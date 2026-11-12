@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kiosk glass: shown while Flutter starts so the app never flashes white. -->
+    <color name="ic_launcher_background">#06302B</color>
+    <color name="surau_glass">#06302B</color>
+</resources>

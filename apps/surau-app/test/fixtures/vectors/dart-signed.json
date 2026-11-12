@@ -1,0 +1,10 @@
+{
+  "publicJwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "E70HdPo7nWUKkqkg4epasi6nquBW9JMpxMsqlaXps-M",
+    "y": "ED39dimNtvKzmWtML1UDJ0s2GzMvNolN6zQDGoZsbEs"
+  },
+  "messageHex": "73757261752d756e6c6f636b0a613162326333643465356636303731380a646576310a6e6f6e6365",
+  "signatureB64url": "vdqDwlIqVopkwUzPPRzARog04TwO-a6a9bzz3lVvFfqcx8RttMx57WJq7vW5QWlopuwWgG80kQvV5ppk5mlJaw"
+}

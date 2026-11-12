@@ -1,0 +1,8 @@
+# Copy to apps/box-android/key.properties (git-ignored) and fill in. Never commit the real file or the .jks.
+# This is the BOX app's own release key, not the phone app's upload key. Make the keystore once,
+# outside the repo, and back it up with its passwords before the first box is installed:
+#   keytool -genkeypair -keyalg RSA -keysize 4096 -validity 10000 -alias maxcom-box -keystore maxcom-box.jks
+storeFile=C:/path/outside/the/repo/maxcom-box.jks
+storePassword=CHANGE-ME
+keyPassword=CHANGE-ME
+keyAlias=maxcom-box

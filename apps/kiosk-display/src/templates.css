@@ -1,0 +1,1525 @@
+/* MAXCOM kiosk, presentation templates.
+   The stage wears data-template="<id>" (app.tsx). 'default' is the original single-colour look and has NO rule
+   in this file: with it, every computed style is exactly what styles.css and content.css give. Each other template
+   owns its background (CSS gradients and small inline SVG, nothing downloaded), its text colour, its accent AND its
+   own layout of the same DOM (Main.tsx, Phase.tsx, PrayerBar.tsx): no template changes the markup. On the main
+   screen `.ident { display: contents }` lets the surau name, the clock and the dates become separate grid items,
+   so each template places them where its composition wants them. The uploaded background pictures and the
+   measured tone (autoTone) dress the default only, so the picture layer is hidden here.
+   Every selector starts with .stage[data-template='<id>'] (test/templates.test.tsx checks it).
+   Main-screen rules are scoped to `.screen--main` so the no-data screen's own clock and the safe screen keep theirs.
+   Shared rules: the emergency band keeps a high-contrast amber warning look; the bottom-right corner
+   (about 6rem x 2rem) stays free for the MAXCOM mark; patterns are geometric only.
+   Chrome 91: grid, display: contents, clip-path polygon, :is(), calc() on angles; nothing newer (test/compat91). */
+
+/* ======================================================================================================
+   KLASIK LAMA (oldschool): the printed jadual board. A centred masthead (name between two ruled ornaments,
+   Gregorian and Hijri date over a double rule), the seven prayers as ruled rows with dotted leaders down the
+   left under the caption "Waktu solat", an Amiri clock and the next prayer on the right with the card under
+   them, the ticker as a printed notice line at the foot. During solat the paper goes to dark brown ink.
+   ====================================================================================================== */
+.stage[data-template='oldschool'] {
+  --glass-rgb: 251 246 232;
+  --accent: #7a1f2b;
+  --accent-rgb: 122 31 43;
+  --text: #2a1c10;
+  --ink: #fbf5e6;
+  --green: #1f4d36;
+  --paper: #fcf7ea;
+  --rule: rgb(122 31 43 / 0.55);
+  --muted: #6b5640;
+  --serif: 'Amiri', Georgia, 'Times New Roman', serif;
+  --radius-lg: 0.3rem;
+  --radius-md: 0.3rem;
+}
+.stage[data-template='oldschool'] .bg {
+  background:
+    repeating-linear-gradient(0deg, rgb(122 31 43 / 0.022) 0 1px, transparent 1px 0.6rem),
+    radial-gradient(120% 90% at 50% 40%, #f7efdc 0%, #efe3c6 70%, #e2d1ab 100%);
+}
+/* The printed frame: a double maroon rule inset from the edge. */
+.stage[data-template='oldschool'] .bg::after {
+  content: '';
+  position: absolute;
+  inset: 0.7rem;
+  border: 0.32rem double var(--rule);
+  pointer-events: none;
+}
+.stage[data-template='oldschool'] .bg__img,
+.stage[data-template='oldschool'] .bg__shade { display: none; }
+.stage[data-template='oldschool'] .bg__dim { background: rgb(26 17 10 / 0.95); }
+.stage[data-template='oldschool'] :is(.ident, .clock__hm, .source-footer, .poster-strip, .phase__head, .phase__centre, .card, .ticker, .zikir, .safe) {
+  text-shadow: none;
+}
+.stage[data-template='oldschool'] .ident__logo { filter: none; }
+.stage[data-template='oldschool'] .glass {
+  background: var(--paper);
+  border: 0.24rem double var(--rule);
+  box-shadow: 0 0.3rem 0.9rem rgb(80 50 20 / 0.1);
+}
+
+/* The board. */
+.stage[data-template='oldschool'] .screen--main {
+  grid-template-columns: 33rem minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name   name   name'
+    'dates  dates  dates'
+    'bar    clock  next'
+    'bar    band   band'
+    'ticker ticker ticker';
+  column-gap: 2.4rem;
+  row-gap: 0;
+  padding: 2.3rem 3.6rem 2.9rem;
+}
+.stage[data-template='oldschool'] .screen--main.has-emergency {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'name   name   name'
+    'dates  dates  dates'
+    'bar    clock  next'
+    'bar    band   band'
+    'emerg  emerg  emerg'
+    'ticker ticker ticker';
+}
+.stage[data-template='oldschool'] .screen--main .ident { display: contents; }
+/* Masthead: the name between two ruled ornaments (they give way to a long name, which wraps to two lines). */
+.stage[data-template='oldschool'] .ident__head { justify-content: center; gap: 1.2rem; }
+.stage[data-template='oldschool'] .screen--main .ident__head { grid-area: name; min-width: 0; margin: 0; }
+.stage[data-template='oldschool'] .ident__head::before,
+.stage[data-template='oldschool'] .ident__head::after {
+  content: '';
+  flex: 0 1 11rem;
+  min-width: 3.2rem;
+  height: 2.4rem;
+  background:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-20 -20 40 40'><g fill='none' stroke='%237a1f2b' stroke-width='2'><rect x='-11' y='-11' width='22' height='22'/><rect x='-11' y='-11' width='22' height='22' transform='rotate(45)'/></g><circle r='3.2' fill='%231f4d36'/></svg>") no-repeat right center / 2.4rem 2.4rem,
+    linear-gradient(var(--rule), var(--rule)) no-repeat left calc(50% - 0.25rem) / calc(100% - 3.2rem) 0.12rem,
+    linear-gradient(var(--rule), var(--rule)) no-repeat left calc(50% + 0.25rem) / calc(100% - 3.2rem) 0.12rem;
+}
+.stage[data-template='oldschool'] .ident__head::after { transform: scaleX(-1); }
+.stage[data-template='oldschool'] .ident__name,
+.stage[data-template='oldschool'] .poster-strip__name {
+  font-family: var(--serif);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--accent);
+}
+.stage[data-template='oldschool'] .ident__name {
+  margin: 0;
+  min-width: 0;
+  font-size: 3.5rem;
+  line-height: 1.3;
+  padding-bottom: 0.22em; /* Amiri's descenders sit below the line box: room inside the clamp box */
+  text-align: center;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.stage[data-template='oldschool'] .poster-strip__name { font-size: 1.6rem; }
+.stage[data-template='oldschool'] .screen--main .ident__dates {
+  grid-area: dates;
+  justify-content: center;
+  margin: 0 0 1.5rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 0.34rem double var(--rule);
+  font-family: var(--serif);
+  font-size: 1.9rem;
+  font-weight: 700;
+  gap: 1.2rem;
+}
+.stage[data-template='oldschool'] .ident__dates .sep { width: 0.55rem; height: 0.55rem; border-radius: 0; transform: rotate(45deg); background: var(--green); }
+.stage[data-template='oldschool'] .ident__hijri { color: var(--green); opacity: 1; font-weight: 700; }
+/* The clock in Amiri numerals. */
+.stage[data-template='oldschool'] .screen--main .clock { grid-area: clock; align-self: end; line-height: 0.82; }
+.stage[data-template='oldschool'] .clock__hm { color: var(--text); font-family: var(--serif); font-weight: 700; letter-spacing: 0; }
+.stage[data-template='oldschool'] .screen--main .clock__hm { font-size: 10.5rem; }
+.stage[data-template='oldschool'] .clock__aside { font-family: var(--serif); font-weight: 700; color: var(--accent); opacity: 1; }
+.stage[data-template='oldschool'] .screen--main .clock__aside { font-size: 2.6rem; margin-left: 0.7rem; }
+.stage[data-template='oldschool'] .clock__aside .num { font-family: var(--font); font-size: 0.8em; color: var(--text); }
+.stage[data-template='oldschool'] .screen--main .next {
+  grid-area: next;
+  justify-self: stretch;
+  align-self: end;
+  margin: 0 0 0.6rem;
+  padding: 0.8rem 1.8rem 1rem;
+  min-width: 0;
+  font-family: var(--serif);
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+}
+.stage[data-template='oldschool'] .screen--main .next .num { font-family: var(--font); color: var(--green); font-size: 3.6rem; margin-top: 0; }
+.stage[data-template='oldschool'] .screen--main .content { grid-area: band; width: auto; margin-top: 1.4rem; }
+.stage[data-template='oldschool'] .screen--main .zikir { grid-area: band; margin-top: 1.4rem; }
+.stage[data-template='oldschool'] .screen--main .live-strip { grid-area: band; }
+.stage[data-template='oldschool'] .screen--main .emergency-band { margin-top: 1.2rem; }
+.stage[data-template='oldschool'] .card--wide { right: 0; }
+
+/* The jadual: the bar turned into ruled rows. Its caption is the bar's own aria-label ("Waktu solat"). */
+.stage[data-template='oldschool'] .pbar {
+  height: auto;
+  display: grid;
+  grid-auto-flow: row;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+  grid-auto-rows: minmax(0, 1fr);
+  border-radius: 0;
+  overflow: hidden;
+}
+.stage[data-template='oldschool'] .pbar::before {
+  content: attr(aria-label);
+  display: block;
+  padding: 0.55rem 0 0.5rem;
+  text-align: center;
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+  background: var(--accent);
+  letter-spacing: 0.04em;
+}
+.stage[data-template='oldschool'] .pcell {
+  display: grid;
+  grid-template-columns: auto minmax(2rem, 1fr) auto;
+  align-items: center;
+  column-gap: 0.9rem;
+  padding: 0 1.4rem;
+  border-top: 1px solid rgb(122 31 43 / 0.28);
+}
+.stage[data-template='oldschool'] .pcell::after {
+  content: '';
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  margin-top: 0.9rem;
+  border-bottom: 0.22rem dotted rgb(122 31 43 / 0.4);
+}
+.stage[data-template='oldschool'] .pcell__label {
+  grid-column: 1;
+  grid-row: 1;
+  font-family: var(--serif);
+  font-size: 2.3rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  opacity: 1;
+  line-height: 1.2;
+}
+.stage[data-template='oldschool'] .pcell__time { grid-column: 3; grid-row: 1; margin: 0; font-size: 3rem; }
+/* Imsak and Syuruk: smaller and fainter, so the five prayers lead. */
+.stage[data-template='oldschool'] .pcell.is-minor .pcell__label { font-size: 1.85rem; color: var(--muted); }
+.stage[data-template='oldschool'] .pcell.is-minor .pcell__time { padding-top: 0; font-size: 2.2rem; color: var(--muted); opacity: 1; }
+.stage[data-template='oldschool'] .pcell.is-current { background: var(--green); color: var(--ink); }
+.stage[data-template='oldschool'] .pcell.is-current .pcell__label,
+.stage[data-template='oldschool'] .pcell.is-current .pcell__time { color: #f6e7bf; }
+.stage[data-template='oldschool'] .pcell.is-current::after { border-color: rgb(246 231 191 / 0.35); }
+/* The chip sits on the dotted leader, between the name and the time. */
+.stage[data-template='oldschool'] .pcell__cd {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  background: var(--ink);
+  color: var(--green);
+  font-size: 1.2rem;
+  padding: 0.3rem 0.8rem 0.25rem;
+  border-radius: 0.2rem;
+}
+.stage[data-template='oldschool'] .pcell__tag { font-size: 1rem; }
+.stage[data-template='oldschool'] .screen--main .ticker {
+  margin-top: 1.3rem;
+  height: 3rem;
+  border-radius: 0;
+  border: 0;
+  border-top: 0.24rem double var(--rule);
+  border-bottom: 0.24rem double var(--rule);
+  background: var(--paper);
+  box-shadow: none;
+}
+.stage[data-template='oldschool'] .ticker__cap {
+  font-family: var(--serif);
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  background: var(--accent);
+  color: var(--ink);
+  padding: 0 1.3rem;
+}
+.stage[data-template='oldschool'] .ticker__strip { -webkit-mask-image: none; mask-image: none; font-family: var(--serif); }
+.stage[data-template='oldschool'] :is(.ticker__track, .ticker__static) { font-size: 1.7rem; font-weight: 400; }
+.stage[data-template='oldschool'] .ticker__dot { color: var(--green); }
+.stage[data-template='oldschool'] .source-footer { bottom: 0.95rem; font-family: var(--serif); font-size: 1.1rem; line-height: 1.5; color: var(--muted); opacity: 1; }
+
+/* Cards on paper. */
+.stage[data-template='oldschool'] .card:not(.card--poster) { background: var(--paper); }
+.stage[data-template='oldschool'] .card__tag {
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--accent);
+}
+.stage[data-template='oldschool'] :is(.kuliah__name, .pengumuman__title, .program__title, .takwim__title) {
+  font-family: var(--serif);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.3; /* Amiri's tall ascenders and descenders need the room, or the clamp box cuts them */
+  padding-bottom: 0.2em;
+}
+.stage[data-template='oldschool'] .kuliah__when b,
+.stage[data-template='oldschool'] .kuliah__next-when { color: var(--green); }
+.stage[data-template='oldschool'] .kuliah__photo { border-color: var(--rule); }
+.stage[data-template='oldschool'] .card .sep { background: var(--green); border-radius: 0; transform: rotate(45deg); }
+.stage[data-template='oldschool'] .card--kuliah { gap: 1.8rem; padding: 1.8rem 2.2rem; }
+.stage[data-template='oldschool'] .kuliah__photo { width: 11.5rem; height: 11.5rem; }
+.stage[data-template='oldschool'] .kuliah__kitab { width: 7.8rem; height: 11rem; }
+.stage[data-template='oldschool'] .kuliah__body { gap: 0.5rem; }
+.stage[data-template='oldschool'] .kuliah__name { font-size: 3rem; }
+.stage[data-template='oldschool'] .kuliah__topic { font-size: 1.85rem; }
+.stage[data-template='oldschool'] .kuliah__meta { font-size: 1.4rem; }
+.stage[data-template='oldschool'] .kuliah__next li { font-size: 1.3rem; }
+.stage[data-template='oldschool'] .kuliah__when { font-size: 1.45rem; }
+.stage[data-template='oldschool'] .kuliah__when b { font-size: 1.6rem; }
+.stage[data-template='oldschool'] .pengumuman__title { font-size: 3.4rem; }
+.stage[data-template='oldschool'] .pengumuman__body { font-family: var(--serif); font-size: 2rem; line-height: 1.35; padding-bottom: 0.2em; }
+.stage[data-template='oldschool'] :is(.tabung__col, .card--tabung-manual .tabung__col) { background: rgb(122 31 43 / 0.05); border-color: rgb(122 31 43 / 0.18); }
+.stage[data-template='oldschool'] .tabung__bar { background: rgb(122 31 43 / 0.15); }
+
+/* No card: the right of the board becomes a clock plate. */
+.stage[data-template='oldschool'] .screen--main.is-idle {
+  grid-template-rows: auto auto minmax(0, 1.15fr) minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name   name   name'
+    'dates  dates  dates'
+    'bar    clock  clock'
+    'bar    next   next'
+    'ticker ticker ticker';
+}
+.stage[data-template='oldschool'] .screen--main.is-idle.has-emergency {
+  grid-template-rows: auto auto minmax(0, 1.15fr) minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'name   name   name'
+    'dates  dates  dates'
+    'bar    clock  clock'
+    'bar    next   next'
+    'emerg  emerg  emerg'
+    'ticker ticker ticker';
+}
+.stage[data-template='oldschool'] .screen--main.is-idle .content { display: none; }
+.stage[data-template='oldschool'] .screen--main.is-idle .clock { justify-self: center; align-self: end; margin-bottom: 1rem; }
+.stage[data-template='oldschool'] .screen--main.is-idle .clock__hm { font-size: 17rem; letter-spacing: 0; }
+.stage[data-template='oldschool'] .screen--main.is-idle .clock__aside { font-size: 3.6rem; margin-left: 1rem; }
+.stage[data-template='oldschool'] .screen--main.is-idle .ident__dates { font-size: 1.9rem; }
+.stage[data-template='oldschool'] .screen--main.is-idle .next {
+  justify-self: center;
+  align-self: start;
+  margin: 1.6rem 0 0;
+  padding: 1.2rem 3.4rem 1.4rem;
+  font-size: 2.4rem;
+}
+.stage[data-template='oldschool'] .screen--main.is-idle .next .num { font-size: 6rem; margin-top: 0.2rem; }
+
+/* Phases: the same board; the countdown is printed in the right panel. */
+.stage[data-template='oldschool'] .screen--phase {
+  display: grid;
+  grid-template-columns: 33rem minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: 'head head' 'bar centre';
+  column-gap: 2.4rem;
+  padding: 2.3rem 3.6rem 2.9rem;
+}
+.stage[data-template='oldschool'] .phase__head {
+  position: relative;
+  inset: auto;
+  grid-area: head;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding: 0 12rem 0.9rem;
+  border-bottom: 0.34rem double var(--rule);
+}
+.stage[data-template='oldschool'] .phase__head .ident__head { flex: 1 1 auto; min-width: 0; }
+.stage[data-template='oldschool'] .phase__head .phase__clock { position: absolute; right: 0; top: 0.6rem; font-size: 2.7rem; color: var(--text); }
+.stage[data-template='oldschool'] .phase__clock small { font-family: var(--serif); color: var(--accent); font-size: 1.5rem; font-weight: 700; opacity: 1; }
+.stage[data-template='oldschool'] .screen--phase .pbar { position: static; grid-area: bar; }
+.stage[data-template='oldschool'] .phase__centre {
+  position: static;
+  grid-area: centre;
+  min-width: 0;
+  padding: 2rem;
+  background-color: var(--paper);
+  border: 0.24rem double var(--rule);
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-50 -50 100 100'><g fill='none' stroke='%237a1f2b' stroke-opacity='0.08' stroke-width='1'><rect x='-36' y='-36' width='72' height='72'/><rect x='-36' y='-36' width='72' height='72' transform='rotate(45)'/><rect x='-22' y='-22' width='44' height='44'/><rect x='-22' y='-22' width='44' height='44' transform='rotate(45)'/><circle r='12'/></g></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 34rem 34rem;
+}
+.stage[data-template='oldschool'] .phase__title { font-family: var(--serif); font-weight: 700; font-size: 4rem; line-height: 1.3; color: var(--accent); }
+.stage[data-template='oldschool'] .phase__big { font-size: 10rem; color: var(--green); margin-top: 0.4rem; }
+.stage[data-template='oldschool'] .phase__big.is-warning { color: var(--accent); }
+.stage[data-template='oldschool'] .phase__time { font-size: 8rem; color: var(--green); }
+.stage[data-template='oldschool'] .phase__sub { font-family: var(--serif); font-size: 2.4rem; color: var(--muted); opacity: 1; margin-top: 1rem; }
+.stage[data-template='oldschool'] .phase__calm::before {
+  content: '';
+  display: block;
+  height: 3rem;
+  margin-bottom: 1.6rem;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-20 -20 40 40'><g fill='none' stroke='%237a1f2b' stroke-width='1.6'><rect x='-11' y='-11' width='22' height='22'/><rect x='-11' y='-11' width='22' height='22' transform='rotate(45)'/></g></svg>") no-repeat center / 3rem 3rem;
+}
+.stage[data-template='oldschool'] .phase__calm .phase__title { font-size: 5.2rem; color: var(--text); max-width: 100%; }
+.stage[data-template='oldschool'] .phase__calm .phase__sub { font-size: 2.4rem; margin-top: 1rem; }
+.stage[data-template='oldschool'] .screen--phase .emergency-band { left: 39rem; right: 3.6rem; bottom: 3.6rem; }
+.stage[data-template='oldschool'] .screen--phase .source-footer { left: 39rem; right: 3.6rem; }
+/* No prayer data: no jadual, the clock plate fills the board. */
+.stage[data-template='oldschool'][data-phase='noData'] .phase__centre { grid-column: 1 / -1; }
+.stage[data-template='oldschool'] .phase__nodata .clock__hm { font-size: 13rem; }
+.stage[data-template='oldschool'] .phase__nodata .clock__aside { font-size: 3rem; }
+.stage[data-template='oldschool'] .phase__date { font-family: var(--serif); font-weight: 700; color: var(--green); opacity: 1; }
+.stage[data-template='oldschool'] .phase__nodata .phase__title { font-size: 2.6rem; color: var(--text); }
+/* Solat and tarawih: the paper goes to night ink, never a lit white screen in a prayer hall. */
+.stage[data-template='oldschool'][data-dim='true'] {
+  --text: #efe2c6;
+  --accent: #e3b59c;
+  --accent-rgb: 227 181 156;
+  --green: #a9d3b8;
+  --paper: #2a1f16;
+  --ink: #1b130c;
+  --rule: rgb(227 181 156 / 0.4);
+  --muted: #b9a585;
+}
+.stage[data-template='oldschool'][data-dim='true'] .pbar.is-dimmed { opacity: 0.32; }
+.stage[data-template='oldschool'][data-dim='true'] .pcell.is-current .pcell__label,
+.stage[data-template='oldschool'][data-dim='true'] .pcell.is-current .pcell__time { color: #1b130c; }
+.stage[data-template='oldschool'][data-dim='true'] .pcell__cd { background: #2c2118; color: var(--green); }
+.stage[data-template='oldschool'][data-dim='true'] .phase__calm::before {
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-20 -20 40 40'><g fill='none' stroke='%23e3b59c' stroke-width='1.6'><rect x='-11' y='-11' width='22' height='22'/><rect x='-11' y='-11' width='22' height='22' transform='rotate(45)'/></g></svg>");
+}
+.stage[data-template='oldschool'][data-dim='true'] .source-footer { color: var(--text); opacity: 0.7; }
+
+/* ======================================================================================================
+   MINIMALIS CERAH (minimal): the wall clock. One large thin clock with a single quiet line under it for the
+   next prayer and the dates, the surau name as a clear identity line at the top, the card as a calm white
+   panel beside the clock, the times as a thin typographic row at the foot. With no card the clock column takes
+   the whole width, so an empty surau looks intentional, not unfinished.
+   ====================================================================================================== */
+.stage[data-template='minimal'] {
+  --glass-rgb: 255 255 255;
+  --accent: #0b6b61;
+  --accent-rgb: 11 107 97;
+  --text: #16211f;
+  --ink: #ffffff;
+  --muted: #5b6966;
+  --hair: #d9dfdc;
+}
+.stage[data-template='minimal'] .bg { background: linear-gradient(180deg, #f8f9f7 0%, #f0f2ef 100%); }
+.stage[data-template='minimal'] .bg__img,
+.stage[data-template='minimal'] .bg__shade { display: none; }
+.stage[data-template='minimal'] .bg__dim { background: #0f1715; }
+.stage[data-template='minimal'] :is(.ident, .clock__hm, .source-footer, .poster-strip, .phase__head, .phase__centre, .card, .ticker, .zikir, .safe) {
+  text-shadow: none;
+}
+.stage[data-template='minimal'] .ident__logo { filter: none; }
+.stage[data-template='minimal'] .glass {
+  background: #ffffff;
+  border: 1px solid #e3e8e5;
+  box-shadow: 0 0.4rem 1.6rem rgb(20 40 36 / 0.07);
+}
+.stage[data-template='minimal'] .screen--main {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'name   band'
+    '.      band'
+    'clock  band'
+    'next   band'
+    'dates  band'
+    '.      band'
+    'bar    bar'
+    'ticker ticker';
+  column-gap: 0;
+  row-gap: 0;
+  padding: 2.6rem 4rem 2.5rem;
+}
+.stage[data-template='minimal'] .screen--main.has-emergency {
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas:
+    'name   band'
+    '.      band'
+    'clock  band'
+    'next   band'
+    'dates  band'
+    '.      band'
+    'emerg  emerg'
+    'bar    bar'
+    'ticker ticker';
+}
+.stage[data-template='minimal'] .screen--main .ident { display: contents; }
+/* The identity line: the surau's name, large and plain, with the teal dot. */
+.stage[data-template='minimal'] .screen--main .ident__head { grid-area: name; min-width: 0; margin: 0; }
+.stage[data-template='minimal'] .ident__name {
+  margin: 0;
+  min-width: 0;
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  text-transform: none;
+  color: var(--text);
+}
+.stage[data-template='minimal'] .screen--main .ident__name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.stage[data-template='minimal'] .ident__head:not(.has-logo) .ident__name::before {
+  content: '';
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-right: 1rem;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 0.14em;
+}
+.stage[data-template='minimal'] .phase__head .ident__name,
+.stage[data-template='minimal'] .poster-strip__name { font-size: 1.9rem; }
+.stage[data-template='minimal'] .poster-strip__name { color: var(--text); letter-spacing: 0; text-transform: none; }
+/* The thin wall clock. */
+.stage[data-template='minimal'] .screen--main .clock { grid-area: clock; justify-self: center; line-height: 0.86; }
+.stage[data-template='minimal'] .clock__hm { font-weight: 300; letter-spacing: -0.045em; color: var(--text); }
+.stage[data-template='minimal'] .screen--main .clock__hm { font-size: 14rem; }
+.stage[data-template='minimal'] .clock__aside { font-weight: 600; color: var(--accent); opacity: 1; }
+.stage[data-template='minimal'] .screen--main .clock__aside { font-size: 2.6rem; margin-left: 1rem; }
+.stage[data-template='minimal'] .clock__aside .num { font-weight: 500; color: var(--muted); }
+.stage[data-template='minimal'] .screen--main .next {
+  grid-area: next;
+  justify-self: center;
+  align-self: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  margin: 1.8rem 0 0;
+  padding: 0;
+  min-width: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  font-size: 2.1rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.stage[data-template='minimal'] .screen--main .next .num { display: inline; color: var(--accent); font-size: 2.6rem; font-weight: 700; margin: 0; letter-spacing: 0; }
+.stage[data-template='minimal'] .screen--main .ident__dates {
+  grid-area: dates;
+  justify-self: center;
+  margin-top: 0.8rem;
+  font-size: 1.6rem;
+  font-weight: 500;
+  color: var(--muted);
+  gap: 0.9rem;
+}
+.stage[data-template='minimal'] .ident__dates .sep { width: 0.3rem; height: 0.3rem; background: #a7b2af; }
+.stage[data-template='minimal'] .ident__hijri { opacity: 1; }
+/* The card column beside the clock. */
+.stage[data-template='minimal'] .screen--main .content { grid-area: band; width: 43rem; margin: 0 0 1.6rem 3rem; }
+.stage[data-template='minimal'] .screen--main .zikir { grid-area: band; width: 43rem; margin: 0 0 1.6rem 3rem; }
+.stage[data-template='minimal'] .zikir__page.has-repeat { padding: 0 0 8.4rem; }
+.stage[data-template='minimal'] .zikir__repeat { top: auto; bottom: 1.4rem; right: 50%; transform: translateX(50%); width: 7rem; height: 7rem; }
+.stage[data-template='minimal'] .screen--main .live-strip { grid-area: band; max-width: 43rem; margin: 0 0 1.6rem 3rem; }
+.stage[data-template='minimal'] .card--wide { right: 0; }
+.stage[data-template='minimal'] .card:not(.card--poster) { background: #ffffff; border: 1px solid #e3e8e5; box-shadow: 0 1.2rem 3rem rgb(20 40 36 / 0.07); border-radius: 1rem; }
+.stage[data-template='minimal'] .card__tag { letter-spacing: 0.04em; text-transform: none; font-size: 1.3rem; }
+.stage[data-template='minimal'] .kuliah__photo { border-color: #e3e8e5; }
+.stage[data-template='minimal'] .kuliah__next { border-color: var(--hair); }
+.stage[data-template='minimal'] .kuliah__name { font-weight: 700; font-size: 3.1rem; }
+.stage[data-template='minimal'] .card--pengumuman { justify-content: flex-start; padding: 2.8rem; gap: 1.2rem; }
+.stage[data-template='minimal'] .pengumuman__title { font-weight: 700; font-size: 3.4rem; margin-bottom: 1.1rem; }
+.stage[data-template='minimal'] .pengumuman__body { color: #33403d; font-size: 2rem; line-height: 1.4; }
+.stage[data-template='minimal'] .card .sep { background: #a7b2af; }
+.stage[data-template='minimal'] :is(.tabung__col, .card--tabung-manual .tabung__col) { background: #f4f6f5; border-color: #e3e7e5; }
+.stage[data-template='minimal'] .tabung__bar { background: #e3e7e5; }
+
+/* The thin row of times. */
+.stage[data-template='minimal'] .pbar {
+  height: 7rem;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--hair);
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.stage[data-template='minimal'] .screen--main .pbar { margin-top: 2rem; }
+.stage[data-template='minimal'] .pcell { padding-top: 1rem; }
+.stage[data-template='minimal'] .pcell__label { font-size: 1.2rem; font-weight: 600; text-transform: none; letter-spacing: 0.02em; color: var(--muted); opacity: 1; }
+.stage[data-template='minimal'] .pcell__time { margin-top: 0.35rem; font-size: 2.7rem; font-weight: 600; }
+/* Imsak and Syuruk: smaller and fainter. */
+.stage[data-template='minimal'] .pcell.is-minor .pcell__label { font-size: 1.05rem; }
+.stage[data-template='minimal'] .pcell.is-minor .pcell__time { font-size: 2.1rem; color: var(--muted); opacity: 0.85; }
+.stage[data-template='minimal'] .pcell.is-current { background: none; color: var(--accent); box-shadow: inset 0 0.32rem 0 var(--accent); }
+.stage[data-template='minimal'] .pcell.is-current .pcell__label { color: var(--accent); opacity: 1; }
+.stage[data-template='minimal'] .pcell__cd { background: var(--accent); color: #ffffff; font-size: 1rem; font-weight: 700; margin-top: 0.35rem; padding: 0.2rem 0.7rem; }
+.stage[data-template='minimal'] .screen--main .ticker {
+  height: 2.6rem;
+  margin-top: 0.8rem;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.stage[data-template='minimal'] .ticker__cap {
+  align-self: center;
+  background: none;
+  color: var(--accent);
+  padding: 0 1.2rem 0 0;
+  margin-right: 0.2rem;
+  height: 1.6rem;
+  border-right: 1px solid var(--hair);
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.stage[data-template='minimal'] .ticker__strip { -webkit-mask-image: none; mask-image: none; }
+.stage[data-template='minimal'] :is(.ticker__track, .ticker__static) { font-size: 1.45rem; font-weight: 500; color: #33403d; }
+.stage[data-template='minimal'] .ticker__dot { color: #a7b2af; }
+.stage[data-template='minimal'] .source-footer { color: var(--muted); opacity: 1; }
+.stage[data-template='minimal'] .screen--main .emergency-band { margin-top: 1.4rem; }
+
+/* No card: the clock is the screen. */
+.stage[data-template='minimal'] .screen--main.is-idle .content { display: none; }
+.stage[data-template='minimal'] .screen--main.is-idle .clock__hm { font-size: 21rem; letter-spacing: -0.045em; }
+.stage[data-template='minimal'] .screen--main.is-idle .clock__aside { font-size: 3.6rem; margin-left: 1.3rem; }
+.stage[data-template='minimal'] .screen--main.is-idle .next { font-size: 2.6rem; margin-top: 2.4rem; padding: 0; }
+.stage[data-template='minimal'] .screen--main.is-idle .next .num { font-size: 3.2rem; margin: 0; }
+.stage[data-template='minimal'] .screen--main.is-idle .ident__dates { font-size: 1.9rem; margin-top: 1rem; }
+.stage[data-template='minimal'] .screen--main.is-idle .pbar { margin-top: 2.6rem; }
+
+/* Phases: the same quiet page; the countdown is the thin clock. */
+.stage[data-template='minimal'] .screen--phase .phase__head { left: 4rem; right: 4rem; top: 2.6rem; align-items: center; }
+.stage[data-template='minimal'] .phase__clock { color: var(--muted); font-weight: 600; font-size: 2.4rem; }
+.stage[data-template='minimal'] .screen--phase .pbar { top: auto; bottom: 2.5rem; left: 4rem; right: 4rem; margin: 0; }
+.stage[data-template='minimal'] .phase__centre { top: 8rem; bottom: 10.5rem; }
+.stage[data-template='minimal'][data-phase='noData'] .phase__centre { top: 0; bottom: 0; }
+.stage[data-template='minimal'] .phase__title { font-size: 2.8rem; font-weight: 500; color: var(--muted); }
+.stage[data-template='minimal'] .phase__big { font-size: 18rem; font-weight: 300; letter-spacing: -0.045em; line-height: 0.95; margin-top: 0.6rem; color: var(--text); }
+.stage[data-template='minimal'] .phase__big.is-warning { color: #c0392b; }
+.stage[data-template='minimal'] .phase__time { font-size: 14rem; font-weight: 300; letter-spacing: -0.045em; color: var(--accent); }
+.stage[data-template='minimal'] .screen--iqamah .phase__centre::after { content: ''; width: 9rem; height: 0.3rem; margin-top: 2.2rem; background: var(--accent); border-radius: 1rem; }
+.stage[data-template='minimal'] .phase__sub { color: var(--muted); opacity: 1; }
+.stage[data-template='minimal'] .phase__calm .phase__title { font-size: 6rem; font-weight: 300; letter-spacing: -0.02em; color: var(--text); }
+.stage[data-template='minimal'] .phase__calm .phase__sub { font-size: 2.2rem; margin-top: 1.6rem; }
+.stage[data-template='minimal'] .phase__nodata .clock__hm { font-size: 18rem; }
+.stage[data-template='minimal'] .phase__nodata .clock__aside { font-size: 3.4rem; }
+.stage[data-template='minimal'] .phase__date { color: var(--muted); font-weight: 500; opacity: 1; }
+.stage[data-template='minimal'] .screen--phase .emergency-band { left: 4rem; right: 4rem; bottom: 10.2rem; }
+/* Solat and tarawih: a dark, quiet version of the same page. */
+.stage[data-template='minimal'][data-dim='true'] {
+  --text: #e6ecea;
+  --accent: #7fd6c8;
+  --accent-rgb: 127 214 200;
+  --muted: #93a29e;
+  --hair: #26332f;
+}
+.stage[data-template='minimal'][data-dim='true'] .glass { background: #1c2826; border-color: #2c3a37; }
+.stage[data-template='minimal'][data-dim='true'] .pbar.glass { background: none; border-color: var(--hair); }
+.stage[data-template='minimal'][data-dim='true'] .pbar.is-dimmed { opacity: 0.3; }
+.stage[data-template='minimal'][data-dim='true'] .pcell__cd { color: #0f1715; }
+.stage[data-template='minimal'][data-dim='true'] .source-footer { color: var(--text); opacity: 0.7; }
+
+/* ======================================================================================================
+   BERWARNA-WARNI (colourful): the colour column. The seven prayers are a stack of jewel tiles down the right,
+   one fixed colour per time of day; the next prayer steps out as the larger white tile. The clock and the next
+   prayer are two bold colour blocks side by side, the countdown in the sunset block; the card fills the rest.
+   ====================================================================================================== */
+.stage[data-template='colourful'] {
+  --glass-rgb: 24 20 70;
+  --accent: #ffd166;
+  --accent-rgb: 255 209 102;
+  --text: #ffffff;
+  --ink: #1d1442;
+  --sunset: linear-gradient(135deg, #e2457a 0%, #f2793f 100%);
+}
+.stage[data-template='colourful'] .bg {
+  background:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'><g fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='1.4'><rect x='27' y='27' width='42' height='42'/><rect x='27' y='27' width='42' height='42' transform='rotate(45 48 48)'/><circle cx='48' cy='48' r='9'/><path d='M0 48h12M84 48h12M48 0v12M48 84v12'/></g></svg>") 0 0 / 6rem 6rem,
+    radial-gradient(60rem 40rem at 6% 0%, rgb(140 70 220 / 0.5), transparent 70%),
+    radial-gradient(55rem 38rem at 70% 100%, rgb(0 160 150 / 0.42), transparent 70%),
+    linear-gradient(140deg, #1b1446 0%, #14204f 45%, #0b2c48 100%);
+}
+.stage[data-template='colourful'] .bg__img,
+.stage[data-template='colourful'] .bg__shade { display: none; }
+.stage[data-template='colourful'] .bg__dim { background: rgb(8 6 26 / 0.93); }
+.stage[data-template='colourful'] .glass {
+  /* No blur behind it (styles.css .glass): a deeper indigo fill keeps the star lattice out of the text. */
+  background: linear-gradient(160deg, rgb(52 44 128 / 0.82), rgb(30 30 92 / 0.86));
+  border: 1px solid rgb(255 255 255 / 0.16);
+  box-shadow: 0 0.8rem 2.4rem rgb(5 5 30 / 0.35);
+}
+.stage[data-template='colourful'] .screen--main {
+  grid-template-columns: auto minmax(0, 1fr) 25rem;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name   name   bar'
+    'clock  next   bar'
+    'dates  dates  bar'
+    'band   band   bar'
+    'ticker ticker bar';
+  column-gap: 1.4rem;
+  row-gap: 1rem;
+  padding: 2.4rem 3rem 3.1rem;
+}
+.stage[data-template='colourful'] .screen--main.has-emergency {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'name   name   bar'
+    'clock  next   bar'
+    'dates  dates  bar'
+    'band   band   bar'
+    'emerg  emerg  bar'
+    'ticker ticker bar';
+}
+.stage[data-template='colourful'] .screen--main .ident { display: contents; }
+.stage[data-template='colourful'] .screen--main .ident__head { grid-area: name; min-width: 0; margin: 0; }
+.stage[data-template='colourful'] .ident__name { margin: 0; color: var(--accent); font-size: 1.4rem; letter-spacing: 0.22em; }
+.stage[data-template='colourful'] .poster-strip__name { color: var(--accent); }
+.stage[data-template='colourful'] .screen--main .clock {
+  grid-area: clock;
+  padding: 1.3rem 2.2rem 1.5rem 1.9rem;
+  border-radius: 1.6rem;
+  line-height: 0.88;
+  background: linear-gradient(150deg, #6c4ad0 0%, #3d2c9a 100%);
+  box-shadow: 0 1rem 2.6rem rgb(40 20 120 / 0.4), inset 0 0 0 1px rgb(255 255 255 / 0.14);
+}
+.stage[data-template='colourful'] .screen--main .clock__hm { font-size: 9.4rem; text-shadow: none; }
+.stage[data-template='colourful'] .clock__aside { color: var(--accent); opacity: 1; font-weight: 800; }
+.stage[data-template='colourful'] .screen--main .clock__aside { font-size: 2.2rem; }
+.stage[data-template='colourful'] .clock__aside .num { color: #ffffff; }
+.stage[data-template='colourful'] .screen--main .next {
+  grid-area: next;
+  justify-self: stretch;
+  align-self: stretch;
+  margin: 0;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.2rem 2.2rem;
+  border: 0;
+  border-radius: 1.6rem;
+  background: var(--sunset);
+  box-shadow: 0 1rem 2.6rem rgb(226 69 122 / 0.32);
+  font-size: 1.9rem;
+  font-weight: 700;
+  text-shadow: none;
+}
+.stage[data-template='colourful'] .screen--main .next .num { color: #ffffff; font-size: 5.4rem; margin-top: 0.3rem; }
+.stage[data-template='colourful'] .screen--main .ident__dates { grid-area: dates; margin: 0.1rem 0 0.2rem; font-size: 1.8rem; }
+.stage[data-template='colourful'] .ident__dates .sep { background: #ff7aa2; }
+.stage[data-template='colourful'] .screen--main .content { grid-area: band; width: auto; margin: 0; }
+.stage[data-template='colourful'] .screen--main .zikir { grid-area: band; margin: 0; }
+.stage[data-template='colourful'] .screen--main .live-strip { grid-area: band; }
+.stage[data-template='colourful'] .card--wide { right: 0; }
+.stage[data-template='colourful'] .card:not(.card--poster) { border-left: 0.5rem solid #ff7aa2; }
+.stage[data-template='colourful'] .card__tag { color: var(--accent); }
+.stage[data-template='colourful'] .card--kuliah { padding: 2rem 2.6rem; gap: 2.4rem; }
+.stage[data-template='colourful'] .kuliah__photo { width: 14.5rem; height: 14.5rem; }
+.stage[data-template='colourful'] .kuliah__kitab { width: 9.4rem; height: 13.2rem; }
+.stage[data-template='colourful'] .kuliah__body { gap: 0.5rem; }
+.stage[data-template='colourful'] .card__tag { font-size: 1.3rem; }
+.stage[data-template='colourful'] .kuliah__when { font-size: 1.6rem; }
+.stage[data-template='colourful'] .kuliah__when b { font-size: 1.8rem; }
+.stage[data-template='colourful'] .kuliah__name { font-size: 3.3rem; }
+.stage[data-template='colourful'] .kuliah__topic { font-size: 2.1rem; }
+.stage[data-template='colourful'] .kuliah__meta { font-size: 1.6rem; }
+.stage[data-template='colourful'] .kuliah__next li { font-size: 1.45rem; }
+.stage[data-template='colourful'] .pengumuman__title { font-size: 3.2rem; }
+.stage[data-template='colourful'] .pengumuman__body { font-size: 2.1rem; max-width: 58rem; }
+.stage[data-template='colourful'] .screen--main .ticker { height: 2.8rem; }
+.stage[data-template='colourful'] .ticker__cap { background: linear-gradient(135deg, #ffd166, #f2a541); }
+.stage[data-template='colourful'] .ticker__track,
+.stage[data-template='colourful'] .ticker__static { font-size: 1.45rem; }
+.stage[data-template='colourful'] .source-footer { left: 3rem; right: 28.4rem; }
+
+/* The tile column: one fixed colour per time of day. */
+.stage[data-template='colourful'] .pbar {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+}
+.stage[data-template='colourful'] .pcell {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-items: center;
+  padding: 0 1.5rem 0 1.4rem;
+  border-radius: 1rem;
+  color: #ffffff;
+  background: linear-gradient(160deg, var(--cell-a), var(--cell-b));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+.stage[data-template='colourful'] .pcell__label { grid-column: 1; grid-row: 1; font-size: 1.3rem; font-weight: 800; letter-spacing: 0.12em; line-height: 1.3; opacity: 0.95; overflow: hidden; text-overflow: ellipsis; }
+.stage[data-template='colourful'] .pcell:not(.is-current) .pcell__label { grid-row: 1 / 3; }
+.stage[data-template='colourful'] .pcell__time { grid-column: 2; grid-row: 1 / 3; margin: 0; font-size: 3.3rem; }
+.stage[data-template='colourful'] .pcell.is-minor .pcell__time { padding-top: 0; font-size: 2.5rem; opacity: 0.88; }
+.stage[data-template='colourful'] .pcell.is-minor .pcell__label { font-size: 1.15rem; opacity: 0.85; }
+.stage[data-template='colourful'] .pcell__cd { grid-column: 1; grid-row: 2; justify-self: start; margin: 0.35rem 0 0; font-size: 1.15rem; padding: 0.22rem 0.75rem; }
+.stage[data-template='colourful'] .pcell[data-prayer='imsak'] { --cell-a: #4b4fb8; --cell-b: #33378f; }
+.stage[data-template='colourful'] .pcell[data-prayer='subuh'] { --cell-a: #2f74c8; --cell-b: #1d4f94; }
+.stage[data-template='colourful'] .pcell[data-prayer='syuruk'] { --cell-a: #d98a1e; --cell-b: #a9620c; }
+.stage[data-template='colourful'] .pcell[data-prayer='zohor'] { --cell-a: #1f9e8f; --cell-b: #13726a; }
+.stage[data-template='colourful'] .pcell[data-prayer='asar'] { --cell-a: #d0642c; --cell-b: #9e4317; }
+.stage[data-template='colourful'] .pcell[data-prayer='maghrib'] { --cell-a: #c43d64; --cell-b: #8f2446; }
+.stage[data-template='colourful'] .pcell[data-prayer='isyak'] { --cell-a: #6b45bf; --cell-b: #48298c; }
+/* The next prayer (or the one in progress) steps out of the column as the larger white tile. */
+.stage[data-template='colourful'] .pcell.is-current {
+  background: #ffffff;
+  color: var(--ink);
+  flex-grow: 1.45;
+  margin-left: -1.6rem;
+  box-shadow: 0 0 0 0.3rem var(--cell-a), 0 0.8rem 2rem rgb(0 0 0 / 0.4);
+}
+.stage[data-template='colourful'] .pcell.is-current .pcell__label { color: var(--cell-b); opacity: 1; font-size: 1.45rem; }
+.stage[data-template='colourful'] .pcell.is-current .pcell__time { font-size: 4rem; opacity: 1; }
+.stage[data-template='colourful'] .pcell.is-current .pcell__cd { background: var(--cell-b); color: #ffffff; }
+
+/* No card: the two blocks grow into hero size in the middle of the left side. */
+.stage[data-template='colourful'] .screen--main.is-idle {
+  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name   name   bar'
+    '.      .      bar'
+    'clock  clock  bar'
+    'next   dates  bar'
+    '.      .      bar'
+    'ticker ticker bar';
+}
+.stage[data-template='colourful'] .screen--main.is-idle.has-emergency {
+  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'name   name   bar'
+    '.      .      bar'
+    'clock  clock  bar'
+    'next   dates  bar'
+    '.      .      bar'
+    'emerg  emerg  bar'
+    'ticker ticker bar';
+}
+.stage[data-template='colourful'] .screen--main.is-idle .content { display: none; }
+.stage[data-template='colourful'] .screen--main.is-idle .clock { justify-self: stretch; align-self: auto; text-align: center; padding: 2.4rem 2rem 2.8rem; border-radius: 2.2rem; }
+.stage[data-template='colourful'] .screen--main.is-idle .clock__hm { font-size: 17rem; letter-spacing: -0.03em; }
+.stage[data-template='colourful'] .screen--main.is-idle .clock__aside { font-size: 3.4rem; margin-left: 1.3rem; }
+.stage[data-template='colourful'] .screen--main.is-idle .next { margin: 0; padding: 1.4rem 2.4rem; font-size: 2.1rem; align-self: start; }
+.stage[data-template='colourful'] .screen--main.is-idle .next .num { font-size: 5.6rem; margin-top: 0.3rem; }
+.stage[data-template='colourful'] .screen--main.is-idle .ident__dates { align-self: center; flex-direction: column; align-items: flex-start; gap: 0.5rem; margin: 0 0 0 0.6rem; font-size: 2.1rem; }
+.stage[data-template='colourful'] .screen--main.is-idle .ident__dates .sep { display: none; }
+
+/* Phases: the sunset block carries the phase, the tile column stays. */
+.stage[data-template='colourful'] .screen--phase {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 25rem;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: 'head bar' 'centre bar';
+  column-gap: 1.4rem;
+  padding: 2.4rem 3rem 3.1rem;
+}
+.stage[data-template='colourful'] .phase__head { position: static; grid-area: head; align-items: center; min-width: 0; gap: 1.6rem; }
+.stage[data-template='colourful'] .phase__head .ident__head { min-width: 0; }
+.stage[data-template='colourful'] .phase__clock { font-size: 3rem; flex: none; }
+.stage[data-template='colourful'] .phase__clock small { color: var(--accent); opacity: 1; }
+.stage[data-template='colourful'] .screen--phase .pbar { position: static; grid-area: bar; }
+.stage[data-template='colourful'] .phase__centre {
+  position: static;
+  grid-area: centre;
+  min-width: 0;
+  margin-top: 1.6rem;
+  padding: 2rem;
+  border-radius: 2.2rem;
+  background: var(--sunset);
+  box-shadow: 0 1.4rem 3.4rem rgb(226 69 122 / 0.35);
+  text-shadow: 0 0.2rem 1rem rgb(90 10 40 / 0.3);
+}
+.stage[data-template='colourful'] .phase__title { font-size: 3.6rem; font-weight: 700; color: #ffffff; }
+.stage[data-template='colourful'] .phase__big { font-size: 11.5rem; color: #ffffff; }
+.stage[data-template='colourful'] .phase__big.is-warning { color: var(--ink); text-shadow: none; }
+.stage[data-template='colourful'] .phase__time { color: #ffffff; }
+.stage[data-template='colourful'] .phase__sub { color: rgb(255 255 255 / 0.9); opacity: 1; }
+.stage[data-template='colourful'] .phase__calm .phase__title { color: #ffe3a3; font-size: 5.2rem; max-width: 100%; }
+.stage[data-template='colourful'] .phase__calm .phase__sub { color: rgb(255 255 255 / 0.78); font-size: 2.4rem; }
+.stage[data-template='colourful'] .screen--phase .emergency-band { left: 3rem; right: 28.4rem; bottom: 4.6rem; }
+.stage[data-template='colourful'] .screen--phase .source-footer { left: 3rem; right: 28.4rem; }
+/* No prayer data: no tiles; the hero clock on the indigo field. */
+.stage[data-template='colourful'][data-phase='noData'] .phase__centre {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  background: none;
+  box-shadow: none;
+}
+.stage[data-template='colourful'] .phase__nodata .clock {
+  padding: 2.4rem 3rem 2.8rem;
+  border-radius: 2.2rem;
+  background: linear-gradient(150deg, #6c4ad0 0%, #3d2c9a 100%);
+  box-shadow: 0 1rem 2.6rem rgb(40 20 120 / 0.4), inset 0 0 0 1px rgb(255 255 255 / 0.14);
+}
+.stage[data-template='colourful'] .phase__nodata .clock__hm { font-size: 14rem; text-shadow: none; }
+.stage[data-template='colourful'] .phase__nodata .clock__aside { font-size: 3rem; }
+/* Solat and tarawih: the block steps back to a faint outline; the tiles dim. */
+.stage[data-template='colourful'][data-dim='true'] .phase__centre { background: rgb(255 255 255 / 0.04); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08); text-shadow: none; }
+.stage[data-template='colourful'][data-dim='true'] .pbar.is-dimmed { opacity: 0.28; }
+.stage[data-template='colourful'][data-dim='true'] .phase__head { opacity: 0.6; }
+
+/* ======================================================================================================
+   KREATIF (creative): the leaning column. A saffron slab cut on a diagonal holds a poster-size clock; the seven
+   prayers are slanted bars stepping down that same diagonal, so the times draw the cut; the card is a tall
+   portrait panel on the dark side. In a phase the slab widens and the countdown is printed on it.
+   --slant is the one knob for the lean: the tangent of the angle (0.2126 = 12 degrees). The bars' skew, their
+   step down the cut and the slab's edge all follow it; 0 straightens the whole composition.
+   The cut and the steps use the tangent directly (a shift per height). skewX() takes an angle, so --slant-angle
+   is atan(--slant), derived from the same knob: Chrome 91 has no atan() in CSS, so it is the series
+   x - x^3/3 + x^5/5 - x^7/7, exact to a millionth of a radian at 12 degrees and under 0.0003 rad up to 26.6
+   degrees (0.5). Never set --slant-angle by hand.
+   ====================================================================================================== */
+.stage[data-template='creative'] {
+  --slant: 0.2126;
+  --slant-angle: calc(
+    (
+      var(--slant)
+      - var(--slant) * var(--slant) * var(--slant) / 3
+      + var(--slant) * var(--slant) * var(--slant) * var(--slant) * var(--slant) / 5
+      - var(--slant) * var(--slant) * var(--slant) * var(--slant) * var(--slant) * var(--slant) * var(--slant) / 7
+    ) * 1rad
+  );
+  --glass-rgb: 18 30 42;
+  --accent: #ffb547;
+  --accent-rgb: 255 181 71;
+  --text: #f4f7fa;
+  --ink: #1a1306;
+  --mint: #2fd1ad;
+  --slab-a: #ffc15e;
+  --slab-b: #f39a2c;
+  --radius-lg: 0.4rem;
+  --radius-md: 0.4rem;
+  --cut-top: 46%;
+  --bar-pitch: 5.85rem; /* one bar plus the gap under it */
+}
+/* Every phase screen: the slab widens to carry the phase. */
+.stage[data-template='creative']:not([data-phase='normal']) { --cut-top: 72%; }
+.stage[data-template='creative'] .bg {
+  background:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><g transform='translate(100 100)' fill='none' stroke='%232fd1ad' stroke-opacity='0.13' stroke-width='1.1'><rect x='-80' y='-80' width='160' height='160'/><rect x='-80' y='-80' width='160' height='160' transform='rotate(45)'/><rect x='-52' y='-52' width='104' height='104'/><rect x='-52' y='-52' width='104' height='104' transform='rotate(45)'/><circle r='26'/></g></svg>") no-repeat 96% 46% / 44rem 44rem,
+    linear-gradient(180deg, #101b27 0%, #0c141d 100%);
+}
+.stage[data-template='creative'] .bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='%231a1306' stroke-opacity='0.07' stroke-width='1.2'><rect x='22' y='22' width='36' height='36'/><rect x='22' y='22' width='36' height='36' transform='rotate(45 40 40)'/></g></svg>") 0 0 / 5rem 5rem,
+    linear-gradient(165deg, var(--slab-a) 0%, var(--slab-b) 100%);
+  -webkit-clip-path: polygon(0 0, var(--cut-top) 0, calc(var(--cut-top) - var(--slant) * 56.25rem) 100%, 0 100%);
+  clip-path: polygon(0 0, var(--cut-top) 0, calc(var(--cut-top) - var(--slant) * 56.25rem) 100%, 0 100%);
+}
+/* The mint seam just outside the cut. */
+.stage[data-template='creative'] .bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--mint);
+  opacity: 0.85;
+  -webkit-clip-path: polygon(calc(var(--cut-top) + 0.4rem) 0, calc(var(--cut-top) + 0.75rem) 0, calc(var(--cut-top) + 0.75rem - var(--slant) * 56.25rem) 100%, calc(var(--cut-top) + 0.4rem - var(--slant) * 56.25rem) 100%);
+  clip-path: polygon(calc(var(--cut-top) + 0.4rem) 0, calc(var(--cut-top) + 0.75rem) 0, calc(var(--cut-top) + 0.75rem - var(--slant) * 56.25rem) 100%, calc(var(--cut-top) + 0.4rem - var(--slant) * 56.25rem) 100%);
+}
+.stage[data-template='creative'] .bg__img,
+.stage[data-template='creative'] .bg__shade { display: none; }
+.stage[data-template='creative'] .bg__dim { z-index: 1; background: rgb(6 10 15 / 0.9); }
+.stage[data-template='creative'] .glass {
+  background: rgb(14 24 34 / 0.94);
+  border: 0;
+  border-top: 0.32rem solid var(--mint);
+  border-radius: 0 2.4rem 0 2.4rem;
+  box-shadow: 0 1rem 2.6rem rgb(0 0 0 / 0.4);
+}
+.stage[data-template='creative'] .screen--main { display: block; padding: 0; }
+.stage[data-template='creative'] .screen--main .ident { display: contents; }
+.stage[data-template='creative'] :is(.ident, .clock__hm, .card, .zikir, .phase__head, .phase__centre) { text-shadow: none; }
+/* On the slab: name, clock, dates, ink on saffron. */
+.stage[data-template='creative'] .screen--main .ident__head { position: absolute; left: 3rem; top: 2.7rem; max-width: 39rem; margin: 0; }
+.stage[data-template='creative'] .ident__name {
+  margin: 0;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stage[data-template='creative'] .poster-strip__name { color: var(--mint); }
+.stage[data-template='creative'] .screen--main .clock { position: absolute; left: 2.4rem; top: 5.2rem; color: var(--ink); line-height: 0.84; }
+.stage[data-template='creative'] .screen--main .clock__hm { font-size: 13.5rem; letter-spacing: -0.04em; }
+.stage[data-template='creative'] .clock__aside { font-weight: 800; opacity: 1; }
+.stage[data-template='creative'] .screen--main .clock__aside { font-size: 2.6rem; margin-left: 0.6rem; }
+.stage[data-template='creative'] .screen--main .ident__dates {
+  position: absolute;
+  left: 3rem;
+  top: 19.4rem;
+  margin: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  color: var(--ink);
+  font-size: 1.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.stage[data-template='creative'] .ident__dates .sep { display: none; }
+.stage[data-template='creative'] .ident__hijri { font-weight: 700; opacity: 0.78; }
+.stage[data-template='creative'] .screen--main .next {
+  position: absolute;
+  left: 3rem;
+  top: 27.4rem;
+  margin: 0;
+  min-width: 0;
+  text-align: left;
+  background: #0e1620;
+  border: 0;
+  border-radius: 0 2.2rem 0 2.2rem;
+  padding: 1.2rem 2.2rem 1.4rem;
+  color: var(--mint);
+  font-size: 1.45rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  box-shadow: 0 1rem 2.4rem rgb(60 30 0 / 0.3);
+}
+.stage[data-template='creative'] .screen--main .next .num { color: var(--accent); font-size: 4.8rem; margin-top: 0.2rem; letter-spacing: -0.02em; }
+
+/* Slanted bars stepping down the cut. */
+.stage[data-template='creative'] .pbar {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.stage[data-template='creative'] .screen--main .pbar { position: absolute; left: 38.4rem; top: 3rem; width: 19.5rem; }
+.stage[data-template='creative'] .pcell {
+  flex: none;
+  width: 19.5rem;
+  height: 5.3rem;
+  align-self: flex-start;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.8rem;
+  padding: 0 1.6rem 0 1.5rem;
+  background: #172a3c;
+  box-shadow: inset 0.35rem 0 0 rgb(47 209 173 / 0.55);
+  transform: skewX(calc(var(--slant-angle) * -1));
+}
+.stage[data-template='creative'] .pcell > * { transform: skewX(var(--slant-angle)); }
+.stage[data-template='creative'] .pcell:nth-child(1) { margin-left: calc(var(--slant) * var(--bar-pitch) * 6); }
+.stage[data-template='creative'] .pcell:nth-child(2) { margin-left: calc(var(--slant) * var(--bar-pitch) * 5); }
+.stage[data-template='creative'] .pcell:nth-child(3) { margin-left: calc(var(--slant) * var(--bar-pitch) * 4); }
+.stage[data-template='creative'] .pcell:nth-child(4) { margin-left: calc(var(--slant) * var(--bar-pitch) * 3); }
+.stage[data-template='creative'] .pcell:nth-child(5) { margin-left: calc(var(--slant) * var(--bar-pitch) * 2); }
+.stage[data-template='creative'] .pcell:nth-child(6) { margin-left: calc(var(--slant) * var(--bar-pitch)); }
+.stage[data-template='creative'] .pcell__label { flex: 1; min-width: 0; font-size: 1.2rem; font-weight: 800; letter-spacing: 0.12em; line-height: 1.3; color: #a9bccd; opacity: 1; overflow: hidden; text-overflow: ellipsis; }
+.stage[data-template='creative'] .pcell__time { order: 2; margin: 0; font-size: 3rem; }
+.stage[data-template='creative'] .pcell.is-minor .pcell__time { padding-top: 0; font-size: 2.3rem; opacity: 0.8; }
+.stage[data-template='creative'] .pcell__cd { order: 1; margin: 0; background: #06231c; color: var(--mint); font-size: 1.05rem; padding: 0.25rem 0.7rem; }
+.stage[data-template='creative'] .pcell.is-current { width: 21rem; background: var(--mint); color: #06231c; box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 0.4); }
+.stage[data-template='creative'] .pcell.is-current .pcell__label { color: #06231c; }
+/* The highlighted bar stacks its name over the countdown chip, the time beside both, so a long name
+   (Maghrib) with a long chip (Iqamah 00:04:58, 24-hour times) still fits the bar whole. */
+.stage[data-template='creative'] .pcell.is-current {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: 0.8rem;
+  row-gap: 0.3rem;
+}
+.stage[data-template='creative'] .pcell.is-current .pcell__label { grid-column: 1; grid-row: 1; }
+.stage[data-template='creative'] .pcell.is-current .pcell__cd { grid-column: 1; grid-row: 2; justify-self: start; }
+.stage[data-template='creative'] .pcell.is-current .pcell__time { grid-column: 2; grid-row: 1 / 3; }
+
+/* The card: a tall portrait panel on the dark side. */
+.stage[data-template='creative'] .screen--main .content { position: absolute; left: 67.6rem; right: 3rem; top: 3rem; bottom: 12.2rem; width: auto; margin: 0; }
+.stage[data-template='creative'] .screen--main .zikir { position: absolute; left: 67.6rem; right: 3rem; top: 3rem; bottom: 12.2rem; margin: 0; }
+.stage[data-template='creative'] .zikir__page.has-repeat { padding: 0 0 8.4rem; }
+.stage[data-template='creative'] .zikir__repeat { top: auto; bottom: 1.4rem; right: 50%; transform: translateX(50%); width: 7rem; height: 7rem; }
+.stage[data-template='creative'] .screen--main .live-strip { position: absolute; left: 67.6rem; right: 3rem; bottom: 12.2rem; max-width: none; }
+.stage[data-template='creative'] .card--wide { right: 0; }
+.stage[data-template='creative'] .card:not(.card--poster) {
+  background: rgb(14 24 34 / 0.94);
+  border: 0;
+  border-top: 0.32rem solid var(--mint);
+  border-radius: 0 2.4rem 0 2.4rem;
+  box-shadow: 0 1rem 2.6rem rgb(0 0 0 / 0.4);
+}
+.stage[data-template='creative'] .card__tag { color: var(--mint); font-weight: 800; font-size: 1.3rem; }
+.stage[data-template='creative'] .kuliah__when b,
+.stage[data-template='creative'] .kuliah__next-when { color: var(--accent); }
+.stage[data-template='creative'] .kuliah__name { text-transform: uppercase; font-size: 2.7rem; letter-spacing: 0; }
+.stage[data-template='creative'] .card--pengumuman { justify-content: flex-start; padding: 2.4rem; }
+.stage[data-template='creative'] .pengumuman__title { -webkit-line-clamp: 4; text-transform: uppercase; font-size: 2.6rem; line-height: 1.12; color: var(--accent); margin-bottom: 1.2rem; }
+.stage[data-template='creative'] .pengumuman__body { font-size: 1.75rem; }
+.stage[data-template='creative'] .zikir { border-radius: 0 2.4rem 0 2.4rem; }
+.stage[data-template='creative'] .screen--main .ticker {
+  position: absolute;
+  left: 37.4rem;
+  right: 3rem;
+  bottom: 4.8rem;
+  height: 3rem;
+  border-radius: 0 1.2rem 0 1.2rem;
+  border: 0;
+  background: #172a3c;
+}
+.stage[data-template='creative'] .ticker__cap { background: var(--accent); color: var(--ink); }
+.stage[data-template='creative'] .ticker__track,
+.stage[data-template='creative'] .ticker__static { font-size: 1.45rem; }
+.stage[data-template='creative'] .ticker__dot { color: var(--mint); }
+.stage[data-template='creative'] .screen--main .emergency-band { position: absolute; left: 37.4rem; right: 3rem; bottom: 8.3rem; }
+.stage[data-template='creative'] .screen--main .source-footer { left: 37.4rem; right: 6rem; bottom: 1.3rem; }
+
+/* Portrait card (Kreatif and Minimalis): photo and kitab on top, the words under them. */
+.stage[data-template='creative'] .card--kuliah,
+.stage[data-template='minimal'] .card--kuliah {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: 'photo kitab' 'body body';
+  gap: 1.6rem 1.4rem;
+  padding: 2.2rem 2.4rem;
+}
+.stage[data-template='creative'] .kuliah__photo,
+.stage[data-template='minimal'] .kuliah__photo { grid-area: photo; align-self: start; width: 10rem; height: 10rem; }
+.stage[data-template='creative'] .kuliah__kitab,
+.stage[data-template='minimal'] .kuliah__kitab { grid-area: kitab; justify-self: end; align-self: start; width: 7.2rem; height: 10rem; }
+.stage[data-template='creative'] .kuliah__body,
+.stage[data-template='minimal'] .kuliah__body { grid-area: body; justify-content: flex-start; gap: 0.45rem; }
+.stage[data-template='creative'] .kuliah__head,
+.stage[data-template='minimal'] .kuliah__head { flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+.stage[data-template='creative'] .kuliah__next li,
+.stage[data-template='minimal'] .kuliah__next li { display: flex; flex-direction: column; gap: 0; line-height: 1.25; margin-top: 0.5rem; }
+/* A kitab without a cover image spells its title on the block: the padding moves to the block, so the clamp box
+   ends exactly at its last line and a fifth line never shows half-cut in the padding. */
+.stage[data-template='creative'] .kuliah__kitab:not(.has-img),
+.stage[data-template='minimal'] .kuliah__kitab:not(.has-img),
+.stage[data-template='oldschool'] .kuliah__kitab:not(.has-img),
+.stage[data-template='colourful'] .kuliah__kitab:not(.has-img) { padding: 0.6rem 0.5rem; }
+.stage[data-template='creative'] .kuliah__kitab-title,
+.stage[data-template='minimal'] .kuliah__kitab-title,
+.stage[data-template='oldschool'] .kuliah__kitab-title,
+.stage[data-template='colourful'] .kuliah__kitab-title { padding: 0; font-size: 1.1rem; }
+/* Every layout template sizes the card differently from the default the row estimate (KuliahCard) was made for:
+   only whole following rows show. The list may shrink to the space left, and a row that no longer fits wraps
+   into a second column outside the card instead of being cut mid-line. */
+.stage[data-template='creative'] .kuliah__next,
+.stage[data-template='minimal'] .kuliah__next,
+.stage[data-template='oldschool'] .kuliah__next,
+.stage[data-template='colourful'] .kuliah__next { flex: 0 1 auto; min-height: 0; flex-wrap: wrap; align-content: flex-start; overflow: hidden; }
+.stage[data-template='creative'] .kuliah__next li,
+.stage[data-template='minimal'] .kuliah__next li,
+.stage[data-template='oldschool'] .kuliah__next li,
+.stage[data-template='colourful'] .kuliah__next li { width: 100%; }
+/* The rule above the following rows belongs to the first row, so it goes with it when no row fits. */
+.stage[data-template='creative'] .kuliah__next,
+.stage[data-template='minimal'] .kuliah__next,
+.stage[data-template='oldschool'] .kuliah__next,
+.stage[data-template='colourful'] .kuliah__next { border-top: 0; padding-top: 0; }
+.stage[data-template='creative'] .kuliah__next li:first-child,
+.stage[data-template='minimal'] .kuliah__next li:first-child,
+.stage[data-template='oldschool'] .kuliah__next li:first-child,
+.stage[data-template='colourful'] .kuliah__next li:first-child { border-top: 1px solid rgb(var(--accent-rgb) / 0.28); padding-top: 0.45rem; }
+.stage[data-template='minimal'] .kuliah__next li:first-child { border-top-color: var(--hair); }
+.stage[data-template='creative'] .kuliah__when,
+.stage[data-template='minimal'] .kuliah__when { font-size: 1.6rem; }
+.stage[data-template='creative'] .kuliah__when b,
+.stage[data-template='minimal'] .kuliah__when b { font-size: 1.8rem; margin-left: 0.4rem; }
+.stage[data-template='creative'] .kuliah__topic,
+.stage[data-template='minimal'] .kuliah__topic { font-size: 1.9rem; }
+.stage[data-template='creative'] .kuliah__meta,
+.stage[data-template='minimal'] .kuliah__meta { font-size: 1.45rem; white-space: normal; }
+.stage[data-template='creative'] .kuliah__next li,
+.stage[data-template='minimal'] .kuliah__next li { font-size: 1.35rem; }
+.stage[data-template='minimal'] .card__tag { font-size: 1.3rem; }
+/* The Islamic text cards are narrower here than the default's gutter-to-gutter wide card: the source and credit
+   lines wrap rather than cut an attribution short. */
+.stage[data-template='creative'] .ayat__credit,
+.stage[data-template='minimal'] .ayat__credit,
+.stage[data-template='oldschool'] .ayat__credit,
+.stage[data-template='colourful'] .ayat__credit { flex-wrap: wrap; white-space: normal; row-gap: 0.2rem; line-height: 1.25; }
+.stage[data-template='creative'] .hadis__foot,
+.stage[data-template='minimal'] .hadis__foot,
+.stage[data-template='oldschool'] .hadis__foot,
+.stage[data-template='colourful'] .hadis__foot { flex-wrap: wrap; row-gap: 0.2rem; }
+/* Hadis: the Arabic and the Malay keep their clamp height, so a text taller than the narrower card overflows
+   the body and the card's own fit (useFit) shrinks it, instead of a squeezed clamp box cutting a line in half. */
+.stage[data-template='creative'] .hadis__body > *,
+.stage[data-template='minimal'] .hadis__body > *,
+.stage[data-template='oldschool'] .hadis__body > *,
+.stage[data-template='colourful'] .hadis__body > * { flex-shrink: 0; }
+/* The card head (tag, surah, counters) may wrap in the portrait panel. */
+.stage[data-template='creative'] .card__head { flex-wrap: wrap; row-gap: 0.3rem; }
+/* Tugasan in the portrait panel and the Minimalis column: the days stack, one under the other. */
+.stage[data-template='creative'] .tugasan__days.cols-2,
+.stage[data-template='creative'] .tugasan__days.cols-3,
+.stage[data-template='minimal'] .tugasan__days.cols-2,
+.stage[data-template='minimal'] .tugasan__days.cols-3 { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 0.9rem; }
+/* Each stacked day shows only the role rows that fit whole (a row that does not fit wraps out of sight). */
+.stage[data-template='creative'] .tugasan__day,
+.stage[data-template='minimal'] .tugasan__day { min-height: 0; }
+.stage[data-template='creative'] .tugasan__rows,
+.stage[data-template='minimal'] .tugasan__rows { flex: 1 1 0; flex-wrap: wrap; align-content: flex-start; }
+.stage[data-template='creative'] .tugasan__row,
+.stage[data-template='minimal'] .tugasan__row { width: 100%; }
+.stage[data-template='creative'] .tugasan__day + .tugasan__day,
+.stage[data-template='minimal'] .tugasan__day + .tugasan__day { border-left: 0; padding-left: 0; border-top: 1px solid rgb(var(--accent-rgb) / 0.28); padding-top: 0.8rem; }
+.stage[data-template='creative'] .tugasan__days.cols-3 .tugasan__name,
+.stage[data-template='minimal'] .tugasan__days.cols-3 .tugasan__name { font-size: 1.5rem; }
+/* Program khas in the portrait panel: the picture across the top, the words under it. */
+.stage[data-template='creative'] .card--program { flex-direction: column; gap: 1.4rem; padding: 2.2rem 2.4rem; }
+.stage[data-template='creative'] .program__img { width: auto; height: 13.5rem; flex: none; }
+.stage[data-template='creative'] .program__body { flex: 1 1 0; min-height: 0; justify-content: flex-start; overflow: hidden; }
+.stage[data-template='creative'] .program__title { font-size: 2.8rem; }
+.stage[data-template='creative'] .program__when { font-size: 1.8rem; }
+.stage[data-template='creative'] .program__note { font-size: 1.6rem; }
+/* World times in the narrow column: up to three cities stack, more go two abreast. */
+.stage[data-template='creative'] .wt__grid:not(.is-two-rows) { grid-template-columns: minmax(0, 1fr); }
+.stage[data-template='creative'] .wt__grid.is-two-rows,
+.stage[data-template='minimal'] .wt__grid.is-two-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stage[data-template='creative'] .wt__grid.is-two-rows .wt__time,
+.stage[data-template='minimal'] .wt__grid.is-two-rows .wt__time { font-size: 2.9rem; }
+/* Takwim in the narrow column: a slimmer days block, and the title wraps to two lines instead of one cut line. */
+.stage[data-template='creative'] .takwim__days,
+.stage[data-template='minimal'] .takwim__days { width: 7.6rem; }
+.stage[data-template='creative'] .takwim__row,
+.stage[data-template='minimal'] .takwim__row { gap: 1.1rem; }
+.stage[data-template='creative'] .takwim__title,
+.stage[data-template='minimal'] .takwim__title {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  line-height: 1.18;
+}
+
+/* No card: the clock grows; the next prayer crosses to the dark side as its own panel. */
+.stage[data-template='creative'] .screen--main.is-idle .content { display: none; }
+.stage[data-template='creative'] .screen--main.is-idle .clock { top: 8rem; }
+/* Not larger than with a card: a four-digit time (10:00 to 12:59, or 24-hour) must stay on the slab. */
+.stage[data-template='creative'] .screen--main.is-idle .clock__hm { font-size: 13.5rem; letter-spacing: -0.04em; }
+.stage[data-template='creative'] .screen--main.is-idle .clock__aside { font-size: 2.6rem; }
+.stage[data-template='creative'] .screen--main.is-idle .ident__dates { top: 23rem; font-size: 2rem; margin: 0; gap: 0.25rem; }
+.stage[data-template='creative'] .screen--main.is-idle .pbar { --bar-pitch: 6.45rem; }
+.stage[data-template='creative'] .screen--main.is-idle .pcell { height: 5.9rem; }
+/* With the emergency band (bottom 8.3rem, across from 37.4rem) the idle bars keep the card-time size: seven bars
+   then end at 43.4rem, clear of the band's top (about 44.8rem), instead of 47.6rem, under it. */
+.stage[data-template='creative'] .screen--main.is-idle.has-emergency .pbar { --bar-pitch: 5.85rem; }
+.stage[data-template='creative'] .screen--main.is-idle.has-emergency .pcell { height: 5.3rem; }
+.stage[data-template='creative'] .screen--main.is-idle .next {
+  left: 67.6rem;
+  right: 3rem;
+  top: 13rem;
+  margin: 0;
+  padding: 2.4rem 2.2rem 2.6rem;
+  background: #172a3c;
+  border-top: 0.32rem solid var(--mint);
+  border-radius: 0 2.4rem 0 2.4rem;
+  font-size: 1.7rem;
+}
+.stage[data-template='creative'] .screen--main.is-idle .next .num { font-size: 5rem; margin-top: 0.6rem; }
+
+/* Phases: the slab widens and carries the phase; the bars follow the new cut. */
+.stage[data-template='creative'] .screen--phase { z-index: 2; }
+.stage[data-template='creative'] .screen--phase .phase__head { left: 3rem; right: auto; width: 54rem; top: 2.7rem; align-items: center; gap: 1.6rem; }
+.stage[data-template='creative'] .screen--phase .ident__head { min-width: 0; }
+.stage[data-template='creative'] .screen--phase .phase__clock { color: var(--ink); font-size: 2.8rem; font-weight: 800; flex: none; }
+.stage[data-template='creative'] .screen--phase .pbar { left: 64.4rem; right: auto; bottom: auto; top: 3rem; width: 24rem; }
+.stage[data-template='creative'] .screen--phase .pcell.is-current { width: 24rem; }
+.stage[data-template='creative'] .phase__centre {
+  left: 3rem;
+  right: auto;
+  width: 54rem;
+  top: 9rem;
+  bottom: 9rem;
+  align-items: flex-start;
+  text-align: left;
+  color: var(--ink);
+}
+.stage[data-template='creative'] .phase__title { font-size: 3.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink); }
+.stage[data-template='creative'] .phase__big { font-size: 12.4rem; letter-spacing: -0.04em; margin: 0.6rem 0 0 -0.4rem; color: var(--ink); }
+.stage[data-template='creative'] .phase__big.is-warning { color: #8a1c0c; }
+.stage[data-template='creative'] .phase__time { font-size: 10rem; letter-spacing: -0.04em; color: var(--ink); }
+.stage[data-template='creative'] .phase__sub { font-weight: 600; opacity: 0.85; }
+.stage[data-template='creative'] .screen--iqamah .phase__centre::after { content: ''; width: 16rem; height: 0.6rem; margin-top: 2rem; background: var(--ink); }
+.stage[data-template='creative'] .screen--phase .emergency-band { left: 64rem; right: 3rem; bottom: 4.6rem; }
+.stage[data-template='creative'] .screen--phase .source-footer { left: 64rem; right: 6rem; color: var(--text); }
+.stage[data-template='creative'] .phase__calm .phase__title { font-size: 4.8rem; line-height: 1.05; max-width: 100%; }
+.stage[data-template='creative'] .phase__calm .phase__sub { font-size: 2.3rem; margin-top: 1.4rem; }
+/* No prayer data: the slab holds the clock and the message. */
+.stage[data-template='creative'][data-phase='noData'] .phase__centre { top: 0; bottom: 0; justify-content: center; }
+.stage[data-template='creative'] .phase__nodata { align-items: flex-start; }
+.stage[data-template='creative'] .phase__nodata .clock { text-align: left; line-height: 0.84; }
+.stage[data-template='creative'] .phase__nodata .clock__hm { font-size: 14rem; letter-spacing: -0.055em; }
+.stage[data-template='creative'] .phase__nodata .clock__aside { font-size: 3rem; }
+.stage[data-template='creative'] .phase__date { font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; opacity: 1; }
+.stage[data-template='creative'] .phase__nodata .phase__title { font-size: 2.4rem; text-transform: none; letter-spacing: 0; font-weight: 600; opacity: 1; }
+/* Solat and tarawih: the slab goes to deep ink, everything quiet. */
+.stage[data-template='creative'][data-dim='true'] { --slab-a: #182838; --slab-b: #132130; }
+.stage[data-template='creative'][data-dim='true'] .bg__dim { opacity: 0.55; }
+.stage[data-template='creative'][data-dim='true'] .bg::after { opacity: 0.2; }
+.stage[data-template='creative'][data-dim='true'] :is(.ident__name, .phase__clock, .phase__centre, .phase__title) { color: #c9d6e2; }
+.stage[data-template='creative'][data-dim='true'] .phase__calm .phase__title { color: var(--mint); }
+.stage[data-template='creative'][data-dim='true'] .phase__calm .phase__sub { color: #b9c7d3; }
+.stage[data-template='creative'][data-dim='true'] .pbar.is-dimmed { opacity: 0.3; }
+
+/* ======================================================================================================
+   Live on the kiosk (Plan 5 Task 6), every layout template. The live picture (live.css: .live at z-index -1 in
+   the isolated main screen) covers each template's own .bg, so while .has-live is on nothing may lean on that
+   background: every text sits on its own plate or reads light on the live scrim. The head steps down to the
+   live sizes the operator asked for ("smaller more": live.css clock 5.2rem, aside 1.25rem, dates 1.05rem, or the
+   layout's own equivalent) and moves off the middle of the picture. The prayer bar, the next prayer box and
+   the ticker keep their design. The default template's live look is live.css alone.
+   ====================================================================================================== */
+
+/* Klasik Lama: the board's pieces become printed notices pinned over the picture. The masthead is one paper
+   banner, the clock and the next prayer stack as two paper panels in the right column, the jadual stays on the
+   left and the middle is left open for the speaker. */
+.stage[data-template='oldschool'] .screen--main.has-live {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name   name   name'
+    'dates  dates  dates'
+    'bar    band   clock'
+    'bar    band   next'
+    'bar    band   .'
+    'ticker ticker ticker';
+}
+.stage[data-template='oldschool'] .screen--main.has-live.has-emergency {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'name   name   name'
+    'dates  dates  dates'
+    'bar    band   clock'
+    'bar    band   next'
+    'bar    band   .'
+    'emerg  emerg  emerg'
+    'ticker ticker ticker';
+}
+.stage[data-template='oldschool'] .screen--main.has-live .ident__head {
+  padding: 0.5rem 2rem 0;
+  background: var(--paper);
+  border: 0.24rem double var(--rule);
+  border-bottom: 0;
+}
+.stage[data-template='oldschool'] .screen--main.has-live .ident__name { font-size: 2.5rem; }
+.stage[data-template='oldschool'] .screen--main.has-live .ident__head::before,
+.stage[data-template='oldschool'] .screen--main.has-live .ident__head::after { height: 2rem; background-size: 2rem 2rem, calc(100% - 2.8rem) 0.12rem, calc(100% - 2.8rem) 0.12rem; }
+.stage[data-template='oldschool'] .screen--main.has-live .ident__dates {
+  margin: 0 0 1.2rem;
+  padding: 0 2rem 0.6rem;
+  background: var(--paper);
+  border-left: 0.24rem double var(--rule);
+  border-right: 0.24rem double var(--rule);
+  font-size: 1.4rem;
+  gap: 1rem;
+}
+.stage[data-template='oldschool'] .screen--main.has-live .clock {
+  justify-self: stretch;
+  align-self: start;
+  margin: 0 0 0.8rem;
+  padding: 0.8rem 1.6rem 0.6rem;
+  text-align: center;
+  line-height: 0.9;
+  background: var(--paper);
+  border: 0.24rem double var(--rule);
+  box-shadow: 0 0.3rem 0.9rem rgb(80 50 20 / 0.1);
+}
+.stage[data-template='oldschool'] .screen--main.has-live .clock__hm { font-size: 5.2rem; }
+.stage[data-template='oldschool'] .screen--main.has-live .clock__aside { font-size: 1.5rem; margin-left: 0.5rem; }
+.stage[data-template='oldschool'] .screen--main.has-live .next { align-self: start; margin: 0; }
+/* The strip runs from the jadual to the right edge, under the two panels. */
+.stage[data-template='oldschool'] .screen--main.has-live .live-strip { grid-area: auto; grid-column: 2 / -1; grid-row: 5; margin-top: 1.4rem; text-shadow: none; }
+/* The tally block in the board's maroon (live.css gives it a dark wash meant for a dark glass). */
+.stage[data-template='oldschool'] .screen--main.has-live .live-strip__tag { background: var(--accent); color: var(--ink); border-right: 0; }
+
+/* Minimalis: its own quiet dark palette (the one it wears for solat), so the thin type reads light on a dark
+   scrim; the clock, the next prayer and the dates stack under the name on the left, the picture's middle stays
+   open and the strip sits in the card column. */
+.stage[data-template='minimal'] .screen--main.has-live {
+  --glass-rgb: 15 23 21;
+  --text: #f1f5f4;
+  --accent: #7fd6c8;
+  --accent-rgb: 127 214 200;
+  --muted: #bccac6;
+  --hair: rgb(255 255 255 / 0.22);
+  color: var(--text); /* the stage's colour was computed from the light palette's --text */
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'name   band'
+    'clock  band'
+    'next   band'
+    'dates  band'
+    '.      band'
+    'bar    bar'
+    'ticker ticker';
+}
+.stage[data-template='minimal'] .screen--main.has-live.has-emergency {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas:
+    'name   band'
+    'clock  band'
+    'next   band'
+    'dates  band'
+    '.      band'
+    'emerg  emerg'
+    'bar    bar'
+    'ticker ticker';
+}
+.stage[data-template='minimal'] .screen--main.has-live :is(.ident__name, .clock__hm, .clock__aside, .next, .ident__dates, .pbar, .ticker, .source-footer) {
+  text-shadow: 0 0.1rem 0.5rem rgb(0 0 0 / 0.5);
+}
+.stage[data-template='minimal'] .screen--main.has-live .clock { justify-self: start; margin-top: 1.4rem; }
+.stage[data-template='minimal'] .screen--main.has-live .clock__hm { font-size: 5.2rem; font-weight: 400; letter-spacing: -0.03em; }
+.stage[data-template='minimal'] .screen--main.has-live .clock__aside { font-size: 1.25rem; margin-left: 0.6rem; }
+.stage[data-template='minimal'] .screen--main.has-live .next { justify-self: start; margin-top: 1rem; }
+.stage[data-template='minimal'] .screen--main.has-live .ident__dates { justify-self: start; margin-top: 0.5rem; font-size: 1.05rem; gap: 0.7rem; color: var(--text); }
+.stage[data-template='minimal'] .screen--main.has-live .live-strip {
+  background: rgb(15 23 21 / 0.88);
+  border-color: rgb(255 255 255 / 0.12);
+  box-shadow: none;
+}
+.stage[data-template='minimal'] .screen--main.has-live .pbar.glass { background: none; border-color: var(--hair); }
+.stage[data-template='minimal'] .screen--main.has-live .pcell__cd { color: #0f1715; }
+.stage[data-template='minimal'] .screen--main.has-live :is(.ticker__track, .ticker__static) { color: var(--text); }
+
+/* Berwarna-warni: the blocks are already plates. The clock block steps down and centres its line, the sunset
+   block keeps its size but only its own width, so the top of the picture is not one long band. */
+.stage[data-template='colourful'] .screen--main.has-live .clock {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  align-items: baseline;
+  padding: 1rem 1.8rem 1.1rem 1.6rem;
+}
+.stage[data-template='colourful'] .screen--main.has-live .clock__hm { font-size: 5.2rem; }
+.stage[data-template='colourful'] .screen--main.has-live .clock__aside { font-size: 1.25rem; margin-left: 0.6rem; }
+.stage[data-template='colourful'] .screen--main.has-live .next { justify-self: start; }
+.stage[data-template='colourful'] .screen--main.has-live .ident__dates { font-size: 1.05rem; gap: 0.7rem; }
+
+/* Kreatif: the saffron slab is part of the background the picture covers, so a small slab of its own comes
+   back in the top-left corner, cut on the same --slant with the same mint seam: name, clock and dates stay
+   ink on saffron. The next prayer box moves up under it; the bars, the ticker and the right column keep their
+   places, and the strip takes the empty card column. */
+.stage[data-template='creative'] .screen--main.has-live::before,
+.stage[data-template='creative'] .screen--main.has-live::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 15.2rem;
+  pointer-events: none;
+}
+.stage[data-template='creative'] .screen--main.has-live::before {
+  width: 31rem;
+  background:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='%231a1306' stroke-opacity='0.07' stroke-width='1.2'><rect x='22' y='22' width='36' height='36'/><rect x='22' y='22' width='36' height='36' transform='rotate(45 40 40)'/></g></svg>") 0 0 / 5rem 5rem,
+    linear-gradient(165deg, var(--slab-a) 0%, var(--slab-b) 100%);
+  -webkit-clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant) * 15.2rem) 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant) * 15.2rem) 100%, 0 100%);
+}
+.stage[data-template='creative'] .screen--main.has-live::after {
+  width: 31.75rem;
+  background: var(--mint);
+  opacity: 0.85;
+  -webkit-clip-path: polygon(calc(100% - 0.35rem) 0, 100% 0, calc(100% - var(--slant) * 15.2rem) 100%, calc(100% - 0.35rem - var(--slant) * 15.2rem) 100%);
+  clip-path: polygon(calc(100% - 0.35rem) 0, 100% 0, calc(100% - var(--slant) * 15.2rem) 100%, calc(100% - 0.35rem - var(--slant) * 15.2rem) 100%);
+}
+.stage[data-template='creative'] .screen--main.has-live .ident__head { max-width: 24rem; }
+.stage[data-template='creative'] .screen--main.has-live .clock { top: 4.7rem; }
+.stage[data-template='creative'] .screen--main.has-live .clock__hm { font-size: 5.2rem; letter-spacing: -0.03em; }
+.stage[data-template='creative'] .screen--main.has-live .clock__aside { font-size: 1.25rem; margin-left: 0.5rem; }
+.stage[data-template='creative'] .screen--main.has-live .ident__dates { top: 10.3rem; font-size: 1.05rem; gap: 0.2rem; }
+.stage[data-template='creative'] .screen--main.has-live .next { top: 17rem; }
+/* The strip takes the lane between the last bar (43.4rem) and the ticker, as wide as the ticker; with the
+   emergency band in that lane it moves up into the card column, right of the bars. */
+.stage[data-template='creative'] .screen--main.has-live .live-strip { justify-self: auto; left: 37.4rem; bottom: 8.3rem; }
+.stage[data-template='creative'] .screen--main.has-live.has-emergency .live-strip { left: 60rem; bottom: 12.2rem; }
+
+/* ======================================================================================================
+   Every layout template: the identity block is `display: contents` on the main screen, so its own fade (the
+   poster takeover, the idle <-> card settle in styles.css) is carried by its three children instead.
+   ====================================================================================================== */
+.stage[data-template='oldschool'] .screen--main .ident > *,
+.stage[data-template='minimal'] .screen--main .ident > *,
+.stage[data-template='colourful'] .screen--main .ident > *,
+.stage[data-template='creative'] .screen--main .ident > * { transition: opacity 400ms ease, visibility 0s linear 0s; }
+.stage[data-template='oldschool'] .screen--main.is-poster .ident > *,
+.stage[data-template='minimal'] .screen--main.is-poster .ident > *,
+.stage[data-template='colourful'] .screen--main.is-poster .ident > *,
+.stage[data-template='creative'] .screen--main.is-poster .ident > * {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 400ms ease, visibility 0s linear 400ms;
+}
+.stage[data-template='oldschool'] .screen--main.is-settling .ident > *,
+.stage[data-template='minimal'] .screen--main.is-settling .ident > *,
+.stage[data-template='colourful'] .screen--main.is-settling .ident > *,
+.stage[data-template='creative'] .screen--main.is-settling .ident > * { animation: head-settle 520ms ease-out backwards; }
+.stage[data-template='oldschool'] .screen--main.is-settling.is-idle .ident > *,
+.stage[data-template='minimal'] .screen--main.is-settling.is-idle .ident > *,
+.stage[data-template='colourful'] .screen--main.is-settling.is-idle .ident > *,
+.stage[data-template='creative'] .screen--main.is-settling.is-idle .ident > * { animation: head-settle-idle 520ms ease-out backwards; }
+.stage[data-template='oldschool'] .screen--main.is-poster .ident > *,
+.stage[data-template='minimal'] .screen--main.is-poster .ident > *,
+.stage[data-template='colourful'] .screen--main.is-poster .ident > *,
+.stage[data-template='creative'] .screen--main.is-poster .ident > * { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .stage[data-template='oldschool'] .screen--main .ident > *,
+  .stage[data-template='minimal'] .screen--main .ident > *,
+  .stage[data-template='colourful'] .screen--main .ident > *,
+  .stage[data-template='creative'] .screen--main .ident > * { transition: none; animation: none; }
+}
+
+/* Every template: the emergency band keeps its amber warning look with dark ink, framed so it reads on light and
+   dark fields alike. */
+.stage[data-template='colourful'] .emergency-band,
+.stage[data-template='creative'] .emergency-band,
+.stage[data-template='oldschool'] .emergency-band,
+.stage[data-template='minimal'] .emergency-band {
+  background: #f5b335;
+  color: #1a1405;
+  border: 0.2rem solid #1a1405;
+  border-radius: 0.6rem;
+  font-family: var(--font);
+  text-shadow: none;
+}

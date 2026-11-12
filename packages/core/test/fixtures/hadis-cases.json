@@ -1,0 +1,3827 @@
+{
+ "cases": [
+  {
+   "fn": "hadisLength",
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "expect": "short"
+  },
+  {
+   "fn": "hadisLength",
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "expect": "medium"
+  },
+  {
+   "fn": "hadisLength",
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "expect": "medium"
+  },
+  {
+   "fn": "hadisLength",
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "expect": "long"
+  },
+  {
+   "fn": "gradeOf",
+   "input": "صحيح",
+   "expect": "sahih"
+  },
+  {
+   "fn": "gradeOf",
+   "input": "صحيح لغيره",
+   "expect": "sahih_lighairihi"
+  },
+  {
+   "fn": "gradeOf",
+   "input": "ضعيف جدا",
+   "expect": null
+  },
+  {
+   "fn": "attributionOf",
+   "input": "رواه البخاري ومسلم",
+   "expect": {
+    "short": "Muttafaq alaih",
+    "long": "Riwayat al-Bukhari dan Muslim"
+   }
+  },
+  {
+   "fn": "attributionOf",
+   "input": "رواه أبو داود والترمذي",
+   "expect": {
+    "short": "Riwayat Abu Daud dan al-Tirmizi",
+    "long": null
+   }
+  },
+  {
+   "fn": "attributionOf",
+   "input": "رواه فلان",
+   "expect": null
+  },
+  {
+   "fn": "providerItemId",
+   "input": "66512",
+   "expect": "hadeethenc-66512"
+  },
+  {
+   "fn": "hadisParts",
+   "input": "KataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKata. KataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKata. KataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKata. KataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKata.",
+   "max": 400,
+   "expect": [
+    "KataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKata. KataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKata. KataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKata.",
+    "KataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKataKata."
+   ]
+  },
+  {
+   "fn": "hadisParts",
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.",
+   "max": 400,
+   "expect": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb."
+   ]
+  }
+ ],
+ "tv": {
+  "tierCases": [
+   {
+    "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+    "textAr": null,
+    "from": "l",
+    "expect": "l"
+   },
+   {
+    "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+    "textAr": null,
+    "from": "m",
+    "expect": "m"
+   },
+   {
+    "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+    "textAr": null,
+    "from": "s",
+    "expect": "s"
+   },
+   {
+    "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+    "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "from": "l",
+    "expect": "l"
+   },
+   {
+    "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+    "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "from": "m",
+    "expect": "m"
+   },
+   {
+    "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+    "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "from": "s",
+    "expect": "s"
+   },
+   {
+    "textMs": "Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat.",
+    "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "from": "l",
+    "expect": "l"
+   },
+   {
+    "textMs": "Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat.",
+    "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "from": "m",
+    "expect": "m"
+   },
+   {
+    "textMs": "Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat.",
+    "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "from": "s",
+    "expect": "s"
+   },
+   {
+    "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+    "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "from": "l",
+    "expect": null
+   },
+   {
+    "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+    "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "from": "m",
+    "expect": null
+   },
+   {
+    "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+    "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "from": "s",
+    "expect": null
+   },
+   {
+    "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+    "textAr": null,
+    "from": "l",
+    "expect": null
+   },
+   {
+    "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+    "textAr": null,
+    "from": "m",
+    "expect": null
+   },
+   {
+    "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+    "textAr": null,
+    "from": "s",
+    "expect": null
+   }
+  ],
+  "planCases": [
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah."
+    },
+    "settings": {},
+    "expect": {
+     "mode": "single",
+     "tier": "l",
+     "showIntro": true,
+     "showAr": false
+    }
+   },
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah."
+    },
+    "settings": {
+     "showArabic": false
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "l",
+     "showIntro": true,
+     "showAr": false
+    }
+   },
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah."
+    },
+    "settings": {
+     "fontSize": "s"
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "s",
+     "showIntro": true,
+     "showAr": false
+    }
+   },
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah."
+    },
+    "settings": {
+     "fontSize": "m"
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "m",
+     "showIntro": true,
+     "showAr": false
+    }
+   },
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah."
+    },
+    "settings": {
+     "fontSize": "l"
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "l",
+     "showIntro": true,
+     "showAr": false
+    }
+   },
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {},
+    "expect": {
+     "mode": "single",
+     "tier": "l",
+     "showIntro": true,
+     "showAr": true
+    }
+   },
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {
+     "showArabic": false
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "l",
+     "showIntro": true,
+     "showAr": false
+    }
+   },
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {
+     "fontSize": "s"
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "s",
+     "showIntro": true,
+     "showAr": true
+    }
+   },
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {
+     "fontSize": "m"
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "m",
+     "showIntro": true,
+     "showAr": true
+    }
+   },
+   {
+    "item": {
+     "textMs": "Senyumanmu di hadapan saudaramu adalah sedekah.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {
+     "fontSize": "l"
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "l",
+     "showIntro": true,
+     "showAr": true
+    }
+   },
+   {
+    "item": {
+     "textMs": "Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {},
+    "expect": {
+     "mode": "single",
+     "tier": "l",
+     "showIntro": true,
+     "showAr": true
+    }
+   },
+   {
+    "item": {
+     "textMs": "Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {
+     "showArabic": false
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "l",
+     "showIntro": true,
+     "showAr": false
+    }
+   },
+   {
+    "item": {
+     "textMs": "Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {
+     "fontSize": "s"
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "s",
+     "showIntro": true,
+     "showAr": true
+    }
+   },
+   {
+    "item": {
+     "textMs": "Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {
+     "fontSize": "m"
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "m",
+     "showIntro": true,
+     "showAr": true
+    }
+   },
+   {
+    "item": {
+     "textMs": "Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat. Sesungguhnya setiap amalan itu bergantung kepada niat.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى"
+    },
+    "settings": {
+     "fontSize": "l"
+    },
+    "expect": {
+     "mode": "single",
+     "tier": "l",
+     "showIntro": true,
+     "showAr": true
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+     "intro": "Daripada Abu Hurairah, beliau berkata:"
+    },
+    "settings": {},
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+     "intro": "Daripada Abu Hurairah, beliau berkata:"
+    },
+    "settings": {
+     "showArabic": false
+    },
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+     "intro": "Daripada Abu Hurairah, beliau berkata:"
+    },
+    "settings": {
+     "fontSize": "s"
+    },
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+     "intro": "Daripada Abu Hurairah, beliau berkata:"
+    },
+    "settings": {
+     "fontSize": "m"
+    },
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+     "textAr": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+     "intro": "Daripada Abu Hurairah, beliau berkata:"
+    },
+    "settings": {
+     "fontSize": "l"
+    },
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+    },
+    "settings": {},
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+    },
+    "settings": {
+     "showArabic": false
+    },
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+    },
+    "settings": {
+     "fontSize": "s"
+    },
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+    },
+    "settings": {
+     "fontSize": "m"
+    },
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   },
+   {
+    "item": {
+     "textMs": "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+    },
+    "settings": {
+     "fontSize": "l"
+    },
+    "expect": {
+     "mode": "parts",
+     "parts": [
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan.",
+      "Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan. Daripada Abu Hurairah, beliau berkata: Rasulullah bersabda dengan panjang lebar tentang amalan."
+     ],
+     "tier": "m"
+    }
+   }
+  ],
+  "poolItems": [
+   {
+    "id": "s1",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks s1.",
+    "source": "Riwayat Muslim",
+    "order": 1000
+   },
+   {
+    "id": "hadeethenc-1",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 2000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "s2",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks s2.",
+    "source": "Riwayat Muslim",
+    "order": 3000
+   },
+   {
+    "id": "hadeethenc-2",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 2.",
+    "source": "Muttafaq alaih",
+    "grade": "hasan",
+    "order": 4000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "2",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "s3",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks s3.",
+    "source": "Riwayat Muslim",
+    "order": 5000,
+    "shown": false
+   },
+   {
+    "id": "hadeethenc-3",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 3.",
+    "source": "Muttafaq alaih",
+    "grade": "hasan_lighairihi",
+    "order": 6000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "3",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "hadeethenc-4",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 4.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 7000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "4",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "s4",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks s4.",
+    "source": "Riwayat Muslim"
+   },
+   {
+    "id": "s5",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks s5.",
+    "source": "Riwayat Muslim",
+    "order": 8000
+   },
+   {
+    "id": "hadeethenc-5",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 5.",
+    "source": "Muttafaq alaih",
+    "grade": "dhaif",
+    "order": 9000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "5",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "hadeethenc-6",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 6.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 10000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "6",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "shown": false
+   },
+   {
+    "id": "hadeethenc-7",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 7.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 11000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "7",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "blocked": true
+    }
+   }
+  ],
+  "poolCases": [
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "s1",
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2",
+     "hadeethenc-4",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "s1",
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2",
+     "hadeethenc-4",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "s1",
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2",
+     "hadeethenc-4",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "s1",
+     "s2",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "s1",
+     "s2",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "s1",
+     "s2",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "hadeethenc",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": true
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "hadeethenc-1",
+     "hadeethenc-2",
+     "hadeethenc-3",
+     "hadeethenc-4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "hadeethenc",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": true
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "hadeethenc-1",
+     "hadeethenc-2",
+     "hadeethenc-3",
+     "hadeethenc-4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "hadeethenc",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": true
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "hadeethenc-1",
+     "hadeethenc-2",
+     "hadeethenc-3",
+     "hadeethenc-4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "s1",
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2",
+     "s5",
+     "hadeethenc-4",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "s1",
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2",
+     "s5",
+     "hadeethenc-4",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "s1",
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2",
+     "s5",
+     "hadeethenc-4",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "s1",
+     "s2",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "s1",
+     "s2",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "s1",
+     "s2",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "hadeethenc-4",
+     "s1",
+     "s4",
+     "hadeethenc-1",
+     "s5",
+     "s2",
+     "hadeethenc-2"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "s5",
+     "hadeethenc-2",
+     "hadeethenc-4",
+     "hadeethenc-1",
+     "s1",
+     "s2",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "s4",
+     "hadeethenc-2",
+     "s2",
+     "hadeethenc-1",
+     "s5",
+     "hadeethenc-4",
+     "s1"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 3,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "s5",
+     "s4",
+     "s1"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 3,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 3,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "s5",
+     "s4",
+     "s1"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "day",
+     "perDay": 2,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "s1",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "day",
+     "perDay": 2,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "hadeethenc-1",
+     "s1"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "day",
+     "perDay": 2,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "hadeethenc-2",
+     "s2"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 10,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "s1",
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2",
+     "hadeethenc-4",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 10,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "s1",
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2",
+     "hadeethenc-4",
+     "s5",
+     "s4"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 10,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "s1",
+     "hadeethenc-1",
+     "s2",
+     "hadeethenc-2",
+     "hadeethenc-4",
+     "s5",
+     "s4"
+    ]
+   }
+  ],
+  "poolBigItems": [
+   {
+    "id": "hadeethenc-1000",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1000.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 1000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1000",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b001",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b001.",
+    "source": "Riwayat Muslim",
+    "order": 2000
+   },
+   {
+    "id": "b002",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b002.",
+    "source": "Riwayat Muslim",
+    "order": 3000
+   },
+   {
+    "id": "hadeethenc-1003",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1003.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 4000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1003",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b004",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b004.",
+    "source": "Riwayat Muslim",
+    "order": 5000
+   },
+   {
+    "id": "b005",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b005.",
+    "source": "Riwayat Muslim",
+    "order": 6000
+   },
+   {
+    "id": "hadeethenc-1006",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1006.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 7000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1006",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b007",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b007.",
+    "source": "Riwayat Muslim",
+    "order": 8000
+   },
+   {
+    "id": "b008",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b008.",
+    "source": "Riwayat Muslim",
+    "order": 9000
+   },
+   {
+    "id": "hadeethenc-1009",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1009.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 10000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1009",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b010",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b010.",
+    "source": "Riwayat Muslim",
+    "order": 11000
+   },
+   {
+    "id": "b011",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b011.",
+    "source": "Riwayat Muslim",
+    "order": 12000
+   },
+   {
+    "id": "hadeethenc-1012",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1012.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 13000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1012",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b013",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b013.",
+    "source": "Riwayat Muslim",
+    "order": 14000
+   },
+   {
+    "id": "b014",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b014.",
+    "source": "Riwayat Muslim",
+    "order": 15000
+   },
+   {
+    "id": "hadeethenc-1015",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1015.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 16000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1015",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b016",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b016.",
+    "source": "Riwayat Muslim",
+    "order": 17000
+   },
+   {
+    "id": "b017",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b017.",
+    "source": "Riwayat Muslim",
+    "order": 18000
+   },
+   {
+    "id": "hadeethenc-1018",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1018.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 19000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1018",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b019",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b019.",
+    "source": "Riwayat Muslim",
+    "order": 20000
+   },
+   {
+    "id": "b020",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b020.",
+    "source": "Riwayat Muslim",
+    "order": 21000
+   },
+   {
+    "id": "hadeethenc-1021",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1021.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 22000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1021",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b022",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b022.",
+    "source": "Riwayat Muslim",
+    "order": 23000
+   },
+   {
+    "id": "b023",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b023.",
+    "source": "Riwayat Muslim",
+    "order": 24000
+   },
+   {
+    "id": "hadeethenc-1024",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1024.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 25000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1024",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b025",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b025.",
+    "source": "Riwayat Muslim",
+    "order": 26000
+   },
+   {
+    "id": "b026",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b026.",
+    "source": "Riwayat Muslim",
+    "order": 27000
+   },
+   {
+    "id": "hadeethenc-1027",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1027.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 28000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1027",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b028",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b028.",
+    "source": "Riwayat Muslim",
+    "order": 29000
+   },
+   {
+    "id": "b029",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b029.",
+    "source": "Riwayat Muslim",
+    "order": 30000
+   },
+   {
+    "id": "hadeethenc-1030",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1030.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 31000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1030",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b031",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b031.",
+    "source": "Riwayat Muslim",
+    "order": 32000
+   },
+   {
+    "id": "b032",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b032.",
+    "source": "Riwayat Muslim",
+    "order": 33000
+   },
+   {
+    "id": "hadeethenc-1033",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1033.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 34000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1033",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b034",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b034.",
+    "source": "Riwayat Muslim",
+    "order": 35000
+   },
+   {
+    "id": "b035",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b035.",
+    "source": "Riwayat Muslim",
+    "order": 36000
+   },
+   {
+    "id": "hadeethenc-1036",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1036.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 37000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1036",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b037",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b037.",
+    "source": "Riwayat Muslim",
+    "order": 38000
+   },
+   {
+    "id": "b038",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b038.",
+    "source": "Riwayat Muslim",
+    "order": 39000
+   },
+   {
+    "id": "hadeethenc-1039",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1039.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 40000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1039",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b040",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b040.",
+    "source": "Riwayat Muslim",
+    "order": 41000
+   },
+   {
+    "id": "b041",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b041.",
+    "source": "Riwayat Muslim",
+    "order": 42000
+   },
+   {
+    "id": "hadeethenc-1042",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1042.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 43000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1042",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b043",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b043.",
+    "source": "Riwayat Muslim",
+    "order": 44000
+   },
+   {
+    "id": "b044",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b044.",
+    "source": "Riwayat Muslim",
+    "order": 45000
+   },
+   {
+    "id": "hadeethenc-1045",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1045.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 46000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1045",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b046",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b046.",
+    "source": "Riwayat Muslim",
+    "order": 47000
+   },
+   {
+    "id": "b047",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b047.",
+    "source": "Riwayat Muslim",
+    "order": 48000
+   },
+   {
+    "id": "hadeethenc-1048",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1048.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 49000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1048",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b049",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b049.",
+    "source": "Riwayat Muslim",
+    "order": 50000
+   },
+   {
+    "id": "b050",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b050.",
+    "source": "Riwayat Muslim",
+    "order": 51000
+   },
+   {
+    "id": "hadeethenc-1051",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1051.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 52000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1051",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b052",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b052.",
+    "source": "Riwayat Muslim",
+    "order": 53000
+   },
+   {
+    "id": "b053",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b053.",
+    "source": "Riwayat Muslim",
+    "order": 54000
+   },
+   {
+    "id": "hadeethenc-1054",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1054.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 55000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1054",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b055",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b055.",
+    "source": "Riwayat Muslim",
+    "order": 56000
+   },
+   {
+    "id": "b056",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b056.",
+    "source": "Riwayat Muslim",
+    "order": 57000
+   },
+   {
+    "id": "hadeethenc-1057",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1057.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 58000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1057",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b058",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b058.",
+    "source": "Riwayat Muslim",
+    "order": 59000
+   },
+   {
+    "id": "b059",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b059.",
+    "source": "Riwayat Muslim",
+    "order": 60000
+   },
+   {
+    "id": "hadeethenc-1060",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1060.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 61000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1060",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b061",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b061.",
+    "source": "Riwayat Muslim",
+    "order": 62000
+   },
+   {
+    "id": "b062",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b062.",
+    "source": "Riwayat Muslim",
+    "order": 63000
+   },
+   {
+    "id": "hadeethenc-1063",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1063.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 64000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1063",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b064",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b064.",
+    "source": "Riwayat Muslim",
+    "order": 65000
+   },
+   {
+    "id": "b065",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b065.",
+    "source": "Riwayat Muslim",
+    "order": 66000
+   },
+   {
+    "id": "hadeethenc-1066",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1066.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 67000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1066",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b067",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b067.",
+    "source": "Riwayat Muslim",
+    "order": 68000
+   },
+   {
+    "id": "b068",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b068.",
+    "source": "Riwayat Muslim",
+    "order": 69000
+   },
+   {
+    "id": "hadeethenc-1069",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1069.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 70000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1069",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b070",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b070.",
+    "source": "Riwayat Muslim",
+    "order": 71000
+   },
+   {
+    "id": "b071",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b071.",
+    "source": "Riwayat Muslim",
+    "order": 72000
+   },
+   {
+    "id": "hadeethenc-1072",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1072.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 73000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1072",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b073",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b073.",
+    "source": "Riwayat Muslim",
+    "order": 74000
+   },
+   {
+    "id": "b074",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b074.",
+    "source": "Riwayat Muslim",
+    "order": 75000
+   },
+   {
+    "id": "hadeethenc-1075",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1075.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 76000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1075",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b076",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b076.",
+    "source": "Riwayat Muslim",
+    "order": 77000
+   },
+   {
+    "id": "b077",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b077.",
+    "source": "Riwayat Muslim",
+    "order": 78000
+   },
+   {
+    "id": "hadeethenc-1078",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1078.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 79000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1078",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b079",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b079.",
+    "source": "Riwayat Muslim",
+    "order": 80000
+   },
+   {
+    "id": "b080",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b080.",
+    "source": "Riwayat Muslim",
+    "order": 81000
+   },
+   {
+    "id": "hadeethenc-1081",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1081.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 82000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1081",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b082",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b082.",
+    "source": "Riwayat Muslim",
+    "order": 83000
+   },
+   {
+    "id": "b083",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b083.",
+    "source": "Riwayat Muslim",
+    "order": 84000
+   },
+   {
+    "id": "hadeethenc-1084",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1084.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 85000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1084",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b085",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b085.",
+    "source": "Riwayat Muslim",
+    "order": 86000
+   },
+   {
+    "id": "b086",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b086.",
+    "source": "Riwayat Muslim",
+    "order": 87000
+   },
+   {
+    "id": "hadeethenc-1087",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1087.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 88000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1087",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b088",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b088.",
+    "source": "Riwayat Muslim",
+    "order": 89000
+   },
+   {
+    "id": "b089",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b089.",
+    "source": "Riwayat Muslim",
+    "order": 90000
+   },
+   {
+    "id": "hadeethenc-1090",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1090.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 91000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1090",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b091",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b091.",
+    "source": "Riwayat Muslim",
+    "order": 92000
+   },
+   {
+    "id": "b092",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b092.",
+    "source": "Riwayat Muslim",
+    "order": 93000
+   },
+   {
+    "id": "hadeethenc-1093",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1093.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 94000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1093",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b094",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b094.",
+    "source": "Riwayat Muslim",
+    "order": 95000
+   },
+   {
+    "id": "b095",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b095.",
+    "source": "Riwayat Muslim",
+    "order": 96000
+   },
+   {
+    "id": "hadeethenc-1096",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1096.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 97000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1096",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b097",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b097.",
+    "source": "Riwayat Muslim",
+    "order": 98000
+   },
+   {
+    "id": "b098",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b098.",
+    "source": "Riwayat Muslim",
+    "order": 99000
+   },
+   {
+    "id": "hadeethenc-1099",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1099.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 100000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1099",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b100",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b100.",
+    "source": "Riwayat Muslim",
+    "order": 101000
+   },
+   {
+    "id": "b101",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b101.",
+    "source": "Riwayat Muslim",
+    "order": 102000
+   },
+   {
+    "id": "hadeethenc-1102",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1102.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 103000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1102",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b103",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b103.",
+    "source": "Riwayat Muslim",
+    "order": 104000
+   },
+   {
+    "id": "b104",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b104.",
+    "source": "Riwayat Muslim",
+    "order": 105000
+   },
+   {
+    "id": "hadeethenc-1105",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1105.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 106000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1105",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b106",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b106.",
+    "source": "Riwayat Muslim",
+    "order": 107000
+   },
+   {
+    "id": "b107",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b107.",
+    "source": "Riwayat Muslim",
+    "order": 108000
+   },
+   {
+    "id": "hadeethenc-1108",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1108.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 109000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1108",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b109",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b109.",
+    "source": "Riwayat Muslim",
+    "order": 110000
+   },
+   {
+    "id": "b110",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b110.",
+    "source": "Riwayat Muslim",
+    "order": 111000
+   },
+   {
+    "id": "hadeethenc-1111",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1111.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 112000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1111",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b112",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b112.",
+    "source": "Riwayat Muslim",
+    "order": 113000
+   },
+   {
+    "id": "b113",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b113.",
+    "source": "Riwayat Muslim",
+    "order": 114000
+   },
+   {
+    "id": "hadeethenc-1114",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1114.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 115000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1114",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b115",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b115.",
+    "source": "Riwayat Muslim",
+    "order": 116000
+   },
+   {
+    "id": "b116",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b116.",
+    "source": "Riwayat Muslim",
+    "order": 117000
+   },
+   {
+    "id": "hadeethenc-1117",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks 1117.",
+    "source": "Muttafaq alaih",
+    "grade": "sahih",
+    "order": 118000,
+    "ext": {
+     "provider": "hadeethenc",
+     "id": "1117",
+     "attributionAr": "رواه مسلم",
+     "gradeAr": "صحيح",
+     "categories": [],
+     "fetchedAt": "2026-11-09T01:00:00.000Z",
+     "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "id": "b118",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b118.",
+    "source": "Riwayat Muslim",
+    "order": 119000
+   },
+   {
+    "id": "b119",
+    "updatedAt": "2026-11-09T01:00:00.000Z",
+    "updatedBy": "user:u1",
+    "textMs": "Teks b119.",
+    "source": "Riwayat Muslim",
+    "order": 120000
+   }
+  ],
+  "poolBigCases": [
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "hadeethenc-1060",
+     "b061",
+     "b062",
+     "hadeethenc-1063",
+     "b064",
+     "b065",
+     "hadeethenc-1066",
+     "b067",
+     "b068",
+     "hadeethenc-1069",
+     "b070",
+     "b071",
+     "hadeethenc-1072",
+     "b073",
+     "b074",
+     "hadeethenc-1075",
+     "b076",
+     "b077",
+     "hadeethenc-1078",
+     "b079",
+     "b080",
+     "hadeethenc-1081",
+     "b082",
+     "b083",
+     "hadeethenc-1084",
+     "b085",
+     "b086",
+     "hadeethenc-1087",
+     "b088",
+     "b089",
+     "hadeethenc-1090",
+     "b091",
+     "b092",
+     "hadeethenc-1093",
+     "b094",
+     "b095",
+     "hadeethenc-1096",
+     "b097",
+     "b098",
+     "hadeethenc-1099",
+     "b100",
+     "b101",
+     "hadeethenc-1102",
+     "b103",
+     "b104",
+     "hadeethenc-1105",
+     "b106",
+     "b107",
+     "hadeethenc-1108",
+     "b109"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "b110",
+     "hadeethenc-1111",
+     "b112",
+     "b113",
+     "hadeethenc-1114",
+     "b115",
+     "b116",
+     "hadeethenc-1117",
+     "b118",
+     "b119",
+     "hadeethenc-1000",
+     "b001",
+     "b002",
+     "hadeethenc-1003",
+     "b004",
+     "b005",
+     "hadeethenc-1006",
+     "b007",
+     "b008",
+     "hadeethenc-1009",
+     "b010",
+     "b011",
+     "hadeethenc-1012",
+     "b013",
+     "b014",
+     "hadeethenc-1015",
+     "b016",
+     "b017",
+     "hadeethenc-1018",
+     "b019",
+     "b020",
+     "hadeethenc-1021",
+     "b022",
+     "b023",
+     "hadeethenc-1024",
+     "b025",
+     "b026",
+     "hadeethenc-1027",
+     "b028",
+     "b029",
+     "hadeethenc-1030",
+     "b031",
+     "b032",
+     "hadeethenc-1033",
+     "b034",
+     "b035",
+     "hadeethenc-1036",
+     "b037",
+     "b038",
+     "hadeethenc-1039"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-11",
+    "expect": [
+     "b040",
+     "b041",
+     "hadeethenc-1042",
+     "b043",
+     "b044",
+     "hadeethenc-1045",
+     "b046",
+     "b047",
+     "hadeethenc-1048",
+     "b049",
+     "b050",
+     "hadeethenc-1051",
+     "b052",
+     "b053",
+     "hadeethenc-1054",
+     "b055",
+     "b056",
+     "hadeethenc-1057",
+     "b058",
+     "b059",
+     "hadeethenc-1060",
+     "b061",
+     "b062",
+     "hadeethenc-1063",
+     "b064",
+     "b065",
+     "hadeethenc-1066",
+     "b067",
+     "b068",
+     "hadeethenc-1069",
+     "b070",
+     "b071",
+     "hadeethenc-1072",
+     "b073",
+     "b074",
+     "hadeethenc-1075",
+     "b076",
+     "b077",
+     "hadeethenc-1078",
+     "b079",
+     "b080",
+     "hadeethenc-1081",
+     "b082",
+     "b083",
+     "hadeethenc-1084",
+     "b085",
+     "b086",
+     "hadeethenc-1087",
+     "b088",
+     "b089"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "b020",
+     "hadeethenc-1021",
+     "b022",
+     "b023",
+     "hadeethenc-1024",
+     "b025",
+     "b026",
+     "hadeethenc-1027",
+     "b028",
+     "b029",
+     "hadeethenc-1030",
+     "b031",
+     "b032",
+     "hadeethenc-1033",
+     "b034",
+     "b035",
+     "hadeethenc-1036",
+     "b037",
+     "b038",
+     "hadeethenc-1039",
+     "b040",
+     "b041",
+     "hadeethenc-1042",
+     "b043",
+     "b044",
+     "hadeethenc-1045",
+     "b046",
+     "b047",
+     "hadeethenc-1048",
+     "b049",
+     "b050",
+     "hadeethenc-1051",
+     "b052",
+     "b053",
+     "hadeethenc-1054",
+     "b055",
+     "b056",
+     "hadeethenc-1057",
+     "b058",
+     "b059",
+     "hadeethenc-1060",
+     "b061",
+     "b062",
+     "hadeethenc-1063",
+     "b064",
+     "b065",
+     "hadeethenc-1066",
+     "b067",
+     "b068",
+     "hadeethenc-1069"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "b071",
+     "b005",
+     "hadeethenc-1117",
+     "hadeethenc-1072",
+     "b086",
+     "hadeethenc-1105",
+     "hadeethenc-1018",
+     "b073",
+     "hadeethenc-1081",
+     "hadeethenc-1093",
+     "b004",
+     "b083",
+     "hadeethenc-1108",
+     "b082",
+     "b092",
+     "b080",
+     "b013",
+     "b041",
+     "b058",
+     "hadeethenc-1003",
+     "b094",
+     "b098",
+     "b089",
+     "hadeethenc-1099",
+     "b109",
+     "b020",
+     "hadeethenc-1087",
+     "b074",
+     "b079",
+     "b001",
+     "hadeethenc-1036",
+     "b070",
+     "b010",
+     "b026",
+     "hadeethenc-1024",
+     "b103",
+     "b034",
+     "b053",
+     "b076",
+     "b049",
+     "hadeethenc-1006",
+     "b011",
+     "b031",
+     "hadeethenc-1015",
+     "hadeethenc-1084",
+     "b029",
+     "hadeethenc-1048",
+     "b016",
+     "b091",
+     "hadeethenc-1021"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "b106",
+     "b016",
+     "b007",
+     "hadeethenc-1021",
+     "hadeethenc-1057",
+     "b032",
+     "b038",
+     "b014",
+     "b043",
+     "hadeethenc-1108",
+     "hadeethenc-1051",
+     "b047",
+     "b059",
+     "b011",
+     "hadeethenc-1084",
+     "b073",
+     "b097",
+     "b095",
+     "b088",
+     "hadeethenc-1096",
+     "hadeethenc-1087",
+     "hadeethenc-1036",
+     "hadeethenc-1018",
+     "b113",
+     "hadeethenc-1081",
+     "b053",
+     "hadeethenc-1039",
+     "b067",
+     "b035",
+     "b023",
+     "b076",
+     "b068",
+     "b098",
+     "b041",
+     "b118",
+     "b046",
+     "b085",
+     "b089",
+     "b028",
+     "b091",
+     "b004",
+     "hadeethenc-1009",
+     "b064",
+     "b017",
+     "hadeethenc-1003",
+     "b037",
+     "hadeethenc-1111",
+     "b079",
+     "b062",
+     "b025"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-11",
+    "expect": [
+     "b053",
+     "hadeethenc-1051",
+     "hadeethenc-1081",
+     "hadeethenc-1048",
+     "b082",
+     "b106",
+     "b100",
+     "b035",
+     "b065",
+     "b091",
+     "b088",
+     "hadeethenc-1108",
+     "b085",
+     "hadeethenc-1000",
+     "b040",
+     "b041",
+     "hadeethenc-1084",
+     "b097",
+     "b014",
+     "b094",
+     "b076",
+     "b112",
+     "b089",
+     "hadeethenc-1093",
+     "b028",
+     "b119",
+     "b004",
+     "b031",
+     "b050",
+     "b064",
+     "hadeethenc-1075",
+     "b016",
+     "b083",
+     "b029",
+     "hadeethenc-1099",
+     "b049",
+     "b008",
+     "hadeethenc-1036",
+     "hadeethenc-1030",
+     "hadeethenc-1045",
+     "b017",
+     "hadeethenc-1006",
+     "b113",
+     "hadeethenc-1072",
+     "hadeethenc-1042",
+     "hadeethenc-1027",
+     "b026",
+     "b109",
+     "b058",
+     "hadeethenc-1009"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "random",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "b049",
+     "b061",
+     "b068",
+     "hadeethenc-1030",
+     "b097",
+     "hadeethenc-1099",
+     "b004",
+     "hadeethenc-1075",
+     "b029",
+     "b070",
+     "b091",
+     "b053",
+     "b062",
+     "hadeethenc-1105",
+     "b028",
+     "b050",
+     "b109",
+     "b017",
+     "b034",
+     "hadeethenc-1114",
+     "b007",
+     "b013",
+     "b052",
+     "b110",
+     "b106",
+     "hadeethenc-1048",
+     "b113",
+     "b089",
+     "b010",
+     "hadeethenc-1096",
+     "hadeethenc-1015",
+     "b022",
+     "hadeethenc-1018",
+     "b023",
+     "hadeethenc-1009",
+     "b071",
+     "b046",
+     "hadeethenc-1066",
+     "b098",
+     "b095",
+     "b058",
+     "hadeethenc-1063",
+     "hadeethenc-1045",
+     "hadeethenc-1039",
+     "b076",
+     "hadeethenc-1051",
+     "b032",
+     "b020",
+     "b092",
+     "hadeethenc-1111"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "b046",
+     "hadeethenc-1090",
+     "b047",
+     "hadeethenc-1093",
+     "b049",
+     "hadeethenc-1096",
+     "b050",
+     "hadeethenc-1099",
+     "b052",
+     "hadeethenc-1102",
+     "b053",
+     "hadeethenc-1105",
+     "b055",
+     "hadeethenc-1108",
+     "b056",
+     "hadeethenc-1111",
+     "b058",
+     "hadeethenc-1114",
+     "b059",
+     "hadeethenc-1117",
+     "b061",
+     "b062",
+     "b064",
+     "b065",
+     "b067",
+     "b068",
+     "b070",
+     "b071",
+     "b073",
+     "b074",
+     "b076",
+     "b077",
+     "b079",
+     "b080",
+     "b082",
+     "b083",
+     "b085",
+     "b086",
+     "b088",
+     "b089",
+     "b091",
+     "b092",
+     "b094",
+     "b095",
+     "b097",
+     "b098",
+     "b100",
+     "b101",
+     "b103",
+     "b104"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "b106",
+     "b107",
+     "b109",
+     "b110",
+     "b112",
+     "b113",
+     "b115",
+     "b116",
+     "b118",
+     "b119",
+     "b001",
+     "hadeethenc-1000",
+     "b002",
+     "hadeethenc-1003",
+     "b004",
+     "hadeethenc-1006",
+     "b005",
+     "hadeethenc-1009",
+     "b007",
+     "hadeethenc-1012",
+     "b008",
+     "hadeethenc-1015",
+     "b010",
+     "hadeethenc-1018",
+     "b011",
+     "hadeethenc-1021",
+     "b013",
+     "hadeethenc-1024",
+     "b014",
+     "hadeethenc-1027",
+     "b016",
+     "hadeethenc-1030",
+     "b017",
+     "hadeethenc-1033",
+     "b019",
+     "hadeethenc-1036",
+     "b020",
+     "hadeethenc-1039",
+     "b022",
+     "hadeethenc-1042",
+     "b023",
+     "hadeethenc-1045",
+     "b025",
+     "hadeethenc-1048",
+     "b026",
+     "hadeethenc-1051",
+     "b028",
+     "hadeethenc-1054",
+     "b029",
+     "hadeethenc-1057"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-11",
+    "expect": [
+     "b031",
+     "hadeethenc-1060",
+     "b032",
+     "hadeethenc-1063",
+     "b034",
+     "hadeethenc-1066",
+     "b035",
+     "hadeethenc-1069",
+     "b037",
+     "hadeethenc-1072",
+     "b038",
+     "hadeethenc-1075",
+     "b040",
+     "hadeethenc-1078",
+     "b041",
+     "hadeethenc-1081",
+     "b043",
+     "hadeethenc-1084",
+     "b044",
+     "hadeethenc-1087",
+     "b046",
+     "hadeethenc-1090",
+     "b047",
+     "hadeethenc-1093",
+     "b049",
+     "hadeethenc-1096",
+     "b050",
+     "hadeethenc-1099",
+     "b052",
+     "hadeethenc-1102",
+     "b053",
+     "hadeethenc-1105",
+     "b055",
+     "hadeethenc-1108",
+     "b056",
+     "hadeethenc-1111",
+     "b058",
+     "hadeethenc-1114",
+     "b059",
+     "hadeethenc-1117",
+     "b061",
+     "b062",
+     "b064",
+     "b065",
+     "b067",
+     "b068",
+     "b070",
+     "b071",
+     "b073",
+     "b074"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "alternate",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "b016",
+     "hadeethenc-1030",
+     "b017",
+     "hadeethenc-1033",
+     "b019",
+     "hadeethenc-1036",
+     "b020",
+     "hadeethenc-1039",
+     "b022",
+     "hadeethenc-1042",
+     "b023",
+     "hadeethenc-1045",
+     "b025",
+     "hadeethenc-1048",
+     "b026",
+     "hadeethenc-1051",
+     "b028",
+     "hadeethenc-1054",
+     "b029",
+     "hadeethenc-1057",
+     "b031",
+     "hadeethenc-1060",
+     "b032",
+     "hadeethenc-1063",
+     "b034",
+     "hadeethenc-1066",
+     "b035",
+     "hadeethenc-1069",
+     "b037",
+     "hadeethenc-1072",
+     "b038",
+     "hadeethenc-1075",
+     "b040",
+     "hadeethenc-1078",
+     "b041",
+     "hadeethenc-1081",
+     "b043",
+     "hadeethenc-1084",
+     "b044",
+     "hadeethenc-1087",
+     "b046",
+     "hadeethenc-1090",
+     "b047",
+     "hadeethenc-1093",
+     "b049",
+     "hadeethenc-1096",
+     "b050",
+     "hadeethenc-1099",
+     "b052",
+     "hadeethenc-1102"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "b091",
+     "b092",
+     "b094",
+     "b095",
+     "b097",
+     "b098",
+     "b100",
+     "b101",
+     "b103",
+     "b104",
+     "b106",
+     "b107",
+     "b109",
+     "b110",
+     "b112",
+     "b113",
+     "b115",
+     "b116",
+     "b118",
+     "b119",
+     "b001",
+     "b002",
+     "b004",
+     "b005",
+     "b007",
+     "b008",
+     "b010",
+     "b011",
+     "b013",
+     "b014",
+     "b016",
+     "b017",
+     "b019",
+     "b020",
+     "b022",
+     "b023",
+     "b025",
+     "b026",
+     "b028",
+     "b029",
+     "b031",
+     "b032",
+     "b034",
+     "b035",
+     "b037",
+     "b038",
+     "b040",
+     "b041",
+     "b043",
+     "b044"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "b046",
+     "b047",
+     "b049",
+     "b050",
+     "b052",
+     "b053",
+     "b055",
+     "b056",
+     "b058",
+     "b059",
+     "b061",
+     "b062",
+     "b064",
+     "b065",
+     "b067",
+     "b068",
+     "b070",
+     "b071",
+     "b073",
+     "b074",
+     "b076",
+     "b077",
+     "b079",
+     "b080",
+     "b082",
+     "b083",
+     "b085",
+     "b086",
+     "b088",
+     "b089",
+     "b091",
+     "b092",
+     "b094",
+     "b095",
+     "b097",
+     "b098",
+     "b100",
+     "b101",
+     "b103",
+     "b104",
+     "b106",
+     "b107",
+     "b109",
+     "b110",
+     "b112",
+     "b113",
+     "b115",
+     "b116",
+     "b118",
+     "b119"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-11",
+    "expect": [
+     "b001",
+     "b002",
+     "b004",
+     "b005",
+     "b007",
+     "b008",
+     "b010",
+     "b011",
+     "b013",
+     "b014",
+     "b016",
+     "b017",
+     "b019",
+     "b020",
+     "b022",
+     "b023",
+     "b025",
+     "b026",
+     "b028",
+     "b029",
+     "b031",
+     "b032",
+     "b034",
+     "b035",
+     "b037",
+     "b038",
+     "b040",
+     "b041",
+     "b043",
+     "b044",
+     "b046",
+     "b047",
+     "b049",
+     "b050",
+     "b052",
+     "b053",
+     "b055",
+     "b056",
+     "b058",
+     "b059",
+     "b061",
+     "b062",
+     "b064",
+     "b065",
+     "b067",
+     "b068",
+     "b070",
+     "b071",
+     "b073",
+     "b074"
+    ]
+   },
+   {
+    "settings": {
+     "source": "own",
+     "mix": "list",
+     "changeEvery": "card",
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "b091",
+     "b092",
+     "b094",
+     "b095",
+     "b097",
+     "b098",
+     "b100",
+     "b101",
+     "b103",
+     "b104",
+     "b106",
+     "b107",
+     "b109",
+     "b110",
+     "b112",
+     "b113",
+     "b115",
+     "b116",
+     "b118",
+     "b119",
+     "b001",
+     "b002",
+     "b004",
+     "b005",
+     "b007",
+     "b008",
+     "b010",
+     "b011",
+     "b013",
+     "b014",
+     "b016",
+     "b017",
+     "b019",
+     "b020",
+     "b022",
+     "b023",
+     "b025",
+     "b026",
+     "b028",
+     "b029",
+     "b031",
+     "b032",
+     "b034",
+     "b035",
+     "b037",
+     "b038",
+     "b040",
+     "b041",
+     "b043",
+     "b044"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 3,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-09",
+    "expect": [
+     "hadeethenc-1018",
+     "b019",
+     "b020"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 3,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-10",
+    "expect": [
+     "hadeethenc-1021",
+     "b022",
+     "b023"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 3,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2026-11-11",
+    "expect": [
+     "hadeethenc-1024",
+     "b025",
+     "b026"
+    ]
+   },
+   {
+    "settings": {
+     "source": "both",
+     "mix": "list",
+     "changeEvery": "day",
+     "perDay": 3,
+     "allowedGrades": {
+      "sahih": true,
+      "hasan": true,
+      "sahih_lighairihi": false,
+      "hasan_lighairihi": false
+     }
+    },
+    "today": "2027-03-01",
+    "expect": [
+     "hadeethenc-1114",
+     "b115",
+     "b116"
+    ]
+   }
+  ]
+ }
+}

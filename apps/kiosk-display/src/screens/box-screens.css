@@ -1,0 +1,171 @@
+/* The box's own screens: setup, recovery, stopped, pairing, network check.
+   Loaded after styles.css (BoxChrome.tsx imports it), so these rules win there; they never touch the main program.
+   Written for the T95's Chrome 91 WebView: see compat91.test.ts for what that rules out. */
+
+@import '@fontsource/amiri/arabic-400.css';
+@import '@fontsource/amiri/arabic-700.css';
+
+/* A mouse is plugged into these boxes for setup: show its pointer here (the main program hides it). */
+.stage[data-phase='setup'],
+.stage[data-phase='recovery'],
+.stage[data-phase='pair'],
+.stage[data-phase='locked'],
+.box-screen { cursor: default; }
+.box-screen .tvbtn,
+.box-screen .langswitch__opt { cursor: pointer; }
+
+/* ---- Arabic ------------------------------------------------------------------
+   Amiri (bundled, Arabic subset only) for the Arabic letters; Latin words, digits and codes keep Plus Jakarta
+   Sans because it comes first and Amiri's subset has no Latin. Naskh sits smaller and taller than the Latin
+   face at the same size, so Arabic text gets a little more size and line height. */
+.box-screen [lang='ar'] { font-family: 'Plus Jakarta Sans', 'Amiri', 'Segoe UI', serif; }
+.box-screen [lang='ar'] b,
+.box-screen [lang='ar'] h1,
+.box-screen [lang='ar'] h2 { font-weight: 700; }
+
+/* ---- Brand row ---------------------------------------------------------------- */
+.box-head--brand { gap: 1.2rem; }
+.box-head--brand .phase__clock { font-size: 2.4rem; gap: 0.4rem; }
+.box-brandrow { display: flex; align-items: center; gap: 0.9rem; min-width: 0; }
+.box-logo { display: block; flex: none; height: 2.2rem; width: auto; }
+.box-brandrow__rule {
+  flex: none;
+  width: 0.14rem;
+  height: 2.1rem;
+  border-radius: 0.1rem;
+  background: rgb(var(--accent-rgb) / 0.5);
+}
+.box-brandrow__title { min-width: 0; }
+.box-brandrow__sub {
+  display: block;
+  color: var(--accent);
+  font-size: 1.45rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.box-brandrow__title[lang='ar'] .box-brandrow__sub { font-size: 1.7rem; line-height: 1.2; }
+.box-brandrow .box-names { min-width: 0; }
+.box-brandrow .box-brand,
+.box-brandrow .box-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.box-head__end { display: flex; align-items: center; gap: 1.2rem; flex: none; }
+
+/* ---- Language switch: BM / EN / عربي -------------------------------------------
+   The landing page's segmented control at TV size: the chosen language is the gold segment, the remote's focus
+   is the same white ring as the network check button. */
+.langswitch {
+  display: inline-flex;
+  flex: none;
+  gap: 0.2rem;
+  padding: 0.22rem;
+  border-radius: 1rem;
+  border: 0.12rem solid rgb(var(--accent-rgb) / 0.45);
+  background: rgb(0 0 0 / 0.3);
+}
+.langswitch__opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.1rem;
+  height: 2.25rem;
+  padding: 0 0.6rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: rgb(255 255 255 / 0.88);
+  font: 800 1.15rem/1 var(--font);
+  letter-spacing: 0.03em;
+}
+.langswitch__opt[lang='ar'] {
+  font-family: 'Amiri', var(--font);
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: 0;
+  padding: 0 0.7rem 0.2rem;
+}
+.langswitch__opt:hover { background: rgb(255 255 255 / 0.14); }
+.langswitch__opt[aria-pressed='true'] { background: var(--accent); color: var(--ink); }
+/* A box-shadow ring, not an outline: Chrome before 94 draws an outline square, ignoring the radius. */
+.langswitch__opt.is-focused { outline: none; box-shadow: 0 0 0 0.12rem #000, 0 0 0 0.37rem #fff; }
+
+/* Grey on black for the stopped screen: present, never loud. */
+.langswitch[data-tone='quiet'] { border-color: rgb(164 177 174 / 0.35); background: transparent; }
+.langswitch[data-tone='quiet'] .langswitch__opt { color: #a4b1ae; }
+.langswitch[data-tone='quiet'] .langswitch__opt[aria-pressed='true'] { background: #3a4442; color: #e3e9e7; }
+
+/* Top-right corner holder (pairing, stopped). */
+.box-corner {
+  position: absolute;
+  top: 2.6rem;
+  right: var(--gutter);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+}
+
+/* ---- Setup and recovery, right to left -------------------------------------------
+   Only the text side turns: the QR card keeps its place on the right. */
+.box-body[dir='rtl'] .box-steps li { padding-left: 0; padding-right: 3.4rem; }
+.box-body[dir='rtl'] .box-steps i { left: auto; right: 0; }
+.box-foot[dir='rtl'] .tvbtn { margin-left: 0; margin-right: auto; }
+.screen--recovery .box-body[dir='rtl'] .tvbtn { margin-right: 0; }
+
+.box-body[lang='ar'] { gap: 0.8rem; }
+.box-body[lang='ar'] .box-title { font-size: 3.3rem; line-height: 1.2; }
+.box-body[lang='ar'] .box-lead { font-size: 1.85rem; line-height: 1.38; }
+.box-body[lang='ar'] .box-steps { gap: 0.45rem; }
+.box-body[lang='ar'] .box-steps li { font-size: 1.75rem; line-height: 1.35; }
+.box-body[lang='ar'] .box-id { font-size: 1.65rem; line-height: 1.3; gap: 0.1rem 1.6rem; }
+.box-body[lang='ar'] .box-note { font-size: 1.55rem; line-height: 1.3; }
+.box-body[lang='ar'] .box-warn { font-size: 1.65rem; line-height: 1.3; }
+.box-body[lang='ar'] .box-pill { font-size: 1.6rem; letter-spacing: 0; padding: 0.2rem 1.2rem 0.4rem; }
+.box-body[lang='ar'] .box-how h2 { font-size: 1.9rem; }
+.box-body[lang='ar'] .box-how .box-steps li { font-size: 1.7rem; }
+.box-body[lang='ar'] .box-how p { font-size: 1.7rem; }
+.screen--recovery .box-body[lang='ar'] .box-title { font-size: 3.1rem; }
+.screen--recovery .box-body[lang='ar'] .box-lead { font-size: 1.8rem; }
+.box-foot[lang='ar'] .netitem { font-size: 1.55rem; line-height: 1.3; }
+.box-screen .tvbtn[lang='ar'],
+.box-screen [lang='ar'] .tvbtn { font-family: 'Plus Jakarta Sans', 'Amiri', 'Segoe UI', serif; font-size: 1.65rem; line-height: 1.2; padding: 0.45rem 1.2rem 0.65rem; }
+.box-noprayer[lang='ar'] { font-size: 2.2rem; }
+
+/* ---- QR card text -------------------------------------------------------------- */
+.qrcard[lang='ar'] { line-height: 1.25; }
+.qrcard[lang='ar'] .qrcard__cap { font-size: 1.7rem; font-weight: 700; }
+.qrcard[lang='ar'] .qrcard__left,
+.qrcard[lang='ar'] .qrcard__fp { font-size: 1.55rem; }
+.qrcard[lang='ar'] .qrcard__hint { font-size: 1.55rem; line-height: 1.3; }
+
+/* ---- Pairing ------------------------------------------------------------------- */
+.box-corner--pair .box-logo { height: 2.2rem; }
+.pair__centre[lang='ar'] .pair__title { font-size: 2.9rem; line-height: 1.3; }
+.pair__centre[lang='ar'] .pair__instruction { margin-top: 2rem; font-size: 2.35rem; line-height: 1.45; }
+.pair__centre[lang='ar'] .pair__expiry { margin-top: 1rem; font-size: 1.85rem; }
+.pair__centre[lang='ar'] .pair__connected { margin-top: 1.2rem; font-size: 1.75rem; line-height: 1.3; padding-bottom: 0.65rem; }
+.pair__centre[lang='ar'] .pair__status { font-size: 3.4rem; line-height: 1.4; }
+.pair__centre[lang='ar'] .pair__sub { font-size: 2.2rem; }
+
+/* ---- Stopped ------------------------------------------------------------------- */
+.locked__logo { height: 2.6rem; margin-bottom: 2.6rem; opacity: 0.6; filter: grayscale(1); }
+.locked__text[lang='ar'] .locked__title { font-size: 3.2rem; line-height: 1.35; }
+.locked__text[lang='ar'] .locked__body { font-size: 2.1rem; line-height: 1.5; }
+.locked__text[lang='ar'] .locked__id { letter-spacing: 0; font-size: 1.7rem; }
+
+/* ---- Network check ---------------------------------------------------------------
+   The header now carries the switch, so the rows give back a little air to keep both buttons on screen. */
+.box-screen.netcheck .box-head--brand { margin-bottom: 0.9rem; }
+.box-screen.netcheck .netcheck__body { gap: 0.8rem; }
+.box-screen.netcheck .netcheck__rows { gap: 0.4rem; }
+.box-screen.netcheck .netcheck__row { padding: 0.5rem 1rem; }
+.box-screen.netcheck .netcheck__cause { padding: 0.8rem 1.3rem; }
+.box-screen.netcheck .netcheck__keys { margin-top: 0.8rem; }
+.netcheck__body[dir='rtl'] .netcheck__cause ol { padding-left: 0; padding-right: 2rem; }
+.netcheck__body[lang='ar'] .netcheck__row .netitem { font-size: 1.65rem; line-height: 1.25; }
+.netcheck__body[lang='ar'] .netcheck__cause h2 { font-size: 1.8rem; line-height: 1.3; }
+.netcheck__body[lang='ar'] .netcheck__cause p,
+.netcheck__body[lang='ar'] .netcheck__cause ol { font-size: 1.55rem; line-height: 1.35; }
+.netcheck__body[lang='ar'] .netcheck__wait { font-size: 2.4rem; }
+
+/* ص / م beside the clock: Naskh needs a larger size than PTG / PM to read as the same weight. */
+.box-screen .phase__clock small[lang='ar'] { font-size: 1.7rem; line-height: 1; }
+.box-screen .clock__aside [lang='ar'] { font-size: 1.35em; line-height: 1; }

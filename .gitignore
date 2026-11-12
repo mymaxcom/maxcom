@@ -1,0 +1,44 @@
+node_modules/
+dist/
+*.db
+*.db-*
+.env
+.env.*
+*.key
+credential*
+proof/
+.superpowers/
+coverage/
+ui-preview/*
+!ui-preview/fixtures/
+/data/
+apps/box-server/data/
+/mdb-export/
+import-report.json
+
+# Surau app: release signing material and build output (never committed)
+apps/surau-app/android/key.properties
+*.jks
+*.keystore
+apps/surau-app/build/
+apps/box-server/public/app/
+tools/live/
+/data/live/
+
+# MediaMTX writes its auto certificate into its working directory
+auto.crt
+auto.key
+
+# Test TLS material made by scripts/gen-test-fixtures.mjs (test keys; never committed)
+apps/box-server/test/fixtures/test-box*.pfx
+apps/box-server/test/fixtures/test-box*-key.pem
+apps/box-server/test/fixtures/test-box*-leaf.cer
+apps/surau-app/test/fixtures/tls/
+apps/surau-app/test/fixtures/tls-nc/
+apps/surau-app/test/fixtures/android-box-pki/box-key.pem
+*.pfx
+*.p12
+*.pem
+*.jks
+*.keystore
+pfx.pass

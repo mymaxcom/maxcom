@@ -1,0 +1,800 @@
+[
+ {
+  "id": "1",
+  "title": "The Noble Qur'an and Qur'anic Sciences",
+  "hadeeths_count": "9",
+  "parent_id": null
+ },
+ {
+  "id": "2",
+  "title": "The Hadith and Hadith Sciences",
+  "hadeeths_count": "4",
+  "parent_id": null
+ },
+ {
+  "id": "3",
+  "title": "The Creed",
+  "hadeeths_count": "75",
+  "parent_id": null
+ },
+ {
+  "id": "4",
+  "title": "Jurisprudence and Juristic Principles",
+  "hadeeths_count": "31",
+  "parent_id": null
+ },
+ {
+  "id": "5",
+  "title": "Virtues and Manners",
+  "hadeeths_count": "72",
+  "parent_id": null
+ },
+ {
+  "id": "6",
+  "title": "Da‘wah and Hisbah",
+  "hadeeths_count": "10",
+  "parent_id": null
+ },
+ {
+  "id": "7",
+  "title": "Seerah and History",
+  "hadeeths_count": "1",
+  "parent_id": null
+ },
+ {
+  "id": "8",
+  "title": "Revelation and Collection of the Qur'an",
+  "hadeeths_count": "1",
+  "parent_id": "1"
+ },
+ {
+  "id": "9",
+  "title": "Modes of Qur'anic Recitation and Tajweed",
+  "hadeeths_count": "2",
+  "parent_id": "1"
+ },
+ {
+  "id": "10",
+  "title": "Qur'anic Exegesis",
+  "hadeeths_count": "4",
+  "parent_id": "1"
+ },
+ {
+  "id": "11",
+  "title": "General Qur'anic Topics",
+  "hadeeths_count": "1",
+  "parent_id": "1"
+ },
+ {
+  "id": "12",
+  "title": "Excellence of the Qur'an",
+  "hadeeths_count": "3",
+  "parent_id": "1"
+ },
+ {
+  "id": "17",
+  "title": "Collecting the Qur'an",
+  "hadeeths_count": "1",
+  "parent_id": "8"
+ },
+ {
+  "id": "20",
+  "title": "Science of Tajweed",
+  "hadeeths_count": "1",
+  "parent_id": "9"
+ },
+ {
+  "id": "21",
+  "title": "Stops and Starts",
+  "hadeeths_count": "1",
+  "parent_id": "9"
+ },
+ {
+  "id": "24",
+  "title": "Rules and Principles of Exegesis",
+  "hadeeths_count": "1",
+  "parent_id": "10"
+ },
+ {
+  "id": "31",
+  "title": "Manners of Reading and Memorizing the Qur'an",
+  "hadeeths_count": "1",
+  "parent_id": "11"
+ },
+ {
+  "id": "39",
+  "title": "Merit of Taking Care of the Qur'an",
+  "hadeeths_count": "1",
+  "parent_id": "12"
+ },
+ {
+  "id": "40",
+  "title": "Virtues of Surahs and Verses",
+  "hadeeths_count": "2",
+  "parent_id": "12"
+ },
+ {
+  "id": "44",
+  "title": "General Sunnah Topics",
+  "hadeeths_count": "4",
+  "parent_id": "2"
+ },
+ {
+  "id": "56",
+  "title": "Significance and Status of the Sunnah",
+  "hadeeths_count": "4",
+  "parent_id": "44"
+ },
+ {
+  "id": "59",
+  "title": "Belief in Allah the Mighty and Majestic",
+  "hadeeths_count": "28",
+  "parent_id": "3"
+ },
+ {
+  "id": "60",
+  "title": "Belief in the Angels",
+  "hadeeths_count": "3",
+  "parent_id": "3"
+ },
+ {
+  "id": "61",
+  "title": "Belief in the Revealed Books",
+  "hadeeths_count": "1",
+  "parent_id": "3"
+ },
+ {
+  "id": "62",
+  "title": "Belief in the Messengers",
+  "hadeeths_count": "7",
+  "parent_id": "3"
+ },
+ {
+  "id": "63",
+  "title": "Belief in the Last Day",
+  "hadeeths_count": "16",
+  "parent_id": "3"
+ },
+ {
+  "id": "64",
+  "title": "Belief in the Divine Decree and Fate",
+  "hadeeths_count": "8",
+  "parent_id": "3"
+ },
+ {
+  "id": "65",
+  "title": "Names and Rulings",
+  "hadeeths_count": "31",
+  "parent_id": "3"
+ },
+ {
+  "id": "66",
+  "title": "The Companions",
+  "hadeeths_count": "3",
+  "parent_id": "3"
+ },
+ {
+  "id": "72",
+  "title": "Oneness of Allah's Lordship",
+  "hadeeths_count": "3",
+  "parent_id": "59"
+ },
+ {
+  "id": "73",
+  "title": "Oneness of Allah's Worship",
+  "hadeeths_count": "7",
+  "parent_id": "59"
+ },
+ {
+  "id": "74",
+  "title": "Oneness of Allah's Names and Attributes",
+  "hadeeths_count": "10",
+  "parent_id": "59"
+ },
+ {
+  "id": "75",
+  "title": "The Angels",
+  "hadeeths_count": "1",
+  "parent_id": "60"
+ },
+ {
+  "id": "76",
+  "title": "The Jinn",
+  "hadeeths_count": "1",
+  "parent_id": "60"
+ },
+ {
+  "id": "77",
+  "title": "Pre-Islamic Scriptures",
+  "hadeeths_count": "1",
+  "parent_id": "61"
+ },
+ {
+  "id": "79",
+  "title": "Prophethood",
+  "hadeeths_count": "3",
+  "parent_id": "62"
+ },
+ {
+  "id": "80",
+  "title": "Pre-Islamic Prophets and Messengers, peace be upon them",
+  "hadeeths_count": "2",
+  "parent_id": "62"
+ },
+ {
+  "id": "81",
+  "title": "Our Prophet Muhammad, may Allah's peace and blessings be upon him",
+  "hadeeths_count": "2",
+  "parent_id": "62"
+ },
+ {
+  "id": "83",
+  "title": "The Barzakh Life (After death Period)",
+  "hadeeths_count": "5",
+  "parent_id": "63"
+ },
+ {
+  "id": "85",
+  "title": "The Hereafter Life",
+  "hadeeths_count": "2",
+  "parent_id": "63"
+ },
+ {
+  "id": "86",
+  "title": "Levels of Divine Decree and Fate",
+  "hadeeths_count": "4",
+  "parent_id": "64"
+ },
+ {
+  "id": "88",
+  "title": "Islam",
+  "hadeeths_count": "15",
+  "parent_id": "65"
+ },
+ {
+  "id": "89",
+  "title": "Nullifiers of Islam",
+  "hadeeths_count": "1",
+  "parent_id": "65"
+ },
+ {
+  "id": "92",
+  "title": "Increase and Decrease of Faith",
+  "hadeeths_count": "4",
+  "parent_id": "65"
+ },
+ {
+  "id": "94",
+  "title": "Branches of Faith",
+  "hadeeths_count": "4",
+  "parent_id": "65"
+ },
+ {
+  "id": "96",
+  "title": "Disbelief",
+  "hadeeths_count": "2",
+  "parent_id": "65"
+ },
+ {
+  "id": "97",
+  "title": "Polytheism",
+  "hadeeths_count": "3",
+  "parent_id": "65"
+ },
+ {
+  "id": "98",
+  "title": "Hypocrisy",
+  "hadeeths_count": "3",
+  "parent_id": "65"
+ },
+ {
+  "id": "100",
+  "title": "Religious Innovation",
+  "hadeeths_count": "3",
+  "parent_id": "65"
+ },
+ {
+  "id": "101",
+  "title": "Merit of the Companions",
+  "hadeeths_count": "3",
+  "parent_id": "66"
+ },
+ {
+  "id": "121",
+  "title": "Jurisprudence of Acts of Worship",
+  "hadeeths_count": "14",
+  "parent_id": "4"
+ },
+ {
+  "id": "124",
+  "title": "Family Jurisprudence",
+  "hadeeths_count": "2",
+  "parent_id": "4"
+ },
+ {
+  "id": "126",
+  "title": "Foods and Drinks",
+  "hadeeths_count": "5",
+  "parent_id": "4"
+ },
+ {
+  "id": "128",
+  "title": "Prescribed Punishments",
+  "hadeeths_count": "1",
+  "parent_id": "4"
+ },
+ {
+  "id": "129",
+  "title": "Judiciary",
+  "hadeeths_count": "2",
+  "parent_id": "4"
+ },
+ {
+  "id": "132",
+  "title": "Principles of Islamic Jurisprudence",
+  "hadeeths_count": "7",
+  "parent_id": "4"
+ },
+ {
+  "id": "133",
+  "title": "Purification",
+  "hadeeths_count": "3",
+  "parent_id": "121"
+ },
+ {
+  "id": "134",
+  "title": "Prayer",
+  "hadeeths_count": "8",
+  "parent_id": "121"
+ },
+ {
+  "id": "135",
+  "title": "Funerals",
+  "hadeeths_count": "1",
+  "parent_id": "121"
+ },
+ {
+  "id": "136",
+  "title": "Zakah",
+  "hadeeths_count": "5",
+  "parent_id": "121"
+ },
+ {
+  "id": "137",
+  "title": "Fasting",
+  "hadeeths_count": "4",
+  "parent_id": "121"
+ },
+ {
+  "id": "138",
+  "title": "Hajj and ‘Umrah",
+  "hadeeths_count": "3",
+  "parent_id": "121"
+ },
+ {
+  "id": "199",
+  "title": "Breastfeeding",
+  "hadeeths_count": "1",
+  "parent_id": "124"
+ },
+ {
+  "id": "204",
+  "title": "Muslim Society",
+  "hadeeths_count": "1",
+  "parent_id": "124"
+ },
+ {
+  "id": "213",
+  "title": "Lawful and Unlawful Animals and Birds",
+  "hadeeths_count": "1",
+  "parent_id": "126"
+ },
+ {
+  "id": "215",
+  "title": "Slaughtering",
+  "hadeeths_count": "2",
+  "parent_id": "126"
+ },
+ {
+  "id": "218",
+  "title": "Forbidden Drinks",
+  "hadeeths_count": "2",
+  "parent_id": "126"
+ },
+ {
+  "id": "235",
+  "title": "Claims and Proofs",
+  "hadeeths_count": "2",
+  "parent_id": "129"
+ },
+ {
+  "id": "249",
+  "title": "Shariah Ruling",
+  "hadeeths_count": "2",
+  "parent_id": "132"
+ },
+ {
+  "id": "250",
+  "title": "Juristic and Usooli (Juristic Priciples) Rules",
+  "hadeeths_count": "2",
+  "parent_id": "132"
+ },
+ {
+  "id": "251",
+  "title": "Religious Assignment and its Conditions",
+  "hadeeths_count": "1",
+  "parent_id": "132"
+ },
+ {
+  "id": "259",
+  "title": "Significations and Inference",
+  "hadeeths_count": "1",
+  "parent_id": "132"
+ },
+ {
+  "id": "261",
+  "title": "Divergence and Preponderance",
+  "hadeeths_count": "2",
+  "parent_id": "132"
+ },
+ {
+  "id": "262",
+  "title": "Shariah Objectives",
+  "hadeeths_count": "1",
+  "parent_id": "132"
+ },
+ {
+  "id": "265",
+  "title": "Virtues",
+  "hadeeths_count": "26",
+  "parent_id": "5"
+ },
+ {
+  "id": "266",
+  "title": "Jurisprudence of Ethics",
+  "hadeeths_count": "16",
+  "parent_id": "5"
+ },
+ {
+  "id": "267",
+  "title": "Shariah-approved Manners",
+  "hadeeths_count": "5",
+  "parent_id": "5"
+ },
+ {
+  "id": "268",
+  "title": "Jurisprudence of Supplications and Remembrance of Allah",
+  "hadeeths_count": "6",
+  "parent_id": "5"
+ },
+ {
+  "id": "269",
+  "title": "Heart-Softeners and Sermons",
+  "hadeeths_count": "32",
+  "parent_id": "5"
+ },
+ {
+  "id": "270",
+  "title": "Excellence of Knowledge",
+  "hadeeths_count": "6",
+  "parent_id": "265"
+ },
+ {
+  "id": "271",
+  "title": "Excellence of Monotheism",
+  "hadeeths_count": "6",
+  "parent_id": "265"
+ },
+ {
+  "id": "272",
+  "title": "Merits of the Noble Qur'an",
+  "hadeeths_count": "4",
+  "parent_id": "265"
+ },
+ {
+  "id": "276",
+  "title": "Merits of the Companions",
+  "hadeeths_count": "1",
+  "parent_id": "265"
+ },
+ {
+  "id": "277",
+  "title": "Merits of Good Deeds",
+  "hadeeths_count": "2",
+  "parent_id": "265"
+ },
+ {
+  "id": "278",
+  "title": "Merits of Remembering Allah",
+  "hadeeths_count": "3",
+  "parent_id": "265"
+ },
+ {
+  "id": "280",
+  "title": "Merits of Heart Acts",
+  "hadeeths_count": "6",
+  "parent_id": "265"
+ },
+ {
+  "id": "281",
+  "title": "Merits of Organs' Acts",
+  "hadeeths_count": "1",
+  "parent_id": "265"
+ },
+ {
+  "id": "282",
+  "title": "Praiseworthy Morals",
+  "hadeeths_count": "14",
+  "parent_id": "266"
+ },
+ {
+  "id": "283",
+  "title": "Blameworthy Morals",
+  "hadeeths_count": "2",
+  "parent_id": "266"
+ },
+ {
+  "id": "285",
+  "title": "Etiquettes of Reciting the Noble Qur’an",
+  "hadeeths_count": "1",
+  "parent_id": "267"
+ },
+ {
+  "id": "286",
+  "title": "Manners of Greeting and Seeking Permission",
+  "hadeeths_count": "1",
+  "parent_id": "267"
+ },
+ {
+  "id": "287",
+  "title": "Manners of Speaking and Keeping Silent",
+  "hadeeths_count": "2",
+  "parent_id": "267"
+ },
+ {
+  "id": "293",
+  "title": "Manners of Sleeping and Waking Up",
+  "hadeeths_count": "1",
+  "parent_id": "267"
+ },
+ {
+  "id": "296",
+  "title": "Manners of Sneezing and Yawning",
+  "hadeeths_count": "1",
+  "parent_id": "267"
+ },
+ {
+  "id": "297",
+  "title": "Manners of Visiting the Sick",
+  "hadeeths_count": "1",
+  "parent_id": "267"
+ },
+ {
+  "id": "300",
+  "title": "Benefits of Remembering Allah",
+  "hadeeths_count": "3",
+  "parent_id": "268"
+ },
+ {
+  "id": "302",
+  "title": "Timeless Dhikr",
+  "hadeeths_count": "1",
+  "parent_id": "268"
+ },
+ {
+  "id": "312",
+  "title": "Causes for Answering or not Answering Supplications",
+  "hadeeths_count": "2",
+  "parent_id": "268"
+ },
+ {
+  "id": "314",
+  "title": "Acts of Heart",
+  "hadeeths_count": "7",
+  "parent_id": "269"
+ },
+ {
+  "id": "315",
+  "title": "Heart Diseases",
+  "hadeeths_count": "2",
+  "parent_id": "269"
+ },
+ {
+  "id": "316",
+  "title": "Asceticism and Piety",
+  "hadeeths_count": "1",
+  "parent_id": "269"
+ },
+ {
+  "id": "318",
+  "title": "Condemning Sins",
+  "hadeeths_count": "3",
+  "parent_id": "269"
+ },
+ {
+  "id": "320",
+  "title": "Condemning Whims and Desires",
+  "hadeeths_count": "5",
+  "parent_id": "269"
+ },
+ {
+  "id": "321",
+  "title": "Repentance",
+  "hadeeths_count": "2",
+  "parent_id": "269"
+ },
+ {
+  "id": "322",
+  "title": "Purification of Souls",
+  "hadeeths_count": "8",
+  "parent_id": "269"
+ },
+ {
+  "id": "324",
+  "title": "Descriptions of Paradise and Hell",
+  "hadeeths_count": "7",
+  "parent_id": "269"
+ },
+ {
+  "id": "325",
+  "title": "Calling to Allah (Da‘wah)",
+  "hadeeths_count": "5",
+  "parent_id": "6"
+ },
+ {
+  "id": "326",
+  "title": "Enjoining Good and Forbidding Evil",
+  "hadeeths_count": "1",
+  "parent_id": "6"
+ },
+ {
+  "id": "327",
+  "title": "Shariah-approved Politics",
+  "hadeeths_count": "4",
+  "parent_id": "6"
+ },
+ {
+  "id": "329",
+  "title": "Ruling of Calling to Allah",
+  "hadeeths_count": "1",
+  "parent_id": "325"
+ },
+ {
+  "id": "338",
+  "title": "Excellence and Merits of Islam",
+  "hadeeths_count": "3",
+  "parent_id": "325"
+ },
+ {
+  "id": "344",
+  "title": "Ruling of Enjoining Good and Forbidding Evil",
+  "hadeeths_count": "1",
+  "parent_id": "326"
+ },
+ {
+  "id": "347",
+  "title": "Principles of Enjoining Good and Forbidding Evil",
+  "hadeeths_count": "1",
+  "parent_id": "326"
+ },
+ {
+  "id": "352",
+  "title": "Duties of the Imam",
+  "hadeeths_count": "1",
+  "parent_id": "327"
+ },
+ {
+  "id": "353",
+  "title": "Imam's Rights over the Subjects",
+  "hadeeths_count": "3",
+  "parent_id": "327"
+ },
+ {
+  "id": "367",
+  "title": "Prophet's Biography",
+  "hadeeths_count": "1",
+  "parent_id": "7"
+ },
+ {
+  "id": "418",
+  "title": "Ahl-us-Sunnah's (Sunni) Stance on Religious Innovators",
+  "hadeeths_count": "1",
+  "parent_id": "100"
+ },
+ {
+  "id": "436",
+  "title": "Natural Cleanliness Practices",
+  "hadeeths_count": "1",
+  "parent_id": "133"
+ },
+ {
+  "id": "437",
+  "title": "Ablution",
+  "hadeeths_count": "2",
+  "parent_id": "133"
+ },
+ {
+  "id": "441",
+  "title": "Excellence of Ablution",
+  "hadeeths_count": "2",
+  "parent_id": "437"
+ },
+ {
+  "id": "456",
+  "title": "Obligation of Prayer and Ruling on Its Abandoner",
+  "hadeeths_count": "3",
+  "parent_id": "134"
+ },
+ {
+  "id": "457",
+  "title": "Virtue of Prayer",
+  "hadeeths_count": "3",
+  "parent_id": "134"
+ },
+ {
+  "id": "492",
+  "title": "Death and Its Rulings",
+  "hadeeths_count": "1",
+  "parent_id": "135"
+ },
+ {
+  "id": "500",
+  "title": "Obligation of Zakah and Ruling of Its Abandoning",
+  "hadeeths_count": "3",
+  "parent_id": "136"
+ },
+ {
+  "id": "511",
+  "title": "Voluntary Charity",
+  "hadeeths_count": "2",
+  "parent_id": "136"
+ },
+ {
+  "id": "512",
+  "title": "Obligation of Fasting and Ruling of Its Abandoning",
+  "hadeeths_count": "3",
+  "parent_id": "137"
+ },
+ {
+  "id": "531",
+  "title": "Obligation of Hajj and ‘Umrah and Ruling of Its Abandoner",
+  "hadeeths_count": "2",
+  "parent_id": "138"
+ },
+ {
+  "id": "532",
+  "title": "Virtue of Hajj and Umrah",
+  "hadeeths_count": "1",
+  "parent_id": "138"
+ },
+ {
+  "id": "629",
+  "title": "Merit and Significance of Knowledge",
+  "hadeeths_count": "2",
+  "parent_id": "270"
+ },
+ {
+  "id": "631",
+  "title": "Merits of the Rightly Guided Caliphs",
+  "hadeeths_count": "1",
+  "parent_id": "276"
+ },
+ {
+  "id": "636",
+  "title": "Forbidden Utterances and Tongue Evils",
+  "hadeeths_count": "1",
+  "parent_id": "287"
+ },
+ {
+  "id": "725",
+  "title": "The rulings of mosques",
+  "hadeeths_count": "1",
+  "parent_id": "134"
+ },
+ {
+  "id": "738",
+  "title": "Interpretation of verses",
+  "hadeeths_count": "3",
+  "parent_id": "10"
+ }
+]

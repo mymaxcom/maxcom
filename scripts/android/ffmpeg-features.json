@@ -1,0 +1,11 @@
+{
+  "protocols": ["file", "pipe", "tcp", "udp", "tls", "rtmp", "rtmps", "rtp"],
+  "demuxers": ["rtsp", "rtp", "sdp"],
+  "muxers": ["flv", "rtsp", "rtp"],
+  "encoders": ["aac", "libopus"],
+  "decoders": ["aac", "opus", "h264"],
+  "parsers": ["h264", "aac", "opus"],
+  "bsfs": ["h264_mp4toannexb", "aac_adtstoasc", "extract_extradata"],
+  "filters": ["aresample", "aformat", "anull"],
+  "externalLibs": ["libopus", "mbedtls"]
+}

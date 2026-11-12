@@ -1,0 +1,206 @@
+/* MAXCOM kiosk, live layer (Plan 5 Task 6).
+   The live is the picture behind the glass: the same stage, the same identity block, next prayer box, ticker
+   and prayer bar on top, in the same places. Only the content band changes: the rotating card makes way for
+   one low strip that names the kuliah. One loud thing, the red tally light, says "on air"; everything else
+   keeps the kiosk's own gold-on-green glass so the screen still reads as this surau's screen. */
+
+/* The screen becomes its own stacking context so the video can sit under every grid item (z-index -1)
+   and still above the background picture, which is a sibling of the screen. */
+.screen--main.has-live { isolation: isolate; }
+
+.live {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.live__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: transparent;
+  /* invisible until frames really arrive: a connecting or stalled player shows the normal background */
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+.live__video[data-fit='contain'] { object-fit: contain; }
+/* A phone held upright sends a picture taller than wide: show it whole, centred, with dark bars at the sides,
+   whatever the fit setting says (cover would crop the speaker's head and hands away on a 16:9 TV). */
+.live__video[data-orientation='portrait'] {
+  object-fit: contain;
+  object-position: center;
+  background: rgb(0 0 0 / 0.92);
+}
+.live[data-playing='true'] .live__video { opacity: 1; }
+
+/* Legibility over moving pictures: a darker head (clock, dates, next prayer) and foot (strip, ticker, bar),
+   the middle left open for the speaker. Tinted with the measured glass tone, like the background shade. */
+.live__scrim {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 900ms ease;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--glass-rgb) / 0.8) 0%,
+      rgb(var(--glass-rgb) / 0.55) 26%,
+      rgb(var(--glass-rgb) / 0) 46%,
+      rgb(var(--glass-rgb) / 0) 54%,
+      rgb(var(--glass-rgb) / 0.5) 74%,
+      rgb(var(--glass-rgb) / 0.88) 100%
+    );
+}
+.live[data-playing='true'] .live__scrim { opacity: 1; }
+/* Over a live picture the glass gets a touch more body so the countdown and the bar never wash out (no blur
+   behind it anywhere: see .glass in styles.css). */
+.screen--main.has-live .glass { background: rgb(var(--glass-rgb) / 0.88); }
+
+/* ---- The kuliah strip ------------------------------------------------------------------------------------
+   A compact corner badge, not a banner: one slim line pinned to the bottom-left of the content band, so it
+   sits above the ticker and the prayer bar, never covers them and never reaches the middle of the picture.
+   Small but still readable across the hall: nothing under about 18px on a 1080p TV (1rem = 19.2px there). */
+.live-strip {
+  grid-area: band;
+  align-self: end;
+  justify-self: start;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  max-width: min(100%, 52rem);
+  min-height: 2.9rem;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  text-shadow: 0 0.1rem 0.4rem rgb(0 0 0 / 0.35);
+  animation: screen-in 600ms ease-out both;
+}
+
+/* The tally: a dark block on the left with the red light, the one thing on screen that is not gold or white. */
+.live-strip__tag {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 0.95rem 0 0.85rem;
+  background: rgb(0 0 0 / 0.42);
+  border-right: 1px solid rgb(var(--accent-rgb) / 0.25);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.live-strip__dot {
+  display: block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: #ff4d4d;
+  box-shadow: 0 0 0 0.22rem rgb(255 77 77 / 0.28), 0 0 0.8rem rgb(255 77 77 / 0.55);
+  animation: live-tally 2.4s ease-in-out infinite;
+}
+@keyframes live-tally {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+/* Waiting for pictures (preview, connecting, no stream): the light is steady and quieter. */
+.live-strip.is-waiting .live-strip__dot {
+  animation: none;
+  opacity: 0.8;
+  box-shadow: 0 0 0 0.22rem rgb(255 77 77 / 0.2);
+}
+
+/* One line: penceramah, then the kuliah label and the topic, each joined by a small gold dot. */
+.live-strip__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.45rem 1.1rem 0.45rem 0.9rem;
+}
+.live-strip__who {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-strip__about {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+/* The dot between the penceramah and the label (the JSX keeps them as two blocks). */
+.live-strip__who + .live-strip__about::before {
+  content: '';
+  flex: none;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.9;
+}
+.live-strip__label {
+  flex: none;
+  color: var(--accent);
+  font-weight: 700;
+}
+.live-strip__topic {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+.live-strip .sep {
+  flex: none;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.9;
+}
+
+/* ---- Live mode: the hero clock steps down a size ---------------------------------------------------------
+   Only while live (.has-live on the main screen) so the head band takes less of the picture; the normal
+   screen keeps its own sizes in styles.css. The next prayer box and the prayer bar are not touched. */
+/* Operator, after watching it on the TV (2026-11-05): "smaller more". The aside and the date line stay above
+   the 18px floor at 1080p (1.25rem = 24px, 1.05rem = about 20px). */
+.screen--main.has-live .clock__hm {
+  font-size: 5.2rem;
+}
+.screen--main.has-live .clock__aside {
+  margin-left: 0.6rem;
+  font-size: 1.25rem;
+}
+.screen--main.has-live .clock__aside > * + * {
+  margin-top: 0.2rem;
+}
+.screen--main.has-live .ident__dates {
+  margin-top: 0.45rem;
+  gap: 0.7rem;
+  font-size: 1.05rem;
+}
+.screen--main.has-live .ident__dates .sep {
+  width: 0.32rem;
+  height: 0.32rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live__video, .live__scrim { transition: none; }
+  .live-strip, .live-strip__dot { animation: none; }
+}

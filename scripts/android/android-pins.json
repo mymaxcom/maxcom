@@ -1,0 +1,165 @@
+{
+  "signingCertSha256": "165930a289cc1aa38c4434b639a3cb36fd282a8f42372228a96836c46bc94d84",
+  "termux": {
+    "arm": {
+      "nodejs-lts": {
+        "version": "24.22.2-1",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_24.22.2-1_arm.deb",
+        "file": "nodejs-lts_24.22.2-1_arm.deb",
+        "sha256": "95471b68bf5cc5860714e4a2da0c1c99c165b9ad57577a63529847bf932a3646",
+        "licence": "MIT, with bundled third-party licences (see licences/nodejs-lts)"
+      },
+      "libc++": {
+        "version": "30",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/libc/libc++/libc++_30_arm.deb",
+        "file": "libc++_30_arm.deb",
+        "sha256": "5d4e4dfea77402c0b3ee05b6cb4c73108bb69cc149e2d3a73d4ec6ee6919fd16",
+        "licence": "Apache-2.0 WITH LLVM-exception"
+      },
+      "openssl": {
+        "version": "1:3.6.5",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/o/openssl/openssl_1:3.6.5_arm.deb",
+        "file": "openssl_1_3.6.5_arm.deb",
+        "sha256": "4271df34c1cad73da0143b6d9013df4b80a4f6fc4d8a107f4069ef864606e0a9",
+        "licence": "Apache-2.0"
+      },
+      "c-ares": {
+        "version": "1.34.9",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/c/c-ares/c-ares_1.34.9_arm.deb",
+        "file": "c-ares_1.34.9_arm.deb",
+        "sha256": "6c9b77ed08a606c854ea73875f7fb8ae389f7752b49e2b473d589a418ce222d1",
+        "licence": "MIT"
+      },
+      "libicu": {
+        "version": "79.1",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/libi/libicu/libicu_79.1_arm.deb",
+        "file": "libicu_79.1_arm.deb",
+        "sha256": "0cd8ea9a4719da20e8ddeb05a3901c510880c56536ce7ea80b10609fb2933c7b",
+        "licence": "Unicode-3.0"
+      },
+      "libsqlite": {
+        "version": "3.54.1-1",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/libs/libsqlite/libsqlite_3.54.1-1_arm.deb",
+        "file": "libsqlite_3.54.1-1_arm.deb",
+        "sha256": "32b5030544cff8fb9e762ff4824fb99d443a4ed7091422f348e3e99a0b4e0913",
+        "licence": "blessing (public domain)"
+      },
+      "zlib": {
+        "version": "1.4",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/z/zlib/zlib_1.4_arm.deb",
+        "file": "zlib_1.4_arm.deb",
+        "sha256": "a04f6ce4f36749b49a7ee0432e6fe3f235bdde95ed53f6b9f86138d58fbdc816",
+        "licence": "Zlib"
+      },
+      "ca-certificates": {
+        "version": "1:2026.11.05-1",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/c/ca-certificates/ca-certificates_1:2026.11.05-1_all.deb",
+        "file": "ca-certificates_1_2026.11.05-1_all.deb",
+        "sha256": "12fc350fc5ad638338b06b04835bce897615f8c93f96d30ac396cdb39b850c6b",
+        "licence": "MPL-2.0"
+      }
+    },
+    "aarch64": {
+      "nodejs-lts": {
+        "version": "24.22.2-1",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_24.22.2-1_aarch64.deb",
+        "file": "nodejs-lts_24.22.2-1_aarch64.deb",
+        "sha256": "837bbc7e422ef44583d590b7735c8736916183a185fc6f8c547c42b44cabfd01",
+        "licence": "MIT, with bundled third-party licences (see licences/nodejs-lts)"
+      },
+      "libc++": {
+        "version": "30",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/libc/libc++/libc++_30_aarch64.deb",
+        "file": "libc++_30_aarch64.deb",
+        "sha256": "53d0b84a7ba7459024257cb94d5b136fe13ef858567f65a8064b35950799f2ca",
+        "licence": "Apache-2.0 WITH LLVM-exception"
+      },
+      "openssl": {
+        "version": "1:3.6.5",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/o/openssl/openssl_1:3.6.5_aarch64.deb",
+        "file": "openssl_1_3.6.5_aarch64.deb",
+        "sha256": "a2fb7856875e63ef6b90442752e05974813372c3ca86d2513a78ea43c67a0f8b",
+        "licence": "Apache-2.0"
+      },
+      "c-ares": {
+        "version": "1.34.9",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/c/c-ares/c-ares_1.34.9_aarch64.deb",
+        "file": "c-ares_1.34.9_aarch64.deb",
+        "sha256": "623d84855e176f3f2a415d24c0e1d2f529356f4b5439bb3313e6d7ff0da4585c",
+        "licence": "MIT"
+      },
+      "libicu": {
+        "version": "79.1",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/libi/libicu/libicu_79.1_aarch64.deb",
+        "file": "libicu_79.1_aarch64.deb",
+        "sha256": "83c980a010e957738e3567127801d66a1b9bd7e404a4fda98788048ee57d606c",
+        "licence": "Unicode-3.0"
+      },
+      "libsqlite": {
+        "version": "3.54.1-1",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/libs/libsqlite/libsqlite_3.54.1-1_aarch64.deb",
+        "file": "libsqlite_3.54.1-1_aarch64.deb",
+        "sha256": "661fb995f7215845007b222a85266ae99d9443e87e0604f8677edfd738e6b81a",
+        "licence": "blessing (public domain)"
+      },
+      "zlib": {
+        "version": "1.4",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/z/zlib/zlib_1.4_aarch64.deb",
+        "file": "zlib_1.4_aarch64.deb",
+        "sha256": "e3027565ae50bcd8ba5113c988b589754ae192c9cc3e6afbe3e4ed7c06b2598e",
+        "licence": "Zlib"
+      },
+      "ca-certificates": {
+        "version": "1:2026.11.05-1",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/c/ca-certificates/ca-certificates_1:2026.11.05-1_all.deb",
+        "file": "ca-certificates_1_2026.11.05-1_all.deb",
+        "sha256": "12fc350fc5ad638338b06b04835bce897615f8c93f96d30ac396cdb39b850c6b",
+        "licence": "MPL-2.0"
+      }
+    }
+  },
+  "mediamtx": {
+    "armeabi-v7a": {
+      "version": "v1.21.3",
+      "url": "https://github.com/bluenviron/mediamtx/releases/download/v1.21.3/mediamtx_v1.21.3_linux_armv7.tar.gz",
+      "file": "mediamtx_v1.21.3_linux_armv7.tar.gz",
+      "sha256": "134b53bfdb26583d02e1c27fc256d587cf3482e80c9e3b49083595e19a096284",
+      "licence": "MIT"
+    },
+    "arm64-v8a": {
+      "version": "v1.21.3",
+      "url": "https://github.com/bluenviron/mediamtx/releases/download/v1.21.3/mediamtx_v1.21.3_linux_arm64.tar.gz",
+      "file": "mediamtx_v1.21.3_linux_arm64.tar.gz",
+      "sha256": "27f038237cb5f77a724f6afc58eca2798f2bc4edf9989895631a80eeb41a4fe2",
+      "licence": "MIT"
+    }
+  },
+  "ffmpegSrc": {
+    "version": "9.0.2",
+    "url": "https://www.ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+    "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
+    "licence": "LGPL-2.1-or-later, built with --enable-version3 (LGPL-3.0-or-later)"
+  },
+  "opusSrc": {
+    "version": "1.6.1",
+    "url": "https://downloads.xiph.org/releases/opus/opus-1.6.1.tar.gz",
+    "sha256": "6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1",
+    "licence": "BSD-3-Clause"
+  },
+  "mbedtlsSrc": {
+    "version": "3.6.7",
+    "url": "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2",
+    "sha256": "a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6",
+    "licence": "Apache-2.0 (dual licensed with GPL-2.0-or-later; used under Apache-2.0)"
+  },
+  "ndkImage": {
+    "base": "ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852",
+    "imageTag": "maxcom-ffmpeg-ndk:r28c-fe8156099",
+    "ndkVersion": "r28c",
+    "ndkRevision": "28.2.13676358",
+    "ndkUrl": "https://dl.google.com/android/repository/android-ndk-r28c-linux.zip",
+    "ndkSha256": "dfb20d396df28ca02a8c708314b814a4d961dc9074f9a161932746f815aa552f",
+    "ndkSha1Google": "a7b54a5de87fecd125a17d54f73c446199e72a64",
+    "apiLevel": 28
+  }
+}

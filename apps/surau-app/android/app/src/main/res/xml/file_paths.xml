@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only this one folder of the app cache can be handed to another app
+     (ShareChannel.kt writes cache/finance/<name>). -->
+<paths>
+    <cache-path name="finance" path="finance/" />
+</paths>

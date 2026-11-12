@@ -1,0 +1,7 @@
+# Copy to android/key.properties (git-ignored) and fill in. Never commit the real file or the .jks.
+# Make the keystore once, outside the repo, and keep it and its passwords safe:
+#   keytool -genkeypair -keyalg RSA -keysize 4096 -validity 10000 -alias surau-upload -keystore surau-upload.jks
+storeFile=C:/path/outside/the/repo/surau-upload.jks
+storePassword=CHANGE-ME
+keyPassword=CHANGE-ME
+keyAlias=surau-upload

@@ -1,0 +1,20 @@
+{
+  "node": {
+    "version": "24.22.1",
+    "url": "https://nodejs.org/dist/v24.22.1/node-v24.22.1-win-x64.zip",
+    "sha256": "d2046d28c2c3dcd211ac5145c0bf30e2047ef9dfb306693c8c6e2eccd8b95fa5",
+    "licence": "MIT"
+  },
+  "mediamtx": {
+    "version": "v1.21.3",
+    "url": "https://github.com/bluenviron/mediamtx/releases/download/v1.21.3/mediamtx_v1.21.3_windows_amd64.zip",
+    "sha256": "b2f5246b07cb72961df03b8d5e8cad43dc657bcf3f49a87bb031bdf22721af74",
+    "licence": "MIT"
+  },
+  "ffmpeg": {
+    "version": "n9.0.2-39-g7adfbe40dc",
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-win64-gpl-9.0.zip",
+    "sha256": "693f3e224bc184b40524a62ca47526cfebaf2504414021b92fe75f677ad868b9",
+    "licence": "GPL-3.0-or-later (BtbN FFmpeg-Builds win64-gpl build, includes libx264)"
+  }
+}

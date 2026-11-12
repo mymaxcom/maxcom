@@ -1,0 +1,53 @@
+KFGQPC HAFS Uthmanic Script (QPC Hafs), version 3.0
+====================================================
+
+Bundled file (this folder)
+  KFGQPC-Hafs-V30.ttf
+  Original file name inside the official zip: "KFGQPC Hafs V30.ttf"
+  Size:   301356 bytes
+  SHA256: c9dd7e71a454565b13d89e5e6f2663a918acb0a20a23eea31eccb32a3aeec47a
+  The file is bundled byte-for-byte unmodified (only renamed, spaces to hyphens).
+  It carries the KFGQPC digital signature (DSIG table) and the copyright and EULA
+  below in its own name table (name IDs 0 and 13).
+
+Source (official distribution)
+  Publisher: King Fahd Glorious Quran Printing Complex (KFGQPC), AlMadinah AlMunawarrah.
+  Page:      https://fonts.qurancomplex.gov.sa/hafs-reading  (listed under "Ten readings")
+  Download:  https://fonts.qurancomplex.gov.sa/fonts/KFGQPC-Hafs-V30.zip
+             zip SHA256 ddf52d0f6919b0a9cfb1e9cc048d41d88e695f973455fea3c9973837295a324c (844410 bytes)
+             zip contents: "KFGQPC Hafs V30.ttf" and "KFGQPC Hafs V30.docx" (a sample document)
+  Font names (name table): family "KFGQPC Hafs V3", full name "KFGQPC HAFS Uthmanic Script Regular",
+             version "Version 3.0", vendor URL http://fonts.qurancomplex.gov.sa/
+  Obtained:  2026-11-03.
+  The same family is redistributed by QUL (Tarteel) as "QPC Hafs font", version 2.2:
+  https://qul.tarteel.ai/resources/font/245 -> https://static-cdn.tarteel.ai/qul/fonts/UthmanicHafs_V22.ttf
+  (297700 bytes, SHA256 aa68bffce289b4c0ebac68e90502eb69e42356abcd1603cb2b8e99c2c723f145). QUL lists no
+  licence text of its own for it, so the terms are taken from the font's own EULA, copied verbatim below.
+
+Terms followed by MAXCOM
+  Free, non-commercial surau use; the font file is not modified, altered or converted; it is served to the
+  kiosk page from the box only (never from the internet); this licence text travels with it. Any commercial
+  use needs the written approval of KFGQPC (see the EULA and the repo-root THIRD-PARTY-NOTICES.md).
+  Fallback when the file is absent: Amiri Quran (SIL Open Font License 1.1, Plan 1).
+
+----------------------------------------------------------------------------------------------------
+Copyright notice embedded in the font (name ID 0), verbatim
+----------------------------------------------------------------------------------------------------
+The digitally signed machine readable Typeface(Font) licensed to you is copyrighted, (2010), King Fahd Glorious Quran Printing Complex.
+ISBN: 978-603-8010-15-0, Accession No. 1430/7278
+All rights reserved. This Font is the property of King Fahd Glorious Quran Printing Complex, and may not be reproduced, modified without the express written approval of King Fahd Glorious Quran Printing Complex.
+
+----------------------------------------------------------------------------------------------------
+Licence embedded in the font (name ID 13), verbatim
+----------------------------------------------------------------------------------------------------
+ELECTRONIC END-USER LICENSE AGREEMENT
+
+By installing this Font You accept all the terms and conditions of this Agreement.
+
+Copyright (c) 2010 by King Fahd Glorious Quran Printing Complex (KFGQPC), AlMadinah AlMunawarrah, Kingdom of Saudi Arabia. All Rights Reserved. KFGQPC retains full title and ownership of this Typeface both as artwork and font software. This Agreement does not grant you any intellectual property rights in the Font.
+
+Permission is hereby granted, Free of Cost, to any person obtaining a copy of this Font accompanying this license, the rights to Use, Copy, Distribute, subject to the following conditions:
+
+1.    The Font Software cannot be Sold, Modified, Altered, Translated, Reverse Engineered, Decompiled, Disassembled, Reproduced or Attempted to discover the Source Code of this Font in no means.
+
+2.    The Font Software is provided "AS IS", and KFGQPC makes no warranties as to its use or performance, fitness for a particular purpose. KFGQPC does not and cannot warrant the performance or results you may obtain by using the Font. In no event shall KFGQPC be liable for any Claims, Damages or other Liability, including any Damages, arising from, out of the use or inability to use the Font or from other dealings in the Font.

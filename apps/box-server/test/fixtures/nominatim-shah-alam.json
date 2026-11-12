@@ -1,0 +1,48 @@
+[
+  {
+    "place_id": 1001,
+    "licence": "Data (c) OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "lat": "-1.28003412",
+    "lon": "36.84950187",
+    "category": "amenity",
+    "type": "place_of_worship",
+    "display_name": "Masjid An-Nur, Eastleigh, Nairobi, Nairobi County, 00610, Kenya",
+    "address": {
+      "amenity": "Masjid An-Nur",
+      "suburb": "Eastleigh",
+      "city": "Nairobi",
+      "state": "Nairobi County",
+      "postcode": "00610",
+      "country": "Kenya",
+      "country_code": "ke"
+    }
+  },
+  {
+    "place_id": 1002,
+    "lat": "3.0733",
+    "lon": "101.5185",
+    "display_name": "Shah Alam, Petaling, Selangor, Malaysia",
+    "address": { "town": "Shah Alam", "state": "Selangor", "country": "Malaysia", "country_code": "my" }
+  },
+  {
+    "place_id": 1003,
+    "lat": "not a number",
+    "lon": "1",
+    "display_name": "Broken row",
+    "address": { "country_code": "my" }
+  },
+  {
+    "place_id": 1004,
+    "lat": "123",
+    "lon": "1",
+    "display_name": "Latitude out of range",
+    "address": { "country_code": "my" }
+  },
+  {
+    "place_id": 1005,
+    "lat": "6.1254",
+    "lon": "102.2381",
+    "display_name": "Kampung Baru\u0007, Kelantan, Malaysia",
+    "address": { "village": "Kampung Baru\u0007", "country_code": "my" }
+  }
+]

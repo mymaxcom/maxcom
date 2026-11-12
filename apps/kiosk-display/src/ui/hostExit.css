@@ -1,0 +1,44 @@
+/* The MAXCOM mark in the bottom-right corner: a quiet way out to the box OS (double-click).
+   The wordmark's letters are cream and its X is orange, so it always sits on its own small ink plate: solid,
+   not a translucent smudge, so it reads the same on the dark templates and on the paper/white ones. The plate
+   colour follows the template's own dark ink; the corner (about 6rem x 2rem) stays reserved for it. */
+.host-exit {
+  position: fixed;
+  right: 0.7rem;
+  bottom: 0.35rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  height: 1.6rem;
+  padding: 0.24rem 0.55rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: var(--mark-plate, #082824);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  opacity: 0.8;
+  cursor: pointer;
+  transition: opacity 160ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+.host-exit img {
+  display: block;
+  height: 100%;
+  width: auto;
+  pointer-events: none;
+  user-select: none;
+}
+.host-exit[data-pulse='true'] {
+  transform: scale(1.12);
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+/* Per template: the plate is the template's darkest ink, so it looks printed into the design, not pasted on. */
+.stage[data-template='colourful'] .host-exit { --mark-plate: #1d1442; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16); }
+.stage[data-template='creative'] .host-exit { --mark-plate: #0e1620; border-radius: 0 0.6rem 0 0.6rem; }
+.stage[data-template='oldschool'] .host-exit { --mark-plate: #2a1c10; opacity: 0.9; border-radius: 0.2rem; box-shadow: none; }
+.stage[data-template='minimal'] .host-exit { --mark-plate: #16211f; opacity: 0.88; box-shadow: none; }
+/* Solat and tarawih dim the screen: the mark steps back with it. */
+.stage[data-dim='true'] .host-exit { opacity: 0.45; }
+/* Hover and the pulse come last at the highest specificity, so they beat the dim and the per-template opacity above. */
+.stage .host-exit:hover,
+.stage .host-exit[data-pulse='true'] { opacity: 1; }

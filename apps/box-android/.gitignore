@@ -1,0 +1,19 @@
+/.gradle
+/build
+/app/build
+/captures/
+/local.properties
+*.iml
+.idea/
+
+# Release signing material: never committed.
+key.properties
+**/*.keystore
+**/*.jks
+
+# Build inputs written by scripts/android/build-box-apk.ps1.
+/app/src/main/jniLibs/
+/app/src/main/assets/box/
+/app/src/main/assets/runtime/
+/app/src/main/assets/licences/
+.kotlin/

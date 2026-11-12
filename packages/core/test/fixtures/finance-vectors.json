@@ -1,0 +1,184 @@
+{
+  "note": "Shared by packages/core/test/finance.test.ts and apps/surau-app/test/finance/ledger_test.dart. Entries list only the fields they set; every other entry field is null (createdBy u1, receivedAt = editedAt).",
+  "funds": [
+    { "id": "f1", "name": "Tabung Jumaat", "sortOrder": 1 },
+    { "id": "f2", "name": "Tabung Am", "sortOrder": 2 }
+  ],
+  "perihal": [
+    { "id": "in-j", "direction": "in", "label": "Kutipan solat Jumaat" },
+    { "id": "out-u", "direction": "out", "label": "Utiliti" }
+  ],
+  "scenarios": [
+    {
+      "name": "1 plain entries",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 100000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "a2", "kind": "out", "entryDate": "2026-10-03", "fundId": "f1", "amountSen": 25000, "editedAt": "2026-10-03T04:00:00.000Z" },
+        { "id": "a3", "kind": "in", "entryDate": "2026-10-03", "fundId": "f2", "amountSen": 5000, "editedAt": "2026-10-03T05:00:00.000Z" },
+        { "id": "a4", "kind": "opening", "entryDate": "2026-10-01", "fundId": "f2", "amountSen": 20000, "editedAt": "2026-10-01T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 75000, "f2": 25000 }
+    },
+    {
+      "name": "2 amount correction",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 100000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a1", "correctionKind": "amount", "amountSen": 90000, "reason": "Salah taip jumlah: 900", "editedAt": "2026-10-04T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 90000, "f2": 0 }
+    },
+    {
+      "name": "3 void an expense",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 100000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "a2", "kind": "out", "entryDate": "2026-10-03", "fundId": "f1", "amountSen": 30000, "editedAt": "2026-10-03T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a2", "correctionKind": "void", "amountSen": 0, "reason": "Bil dibayar dua kali", "editedAt": "2026-10-04T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 100000, "f2": 0 }
+    },
+    {
+      "name": "4 move to another tabung",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 100000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a1", "correctionKind": "fund", "toFundId": "f2", "amountSen": 0, "reason": "Salah tabung: masuk Am", "editedAt": "2026-10-04T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 0, "f2": 100000 }
+    },
+    {
+      "name": "5 void then a new amount un-voids",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 50000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a1", "correctionKind": "void", "amountSen": 0, "reason": "Batal dahulu sebab silap", "editedAt": "2026-10-04T04:00:00.000Z" },
+        { "id": "c2", "kind": "adjust", "entryDate": "2026-10-05", "fundId": "f1", "correctsId": "a1", "correctionKind": "amount", "amountSen": 40000, "reason": "Kiraan semula: 400", "editedAt": "2026-10-05T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 40000, "f2": 0 }
+    },
+    {
+      "name": "6 void then a tabung change un-voids",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 50000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a1", "correctionKind": "void", "amountSen": 0, "reason": "Batal dahulu sebab silap", "editedAt": "2026-10-04T04:00:00.000Z" },
+        { "id": "c2", "kind": "adjust", "entryDate": "2026-10-05", "fundId": "f1", "correctsId": "a1", "correctionKind": "fund", "toFundId": "f2", "amountSen": 0, "reason": "Salah tabung: masuk Am", "editedAt": "2026-10-05T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 0, "f2": 50000 }
+    },
+    {
+      "name": "7 amount then a later void stays voided",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 50000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "c2", "kind": "adjust", "entryDate": "2026-10-06", "fundId": "f1", "correctsId": "a1", "correctionKind": "void", "amountSen": 0, "reason": "Batal kerana pendua", "editedAt": "2026-10-06T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a1", "correctionKind": "amount", "amountSen": 60000, "reason": "Kiraan semula: 600", "editedAt": "2026-10-04T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 0, "f2": 0 }
+    },
+    {
+      "name": "8 same instant, ordered by id",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 10000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "adj-b", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a1", "correctionKind": "amount", "amountSen": 20000, "reason": "Kiraan semula: 200", "editedAt": "2026-10-04T04:00:00.000Z" },
+        { "id": "adj-a", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a1", "correctionKind": "amount", "amountSen": 30000, "reason": "Kiraan semula: 300", "editedAt": "2026-10-04T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 20000, "f2": 0 }
+    },
+    {
+      "name": "9 expense corrected down",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 20000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "a2", "kind": "out", "entryDate": "2026-10-03", "fundId": "f1", "amountSen": 8000, "editedAt": "2026-10-03T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a2", "correctionKind": "amount", "amountSen": 5000, "reason": "Salah taip jumlah: 50", "editedAt": "2026-10-04T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 15000, "f2": 0 }
+    },
+    {
+      "name": "10 report month with a last-month correction",
+      "ym": "2026-10",
+      "entries": [
+        { "id": "e1", "kind": "opening", "entryDate": "2026-09-01", "fundId": "f1", "amountSen": 100000, "refNo": "A-0001", "editedAt": "2026-09-01T04:00:00.000Z" },
+        { "id": "e2", "kind": "in", "entryDate": "2026-09-25", "fundId": "f1", "perihalId": "in-j", "amountSen": 50000, "refNo": "K-0001", "method": "tunai", "editedAt": "2026-09-25T04:00:00.000Z" },
+        { "id": "e3", "kind": "out", "entryDate": "2026-09-28", "fundId": "f1", "perihalId": "out-u", "amountSen": 20000, "refNo": "B-0001", "method": "bank", "reference": "FPX123", "payee": "TNB", "editedAt": "2026-09-28T04:00:00.000Z" },
+        { "id": "e4", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "perihalId": "in-j", "amountSen": 30000, "refNo": "K-0002", "method": "tunai", "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "e5", "kind": "in", "entryDate": "2026-10-02", "fundId": "f2", "perihalId": "in-j", "amountSen": 10000, "refNo": "K-0003", "method": "tunai", "editedAt": "2026-10-02T05:00:00.000Z" },
+        { "id": "e6", "kind": "out", "entryDate": "2026-10-10", "fundId": "f1", "perihalId": "out-u", "amountSen": 5000, "refNo": "B-0002", "method": "bank", "reference": "FPX124", "payee": "Air Selangor", "note": "Bil air", "editedAt": "2026-10-10T04:00:00.000Z" },
+        { "id": "e7", "kind": "adjust", "entryDate": "2026-10-12", "fundId": "f1", "correctsId": "e2", "correctionKind": "amount", "amountSen": 45000, "refNo": "P-0001", "reason": "Salah taip jumlah: 450", "editedAt": "2026-10-12T04:00:00.000Z" },
+        { "id": "e8", "kind": "adjust", "entryDate": "2026-10-15", "fundId": "f2", "correctsId": "e5", "correctionKind": "void", "amountSen": 0, "refNo": "P-0002", "reason": "Dimasukkan dua kali", "editedAt": "2026-10-15T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 150000, "f2": 0 },
+      "report": {
+        "now": "2026-11-02T01:00:00.000Z",
+        "syncedUntil": "2026-11-02T00:59:00.000Z",
+        "status": "open",
+        "expected": {
+          "ym": "2026-10",
+          "status": "open",
+          "generatedAt": "2026-11-02T01:00:00.000Z",
+          "syncedUntil": "2026-11-02T00:59:00.000Z",
+          "funds": [
+            { "fundId": "f1", "name": "Tabung Jumaat", "openingSen": 130000, "inSen": 30000, "outSen": 5000, "correctionsSen": -5000, "closingSen": 150000 },
+            { "fundId": "f2", "name": "Tabung Am", "openingSen": 0, "inSen": 10000, "outSen": 0, "correctionsSen": -10000, "closingSen": 0 }
+          ],
+          "inByPerihal": [
+            { "perihalId": "in-j", "label": "Kutipan solat Jumaat", "fundId": "f1", "rows": [ { "date": "2026-10-02", "refNo": "K-0002", "note": null, "amountSen": 30000 } ], "totalSen": 30000 },
+            { "perihalId": "in-j", "label": "Kutipan solat Jumaat", "fundId": "f2", "rows": [ { "date": "2026-10-02", "refNo": "K-0003", "note": null, "amountSen": 10000 } ], "totalSen": 10000 }
+          ],
+          "outByPerihal": [
+            { "perihalId": "out-u", "label": "Utiliti", "fundId": "f1", "rows": [ { "date": "2026-10-10", "refNo": "B-0002", "note": "Bil air", "amountSen": 5000, "payee": "Air Selangor", "penceramahName": null, "kuliahTitle": null, "kuliahDate": null } ], "totalSen": 5000 }
+          ],
+          "corrections": [
+            { "id": "e7", "date": "2026-10-12", "refNo": "P-0001", "originalRefNo": "K-0001", "kind": "amount", "reason": "Salah taip jumlah: 450", "deltaSen": -5000, "fundName": "Tabung Jumaat", "lastMonth": true },
+            { "id": "e8", "date": "2026-10-15", "refNo": "P-0002", "originalRefNo": "K-0003", "kind": "void", "reason": "Dimasukkan dua kali", "deltaSen": -10000, "fundName": "Tabung Am", "lastMonth": false }
+          ],
+          "totals": { "openingSen": 130000, "inSen": 40000, "outSen": 5000, "correctionsSen": -15000, "closingSen": 150000 }
+        }
+      }
+    },
+    {
+      "name": "11 a correction dated next month still counts in the all-time balance",
+      "entries": [
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-30", "fundId": "f1", "amountSen": 70000, "editedAt": "2026-10-30T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-11-02", "fundId": "f1", "correctsId": "a1", "correctionKind": "amount", "amountSen": 7000, "reason": "Salah taip jumlah: 70", "editedAt": "2026-11-02T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 7000, "f2": 0 }
+    },
+    {
+      "name": "12 expense moved to another tabung",
+      "entries": [
+        { "id": "a1", "kind": "opening", "entryDate": "2026-10-01", "fundId": "f1", "amountSen": 10000, "editedAt": "2026-10-01T04:00:00.000Z" },
+        { "id": "a2", "kind": "out", "entryDate": "2026-10-03", "fundId": "f1", "amountSen": 4000, "editedAt": "2026-10-03T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a2", "correctionKind": "fund", "toFundId": "f2", "amountSen": 0, "reason": "Salah tabung: ambil Am", "editedAt": "2026-10-04T04:00:00.000Z" }
+      ],
+      "balances": { "f1": 10000, "f2": -4000 }
+    },
+    {
+      "name": "13 month totals use effective amounts",
+      "ym": "2026-10",
+      "entries": [
+        { "id": "a6", "kind": "in", "entryDate": "2026-09-30", "fundId": "f1", "amountSen": 7000, "editedAt": "2026-09-30T04:00:00.000Z" },
+        { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 100000, "editedAt": "2026-10-02T04:00:00.000Z" },
+        { "id": "a2", "kind": "in", "entryDate": "2026-10-03", "fundId": "f1", "amountSen": 50000, "editedAt": "2026-10-03T04:00:00.000Z" },
+        { "id": "a3", "kind": "in", "entryDate": "2026-10-05", "fundId": "f1", "amountSen": 20000, "editedAt": "2026-10-05T04:00:00.000Z" },
+        { "id": "a4", "kind": "out", "entryDate": "2026-10-06", "fundId": "f1", "amountSen": 30000, "editedAt": "2026-10-06T04:00:00.000Z" },
+        { "id": "a5", "kind": "out", "entryDate": "2026-10-07", "fundId": "f1", "amountSen": 10000, "editedAt": "2026-10-07T04:00:00.000Z" },
+        { "id": "c1", "kind": "adjust", "entryDate": "2026-10-08", "fundId": "f1", "correctsId": "a2", "correctionKind": "void", "amountSen": 0, "reason": "Dicatat dua kali", "editedAt": "2026-10-08T04:00:00.000Z" },
+        { "id": "c2", "kind": "adjust", "entryDate": "2026-10-08", "fundId": "f1", "correctsId": "a3", "correctionKind": "amount", "amountSen": 25000, "reason": "Salah taip jumlah: 250", "editedAt": "2026-10-08T05:00:00.000Z" },
+        { "id": "c3", "kind": "adjust", "entryDate": "2026-10-09", "fundId": "f1", "correctsId": "a4", "correctionKind": "amount", "amountSen": 28000, "reason": "Salah taip jumlah: 280", "editedAt": "2026-10-09T04:00:00.000Z" },
+        { "id": "c4", "kind": "adjust", "entryDate": "2026-10-09", "fundId": "f1", "correctsId": "a5", "correctionKind": "void", "amountSen": 0, "reason": "Bil dibayar dua kali", "editedAt": "2026-10-09T05:00:00.000Z" }
+      ],
+      "balances": { "f1": 104000, "f2": 0 },
+      "month": { "inSen": 125000, "outSen": 28000 }
+    }
+  ],
+  "money": {
+    "format": [
+      [0, "RM 0.00"], [5, "RM 0.05"], [100, "RM 1.00"], [135680, "RM 1,356.80"], [100000000, "RM 1,000,000.00"],
+      [1000000000, "RM 10,000,000.00"]
+    ],
+    "formatParens": [[-1800, "(RM 18.00)"], [135680, "RM 1,356.80"]],
+    "parse": [
+      ["0", 0], ["5", 500], ["1356", 135600], ["1356.8", 135680], ["1356.80", 135680], ["1,356.80", 135680],
+      ["RM 1356.8", 135680], ["rm1,356.80", 135680], [" 12.5 ", 1250], ["0.05", 5], ["10000000", 1000000000],
+      ["10000000.00", 1000000000],
+      ["10000000.01", null], ["100000000000", null], ["1356.801", null], ["-5", null], ["1e5", null], ["", null],
+      ["1,35", null], ["12,34,567", null], [".5", null], ["1.", null], ["abc", null], ["RM", null]
+    ]
+  }
+}

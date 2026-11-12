@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MAX Kiosk Server</string>
+
+    <!-- Foreground service notification -->
+    <string name="notif_channel_name">Perkhidmatan MAXCOM</string>
+    <string name="notif_channel_desc">Menunjukkan bahawa pelayan MAXCOM sedang berjalan.</string>
+    <string name="notif_title">MAX Kiosk Server sedang berjalan</string>
+    <string name="notif_text_running">Pelayan surau aktif pada peranti ini.</string>
+    <string name="notif_text_starting">MAXCOM sedang dimulakan.</string>
+    <string name="notif_text_waiting_clock">Menunggu jam Internet.</string>
+    <string name="notif_text_failed">MAXCOM tidak dapat dimulakan.</string>
+
+    <!-- Kiosk start screen -->
+    <string name="start_title">MAXCOM</string>
+    <string name="start_starting">Sedang memulakan MAXCOM</string>
+    <string name="start_wait_clock">Menunggu jam Internet</string>
+    <string name="start_failed">MAXCOM tidak dapat dimulakan</string>
+    <string name="start_last_log">Baris log terakhir</string>
+    <string name="start_retry">Cuba lagi</string>
+    <string name="start_renderer_gone">Skrin MAXCOM terhenti. Memuatkan semula.</string>
+    <string name="start_load_error">GAGAL: skrin MAXCOM tidak dapat dimuatkan.</string>
+
+    <!-- Maintenance screen -->
+    <string name="maint_title">Penyelenggaraan MAXCOM</string>
+    <string name="maint_check">Semak MAXCOM</string>
+    <string name="maint_restart">Mula semula MAXCOM</string>
+    <string name="maint_exit_android">Keluar ke Android</string>
+    <string name="maint_android_settings">Tetapan Android</string>
+    <string name="maint_change_home">Tukar aplikasi utama</string>
+    <string name="maint_back">Kembali ke skrin MAXCOM</string>
+    <string name="maint_licences">Lesen perisian</string>
+    <string name="maint_pin_title">PIN penyelenggaraan</string>
+    <string name="maint_pin_hint">6 hingga 8 digit</string>
+    <string name="maint_pin_set">Tetapkan PIN</string>
+    <string name="maint_pin_clear">Buang PIN</string>
+    <string name="maint_pin_enter">Masukkan PIN penyelenggaraan</string>
+    <string name="maint_pin_wrong">GAGAL: PIN salah.</string>
+    <string name="maint_pin_invalid">GAGAL: PIN mesti 6 hingga 8 digit.</string>
+    <string name="maint_ca_keystore">Kunci pensijil akar disimpan dalam Android Keystore.</string>
+    <string name="maint_ca_file">Kunci pensijil akar disimpan dalam fail peribadi aplikasi.</string>
+    <string name="maint_check_ok">LULUS: semua semakan berjaya.</string>
+    <string name="maint_check_fail">GAGAL: ada semakan yang tidak berjaya.</string>
+</resources>

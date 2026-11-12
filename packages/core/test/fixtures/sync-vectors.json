@@ -1,0 +1,567 @@
+{
+  "note": "Pinned by packages/core/test/sync.test.ts; the Dart side (Task 8) must reproduce every value. inputJson is parsed by each side itself; canonicalWithoutSig is the op without its sig field. messageText joins the five lines with LF.",
+  "canonical": [
+    {
+      "name": "nested objects: keys sorted at every depth",
+      "inputJson": "{\"b\":{\"z\":1,\"a\":[3,2,1]},\"a\":{\"y\":true,\"x\":null},\"c\":\"x\"}",
+      "canonical": "{\"a\":{\"x\":null,\"y\":true},\"b\":{\"a\":[3,2,1],\"z\":1},\"c\":\"x\"}",
+      "sha256Hex": "4bf9abbed127fe7602f2fc4dee43bfe59c67489b5432375fe660f61c654d7211"
+    },
+    {
+      "name": "unicode: keys ordered by UTF-16 code units, not code points; raw text kept unescaped",
+      "inputJson": "{\"😀\":1,\"￮\":2,\"é\":3,\"e\":4,\"Z\":5,\" \":\"é中😀\"}",
+      "canonical": "{\"Z\":5,\"e\":4,\"é\":3,\" \":\"é中😀\",\"😀\":1,\"￮\":2}",
+      "sha256Hex": "30ed4e00890fa7936dc4c9b557f2623f8e51a6e336a25e780218bb9375e9ac7b"
+    },
+    {
+      "name": "numbers: exponent forms, negative zero, shortest round trip",
+      "inputJson": "[1e21,-0,0.1,1e-7,123456789012345680000,5e-324,4294967296,-1.5,100,1.0,2e0]",
+      "canonical": "[1e+21,0,0.1,1e-7,123456789012345680000,5e-324,4294967296,-1.5,100,1,2]",
+      "sha256Hex": "c0d603f285002627aa31e1c30c4eaa4ea14d474bd533d44d724b35cb0b219319"
+    },
+    {
+      "name": "empty containers and nesting",
+      "inputJson": "{\"e\":[],\"o\":{},\"n\":[[],{}],\"m\":{\"k\":[]}}",
+      "canonical": "{\"e\":[],\"m\":{\"k\":[]},\"n\":[[],{}],\"o\":{}}",
+      "sha256Hex": "35bb0b53e5069aba69bd803a606cf2cefea71d97db532c3574412bac0414a2c2"
+    },
+    {
+      "name": "string escapes: quote, backslash, control characters",
+      "inputJson": "\"a\\\"\\\\\\n\\t\\u0000\\u001fb\\\"\\\\\\n\\t\\u0000\\u001fc/\"",
+      "canonical": "\"a\\\"\\\\\\n\\t\\u0000\\u001fb\\\"\\\\\\n\\t\\u0000\\u001fc/\"",
+      "sha256Hex": "4ecfe4299a24136668b4ab44dbe0d6bdee4f238e58b4f0df185d932954d28270"
+    },
+    {
+      "name": "array order kept; null and booleans",
+      "inputJson": "[null,false,true,{\"b\":null,\"a\":false},[2,1]]",
+      "canonical": "[null,false,true,{\"a\":false,\"b\":null},[2,1]]",
+      "sha256Hex": "12765c3de26a2982c487652fe0e074f91aa41be081068261e17318e22bb40be5"
+    },
+    {
+      "name": "duplicate-free key order with digits and case",
+      "inputJson": "{\"10\":1,\"2\":2,\"B\":3,\"a\":4,\"_\":5,\"\":6}",
+      "canonical": "{\"\":6,\"10\":1,\"2\":2,\"B\":3,\"_\":5,\"a\":4}",
+      "sha256Hex": "ebf4228e43d0552186f4f9fa7933eb1c55ab2881182f19fcf794fa0bbaf0be65"
+    }
+  ],
+  "merge": [
+    {
+      "name": "put, no current row",
+      "input": {
+        "kind": "content.put",
+        "current": null,
+        "op": {
+          "editedAt": "2026-11-05T10:00:01.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": true,
+      "reason": "new"
+    },
+    {
+      "name": "delete of an entity never seen",
+      "input": {
+        "kind": "content.delete",
+        "current": null,
+        "op": {
+          "editedAt": "2026-11-05T09:59:59.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": true,
+      "reason": "new"
+    },
+    {
+      "name": "newer put",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:01.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": true,
+      "reason": "newer"
+    },
+    {
+      "name": "older put",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T09:59:59.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": false,
+      "reason": "older"
+    },
+    {
+      "name": "put tie: greater device wins",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-z"
+        }
+      },
+      "apply": true,
+      "reason": "tie_won"
+    },
+    {
+      "name": "put tie: lesser device loses",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-a"
+        }
+      },
+      "apply": false,
+      "reason": "tie_lost"
+    },
+    {
+      "name": "put tie: same device loses",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": false,
+      "reason": "tie_lost"
+    },
+    {
+      "name": "older delete loses to a newer put",
+      "input": {
+        "kind": "content.delete",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T09:59:59.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": false,
+      "reason": "older"
+    },
+    {
+      "name": "newer delete wins",
+      "input": {
+        "kind": "content.delete",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:01.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": true,
+      "reason": "newer"
+    },
+    {
+      "name": "delete tie: greater device wins",
+      "input": {
+        "kind": "content.delete",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-z"
+        }
+      },
+      "apply": true,
+      "reason": "tie_won"
+    },
+    {
+      "name": "delete tie: lesser device loses",
+      "input": {
+        "kind": "content.delete",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-a"
+        }
+      },
+      "apply": false,
+      "reason": "tie_lost"
+    },
+    {
+      "name": "delete on the very same stamp beats the put",
+      "input": {
+        "kind": "content.delete",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": true,
+      "reason": "tie_won"
+    },
+    {
+      "name": "put on the very same stamp as a tombstone loses",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": "2026-11-05T10:00:00.000Z"
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": false,
+      "reason": "tombstoned"
+    },
+    {
+      "name": "older delete leaves the tombstone",
+      "input": {
+        "kind": "content.delete",
+        "current": {
+          "rev": "2026-11-05T10:00:05.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:05.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": "2026-11-05T10:00:05.000Z"
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:01.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": false,
+      "reason": "tombstoned"
+    },
+    {
+      "name": "newer delete replaces the tombstone",
+      "input": {
+        "kind": "content.delete",
+        "current": {
+          "rev": "2026-11-05T09:59:59.000Z|dev-m",
+          "editedAt": "2026-11-05T09:59:59.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": "2026-11-05T09:59:59.000Z"
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:01.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": true,
+      "reason": "newer"
+    },
+    {
+      "name": "put after the delete undeletes",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:05.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:05.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": "2026-11-05T10:00:05.000Z"
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:06.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": true,
+      "reason": "newer"
+    },
+    {
+      "name": "put before the delete stays deleted",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:05.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:05.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": "2026-11-05T10:00:05.000Z"
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:04.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": false,
+      "reason": "tombstoned"
+    },
+    {
+      "name": "put at the instant of the delete: greater device wins",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:05.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:05.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": "2026-11-05T10:00:05.000Z"
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:05.000Z",
+          "deviceId": "dev-z"
+        }
+      },
+      "apply": true,
+      "reason": "tie_won"
+    },
+    {
+      "name": "put at the instant of the delete: lesser device loses",
+      "input": {
+        "kind": "content.put",
+        "current": {
+          "rev": "2026-11-05T10:00:05.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:05.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": "2026-11-05T10:00:05.000Z"
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:05.000Z",
+          "deviceId": "dev-a"
+        }
+      },
+      "apply": false,
+      "reason": "tombstoned"
+    },
+    {
+      "name": "settings newer",
+      "input": {
+        "kind": "settings.put",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:01.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": true,
+      "reason": "newer"
+    },
+    {
+      "name": "settings older",
+      "input": {
+        "kind": "settings.put",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T09:59:59.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": false,
+      "reason": "older"
+    },
+    {
+      "name": "revoke lands with an older clock",
+      "input": {
+        "kind": "device.revoke",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null,
+          "revokedAt": null
+        },
+        "op": {
+          "editedAt": "2026-11-05T09:59:59.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": true,
+      "reason": "newer"
+    },
+    {
+      "name": "revoke twice",
+      "input": {
+        "kind": "device.revoke",
+        "current": {
+          "rev": "2026-11-05T10:00:00.000Z|dev-m",
+          "editedAt": "2026-11-05T10:00:00.000Z",
+          "deviceId": "dev-m",
+          "deletedAt": null,
+          "revokedAt": "2026-11-05T09:59:59.000Z"
+        },
+        "op": {
+          "editedAt": "2026-11-05T10:00:01.000Z",
+          "deviceId": "dev-m"
+        }
+      },
+      "apply": false,
+      "reason": "already_revoked"
+    }
+  ],
+  "ops": [
+    {
+      "name": "op content.put",
+      "op": {
+        "v": 1,
+        "opId": "01JC3Y8Q0ZRXK5T1V6N2M4P7HD",
+        "surauId": "s-ûjaŋ",
+        "boxId": "a1b2c3d4e5f60718",
+        "deviceId": "dev-9f",
+        "userId": "u1",
+        "kind": "content.put",
+        "entity": "content:kuliah",
+        "entityId": "k-001",
+        "baseRev": "2026-11-04T09:00:00.000Z|dev-2a",
+        "editedAt": "2026-11-05T10:15:30.250Z",
+        "payload": {
+          "title": "Tafsir 中 😀",
+          "when": {
+            "time": "20:15",
+            "day": 1
+          },
+          "tags": [],
+          "speakers": [
+            "Ustaz Ali",
+            "Ustazah Aminah"
+          ],
+          "dur": 1.5,
+          "pin": false
+        },
+        "sig": "ignored-by-digest"
+      },
+      "canonicalWithoutSig": "{\"baseRev\":\"2026-11-04T09:00:00.000Z|dev-2a\",\"boxId\":\"a1b2c3d4e5f60718\",\"deviceId\":\"dev-9f\",\"editedAt\":\"2026-11-05T10:15:30.250Z\",\"entity\":\"content:kuliah\",\"entityId\":\"k-001\",\"kind\":\"content.put\",\"opId\":\"01JC3Y8Q0ZRXK5T1V6N2M4P7HD\",\"payload\":{\"dur\":1.5,\"pin\":false,\"speakers\":[\"Ustaz Ali\",\"Ustazah Aminah\"],\"tags\":[],\"title\":\"Tafsir 中 😀\",\"when\":{\"day\":1,\"time\":\"20:15\"}},\"surauId\":\"s-ûjaŋ\",\"userId\":\"u1\",\"v\":1}",
+      "digest": "c3ff11724381799c433ba5795b2713b09bdc06743c7921ea80bac0365fb7213a",
+      "messageText": "surau-op\na1b2c3d4e5f60718\ndev-9f\n01JC3Y8Q0ZRXK5T1V6N2M4P7HD\nc3ff11724381799c433ba5795b2713b09bdc06743c7921ea80bac0365fb7213a",
+      "messageHex": "73757261752d6f700a613162326333643465356636303731380a6465762d39660a30314a4333593851305a52584b35543156364e324d34503748440a63336666313137323433383137393963343333626135373935623237313362303962646330363734336337393231656138306261633033363566623732313361"
+    },
+    {
+      "name": "op content.delete",
+      "op": {
+        "v": 1,
+        "opId": "01JC3Y8Q10AAAAAAAAAAAAAAAA",
+        "surauId": "s-ûjaŋ",
+        "boxId": "a1b2c3d4e5f60718",
+        "deviceId": "dev-9f",
+        "userId": "u1",
+        "kind": "content.delete",
+        "entity": "content:pengumuman",
+        "entityId": "p-77",
+        "baseRev": null,
+        "editedAt": "2026-11-05T10:16:00.000Z",
+        "payload": null,
+        "sig": "x"
+      },
+      "canonicalWithoutSig": "{\"baseRev\":null,\"boxId\":\"a1b2c3d4e5f60718\",\"deviceId\":\"dev-9f\",\"editedAt\":\"2026-11-05T10:16:00.000Z\",\"entity\":\"content:pengumuman\",\"entityId\":\"p-77\",\"kind\":\"content.delete\",\"opId\":\"01JC3Y8Q10AAAAAAAAAAAAAAAA\",\"payload\":null,\"surauId\":\"s-ûjaŋ\",\"userId\":\"u1\",\"v\":1}",
+      "digest": "3211aac991a5866c796ee69fac948c36e18f673df0960c01304f4cb280caf641",
+      "messageText": "surau-op\na1b2c3d4e5f60718\ndev-9f\n01JC3Y8Q10AAAAAAAAAAAAAAAA\n3211aac991a5866c796ee69fac948c36e18f673df0960c01304f4cb280caf641",
+      "messageHex": "73757261752d6f700a613162326333643465356636303731380a6465762d39660a30314a43335938513130414141414141414141414141414141410a33323131616163393931613538363663373936656536396661633934386333366531386636373364663039363063303133303466346362323830636166363431"
+    },
+    {
+      "name": "op asset.put",
+      "op": {
+        "v": 1,
+        "opId": "01JC3Y8Q11ZZZZZZZZZZZZZZZZ",
+        "surauId": "s-ûjaŋ",
+        "boxId": "a1b2c3d4e5f60718",
+        "deviceId": "dev-9f",
+        "userId": "u1",
+        "kind": "asset.put",
+        "entity": "asset",
+        "entityId": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "baseRev": null,
+        "editedAt": "2026-11-05T10:17:01.999Z",
+        "payload": {
+          "mime": "image/png",
+          "bytesBase64": "iVBORw0KGgo=",
+          "size": 8,
+          "scale": 1e+21,
+          "offset": 0
+        },
+        "sig": "y"
+      },
+      "canonicalWithoutSig": "{\"baseRev\":null,\"boxId\":\"a1b2c3d4e5f60718\",\"deviceId\":\"dev-9f\",\"editedAt\":\"2026-11-05T10:17:01.999Z\",\"entity\":\"asset\",\"entityId\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"kind\":\"asset.put\",\"opId\":\"01JC3Y8Q11ZZZZZZZZZZZZZZZZ\",\"payload\":{\"bytesBase64\":\"iVBORw0KGgo=\",\"mime\":\"image/png\",\"offset\":0,\"scale\":1e+21,\"size\":8},\"surauId\":\"s-ûjaŋ\",\"userId\":\"u1\",\"v\":1}",
+      "digest": "cb0fabcbda776ef024d820999efd4756c8170ad0c9d4af17fe5e5031f5eced19",
+      "messageText": "surau-op\na1b2c3d4e5f60718\ndev-9f\n01JC3Y8Q11ZZZZZZZZZZZZZZZZ\ncb0fabcbda776ef024d820999efd4756c8170ad0c9d4af17fe5e5031f5eced19",
+      "messageHex": "73757261752d6f700a613162326333643465356636303731380a6465762d39660a30314a433359385131315a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a0a63623066616263626461373736656630323464383230393939656664343735366338313730616430633964346166313766653565353033316635656365643139"
+    },
+    {
+      "name": "op settings.put system",
+      "op": {
+        "v": 1,
+        "opId": "01JC3Y8Q20SYSTEMAAAAAAAAAA",
+        "surauId": "sdm",
+        "boxId": "a1b2c3d4e5f60718",
+        "deviceId": "dev-9f",
+        "userId": "u1",
+        "kind": "settings.put",
+        "entity": "settings",
+        "entityId": "system",
+        "baseRev": null,
+        "editedAt": "2026-11-09T10:00:00.000Z",
+        "payload": {
+          "noVideoSeconds": 20,
+          "syncHistoryDays": 365
+        },
+        "sig": "x"
+      },
+      "canonicalWithoutSig": "{\"baseRev\":null,\"boxId\":\"a1b2c3d4e5f60718\",\"deviceId\":\"dev-9f\",\"editedAt\":\"2026-11-09T10:00:00.000Z\",\"entity\":\"settings\",\"entityId\":\"system\",\"kind\":\"settings.put\",\"opId\":\"01JC3Y8Q20SYSTEMAAAAAAAAAA\",\"payload\":{\"noVideoSeconds\":20,\"syncHistoryDays\":365},\"surauId\":\"sdm\",\"userId\":\"u1\",\"v\":1}",
+      "digest": "4478720fbb67dba4a00fb713e1c7601fde1597e29f688140620a9a4322908d7c",
+      "messageText": "surau-op\na1b2c3d4e5f60718\ndev-9f\n01JC3Y8Q20SYSTEMAAAAAAAAAA\n4478720fbb67dba4a00fb713e1c7601fde1597e29f688140620a9a4322908d7c",
+      "messageHex": "73757261752d6f700a613162326333643465356636303731380a6465762d39660a30314a4333593851323053595354454d414141414141414141410a34343738373230666262363764626134613030666237313365316337363031666465313539376532396636383831343036323061396134333232393038643763"
+    }
+  ]
+}

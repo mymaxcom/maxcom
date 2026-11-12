@@ -1,0 +1,52 @@
+{
+  "boxId": "a1b2c3d4e5f60718",
+  "deviceId": "dev1",
+  "nonce": "nonce",
+  "messageHex": "73757261752d756e6c6f636b0a613162326333643465356636303731380a646576310a6e6f6e6365",
+  "publicJwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "E70HdPo7nWUKkqkg4epasi6nquBW9JMpxMsqlaXps-M",
+    "y": "ED39dimNtvKzmWtML1UDJ0s2GzMvNolN6zQDGoZsbEs"
+  },
+  "privateJwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "E70HdPo7nWUKkqkg4epasi6nquBW9JMpxMsqlaXps-M",
+    "y": "ED39dimNtvKzmWtML1UDJ0s2GzMvNolN6zQDGoZsbEs",
+    "d": "pHMA0_BoeoDDxwkTnBZkhJVJQuHVNHVSHTZVlLcSAOw"
+  },
+  "signatureB64url": "sKklXFR1MchCSZIQoCK5Sb-Us9-xBgqjtCF1-OuSzdGCuYkhDOFwaZOVoyoq4p86Pm5v1JNUSTQNz8LcJJRJBg",
+  "derCases": [
+    {
+      "name": "plain",
+      "derHex": "30440220461ea439b3019650254b697dafd08dd76e9425f5af3cbf8113709a8128d9593b02206554a465b87105fea2d682730ee14c3c7d8aa9242807d67a05591d268f128ae3",
+      "p1363Hex": "461ea439b3019650254b697dafd08dd76e9425f5af3cbf8113709a8128d9593b6554a465b87105fea2d682730ee14c3c7d8aa9242807d67a05591d268f128ae3"
+    },
+    {
+      "name": "high-bit-r",
+      "derHex": "3045022100e743ad240e44a44f919ddf5a3b56540cc641c2946ad33a3767303cc3ba0c693f022041297e4403d1049e899f551d5a95dafa03180d9f423906f9a6f041fd318ebab2",
+      "p1363Hex": "e743ad240e44a44f919ddf5a3b56540cc641c2946ad33a3767303cc3ba0c693f41297e4403d1049e899f551d5a95dafa03180d9f423906f9a6f041fd318ebab2"
+    },
+    {
+      "name": "high-bit-s",
+      "derHex": "304502206ace4d3e35d27c4f90feb8c59399880bacc471cd32a26738c89165b56daddf35022100e4a1d8f347ab634f316e7bdff13fe9469ce6d17f8a080bf19344ea96b5336cfb",
+      "p1363Hex": "6ace4d3e35d27c4f90feb8c59399880bacc471cd32a26738c89165b56daddf35e4a1d8f347ab634f316e7bdff13fe9469ce6d17f8a080bf19344ea96b5336cfb"
+    },
+    {
+      "name": "high-bit-both",
+      "derHex": "304602210096246f3fe194081cd991882c98846b73f18f0466689b1061f1d7c8c668c1894e022100861116cfad1594927e8ca26dea217d8b4b0cb0c20597e60261f9e96847ec1763",
+      "p1363Hex": "96246f3fe194081cd991882c98846b73f18f0466689b1061f1d7c8c668c1894e861116cfad1594927e8ca26dea217d8b4b0cb0c20597e60261f9e96847ec1763"
+    },
+    {
+      "name": "leading-zero-r",
+      "derHex": "3043021f45c0341c076966ed115707bf992aface42aee7f45a57250277c6cc3bd9d0b302201840f0d46223adb2ee8337cd60fc8add743650640e8baa9eb95f48cfaf1f57e2",
+      "p1363Hex": "0045c0341c076966ed115707bf992aface42aee7f45a57250277c6cc3bd9d0b31840f0d46223adb2ee8337cd60fc8add743650640e8baa9eb95f48cfaf1f57e2"
+    },
+    {
+      "name": "leading-zero-s",
+      "derHex": "3043022036ade9dcbacfef12c0d2b661c99df8cae40610fb4975429f39d29efaa53528c2021f382a4fc647f4a79765c80e6f8da6d1378b83195e1ba816a2b384d1d25663f5",
+      "p1363Hex": "36ade9dcbacfef12c0d2b661c99df8cae40610fb4975429f39d29efaa53528c200382a4fc647f4a79765c80e6f8da6d1378b83195e1ba816a2b384d1d25663f5"
+    }
+  ]
+}

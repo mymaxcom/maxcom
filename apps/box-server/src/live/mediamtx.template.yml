@@ -1,0 +1,62 @@
+# MAXCOM: MediaMTX configuration, rendered by the box server into <dataDir>/live/mediamtx.yml.
+# Placeholders in double braces are filled by renderMediamtxConfig(); do not edit the rendered file.
+# Every HTTP style listener is loopback only. Only the two UDP media ports face the LAN.
+
+logLevel: info
+# stdout only: the box supervisor captures it, redacts every credential and rotates it
+# (MediaMTX logs the SRT stream id, which carries the session's publisher password).
+logDestinations: [stdout]
+
+api: yes
+apiAddress: 127.0.0.1:9997
+
+rtsp: yes
+rtspAddress: 127.0.0.1:8554
+rtspTransports: [tcp]
+
+# Every listener the box does not use is switched off by name. MediaMTX v1.21 enables a MoQ server
+# (TCP 8892, UDP 8892, UDP 8893) by default and generates a certificate for it: it stays off.
+# A test compares this file with the shipped default so a listener added by a later release cannot stay on.
+rtmp: no
+hls: no
+playback: no
+metrics: no
+pprof: no
+moq: no
+
+webrtc: yes
+webrtcAddress: 127.0.0.1:8889
+webrtcEncryption: no
+# bound to the one LAN address of the certificate (empty host = every interface only when there is not exactly
+# one): a wildcard socket let a VPN adapter carry the media even with the advertised hosts set (real-device test 2)
+webrtcLocalUDPAddress: {{MEDIA_HOST}}:8189
+webrtcLocalTCPAddress: ''
+# The candidates sent to clients are exactly webrtcAdditionalHosts (the LAN addresses of the certificate),
+# not every interface of the machine (a VPN adapter would otherwise be offered too).
+webrtcIPsFromInterfaces: no
+webrtcAdditionalHosts: {{HOSTS}}
+webrtcICEServers2: []
+
+srt: yes
+srtAddress: {{MEDIA_HOST}}:8890
+
+authMethod: internal
+authInternalUsers:
+  - user: box
+    pass: {{BOX_PASS_HASH}}
+    ips: ['127.0.0.1', '::1']
+    permissions:
+      - action: publish
+      - action: read
+      - action: api
+
+pathDefaults:
+  record: no
+
+paths:
+  surau:
+    source: publisher
+    srtPublishPassphrase: ''
+  # the kiosk's sound leg (ffmpeg republishes the picture with Opus audio here while the kiosk audio is on)
+  surau-kiosk:
+    source: publisher

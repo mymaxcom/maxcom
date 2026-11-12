@@ -1,0 +1,1119 @@
+/* MAXCOM kiosk, content layer (Plan 2).
+   The rotating card between the clock and the prayer bar. Same unit as styles.css
+   (1rem = 1 % of the stage width) and the same glass language; one fixed footprint
+   for every card so the cross-fade never moves the silhouette. */
+
+/* The band's height comes from the main grid (styles.css): everything between the header block and the
+   ticker/bar, so every rem the bar gives up goes to the cards, and it is the same for every card of a screen. */
+.content[data-layer='content'] {
+  min-height: 0;
+}
+
+/* One card per slot; slots stack so the outgoing and incoming cards overlap during the fade. */
+.card-slot {
+  position: absolute;
+  inset: 0;
+  animation: card-in 400ms ease-out both;
+}
+.card-slot.is-leaving {
+  animation: card-out 400ms ease-in both;
+  pointer-events: none;
+}
+@keyframes card-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes card-out { from { opacity: 1; } to { opacity: 0; } }
+
+.card {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  padding: 1.3rem 1.6rem;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  gap: 1.5rem;
+  text-shadow: 0 0.1rem 0.5rem rgb(0 0 0 / 0.35);
+}
+.card h2, .card p { margin: 0; }
+.card .sep {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--accent);
+  margin: 0 0.6rem;
+  vertical-align: middle;
+  opacity: 0.9;
+}
+
+/* Small accent tag naming the card ("Kuliah hari ini"), same voice as the surau name top-left. */
+.card__tag {
+  color: var(--accent);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Two-line clamp used by every long title. */
+.clamp-2, .kuliah__name, .kuliah__topic, .pengumuman__title, .program__title, .program__note {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.one-line, .kuliah__meta, .takwim__title, .takwim__date {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Cancelled: red corner ribbon across the top-right, the rest of the card muted. */
+.card__ribbon {
+  position: absolute;
+  top: 2.6rem;
+  right: -4.4rem;
+  width: 16rem;
+  padding: 0.45rem 0;
+  transform: rotate(45deg);
+  background: #c62a2a;
+  color: #fff;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-shadow: none;
+  box-shadow: 0 0.3rem 1rem rgb(0 0 0 / 0.4);
+}
+.card.is-batal .kuliah__body,
+.card.is-batal .program__body { opacity: 0.72; }
+.card.is-batal .kuliah__photo img,
+.card.is-batal .program__img img { filter: grayscale(1) brightness(0.85); }
+
+/* ---- Kuliah: photo | name, topic, label, following | kitab ------------------ */
+.kuliah__photo {
+  flex: none;
+  align-self: center;
+  width: 10.5rem;
+  height: 14rem;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: rgb(var(--accent-rgb) / 0.12);
+  box-shadow: 0 0.5rem 1.4rem rgb(0 0 0 / 0.35);
+}
+.kuliah__photo.is-round {
+  width: 11rem;
+  height: 11rem;
+  border-radius: 50%;
+  border: 0.22rem solid rgb(var(--accent-rgb) / 0.55);
+}
+.kuliah__photo img,
+.kuliah__kitab img,
+.program__img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.kuliah__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* guarantees `center` whether or not the `safe` line below is understood */
+  justify-content: safe center;
+  gap: 0.3rem;
+  overflow: hidden;
+}
+/* Nothing squashes: lines keep their height; the card decides how many following rows fit (KuliahCard). */
+.kuliah__body > * { flex-shrink: 0; }
+.kuliah__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  min-width: 0;
+}
+.kuliah__when {
+  font-size: 1.35rem;
+  font-weight: 600;
+  opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kuliah__when b {
+  color: var(--accent);
+  font-size: 1.5rem;
+  margin-left: 0.55rem;
+  letter-spacing: 0;
+}
+.kuliah__name {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1.18; /* the clamp box clips at the line box: below ~1.15 the g/y/p descenders are cut */
+  letter-spacing: -0.01em;
+  margin-top: 0.15rem;
+}
+.kuliah__topic {
+  font-size: 1.6rem;
+  font-weight: 500;
+  line-height: 1.2;
+  opacity: 0.95;
+}
+.kuliah__meta {
+  font-size: 1.3rem;
+  font-weight: 500;
+  opacity: 0.82;
+}
+.kuliah__next {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0.45rem 0 0;
+  border-top: 1px solid rgb(var(--accent-rgb) / 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 1.2rem;
+  line-height: 1.25;
+}
+.kuliah__next li {
+  display: flex;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.kuliah__next-when {
+  flex: none;
+  color: var(--accent);
+  font-weight: 700;
+}
+.kuliah__next-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+}
+.kuliah__kitab {
+  flex: none;
+  align-self: center;
+  width: 7.6rem;
+  height: 10.6rem;
+  border-radius: 0.4rem 0.9rem 0.9rem 0.4rem;
+  border-left: 0.45rem solid rgb(0 0 0 / 0.45);
+  overflow: hidden;
+  background: linear-gradient(135deg, #6b1f1f, #3d0f0f);
+  box-shadow: 0 0.5rem 1.2rem rgb(0 0 0 / 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kuliah__kitab.has-img { border-left-color: rgb(0 0 0 / 0.6); }
+.kuliah__kitab-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  padding: 0.7rem 0.6rem;
+  text-align: center;
+  color: #e8c172;
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.25;
+  text-shadow: none;
+}
+
+/* ---- Pengumuman: tag, title, body --------------------------------------- */
+.card--pengumuman {
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 1.6rem 2.4rem;
+}
+.card--pengumuman > .card__tag { flex-shrink: 0; }
+/* Title and body at reading size for the back of the hall; PengumumanCard's useFit scales both down together
+   (--fit) only when a long notice would overflow the card. */
+.pengumuman__text {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  --fit: 1;
+}
+.pengumuman__text > * { flex-shrink: 0; }
+.card--pengumuman.is-priority {
+  border: 0.18rem solid rgb(var(--accent-rgb) / 0.9);
+  box-shadow: 0 0 0 0.35rem rgb(var(--accent-rgb) / 0.16);
+}
+.pengumuman__title {
+  font-size: calc(3.3rem * var(--fit));
+  font-weight: 800;
+  line-height: 1.18; /* clamp box: keep the descenders inside it */
+  letter-spacing: -0.01em;
+  max-width: 50rem;
+  text-wrap: balance;
+}
+.pengumuman__body {
+  -webkit-line-clamp: var(--lines, 6);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  font-size: calc(2.05rem * var(--fit));
+  line-height: 1.35;
+  max-width: 50rem;
+  margin-top: 0.8rem;
+  opacity: 0.94;
+}
+
+/* ---- Poster: the whole stage, the image whole over a blurred copy of itself ----
+   Fixed over the stage (not inside the content band) so the card cross-fade is the only transition in and
+   out; Main fades the rest of the screen behind it and keeps a thin strip at the bottom (styles.css). The
+   strip's band is left to the blurred copy so the picture itself is never covered. */
+.card--poster {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  padding: 0 0 7.2rem;
+  border-radius: 0;
+  border: 0;
+  background: #000;
+}
+.poster__blur {
+  position: absolute;
+  inset: -2rem;
+  width: calc(100% + 4rem);
+  height: calc(100% + 4rem);
+  object-fit: cover;
+  filter: blur(1.6rem) brightness(0.45) saturate(1.1);
+}
+.poster__img {
+  position: absolute;
+  left: 0;
+  top: 1.4rem;
+  width: 100%;
+  height: calc(100% - 8.6rem);
+  object-fit: contain;
+  filter: drop-shadow(0 0.6rem 2rem rgb(0 0 0 / 0.45));
+}
+
+/* ---- Program khas: image | tag, title, date, note ------------------------- */
+.program__img {
+  flex: none;
+  width: 12rem;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: rgb(var(--accent-rgb) / 0.12);
+  box-shadow: 0 0.5rem 1.4rem rgb(0 0 0 / 0.35);
+}
+.program__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
+}
+.program__title {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.18; /* clamp box: keep the descenders inside it */
+  margin-top: 0.15rem;
+}
+.program__when {
+  color: var(--accent);
+  font-size: 1.95rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin-top: 0.2rem;
+}
+.program__note {
+  -webkit-line-clamp: 3; /* the larger size keeps about the same amount of text as two lines at 1.4rem did */
+  font-size: 1.7rem;
+  line-height: 1.3;
+  opacity: 0.92;
+  margin-top: 0.2rem;
+}
+
+/* ---- Takwim: up to three rows, days-left block first ---------------------- */
+.card--takwim {
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.3rem 2rem;
+}
+.takwim__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  gap: 0.4rem;
+}
+.takwim__row {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  min-width: 0;
+}
+.takwim__days {
+  flex: none;
+  width: 10.5rem;
+  min-height: 4.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.4rem;
+  border-radius: 0.9rem;
+  background: rgb(var(--accent-rgb) / 0.14);
+  border: 1px solid rgb(var(--accent-rgb) / 0.35);
+  text-shadow: none;
+}
+.takwim__n {
+  color: var(--accent);
+  font-size: 2.5rem;
+  line-height: 1;
+}
+.takwim__n--word {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.takwim__days small {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-top: 0.3rem;
+}
+.takwim__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.takwim__title {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.takwim__date {
+  font-size: 1.25rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* ============================================================================
+   Plan 2 Task 10: Islamic text cards (hadis, ayat), world times, tugasan,
+   the ticker strip and the zikir overlay.
+   ============================================================================ */
+
+/* The Quran face: KFGQPC HAFS Uthmanic Script v3.0, bundled unmodified (LICENCE.txt beside it), never
+   fetched from the network. `block` so Quran text never flashes in the fallback face. */
+@font-face {
+  font-family: 'QPC Hafs';
+  src: url('../assets/fonts/qpc-hafs/KFGQPC-Hafs-V30.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+/* General Arabic (hadis, zikir): Amiri Quran from Plan 1. */
+.arabic {
+  font-family: var(--font-arabic);
+  font-weight: 400;
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
+/* Wide cards (Islamic text) run from the left gutter to the right gutter: the Arabic needs the line length. */
+.card--wide {
+  right: calc(56rem + 2 * var(--gutter) - 100vw);
+}
+.card__head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.2rem;
+  min-width: 0;
+}
+.card__head > :first-child { margin-right: auto; }
+
+/* ---- Hadis: tag | Arabic (right) / Malay (left) | source ------------------ */
+.card--hadis {
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.1rem 2rem 1rem;
+}
+.hadis__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  overflow: hidden;
+  --fit: 1;
+}
+.hadis__ar {
+  text-align: right;
+  line-height: 1.75;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--ar-lines, 2);
+  overflow: hidden;
+  font-size: calc(var(--ar-fs, 2.05rem) * var(--fit));
+}
+.hadis__ms {
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--ms-lines, 3);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: calc(var(--ms-fs, 1.5rem) * var(--fit));
+  font-weight: 500;
+  opacity: 0.95;
+}
+/* Sizes by length tier, set for reading at 3 m. The line clamps are generous: useFit (HadisCard) shrinks the
+   whole body when the text would overflow the card, so the clamp is only the last guard and never cuts a
+   hadis that the plan put on one card. */
+.card--hadis.is-len-l .hadis__body { --ar-fs: 2.9rem; --ar-lines: 3; --ms-fs: 2.3rem; --ms-lines: 5; }
+.card--hadis.is-len-m .hadis__body { --ar-fs: 2.45rem; --ar-lines: 3; --ms-fs: 1.95rem; --ms-lines: 7; }
+.card--hadis.is-len-s .hadis__body { --ar-fs: 2.1rem; --ar-lines: 3; --ms-fs: 1.7rem; --ms-lines: 9; }
+.hadis__intro {
+  font-weight: 400;
+  opacity: 0.8;
+}
+/* grade chip beside the tag */
+.hadis__grade {
+  flex: none;
+  margin-left: 1rem;
+  padding: 0.1rem 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+/* "Bahagian 2 daripada 3" with one dot per part */
+.hadis__parts {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 1rem;
+  font-weight: 600;
+  opacity: 0.9;
+  white-space: nowrap;
+}
+.hadis__dots { display: inline-flex; gap: 0.35rem; }
+.hadis__dots i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.3;
+}
+.hadis__dots i.is-on { opacity: 1; background: var(--accent); }
+.hadis__foot {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.2rem;
+  min-width: 0;
+}
+.card--hadis.is-parts .hadis__body { --ms-lines: 9; }
+.hadis__src {
+  min-width: 0;
+  color: var(--accent);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the HadeethEnc credit: on every HadeethEnc card, not a setting */
+.hadis__credit {
+  flex: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+/* ---- World times: tiles, one row up to three cities, two rows beyond ------ */
+.card--wt {
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.2rem 2rem 1.1rem;
+}
+.wt__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 0.6rem 1rem;
+  align-content: center;
+}
+.wt__grid.cols-1 { grid-template-columns: 1fr; }
+.wt__grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.wt__grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.wt__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.55rem 0.6rem 0.5rem;
+  border-radius: 0.9rem;
+  background: rgb(var(--accent-rgb) / 0.1);
+  border: 1px solid rgb(var(--accent-rgb) / 0.3);
+  text-shadow: none;
+  min-width: 0;
+}
+.wt__city {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.wt__clock {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  line-height: 1;
+  margin-top: 0.25rem;
+}
+.wt__time {
+  color: var(--accent);
+  font-size: 3.3rem;
+}
+.wt__grid.is-two-rows .wt__time { font-size: 2.7rem; }
+.wt__period {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.wt__offset {
+  margin-top: 0.3rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+.wt__day {
+  font-style: normal;
+  margin-left: 0.5rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ---- Tugasan: a column per date, a row per role ---------------------------- */
+.card--tugasan {
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.2rem 2rem 1rem;
+}
+.tugasan__days {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 1.4rem;
+}
+.tugasan__days.cols-1 { grid-template-columns: 1fr; }
+.tugasan__days.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.tugasan__days.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.tugasan__day {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.tugasan__day + .tugasan__day { border-left: 1px solid rgb(var(--accent-rgb) / 0.28); padding-left: 1.4rem; }
+.tugasan__date {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tugasan__date b { color: var(--accent); font-weight: 800; }
+.tugasan__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+  overflow: hidden;
+}
+.tugasan__row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+}
+.tugasan__photo {
+  flex: none;
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgb(var(--accent-rgb) / 0.16);
+  border: 0.14rem solid rgb(var(--accent-rgb) / 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: 1.4rem;
+  font-weight: 800;
+  text-shadow: none;
+}
+.tugasan__photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tugasan__text { min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.tugasan__role {
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.tugasan__name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tugasan__days.cols-3 { gap: 1rem; }
+.tugasan__days.cols-3 .tugasan__day + .tugasan__day { padding-left: 1rem; }
+.tugasan__days.cols-3 .tugasan__name { font-size: 1.3rem; }
+.tugasan__days.cols-3 .tugasan__photo { width: 2.8rem; height: 2.8rem; font-size: 1.2rem; }
+
+/* ---- Ayat: tag + surah | Arabic (QPC Hafs) / Malay | credit --------------- */
+.card--ayat {
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.1rem 2rem 0.9rem;
+}
+.ayat__ref {
+  color: var(--accent);
+  font-size: 1.35rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ayat__mode {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.ayat__pages {
+  font-size: 1.05rem;
+  font-weight: 700;
+  opacity: 0.7;
+  letter-spacing: 0.04em;
+}
+.ayat__page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  overflow: hidden;
+  animation: card-in 400ms ease-out both;
+  --fit: 1;
+}
+.ayat__ar {
+  font-family: 'QPC Hafs', 'Amiri Quran', serif;
+  font-weight: 400;
+  direction: rtl;
+  unicode-bidi: isolate;
+  text-align: right;
+  font-size: calc(var(--ar-fs, 2.8rem) * var(--fit));
+  line-height: 1.85;
+  overflow-wrap: normal;
+}
+.ayat__no { color: var(--accent); }
+.ayat__ms {
+  font-size: calc(var(--ms-fs, 1.55rem) * var(--fit));
+  line-height: 1.35;
+  font-weight: 500;
+  opacity: 0.95;
+  overflow-wrap: anywhere;
+}
+.ayat__trno { color: var(--accent); margin-right: 0.4rem; }
+.ayat__credit {
+  flex: none;
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 500;
+  opacity: 0.72;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Ticker strip above the prayer bar ------------------------------------
+   The ticker row of the main grid (styles.css): just above the bar, under the band; absent, its row is empty
+   and the band reaches down to the bar. */
+.ticker {
+  grid-area: ticker;
+  position: relative;
+  height: 2.9rem;
+  border-radius: 0.9rem;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  text-shadow: 0 0.1rem 0.4rem rgb(0 0 0 / 0.35);
+  animation: card-in 400ms ease-out both;
+}
+.ticker__cap {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 1.1rem 0 1.2rem;
+  background: rgb(var(--accent-rgb) / 0.94);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+.ticker__strip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 1.5rem, #000 calc(100% - 1.5rem), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 1.5rem, #000 calc(100% - 1.5rem), transparent);
+}
+.ticker__track {
+  display: inline-block;
+  white-space: nowrap;
+  padding-left: 100%;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1;
+  will-change: transform;
+}
+.ticker__track.is-live { animation: ticker-scroll linear infinite; }
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+.ticker__dot { color: var(--accent); margin: 0 1.3rem; }
+.ticker__static {
+  padding: 0 1.2rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: card-in 400ms ease-out both;
+}
+
+/* ---- Zikir overlay: the whole content band, gutter to gutter ------------ */
+.zikir {
+  grid-area: band;
+  position: relative;
+  min-height: 0;
+  margin-top: 0.6rem;
+  border-radius: var(--radius-lg);
+  padding: 1.2rem 2rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow: hidden;
+  text-shadow: 0 0.1rem 0.5rem rgb(0 0 0 / 0.35);
+  animation: card-in 400ms ease-out both;
+}
+.zikir p { margin: 0; }
+.zikir__count { font-size: 1.1rem; font-weight: 700; opacity: 0.7; letter-spacing: 0.04em; }
+.zikir__page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.9rem;
+  padding: 0 4rem;
+  overflow: hidden;
+  animation: card-in 400ms ease-out both;
+  --fit: 1;
+}
+.zikir__page.has-repeat { padding-right: 12rem; padding-left: 12rem; }
+.zikir__ar {
+  /* The deep tails of Amiri (meem, kasrah) reach below the line box: keep them off the Malay line under it. */
+  padding-bottom: 0.3em;
+  line-height: 1.65;
+  font-size: calc(var(--ar-fs, 3.4rem) * var(--fit));
+  text-wrap: balance;
+}
+.zikir__page.is-xl { --ar-fs: 4.8rem; }
+.zikir__page.is-l { --ar-fs: 3.9rem; }
+.zikir__page.is-m { --ar-fs: 3.1rem; }
+.zikir__page.is-s { --ar-fs: 2.4rem; }
+.zikir__ms {
+  font-size: calc(1.9rem * var(--fit));
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0.92;
+  max-width: 72rem;
+  text-wrap: balance;
+}
+.zikir__page.is-s .zikir__ms { font-size: calc(1.6rem * var(--fit)); }
+.zikir__repeat {
+  position: absolute;
+  right: 2.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7.6rem;
+  height: 7.6rem;
+  border-radius: 50%;
+  background: rgb(var(--accent-rgb) / 0.16);
+  border: 0.2rem solid rgb(var(--accent-rgb) / 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-shadow: none;
+}
+.zikir__repeat b {
+  color: var(--accent);
+  font-size: 2.6rem;
+  line-height: 1;
+}
+.zikir__repeat small {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* ---- Motion preferences --------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .card-slot { animation: none; }
+  .card-slot.is-leaving { display: none; }
+  .ayat__page, .zikir, .zikir__page, .ticker, .ticker__static { animation: none; }
+  .ticker__track.is-live { animation: none; }
+}
+
+/* ---- Tabung: eyebrow, one glass column per fund | DuitNow QR ---------------- */
+.card--tabung {
+  gap: 2rem;
+  padding: 1.3rem 2rem;
+}
+.tabung__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.tabung__head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  min-width: 0;
+}
+.tabung__updated {
+  font-size: 1.05rem;
+  font-weight: 600;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.tabung__list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  gap: 1rem;
+}
+.tabung__col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* guarantees this value whether or not the `safe` line below is understood */
+  justify-content: safe center;
+  gap: 0.5rem;
+  padding: 1rem 1.2rem;
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.tabung__col--hot {
+  background: rgb(var(--accent-rgb) / 0.16);
+  border-color: var(--accent);
+  box-shadow: 0 0 2rem rgb(var(--accent-rgb) / 0.35);
+}
+.tabung__name {
+  /* Two lines of the full size, whatever the name: useFit shrinks a longer one to stay inside. */
+  flex: none;
+  height: calc(2 * 1.2 * 1.6rem);
+  display: grid;
+  align-content: end; /* guarantees this value whether or not the `safe` line below is understood */
+  align-content: safe end;
+  overflow: hidden;
+  font-size: calc(1.6rem * var(--fit, 1) * var(--name-fit, 1));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.tabung__new {
+  display: inline-block;
+  margin-left: 0.6rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 0.72em;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  vertical-align: 0.14em;
+  text-shadow: none;
+}
+.tabung__value {
+  display: block;
+  font-size: var(--figure, 3rem);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.tabung__value small {
+  margin-right: 0.18em;
+  font-size: 0.46em;
+  font-weight: 700;
+  opacity: 0.8;
+}
+.tabung__sub,
+.tabung__target small {
+  font-size: calc(1.45rem * var(--fit, 1));
+  font-weight: 600;
+  line-height: 1.25;
+  opacity: 0.85;
+}
+.tabung__amount { white-space: nowrap; }
+/* Same height with a small line, a bar or nothing, so the columns line up. */
+.tabung__foot {
+  flex: none;
+  display: block;
+  min-height: 5rem;
+}
+.tabung__target {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.tabung__bar {
+  display: block;
+  height: 0.9rem;
+  border-radius: 0.45rem;
+  background: rgb(255 255 255 / 0.18);
+  overflow: hidden;
+}
+.tabung__bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.tabung__qr {
+  flex: none;
+  width: 12rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+.tabung__qr img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0.6rem;
+  border-radius: 0.8rem;
+  background: #fff;
+  object-fit: contain;
+}
+/* Finance off: the rows the admin typed, name left and figure right. */
+.card--tabung-manual .tabung__list {
+  flex-direction: column;
+  justify-content: center; /* guarantees this value whether or not the `safe` line below is understood */
+  justify-content: safe center;
+  gap: 0;
+}
+.card--tabung-manual .tabung__col {
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 0.9rem 0;
+  border: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0;
+  background: none;
+}
+.card--tabung-manual .tabung__col:last-child { border-bottom: 0; }
+.card--tabung-manual .tabung__name {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  display: block;
+  font-size: calc(2.2rem * var(--fit, 1));
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.card--tabung-manual .tabung__value {
+  flex: none;
+  font-size: calc(3.4rem * var(--fit, 1));
+}
