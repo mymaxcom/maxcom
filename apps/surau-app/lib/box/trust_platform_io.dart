@@ -22,7 +22,17 @@ String _pem(Uint8List der) {
 
 /// Trusts only [caDer], no system roots. Without a CA there is no client:
 /// a plain one would trust the system roots instead of the surau's own CA.
-http.Client createClient(Uint8List? caDer, Duration connect) {
+///
+/// [addressOf] may give an IPv4 to open for a host name (the box's local
+/// name, found by discovery). Only the address changes: the socket is a
+/// plain TCP one and `HttpClient` runs the TLS handshake over it with the
+/// URL's host as the name, against the pinned [caDer], so the certificate
+/// must carry that name. Proxies are never used for a mapped host.
+http.Client createClient(
+  Uint8List? caDer,
+  Duration connect, {
+  String? Function(String host)? addressOf,
+}) {
   if (caDer == null) throw const TrustError('Sijil akar tiada. Daftar semula');
   final ctx = SecurityContext(withTrustedRoots: false);
   try {
@@ -32,6 +42,36 @@ http.Client createClient(Uint8List? caDer, Duration connect) {
   }
   final hc = HttpClient(context: ctx);
   hc.connectionTimeout = connect;
+  if (addressOf != null) {
+    hc.findProxy = (url) => addressOf(url.host) != null
+        ? 'DIRECT'
+        : HttpClient.findProxyFromEnvironment(url);
+    hc.connectionFactory = (Uri url, String? proxyHost, int? proxyPort) {
+      if (proxyHost != null) return Socket.startConnect(proxyHost, proxyPort!);
+      final ip = addressOf(url.host);
+      if (url.scheme != 'https') {
+        return Socket.startConnect(ip ?? url.host, url.port);
+      }
+      // HttpClient does not add TLS to a socket from a factory: do it here,
+      // with the URL's host as the name and only the pinned root as trust.
+      Socket? raw;
+      var cancelled = false;
+      final secured = () async {
+        raw = await Socket.connect(ip ?? url.host, url.port, timeout: connect);
+        if (cancelled) {
+          raw!.destroy();
+          throw const SocketException('cancelled');
+        }
+        return SecureSocket.secure(raw!, host: url.host, context: ctx);
+      }();
+      return Future.value(
+        ConnectionTask.fromSocket(secured, () {
+          cancelled = true;
+          raw?.destroy();
+        }),
+      );
+    };
+  }
   return IOClient(hc);
 }
 

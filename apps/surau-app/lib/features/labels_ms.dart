@@ -98,6 +98,7 @@ const Map<String, String> settingLabelsMs = {
   'audioFile': 'Fail audio',
   // skrin
   'name': 'Nama surau',
+  'shortName': 'Nama pendek (ikon skrin utama)',
   'kind': 'Jenis',
   'shortAddress': 'Alamat ringkas',
   'helpName': 'Nama untuk bantuan',
@@ -266,6 +267,7 @@ const Map<String, String> settingLabelsEn = {
   'durationMinutes': 'Length (minutes)',
   'audioFile': 'Audio file',
   'name': 'Surau name',
+  'shortName': 'Short name (home screen icon)',
   'kind': 'Kind',
   'shortAddress': 'Short address',
   'helpName': 'Help contact name',

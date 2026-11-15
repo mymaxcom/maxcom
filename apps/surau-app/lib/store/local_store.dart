@@ -57,8 +57,18 @@ const String metaOutboxUnreadable = 'outboxUnreadable';
 /// Total blob bytes kept before the oldest asset blob is evicted.
 const int defaultBlobCapBytes = 200 * 1024 * 1024;
 
-/// Blobs whose id starts with this are queued uploads: never evicted.
+/// Blobs whose id starts with this are queued uploads: never evicted. (Since
+/// 2026.11.7 a queued picture is kept once, under the id readers use, and the
+/// outbox doc names it in `blob`; only queues written by 2026.11.6 still use
+/// `upload-<opId>`.)
 const String uploadBlobPrefix = 'upload-';
+
+/// Blob ids that queued outbox ops still need: the outbox docs whose `blob`
+/// is a blob id (a string). A store never evicts these, nor `upload-` blobs.
+Set<String> queuedBlobIds(Iterable<Map<String, dynamic>> outboxDocs) => {
+  for (final d in outboxDocs)
+    if (d['blob'] is String) d['blob'] as String,
+};
 
 /// A box id is used in file names and Keystore aliases: letters, digits,
 /// `_` and `-` only, 1 to 64 characters.
@@ -97,6 +107,22 @@ abstract class LocalStore {
   Future<Uint8List?> getBlob(String id);
 
   Future<void> putBlob(String id, Uint8List bytes);
+
+  /// Whether blob [id] exists. A file/index check: nothing is opened or
+  /// decrypted.
+  Future<bool> hasBlob(String id);
+
+  /// Writes blob [blobId] and doc [docId] of [collection] together: no other
+  /// store call runs in between, and the blob is never evicted for lack of
+  /// the doc that names it (the bytes are written first, the eviction runs
+  /// after the doc is in).
+  Future<void> putBlobWithDoc(
+    String blobId,
+    Uint8List bytes,
+    String collection,
+    String docId,
+    Map<String, dynamic> doc,
+  );
 
   Future<void> deleteBlob(String id);
 
@@ -194,14 +220,43 @@ class MemoryLocalStore implements LocalStore {
 
   @override
   Future<void> putBlob(String id, Uint8List bytes) async {
+    _storeBlob(id, bytes);
+    _evict(id);
+  }
+
+  @override
+  Future<bool> hasBlob(String id) async => _blobs.containsKey(id);
+
+  @override
+  Future<void> putBlobWithDoc(
+    String blobId,
+    Uint8List bytes,
+    String collection,
+    String docId,
+    Map<String, dynamic> doc,
+  ) async {
+    _storeBlob(blobId, bytes);
+    (_docs[collection] ??= {})[docId] = copyDoc(doc);
+    _evict(blobId);
+  }
+
+  void _storeBlob(String id, Uint8List bytes) {
     _blobs[id] = Uint8List.fromList(bytes);
     _blobOrder
       ..remove(id)
       ..add(id);
+  }
+
+  /// Drops the oldest blobs over [blobCap], never [keep], an `upload-` blob
+  /// or one a queued outbox op names.
+  void _evict(String keep) {
+    final queued = queuedBlobIds(_docs[Collections.outbox]?.values ?? const []);
     var total = _blobs.values.fold<int>(0, (a, b) => a + b.length);
     for (final old in List<String>.of(_blobOrder)) {
       if (total <= blobCap) break;
-      if (old == id || old.startsWith(uploadBlobPrefix)) continue;
+      if (old == keep || old.startsWith(uploadBlobPrefix) || queued.contains(old)) {
+        continue;
+      }
       total -= _blobs.remove(old)!.length;
       _blobOrder.remove(old);
     }

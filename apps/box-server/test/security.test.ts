@@ -338,13 +338,15 @@ describe('1 route enumeration: nothing registered is unlisted, nothing is reacha
     }
   });
 
-  it('the public list is exactly the fifteen intended routes (POST /api/sync/link and /api/sync/claim are cloud-only: 404 on a box)', () => {
+  it('the public list is exactly the seventeen intended routes (POST /api/sync/link and /api/sync/claim are cloud-only: 404 on a box)', () => {
     expect(PUBLIC_RULES.map((r) => `${r.method} ${r.sample}`).sort()).toEqual(
       [
         'GET /api/box/info',
         'GET /api/health',
         'GET /api/pki/root.cer',
         'GET /api/surau/info',
+        'GET /app/ios',
+        'GET /app/ios.mobileconfig',
         'GET /surau-logo',
         'POST /api/auth/challenge',
         'POST /api/auth/unlock',

@@ -3,9 +3,12 @@
 
 import 'dart:async';
 
-import '../features/enrol/enrol_flow.dart' show EnrolledBox;
+import '../features/enrol/enrol_flow.dart' show EnrolledBox, TrustError;
 import 'box_client.dart';
+import 'box_name.dart';
 import 'cloud_origin.dart';
+import 'discovery.dart';
+import 'routes.dart';
 
 class Located {
   const Located({required this.base, required this.via, required this.health});
@@ -49,6 +52,195 @@ class DirectBoxLocator implements BoxLocator {
       // learning the cloud is a convenience
     }
     return Located(base: b.box, via: 'box', health: health);
+  }
+}
+
+/// A pinned client for one probe: [origin] is the URL, and when [ip] is set
+/// that host opens [ip] (only for this client). TLS is still checked for the
+/// URL's host against the enrolled CA.
+typedef ProbeClientFactory = Future<BoxClient> Function(Uri origin, String? ip);
+
+/// Finds a box that has a local name, or learns its name.
+///
+/// A name, a TXT record or an address from discovery is only a HINT. Every
+/// candidate must (1) complete a TLS handshake to the enrolled, pinned CA for
+/// the candidate's own host and (2) answer `GET /api/box/info` with the
+/// enrolled `boxId`. Only then is it trusted and used.
+///
+/// Boxes without a name keep the plain [legacy] locator (IP origin); once a
+/// pinned health answer carries a name, a handshake by that name migrates the
+/// enrolment.
+class NameAwareLocator implements BoxLocator {
+  NameAwareLocator({
+    required this.legacy,
+    required this.probeClient,
+    required this.discovery,
+    required this.routes,
+    this.onReached,
+    this.onNameLearned,
+    this.discoveryTimeout = const Duration(milliseconds: 1500),
+  });
+
+  /// The IP-origin locator used while the box has no proven name.
+  final BoxLocator legacy;
+  final ProbeClientFactory probeClient;
+  final BoxDiscovery discovery;
+  final BoxRoutes routes;
+
+  /// A verified direct answer came from [ip] (null when unknown, for
+  /// example through the system resolver).
+  final void Function(String? ip)? onReached;
+
+  /// A handshake by [name] to the pinned CA, with the right boxId, worked.
+  final void Function(String name)? onNameLearned;
+  final Duration discoveryTimeout;
+
+  /// The last migration attempt, for tests.
+  Future<void>? lastMigration;
+
+  Future<List<DiscoveredBox>>? _discovering;
+
+  Future<List<DiscoveredBox>> _discover() => _discovering ??= discovery
+      .discover(timeout: discoveryTimeout)
+      .whenComplete(() => _discovering = null);
+
+  @override
+  Future<Located> locate(EnrolledBox b) async {
+    final name = b.name;
+    if (name == null) {
+      final out = await legacy.locate(b);
+      _maybeMigrate(b, out.health);
+      return out;
+    }
+    final out = await _race(b, name);
+    _maybeMigrate(b, out.health);
+    return out;
+  }
+
+  void _maybeMigrate(EnrolledBox b, HealthDto health) {
+    final seen = health.name;
+    if (seen == null || !isBoxName(seen) || seen == b.name) return;
+    lastMigration = _migrate(b, seen);
+  }
+
+  /// A health answer from the enrolled box named [name]: believe it only
+  /// after a handshake by that name and the same boxId.
+  Future<void> _migrate(EnrolledBox b, String name) async {
+    try {
+      final found = await _byName(b, name);
+      onNameLearned?.call(name);
+      if (found.ip != null) routes.set(name, found.ip!);
+    } on Object {
+      // The name stays a hint; the IP keeps working.
+    }
+  }
+
+  Uri _origin(EnrolledBox b, String host) => Uri(
+    scheme: 'https',
+    host: host,
+    port: b.box.port == 443 ? null : b.box.port,
+  );
+
+  Future<({Located located, String? ip})> _probe(
+    EnrolledBox b,
+    Uri origin,
+    String? ip,
+  ) async {
+    final client = await probeClient(origin, ip);
+    final info = await client.getJson('/api/box/info');
+    if (info['boxId'] != b.boxId) {
+      throw const BoxUnreachable('bukan kotak ini');
+    }
+    final HealthDto health;
+    try {
+      health = HealthDto.fromJson(await client.getJson('/api/health'));
+    } on BoxError {
+      rethrow;
+    } on Object {
+      throw const BoxUnreachable('jawapan kesihatan tidak sah');
+    }
+    return (located: Located(base: origin, via: 'box', health: health), ip: ip);
+  }
+
+  /// The name through discovery, then through the system resolver.
+  Future<({Located located, String? ip})> _byName(
+    EnrolledBox b,
+    String name,
+  ) async {
+    final origin = _origin(b, name);
+    final seen = await _discover();
+    for (final d in seen) {
+      if (d.name != name) continue;
+      // The TXT id is a hint that saves a probe; the boxId check decides.
+      if (d.id != null && d.id != b.boxId) continue;
+      try {
+        return await _probe(b, origin, d.ip);
+      } on BoxUnreachable {
+        // try the next
+      } on BoxError {
+        // try the next
+      }
+    }
+    try {
+      return await _probe(b, origin, null);
+    } on Object {
+      // The name's route (or the system resolver) failed: a stale name to
+      // address entry must not outlive its failure.
+      routes.remove(name);
+      rethrow;
+    }
+  }
+
+  Future<Located> _race(EnrolledBox b, String name) {
+    final done = Completer<Located>();
+    var open = 0;
+    Object? last;
+    TrustError? trust;
+
+    void fail(Object e) {
+      if (e is TrustError) trust = e;
+      last = e;
+      if (--open == 0 && !done.isCompleted) {
+        done.completeError(
+          trust ?? (last is BoxUnreachable ? last! : BoxUnreachable(last)),
+        );
+      }
+    }
+
+    void start(Future<({Located located, String? ip})> Function() f) {
+      open++;
+      f().then((r) {
+        if (done.isCompleted) return;
+        final host = r.located.base.host;
+        if (r.ip != null && host == name) {
+          routes.set(name, r.ip!);
+        } else if (isIpv4(host)) {
+          // Reached by address: the name follows that address only when the
+          // box (boxId verified, pinned CA) says it carries this name; else
+          // the old route is dropped.
+          if (r.located.health.name == name) {
+            routes.set(name, host);
+          } else {
+            routes.remove(name);
+          }
+        }
+        try {
+          onReached?.call(
+            r.ip ?? (isIpv4(r.located.base.host) ? r.located.base.host : null),
+          );
+        } on Object {
+          // remembering the address never fails a locate
+        }
+        done.complete(r.located);
+      }, onError: fail);
+    }
+
+    final ips = <String>{?b.lastIp, if (isIpv4(b.box.host)) b.box.host};
+    for (final ip in ips) {
+      start(() => _probe(b, _origin(b, ip), null));
+    }
+    start(() => _byName(b, name));
+    return done.future;
   }
 }
 

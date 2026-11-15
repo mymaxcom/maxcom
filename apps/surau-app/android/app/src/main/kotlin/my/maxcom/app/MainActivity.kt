@@ -26,6 +26,7 @@ class MainActivity : FlutterFragmentActivity() {
         my.maxcom.app.upload.UploadChannel.register(flutterEngine, this)
         FilePickChannel.register(flutterEngine, this)
         ShareChannel.register(flutterEngine, this)
+        DiscoveryChannel.register(flutterEngine, this)
     }
 
     // The document picker answers through startActivityForResult.

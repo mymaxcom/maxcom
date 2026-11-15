@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/box/box_client.dart';
 import 'package:surau_app/features/enrol/enrol_flow.dart';
@@ -66,6 +68,79 @@ void main() {
         now: () => DateTime.utc(2026, 11, 4),
       );
     }
+
+    test('a QR with name and ips: the record keeps the name hint and the box IP as lastIp', () async {
+      final base = fixturePayload();
+      final m = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(base.substring(7))))) as Map<String, dynamic>;
+      m['name'] = 'box1-surau.local';
+      m['ips'] = ['127.0.0.1', '10.1.1.1'];
+      final text = 'surau1:${base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '')}';
+      final out = await flowFor(FakeBox(happyBox)).run(text, deviceName: 'T', hasPinAlready: false, newPin: '280419');
+      expect(out.box.name, 'box1-surau.local');
+      expect(out.box.lastIp, '127.0.0.1');
+      expect(out.box.box.toString(), 'https://127.0.0.1:8443');
+    });
+
+    group('web page origin', () {
+      String named() {
+        final base = fixturePayload();
+        final m = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(base.substring(7))))) as Map<String, dynamic>;
+        m['name'] = 'box1-surau.local';
+        m['ips'] = ['127.0.0.1', '10.1.1.1'];
+        return 'surau1:${base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '')}';
+      }
+
+      Future<(EnrolOutcome, FakeBox)> runAt(String? page, String text) async {
+        final box = FakeBox(happyBox);
+        key = FakeDeviceKey();
+        trust = FakeTrust();
+        store = MemoryEnrolledBoxStore();
+        final flow = EnrolFlow(
+          clientFor: box.client,
+          key: key,
+          trust: trust,
+          store: store,
+          platform: 'ios-web',
+          pageOrigin: page == null ? null : Uri.parse(page),
+          now: () => DateTime.utc(2026, 11, 4),
+        );
+        final out = await flow.run(text, deviceName: 'T', hasPinAlready: false, newPin: '280419');
+        return (out, box);
+      }
+
+      test('page opened at the box name: enrol at the name (same origin)', () async {
+        final (out, box) = await runAt('https://box1-surau.local:8443/app/', named());
+        expect(box.byPath('/api/enrol/complete')!.url.origin, 'https://box1-surau.local:8443');
+        expect(out.box.box.toString(), 'https://box1-surau.local:8443');
+        expect(out.box.name, 'box1-surau.local');
+        expect(trust.calls.single.$1.toString(), 'https://box1-surau.local:8443');
+      });
+
+      test('page opened at an IP the QR lists: enrol at that IP', () async {
+        final (out, box) = await runAt('https://10.1.1.1:8443/app/', named());
+        expect(box.byPath('/api/enrol/complete')!.url.origin, 'https://10.1.1.1:8443');
+        expect(out.box.box.toString(), 'https://10.1.1.1:8443');
+      });
+
+      test('an unrelated page origin or another port keeps payload.box', () async {
+        for (final page in ['https://evil.example:8443/app/', 'https://box1-surau.local:9999/app/', 'http://box1-surau.local:8443/app/']) {
+          final (out, box) = await runAt(page, named());
+          expect(box.byPath('/api/enrol/complete')!.url.origin, 'https://127.0.0.1:8443', reason: page);
+          expect(out.box.box.toString(), 'https://127.0.0.1:8443', reason: page);
+        }
+      });
+
+      test('no page origin (Android) keeps payload.box', () async {
+        final (out, _) = await runAt(null, named());
+        expect(out.box.box.toString(), 'https://127.0.0.1:8443');
+      });
+    });
+
+    test('a QR without a name leaves name null', () async {
+      final out = await flowFor(FakeBox(happyBox)).run(fixturePayload(), deviceName: 'T', hasPinAlready: false, newPin: '280419');
+      expect(out.box.name, isNull);
+      expect(out.box.lastIp, '127.0.0.1');
+    });
 
     test('new PIN: sends pin and a JWK with exactly kty, crv, x, y', () async {
       final box = FakeBox(happyBox);

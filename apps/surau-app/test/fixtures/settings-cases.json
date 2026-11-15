@@ -1,5 +1,5 @@
 {
- "coreSourceHash": "2e9a8542e7b852ef5f267cdab56a1bc539ed4a0864654c0ff3d5bf84e4deec04",
+ "coreSourceHash": "d408dc9aa303a4697604d9548a1a88f12e9d9e1ea2cbeba64de77a20d94d5754",
  "cases": [
   {
    "key": "prayerBar",
@@ -10429,6 +10429,7 @@
    "note": "defaults",
    "patch": {
     "name": "Surau",
+    "shortName": "",
     "kind": "surau",
     "shortAddress": "",
     "helpName": "",
@@ -10445,6 +10446,7 @@
    "patch": {
     "enabled": true,
     "name": "Surau",
+    "shortName": "",
     "kind": "surau",
     "shortAddress": "",
     "helpName": "",
@@ -10532,6 +10534,54 @@
    "note": "name null",
    "patch": {
     "name": null
+   },
+   "ok": false
+  },
+  {
+   "key": "surauInfo",
+   "note": "shortName wrong value",
+   "patch": {
+    "shortName": "zzz-wrong"
+   },
+   "ok": true
+  },
+  {
+   "key": "surauInfo",
+   "note": "shortName empty",
+   "patch": {
+    "shortName": ""
+   },
+   "ok": true
+  },
+  {
+   "key": "surauInfo",
+   "note": "shortName 501 chars",
+   "patch": {
+    "shortName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "surauInfo",
+   "note": "shortName 500 chars",
+   "patch": {
+    "shortName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "surauInfo",
+   "note": "shortName number",
+   "patch": {
+    "shortName": 123
+   },
+   "ok": false
+  },
+  {
+   "key": "surauInfo",
+   "note": "shortName null",
+   "patch": {
+    "shortName": null
    },
    "ok": false
   },

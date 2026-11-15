@@ -57,19 +57,55 @@ class Supervisor(
     private var current: RunningProcess? = null
     private var stopping = false
     private var sleeping = false
+    private var restarting = false
+    private var shutDown = false
+    private var generation = 0
     private val lastLines = ArrayDeque<String>()
 
-    fun start() {
+    /** True while a loop thread runs and nobody asked it to stop, or while [restart] is between its stop and its start. */
+    fun isActive(): Boolean = synchronized(lock) {
+        if (restarting) return true
+        val t = thread
+        t != null && t.isAlive && !stopping
+    }
+
+    /**
+     * Starts a loop. False when none was started: after [shutdown], while a loop is running, or while an old loop
+     * thread is still alive (stuck after a stop); a new loop never runs beside an old thread, the watchdog retries.
+     */
+    fun start(): Boolean {
         synchronized(lock) {
+            if (shutDown) {
+                note("penyelia: start ditolak, penyelia telah ditutup")
+                return false
+            }
             val t = thread
-            if (t != null && t.isAlive && !stopping) return
+            if (t != null && t.isAlive) {
+                if (stopping) note("penyelia: gelung lama masih hidup, cuba semula")
+                else note("penyelia: start diminta, sudah berjalan (diabaikan)")
+                return false
+            }
             stopping = false
             sleeping = false
-            val nt = Thread({ loop() }, "box-supervisor")
+            val mine = ++generation
+            val nt = Thread({ loop(mine) }, "box-supervisor")
             nt.isDaemon = true
             thread = nt
+            note("penyelia: start diminta, gelung baharu dimulakan")
             nt.start()
+            return true
         }
+    }
+
+    /** Refuses every later [start], [restart] and [ensureRunning]; does not stop a running loop. */
+    fun refuseStarts() {
+        synchronized(lock) { shutDown = true }
+    }
+
+    /** For service destruction: [refuseStarts], then [stop]. The supervisor cannot be started again. */
+    fun shutdown() {
+        refuseStarts()
+        stop()
     }
 
     /** Terminate, wait [graceMs], then kill. Returns when the loop has ended. */
@@ -77,23 +113,58 @@ class Supervisor(
         val t: Thread
         synchronized(lock) {
             val existing = thread
-            if (existing == null || !existing.isAlive) return
+            if (existing == null || !existing.isAlive) {
+                note("penyelia: henti diminta, tiada gelung berjalan")
+                return
+            }
             t = existing
             stopping = true
+            note("penyelia: henti diminta, SIGTERM dihantar")
             current?.terminate()
             if (sleeping) t.interrupt()
         }
         t.join(graceMs)
         if (t.isAlive) {
+            note("penyelia: pelayan tidak berhenti dalam masa, dibunuh (SIGKILL)")
             synchronized(lock) { current?.kill() }
             t.join(graceMs)
-            if (t.isAlive) t.interrupt()
+            if (t.isAlive) {
+                note("penyelia: gelung masih hidup selepas SIGKILL, diganggu")
+                t.interrupt()
+            }
         }
     }
 
+    /** Stop then start. The start always happens, even when the stop fails; [isActive] stays true in between. */
     fun restart() {
-        stop()
-        start()
+        synchronized(lock) { restarting = true }
+        note("penyelia: mula semula diminta")
+        try {
+            try {
+                stop()
+            } catch (e: Throwable) {
+                note("penyelia: GAGAL henti semasa mula semula: " + e.javaClass.simpleName)
+            }
+        } finally {
+            synchronized(lock) { restarting = false }
+            start()
+        }
+    }
+
+    /** Starts the loop when it is not active (a watchdog calls this); true when it had to start it. */
+    fun ensureRunning(): Boolean {
+        if (isActive()) return false
+        synchronized(lock) { if (shutDown) return false }
+        note("penyelia: gelung tidak aktif, dimulakan semula oleh pengawas")
+        return start()
+    }
+
+    private fun note(text: String) {
+        try {
+            log.appendLine(text)
+        } catch (e: Exception) {
+            // the log must never stop the box
+        }
     }
 
     private fun emit(state: BoxRunState) {
@@ -104,12 +175,12 @@ class Supervisor(
         }
     }
 
-    private fun isStopping(): Boolean = synchronized(lock) { stopping }
+    private fun isStopping(mine: Int): Boolean = synchronized(lock) { stopping || generation != mine }
 
-    private fun loop() {
+    private fun loop(mine: Int) {
         val exits = ArrayList<Long>()
         try {
-            while (!isStopping()) {
+            while (!isStopping(mine)) {
                 emit(BoxRunState.Starting)
                 try {
                     reaper.reap()
@@ -124,8 +195,8 @@ class Supervisor(
                     for ((k, v) in env) if (looksSecret(k)) log.addSecret(v)
                     val proc = starter.start(command, env, cwdProvider())
                     synchronized(lock) {
-                        current = proc
-                        if (stopping) proc.terminate()
+                        if (generation == mine) current = proc
+                        if (stopping || generation != mine) proc.terminate()
                     }
                     startedAt = clock.nowMs()
                     emit(BoxRunState.Running(proc.pid, startedAt))
@@ -138,10 +209,10 @@ class Supervisor(
                     log.appendLine("GAGAL mula: " + e.javaClass.simpleName + ": " + (e.message ?: ""))
                     exit = 1
                 } finally {
-                    synchronized(lock) { current = null }
+                    synchronized(lock) { if (generation == mine) current = null }
                 }
                 log.appendLine("MAXCOM: pelayan berhenti (kod $exit)")
-                if (isStopping()) break
+                if (isStopping(mine)) break
 
                 val now = clock.nowMs()
                 val immediate = exit == Backoff.RESTART_NOW_EXIT || exit == Backoff.APK_WAITING_EXIT
@@ -163,18 +234,21 @@ class Supervisor(
                 } else {
                     emit(BoxRunState.Waiting(delay, exit))
                 }
-                if (delay > 0 && !pause(delay)) break
+                if (delay > 0 && !pause(delay, mine)) break
             }
+        } catch (e: Throwable) {
+            note("GAGAL: gelung penyelia terhenti tanpa jangka: " + e.javaClass.simpleName)
         } finally {
             Thread.interrupted()
-            emit(BoxRunState.Stopped)
+            note("penyelia: gelung tamat")
+            if (synchronized(lock) { generation == mine }) emit(BoxRunState.Stopped)
         }
     }
 
     /** False when stop() woke the wait. */
-    private fun pause(ms: Long): Boolean {
+    private fun pause(ms: Long, mine: Int): Boolean {
         synchronized(lock) {
-            if (stopping) return false
+            if (stopping || generation != mine) return false
             sleeping = true
         }
         try {
@@ -184,7 +258,7 @@ class Supervisor(
         } finally {
             synchronized(lock) { sleeping = false }
         }
-        return !isStopping()
+        return !isStopping(mine)
     }
 
     private fun pump(output: InputStream) {

@@ -1,20 +1,55 @@
-/* MAXCOM kiosk, live layer (Plan 5 Task 6).
-   The live is the picture behind the glass: the same stage, the same identity block, next prayer box, ticker
-   and prayer bar on top, in the same places. Only the content band changes: the rotating card makes way for
-   one low strip that names the kuliah. One loud thing, the red tally light, says "on air"; everything else
-   keeps the kiosk's own gold-on-green glass so the screen still reads as this surau's screen. */
+/* MAXCOM kiosk, the live (Plan 5 Task 6; reworked for the operator decision of 2026-11-14).
+   While a live is on it takes priority over every screen (.stage[data-live='clear'], the live screen,
+   data-screen="live"), except 1 minute either side of the azan and the iqamah time, when the prayer screen of
+   that moment comes up on top of the still-playing, blurred picture (.stage[data-live='blurred']).
+   The video element is owned by the app above the phase switch (.stage > .live): the two modes move and blur the
+   same element, so the WHEP session never reconnects.
 
-/* The screen becomes its own stacking context so the video can sit under every grid item (z-index -1)
-   and still above the background picture, which is a sibling of the screen. */
-.screen--main.has-live { isolation: isolate; }
+   Theme contract (the later .maxtheme packs set these; templates.css sets them per template today):
+     --live-frame-w        width of the 16:9 video frame (its height follows)
+     --live-pad-top/-x/-bottom, --live-gap   the live screen's margins (TV overscan safe) and gutters
+     --live-frame-radius   corner of the frame
+     --live-frame-ring     the frame's outline colour
+     --live-frame-fill     the frame's fill while no picture plays (preview, connecting)
+     --live-blur           how soft the picture is behind a prayer screen
+     --live-veil           the template's field laid over the blurred picture (the prayer screen reads on it)
+     --live-veil-dim       the same during solat / tarawih (the calm, dimmed screens)
+     --live-side-shadow    text shadow of the side column (none on light templates)
+   No backdrop-filter anywhere (T95 Chrome 91 repaint ghosts): the blur is a plain `filter` on the video. */
 
+.stage {
+  --live-pad-top: 2.6rem;
+  --live-pad-x: 3rem;
+  --live-pad-bottom: 2.1rem;
+  --live-gap: 1.6rem;
+  --live-frame-w: 70rem;
+  --live-frame-h: calc(var(--live-frame-w) * 9 / 16);
+  --live-frame-radius: var(--radius-md);
+  --live-frame-ring: rgb(var(--accent-rgb) / 0.55);
+  --live-frame-fill: rgb(var(--glass-rgb) / 0.9);
+  --live-blur: 1.4rem;
+  --live-veil: rgb(var(--glass-rgb) / 0.66);
+  --live-veil-dim: rgb(2 12 12 / 0.86);
+  --live-side-shadow: 0 0.2rem 0.9rem rgb(0 0 0 / 0.45);
+}
+
+/* ---- The video ------------------------------------------------------------------------------------------- */
 .live {
   position: absolute;
-  inset: 0;
-  z-index: -1;
   overflow: hidden;
   pointer-events: none;
 }
+/* Clear: exactly the live screen's frame (same custom properties as .screen--live's grid). */
+.live--clear {
+  left: var(--live-pad-x);
+  top: var(--live-pad-top);
+  width: var(--live-frame-w);
+  height: var(--live-frame-h);
+  border-radius: var(--live-frame-radius);
+}
+/* Blurred: the whole stage, under the prayer screen. */
+.live--blurred { inset: 0; }
+
 .live__video {
   position: absolute;
   inset: 0;
@@ -22,7 +57,7 @@
   height: 100%;
   object-fit: cover;
   background: transparent;
-  /* invisible until frames really arrive: a connecting or stalled player shows the normal background */
+  /* invisible until frames really arrive: a connecting or stalled player shows the frame's own fill */
   opacity: 0;
   transition: opacity 900ms ease;
 }
@@ -36,58 +71,144 @@
 }
 .live[data-playing='true'] .live__video { opacity: 1; }
 
-/* Legibility over moving pictures: a darker head (clock, dates, next prayer) and foot (strip, ticker, bar),
-   the middle left open for the speaker. Tinted with the measured glass tone, like the background shade. */
-.live__scrim {
+/* The blur: one class, so a lighter variant (a scaled-down copy, say) can replace it. The slight scale pushes the
+   soft edge of the blur off the screen. */
+.live--blurred .live__video {
+  filter: blur(var(--live-blur));
+  transform: scale(1.08);
+}
+.live__veil { display: none; }
+.live--blurred .live__veil {
+  display: block;
   position: absolute;
   inset: 0;
-  opacity: 0;
-  transition: opacity 900ms ease;
-  background:
-    linear-gradient(
-      180deg,
-      rgb(var(--glass-rgb) / 0.8) 0%,
-      rgb(var(--glass-rgb) / 0.55) 26%,
-      rgb(var(--glass-rgb) / 0) 46%,
-      rgb(var(--glass-rgb) / 0) 54%,
-      rgb(var(--glass-rgb) / 0.5) 74%,
-      rgb(var(--glass-rgb) / 0.88) 100%
-    );
+  background: var(--live-veil);
 }
-.live[data-playing='true'] .live__scrim { opacity: 1; }
-/* Over a live picture the glass gets a touch more body so the countdown and the bar never wash out (no blur
-   behind it anywhere: see .glass in styles.css). */
-.screen--main.has-live .glass { background: rgb(var(--glass-rgb) / 0.88); }
+.stage[data-dim='true'] .live--blurred .live__veil { background: var(--live-veil-dim); }
 
-/* ---- The kuliah strip ------------------------------------------------------------------------------------
-   A compact corner badge, not a banner: one slim line pinned to the bottom-left of the content band, so it
-   sits above the ticker and the prayer bar, never covers them and never reaches the middle of the picture.
-   Small but still readable across the hall: nothing under about 18px on a 1080p TV (1rem = 19.2px there). */
+/* ---- The live screen ----------------------------------------------------------------------------------------
+   Frame top-left, side column right; the kuliah strip under the frame and the next prayer chip under the side. */
+.screen--live {
+  display: grid;
+  grid-template-columns: var(--live-frame-w) minmax(0, 1fr);
+  grid-template-rows: var(--live-frame-h) minmax(0, 1fr);
+  grid-template-areas:
+    'frame side'
+    'strip next';
+  column-gap: var(--live-gap);
+  row-gap: var(--live-gap);
+  padding: var(--live-pad-top) var(--live-pad-x) var(--live-pad-bottom);
+}
+
+.live-screen__frame {
+  grid-area: frame;
+  position: relative;
+  border-radius: var(--live-frame-radius);
+  /* outside the picture, never over it */
+  box-shadow: 0 0 0 0.16rem var(--live-frame-ring), 0 1rem 2.6rem rgb(0 0 0 / 0.3);
+}
+.screen--live[data-playing='false'] .live-screen__frame { background: var(--live-frame-fill); }
+.live-screen__waiting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  text-align: center;
+}
+.live-screen__waiting-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+.live-screen__waiting-tag .live-strip__dot { width: 1.2rem; height: 1.2rem; animation: none; }
+.live-screen__waiting-text { font-size: 1.6rem; font-weight: 600; opacity: 0.85; }
+
+.live-screen__side {
+  grid-area: side;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2.2rem;
+  text-shadow: var(--live-side-shadow);
+}
+.live-screen__ident { flex-wrap: wrap; row-gap: 0.7rem; margin: 0; }
+.live-screen__ident .ident__name {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.35;
+  letter-spacing: 0.16em;
+}
+.live-screen__ident .ident__logo { height: min(4.6rem, var(--logo-cap, 999rem)); max-width: 100%; }
+/* The clock and the dates sit in the middle of the column's free height, between the name and the chip row. */
+.live-screen__time { margin: auto 0; }
+.screen--live .clock__hm { font-size: 6rem; }
+.screen--live .clock__aside { margin-left: 0.5rem; font-size: 1.5rem; }
+.screen--live .clock__aside > * + * { margin-top: 0.2rem; }
+.live-screen__dates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.live-screen__hijri { opacity: 0.85; }
+
+.live-screen__next {
+  grid-area: next;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1rem 1.6rem;
+  border-radius: var(--radius-md);
+}
+.live-screen__next-label {
+  color: var(--accent);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.live-screen__next-cd { font-size: 3.8rem; line-height: 1; }
+
+.live-screen__strip {
+  grid-area: strip;
+  min-width: 0;
+  display: flex;
+}
+
+/* ---- The kuliah strip --------------------------------------------------------------------------------------
+   Under the video, as wide as it: the red tally block, then the penceramah large and the kuliah label and topic
+   under it. Read from 3 m across the hall: nothing under about 28px at 1080p (1rem = 19.2px there). */
 .live-strip {
-  grid-area: band;
-  align-self: end;
-  justify-self: start;
+  flex: 1;
   position: relative;
   display: flex;
   align-items: stretch;
-  max-width: min(100%, 52rem);
-  min-height: 2.9rem;
+  min-width: 0;
   border-radius: var(--radius-md);
   overflow: hidden;
-  text-shadow: 0 0.1rem 0.4rem rgb(0 0 0 / 0.35);
   animation: screen-in 600ms ease-out both;
 }
 
-/* The tally: a dark block on the left with the red light, the one thing on screen that is not gold or white. */
+/* The tally: a dark block on the left with the red light, the one thing on screen that is not the accent. */
 .live-strip__tag {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0 0.95rem 0 0.85rem;
+  gap: 0.7rem;
+  padding: 0 1.4rem 0 1.3rem;
   background: rgb(0 0 0 / 0.42);
   border-right: 1px solid rgb(var(--accent-rgb) / 0.25);
-  font-size: 0.95rem;
+  font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: 0.16em;
   line-height: 1;
@@ -95,11 +216,11 @@
 }
 .live-strip__dot {
   display: block;
-  width: 0.75rem;
-  height: 0.75rem;
+  width: 0.95rem;
+  height: 0.95rem;
   border-radius: 50%;
   background: #ff4d4d;
-  box-shadow: 0 0 0 0.22rem rgb(255 77 77 / 0.28), 0 0 0.8rem rgb(255 77 77 / 0.55);
+  box-shadow: 0 0 0 0.25rem rgb(255 77 77 / 0.28), 0 0 0.8rem rgb(255 77 77 / 0.55);
   animation: live-tally 2.4s ease-in-out infinite;
 }
 @keyframes live-tally {
@@ -110,49 +231,37 @@
 .live-strip.is-waiting .live-strip__dot {
   animation: none;
   opacity: 0.8;
-  box-shadow: 0 0 0 0.22rem rgb(255 77 77 / 0.2);
+  box-shadow: 0 0 0 0.25rem rgb(255 77 77 / 0.2);
 }
 
-/* One line: penceramah, then the kuliah label and the topic, each joined by a small gold dot. */
+/* Two lines: the penceramah, then the kuliah label and the topic joined by a small accent dot. */
 .live-strip__body {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.45rem 1.1rem 0.45rem 0.9rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.8rem;
 }
 .live-strip__who {
-  flex: 0 1 auto;
   min-width: 0;
-  font-size: 1.15rem;
+  font-size: 2.4rem;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.12;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .live-strip__about {
-  flex: 0 1 auto;
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.8rem;
   min-width: 0;
-  font-size: 1rem;
+  font-size: 1.55rem;
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 1.2;
   white-space: nowrap;
-}
-/* The dot between the penceramah and the label (the JSX keeps them as two blocks). */
-.live-strip__who + .live-strip__about::before {
-  content: '';
-  flex: none;
-  width: 0.32rem;
-  height: 0.32rem;
-  border-radius: 50%;
-  background: var(--accent);
-  opacity: 0.9;
 }
 .live-strip__label {
   flex: none;
@@ -168,39 +277,14 @@
 }
 .live-strip .sep {
   flex: none;
-  width: 0.32rem;
-  height: 0.32rem;
+  width: 0.4rem;
+  height: 0.4rem;
   border-radius: 50%;
   background: var(--accent);
   opacity: 0.9;
 }
 
-/* ---- Live mode: the hero clock steps down a size ---------------------------------------------------------
-   Only while live (.has-live on the main screen) so the head band takes less of the picture; the normal
-   screen keeps its own sizes in styles.css. The next prayer box and the prayer bar are not touched. */
-/* Operator, after watching it on the TV (2026-11-05): "smaller more". The aside and the date line stay above
-   the 18px floor at 1080p (1.25rem = 24px, 1.05rem = about 20px). */
-.screen--main.has-live .clock__hm {
-  font-size: 5.2rem;
-}
-.screen--main.has-live .clock__aside {
-  margin-left: 0.6rem;
-  font-size: 1.25rem;
-}
-.screen--main.has-live .clock__aside > * + * {
-  margin-top: 0.2rem;
-}
-.screen--main.has-live .ident__dates {
-  margin-top: 0.45rem;
-  gap: 0.7rem;
-  font-size: 1.05rem;
-}
-.screen--main.has-live .ident__dates .sep {
-  width: 0.32rem;
-  height: 0.32rem;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .live__video, .live__scrim { transition: none; }
+  .live__video { transition: none; }
   .live-strip, .live-strip__dot { animation: none; }
 }

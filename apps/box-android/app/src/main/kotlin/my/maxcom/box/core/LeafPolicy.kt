@@ -21,6 +21,9 @@ sealed class LeafDecision {
 object LeafPolicy {
     const val DEFAULT_THRESHOLD_DAYS = 60
 
+    /** [wantedName] value meaning "the leaf must carry no box name" (the box has no name now). */
+    const val NO_NAME = ""
+
     /**
      * Decides whether the leaf in [currentLeafDer] (null when there is none) must be replaced.
      *
@@ -32,6 +35,10 @@ object LeafPolicy {
      *   IP addresses: [LeafDecision.Issue].
      * - [checkKey] true: [leafKeyPem] (null when the file is missing) must be the private key of the leaf,
      *   otherwise [LeafDecision.Issue]; this heals a torn leaf/key pair at the next certify.
+     * - V2 root (new generation, see [BoxCa.rootGeneration]): the leaf must carry `localhost` and, when [wantedName]
+     *   is a name, exactly that numbered name (any other `boxN-surau.local` in it means "box name changed");
+     *   [wantedName] null leaves the name alone, [NO_NAME] wants none. A legacy root (or none given) keeps the
+     *   two legacy names and ignores [wantedName].
      * - [wantedIps] empty (no usable network at the moment) with a good leaf: [LeafDecision.Skip], because
      *   there is nothing to name; the same list in another order is the same list.
      */
@@ -44,8 +51,9 @@ object LeafPolicy {
         rootDer: ByteArray? = null,
         leafKeyPem: String? = null,
         checkKey: Boolean = false,
+        wantedName: String? = null,
     ): LeafDecision {
-        val d = evaluate(currentLeafDer, wantedIps, now, thresholdDays, rootDer, leafKeyPem, checkKey)
+        val d = evaluate(currentLeafDer, wantedIps, now, thresholdDays, rootDer, leafKeyPem, checkKey, wantedName)
         return if (d is LeafDecision.Issue && now.isBefore(buildTime)) LeafDecision.WaitForClock else d
     }
 
@@ -57,6 +65,7 @@ object LeafPolicy {
         rootDer: ByteArray?,
         leafKeyPem: String?,
         checkKey: Boolean,
+        wantedName: String?,
     ): LeafDecision {
         if (currentLeafDer == null) return LeafDecision.Issue("no certificate yet")
         val leaf = parse(currentLeafDer) ?: return LeafDecision.Issue("certificate unreadable")
@@ -85,7 +94,17 @@ object LeafPolicy {
         } catch (e: java.security.cert.CertificateParsingException) {
             return LeafDecision.Issue("certificate names unreadable")
         }
-        if (!dns.containsAll(BoxCa.PERMITTED_DNS)) return LeafDecision.Issue("certificate names changed")
+        val v2 = rootDer != null && BoxCa.rootGeneration(rootDer) == RootGeneration.V2
+        if (v2) {
+            if (!dns.contains("localhost")) return LeafDecision.Issue("certificate names changed")
+            if (wantedName != null) {
+                val have = dns.filter { BoxName.parse(it) != null }.toSet()
+                val want = if (wantedName == NO_NAME) emptySet() else setOf(wantedName)
+                if (have != want) return LeafDecision.Issue("box name changed")
+            }
+        } else if (!dns.containsAll(BoxCa.PERMITTED_DNS)) {
+            return LeafDecision.Issue("certificate names changed")
+        }
 
         val limit = leaf.notAfter.toInstant().minus(Duration.ofDays(thresholdDays.toLong()))
         if (!now.isBefore(limit)) {

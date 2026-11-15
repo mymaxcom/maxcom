@@ -161,6 +161,8 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
     return http.createServer(handler);
   };
 
+  // the certificate now serving (a reload replaces it), read by the health route, the QR and the profile
+  let currentTls: TlsMaterial | null = o.tls;
   let damaged = false;
   const buildOrDamaged = (): FastifyInstance => {
     try {
@@ -172,6 +174,7 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
         ...(o.hadisTimers === false ? {} : { hadisTimers: {} }),
         serverFactory,
         tls: o.tls,
+        tlsNow: () => currentTls,
         ...(o.plan.https ? { httpsPort: o.plan.https.port } : {}),
         ...(o.dataDir !== undefined ? { dataDir: o.dataDir } : {}),
         ...(o.liveToolsDir !== undefined ? { liveTools: { dir: o.liveToolsDir } } : {}),
@@ -250,6 +253,7 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
           ...(o.certReloadMs !== undefined ? { intervalMs: o.certReloadMs } : {}),
           onReload: (next) => {
             // the damaged-database app has no `.surau`: it keeps its own allowlist
+            currentTls = next;
             const hosts = hostsFromTls(next, o.env);
             if (!setDamagedAllowedHosts(app, hosts)) app.surau.setAllowedHosts(hosts);
             console.log(`TLS certificate reloaded, valid until ${next.notAfter.toISOString()}`);

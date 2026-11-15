@@ -185,6 +185,24 @@ void main() {
     expect(find.text('Kak Ros dinyahaktifkan.'), findsOneWidget);
   });
 
+  testWidgets('Daftar peranti on the cloud (Ops): a surau person gets the box-only message and no code', (tester) async {
+    final h = await pumpShell(
+      tester,
+      roles: const ['admin'],
+      overrides: [isCloudGatewayProvider.overrideWithValue(true)],
+    );
+    h.router.go('/users/u2/enrol');
+    await settle(tester);
+    expect(find.byKey(const ValueKey('enrol-box-only')), findsOneWidget);
+    expect(
+      find.text('Kod peranti mesti dibuat oleh MAXCOM di surau. Gunakan telefon Pentadbir Surau di Wi-Fi surau.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('enrol-device-name')), findsNothing);
+    expect(find.text('Jana kod QR'), findsNothing);
+    expect(h.box.byPath('/api/enrol/begin'), isNull);
+  });
+
   testWidgets('Daftar peranti: name, then the QR with the code, the countdown and the fingerprint', (
     tester,
   ) async {

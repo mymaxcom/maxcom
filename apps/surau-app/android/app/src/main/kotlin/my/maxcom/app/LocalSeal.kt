@@ -40,6 +40,15 @@ class LocalSeal(private val keyProvider: () -> SecretKey) {
             return ALIAS_PREFIX + boxId
         }
 
+        private val KEY_LOCK = Any()
+
+        /**
+         * Key creation and key deletion are serialised by one lock: two first-use seals must not
+         * both generate the key (the second would replace the first and make data sealed with the
+         * first one unreadable), and a reset must not interleave with a get-or-create.
+         */
+        internal fun <T> withKeyLock(block: () -> T): T = synchronized(KEY_LOCK) { block() }
+
         private fun store(): KeyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
 
         /** A [LocalSeal] over the Keystore key of [boxId], created on first use. */
@@ -49,11 +58,11 @@ class LocalSeal(private val keyProvider: () -> SecretKey) {
         }
 
         /** The Keystore key, or null when absent and [create] is false. */
-        fun keystoreKey(alias: String, create: Boolean): SecretKey? {
+        fun keystoreKey(alias: String, create: Boolean): SecretKey? = withKeyLock {
             val ks = store()
-            (ks.getKey(alias, null) as? SecretKey)?.let { return it }
-            if (!create) return null
-            return try {
+            (ks.getKey(alias, null) as? SecretKey)?.let { return@withKeyLock it }
+            if (!create) return@withKeyLock null
+            try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) generate(alias, true) else generate(alias, false)
             } catch (e: StrongBoxUnavailableException) {
                 generate(alias, false)
@@ -83,7 +92,7 @@ class LocalSeal(private val keyProvider: () -> SecretKey) {
         }
 
         /** Deletes the Keystore key of [boxId]; a missing key is fine. */
-        fun reset(boxId: String) {
+        fun reset(boxId: String) = withKeyLock {
             val ks = store()
             val alias = aliasFor(boxId)
             if (ks.containsAlias(alias)) ks.deleteEntry(alias)

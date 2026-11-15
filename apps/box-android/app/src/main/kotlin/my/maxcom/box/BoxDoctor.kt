@@ -16,6 +16,7 @@ import java.time.Instant
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
+import my.maxcom.box.core.BoxCa
 import my.maxcom.box.core.BoxPaths
 import my.maxcom.box.core.DoctorLine
 import my.maxcom.box.core.DoctorReport
@@ -41,6 +42,7 @@ class BoxDoctor(
         lines += if (ips.isEmpty()) DoctorLine(false, "Tiada alamat rangkaian setempat (Ethernet atau Wi-Fi).")
         else DoctorLine(true, "Alamat rangkaian: " + ips.joinToString(", "))
         lines += safe("HTTPS pada rangkaian") { https(ips) }
+        lines += safe("Nama setempat") { localName() }
         lines += safe("Versi dipasang") { release() }
         lines += safe("Tempoh pensijil") { certDays() }
         lines += safe("Kunci akar") { rootStore() }
@@ -95,6 +97,12 @@ class BoxDoctor(
         } finally {
             c.disconnect()
         }
+    }
+
+    private fun localName(): DoctorLine {
+        val root = paths.rootCa.takeIf { it.isFile && it.length() <= MAX_CERT }?.readBytes()
+        val newRoot = root != null && BoxCa.rootPermitsSubtree(root)
+        return DoctorReport.localName(newRoot, LocalName.host, LocalName.exhausted, LocalName.failed, LocalName.failReason, LocalName.warning)
     }
 
     private fun release(): DoctorLine {

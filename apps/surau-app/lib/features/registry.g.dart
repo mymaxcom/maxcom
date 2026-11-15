@@ -29,7 +29,7 @@ class FeatureDef {
 }
 
 /// sha256 of core registry.ts, settings.ts and permissions.ts (CRLF as LF).
-const String coreSourceHash = '2e9a8542e7b852ef5f267cdab56a1bc539ed4a0864654c0ff3d5bf84e4deec04';
+const String coreSourceHash = 'd408dc9aa303a4697604d9548a1a88f12e9d9e1ea2cbeba64de77a20d94d5754';
 
 const List<FeatureDef> features = [
   FeatureDef(
@@ -201,7 +201,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Maklumat surau',
     labelEn: 'Surau details',
-    defaults: <String, Object?>{'name': 'Surau', 'kind': 'surau', 'shortAddress': '', 'helpName': '', 'helpPhone': '', 'helpEmail': '', 'logo': '', 'showName': true},
+    defaults: <String, Object?>{'name': 'Surau', 'shortName': '', 'kind': 'surau', 'shortAddress': '', 'helpName': '', 'helpPhone': '', 'helpEmail': '', 'logo': '', 'showName': true},
   ),
   FeatureDef(
     key: 'hijriDate',

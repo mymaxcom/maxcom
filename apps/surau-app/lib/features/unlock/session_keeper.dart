@@ -269,15 +269,7 @@ final sessionKeeperProvider = Provider<SessionKeeper>((ref) {
     final box = ref.read(enrolledBoxProvider);
     if (box == null) throw const BoxUnreachable('tidak berdaftar');
     final BoxLocator? locator = boxOnly
-        ? TimeoutLocator(
-            DirectBoxLocator(
-              clientFor: deps.enrolledClient,
-              onHealth: (h) => unawaited(
-                ref.read(enrolledBoxProvider.notifier).learnCloud(h.cloud),
-              ),
-            ),
-            const Duration(seconds: 2),
-          )
+        ? directLocatorFor(ref, box)
         : ref.read(baseLocatorProvider);
     if (locator == null) throw const BoxUnreachable('tiada pangkalan');
     final pin = ref.read(pinMemoryProvider).value;

@@ -53,7 +53,7 @@ describe('GET /app/ (web build served by the box)', () => {
   it('serves index.html anonymously with no-cache and one CSP that allows wasm', async () => {
     const res = await app.inject({ method: 'GET', url: '/app/' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('<title>app</title>');
+    expect(res.body).toContain('<title>Surau</title>');
     expect(res.headers['cache-control']).toBe('no-cache');
     const csp = cspHeaders(res.headers);
     expect(csp).toHaveLength(1);
@@ -152,7 +152,9 @@ describe('scripts/build-app.ps1 (static checks)', () => {
   it('builds the web app for /app/ offline and the APK per ABI', () => {
     expect(text).toContain('--no-web-resources-cdn');
     expect(text).toContain('--base-href /app/');
-    expect(text).toContain('--pwa-strategy offline-first');
+    // Flutter's own service worker is off; the app shell is cached by web/maxcom_sw.js (precache list injected here).
+    expect(text).toContain('--pwa-strategy none');
+    expect(text).toContain('__MAXCOM_FILES__');
     expect(text).toContain('split-per-abi');
     expect(text).toContain('5173');
     expect(text).toContain('8787');

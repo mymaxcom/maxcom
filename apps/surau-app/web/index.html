@@ -29,5 +29,13 @@
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('maxcom_sw.js', { scope: '/app/' });
+        navigator.storage?.persist?.();
+      });
+    }
+  </script>
 </body>
 </html>

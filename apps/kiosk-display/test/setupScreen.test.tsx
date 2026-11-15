@@ -97,6 +97,26 @@ describe('Setup screen', () => {
     expect(r.queryByText(/belum ada sijil HTTPS/)).toBeNull();
   });
 
+  it('shows the local name large with the IP beneath when the box has a name', () => {
+    const r = show(setup({ localName: 'box1-surau.local' }));
+    expect(r.getByText('https://box1-surau.local:8443')).toBeTruthy();
+    expect(r.getByText('https://10.168.1.20:8443')).toBeTruthy();
+    const name = r.container.querySelector('[data-role="box-name-address"]')!;
+    const ip = r.container.querySelector('.box-id__ip [data-role="box-ip-address"]')!;
+    expect(name.textContent).toBe('https://box1-surau.local:8443');
+    expect(ip.textContent).toBe('https://10.168.1.20:8443');
+  });
+
+  it('shows the IP only when the box has no name', () => {
+    for (const localName of [undefined, null]) {
+      const r = show(setup({ localName }));
+      expect(r.getByText('https://10.168.1.20:8443')).toBeTruthy();
+      expect(r.container.querySelector('[data-role="box-name-address"]')).toBeNull();
+      expect(r.container.querySelector('.box-id__ip')).toBeNull();
+      cleanup();
+    }
+  });
+
   it('says the certificate is missing when the box has no address', () => {
     const r = show(boxView({ https: false, qr: { payload: qrPayload({ box: '', caSha256: null }), expiresAt } }));
     expect(r.getByText('MAXCOM ini belum ada sijil HTTPS: pemasang perlu melengkapkan pemasangan')).toBeTruthy();

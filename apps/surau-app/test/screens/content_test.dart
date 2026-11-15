@@ -262,7 +262,7 @@ void main() {
       expect(h.assetsPosted.length, 1);
       expect(h.assetsPosted.single.$1, 'image/jpeg');
       expect(img.decodeJpg(h.assetsPosted.single.$2), isNotNull);
-      expect(find.text('Gambar dimuat naik'), findsWidgets);
+      expect(find.text('Gambar disimpan, akan dimuat naik'), findsWidgets);
       expect(find.text('Tukar gambar'), findsOneWidget);
       expect(saveEnabled(tester), isTrue);
       // The toast floats over the buttons for a few seconds.

@@ -38,7 +38,8 @@
     radial-gradient(120% 90% at 50% 40%, #f7efdc 0%, #efe3c6 70%, #e2d1ab 100%);
 }
 /* The printed frame: a double maroon rule inset from the edge. */
-.stage[data-template='oldschool'] .bg::after {
+.stage[data-template='oldschool'] .bg::after,
+.stage[data-template='oldschool'] .live--blurred .live__veil::after {
   content: '';
   position: absolute;
   inset: 0.7rem;
@@ -155,7 +156,6 @@
 .stage[data-template='oldschool'] .screen--main .next .num { font-family: var(--font); color: var(--green); font-size: 3.6rem; margin-top: 0; }
 .stage[data-template='oldschool'] .screen--main .content { grid-area: band; width: auto; margin-top: 1.4rem; }
 .stage[data-template='oldschool'] .screen--main .zikir { grid-area: band; margin-top: 1.4rem; }
-.stage[data-template='oldschool'] .screen--main .live-strip { grid-area: band; }
 .stage[data-template='oldschool'] .screen--main .emergency-band { margin-top: 1.2rem; }
 .stage[data-template='oldschool'] .card--wide { right: 0; }
 
@@ -535,7 +535,6 @@
 .stage[data-template='minimal'] .screen--main .zikir { grid-area: band; width: 43rem; margin: 0 0 1.6rem 3rem; }
 .stage[data-template='minimal'] .zikir__page.has-repeat { padding: 0 0 8.4rem; }
 .stage[data-template='minimal'] .zikir__repeat { top: auto; bottom: 1.4rem; right: 50%; transform: translateX(50%); width: 7rem; height: 7rem; }
-.stage[data-template='minimal'] .screen--main .live-strip { grid-area: band; max-width: 43rem; margin: 0 0 1.6rem 3rem; }
 .stage[data-template='minimal'] .card--wide { right: 0; }
 .stage[data-template='minimal'] .card:not(.card--poster) { background: #ffffff; border: 1px solid #e3e8e5; box-shadow: 0 1.2rem 3rem rgb(20 40 36 / 0.07); border-radius: 1rem; }
 .stage[data-template='minimal'] .card__tag { letter-spacing: 0.04em; text-transform: none; font-size: 1.3rem; }
@@ -728,7 +727,6 @@
 .stage[data-template='colourful'] .ident__dates .sep { background: #ff7aa2; }
 .stage[data-template='colourful'] .screen--main .content { grid-area: band; width: auto; margin: 0; }
 .stage[data-template='colourful'] .screen--main .zikir { grid-area: band; margin: 0; }
-.stage[data-template='colourful'] .screen--main .live-strip { grid-area: band; }
 .stage[data-template='colourful'] .card--wide { right: 0; }
 .stage[data-template='colourful'] .card:not(.card--poster) { border-left: 0.5rem solid #ff7aa2; }
 .stage[data-template='colourful'] .card__tag { color: var(--accent); }
@@ -928,7 +926,8 @@
     url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><g transform='translate(100 100)' fill='none' stroke='%232fd1ad' stroke-opacity='0.13' stroke-width='1.1'><rect x='-80' y='-80' width='160' height='160'/><rect x='-80' y='-80' width='160' height='160' transform='rotate(45)'/><rect x='-52' y='-52' width='104' height='104'/><rect x='-52' y='-52' width='104' height='104' transform='rotate(45)'/><circle r='26'/></g></svg>") no-repeat 96% 46% / 44rem 44rem,
     linear-gradient(180deg, #101b27 0%, #0c141d 100%);
 }
-.stage[data-template='creative'] .bg::before {
+.stage[data-template='creative'] .bg::before,
+.stage[data-template='creative'] .live--blurred .live__veil::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -939,7 +938,8 @@
   clip-path: polygon(0 0, var(--cut-top) 0, calc(var(--cut-top) - var(--slant) * 56.25rem) 100%, 0 100%);
 }
 /* The mint seam just outside the cut. */
-.stage[data-template='creative'] .bg::after {
+.stage[data-template='creative'] .bg::after,
+.stage[data-template='creative'] .live--blurred .live__veil::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1074,7 +1074,6 @@
 .stage[data-template='creative'] .screen--main .zikir { position: absolute; left: 67.6rem; right: 3rem; top: 3rem; bottom: 12.2rem; margin: 0; }
 .stage[data-template='creative'] .zikir__page.has-repeat { padding: 0 0 8.4rem; }
 .stage[data-template='creative'] .zikir__repeat { top: auto; bottom: 1.4rem; right: 50%; transform: translateX(50%); width: 7rem; height: 7rem; }
-.stage[data-template='creative'] .screen--main .live-strip { position: absolute; left: 67.6rem; right: 3rem; bottom: 12.2rem; max-width: none; }
 .stage[data-template='creative'] .card--wide { right: 0; }
 .stage[data-template='creative'] .card:not(.card--poster) {
   background: rgb(14 24 34 / 0.94);
@@ -1303,178 +1302,136 @@
 .stage[data-template='creative'][data-dim='true'] .pbar.is-dimmed { opacity: 0.3; }
 
 /* ======================================================================================================
-   Live on the kiosk (Plan 5 Task 6), every layout template. The live picture (live.css: .live at z-index -1 in
-   the isolated main screen) covers each template's own .bg, so while .has-live is on nothing may lean on that
-   background: every text sits on its own plate or reads light on the live scrim. The head steps down to the
-   live sizes the operator asked for ("smaller more": live.css clock 5.2rem, aside 1.25rem, dates 1.05rem, or the
-   layout's own equivalent) and moves off the middle of the picture. The prayer bar, the next prayer box and
-   the ticker keep their design. The default template's live look is live.css alone.
+   The live, every layout template (operator decision 2026-11-14). Two states, same DOM in every template:
+   - data-live='clear': the live screen (.screen--live, data-screen="live"): the 16:9 frame takes the main
+     area, the side column keeps the name, the clock and the dates, the bottom row is the kuliah strip and the
+     next prayer chip. No jadual, no cards, no ticker. Each template sets the live.css custom properties
+     (--live-*) and dresses the side column, the strip and the chip in its own colours and type.
+   - data-live='blurred': the prayer screen of the window on the template's own field (--live-veil) laid over
+     the blurred picture; the template's frame / slab pseudo-elements are shared with .live__veil above, so the
+     prayer screen reads exactly as it does on its normal background.
    ====================================================================================================== */
 
-/* Klasik Lama: the board's pieces become printed notices pinned over the picture. The masthead is one paper
-   banner, the clock and the next prayer stack as two paper panels in the right column, the jadual stays on the
-   left and the middle is left open for the speaker. */
-.stage[data-template='oldschool'] .screen--main.has-live {
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    'name   name   name'
-    'dates  dates  dates'
-    'bar    band   clock'
-    'bar    band   next'
-    'bar    band   .'
-    'ticker ticker ticker';
+/* Klasik Lama: the picture is a print pinned to the board, matted in paper with the maroon double rule. */
+.stage[data-template='oldschool'] {
+  --live-pad-top: 2.8rem;
+  --live-pad-x: 3.2rem;
+  --live-pad-bottom: 2.4rem;
+  --live-frame-w: 69rem;
+  --live-frame-ring: var(--rule);
+  --live-frame-fill: var(--paper);
+  --live-veil: rgb(244 235 212 / 0.78);
+  --live-veil-dim: rgb(26 17 10 / 0.95);
+  --live-side-shadow: none;
 }
-.stage[data-template='oldschool'] .screen--main.has-live.has-emergency {
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
-  grid-template-areas:
-    'name   name   name'
-    'dates  dates  dates'
-    'bar    band   clock'
-    'bar    band   next'
-    'bar    band   .'
-    'emerg  emerg  emerg'
-    'ticker ticker ticker';
+.stage[data-template='oldschool'] .live-screen__frame {
+  box-shadow: 0 0 0 0.35rem var(--paper), 0 0 0 0.65rem var(--rule), 0 0.4rem 1.4rem rgb(80 50 20 / 0.18);
 }
-.stage[data-template='oldschool'] .screen--main.has-live .ident__head {
-  padding: 0.5rem 2rem 0;
-  background: var(--paper);
-  border: 0.24rem double var(--rule);
-  border-bottom: 0;
+.stage[data-template='oldschool'] .live-screen__ident { justify-content: center; text-align: center; }
+.stage[data-template='oldschool'] .live-screen__ident .ident__name {
+  font-size: 2.1rem;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--accent);
+  -webkit-line-clamp: 3;
 }
-.stage[data-template='oldschool'] .screen--main.has-live .ident__name { font-size: 2.5rem; }
-.stage[data-template='oldschool'] .screen--main.has-live .ident__head::before,
-.stage[data-template='oldschool'] .screen--main.has-live .ident__head::after { height: 2rem; background-size: 2rem 2rem, calc(100% - 2.8rem) 0.12rem, calc(100% - 2.8rem) 0.12rem; }
-.stage[data-template='oldschool'] .screen--main.has-live .ident__dates {
-  margin: 0 0 1.2rem;
-  padding: 0 2rem 0.6rem;
-  background: var(--paper);
-  border-left: 0.24rem double var(--rule);
-  border-right: 0.24rem double var(--rule);
-  font-size: 1.4rem;
-  gap: 1rem;
-}
-.stage[data-template='oldschool'] .screen--main.has-live .clock {
-  justify-self: stretch;
-  align-self: start;
-  margin: 0 0 0.8rem;
-  padding: 0.8rem 1.6rem 0.6rem;
+.stage[data-template='oldschool'] .live-screen__time {
+  padding: 1.2rem 0 1.3rem;
+  border-top: 0.32rem double var(--rule);
+  border-bottom: 0.32rem double var(--rule);
   text-align: center;
-  line-height: 0.9;
-  background: var(--paper);
-  border: 0.24rem double var(--rule);
-  box-shadow: 0 0.3rem 0.9rem rgb(80 50 20 / 0.1);
 }
-.stage[data-template='oldschool'] .screen--main.has-live .clock__hm { font-size: 5.2rem; }
-.stage[data-template='oldschool'] .screen--main.has-live .clock__aside { font-size: 1.5rem; margin-left: 0.5rem; }
-.stage[data-template='oldschool'] .screen--main.has-live .next { align-self: start; margin: 0; }
-/* The strip runs from the jadual to the right edge, under the two panels. */
-.stage[data-template='oldschool'] .screen--main.has-live .live-strip { grid-area: auto; grid-column: 2 / -1; grid-row: 5; margin-top: 1.4rem; text-shadow: none; }
-/* The tally block in the board's maroon (live.css gives it a dark wash meant for a dark glass). */
-.stage[data-template='oldschool'] .screen--main.has-live .live-strip__tag { background: var(--accent); color: var(--ink); border-right: 0; }
+.stage[data-template='oldschool'] .screen--live .clock__hm { font-size: 6.2rem; }
+.stage[data-template='oldschool'] .screen--live .clock__aside { font-size: 1.7rem; }
+.stage[data-template='oldschool'] .live-screen__dates { align-items: center; font-family: var(--serif); font-size: 1.55rem; color: var(--muted); }
+.stage[data-template='oldschool'] .live-screen__next { align-items: center; text-align: center; }
+.stage[data-template='oldschool'] .live-screen__next-label { font-family: var(--serif); font-size: 1.75rem; }
+.stage[data-template='oldschool'] .live-screen__next-cd { color: var(--green); }
+.stage[data-template='oldschool'] .live-strip { text-shadow: none; }
+.stage[data-template='oldschool'] .live-strip__tag { background: var(--accent); color: var(--ink); border-right: 0; }
+.stage[data-template='oldschool'] .live-strip__tag .live-strip__dot { box-shadow: 0 0 0 0.22rem rgb(255 255 255 / 0.9); }
+.stage[data-template='oldschool'] .live-strip__who { font-family: var(--serif); font-weight: 700; font-size: 2.6rem; }
+.stage[data-template='oldschool'] .live-screen__waiting { color: var(--accent); font-family: var(--serif); }
 
-/* Minimalis: its own quiet dark palette (the one it wears for solat), so the thin type reads light on a dark
-   scrim; the clock, the next prayer and the dates stack under the name on the left, the picture's middle stays
-   open and the strip sits in the card column. */
-.stage[data-template='minimal'] .screen--main.has-live {
-  --glass-rgb: 15 23 21;
-  --text: #f1f5f4;
-  --accent: #7fd6c8;
-  --accent-rgb: 127 214 200;
-  --muted: #bccac6;
-  --hair: rgb(255 255 255 / 0.22);
-  color: var(--text); /* the stage's colour was computed from the light palette's --text */
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
-  grid-template-areas:
-    'name   band'
-    'clock  band'
-    'next   band'
-    'dates  band'
-    '.      band'
-    'bar    bar'
-    'ticker ticker';
+/* Minimalis: a white page; the picture is a clean panel with a hairline, the clock stays thin. */
+.stage[data-template='minimal'] {
+  --live-frame-radius: 1rem;
+  --live-frame-ring: var(--hair);
+  --live-frame-fill: #ffffff;
+  --live-veil: rgb(248 249 247 / 0.8);
+  --live-veil-dim: rgb(15 23 21 / 0.95);
+  --live-side-shadow: none;
 }
-.stage[data-template='minimal'] .screen--main.has-live.has-emergency {
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto auto;
-  grid-template-areas:
-    'name   band'
-    'clock  band'
-    'next   band'
-    'dates  band'
-    '.      band'
-    'emerg  emerg'
-    'bar    bar'
-    'ticker ticker';
-}
-.stage[data-template='minimal'] .screen--main.has-live :is(.ident__name, .clock__hm, .clock__aside, .next, .ident__dates, .pbar, .ticker, .source-footer) {
-  text-shadow: 0 0.1rem 0.5rem rgb(0 0 0 / 0.5);
-}
-.stage[data-template='minimal'] .screen--main.has-live .clock { justify-self: start; margin-top: 1.4rem; }
-.stage[data-template='minimal'] .screen--main.has-live .clock__hm { font-size: 5.2rem; font-weight: 400; letter-spacing: -0.03em; }
-.stage[data-template='minimal'] .screen--main.has-live .clock__aside { font-size: 1.25rem; margin-left: 0.6rem; }
-.stage[data-template='minimal'] .screen--main.has-live .next { justify-self: start; margin-top: 1rem; }
-.stage[data-template='minimal'] .screen--main.has-live .ident__dates { justify-self: start; margin-top: 0.5rem; font-size: 1.05rem; gap: 0.7rem; color: var(--text); }
-.stage[data-template='minimal'] .screen--main.has-live .live-strip {
-  background: rgb(15 23 21 / 0.88);
-  border-color: rgb(255 255 255 / 0.12);
-  box-shadow: none;
-}
-.stage[data-template='minimal'] .screen--main.has-live .pbar.glass { background: none; border-color: var(--hair); }
-.stage[data-template='minimal'] .screen--main.has-live .pcell__cd { color: #0f1715; }
-.stage[data-template='minimal'] .screen--main.has-live :is(.ticker__track, .ticker__static) { color: var(--text); }
+.stage[data-template='minimal'] .live-screen__frame { box-shadow: 0 0 0 1px var(--hair), 0 1.2rem 3rem rgb(20 40 36 / 0.1); }
+.stage[data-template='minimal'] .live-screen__ident .ident__name { font-size: 1.9rem; letter-spacing: -0.005em; }
+.stage[data-template='minimal'] .screen--live .clock__hm { font-size: 7rem; }
+.stage[data-template='minimal'] .live-screen__dates { color: var(--muted); font-weight: 500; }
+.stage[data-template='minimal'] .live-screen__next { border-radius: 1rem; }
+.stage[data-template='minimal'] .live-screen__next-cd { font-weight: 300; letter-spacing: -0.03em; color: var(--text); }
+.stage[data-template='minimal'] .live-strip { border-radius: 1rem; text-shadow: none; }
+.stage[data-template='minimal'] .live-strip__tag { background: var(--accent); color: #ffffff; border-right: 0; }
+.stage[data-template='minimal'] .live-strip__tag .live-strip__dot { box-shadow: 0 0 0 0.22rem rgb(255 255 255 / 0.9); }
+.stage[data-template='minimal'] .live-screen__waiting { color: var(--accent); }
 
-/* Berwarna-warni: the blocks are already plates. The clock block steps down and centres its line, the sunset
-   block keeps its size but only its own width, so the top of the picture is not one long band. */
-.stage[data-template='colourful'] .screen--main.has-live .clock {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: center;
-  align-items: baseline;
-  padding: 1rem 1.8rem 1.1rem 1.6rem;
+/* Berwarna-warni: the clock is the sunset block, the chip and the strip are indigo plates with the pink edge. */
+.stage[data-template='colourful'] {
+  --live-frame-ring: rgb(255 255 255 / 0.22);
+  --live-frame-fill: rgb(30 30 92 / 0.9);
+  --live-veil: rgb(24 20 70 / 0.7);
+  --live-veil-dim: rgb(8 6 26 / 0.94);
+  --live-side-shadow: none;
 }
-.stage[data-template='colourful'] .screen--main.has-live .clock__hm { font-size: 5.2rem; }
-.stage[data-template='colourful'] .screen--main.has-live .clock__aside { font-size: 1.25rem; margin-left: 0.6rem; }
-.stage[data-template='colourful'] .screen--main.has-live .next { justify-self: start; }
-.stage[data-template='colourful'] .screen--main.has-live .ident__dates { font-size: 1.05rem; gap: 0.7rem; }
+.stage[data-template='colourful'] .live-screen__ident .ident__name { font-size: 1.3rem; letter-spacing: 0.2em; }
+.stage[data-template='colourful'] .live-screen__time {
+  padding: 1.4rem 1.6rem 1.5rem;
+  background: var(--sunset);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0.8rem 2.4rem rgb(5 5 30 / 0.35);
+}
+.stage[data-template='colourful'] .screen--live .clock__hm { text-shadow: none; }
+.stage[data-template='colourful'] .live-screen__dates { font-size: 1.25rem; }
+.stage[data-template='colourful'] .live-screen__next { border-left: 0.5rem solid #ff7aa2; }
+.stage[data-template='colourful'] .live-strip { border-left: 0.5rem solid #ff7aa2; text-shadow: none; }
 
-/* Kreatif: the saffron slab is part of the background the picture covers, so a small slab of its own comes
-   back in the top-left corner, cut on the same --slant with the same mint seam: name, clock and dates stay
-   ink on saffron. The next prayer box moves up under it; the bars, the ticker and the right column keep their
-   places, and the strip takes the empty card column. */
-.stage[data-template='creative'] .screen--main.has-live::before,
-.stage[data-template='creative'] .screen--main.has-live::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 15.2rem;
-  pointer-events: none;
+/* Kreatif: the saffron slab comes back as the clock plate of the side column, its left edge on the same
+   --slant, ink on saffron; the chip and the strip are the dark plates with the mint top edge. The big slab of
+   the background would sit behind the picture, so it steps aside while the live has the screen. */
+.stage[data-template='creative'] {
+  --live-frame-ring: rgb(47 209 173 / 0.55);
+  --live-frame-fill: rgb(14 24 34 / 0.94);
+  --live-veil: rgb(12 20 29 / 0.74);
+  --live-veil-dim: rgb(6 10 15 / 0.92);
+  --live-side-shadow: none;
 }
-.stage[data-template='creative'] .screen--main.has-live::before {
-  width: 31rem;
-  background:
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='%231a1306' stroke-opacity='0.07' stroke-width='1.2'><rect x='22' y='22' width='36' height='36'/><rect x='22' y='22' width='36' height='36' transform='rotate(45 40 40)'/></g></svg>") 0 0 / 5rem 5rem,
-    linear-gradient(165deg, var(--slab-a) 0%, var(--slab-b) 100%);
-  -webkit-clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant) * 15.2rem) 100%, 0 100%);
-  clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant) * 15.2rem) 100%, 0 100%);
+.stage[data-template='creative'][data-live='clear'] .bg::before,
+.stage[data-template='creative'][data-live='clear'] .bg::after { display: none; }
+.stage[data-template='creative'] .live--blurred .live__veil::before { opacity: 0.84; }
+.stage[data-template='creative'][data-dim='true'] .live--blurred .live__veil::before,
+.stage[data-template='creative'][data-dim='true'] .live--blurred .live__veil::after { opacity: 0.08; }
+.stage[data-template='creative'] .live-screen__frame { border-radius: 0 2.4rem 0 2.4rem; }
+.stage[data-template='creative'] .live--clear { border-radius: 0 2.4rem 0 2.4rem; }
+.stage[data-template='creative'] .live-screen__ident .ident__name {
+  color: var(--accent);
+  font-size: 1.3rem;
+  letter-spacing: 0.24em;
+  white-space: normal;
 }
-.stage[data-template='creative'] .screen--main.has-live::after {
-  width: 31.75rem;
-  background: var(--mint);
-  opacity: 0.85;
-  -webkit-clip-path: polygon(calc(100% - 0.35rem) 0, 100% 0, calc(100% - var(--slant) * 15.2rem) 100%, calc(100% - 0.35rem - var(--slant) * 15.2rem) 100%);
-  clip-path: polygon(calc(100% - 0.35rem) 0, 100% 0, calc(100% - var(--slant) * 15.2rem) 100%, calc(100% - 0.35rem - var(--slant) * 15.2rem) 100%);
+.stage[data-template='creative'] .live-screen__time {
+  margin-right: calc(-1 * var(--live-pad-x));
+  padding: 1.4rem var(--live-pad-x) 1.5rem calc(1.6rem + var(--slant) * 10rem);
+  color: var(--ink);
+  background: linear-gradient(165deg, var(--slab-a) 0%, var(--slab-b) 100%);
+  -webkit-clip-path: polygon(calc(var(--slant) * 10rem) 0, 100% 0, 100% 100%, 0 100%);
+  clip-path: polygon(calc(var(--slant) * 10rem) 0, 100% 0, 100% 100%, 0 100%);
 }
-.stage[data-template='creative'] .screen--main.has-live .ident__head { max-width: 24rem; }
-.stage[data-template='creative'] .screen--main.has-live .clock { top: 4.7rem; }
-.stage[data-template='creative'] .screen--main.has-live .clock__hm { font-size: 5.2rem; letter-spacing: -0.03em; }
-.stage[data-template='creative'] .screen--main.has-live .clock__aside { font-size: 1.25rem; margin-left: 0.5rem; }
-.stage[data-template='creative'] .screen--main.has-live .ident__dates { top: 10.3rem; font-size: 1.05rem; gap: 0.2rem; }
-.stage[data-template='creative'] .screen--main.has-live .next { top: 17rem; }
-/* The strip takes the lane between the last bar (43.4rem) and the ticker, as wide as the ticker; with the
-   emergency band in that lane it moves up into the card column, right of the bars. */
-.stage[data-template='creative'] .screen--main.has-live .live-strip { justify-self: auto; left: 37.4rem; bottom: 8.3rem; }
-.stage[data-template='creative'] .screen--main.has-live.has-emergency .live-strip { left: 60rem; bottom: 12.2rem; }
-
+.stage[data-template='creative'] .screen--live .clock__hm { color: var(--ink); letter-spacing: -0.04em; text-shadow: none; }
+.stage[data-template='creative'] .live-screen__dates { color: var(--ink); font-weight: 700; }
+.stage[data-template='creative'] .live-screen__next { border-radius: 0 2.4rem 0 2.4rem; }
+.stage[data-template='creative'] .live-screen__next-label { color: var(--mint); }
+.stage[data-template='creative'] .live-strip { border-radius: 0 2.4rem 0 2.4rem; text-shadow: none; }
+.stage[data-template='creative'] .live-strip__label { color: var(--mint); }
+.stage[data-template='creative'] .live-screen__waiting { color: var(--accent); }
 /* ======================================================================================================
    Every layout template: the identity block is `display: contents` on the main screen, so its own fade (the
    poster takeover, the idle <-> card settle in styles.css) is carried by its three children instead.

@@ -8,6 +8,8 @@ export interface BoxInfo {
   keyFp: string;
   pub: { kty: 'EC'; crv: 'P-256'; x: string; y: string };
   name: string;
+  /** The numbered local name the box answers on its LAN (`box1-surau.local`), or null on a legacy root. `name` stays the display name. */
+  localName?: string | null | undefined;
   state: BoxState;
   reason: BoxStateReason;
   linked: boolean;

@@ -10,8 +10,11 @@ import 'box_client.dart' show BoxUnreachable;
 const bool pinsCa = false;
 
 /// The browser decides who to trust; [caDer] and [connect] do not apply.
-http.Client createClient(Uint8List? caDer, Duration connect) =>
-    BrowserClient();
+http.Client createClient(
+  Uint8List? caDer,
+  Duration connect, {
+  String? Function(String host)? addressOf,
+}) => BrowserClient();
 
 /// The browser's own trust, which is the system's.
 http.Client createSystemClient(Duration connect) => BrowserClient();

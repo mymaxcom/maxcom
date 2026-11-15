@@ -62,7 +62,7 @@ if ($Web) {
   }
   Push-Location $appDir
   try {
-    & $flutter build web --release --base-href /app/ --no-web-resources-cdn --pwa-strategy offline-first $defineVersion
+    & $flutter build web --release --base-href /app/ --no-web-resources-cdn --pwa-strategy none $defineVersion
     if ($LASTEXITCODE -ne 0) { Fail 'flutter build web gagal.' }
   } finally { Pop-Location }
 
@@ -74,14 +74,48 @@ if ($Web) {
   New-Item -ItemType Directory -Path $outDir -Force | Out-Null
   Copy-Item -Path (Join-Path $built '*') -Destination $outDir -Recurse -Force
 
-  $lines = @()
   $outFull = (Resolve-Path $outDir).Path
+
+  # Generate precache list and build id for the service worker.
+  $precacheFiles = Get-ChildItem -Path $outDir -Recurse -File | Where-Object {
+    $rel = $_.FullName.Substring($outFull.Length + 1).Replace('\', '/')
+    $rel -ne 'maxcom_sw.js' -and
+    $rel -ne 'flutter_service_worker.js' -and
+    $rel -ne 'sha256sums.txt' -and
+    -not $rel.EndsWith('.map') -and
+    $rel -ne 'assets/NOTICES'
+  } | Sort-Object FullName
+
+  $buildInputLines = @()
+  $precachePaths = @()
+  foreach ($file in $precacheFiles) {
+    $rel = $file.FullName.Substring($outFull.Length + 1).Replace('\', '/')
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash.ToLower()
+    $buildInputLines += "$rel $hash"
+    $precachePaths += $rel
+  }
+  $buildInput = $buildInputLines -join "`n"
+  $buildBytes = [System.Text.Encoding]::ASCII.GetBytes($buildInput)
+  $buildStream = [System.IO.MemoryStream]::new($buildBytes)
+  $buildHash = (Get-FileHash -Algorithm SHA256 -InputStream $buildStream).Hash.ToLower()
+  $buildId = $buildHash.Substring(0, 16)
+
+  $swPath = Join-Path $outDir 'maxcom_sw.js'
+  if (-not (Test-Path $swPath)) { Fail 'maxcom_sw.js tiada di output web.' }
+  $swContent = [System.IO.File]::ReadAllText($swPath, [System.Text.Encoding]::UTF8)
+  $swContent = $swContent.Replace('__MAXCOM_BUILD__', $buildId)
+  $quotedPaths = $precachePaths | ForEach-Object { '"' + ($_ -replace '"', '\"') + '"' }
+  $filesJson = '[' + ($quotedPaths -join ', ') + ']'
+  $swContent = $swContent.Replace('__MAXCOM_FILES__', $filesJson)
+  [System.IO.File]::WriteAllText($swPath, $swContent, [System.Text.Encoding]::UTF8)
+
+  $lines = @()
   Get-ChildItem -Path $outDir -Recurse -File | Where-Object { $_.Name -ne 'sha256sums.txt' } | Sort-Object FullName | ForEach-Object {
     $rel = $_.FullName.Substring($outFull.Length + 1).Replace('\', '/')
     $lines += ('{0}  {1}' -f (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLower(), $rel)
   }
   Set-Content -LiteralPath (Join-Path $outDir 'sha256sums.txt') -Value $lines -Encoding ASCII
-  Write-Host "Web siap: $outDir ($($lines.Count) fail, sha256sums.txt ditulis)"
+  Write-Host "Web siap: $outDir ($($lines.Count) fail, sha256sums.txt ditulis, BUILD=$buildId)"
 }
 
 if ($Apk) {

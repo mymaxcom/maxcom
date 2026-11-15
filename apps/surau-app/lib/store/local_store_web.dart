@@ -263,9 +263,37 @@ class IndexedDbLocalStore implements LocalStore {
 
   @override
   Future<void> putBlob(String id, Uint8List bytes) async {
+    await _writeBlob(id, bytes);
+    await _evict(id);
+  }
+
+  @override
+  Future<bool> hasBlob(String id) async {
     final db = await _db;
-    var tx = db.transaction(_blobs.toJS, 'readwrite');
-    var done = _done(tx);
+    final tx = db.transaction(_blobs.toJS, 'readonly');
+    final n = await _result(tx.objectStore(_blobs).count(id.toJS));
+    return ((n as JSNumber?)?.toDartInt ?? 0) > 0;
+  }
+
+  @override
+  Future<void> putBlobWithDoc(
+    String blobId,
+    Uint8List bytes,
+    String collection,
+    String docId,
+    Map<String, dynamic> doc,
+  ) async {
+    // The bytes first, then the doc that names them, then the eviction (which
+    // reads that doc), so the blob is never a candidate without its doc.
+    await _writeBlob(blobId, bytes);
+    await putDoc(collection, docId, doc);
+    await _evict(blobId);
+  }
+
+  Future<void> _writeBlob(String id, Uint8List bytes) async {
+    final db = await _db;
+    final tx = db.transaction(_blobs.toJS, 'readwrite');
+    final done = _done(tx);
     tx
         .objectStore(_blobs)
         .put(
@@ -277,9 +305,15 @@ class IndexedDbLocalStore implements LocalStore {
           }),
         );
     await done;
-    // Evict the oldest asset blobs (never queued uploads, never this one).
-    tx = db.transaction(_blobs.toJS, 'readwrite');
-    done = _done(tx);
+  }
+
+  /// Evicts the oldest asset blobs over [blobCap] (never queued uploads, a
+  /// blob a queued outbox op names, nor [keep]).
+  Future<void> _evict(String keep) async {
+    final queued = queuedBlobIds(await list(Collections.outbox));
+    final db = await _db;
+    final tx = db.transaction(_blobs.toJS, 'readwrite');
+    final done = _done(tx);
     final store = tx.objectStore(_blobs);
     final all = (await _result(store.getAll()) as JSArray<JSObject>).toDart;
     var total = 0;
@@ -290,7 +324,9 @@ class IndexedDbLocalStore implements LocalStore {
     for (final o in all) {
       if (total <= blobCap) break;
       final oid = _s(o, 'id');
-      if (oid == id || oid.startsWith(uploadBlobPrefix)) continue;
+      if (oid == keep || oid.startsWith(uploadBlobPrefix) || queued.contains(oid)) {
+        continue;
+      }
       total -= _i(o, 'size');
       store.delete(oid.toJS);
     }

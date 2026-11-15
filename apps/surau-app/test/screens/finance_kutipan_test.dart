@@ -238,12 +238,23 @@ void main() {
     expect(find.byKey(const Key('fin-photo-ready')), findsOneWidget);
     await tapAt(tester, find.byKey(_review));
     await tapAt(tester, find.byKey(const Key('fin-confirm-save')));
-    final ops = await f.ops();
+    // The photo's sha256 and base64 run in a real isolate (compute) when it
+    // is 128 KB or more, which the widget test's fake async never completes
+    // by itself: give real time to the save until both ops are queued.
+    for (var i = 0; i < 100; i++) {
+      final queued = await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        return (await f.engine.outbox.queued()).length;
+      });
+      await tester.pump();
+      if (queued == 2) break;
+    }
+    final ops = (await tester.runAsync(() => f.ops()))!;
     expect(ops.map((o) => o.kind), ['finance.photo.put', 'finance.append']);
     final entry = (ops.last.payload as Map);
     expect(entry['photoId'], isA<String>());
     expect((entry['photoId'] as String).length, 64);
-    final saved = (await f.repo.entries()).first;
+    final saved = (await tester.runAsync(() => f.repo.entries()))!.first;
     expect(saved.photoId, entry['photoId']);
   });
 

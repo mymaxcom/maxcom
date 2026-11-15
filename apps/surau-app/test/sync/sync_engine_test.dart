@@ -657,7 +657,7 @@ void main() {
     });
 
     test(
-      'an image waits as an upload- blob and goes alone in its batch',
+      'an image waits once in the asset- blob and goes alone in its batch',
       () async {
         await seed();
         final bytes = Uint8List.fromList(List.generate(300, (i) => i % 256));
@@ -671,7 +671,7 @@ void main() {
         );
         final queued = (await engine.outbox.pending()).first;
         expect(queued.kind, 'asset.put');
-        expect(await store.getBlob('upload-${queued.opId}'), isNotNull);
+        expect(await store.getBlob('upload-${queued.opId}'), isNull);
         expect(
           base64.decode((queued.payload as Map)['bytesBase64'] as String),
           bytes,
@@ -686,6 +686,7 @@ void main() {
           'asset.put',
         );
         expect(await store.getBlob('upload-${queued.opId}'), isNull);
+        expect(await store.getBlob('asset-${r.id}'), bytes);
       },
     );
 

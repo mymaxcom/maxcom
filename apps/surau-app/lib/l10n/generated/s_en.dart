@@ -1289,6 +1289,10 @@ class SEn extends S {
   String get userNotFound => 'User not found.';
 
   @override
+  String get enrolBoxOnly =>
+      'Device codes must be made by the surau box. Use the Surau Admin phone on the surau Wi-Fi.';
+
+  @override
   String get enrolQrTitle => 'Enrol a device';
 
   @override
@@ -1637,6 +1641,12 @@ class SEn extends S {
   String get settingsOptionalHint => 'Leave empty for the default.';
 
   @override
+  String get settingsShortNameHint => 'e.g. SDM';
+
+  @override
+  String get settingsShortNameHelper => 'Leave empty to use the surau name.';
+
+  @override
   String get settingsDecrease => 'Less';
 
   @override
@@ -1684,7 +1694,8 @@ class SEn extends S {
   String get settingsBackgroundsUpload => 'Upload a background image';
 
   @override
-  String get settingsBackgroundUploaded => 'Background image uploaded';
+  String get settingsBackgroundUploaded =>
+      'Background image saved, will upload';
 
   @override
   String settingsBackgroundTile(int n) {
@@ -1868,10 +1879,22 @@ class SEn extends S {
   String get imagePreparing => 'Preparing image';
 
   @override
-  String get imageUploading => 'Uploading image';
+  String get imageUploading => 'Saving image';
+
+  @override
+  String get imageQueued => 'Uploading…';
+
+  @override
+  String get imageLost => 'Upload failed';
+
+  @override
+  String get imageChooseAgain => 'Choose the picture again';
 
   @override
   String get imageUploaded => 'Image uploaded';
+
+  @override
+  String get imageSaved => 'Image saved, will upload';
 
   @override
   String get imagePickFailed =>

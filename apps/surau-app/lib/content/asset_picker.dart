@@ -18,20 +18,29 @@ import '../box/wire.dart' show ImageAnalysis, ImageBox;
 import '../l10n/generated/s.dart';
 import '../screens/widgets/box_read.dart';
 import '../screens/widgets/pieces.dart';
+import '../sync/sync_providers.dart' show queuedAssetIdsProvider;
 import 'adjusted_picture.dart';
 import 'image_adjust.dart';
 import 'image_prep.dart';
 import 'image_ref.dart';
 
-export 'adjusted_picture.dart' show AssetPicture, assetBytesProvider;
+export 'adjusted_picture.dart' show AssetPicture, QueuedChip, assetBytesProvider, assetLostProvider, assetQueuedProvider;
 
 typedef PickImageBytes = Future<Uint8List?> Function();
 typedef PrepareImageFn = Future<PreparedImage> Function(Uint8List bytes);
 
 /// The gallery on Android, the file chooser on the web; null when the
-/// person cancels.
+/// person cancels. On Android the photo is shrunk natively at pick time
+/// (longest side 1920 px, JPEG q85; EXIF orientation is kept in the file
+/// and baked later by [prepareImage]), so the Dart side rarely has to
+/// decode anything. The web ignores these limits.
 Future<Uint8List?> pickImageFromGallery() async {
-  final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+  final picked = await ImagePicker().pickImage(
+    source: ImageSource.gallery,
+    maxWidth: defaultMaxSide.toDouble(),
+    maxHeight: defaultMaxSide.toDouble(),
+    imageQuality: defaultJpegQuality,
+  );
   if (picked == null) return null;
   return picked.readAsBytes();
 }
@@ -156,6 +165,17 @@ class _ImageFieldState extends ConsumerState<ImageField> {
     await _adjust(current, bytes, fresh: false);
   }
 
+  /// Whether the picture is still in the outbox (read from the queue now,
+  /// not from a view that may not have caught up yet).
+  Future<bool> _stillQueued(String id) async {
+    try {
+      final ids = await ref.refresh(queuedAssetIdsProvider.future);
+      return ids.contains(id);
+    } on Object {
+      return false;
+    }
+  }
+
   /// Opens the adjust screen. A fresh logo starts from the box's analysis
   /// (trimmed, the white background removed when it suggests so). A
   /// fresh picture is in the form before the screen opens, so `Batal`
@@ -170,13 +190,20 @@ class _ImageFieldState extends ConsumerState<ImageField> {
     if (gateway == null) return;
     ImageAnalysis? analysis;
     var initial = start;
-    if (widget.slot == ImageSlot.logo) {
+    if (widget.slot == ImageSlot.logo && !await _stillQueued(start.asset)) {
+      // Only for a picture the box already holds. A picture still waiting
+      // in the outbox is not there to analyse: the person is not kept
+      // waiting on the network, and the short timeout bounds the rest.
       setState(() => _stage = _Stage.preparing);
       try {
         analysis = ImageAnalysis.fromJson(
-          await gateway.getFresh('/api/assets/${start.asset}/analyze'),
+          await gateway
+              .getFresh('/api/assets/${start.asset}/analyze')
+              .timeout(const Duration(seconds: 3)),
         );
       } on Object {
+        // Also the 3 s timeout: no analysis is not an error. The picture is
+        // simply adjusted by hand, and no error text is set.
         analysis = null;
       }
       if (!mounted) return;
@@ -188,6 +215,7 @@ class _ImageFieldState extends ConsumerState<ImageField> {
         );
       }
     }
+    if (!mounted) return;
     if (fresh) widget.onChanged(start.toJson());
     final result = await showImageAdjust(
       context,
@@ -201,7 +229,7 @@ class _ImageFieldState extends ConsumerState<ImageField> {
       widget.onChanged(result.toJson());
       if (!fresh) toast(context, s.imageAdjusted);
     }
-    if (fresh) toast(context, s.imageUploaded);
+    if (fresh) toast(context, s.imageSaved);
   }
 
   @override
@@ -212,6 +240,8 @@ class _ImageFieldState extends ConsumerState<ImageField> {
     final has = ImageRef.parse(value) != null;
     final busy = _stage != _Stage.idle;
     final error = _error ?? widget.error;
+    final asset = ImageRef.parse(value)?.asset;
+    final lost = asset != null && ref.watch(assetLostProvider(asset));
     final logo = widget.slot == ImageSlot.logo;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,7 +318,7 @@ class _ImageFieldState extends ConsumerState<ImageField> {
                           key: const ValueKey('image-pick'),
                           onPressed: _pick,
                           icon: const Icon(Icons.photo_library_outlined),
-                          label: Text(has ? s.imageChange : s.imagePick),
+                          label: Text(lost ? s.imageChooseAgain : has ? s.imageChange : s.imagePick),
                         ),
                         if (has)
                           OutlinedButton.icon(
@@ -748,6 +778,20 @@ class _BackgroundTile extends ConsumerWidget {
                       ),
                     ),
                   ),
+                ),
+              if (ref.watch(assetLostProvider(id)))
+                PositionedDirectional(
+                  key: ValueKey('background-lost-$id'),
+                  start: 8,
+                  bottom: 8,
+                  child: const QueuedChip(lost: true),
+                )
+              else if (ref.watch(assetQueuedProvider(id)))
+                PositionedDirectional(
+                  key: ValueKey('background-queued-$id'),
+                  start: 8,
+                  bottom: 8,
+                  child: const QueuedChip(),
                 ),
             ],
           ),

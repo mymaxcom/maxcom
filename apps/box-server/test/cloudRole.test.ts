@@ -312,11 +312,32 @@ describe('enrolment payload and enrolment on the cloud', () => {
     expect(await begin()).not.toHaveProperty('cloud');
   });
 
-  it('works on the cloud role: an admin session gets a single-use code the cloud honours', async () => {
+  it('the cloud refuses a device code for a surau person (409 box_only): it would never reach the box', async () => {
     const c = cloud();
     const admin = await loginAs(c.app, 'admin');
-    const ajk = await loginAs(c.app, 'ajk');
+    const ops = await loginAs(c.app, 'superadmin');
     const fresh = createUser(c.app.surau.db, { name: 'Ahli baharu', roles: ['ajk'] }, 'test');
+    for (const who of [admin, ops]) {
+      const res = await c.app.inject({ method: 'POST', url: '/api/enrol/begin', headers: who.headers, payload: { userId: fresh.id, deviceName: 'Telefon rumah' } });
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toContain('box_only');
+    }
+    // an ops/support person (superadmin) may still be enrolled on the cloud
+    const own = await c.app.inject({ method: 'POST', url: '/api/enrol/begin', headers: ops.headers, payload: { userId: ops.userId, deviceName: 'Telefon ops' } });
+    expect(own.statusCode).toBe(200);
+    // the box itself still makes codes for the same admin role
+    const box = plainBox();
+    const boxAdmin = await loginAs(box, 'admin');
+    const boxUser = createUser(box.surau.db, { name: 'Ahli kotak', roles: ['ajk'] }, 'test');
+    expect((await box.inject({ method: 'POST', url: '/api/enrol/begin', headers: boxAdmin.headers, payload: { userId: boxUser.id, deviceName: 'Telefon' } })).statusCode).toBe(200);
+  });
+
+  it('works on the cloud role: a Pentadbir MAXCOM person gets a single-use code the cloud honours', async () => {
+    const c = cloud();
+    const admin = await loginAs(c.app, 'superadmin');
+    const ajk = await loginAs(c.app, 'ajk');
+    const fresh = createUser(c.app.surau.db, { name: 'Ops baharu', roles: ['ajk'] }, 'test');
+    c.app.surau.db.prepare('UPDATE users SET roles_json = ? WHERE id = ?').run(JSON.stringify(['superadmin']), fresh.id);
     const res = await c.app.inject({ method: 'POST', url: '/api/enrol/begin', headers: admin.headers, payload: { userId: fresh.id, deviceName: 'Telefon rumah' } });
     expect(res.statusCode).toBe(200);
     const { code, payload } = res.json();

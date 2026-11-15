@@ -24,8 +24,6 @@ class RootKeyUnavailable(message: String) : Exception(message)
  */
 object RootSignerChooser {
     const val TRIES = 3
-    private const val PKCS8 = "root-key.pk8"
-    private const val SPKI = "root-key.pub"
 
     fun open(
         caDir: File,
@@ -34,9 +32,10 @@ object RootSignerChooser {
         sleep: (Long) -> Unit = { Thread.sleep(it) },
         generateFileKey: () -> SoftwareCaSigner = { SoftwareCaSigner.generate() },
         tries: Int = TRIES,
+        fileBase: String = RootKeys.DEFAULT_FILE_BASE,
     ): RootSigner {
-        val pk8 = File(caDir, PKCS8)
-        val pub = File(caDir, SPKI)
+        val pk8 = File(caDir, "$fileBase.pk8")
+        val pub = File(caDir, "$fileBase.pub")
         if (pk8.isFile && pub.isFile) {
             return RootSigner(SoftwareCaSigner.fromEncoded(pk8.readBytes(), pub.readBytes()), "File")
         }
@@ -56,10 +55,14 @@ object RootSignerChooser {
             throw RootKeyUnavailable("root certificate exists but the Keystore cannot open its key")
         }
         val sw = generateFileKey()
+        return writeFileKey(caDir, fileBase, sw)
+    }
+
+    /** Stores [sw] as `<fileBase>.pub` then `<fileBase>.pk8` (mode 0600; the private file is the marker). */
+    fun writeFileKey(caDir: File, fileBase: String, sw: SoftwareCaSigner): RootSigner {
         caDir.mkdirs()
-        // Public half first: the private file is the marker that selects the file signer.
-        write(pub, sw.publicKey.encoded)
-        write(pk8, sw.privateKeyPkcs8())
+        write(File(caDir, "$fileBase.pub"), sw.publicKey.encoded)
+        write(File(caDir, "$fileBase.pk8"), sw.privateKeyPkcs8())
         return RootSigner(sw, "File")
     }
 

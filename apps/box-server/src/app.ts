@@ -22,6 +22,7 @@ import { boxId as boxIdOf, loadBoxKey } from './auth/secrets.ts';
 import { appLockEnabled } from './auth/appLock.ts';
 import { AuthError, MSG, setUsersRole } from './auth/users.ts';
 import { certInfo } from './tls.ts';
+import { boxNameOf } from './boxName.ts';
 import type { TlsMaterial } from './tls.ts';
 import { hkdfSync, randomBytes } from 'node:crypto';
 import type { FirewallState } from './live/firewall.ts';
@@ -58,6 +59,7 @@ import { prayerStatus } from './prayer/routes.ts';
 import { getSettings, getVersion, putFeature, SettingsError, surauPublicInfo } from './settingsStore.ts';
 import { applySurauIni } from './surauIni.ts';
 import { registerSettingsTest } from './settingsTest.ts';
+import { registerIosProfileRoutes, DEFAULT_CLOUD_ORIGIN } from './iosProfile.ts';
 import { registerSurauLogoRoutes, kioskLogoAssetId, surauLogoUrl } from './surauLogo.ts';
 import { deriveImage, ImageAdjustError } from './imageAdjust.ts';
 import { AssetError, getAssetPath } from './assets/store.ts';
@@ -118,6 +120,8 @@ export interface AppOptions {
   workerOutbox?: { auto?: boolean; pollMs?: number };
   /** TLS material, for the health report and the enrolment payload. */
   tls?: TlsMaterial | null;
+  /** The live TLS material (follows a certificate reload); defaults to `tls`. */
+  tlsNow?: () => TlsMaterial | null;
   /** HTTPS port advertised in enrolment payloads. */
   httpsPort?: number;
   /** Task 6 hook: resolves the kiosk pairing cookie to a kiosk identity. */
@@ -675,19 +679,23 @@ data: ${JSON.stringify(live)}
     return logo === null ? info : { ...info, logo };
   });
 
+  const tlsNow = (): TlsMaterial | null => (opts.tlsNow !== undefined ? opts.tlsNow() : (opts.tls ?? null));
   app.get('/api/health', async (request) => {
     // Anonymous callers (and the kiosk) learn only that the box is up.
     // A linked box also names its cloud origin (`cloud`, the same one the enrolment payload carries), so the app can
     // reach the cloud when the box is away; absent when not linked, and never on the cloud itself.
     const cloudOrigin = role === 'box' ? enrolCloudOrigin(db) : undefined;
     const withCloud = <T extends object>(o: T): T & { cloud?: string } => (cloudOrigin === undefined ? o : { ...o, cloud: cloudOrigin });
-    if (!identityCan(request.auth, 'health:read')) return withCloud({ ok: true, version: getVersion(db) });
+    // the numbered local name (public: it is a certificate DNS name), null on a legacy root; not on the cloud
+    const localName = role === 'box' ? boxNameOf(tlsNow()) : null;
+    if (!identityCan(request.auth, 'health:read')) return withCloud({ ok: true, version: getVersion(db), name: localName });
     const count = (sql: string): number => Number(db.prepare(sql).get()?.n ?? 0);
     const prayer = prayerStatus({ db, now, autoFetch });
     return withCloud({
       ok: true,
       version: getVersion(db),
-      tls: opts.tls ? certInfo(opts.tls, now()) : null,
+      name: localName,
+      tls: tlsNow() ? certInfo(tlsNow()!, now()) : null,
       users: count('SELECT COUNT(*) AS n FROM users WHERE active = 1'),
       devices: count('SELECT COUNT(*) AS n FROM devices WHERE revoked_at IS NULL'),
       lockedUsers: Number(
@@ -730,7 +738,9 @@ data: ${JSON.stringify(live)}
     now,
     limiters,
     tls: opts.tls ?? null,
+    tlsNow,
     httpsPort: opts.httpsPort ?? 8443,
+    role,
   });
   if (role === 'box') {
     // the box's identity key signs the setup and recovery QR; a box with no data folder (in-memory tests) gets a throwaway one
@@ -742,6 +752,7 @@ data: ${JSON.stringify(live)}
       identity,
       now,
       tls: opts.tls ?? null,
+      tlsNow,
       httpsPort: opts.httpsPort ?? 8443,
       realDataDir,
     });
@@ -880,6 +891,21 @@ data: ${JSON.stringify(live)}
   const appDir = typeof opts.appDir === 'string' ? opts.appDir : null;
   const hasApp = appDir !== null && existsSync(appDir);
   registerSurauLogoRoutes(app, { db, dataDir, appDir: hasApp ? appDir : null });
+  registerIosProfileRoutes(app, {
+    db,
+    boxId,
+    httpsPort: opts.httpsPort ?? 8443,
+    lanIps,
+    boxName: () => boxNameOf(tlsNow()),
+    allowedHosts: () => allowedHosts,
+    cloudOrigin: () => {
+      const fromLink = (db.prepare("SELECT value FROM sync_state WHERE key = 'cloud_url'").get()?.value as string | undefined) ?? '';
+      for (const u of [fromLink, opts.cloud?.url ?? '']) {
+        try { if (u !== '') return new URL(u).origin; } catch { /* next */ }
+      }
+      return DEFAULT_CLOUD_ORIGIN;
+    },
+  });
   if (hasApp) {
     registerAppStatic(app, appDir, () => {
       // the web shell may call the cloud the box is linked to (or the operator's env address); the synced

@@ -21,7 +21,12 @@ import android.widget.ScrollView
 import android.widget.TextView
 import java.io.File
 import java.util.concurrent.Executors
+import my.maxcom.box.core.BoxCa
 import my.maxcom.box.core.BoxPaths
+import my.maxcom.box.core.CertLock
+import my.maxcom.box.core.RootGeneration
+import my.maxcom.box.core.RootKeys
+import my.maxcom.box.core.RootRekey
 import my.maxcom.box.core.DoctorLine
 import my.maxcom.box.core.LockState
 import my.maxcom.box.core.Lockout
@@ -139,6 +144,7 @@ class MaintenanceActivity : Activity() {
         text(statusText())
         val first = button(getString(R.string.maint_check)) { runCheck() }
         button(getString(R.string.maint_restart)) { confirmRestart() }
+        if (hasLegacyRoot()) button("Tukar ke nama boxN-surau.local (sijil akar baharu)") { confirmRekey() }
         button(getString(R.string.maint_exit_android)) { exitToAndroid() }
         button(getString(R.string.maint_android_settings)) { open(Intent(Settings.ACTION_SETTINGS)) }
         button("Tetapan Wi-Fi") { open(Intent(Settings.ACTION_WIFI_SETTINGS)) }
@@ -155,6 +161,7 @@ class MaintenanceActivity : Activity() {
         val snap = BoxState.get()
         sb.append("Keadaan: ").append(describe(snap.status)).append('\n')
         val ips = try { NetworkWatch(this) { }.current() } catch (_: Exception) { emptyList() }
+        LocalName.host?.let { sb.append("Nama: https://").append(it).append(":8443/\n") }
         if (ips.isEmpty()) sb.append("Alamat: tiada rangkaian\n")
         else for (ip in ips) sb.append("Alamat: https://").append(ip).append(":8443/\n")
         val release = try { ReleaseStore(paths.boxRoot, NioLinks()).installed() } catch (_: Exception) { null }
@@ -241,18 +248,88 @@ class MaintenanceActivity : Activity() {
         d.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus()
     }
 
+    /** One line in the box log (the one this screen shows), so a restart that did nothing can be told from one never asked for. */
+    private fun mlog(text: String) {
+        try {
+            my.maxcom.box.core.BoxLogs.forFile(paths.boxLog).appendLine("MAXCOM: $text")
+        } catch (_: Exception) {
+        }
+    }
+
     private fun restartBox() {
         output?.text = "Memulakan semula MAXCOM..."
         val app = applicationContext
         worker.execute {
             try {
-                app.stopService(Intent(app, BoxService::class.java))
+                mlog("Mula semula diminta dari Penyelenggaraan")
+                val stopped = app.stopService(Intent(app, BoxService::class.java))
+                mlog("Mula semula: stopService=$stopped")
                 Thread.sleep(RESTART_GAP_MS)
                 app.startForegroundService(Intent(app, BoxService::class.java))
+                mlog("Mula semula: startForegroundService dihantar")
                 ui.post { output?.text = "OK: MAXCOM dimulakan semula. Tunggu sebentar." }
             } catch (e: Exception) {
+                mlog("Mula semula GAGAL: " + e.javaClass.simpleName)
                 ui.post { output?.text = "GAGAL: tidak dapat memulakan semula (" + e.javaClass.simpleName + ")." }
             }
+        }
+    }
+
+    /** True when the stored root is the legacy one (the name `boxN-surau.local` needs a new root). */
+    private fun hasLegacyRoot(): Boolean = try {
+        RootKeys.storedRoot(paths.caDir, paths.pki)?.let { BoxCa.rootGeneration(it) == RootGeneration.LEGACY } == true
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun confirmRekey() {
+        val d = AlertDialog.Builder(this)
+            .setMessage(
+                "Sijil akar baharu akan dibuat supaya kotak boleh dicapai dengan nama boxN-surau.local. " +
+                    "SEMUA telefon, iPad dan komputer yang sudah disambungkan ke kotak ini mesti disediakan semula " +
+                    "(imbas kod QR dan pasang sijil baharu). Sijil lama disimpan sebagai arkib. Teruskan?",
+            )
+            .setPositiveButton("Ya, tukar") { _, _ -> rekeyRoot() }
+            .setNegativeButton("Tidak", null)
+            .create()
+        d.show()
+        d.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus()
+    }
+
+    /** Stops the service, makes the new root under the certificate lock, starts the service (it issues the new leaf). */
+    private fun rekeyRoot() {
+        output?.text = "Membuat sijil akar baharu..."
+        val app = applicationContext
+        worker.execute {
+            var message: String
+            try {
+                val built = packageManager.getPackageInfo(packageName, 0).lastUpdateTime
+                if (System.currentTimeMillis() < built) {
+                    ui.post { output?.text = "GAGAL: jam peranti belum betul. Tunggu masa Internet, kemudian cuba lagi." }
+                    return@execute
+                }
+                app.stopService(Intent(app, BoxService::class.java))
+                Thread.sleep(RESTART_GAP_MS * 2)
+                message = try {
+                    val r = CertLock.held {
+                        RootRekey.run(
+                            paths.caDir, paths.pki, java.time.Instant.now(),
+                            newSigner = { label -> RootSignerProvider.createForRekey(paths.caDir, label) },
+                        )
+                    }
+                    "OK: sijil akar baharu dibuat (${r.label}); yang lama diarkibkan di ${r.archivedAs}. Sediakan semula semua peranti."
+                } catch (e: Exception) {
+                    "GAGAL: sijil akar tidak ditukar (" + e.javaClass.simpleName + "). Sijil lama kekal."
+                }
+            } catch (e: Exception) {
+                message = "GAGAL: tidak dapat menukar sijil akar (" + e.javaClass.simpleName + ")."
+            }
+            try {
+                app.startForegroundService(Intent(app, BoxService::class.java))
+            } catch (e: Exception) {
+                message += " Mulakan semula MAXCOM secara manual."
+            }
+            ui.post { output?.text = message }
         }
     }
 

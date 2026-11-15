@@ -18,6 +18,10 @@ export interface EnrolPayload {
   v: 1;
   mode: 'ip' | 'domain';
   box: string;
+  /** The box's numbered local name (`box1-surau.local`), when its certificate has one. A hint: the pinned CA and `boxId` decide. */
+  name?: string;
+  /** The box's LAN IPv4 addresses, when it listed them. A hint only. */
+  ips?: string[];
   boxId: string;
   caSha256: string | null;
   code: string;
@@ -171,10 +175,16 @@ export function parseEnrolPayload(s: string): EnrolPayload {
   const okScheme = url.protocol === 'https:' || (url.protocol === 'http:' && isLoopback(url.hostname));
   if (!okScheme || url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') throw bad();
   if (url.pathname !== '/') throw bad();
+  const name = typeof p.name === 'string' && /^box([1-9][0-9]?)-surau\.local$/.test(p.name) ? p.name : undefined;
+  const ips = Array.isArray(p.ips)
+    ? p.ips.filter((x): x is string => typeof x === 'string' && /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.test(x)).slice(0, 8)
+    : [];
   return {
     v: 1,
     mode: p.mode,
     box: url.origin,
+    ...(name !== undefined ? { name } : {}),
+    ...(ips.length > 0 ? { ips } : {}),
     boxId: p.boxId,
     caSha256: p.caSha256 === null ? null : p.caSha256.toLowerCase(),
     code: p.code,

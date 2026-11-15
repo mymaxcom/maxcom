@@ -216,6 +216,27 @@ void main() {
     },
   );
 
+  test('a stalled body counts against the same budget as the send', () async {
+    // Headers after 300 ms, then the body never ends; budget 0 + 400 ms.
+    // One deadline fails at ~400 ms; a second full budget for the body
+    // would take ~700 ms.
+    final stalling = _StallingBodyClient(const Duration(milliseconds: 300));
+    final c = BoxClient(
+      box,
+      stalling,
+      connect: Duration.zero,
+      read: const Duration(milliseconds: 400),
+    );
+    final clock = Stopwatch()..start();
+    await expectLater(
+      c.postJson('/api/x', {'a': 1}, token: 't'),
+      throwsA(isA<BoxUnreachable>()),
+    );
+    expect(clock.elapsedMilliseconds, lessThan(600));
+    expect(stalling.sends, 1);
+    await stalling.finish();
+  });
+
   test('uploadAsset sends the raw bytes with the given Content-Type', () async {
     late http.Request seen;
     final c = clientFor((r) async {
@@ -383,5 +404,59 @@ void main() {
         const Duration(seconds: 8),
       );
     });
+
+    test('a per-request read budget replaces the client read budget', () async {
+      Future<http.Response> slow(http.Request r) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return json(200, {'ok': true});
+      }
+
+      final c = clientFor(
+        slow,
+        connect: const Duration(milliseconds: 10),
+        read: const Duration(milliseconds: 60),
+      );
+      // The default read budget is too short for this answer ...
+      await expectLater(
+        c.postJson('/api/sync/ops', {'ops': <Object>[]}, token: 't'),
+        throwsA(isA<BoxUnreachable>()),
+      );
+      // ... a longer one for the same request succeeds.
+      final out = await c.postJson(
+        '/api/sync/ops',
+        {'ops': <Object>[]},
+        token: 't',
+        read: const Duration(seconds: 2),
+      );
+      expect(out['ok'], isTrue);
+    });
   });
+}
+
+/// Answers its headers after [headerDelay], then a body that never ends.
+class _StallingBodyClient extends http.BaseClient {
+  _StallingBodyClient(this.headerDelay);
+
+  final Duration headerDelay;
+  final List<StreamController<List<int>>> _bodies = [];
+  int sends = 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    sends++;
+    await Future<void>.delayed(headerDelay);
+    final body = StreamController<List<int>>();
+    _bodies.add(body);
+    return http.StreamedResponse(
+      body.stream,
+      200,
+      headers: {'content-type': 'application/json'},
+    );
+  }
+
+  Future<void> finish() async {
+    for (final b in _bodies) {
+      await b.close();
+    }
+  }
 }

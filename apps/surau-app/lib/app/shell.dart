@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../box/box_address.dart';
 import '../features/shell/superadmin_badge.dart';
 import '../features/common/help_card.dart';
 import '../features/common/roles.dart';
@@ -731,7 +732,7 @@ Future<void> showHelpSheet(BuildContext context) {
               if (box != null) ...[
                 const SizedBox(height: 12),
                 TechnicalDetails(
-                  boxAddress: box.box.toString(),
+                  boxAddress: boxAddressText(box.box, name: box.name),
                   fingerprint: box.caFingerprint,
                 ),
               ],

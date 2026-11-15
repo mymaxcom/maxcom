@@ -35,6 +35,7 @@ apps/box-server/test/fixtures/test-box*-key.pem
 apps/box-server/test/fixtures/test-box*-leaf.cer
 apps/surau-app/test/fixtures/tls/
 apps/surau-app/test/fixtures/tls-nc/
+apps/surau-app/test/fixtures/tls-nc-v2/
 apps/surau-app/test/fixtures/android-box-pki/box-key.pem
 *.pfx
 *.p12

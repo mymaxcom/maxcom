@@ -87,6 +87,7 @@ function ruleFor(name: string): Rule | undefined {
     case 'ds.name': return { t: 'text', min: 1, max: 60, re: /^[^<>\x00-\x1f\x7f]+$/, what: 'plain text' };
     case 'ds.url': return { t: 'sourceUrl' };
     case 'name': return { t: 'text', min: 1, max: 80 };
+    case 'shortName': return { t: 'text', min: 0, max: 12, re: /^[^\x00-\x1f\x7f<>&"]+$/, what: 'plain text without HTML characters' };
     case 'kind': return { t: 'enum', vals: ['surau', 'masjid'] };
     case 'shortAddress': return { t: 'text', min: 0, max: 120 };
     case 'helpName': return { t: 'text', min: 0, max: 60 };

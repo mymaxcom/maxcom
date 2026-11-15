@@ -16,6 +16,7 @@ import '../app/providers.dart';
 import '../app/theme.dart';
 import '../box/box_client.dart' show BoxError, SessionExpired;
 import '../l10n/generated/s.dart';
+import '../sync/sync_providers.dart' show lostAssetIdsProvider, queuedAssetIdsProvider;
 import 'image_bg.dart';
 import 'image_ref.dart';
 
@@ -164,6 +165,57 @@ class AdjustedPicture extends ConsumerWidget {
   static double _cardAspect(double a) => a >= 1 ? (a + 0.2) / 1.2 : (1 + 0.2) / (1 / a + 0.2);
 }
 
+/// Whether the picture [id] is still queued on this device (not yet sent
+/// to the box). False while unknown, so nothing flickers on first paint.
+final assetQueuedProvider = Provider.family<bool, String>(
+  (ref, id) => ref.watch(queuedAssetIdsProvider.select((a) => a.value?.contains(id) ?? false)),
+);
+
+/// Whether the picture [id] lost its bytes before it was sent.
+final assetLostProvider = Provider.family<bool, String>(
+  (ref, id) => ref.watch(lostAssetIdsProvider.select((a) => a.value?.contains(id) ?? false)),
+);
+
+/// The "Memuat naik…" chip on a queued picture's corner: a small cloud-up
+/// icon and the word; [compact] (small thumbnails) keeps the icon only.
+class QueuedChip extends StatelessWidget {
+  const QueuedChip({super.key, this.compact = false, this.lost = false});
+
+  final bool compact;
+
+  /// `Gagal dimuat naik` (the bytes are gone) instead of `Memuat naik…`.
+  final bool lost;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = lost ? S.of(context).imageLost : S.of(context).imageQueued;
+    return Semantics(
+      label: label,
+      excludeSemantics: true,
+      child: DecoratedBox(
+        key: const ValueKey('queued-chip'),
+        decoration: BoxDecoration(color: lost ? const Color(0xE6A32626) : const Color(0xCC1B1B1B), borderRadius: BorderRadius.circular(999)),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 7, vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(lost ? Icons.error_outline_rounded : Icons.cloud_upload_outlined, size: compact ? 12 : 14, color: Colors.white),
+              if (!compact) ...[
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: const TextStyle(color: Colors.white, fontSize: 11, height: 1.1, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// An image field's value (plain id or adjusted object) as a thumbnail in
 /// [slot]'s shape, fetched through the pinned client; a calm placeholder
 /// while it loads or when it cannot be fetched.
@@ -189,6 +241,35 @@ class AssetPicture extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef wref) {
+    final id = ImageRef.parse(value)?.asset;
+    final picture = _picture(context, wref);
+    final lost = id != null && wref.watch(assetLostProvider(id));
+    final queued = id != null && !lost && wref.watch(assetQueuedProvider(id));
+    if (lost) {
+      return Stack(
+        key: const ValueKey('picture-lost'),
+        children: [
+          picture,
+          PositionedDirectional(start: 4, bottom: 4, child: QueuedChip(compact: size < 72, lost: true)),
+        ],
+      );
+    }
+    if (!queued) return picture;
+    // Still waiting in the outbox: a small chip in the corner, no spinner.
+    return Stack(
+      key: const ValueKey('picture-queued'),
+      children: [
+        picture,
+        PositionedDirectional(
+          start: 4,
+          bottom: 4,
+          child: QueuedChip(compact: size < 72),
+        ),
+      ],
+    );
+  }
+
+  Widget _picture(BuildContext context, WidgetRef wref) {
     final ref = ImageRef.parse(value);
     final fetched = ref == null ? null : wref.watch(assetBytesProvider(ref.asset));
     final bytes = fetched?.value;

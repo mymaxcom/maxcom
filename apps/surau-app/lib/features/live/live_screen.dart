@@ -1199,121 +1199,125 @@ class LiveSummarySheet extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        child: Column(
-          key: const ValueKey('live-summary'),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: SurauColors.tealSoft,
-                    shape: BoxShape.circle,
+        child: SingleChildScrollView(
+          child: Column(
+            key: const ValueKey('live-summary'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const BoxDecoration(
+                      color: SurauColors.tealSoft,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      color: SurauColors.teal,
+                      size: 28,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    color: SurauColors.teal,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(s.liveEnded, style: text.headlineSmall),
-                      if (kuliah != null)
-                        Text(
-                          [
-                            kuliah!.label,
-                            kuliah!.penceramah,
-                          ].whereType<String>().join(', '),
-                          style: text.bodyMedium!.copyWith(
-                            color: SurauColors.muted,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(s.liveEnded, style: text.headlineSmall),
+                        if (kuliah != null)
+                          Text(
+                            [
+                              kuliah!.label,
+                              kuliah!.penceramah,
+                            ].whereType<String>().join(', '),
+                            style: text.bodyMedium!.copyWith(
+                              color: SurauColors.muted,
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              formatDuration(durationSec),
-              style: text.displayMedium!.copyWith(color: SurauColors.glass),
-            ),
-            Text(s.liveDuration, style: text.bodySmall),
-            if (short) ...[
-              const SizedBox(height: 16),
-              LiveNotice(
-                icon: Icons.smart_display_rounded,
-                title: s.liveYoutubeShort(
-                  (yt / 60).round(),
-                  (durationSec / 60).round(),
-                ),
-              ),
-            ],
-            const SizedBox(height: 20),
-            if (recorded && web)
-              FilledButton.icon(
-                onPressed: onSave,
-                icon: const Icon(Icons.download_rounded),
-                label: Text(s.liveSaveRecording),
-              )
-            else if (recorded)
-              Row(
-                children: [
-                  const Icon(Icons.folder_rounded, color: SurauColors.teal),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(s.liveRecordingSaved, style: text.bodyLarge),
-                  ),
-                ],
-              ),
-            if (cleanupKeepDays != null && recorded && !short) ...[
-              const SizedBox(height: 12),
-              Row(
-                key: const ValueKey('live-cleanup-note'),
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.auto_delete_rounded,
-                    size: 20,
-                    color: SurauColors.teal,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      cleanupKeepDays == 0
-                          ? s.liveCleanupNow
-                          : s.liveCleanupAfterDays(cleanupKeepDays!),
-                      style: text.bodyMedium!.copyWith(color: SurauColors.muted),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ],
-            if (catchUp != null) ...[
-              const SizedBox(height: 12),
-              _CatchUpButton(onCatchUp: catchUp, explain: !short),
-            ],
-            if (watchUrl != null) ...[
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () => onWatch(watchUrl!),
-                icon: const Icon(Icons.open_in_new_rounded),
-                label: Text(s.liveWatch),
+              const SizedBox(height: 20),
+              Text(
+                formatDuration(durationSec),
+                style: text.displayMedium!.copyWith(color: SurauColors.glass),
+              ),
+              Text(s.liveDuration, style: text.bodySmall),
+              if (short) ...[
+                const SizedBox(height: 16),
+                LiveNotice(
+                  icon: Icons.smart_display_rounded,
+                  title: s.liveYoutubeShort(
+                    (yt / 60).round(),
+                    (durationSec / 60).round(),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              if (recorded && web)
+                FilledButton.icon(
+                  onPressed: onSave,
+                  icon: const Icon(Icons.download_rounded),
+                  label: Text(s.liveSaveRecording),
+                )
+              else if (recorded)
+                Row(
+                  children: [
+                    const Icon(Icons.folder_rounded, color: SurauColors.teal),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(s.liveRecordingSaved, style: text.bodyLarge),
+                    ),
+                  ],
+                ),
+              if (cleanupKeepDays != null && recorded && !short) ...[
+                const SizedBox(height: 12),
+                Row(
+                  key: const ValueKey('live-cleanup-note'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.auto_delete_rounded,
+                      size: 20,
+                      color: SurauColors.teal,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        cleanupKeepDays == 0
+                            ? s.liveCleanupNow
+                            : s.liveCleanupAfterDays(cleanupKeepDays!),
+                        style: text.bodyMedium!.copyWith(
+                          color: SurauColors.muted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (catchUp != null) ...[
+                const SizedBox(height: 12),
+                _CatchUpButton(onCatchUp: catchUp, explain: !short),
+              ],
+              if (watchUrl != null) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => onWatch(watchUrl!),
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: Text(s.liveWatch),
+                ),
+              ],
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(s.actionClose),
               ),
             ],
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(s.actionClose),
-            ),
-          ],
+          ),
         ),
       ),
     );

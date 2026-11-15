@@ -12,6 +12,9 @@ import { boxId } from '../auth/secrets.ts';
 import { openDb } from '../db.ts';
 import { setupFromCli } from '../setup/complete.ts';
 import { enrolCloudOrigin } from '../sync/sites.ts';
+import { loadTls } from '../tls.ts';
+import type { TlsMaterial } from '../tls.ts';
+import { boxNameOf, lanIpv4Of } from '../boxName.ts';
 
 const USAGE =
   'Guna: node apps/box-server/src/cli/bootstrap.ts --db <laluan surau.db> --name "Nama Pentadbir" [--box https://<ip>:8443] [--data <folder data>] [--surau-name "Nama Surau"] [--box-name "MAXCOM Dewan Utama"] [--force-new-code]' + String.fromCharCode(10) +
@@ -61,6 +64,14 @@ export function issueEnrolmentLines(db: DatabaseSync, user: User, box: string, d
     { id: user.id, name: user.name, roles: user.roles, active: user.active, enrolCodeIssued: true },
   );
   const ca = rootCaSha256(dataDir);
+  let tls: TlsMaterial | null = null;
+  try {
+    tls = loadTls(dataDir);
+  } catch {
+    // no usable certificate: the payload simply carries no name
+  }
+  const localName = boxNameOf(tls);
+  const lanIps = lanIpv4Of(tls);
   const info = surauPublicInfo(db);
   const cloudOrigin = enrolCloudOrigin(db);
   const payload =
@@ -70,6 +81,8 @@ export function issueEnrolmentLines(db: DatabaseSync, user: User, box: string, d
         v: 1,
         mode: 'ip',
         box,
+        ...(localName !== null ? { name: localName } : {}),
+        ...(lanIps.length > 0 ? { ips: lanIps } : {}),
         boxId: boxId(dataDir),
         ...(cloudOrigin !== undefined ? { cloud: cloudOrigin } : {}),
         caSha256: ca,

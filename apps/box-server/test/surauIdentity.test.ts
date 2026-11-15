@@ -13,6 +13,7 @@ import { openDb } from '../src/db.ts';
 import { runMigrations } from '../src/migrations/index.ts';
 import { applySurauIni, parseSurauIni, SURAU_INI_ACTOR } from '../src/surauIni.ts';
 import { getSettings, putFeature } from '../src/settingsStore.ts';
+import { withHomeScreenName } from '../src/surauLogo.ts';
 import { loginAsAdmin } from './authHelpers.ts';
 
 const req = createRequire(import.meta.url);
@@ -357,5 +358,63 @@ describe('GET /surau-logo and the app icons', () => {
     const back = await app.inject({ method: 'GET', url: '/app/icons/Icon-192.png' });
     expect(Buffer.compare(back.rawPayload, png(192, 192, [1, 2, 3, 255]))).toBe(0);
     expect((await app.inject({ method: 'GET', url: '/surau-logo' })).statusCode).toBe(404);
+  });
+
+  it('short name: manifest short_name, index.html title rewrite with ETag, validation, PUT without it keeps it', async () => {
+    const d = tmp();
+    const appDir = appDirWithBundled(d);
+    writeFileSync(join(appDir, 'index.html'), '<!doctype html><html><head><meta name="apple-mobile-web-app-title" content="Surau"><title>Surau</title></head><body></body></html>');
+    const app = buildApp(join(d, 's.db'), { dataDir: d, appDir });
+    apps.push(app);
+    const admin = await loginAsAdmin(app);
+    const put = (payload: object) => app.inject({ method: 'PUT', url: '/api/settings/surauInfo', headers: admin.headers, payload });
+    const manifest = async () => (await app.inject({ method: 'GET', url: '/app/manifest.json' })).json();
+
+    // empty: the automatic rule
+    await put({ name: 'Surau D\'Waqaf' });
+    expect((await manifest()).short_name).toBe('Surau');
+    const html0 = await app.inject({ method: 'GET', url: '/app/' });
+    expect(html0.body).toContain('content="Surau"');
+    expect(html0.body).toContain('<title>Surau</title>');
+    const etag0 = String(html0.headers.etag);
+
+    // set
+    expect((await put({ shortName: 'SDM' })).statusCode).toBe(200);
+    expect((await manifest()).short_name).toBe('SDM');
+    expect((await manifest()).name).toBe('Surau D\'Waqaf');
+    for (const url of ['/app/', '/app/index.html']) {
+      const r = await app.inject({ method: 'GET', url });
+      expect(r.statusCode, url).toBe(200);
+      expect(r.body, url).toContain('<meta name="apple-mobile-web-app-title" content="SDM">');
+      expect(r.body, url).toContain('<title>SDM</title>');
+      expect(r.headers['cache-control']).toBe('no-cache');
+      expect(String(r.headers.etag)).not.toBe(etag0);
+    }
+    const etag1 = String((await app.inject({ method: 'GET', url: '/app/' })).headers.etag);
+    const again = await app.inject({ method: 'GET', url: '/app/', headers: { 'if-none-match': etag1 } });
+    expect(again.statusCode).toBe(304);
+
+    // a PUT that omits shortName keeps it
+    expect((await put({ kind: 'masjid' })).statusCode).toBe(200);
+    const reread = openDb(join(d, 's.db'));
+    try { expect(getSettings(reread).surauInfo.shortName).toBe('SDM'); } finally { reread.close(); }
+    expect((await manifest()).short_name).toBe('SDM');
+
+    // refused
+    expect((await put({ shortName: 'x'.repeat(13) })).statusCode).toBe(400);
+    expect((await put({ shortName: '<b>' })).statusCode).toBe(400);
+    expect((await put({ shortName: 'A&B' })).statusCode).toBe(400);
+    expect((await manifest()).short_name).toBe('SDM');
+
+    // cleared: back to the automatic rule
+    await put({ shortName: '' });
+    expect((await manifest()).short_name).toBe('Surau');
+  });
+
+  it('withHomeScreenName escapes and leaves the html alone without a short name', () => {
+    const html = '<meta name="apple-mobile-web-app-title" content="Surau"><title>Surau</title>';
+    expect(withHomeScreenName(html, '')).toBe(html);
+    const out = withHomeScreenName(html, "A'B $& x");
+    expect(out).toBe('<meta name="apple-mobile-web-app-title" content="A&#39;B $&amp; x"><title>A&#39;B $&amp; x</title>');
   });
 });

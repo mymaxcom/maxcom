@@ -208,6 +208,25 @@ class _EnrolQrBodyState extends ConsumerState<_EnrolQrBody> {
     final inv = _invitation;
     final firstName = u.name.trim().split(RegExp(r'\s+')).first;
 
+    // A code made on the cloud never reaches the surau box: a surau person's
+    // device is enrolled by the box, from the Surau Admin's phone on the
+    // surau Wi-Fi. Only a Pentadbir MAXCOM person is enrolled on the cloud.
+    if (ref.watch(isCloudGatewayProvider) &&
+        !u.roles.contains('superadmin')) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(s.enrolQrFor(u.name), style: text.headlineSmall),
+          const SizedBox(height: 20),
+          Text(
+            s.enrolBoxOnly,
+            key: const ValueKey('enrol-box-only'),
+            style: text.bodyLarge,
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

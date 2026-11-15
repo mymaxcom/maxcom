@@ -30,6 +30,20 @@ export function originOf(payload: string | undefined): string | null {
   }
 }
 
+/**
+ * The numbered local name as an https address beside the IP origin's port (`https://box1-surau.local:8443`), or null when
+ * the box has no name (a legacy root) or no readable origin.
+ */
+export function nameOriginOf(localName: string | null | undefined, origin: string | null): string | null {
+  if (typeof localName !== 'string' || localName === '' || origin === null || origin === '') return null;
+  try {
+    const port = new URL(origin).port;
+    return `https://${localName}${port === '' ? '' : `:${port}`}`;
+  } catch {
+    return null;
+  }
+}
+
 /** One label and value with a status dot. */
 export function StatusItem({ state, label, value }: { state: 'ok' | 'bad' | 'off'; label: string; value: string }) {
   return (
@@ -72,6 +86,7 @@ export function Setup({ box, view, lang, onLang, focus, onNetCheck }: BoxScreenP
   const { settings, now } = view;
   const timeFormat = settings.prayerBar.timeFormat === '24h' ? '24h' : '12h';
   const origin = originOf(box.qr?.payload);
+  const nameOrigin = nameOriginOf(box.localName, origin);
   const noCert = origin === '' || (origin === null && !box.https);
   const txt = textAttrs(lang);
 
@@ -111,7 +126,16 @@ export function Setup({ box, view, lang, onLang, focus, onNetCheck }: BoxScreenP
               <>
                 <dt>{tb('setupAddress', lang)}</dt>
                 <dd class="num">
-                  <bdi dir="ltr">{origin}</bdi>
+                  {nameOrigin !== null ? (
+                    <>
+                      <bdi dir="ltr" data-role="box-name-address">{nameOrigin}</bdi>
+                      <small class="box-id__ip">
+                        <bdi dir="ltr" data-role="box-ip-address">{origin}</bdi>
+                      </small>
+                    </>
+                  ) : (
+                    <bdi dir="ltr">{origin}</bdi>
+                  )}
                 </dd>
               </>
             ) : null}

@@ -75,6 +75,7 @@ final RegExp _dateOrEmptyRe = RegExp(r'^$|^\d{4}-\d{2}-\d{2}$');
 final RegExp _countryRe = RegExp(r'^[A-Z]{2}$');
 final RegExp _timeZoneRe = RegExp(r'^[A-Za-z_]+(/[A-Za-z0-9_+-]+)+$|^UTC$');
 final RegExp _cloudUrlRe = RegExp(r'^https://[^\s<>\x00-\x1f\x7f]+$');
+final RegExp _shortNameRe = RegExp(r'^[^\x00-\x1f\x7f<>&"]+$');
 final RegExp _sourceNameRe = RegExp(r'^[^<>\x00-\x1f\x7f]+$');
 
 /// Settings whose children are `{name, url}` pairs (`dataSources`): their
@@ -194,6 +195,8 @@ SettingRule? ruleFor(String name) {
       return const SettingRule.sourceUrl();
     case 'name':
       return const SettingRule.text(1, 80);
+    case 'shortName':
+      return SettingRule.text(0, 12, re: _shortNameRe, what: 'teks biasa tanpa aksara HTML');
     case 'kind':
       return const SettingRule.enumOf(['surau', 'masjid']);
     case 'shortAddress':

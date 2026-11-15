@@ -68,6 +68,8 @@ export async function fetchKioskLive(fetchImpl: typeof fetch = kioskFetch): Prom
 export interface UseLiveOpts {
   fetchImpl?: typeof fetch;
   EventSourceImpl?: typeof EventSource;
+  /** False while the kiosk has nothing to show a live on (no prayer data yet, a box screen): no GET, no stream. */
+  active?: boolean;
 }
 
 /**
@@ -76,7 +78,7 @@ export interface UseLiveOpts {
  * While `liveOnKiosk` is off everything is ignored. In preview: no stream, a GET every 30 s, never playable.
  */
 export function useLive(settings: Settings, opts: UseLiveOpts = {}): LiveView {
-  const enabled = settings.liveOnKiosk?.enabled === true;
+  const enabled = settings.liveOnKiosk?.enabled === true && opts.active !== false;
   const preview = isPreview();
   const [live, setLive] = useState<KioskLive>(NOT_LIVE);
   const { fetchImpl, EventSourceImpl } = opts;

@@ -19,6 +19,8 @@ import my.maxcom.box.core.LanAddresses
 class NetworkWatch(
     context: Context,
     private val settleMs: Long = 20_000,
+    /** Called at once (no settle wait) with the new list whenever the list of LAN addresses changes; for the name responder. */
+    private val onImmediate: ((List<String>) -> Unit)? = null,
     private val onChanged: (List<String>) -> Unit,
 ) {
     private val cm = context.applicationContext.getSystemService(ConnectivityManager::class.java)
@@ -27,6 +29,7 @@ class NetworkWatch(
     private var applied: List<String> = emptyList()
     private var pending: ScheduledFuture<*>? = null
     private var registered = false
+    private var lastImmediate: List<String>? = null
 
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = changed()
@@ -35,10 +38,22 @@ class NetworkWatch(
         override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) = changed()
     }
 
+    /** One LAN address with the interface it is on and its prefix length. */
+    class IfaceInfo(val name: String?, val ip: String, val prefix: Int)
+
     /** The addresses now, for the leaf: private IPv4 on Ethernet and Wi-Fi. */
+    fun current(): List<String> = LanAddresses.pick(scan().map { it.first })
+
+    /** [current] with interface name and prefix length, for the mDNS responder (same addresses, same order). */
+    fun currentIfaces(): List<IfaceInfo> {
+        val all = scan()
+        val ips = LanAddresses.pick(all.map { it.first })
+        return ips.mapNotNull { ip -> all.firstOrNull { it.first.address == ip }?.second }
+    }
+
     @Suppress("DEPRECATION")
-    fun current(): List<String> {
-        val out = ArrayList<LanAddresses.Candidate>()
+    private fun scan(): List<Pair<LanAddresses.Candidate, IfaceInfo>> {
+        val out = ArrayList<Pair<LanAddresses.Candidate, IfaceInfo>>()
         val nets = try { cm.allNetworks } catch (e: Exception) { return emptyList() }
         for (n in nets) {
             val caps = cm.getNetworkCapabilities(n) ?: continue
@@ -51,10 +66,13 @@ class NetworkWatch(
             val lp = cm.getLinkProperties(n) ?: continue
             for (la in lp.linkAddresses) {
                 val a = la.address
-                if (a is Inet4Address) out.add(LanAddresses.Candidate(type, a.hostAddress ?: continue))
+                if (a is Inet4Address) {
+                    val ip = a.hostAddress ?: continue
+                    out.add(LanAddresses.Candidate(type, ip) to IfaceInfo(lp.interfaceName, ip, la.prefixLength))
+                }
             }
         }
-        return LanAddresses.pick(out)
+        return out
     }
 
     /** The service tells the watch which list its certificate already has. */
@@ -66,6 +84,7 @@ class NetworkWatch(
         synchronized(lock) {
             if (registered) return
             registered = true
+            lastImmediate = current()
         }
         cm.registerNetworkCallback(NetworkRequest.Builder().build(), callback)
     }
@@ -89,6 +108,16 @@ class NetworkWatch(
 
     private fun changed() {
         val now = current()
+        val fire = synchronized(lock) {
+            if (registered && now != lastImmediate) { lastImmediate = now; true } else false
+        }
+        if (fire) {
+            try {
+                onImmediate?.invoke(now)
+            } catch (_: Exception) {
+                // the service logs its own failures
+            }
+        }
         synchronized(lock) {
             if (!registered) return
             pending?.cancel(false)

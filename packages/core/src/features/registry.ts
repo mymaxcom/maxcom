@@ -143,6 +143,8 @@ export interface PrayerSourcesSettings extends FeatureSettings {
 }
 export interface SurauInfoSettings extends FeatureSettings {
   name: string;
+  /** The home-screen icon title (iPad/Android), at most 12 characters: '' for the automatic short name of `name`. */
+  shortName: string;
   kind: 'surau' | 'masjid';
   shortAddress: string;
   helpName: string;
@@ -223,7 +225,7 @@ export const FEATURES: readonly FeatureDef[] = [
   def('firstAzanSubuh', 'solat', false, false, { minutesBefore: 10, audioFile: null }, 'Azan pertama Subuh', 'First Subuh azan'),
 
   def('surauInfo', 'skrin', true, true,
-    { name: 'Surau', kind: 'surau', shortAddress: '', helpName: '', helpPhone: '', helpEmail: '', logo: '', showName: true },
+    { name: 'Surau', shortName: '', kind: 'surau', shortAddress: '', helpName: '', helpPhone: '', helpEmail: '', logo: '', showName: true },
     'Maklumat surau', 'Surau details'),
   def('hijriDate', 'skrin', false, true, { adjustDays: 0, switchAt: 'maghrib' }, 'Tarikh Hijrah', 'Hijri date'),
   def('backgrounds', 'skrin', false, true, { images: ['default-1', 'default-2'], rotate: 'daily' }, 'Latar belakang', 'Backgrounds'),

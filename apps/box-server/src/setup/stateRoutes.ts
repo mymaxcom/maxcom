@@ -11,6 +11,7 @@ import { sha256hex } from '../auth/crypto.ts';
 import { getSettings, surauPublicInfo } from '../settingsStore.ts';
 import { enrolCloudOrigin } from '../sync/sites.ts';
 import type { TlsMaterial } from '../tls.ts';
+import { boxNameOf } from '../boxName.ts';
 import { boxVersion } from '../productVersion.ts';
 import { issueNonce, recoveryCodeExists } from './codes.ts';
 import { buildBoxQr } from './identity.ts';
@@ -24,6 +25,8 @@ export interface StateRouteDeps {
   identity: BoxIdentity;
   now: () => Date;
   tls: TlsMaterial | null;
+  /** The live TLS material: follows a certificate reload. Defaults to `tls`. */
+  tlsNow?: () => TlsMaterial | null;
   httpsPort: number;
   /** False for an in-memory database with no data folder: no box.json is kept. */
   realDataDir: boolean;
@@ -59,8 +62,9 @@ export function boxOrigin(tls: TlsMaterial | null, httpsPort: number): string {
 }
 
 export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps): void {
-  const { db, dataDir, boxId, identity, tls, httpsPort } = deps;
-  const caSha256 = (): string | null => (tls === null ? null : rootCaFingerprint(dataDir));
+  const { db, dataDir, boxId, identity, httpsPort } = deps;
+  const tlsNow = (): TlsMaterial | null => (deps.tlsNow !== undefined ? deps.tlsNow() : deps.tls);
+  const caSha256 = (): string | null => (tlsNow() === null ? null : rootCaFingerprint(dataDir));
   const linked = (): boolean => stateValue(db, 'linked') === '1';
   const hasSurauInfo = (): boolean => db.prepare("SELECT 1 AS ok FROM settings WHERE feature = 'surauInfo'").get() !== undefined;
 
@@ -74,7 +78,8 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
       state,
       reason,
       linked: linked(),
-      https: tls !== null,
+      https: tlsNow() !== null,
+      localName: boxNameOf(tlsNow()),
       caSha256: caSha256(),
       serverTime: deps.now().toISOString(),
       version: boxVersion(),
@@ -99,7 +104,7 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
       type,
       boxId,
       name: boxName(db, boxId),
-      box: boxOrigin(tls, httpsPort),
+      box: boxOrigin(tlsNow(), httpsPort),
       caSha256: caSha256(),
       linked: linked(),
       ...(cloud !== undefined ? { cloud } : {}),
@@ -154,7 +159,7 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
       .get(cutoff);
     const view: NetCheckView = {
       interfaces,
-      https: { listening: tls !== null, port: tls !== null ? httpsPort : null },
+      https: { listening: tlsNow() !== null, port: tlsNow() !== null ? httpsPort : null },
       linked: linked(),
       lastPull: stateValue(db, 'last_pull'),
       lastPhoneSeenAt: typeof seen?.at === 'string' ? seen.at : null,

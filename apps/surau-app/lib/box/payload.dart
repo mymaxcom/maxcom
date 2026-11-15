@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 
+import 'box_name.dart';
+
 /// Enrolment payload shown as a QR by the box (`surau1:` + base64url JSON).
 /// Port of `parseEnrolPayload` in packages/device-client/src/index.ts.
 class EnrolPayload {
@@ -16,6 +18,8 @@ class EnrolPayload {
     this.pinSet,
     this.appLock,
     this.cloud,
+    this.name,
+    this.ips = const [],
   });
 
   /// 'ip' or 'domain'.
@@ -45,6 +49,16 @@ class EnrolPayload {
   /// Origin of the cloud copy (Plan 6), when the box has one linked; null
   /// for a box without cloud sync or a payload from an older box.
   final String? cloud;
+
+  /// The box's local name (`box1-surau.local`), when it has one: a hint for
+  /// finding the box. Null when absent or not of the exact shape.
+  final String? name;
+
+  /// LAN IPv4 addresses the box listed (at most [maxIps]); invalid entries
+  /// are dropped. Hints only.
+  final List<String> ips;
+
+  static const int maxIps = 8;
 
   static const String _prefix = 'surau1:';
   static const String _bad = 'Kod QR pendaftaran tidak sah';
@@ -121,7 +135,18 @@ class EnrolPayload {
     final cloudOrigin = cloudRaw == null
         ? null
         : _originOf(cloudRaw as String, allowLoopback);
+    final nameRaw = p['name'];
+    final ipsRaw = p['ips'];
+    final ips = <String>[];
+    if (ipsRaw is List) {
+      for (final e in ipsRaw) {
+        if (e is String && isIpv4(e) && !ips.contains(e)) ips.add(e);
+        if (ips.length >= maxIps) break;
+      }
+    }
     return EnrolPayload(
+      name: nameRaw is String && isBoxName(nameRaw) ? nameRaw : null,
+      ips: List.unmodifiable(ips),
       mode: mode as String,
       box: origin,
       boxId: boxId,

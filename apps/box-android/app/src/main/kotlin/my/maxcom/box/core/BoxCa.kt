@@ -37,7 +37,15 @@ data class CaMeta(
     val days: Int,
     /** KeyInfo.isInsideSecureHardware of the Keystore root key; null when unknown or the key is a file. */
     val secureHardware: Boolean? = null,
+    /** The claimed local name (`box1-surau.local`) the leaf carries; null for a legacy root or no name yet. */
+    val name: String? = null,
 )
+
+/**
+ * Which name constraints a root carries. [LEGACY]: `localhost` and `box.surau.local`. [V2]: `localhost` and
+ * the 99 explicit names `box1-surau.local` to `box99-surau.local` (DNS only, never a subtree such as `local`).
+ */
+enum class RootGeneration { LEGACY, V2 }
 
 /**
  * The box certificate authority, with the same properties `scripts/box-ca.ps1` gives the Windows box:
@@ -50,7 +58,11 @@ data class CaMeta(
 object BoxCa {
     const val ROOT_CN_PREFIX = "MAXCOM Root CA "
     const val LEAF_CN = "MAXCOM Box"
+    /** The legacy root's two permitted names (and the leaf names under a legacy root). */
     val PERMITTED_DNS: List<String> = listOf("localhost", "box.surau.local")
+
+    /** The permitted names of a V2 root: `localhost` plus the 99 explicit box names. Never wider. */
+    val PERMITTED_DNS_V2: List<String> = listOf("localhost") + BoxName.all()
     const val ROOT_YEARS = 20L
     const val DEFAULT_LEAF_DAYS = 730
     const val MAX_LEAF_DAYS = 825
@@ -87,8 +99,9 @@ object BoxCa {
      * The NameConstraints extension value of the root: `permittedSubtrees` holding the two DNS names
      * only. Byte for byte what `Get-NameConstraintsHex` in `box-ca.ps1` builds.
      */
-    fun nameConstraintsValue(): ByteArray {
-        val subtrees = PERMITTED_DNS.map { name ->
+    fun nameConstraintsValue(generation: RootGeneration = RootGeneration.LEGACY): ByteArray {
+        val names = if (generation == RootGeneration.V2) PERMITTED_DNS_V2 else PERMITTED_DNS
+        val subtrees = names.map { name ->
             Der.sequence(Der.contextPrimitive(2, name.toByteArray(Charsets.US_ASCII)))
         }
         return Der.sequence(Der.contextConstructed(0, Der.concat(*subtrees.toTypedArray())))
@@ -96,8 +109,41 @@ object BoxCa {
 
     // ---- root -----------------------------------------------------------------------------------
 
+    /**
+     * Which generation [rootDer] is: its NameConstraints extension must be exactly the legacy value or exactly
+     * the V2 value (critical); anything else is null. Never trusts a loose match.
+     */
+    fun rootGeneration(rootDer: ByteArray): RootGeneration? {
+        val c = parseCertOrNull(rootDer) ?: return null
+        if (c.basicConstraints < 0) return null
+        if (c.criticalExtensionOIDs?.contains(OID_NAME_CONSTRAINTS) != true) return null
+        val v = c.getExtensionValue(OID_NAME_CONSTRAINTS) ?: return null
+        return when {
+            v.contentEquals(Der.octetString(nameConstraintsValue(RootGeneration.V2))) -> RootGeneration.V2
+            v.contentEquals(Der.octetString(nameConstraintsValue(RootGeneration.LEGACY))) -> RootGeneration.LEGACY
+            else -> null
+        }
+    }
+
+    /** True when the root's name constraints contain `box1-surau.local` (a new-generation root). */
+    fun rootPermitsSubtree(rootDer: ByteArray): Boolean = rootGeneration(rootDer) == RootGeneration.V2
+
+    /** The label of a root made by [makeRoot] (the part of the CN after [ROOT_CN_PREFIX]), or null. */
+    fun rootLabelOf(rootDer: ByteArray): String? {
+        val c = parseCertOrNull(rootDer) ?: return null
+        val cn = Regex("CN=([^,]+)").find(c.subjectX500Principal.getName("RFC2253"))?.groupValues?.get(1) ?: return null
+        val label = cn.removePrefix(ROOT_CN_PREFIX)
+        return if (cn.startsWith(ROOT_CN_PREFIX) && LABEL.matches(label)) label else null
+    }
+
     /** Makes the self-signed root certificate (DER). [label] is `Box` plus 8 hex digits from [newLabel]. */
-    fun makeRoot(signer: CaSigner, label: String, now: Instant, random: SecureRandom = SecureRandom()): ByteArray {
+    fun makeRoot(
+        signer: CaSigner,
+        label: String,
+        now: Instant,
+        random: SecureRandom = SecureRandom(),
+        generation: RootGeneration = RootGeneration.LEGACY,
+    ): ByteArray {
         require(LABEL.matches(label)) { "bad CA label" }
         val spki = checkedSpki(signer.publicKey)
         val subject = name(ROOT_CN_PREFIX + label)
@@ -108,7 +154,7 @@ object BoxCa {
             // keyCertSign (bit 5) and cRLSign (bit 6): 0000 0110, one unused bit.
             extension(OID_KEY_USAGE, true, Der.bitString(byteArrayOf(0x06), 1)),
             extension(OID_SKI, false, Der.octetString(keyIdentifier(spki))),
-            extension(OID_NAME_CONSTRAINTS, true, nameConstraintsValue()),
+            extension(OID_NAME_CONSTRAINTS, true, nameConstraintsValue(generation)),
         )
         val tbs = Der.sequence(
             Der.contextConstructed(0, Der.integer(java.math.BigInteger.valueOf(2))),
@@ -130,7 +176,14 @@ object BoxCa {
      * belong to [signer] is never replaced: [RootMismatch] is thrown, because a new root would change
      * `caSha256` and every enrolled phone would stop trusting the box.
      */
-    fun ensureRoot(caDir: File, pkiDir: File, signer: CaSigner, label: String, now: Instant): ByteArray {
+    fun ensureRoot(
+        caDir: File,
+        pkiDir: File,
+        signer: CaSigner,
+        label: String,
+        now: Instant,
+        generation: RootGeneration = RootGeneration.V2,
+    ): ByteArray {
         val signerSpki = checkedSpki(signer.publicKey)
         val primary = File(caDir, "root-ca.cer")
         val secondary = File(pkiDir, "root-ca.cer")
@@ -144,7 +197,7 @@ object BoxCa {
             root = bytes
             break
         }
-        val der = root ?: makeRoot(signer, label, now)
+        val der = root ?: makeRoot(signer, label, now, generation = generation)
         writeAtomic(primary.toPath(), der, secret = false)
         writeAtomic(secondary.toPath(), der, secret = false)
         return der
@@ -168,9 +221,10 @@ object BoxCa {
 
     /**
      * Makes the leaf certificate (DER) for the box: subject `CN=MAXCOM Box`, the IPv4 addresses [ips]
-     * (private LAN addresses; the caller filters with [LanAddresses.pick]), `localhost` and
-     * `box.surau.local`, server authentication only, [days] long (1 to 825). The root must be a
-     * certificate this code made for [signer].
+     * (private LAN addresses; the caller filters with [LanAddresses.pick]) and DNS names, server
+     * authentication only, [days] long (1 to 825). The root must be a certificate this code made for [signer].
+     * DNS names: under a legacy root `localhost` and `box.surau.local` ([boxName] is ignored); under a V2 root
+     * `localhost` plus [boxName] (`box1-surau.local`, one of the 99 permitted names) when given.
      */
     fun makeLeaf(
         signer: CaSigner,
@@ -180,7 +234,17 @@ object BoxCa {
         now: Instant,
         days: Int = DEFAULT_LEAF_DAYS,
         random: SecureRandom = SecureRandom(),
-    ): ByteArray = buildLeaf(signer, rootDer, leafPublicKey, ips, PERMITTED_DNS, now, days, random)
+        boxName: String? = null,
+    ): ByteArray {
+        val dns = when (rootGeneration(rootDer) ?: throw IllegalArgumentException("root name constraints are not a known set")) {
+            RootGeneration.LEGACY -> PERMITTED_DNS
+            RootGeneration.V2 -> {
+                if (boxName != null) require(BoxName.parse(boxName) != null) { "bad box name" }
+                listOf("localhost") + listOfNotNull(boxName)
+            }
+        }
+        return buildLeaf(signer, rootDer, leafPublicKey, ips, dns, now, days, random)
+    }
 
     /** [makeLeaf] with chosen DNS names; test code uses it to prove the root refuses other names. */
     internal fun buildLeaf(
@@ -204,9 +268,9 @@ object BoxCa {
         require(root.publicKey.encoded.contentEquals(signerSpki)) { "root does not belong to the signer" }
         require(root.basicConstraints >= 0) { "root is not a CA" }
         require(root.criticalExtensionOIDs?.contains(OID_NAME_CONSTRAINTS) == true) { "root has no critical name constraints" }
-        require(root.getExtensionValue(OID_NAME_CONSTRAINTS)?.contentEquals(Der.octetString(nameConstraintsValue())) == true) {
-            "root name constraints are not the DNS-only set"
-        }
+        // The root must carry exactly one of the two known DNS-only constraint sets. The test hook may still
+        // add a name the root refuses (to prove the phone refuses it); production names are checked in makeLeaf.
+        rootGeneration(rootDer) ?: throw IllegalArgumentException("root name constraints are not the DNS-only set")
         val rawRootSubject = rawSubject(rootDer)
 
         val notBefore = now.minus(1, ChronoUnit.DAYS)
@@ -277,7 +341,8 @@ object BoxCa {
         checkMeta(meta)
         val ips = meta.ips.joinToString(",") { "\"$it\"" }
         val hw = meta.secureHardware?.let { ",\"secureHardware\":$it" } ?: ""
-        return "{\"ips\":[$ips],\"store\":\"${meta.store}\",\"label\":\"${meta.label}\",\"days\":${meta.days},\"madeBy\":\"android\"$hw}\n"
+        val nm = meta.name?.let { ",\"name\":\"$it\"" } ?: ""
+        return "{\"ips\":[$ips],\"store\":\"${meta.store}\",\"label\":\"${meta.label}\",\"days\":${meta.days},\"madeBy\":\"android\"$hw$nm}\n"
     }
 
     private fun checkMeta(meta: CaMeta) {
@@ -285,6 +350,7 @@ object BoxCa {
         require(LABEL.matches(meta.label)) { "bad label" }
         require(meta.days in 1..MAX_LEAF_DAYS) { "bad days" }
         for (ip in meta.ips) require(Ipv4.parse(ip) != null) { "bad IP" }
+        meta.name?.let { require(BoxName.parse(it) != null) { "bad name" } }
     }
 
     /** Lower-case hex sha256 of [bytes]: the value the QR carries as `caSha256`. */

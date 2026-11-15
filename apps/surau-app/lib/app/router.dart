@@ -4,6 +4,7 @@
 // entry is a [ComingScreen] with its real title (a later plan); the finance
 // pages live in lib/features/finance/, every other page in lib/screens/.
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -486,6 +487,7 @@ class _EnrolRoute extends ConsumerWidget {
         store: deps.boxStore,
         surauInfoStore: deps.surauInfoStore,
         platform: deps.platform,
+        pageOrigin: kIsWeb ? Uri.base : null,
         now: deps.now,
       ),
       cameraAvailable: deps.cameraAvailable,

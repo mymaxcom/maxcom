@@ -296,3 +296,14 @@ describe('W13 S5: the token only goes to the session box', () => {
     expect((await unlock(`${BOX}/`, enrolled.deviceId, PIN, { boxId: BOX_ID, payload, fetchImpl: spy, keys })).token.length).toBeGreaterThan(10);
   });
 });
+
+describe('enrol payload name and ips hints', () => {
+  it('keeps a valid numbered name and IPv4 list, drops anything else', () => {
+    const p = parseEnrolPayload(payloadString({ code: 'ABCD-EFGH-JKLM', name: 'box2-surau.local', ips: ['10.168.0.9', 'evil', '::1'] as string[] }));
+    expect(p.name).toBe('box2-surau.local');
+    expect(p.ips).toEqual(['10.168.0.9']);
+    const bad = parseEnrolPayload(payloadString({ code: 'ABCD-EFGH-JKLM', name: 'box.surau.local' }));
+    expect(bad.name).toBeUndefined();
+    expect(bad.ips).toBeUndefined();
+  });
+});

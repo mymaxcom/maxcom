@@ -5,6 +5,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Role } from '@surau/core';
 import { pkiStatus } from '../tls.ts';
+import { boxNameOf, lanIpv4Of } from '../boxName.ts';
 import type { TlsMaterial } from '../tls.ts';
 import { bumpVersion, surauPublicInfo } from '../settingsStore.ts';
 import { identityCan, tooMany } from './authz.ts';
@@ -44,7 +45,11 @@ export interface AuthRouteDeps {
   now: () => Date;
   limiters: Limiters;
   tls: TlsMaterial | null;
+  /** The live TLS material: follows a certificate reload. Defaults to `tls`. */
+  tlsNow?: () => TlsMaterial | null;
   httpsPort: number;
+  /** Which side this server is: the cloud makes no device codes for a surau's people. Defaults to the box. */
+  role?: 'box' | 'cloud';
 }
 
 /** Routes that only ever take a few short fields refuse bigger bodies (the app-wide limit is 2 MB). */
@@ -333,12 +338,23 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     const userId = str(b.userId);
     // The code lives 10 minutes unless the admin chooses 30 or 60 for this one code.
     const ttl = b.ttlMinutes === undefined ? 10 : b.ttlMinutes;
+    // A code made on the cloud never reaches the surau box, so it cannot enrol a device for a surau's person on the
+    // surau Wi-Fi. The cloud only makes codes for the Pentadbir MAXCOM (ops/support), who live on the cloud.
+    if (deps.role === 'cloud') {
+      const target = listUsers(db).find((u) => u.id === userId);
+      if (target !== undefined && !target.roles.includes('superadmin')) {
+        throw new AuthError(409, 'box_only', 'Kod peranti mesti dibuat oleh MAXCOM di surau. Gunakan telefon Pentadbir Surau di Wi-Fi surau.');
+      }
+    }
     if (typeof ttl !== 'number' || !ENROL_TTLS.includes(ttl)) throw new AuthError(400, 'bad_ttl', 'Tempoh kod tidak sah');
     const enrol = beginEnrolment(db, { userId, deviceName: str(b.deviceName), ttlMinutes: ttl }, by, {
       canManageSuperadmin: identityCan(request.auth, 'superadmin:manage'),
     });
     const user = listUsers(db).find((u) => u.id === userId);
-    const ip = deps.tls?.ipSan.find((a) => a !== '127.0.0.1' && a !== '::1');
+    const tlsLive = deps.tlsNow !== undefined ? deps.tlsNow() : deps.tls;
+    const ip = tlsLive?.ipSan.find((a) => a !== '127.0.0.1' && a !== '::1');
+    const localName = boxNameOf(tlsLive);
+    const lanIps = lanIpv4Of(tlsLive);
     const hostHeader = typeof request.headers.host === 'string' ? request.headers.host.replace(/:\d+$/, '') : 'localhost';
     const info = surauPublicInfo(db);
     const inviter = db.prepare('SELECT name FROM users WHERE id = ?').get(userOf(request).userId);
@@ -348,8 +364,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       Buffer.from(
         JSON.stringify({
           v: 1,
-          mode: deps.tls?.mode ?? 'ip',
+          mode: tlsLive?.mode ?? 'ip',
           box: `https://${ip ?? hostHeader}:${deps.httpsPort}`,
+          ...(localName !== null ? { name: localName } : {}),
+          ...(lanIps.length > 0 ? { ips: lanIps } : {}),
           boxId,
           ...(cloudOrigin !== undefined ? { cloud: cloudOrigin } : {}),
           caSha256: rootCaFingerprint(dataDir),

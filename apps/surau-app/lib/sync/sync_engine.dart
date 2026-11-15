@@ -10,6 +10,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show compute;
+
 import '../box/box_client.dart';
 import '../box/device_key.dart';
 import '../features/enrol/enrol_flow.dart' show EnrolledBox;
@@ -152,6 +154,17 @@ const String _metaSurauId = 'surauId';
 
 /// `surauId` of a box that never said otherwise (core's DEFAULT_SURAU_ID).
 const String defaultSurauId = 'sdm';
+
+/// [opMessage] of the op with `payload.bytesBase64` put in: top level so a
+/// background isolate can run it.
+Uint8List _messageWithBytes((Map<String, dynamic>, Uint8List) a) {
+  final op = Map<String, dynamic>.of(a.$1);
+  op['payload'] = {
+    ...(op['payload'] as Map<String, dynamic>),
+    'bytesBase64': base64.encode(a.$2),
+  };
+  return opMessage(op);
+}
 
 class SyncEngine {
   SyncEngine({
@@ -311,19 +324,38 @@ class SyncEngine {
   }
 
   /// Ops whose payload carries photo or image bytes: each is pushed alone,
-  /// and its bytes wait in an `upload-` blob until the base accepts it.
+  /// and its bytes wait in one encrypted blob until the base accepts it.
   static bool carriesBytes(String kind) =>
       kind == 'asset.put' || kind == 'finance.photo.put';
 
-  /// Builds, signs, applies locally and queues one op. Returns it. With
-  /// [autoSync] it also starts a sync (never awaited).
+  /// A push of a picture gets this read budget (a ~1 MB photo over a slow
+  /// mobile link and the cloud takes far longer than the 10 s of a small
+  /// request); every other request keeps the client's own.
+  static const Duration pictureReadTimeout = Duration(seconds: 60);
+
+  /// Builds, signs, applies locally and queues one op. Returns it (a picture
+  /// op without its bytes). With [autoSync] it also starts a sync (never
+  /// awaited).
+  ///
+  /// A picture op carries its raw [bytes] (payload without `bytesBase64`).
+  /// The bytes are signed as the base64 string the wire carries (the
+  /// signature covers the whole payload), stored once, and encoded again
+  /// only when the op is sent. A payload that still holds `bytesBase64` is
+  /// split the same way.
   Future<OutboxOp> enqueue({
     required String kind,
     required String entity,
     required String entityId,
     Object? payload,
+    Uint8List? bytes,
   }) async {
     if (_dead) throw StateError('SyncEngine disposed');
+    if (payload is Map<String, dynamic> && payload['bytesBase64'] is String) {
+      bytes ??= Uint8List.fromList(
+        base64.decode(payload['bytesBase64'] as String),
+      );
+      payload = _withoutBytes(payload);
+    }
     final meta = await store.meta();
     final coll = _collectionOf(entity);
     final existing = coll == null ? null : await store.getDoc(coll, entityId);
@@ -347,12 +379,25 @@ class SyncEngine {
       'editedAt': _iso(now()),
       'payload': body,
     };
-    final sig = b64url(await key.sign(opMessage(op)));
+    final sig = b64url(await key.sign(await _messageOf(op, bytes)));
     op['sig'] = sig;
     final out = OutboxOp(op);
-    await _applyLocal(out, existing);
-    await outbox.add(out);
-    _emit(_view.copyWith(pendingOut: await outbox.count));
+    final picture = carriesBytes(kind);
+    // A picture is queued first (blob and op in one write): if that write
+    // fails, no local doc is left behind for an upload that was never queued.
+    if (picture) await outbox.add(out, bytes: bytes);
+    await _applyLocal(out, existing, bytes: bytes);
+    if (!picture) await outbox.add(out, bytes: bytes);
+    // The same picture queued again replaces an earlier "bytes lost" conflict.
+    final cleared = picture && await _clearLostConflicts(entity, entityId);
+    _emit(
+      _view.copyWith(
+        pendingOut: await outbox.count,
+        conflicts: cleared
+            ? (await store.list(Collections.conflicts)).length
+            : null,
+      ),
+    );
     if (autoSync) unawaited(sync());
     return out;
   }
@@ -367,7 +412,22 @@ class SyncEngine {
     return rev is String ? rev : null;
   }
 
-  Future<void> _applyLocal(OutboxOp op, Map<String, dynamic>? existing) async {
+  /// The bytes an op is signed over. For a picture, the op with its bytes as
+  /// `payload.bytesBase64` (exactly what is sent), built off the UI isolate
+  /// when large.
+  Future<Uint8List> _messageOf(Map<String, dynamic> op, Uint8List? bytes) {
+    if (bytes == null) return Future.value(opMessage(op));
+    if (bytes.length < backgroundBytesThreshold) {
+      return Future.value(_messageWithBytes((op, bytes)));
+    }
+    return compute(_messageWithBytes, (op, bytes));
+  }
+
+  Future<void> _applyLocal(
+    OutboxOp op,
+    Map<String, dynamic>? existing, {
+    Uint8List? bytes,
+  }) async {
     final coll = _collectionOf(op.entity);
     final marker = <String, dynamic>{
       'rev': 'pending:${op.opId}',
@@ -414,13 +474,8 @@ class SyncEngine {
           ...marker,
         });
       case 'asset.put':
-        final p = op.payload;
-        if (p is Map && p['bytesBase64'] is String) {
-          await store.putBlob(
-            'asset-${op.entityId}',
-            Uint8List.fromList(base64.decode(p['bytesBase64'] as String)),
-          );
-        }
+        // The bytes are stored by the outbox, once, under `asset-<id>`.
+        break;
       case 'finance.append':
         // A ledger row is only ever added. The local copy is the row as the
         // box will store it, without the number the box assigns (refNo) and
@@ -475,12 +530,10 @@ class SyncEngine {
           ...marker,
         });
       case 'finance.photo.put':
+        // The bytes are stored by the outbox, once, under
+        // `finance-photo-<id>`; here only the meta doc.
         final p = op.payload;
-        if (coll == null || p is! Map || p['bytesBase64'] is! String) return;
-        final bytes = Uint8List.fromList(
-          base64.decode(p['bytesBase64'] as String),
-        );
-        await store.putBlob(financePhotoBlob(op.entityId), bytes);
+        if (coll == null || p is! Map || bytes == null) return;
         await store.putDoc(coll, op.entityId, {
           ...PhotoMeta(
             id: op.entityId,
@@ -506,7 +559,8 @@ class SyncEngine {
   };
 
   /// The blob that keeps a finance photo's bytes readable on this device.
-  static String financePhotoBlob(String photoId) => 'finance-photo-$photoId';
+  static String financePhotoBlob(String photoId) =>
+      financePhotoBlobId(photoId);
 
   static Map<String, dynamic> _deepMerge(
     Map<String, dynamic> a,
@@ -530,12 +584,13 @@ class SyncEngine {
     String mime,
   ) async {
     if (bytes.length > maxQueuedAssetBytes) throw const AssetTooLarge();
-    final id = sha256HexOf(bytes);
+    final id = await sha256Of(bytes);
     await enqueue(
       kind: 'asset.put',
       entity: 'asset',
       entityId: id,
-      payload: {'mime': mime, 'bytesBase64': base64.encode(bytes)},
+      payload: {'mime': mime},
+      bytes: bytes,
     );
     return (id: id, mime: mime, bytes: bytes.length);
   }
@@ -548,15 +603,22 @@ class SyncEngine {
     Uint8List bytes,
   ) async {
     if (bytes.length > maxPhotoBytes) throw const AssetTooLarge();
-    final id = sha256HexOf(bytes);
+    final id = await sha256Of(bytes);
     await enqueue(
       kind: 'finance.photo.put',
       entity: 'finance:photo',
       entityId: id,
-      payload: {'entryId': entryId, 'bytesBase64': base64.encode(bytes)},
+      payload: {'entryId': entryId},
+      bytes: bytes,
     );
     return (id: id, bytes: bytes.length);
   }
+
+  /// sha256 of [bytes], in a background isolate when they are large.
+  static Future<String> sha256Of(Uint8List bytes) =>
+      bytes.length >= backgroundBytesThreshold
+      ? compute(sha256HexOf, bytes)
+      : Future.value(sha256HexOf(bytes));
 
   // ---- sync ----
 
@@ -641,7 +703,7 @@ class SyncEngine {
       // An op queued while this run was sending is not in it: go again
       // (bounded; ops that got no verdict are not "new", so no tight loop).
       if (round < 3 && !_dead) {
-        final more = await outbox.pending();
+        final more = await outbox.queued();
         if (more.any((o) => !_pushed.contains(o.opId))) {
           return await _run(round + 1);
         }
@@ -673,7 +735,9 @@ class SyncEngine {
   Future<bool> _push(SyncLink link) async {
     await _surfaceNotices();
     await _dropLostUploads();
-    final all = await outbox.pending();
+    // No bytes here: a picture's bytes are opened one op at a time, right
+    // before that op is sent.
+    final all = await outbox.queued();
     _pushed = {for (final o in all) o.opId};
     var i = 0;
     while (i < all.length) {
@@ -687,11 +751,26 @@ class SyncEngine {
           i++;
         }
       }
+      final bool picture = carriesBytes(batch.first.kind);
+      final List<Map<String, dynamic>> wire;
+      if (picture) {
+        final full = await outbox.withBytes(batch.first);
+        if (full == null) {
+          await _dropLost(batch.first); // bytes gone since the check above
+          continue;
+        }
+        wire = [full.json];
+      } else {
+        wire = [for (final o in batch) o.json];
+      }
       final Map<String, dynamic> out;
       try {
-        out = await link.client.postJson('/api/sync/ops', {
-          'ops': [for (final o in batch) o.json],
-        }, token: link.token);
+        out = await link.client.postJson(
+          '/api/sync/ops',
+          {'ops': wire},
+          token: link.token,
+          read: picture ? pictureReadTimeout : null,
+        );
       } on SessionExpired {
         onSessionExpired?.call();
         _emit(
@@ -717,19 +796,7 @@ class SyncEngine {
   /// and take it off the queue (it would otherwise wait forever, unseen).
   Future<void> _dropLostUploads() async {
     for (final op in await outbox.missingBlobOps()) {
-      await outbox.remove(op.opId);
-      final p = op.payload;
-      await store.putDoc(Collections.conflicts, op.opId, {
-        'opId': op.opId,
-        'kind': op.kind,
-        'entity': op.entity,
-        'entityId': op.entityId,
-        'reason': 'blob_missing',
-        'mine': p is Map<String, dynamic> ? _withoutBytes(p) : p,
-        'winner': null,
-        'editedAt': op.editedAt,
-        'at': _iso(now()),
-      });
+      await _dropLost(op);
     }
     _emit(
       _view.copyWith(
@@ -737,6 +804,38 @@ class SyncEngine {
         conflicts: (await store.list(Collections.conflicts)).length,
       ),
     );
+  }
+
+  /// Deletes the `blob_missing` conflicts of [entity]/[entityId]; true when
+  /// any was there.
+  Future<bool> _clearLostConflicts(String entity, String entityId) async {
+    var any = false;
+    for (final c in await store.list(Collections.conflicts)) {
+      if (c['reason'] == 'blob_missing' &&
+          c['entity'] == entity &&
+          c['entityId'] == entityId &&
+          c['opId'] is String) {
+        await store.deleteDoc(Collections.conflicts, c['opId'] as String);
+        any = true;
+      }
+    }
+    return any;
+  }
+
+  Future<void> _dropLost(OutboxOp op) async {
+    await outbox.remove(op.opId);
+    final p = op.payload;
+    await store.putDoc(Collections.conflicts, op.opId, {
+      'opId': op.opId,
+      'kind': op.kind,
+      'entity': op.entity,
+      'entityId': op.entityId,
+      'reason': 'blob_missing',
+      'mine': p is Map<String, dynamic> ? _withoutBytes(p) : p,
+      'winner': null,
+      'editedAt': op.editedAt,
+      'at': _iso(now()),
+    });
   }
 
   /// The store set a notice (an unreadable outbox was set aside): turn it

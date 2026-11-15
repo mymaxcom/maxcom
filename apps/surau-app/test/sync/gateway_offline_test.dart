@@ -50,7 +50,7 @@ void main() {
     boxAway = false;
     box = FakeBox((r) async {
       if (boxAway) throw http.ClientException('away');
-      if (r.url.path == '/assets/${'a' * 64}') {
+      if (r.url.path.startsWith('/assets/')) {
         return http.Response.bytes([1, 2, 3], 200);
       }
       return jsonResponse(200, {'ok': true, 'from': 'network'});
@@ -251,7 +251,9 @@ void main() {
   });
 
   group('pictures', () {
-    final id = 'a' * 64;
+    // The box names a picture by the sha256 of its bytes (the fake answers
+    // [1, 2, 3] for any asset).
+    final id = sha256HexOf([1, 2, 3]);
 
     test('a fetched picture is kept and served offline', () async {
       final first = await gw.getBytes('/assets/$id');
@@ -259,6 +261,12 @@ void main() {
       boxAway = true;
       expect(await gw.getBytes('/assets/$id'), [1, 2, 3]);
       expect(await store.getBlob('asset-$id'), isNotNull);
+    });
+
+    test('bytes that do not hash to the id are returned but not kept', () async {
+      final wrong = 'a' * 64;
+      expect(await gw.getBytes('/assets/$wrong'), [1, 2, 3]);
+      expect(await store.getBlob('asset-$wrong'), isNull);
     });
   });
 

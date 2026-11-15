@@ -13,23 +13,29 @@ import { useBoxState } from './data/boxState.ts';
 import { NotPairedError } from './data/bundle.ts';
 import { useCloudStatus } from './data/cloud.ts';
 import { useKiosk } from './data/kiosk.ts';
+import { useLive } from './data/live.ts';
 import { useNotPaired } from './data/pairing.ts';
 import { isPreview } from './data/preview.ts';
 import { useRemoteKeys } from './data/remote.ts';
 import { isBoxLang } from './i18n-box.ts';
 import { t } from './i18n.ts';
 import type { Lang } from './i18n.ts';
+import { LiveVideo } from './live/LiveLayer.tsx';
+import { liveDisplayMode, useLiveAnchors } from './live/liveMode.ts';
+import { LiveScreen } from './screens/LiveScreen.tsx';
 import { Locked } from './screens/Locked.tsx';
 import { Main } from './screens/Main.tsx';
 import { NetCheck } from './screens/NetCheck.tsx';
 import { Pair } from './screens/Pair.tsx';
 import { Phase, CALM_PHASES } from './screens/Phase.tsx';
 import { Recovery } from './screens/Recovery.tsx';
+import { screenIdOf } from './screens/screenId.ts';
 import { Setup } from './screens/Setup.tsx';
 import { Background, resolveTone, toneVars } from './ui/Background.tsx';
 import { useBeep } from './ui/Beep.ts';
 import { CloudBadge } from './ui/CloudBadge.tsx';
 import { HostExit } from './ui/HostExit.tsx';
+import { QuietBoundary } from './ui/QuietBoundary.tsx';
 import { useBoxNav } from './ui/LangSwitch.tsx';
 import { SafeBoundary } from './ui/SafeBoundary.tsx';
 import { templateOf } from './templates.ts';
@@ -60,8 +66,23 @@ export function App() {
     box !== null &&
     (box.state === 'setup' || box.state === 'recovery') &&
     (box.qr !== undefined || box.recoveryCodeSet !== undefined || box.reason === 'db_damaged');
-  // A stopped box shows nothing of the surau, and that includes the prayer tones.
-  useBeep(locked ? { ...state, beep: null } : state, settings);
+  // The live (operator decision 2026-11-14): owned here, above the phase switch, so one WHEP session runs for
+  // the whole live. Clear = the live screen takes priority; blurred = the prayer screen of a window (1 min either
+  // side of the azan or the iqamah time) on top of the still-playing, blurred video; none = no live.
+  // It runs only where the kiosk program runs: never on a box screen (setup, recovery, stopped) and never before
+  // there is prayer data (the no-data screen, a preview still waiting for its token).
+  const live = useLive(settings, { active: !locked && !boxScreen && state.phase !== 'noData' });
+  const liveAnchors = useLiveAnchors(state, settings);
+  // What the live wants (keeps the video mounted) versus what is shown: the live takes the screen only while its
+  // video really has frames (liveOnAir); with none, or none for 10 s, the normal screens and their tones stay.
+  const liveWanted = liveDisplayMode(view.now, state, settings, live.live === true, liveAnchors);
+  const [liveOnAir, setLiveOnAir] = useState(false);
+  // The preview has no player by design (nothing can play): it keeps showing the live screen as the illustration.
+  const liveMode = liveOnAir || (live.live === true && !live.playable) ? liveWanted : 'none';
+  // A stopped box shows nothing of the surau, and that includes the prayer tones. While the live has priority
+  // (clear) no prayer tone sounds over it either: the tones of the windows (masuk waktu, the iqamah end warning)
+  // still sound, because their screens are up then.
+  useBeep(locked || liveMode === 'clear' ? { ...state, beep: null } : state, settings);
   const notPaired = useNotPaired();
   const cloud = useCloudStatus(preview ? { fetchImpl: noBoxFetch } : {});
   const [netCheckOpen, setNetCheckOpen] = useState(false);
@@ -132,8 +153,9 @@ export function App() {
     );
   }
 
-  const normal = state.phase === 'normal';
-  const dim = CALM_PHASES.has(state.phase);
+  const liveClear = liveMode === 'clear';
+  const normal = state.phase === 'normal' && !liveClear;
+  const dim = !liveClear && CALM_PHASES.has(state.phase);
   const showDot = view.stale || (view.ready && view.daysAhead < 30);
   const showBadge = !preview && notPaired && !showPair && !dim;
 
@@ -155,13 +177,26 @@ export function App() {
     <div
       class="stage"
       data-phase={state.phase}
+      data-screen={screenIdOf(state, liveClear)}
+      data-live={liveMode}
       data-dim={dim ? 'true' : 'false'}
       data-template={template}
       style={template === 'default' ? toneVars(tone) : undefined}
     >
       <SafeBoundary today={state.today} settings={settings} lang={lang}>
         <Background settings={settings} now={view.now} onTone={setMeasured} />
-        {normal ? <Main key="main" view={view} lang={lang} /> : <Phase key={state.phase} view={view} lang={lang} />}
+        {liveWanted !== 'none' ? (
+          <QuietBoundary>
+            <LiveVideo key={live.since ?? 'live'} live={live} settings={settings} mode={liveWanted} onAir={setLiveOnAir} />
+          </QuietBoundary>
+        ) : null}
+        {liveClear ? (
+          <LiveScreen key="live" view={view} live={live} lang={lang} onAir={liveOnAir} />
+        ) : normal ? (
+          <Main key="main" view={view} lang={lang} />
+        ) : (
+          <Phase key={state.phase} view={view} lang={lang} />
+        )}
         {showBadge ? (
           <div class="pair-badge" data-testid="pair-badge" data-dim={normal ? 'false' : 'true'} role="status">
             <span class="pair-badge__dot" aria-hidden="true" />

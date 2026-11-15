@@ -37,6 +37,8 @@ for (const f of ['tls/pfx.pass', 'tls-nc/pfx.pass', 'tls-nc/ip-pfx.pass']) write
 
 // 2. certificates and PFX files
 execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', at('scripts/gen-test-pki.ps1')], { stdio: 'inherit' });
+// 2b. the V2 box-root fixtures (root-ca.cer, box2.pfx, evil.pfx, pfx.pass) used by trust_nc_v2_test.dart
+execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', at('scripts/gen-test-pki-v2.ps1')], { stdio: 'inherit' });
 
 // 3. PKCS#8 PEM keys of the two box-server leaves, taken out of their PFX files
 const openssl = findOpenssl();

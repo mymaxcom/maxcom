@@ -521,7 +521,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('adjust-save')));
       await settleImages(tester);
       expect(h.assetsPosted.length, 1, reason: 'nothing adjusted: no second upload');
-      expect(find.text('Gambar latar dimuat naik'), findsOneWidget);
+      expect(find.text('Gambar latar disimpan, akan dimuat naik'), findsOneWidget);
       expect(find.byKey(ValueKey('background-upload-$id')), findsOneWidget);
       expect(
         find.descendant(of: find.byKey(ValueKey('background-order-$id')), matching: find.text('3')),

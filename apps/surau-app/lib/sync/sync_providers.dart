@@ -48,22 +48,45 @@ final revokedProvider = NotifierProvider<RevokedNotifier, bool>(
   RevokedNotifier.new,
 );
 
-BoxLocator _locatorFor(Ref ref, EnrolledBox box) {
+/// The direct (LAN) locator for [box]: a box with a proven local name is
+/// found by name, last IP and discovery (each candidate checked against the
+/// pinned CA and the enrolled boxId); a box without one by its enrolled
+/// address only, which then learns the name once the box reports it.
+BoxLocator directLocatorFor(Ref ref, EnrolledBox box) {
   final deps = ref.read(appDepsProvider);
   final boxes = ref.read(enrolledBoxProvider.notifier);
+  final legacy = DirectBoxLocator(
+    clientFor: deps.enrolledClient,
+    // Every box answer may name the cloud it is linked to.
+    onHealth: (h) => unawaited(boxes.learnCloud(h.cloud)),
+  );
+  final probe = deps.probeClient;
+  final routes = deps.routes;
+  if (probe == null || routes == null) {
+    return TimeoutLocator(legacy, const Duration(seconds: 2));
+  }
+  return TimeoutLocator(
+    NameAwareLocator(
+      legacy: legacy,
+      probeClient: (origin, ip) => probe(boxAt(box, origin), ip),
+      discovery: deps.discovery,
+      routes: routes,
+      onReached: (ip) => unawaited(boxes.learnLastIp(ip)),
+      onNameLearned: (n) => unawaited(boxes.learnName(n)),
+    ),
+    // Discovery takes about a second and a half: a named box gets longer.
+    Duration(seconds: box.name != null ? 4 : 2),
+  );
+}
+
+BoxLocator _locatorFor(Ref ref, EnrolledBox box) {
+  final deps = ref.read(appDepsProvider);
   final wake = ref.read(cloudWakeProvider);
   return CompositeLocator(
     [
       // The box first, with a short budget, then the cloud (12 s, so the
       // Worker's own down-detection can answer).
-      TimeoutLocator(
-        DirectBoxLocator(
-          clientFor: deps.enrolledClient,
-          // Every box answer may name the cloud it is linked to.
-          onHealth: (h) => unawaited(boxes.learnCloud(h.cloud)),
-        ),
-        const Duration(seconds: 2),
-      ),
+      directLocatorFor(ref, box),
       CloudLocator(
         clientFor: (cloud) => deps.enrolledClient(boxAt(box, cloud)),
       ),
@@ -182,6 +205,44 @@ final syncViewProvider = StreamProvider<SyncView>((ref) async* {
   }
   yield engine.view;
   yield* engine.views;
+});
+
+/// The asset ids of pictures still waiting in the outbox (queued locally,
+/// not yet on the box). Read again whenever the engine's view changes (the
+/// same signal as the `N menunggu` count); reads only the queue's ids, never
+/// the picture bytes. Empty without an engine.
+final queuedAssetIdsProvider = FutureProvider<Set<String>>((ref) async {
+  final engine = ref.watch(syncEngineProvider);
+  ref.watch(syncViewProvider);
+  if (engine == null) return const <String>{};
+  final targets = await engine.outbox.targets();
+  const prefix = 'asset|';
+  return {
+    for (final t in targets)
+      if (t.startsWith(prefix)) t.substring(prefix.length),
+  };
+});
+
+/// The asset ids of pictures whose bytes were lost before they could be
+/// sent: a `blob_missing` conflict the person has not dismissed, or a queued
+/// upload whose bytes are gone (it becomes that conflict at the next sync).
+/// Read-only; no picture bytes are loaded. Retrying is not possible (the
+/// bytes are gone), so the UI asks for the picture to be chosen again.
+final lostAssetIdsProvider = FutureProvider<Set<String>>((ref) async {
+  final engine = ref.watch(syncEngineProvider);
+  ref.watch(syncViewProvider);
+  if (engine == null) return const <String>{};
+  final ids = <String>{};
+  for (final c in await engine.conflicts()) {
+    if (c['entity'] == 'asset' && c['reason'] == 'blob_missing') {
+      final id = c['entityId'];
+      if (id is String) ids.add(id);
+    }
+  }
+  for (final op in await engine.outbox.missingBlobOps()) {
+    if (op.entity == 'asset') ids.add(op.entityId);
+  }
+  return ids;
 });
 
 /// What the shell calls when the app opens or comes back to the front: wake

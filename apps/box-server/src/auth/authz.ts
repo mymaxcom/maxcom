@@ -60,6 +60,8 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'POST', pattern: /^\/api\/setup\/complete$/, permission: 'public', sample: '/api/setup/complete' },
   { method: 'POST', pattern: /^\/api\/setup\/probe$/, permission: 'public', sample: '/api/setup/probe' },
   { method: 'POST', pattern: /^\/api\/recovery\/complete$/, permission: 'public', sample: '/api/recovery/complete' },
+  { method: 'GET', pattern: /^\/app\/ios\.mobileconfig$/, permission: 'public', sample: '/app/ios.mobileconfig' },
+  { method: 'GET', pattern: /^\/app\/ios$/, permission: 'public', sample: '/app/ios' },
   { method: 'GET', pattern: /^\/surau-logo$/, permission: 'public', sample: '/surau-logo' },
 
   { method: 'GET', pattern: /^\/api\/kiosk\/bundle$/, permission: 'kiosk:read', sample: '/api/kiosk/bundle' },

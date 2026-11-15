@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createReadStream, existsSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -60,6 +60,25 @@ export function shortNameOf(name: string): string {
     out = next;
   }
   return out !== '' ? out : n.slice(0, SHORT_NAME_MAX);
+}
+
+/** Home-screen title: the stored short name when set, else the automatic short form of the name, else ''. */
+export function homeScreenName(db: DatabaseSync): string {
+  const info = getSettings(db).surauInfo;
+  const stored = info.shortName.trim();
+  return stored !== '' ? stored : shortNameOf(info.name);
+}
+
+const escapeHtml = (v: string): string =>
+  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+/** Set the iPad home-screen title (apple-mobile-web-app-title) and the page title; no short name: the html as built. */
+export function withHomeScreenName(html: string, short: string): string {
+  if (short === '') return html;
+  const safe = escapeHtml(short);
+  return html
+    .replace(/(<meta\s+name="apple-mobile-web-app-title"\s+content=")[^"]*(")/i, (_m, a: string, b: string) => `${a}${safe}${b}`)
+    .replace(/(<title>)[^<]*(<\/title>)/i, (_m, a: string, b: string) => `${a}${safe}${b}`);
 }
 
 const etagOf = (...parts: (string | number)[]): string =>
@@ -146,6 +165,16 @@ export function registerSurauLogoRoutes(app: FastifyInstance, deps: SurauLogoDep
     });
   }
 
+  for (const route of ['/app/', '/app/index.html']) {
+    app.get(route, async (request, reply) => {
+      const file = join(appDir, 'index.html');
+      if (!existsSync(file)) return reply.code(404).send({ errors: ['not found'] });
+      reply.header('Last-Modified', statSync(file).mtime.toUTCString());
+      const body = Buffer.from(withHomeScreenName(readFileSync(file, 'utf8'), homeScreenName(db)), 'utf8');
+      return sendFile(request, reply, body, etagOf('index', createHash('sha256').update(body).digest('hex')), 'text/html; charset=utf-8');
+    });
+  }
+
   app.get('/app/manifest.json', async (request, reply) => {
     const file = join(appDir, 'manifest.json');
     if (!existsSync(file)) return reply.code(404).send({ errors: ['not found'] });
@@ -157,11 +186,11 @@ export function registerSurauLogoRoutes(app: FastifyInstance, deps: SurauLogoDep
     } catch {
       return reply.code(404).send({ errors: ['not found'] });
     }
-    const name = getSettings(db).surauInfo.name.trim();
-    if (name !== '') {
-      manifest.name = name;
-      manifest.short_name = shortNameOf(name);
-    }
+    const info = getSettings(db).surauInfo;
+    const name = info.name.trim();
+    if (name !== '') manifest.name = name;
+    const short = homeScreenName(db);
+    if (short !== '') manifest.short_name = short;
     const body = Buffer.from(JSON.stringify(manifest, null, 2) + '\n', 'utf8');
     const logo = currentLogo(db, dataDir, 'logoSquare');
     return sendFile(

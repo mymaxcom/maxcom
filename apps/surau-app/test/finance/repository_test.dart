@@ -224,7 +224,7 @@ void main() {
 
   group('photos', () {
     test(
-      'a photo travels as an upload- blob and the entry carries its id',
+      'a photo is kept once, in its finance-photo blob, and the entry carries its id',
       () async {
         final jpeg = jpegBytes();
         final e = await repo.appendCollection(cash(), photo: jpeg);
@@ -246,7 +246,8 @@ void main() {
         // The stored op document holds no bytes; they are in the blob.
         final doc = await store.getDoc(Collections.outbox, photo.opId);
         expect((doc!['op'] as Map)['payload'], isNot(contains('bytesBase64')));
-        expect(await store.getBlob(Outbox.blobId(photo.opId)), jpeg);
+        expect(doc['blob'], SyncEngine.financePhotoBlob(id));
+        expect(await store.getBlob(Outbox.blobId(photo.opId)), isNull);
         // And readable offline.
         expect(await store.getBlob(SyncEngine.financePhotoBlob(id)), jpeg);
         expect(

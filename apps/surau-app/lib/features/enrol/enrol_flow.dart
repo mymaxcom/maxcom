@@ -3,7 +3,9 @@
 // `POST /api/enrol/complete`, and only then keep the key and remember the
 // box. Mirrors `enrol()` in packages/device-client/src/index.ts.
 
+import '../../box/box_address.dart';
 import '../../box/box_client.dart';
+import '../../box/box_name.dart';
 import '../../box/device_key.dart';
 import '../../box/payload.dart';
 import '../common/payload_extras.dart';
@@ -23,6 +25,9 @@ class EnrolledBox {
     required this.caSha256,
     this.appLock = true,
     this.cloud,
+    this.name,
+    this.lastIp,
+    this.caSha256Next,
   });
 
   factory EnrolledBox.fromJson(Map<String, dynamic> j) => EnrolledBox(
@@ -37,6 +42,13 @@ class EnrolledBox {
     caSha256: j['caSha256'] as String?,
     appLock: j['appLock'] is bool ? j['appLock'] as bool : true,
     cloud: j['cloud'] is String ? Uri.tryParse(j['cloud'] as String) : null,
+    name: j['name'] is String && isBoxName(j['name'] as String)
+        ? j['name'] as String
+        : null,
+    lastIp: j['lastIp'] is String && isIpv4(j['lastIp'] as String)
+        ? j['lastIp'] as String
+        : null,
+    caSha256Next: j['caSha256Next'] is String ? j['caSha256Next'] as String : null,
   );
 
   /// Origin of the box, for example `https://<box-ip>:8443`.
@@ -58,7 +70,25 @@ class EnrolledBox {
   /// Origin of the cloud copy (Plan 6); null when the box has none linked.
   final Uri? cloud;
 
-  EnrolledBox withAppLock(bool value) => EnrolledBox(
+  /// The box's local name (`box1-surau.local`) once it is known and has been
+  /// proven by a handshake to the pinned CA; null for a box enrolled by IP
+  /// that never reported one. Only a hint for finding the box: the pinned CA
+  /// and [boxId] still decide who answers.
+  final String? name;
+
+  /// The last LAN IPv4 at which this box was reached and verified.
+  final String? lastIp;
+
+  /// Sha256 of the next root, staged for a re-key (plan C4); unused yet.
+  final String? caSha256Next;
+
+  EnrolledBox _with({
+    bool? appLock,
+    Uri? cloud,
+    bool setCloud = false,
+    String? name,
+    String? lastIp,
+  }) => EnrolledBox(
     box: box,
     boxId: boxId,
     deviceId: deviceId,
@@ -66,23 +96,24 @@ class EnrolledBox {
     userName: userName,
     roles: roles,
     caSha256: caSha256,
-    appLock: value,
-    cloud: cloud,
+    appLock: appLock ?? this.appLock,
+    cloud: setCloud ? cloud : this.cloud,
+    name: name ?? this.name,
+    lastIp: lastIp ?? this.lastIp,
+    caSha256Next: caSha256Next,
   );
+
+  EnrolledBox withAppLock(bool value) => _with(appLock: value);
 
   /// The same enrolment with the cloud origin [value] (learnt from the
   /// box's `GET /api/health` after enrolment).
-  EnrolledBox withCloud(Uri? value) => EnrolledBox(
-    box: box,
-    boxId: boxId,
-    deviceId: deviceId,
-    userId: userId,
-    userName: userName,
-    roles: roles,
-    caSha256: caSha256,
-    appLock: appLock,
-    cloud: value,
-  );
+  EnrolledBox withCloud(Uri? value) => _with(cloud: value, setCloud: true);
+
+  /// The same enrolment with the proven local name [value].
+  EnrolledBox withName(String value) => _with(name: value);
+
+  /// The same enrolment with the last verified LAN address [value].
+  EnrolledBox withLastIp(String value) => _with(lastIp: value);
 
   Map<String, dynamic> toJson() => {
     'box': box.toString(),
@@ -94,6 +125,9 @@ class EnrolledBox {
     'caSha256': caSha256,
     'appLock': appLock,
     'cloud': ?cloud?.toString(),
+    'name': ?name,
+    'lastIp': ?lastIp,
+    'caSha256Next': ?caSha256Next,
   };
 
   /// The first 8 groups of 4 hex characters, the part an admin compares
@@ -232,6 +266,7 @@ class EnrolFlow {
     required this.store,
     required this.platform,
     this.surauInfoStore,
+    this.pageOrigin,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
 
@@ -242,6 +277,11 @@ class EnrolFlow {
   final EnrolTrust trust;
   final EnrolledBoxStore store;
   final String platform;
+
+  /// The origin the web app itself runs at (`Uri.base`), null off the web.
+  /// A web page can only call its own origin, so when it is one of the
+  /// addresses the QR lists for the box, enrolment goes there.
+  final Uri? pageOrigin;
 
   /// Seeded with the surau and help contact from the payload on success,
   /// so the unlock screen knows the surau before it ever reaches the box.
@@ -287,7 +327,7 @@ class EnrolFlow {
     if (!hasPin && (pin == null || !isValidPin(pin))) {
       throw const EnrolPinTooWeak();
     }
-    final box = Uri.parse(payload.box);
+    final box = enrolOrigin(payload, page: pageOrigin);
 
     await trust.establish(box, payload.caSha256);
 
@@ -329,6 +369,12 @@ class EnrolFlow {
       caSha256: payload.caSha256,
       appLock: result.appLock ?? payload.appLock ?? true,
       cloud: payload.cloud == null ? null : Uri.parse(payload.cloud!),
+      // The QR's name is a hint, kept so the locator may try it; it is only
+      // trusted after a handshake to the pinned CA with a matching boxId.
+      name: payload.name,
+      lastIp: isIpv4(box.host)
+          ? box.host
+          : (payload.ips.isEmpty ? null : payload.ips.first),
     );
     await trust.commit(payload.caSha256);
     await store.save(enrolled);

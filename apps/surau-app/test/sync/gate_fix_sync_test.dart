@@ -226,7 +226,7 @@ void main() {
     await store.setMeta('seq@box', '1');
     await engine.enqueueAsset(Uint8List.fromList([1, 2, 3, 4]), 'image/png');
     final queued = (await engine.outbox.pending()).single;
-    await store.deleteBlob('upload-${queued.opId}');
+    await store.deleteBlob('asset-${queued.entityId}');
     final v = await engine.sync();
     expect(server.opBatches, isEmpty);
     expect(await engine.outbox.count, 0);

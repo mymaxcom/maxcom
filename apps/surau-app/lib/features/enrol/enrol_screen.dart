@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../app/theme.dart';
+import '../../box/box_address.dart';
 import '../../box/box_client.dart';
 import '../../box/box_qr.dart';
 import '../../box/payload.dart';
@@ -761,7 +762,7 @@ class _EnrolScreenState extends State<EnrolScreen> {
         ],
         const SizedBox(height: 16),
         TechnicalDetails(
-          boxAddress: p.box,
+          boxAddress: boxAddressText(Uri.parse(p.box), name: p.name),
           fingerprint: EnrolledBox.fingerprintOf(p.caSha256),
         ),
         if (_joinError != null) ...[const SizedBox(height: 16), _joinErrorCard()],

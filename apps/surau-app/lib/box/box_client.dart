@@ -116,7 +116,9 @@ class BoxClient {
     required String token,
   }) async => _decodeObject(await _send('PUT', path, token: token, json: body));
 
-  /// Public routes (enrol, challenge, unlock) pass no token.
+  /// Public routes (enrol, challenge, unlock) pass no token. [read] replaces
+  /// the client's read budget for this request (a picture push is slow on a
+  /// mobile link); the connect budget is unchanged.
   /// [idempotent] allows ONE silent retry when the box cannot be reached; it
   /// is for reads only. Enrol, unlock and every other write never retry.
   Future<Map<String, dynamic>> postJson(
@@ -124,8 +126,16 @@ class BoxClient {
     Object body, {
     String? token,
     bool idempotent = false,
+    Duration? read,
   }) async => _decodeObject(
-    await _send('POST', path, token: token, json: body, idempotent: idempotent),
+    await _send(
+      'POST',
+      path,
+      token: token,
+      json: body,
+      idempotent: idempotent,
+      read: read,
+    ),
   );
 
   /// `POST path` with raw bytes as the body and their own Content-Type (a
@@ -183,6 +193,7 @@ class BoxClient {
     Uint8List? raw,
     String? contentType,
     bool idempotent = false,
+    Duration? read,
   }) async {
     try {
       return await _sendOnce(
@@ -192,6 +203,7 @@ class BoxClient {
         json: json,
         raw: raw,
         contentType: contentType,
+        read: read,
       );
     } on BoxUnreachable {
       if (!idempotent) rethrow;
@@ -202,6 +214,7 @@ class BoxClient {
         json: json,
         raw: raw,
         contentType: contentType,
+        read: read,
       );
     }
   }
@@ -213,7 +226,9 @@ class BoxClient {
     Object? json,
     Uint8List? raw,
     String? contentType,
+    Duration? read,
   }) async {
+    final readBudget = read ?? this.read;
     final req = http.Request(method, _uri(path));
     final t = token;
     // The offline session has an empty token: nothing to send, but a 401
@@ -229,8 +244,15 @@ class BoxClient {
 
     final http.Response res;
     try {
-      final streamed = await client.send(req).timeout(connect + read);
-      res = await http.Response.fromStream(streamed).timeout(read);
+      // One deadline for the whole exchange (send and body): the worst case
+      // is connect + read, not that again for the body.
+      final total = connect + readBudget;
+      final clock = Stopwatch()..start();
+      final streamed = await client.send(req).timeout(total);
+      final left = total - clock.elapsed;
+      res = await http.Response.fromStream(
+        streamed,
+      ).timeout(left > Duration.zero ? left : Duration.zero);
     } on BoxError {
       rethrow;
     } on Exception catch (e) {

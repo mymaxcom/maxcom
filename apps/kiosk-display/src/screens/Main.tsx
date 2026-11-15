@@ -7,11 +7,9 @@ import { activeTickerItems, Ticker } from '../content/Ticker.tsx';
 import { ZikirOverlay } from '../content/ZikirOverlay.tsx';
 import { useContent } from '../data/content.ts';
 import type { KioskView } from '../data/kiosk.ts';
-import { useLive } from '../data/live.ts';
 import { fmtGregorian, fmtHijri, prayerLabel } from '../format.ts';
 import { surauNameOf, t } from '../i18n.ts';
 import type { Lang } from '../i18n.ts';
-import { LiveLayer } from '../live/LiveLayer.tsx';
 import { Clock } from '../ui/Clock.tsx';
 import { Countdown } from '../ui/Countdown.tsx';
 import { EmergencyBand } from '../ui/EmergencyBand.tsx';
@@ -26,8 +24,6 @@ export interface MainProps {
 }
 
 interface RegionProps extends MainProps {
-  /** A live is on air: the kuliah strip takes the band, so no card rotates and no tilawah plays. */
-  live: boolean;
   onTicker: (has: boolean) => void;
   onShown: (feature: SlotFeature | null) => void;
   /** Whether the zikir overlay holds the band (Main lays the header out for an empty band only without it). */
@@ -38,23 +34,23 @@ interface RegionProps extends MainProps {
  * The rotating content region: content, tilawah, ticker and zikir. Everything that can throw while rendering
  * content lives in here, behind its own quiet boundary, so a bad card never takes the prayer screen down.
  */
-function ContentRegion({ view, lang, live, onTicker, onShown, onZikir }: RegionProps) {
+function ContentRegion({ view, lang, onTicker, onShown, onZikir }: RegionProps) {
   const { settings, now } = view;
   const c = useContent(view);
-  useTilawah(view, live ? null : c.content);
+  useTilawah(view, c.content);
   // Ticker strip (Plan 2 Task 10): only when the feature is on and a text is active on the KL date; the screen
   // is marked so the content region lifts to make room. Zikir replaces the rotation while its window is open.
   const tickerItems = settings.ticker.enabled && c.content ? activeTickerItems(c.content.ticker, dateOf(now, view.tz)) : [];
   const hasTicker = tickerItems.length > 0;
-  const showZikir = !live && c.zikir !== null && c.content !== null && c.content.zikir.length > 0;
+  const showZikir = c.zikir !== null && c.content !== null && c.content.zikir.length > 0;
   useLayoutEffect(() => {
     onTicker(hasTicker);
     return () => onTicker(false);
   }, [hasTicker, onTicker]);
-  // Zikir (and a live) replace the rotation: no card is on screen then, whatever the rotation says.
+  // Zikir replaces the rotation: no card is on screen then, whatever the rotation says.
   useLayoutEffect(() => {
-    if (showZikir || live) onShown(null);
-  }, [showZikir, live, onShown]);
+    if (showZikir) onShown(null);
+  }, [showZikir, onShown]);
   useLayoutEffect(() => {
     onZikir(showZikir);
     return () => onZikir(false);
@@ -62,7 +58,7 @@ function ContentRegion({ view, lang, live, onTicker, onShown, onZikir }: RegionP
 
   return (
     <>
-      {live ? null : showZikir && c.content && c.zikir ? (
+      {showZikir && c.content && c.zikir ? (
         <ZikirOverlay view={view} lang={lang} content={c.content} zikir={c.zikir} />
       ) : (
         <ContentLayer view={view} lang={lang} content={c} onShown={onShown} />
@@ -90,12 +86,10 @@ export function Main({ view, lang }: MainProps) {
   const name = surauNameOf(settings, lang);
   // The text name is left out only when the logo stands in for it (surauInfo.showName off) and there is one.
   const showName = nameShownOf(settings, logo);
-  // The live (Plan 5 Task 6) exists only here, in the normal phase: every prayer phase unmounts Main and the
-  // player with it. Live wins over the rotation (posters included); the prayer layer wins over live.
-  const live = useLive(settings);
-  const onAir = live.live === true;
-  // Nothing in the band (no card, no zikir, no live): the header takes the screen (styles.css `.is-idle`).
-  const idle = shownFeature === null && !zikirOn && !onAir;
+  // A live never shows here: while one is on, the app shows the live screen instead (or a prayer screen over the
+  // blurred live inside a prayer window), so Main is the kiosk without a live.
+  // Nothing in the band (no card, no zikir): the header takes the screen (styles.css `.is-idle`).
+  const idle = shownFeature === null && !zikirOn;
   // The header fades only on an idle <-> card switch after Main has settled, never on the mount itself (Main mounts
   // after every prayer phase, and a fading header would hide the ticking clock). A short grace covers the first
   // frames, when the band settles from empty to its first card.
@@ -114,16 +108,10 @@ export function Main({ view, lang }: MainProps) {
 
   return (
     <div
-      class={`screen screen--main${hasTicker ? ' has-ticker' : ''}${poster ? ' is-poster' : ''}${idle ? ' is-idle' : ''}${settle ? ' is-settling' : ''}${onAir ? ' has-live' : ''}${view.todaySource.emergency ? ' has-emergency' : ''}`}
+      class={`screen screen--main${hasTicker ? ' has-ticker' : ''}${poster ? ' is-poster' : ''}${idle ? ' is-idle' : ''}${settle ? ' is-settling' : ''}${view.todaySource.emergency ? ' has-emergency' : ''}`}
       data-poster={poster ? 'true' : 'false'}
       data-idle={idle ? 'true' : 'false'}
     >
-      {onAir ? (
-        <QuietBoundary>
-          <LiveLayer key={live.since ?? 'live'} live={live} settings={settings} lang={lang} />
-        </QuietBoundary>
-      ) : null}
-
       <div class="ident" aria-hidden={poster ? 'true' : undefined}>
         <div class={`ident__head${logo ? ' has-logo' : ''}`}>
           <SurauLogo src={logo} class="ident__logo" />
@@ -150,7 +138,7 @@ export function Main({ view, lang }: MainProps) {
 
       {/* Rotating content: mounted only here, so every prayer phase unmounts it (and stops tilawah). */}
       <QuietBoundary>
-        <ContentRegion view={view} lang={lang} live={onAir} onTicker={setHasTicker} onShown={onShown} onZikir={setZikirOn} />
+        <ContentRegion view={view} lang={lang} onTicker={setHasTicker} onShown={onShown} onZikir={setZikirOn} />
       </QuietBoundary>
 
       <EmergencyBand view={view} lang={lang} />

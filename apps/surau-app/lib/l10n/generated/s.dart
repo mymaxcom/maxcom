@@ -2365,6 +2365,12 @@ abstract class S {
   /// **'Pengguna tidak dijumpai.'**
   String get userNotFound;
 
+  /// No description provided for @enrolBoxOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod peranti mesti dibuat oleh MAXCOM di surau. Gunakan telefon Pentadbir Surau di Wi-Fi surau.'**
+  String get enrolBoxOnly;
+
   /// No description provided for @enrolQrTitle.
   ///
   /// In ms, this message translates to:
@@ -2977,6 +2983,18 @@ abstract class S {
   /// **'Biarkan kosong untuk tetapan asal.'**
   String get settingsOptionalHint;
 
+  /// No description provided for @settingsShortNameHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'cth. SDM'**
+  String get settingsShortNameHint;
+
+  /// No description provided for @settingsShortNameHelper.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kosongkan untuk guna nama surau.'**
+  String get settingsShortNameHelper;
+
   /// No description provided for @settingsDecrease.
   ///
   /// In ms, this message translates to:
@@ -3058,7 +3076,7 @@ abstract class S {
   /// No description provided for @settingsBackgroundUploaded.
   ///
   /// In ms, this message translates to:
-  /// **'Gambar latar dimuat naik'**
+  /// **'Gambar latar disimpan, akan dimuat naik'**
   String get settingsBackgroundUploaded;
 
   /// No description provided for @settingsBackgroundTile.
@@ -3334,14 +3352,38 @@ abstract class S {
   /// No description provided for @imageUploading.
   ///
   /// In ms, this message translates to:
-  /// **'Memuat naik gambar'**
+  /// **'Menyimpan gambar'**
   String get imageUploading;
+
+  /// No description provided for @imageQueued.
+  ///
+  /// In ms, this message translates to:
+  /// **'Memuat naik…'**
+  String get imageQueued;
+
+  /// No description provided for @imageLost.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gagal dimuat naik'**
+  String get imageLost;
+
+  /// No description provided for @imageChooseAgain.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih semula gambar'**
+  String get imageChooseAgain;
 
   /// No description provided for @imageUploaded.
   ///
   /// In ms, this message translates to:
   /// **'Gambar dimuat naik'**
   String get imageUploaded;
+
+  /// No description provided for @imageSaved.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar disimpan, akan dimuat naik'**
+  String get imageSaved;
 
   /// No description provided for @imagePickFailed.
   ///

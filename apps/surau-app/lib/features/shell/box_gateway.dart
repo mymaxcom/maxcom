@@ -172,7 +172,12 @@ class BoxGateway {
     try {
       final out = await client.getBytes(path, token: token);
       reach.markUp(now());
-      if (blob != null) await store!.putBlob(blob, out);
+      if (blob != null) {
+        // An asset is named by the sha256 of its bytes: bytes that do not
+        // hash to the id asked for are returned but never kept under it.
+        final ok = assetId == null || await SyncEngine.sha256Of(out) == assetId;
+        if (ok) await store!.putBlob(blob, out);
+      }
       return out;
     } on SessionExpired {
       onSessionExpired();

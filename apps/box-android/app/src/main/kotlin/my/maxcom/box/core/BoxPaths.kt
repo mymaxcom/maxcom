@@ -38,6 +38,7 @@ class BoxPaths(val filesDir: File, val nativeLibDir: File) {
     val rootCa: File = File(pki, "root-ca.cer")
     val leafCert: File = File(pki, "box-leaf.cer")
     val boxCaJson: File = File(pki, "box-ca.json")
+    val boxNameJson: File = File(data, "box-name.json")
     val secret: File = File(data, "secret")
     val boxKey: File = File(secret, "box.key")
     val leafKeyPem: File = File(secret, "box-key.pem")

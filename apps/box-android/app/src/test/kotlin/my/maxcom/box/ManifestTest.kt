@@ -72,6 +72,7 @@ class ManifestTest {
         val expected = listOf(
             "ACCESS_NETWORK_STATE",
             "ACCESS_WIFI_STATE",
+            "CHANGE_WIFI_MULTICAST_STATE",
             "FOREGROUND_SERVICE",
             "FOREGROUND_SERVICE_SPECIAL_USE",
             "INTERNET",

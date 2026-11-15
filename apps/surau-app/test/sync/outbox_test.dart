@@ -104,7 +104,7 @@ void main() {
     });
 
     test(
-      'an asset keeps its bytes in an upload- blob, restored on read',
+      'an asset keeps its bytes once, in the asset- blob, restored on read',
       () async {
         final bytes = Uint8List.fromList(List.generate(100, (i) => i));
         await outbox.add(
@@ -116,14 +116,19 @@ void main() {
         );
         final doc = await store.getDoc(Collections.outbox, '01A');
         expect(jsonEncode(doc), isNot(contains(base64.encode(bytes))));
-        expect(await store.getBlob('${uploadBlobPrefix}01A'), bytes);
+        expect(await store.getBlob('asset-x01A'), bytes);
+        expect(await store.getBlob('${uploadBlobPrefix}01A'), isNull);
+        final lean = (await outbox.queued()).single;
+        expect((lean.payload as Map).containsKey('bytesBase64'), isFalse);
         final op = (await outbox.pending()).single;
         expect(
           base64.decode((op.payload as Map)['bytesBase64'] as String),
           bytes,
         );
         await outbox.remove('01A');
-        expect(await store.getBlob('${uploadBlobPrefix}01A'), isNull);
+        // The picture stays readable offline; only the queue entry is gone.
+        expect(await store.getBlob('asset-x01A'), bytes);
+        expect(await outbox.count, 0);
       },
     );
 
@@ -143,8 +148,36 @@ void main() {
       );
       await small.putBlob('asset-aaa', Uint8List(100));
       await small.putBlob('asset-bbb', Uint8List(100));
-      expect(await small.getBlob('${uploadBlobPrefix}01A'), isNotNull);
+      expect(await small.getBlob('asset-x01A'), isNotNull);
       expect(await small.getBlob('asset-aaa'), isNull);
+    });
+
+    test('a 2026.11.6 queue (bytes in upload-<opId>) still loads', () async {
+      final bytes = Uint8List.fromList(List.generate(50, (i) => i));
+      await store.putBlob('${uploadBlobPrefix}01A', bytes);
+      await store.putDoc(Collections.outbox, '01A', {
+        'op': _op('01A', kind: 'asset.put', payload: {'mime': 'image/png'}).json,
+        'blob': true,
+      });
+      expect((await outbox.queued()).single.blobId, 'upload-01A');
+      expect(await outbox.missingBlobOps(), isEmpty);
+      final op = (await outbox.pending()).single;
+      expect(
+        base64.decode((op.payload as Map)['bytesBase64'] as String),
+        bytes,
+      );
+      await outbox.remove('01A');
+      expect(await store.getBlob('upload-01A'), isNull);
+    });
+
+    test('missingBlobOps flags a queued picture whose blob is gone', () async {
+      await outbox.add(
+        _op('01A', kind: 'asset.put', payload: {'mime': 'image/png'}),
+        bytes: Uint8List(10),
+      );
+      await store.deleteBlob('asset-x01A');
+      expect((await outbox.missingBlobOps()).single.opId, '01A');
+      expect(await outbox.pending(), isEmpty);
     });
   });
 

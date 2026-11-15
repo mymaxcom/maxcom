@@ -530,7 +530,10 @@ class SettingsForm extends StatelessWidget {
         label: label,
         value: v is String ? v : d,
         maxLength: max,
-        hint: rule?.what == null ? null : 'Contoh: ${_exampleFor(name)}',
+        hint: name == 'shortName'
+          ? S.of(context).settingsShortNameHint
+          : rule?.what == null ? null : 'Contoh: ${_exampleFor(name)}',
+        helper: name == 'shortName' ? S.of(context).settingsShortNameHelper : null,
         error: error,
         readOnly: readOnly,
         onChanged: (t) => onChanged(t),
@@ -936,6 +939,7 @@ class TextRow extends StatefulWidget {
     this.maxLength = maxText,
     this.optional = false,
     this.hint,
+    this.helper,
     this.error,
     this.readOnly = false,
     this.url = false,
@@ -952,6 +956,9 @@ class TextRow extends StatefulWidget {
   final int maxLength;
   final bool optional;
   final String? hint;
+
+  /// Helper line under the field; null: the optional hint, when [optional].
+  final String? helper;
   final String? error;
   final bool readOnly;
 
@@ -996,7 +1003,7 @@ class _TextRowState extends State<TextRow> {
         decoration: InputDecoration(
           labelText: widget.label,
           hintText: widget.hint,
-          helperText: widget.optional ? s.settingsOptionalHint : null,
+          helperText: widget.helper ?? (widget.optional ? s.settingsOptionalHint : null),
           errorText: widget.error,
           errorMaxLines: 3,
           counterText: '',

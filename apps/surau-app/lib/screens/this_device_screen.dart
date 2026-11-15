@@ -13,6 +13,7 @@ import '../app/providers.dart';
 import '../app/router.dart';
 import '../app/shell.dart';
 import '../app/theme.dart';
+import '../box/box_address.dart';
 import '../box/box_client.dart';
 import '../features/common/help_card.dart';
 import '../features/common/roles.dart';
@@ -202,7 +203,7 @@ class _ThisDeviceScreenState extends ConsumerState<ThisDeviceScreen> {
           if (box != null) ...[
             const SizedBox(height: 12),
             TechnicalDetails(
-              boxAddress: box.box.toString(),
+              boxAddress: boxAddressText(box.box, name: box.name),
               fingerprint: box.caFingerprint,
             ),
           ],

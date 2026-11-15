@@ -4,6 +4,8 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
+import android.os.Handler
+import android.os.Looper
 import androidx.fragment.app.FragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -15,6 +17,30 @@ import java.security.ProviderException
 import java.security.Signature
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+
+/**
+ * Runs [work] on [executor] and hands its outcome to [deliver] through [postMain], so a slow job
+ * (a multi-MB AES-GCM seal through the Keystore) never blocks the Android main thread and the
+ * platform reply still happens on it. An Error counts as a failure too: a job that dies without
+ * an answer would leave the Dart side waiting forever.
+ */
+internal fun <T> runOffMain(
+    executor: Executor,
+    postMain: (Runnable) -> Unit,
+    work: () -> T,
+    deliver: (Result<T>) -> Unit,
+) {
+    executor.execute {
+        val outcome = try {
+            Result.success(work())
+        } catch (t: Throwable) {
+            Result.failure(t)
+        }
+        postMain(Runnable { deliver(outcome) })
+    }
+}
 
 /**
  * Device signing key in the Android Keystore (channel `my.maxcom/keystore`).
@@ -27,11 +53,21 @@ import java.security.spec.ECGenParameterSpec
 class KeystoreChannel(
     private val seal: BiometricSeal,
     private val filesDir: java.io.File? = null,
+    private val executor: Executor = defaultExecutor,
+    private val postMain: (Runnable) -> Unit = defaultPostMain,
 ) : MethodChannel.MethodCallHandler {
     companion object {
         const val CHANNEL = "my.maxcom/keystore"
         const val ALIAS = "surau-device-key"
         private const val PROVIDER = "AndroidKeyStore"
+
+        /** Seal, open and key reset of the local store run here, two at a time at most. */
+        private val defaultExecutor: Executor = Executors.newFixedThreadPool(2) { r ->
+            Thread(r, "keystore-local-seal").apply { isDaemon = true }
+        }
+        private val defaultPostMain: (Runnable) -> Unit = { r ->
+            Handler(Looper.getMainLooper()).post(r)
+        }
 
         fun register(engine: FlutterEngine, activity: FragmentActivity) {
             MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
@@ -80,10 +116,27 @@ class KeystoreChannel(
                     val bytes = args?.get("bytes") as? ByteArray
                     if (box == null || bytes == null || !LocalSeal.isBoxId(box)) {
                         result.error("bad_args", "bad arguments", null)
-                    } else if (call.method == "localSeal") {
-                        result.success(LocalSeal.forBox(box).seal(bytes))
                     } else {
-                        result.success(LocalSeal.forBox(box).open(bytes))
+                        // Off the main thread: a multi-MB blob through the Keystore takes
+                        // seconds on a mid-range phone. The reply goes back on the main thread.
+                        val sealing = call.method == "localSeal"
+                        runOffMain(
+                            executor,
+                            postMain,
+                            { if (sealing) LocalSeal.forBox(box).seal(bytes) else LocalSeal.forBox(box).open(bytes) },
+                        ) { outcome ->
+                            outcome.fold(
+                                { result.success(it) },
+                                { e ->
+                                    // Never include e.message: it can carry provider internals.
+                                    if (e is NoKeyException) {
+                                        result.error("no_key", "no key", null)
+                                    } else {
+                                        result.error("keystore_failed", "keystore failure", null)
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
                 "localKeyReset" -> {
@@ -91,8 +144,14 @@ class KeystoreChannel(
                     if (box == null || !LocalSeal.isBoxId(box)) {
                         result.error("bad_args", "bad arguments", null)
                     } else {
-                        LocalSeal.reset(box)
-                        result.success(null)
+                        // Same executor as seal/open, so a reset is queued behind the seals
+                        // already running instead of racing them from the main thread.
+                        runOffMain(executor, postMain, { LocalSeal.reset(box) }) { outcome ->
+                            outcome.fold(
+                                { result.success(null) },
+                                { result.error("keystore_failed", "keystore failure", null) },
+                            )
+                        }
                     }
                 }
                 // Folder for the local store files (app-private, excluded from backup).

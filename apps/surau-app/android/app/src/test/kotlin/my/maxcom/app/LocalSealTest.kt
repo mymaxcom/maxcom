@@ -113,4 +113,24 @@ class LocalSealTest {
         assertFalse(LocalSeal.isBoxId("../x"))
         assertFalse(LocalSeal.isBoxId("a".repeat(65)))
     }
+
+    @Test
+    fun keyLockAllowsOneHolderAtATime() {
+        val inside = java.util.concurrent.atomic.AtomicInteger(0)
+        val maxInside = java.util.concurrent.atomic.AtomicInteger(0)
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
+        val tasks = (1..8).map {
+            pool.submit {
+                LocalSeal.withKeyLock {
+                    val n = inside.incrementAndGet()
+                    maxInside.updateAndGet { m -> maxOf(m, n) }
+                    Thread.sleep(15)
+                    inside.decrementAndGet()
+                }
+            }
+        }
+        tasks.forEach { it.get(10, java.util.concurrent.TimeUnit.SECONDS) }
+        pool.shutdown()
+        assertEquals(1, maxInside.get())
+    }
 }

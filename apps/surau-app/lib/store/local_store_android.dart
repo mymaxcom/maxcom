@@ -345,8 +345,28 @@ class LocalStoreAndroid implements LocalStore {
     await _evict(keep: _blobFile(id).path);
   });
 
-  /// Deletes the oldest asset blobs (never queued uploads, never [keep])
-  /// until the blobs fit in [blobCap].
+  @override
+  Future<bool> hasBlob(String id) => _locked(() => _blobFile(id).exists());
+
+  @override
+  Future<void> putBlobWithDoc(
+    String blobId,
+    Uint8List bytes,
+    String collection,
+    String docId,
+    Map<String, dynamic> doc,
+  ) => _locked(() async {
+    // One lock for all three steps: no reader sees the doc before its bytes,
+    // and the eviction below already sees the doc that names the blob.
+    final c = await _load(collection);
+    await _writeSealed(_blobFile(blobId), 'b:$blobId', bytes);
+    c[docId] = copyDoc(doc);
+    await _save(collection);
+    await _evict(keep: _blobFile(blobId).path);
+  });
+
+  /// Deletes the oldest asset blobs (never queued uploads, never a blob a
+  /// queued outbox op names, never [keep]) until the blobs fit in [blobCap].
   Future<void> _evict({required String keep}) async {
     final dir = Directory('${_dir.path}/blobs');
     if (!await dir.exists()) return;
@@ -359,6 +379,10 @@ class LocalStoreAndroid implements LocalStore {
       total += st.size;
     }
     if (total <= blobCap) return;
+    final queued = {
+      for (final id in queuedBlobIds((await _load(Collections.outbox)).values))
+        '${safeName(id)}.bin',
+    };
     final order = files.keys.toList()
       ..sort((a, b) {
         final c = files[a]!.modified.compareTo(files[b]!.modified);
@@ -367,7 +391,11 @@ class LocalStoreAndroid implements LocalStore {
     for (final f in order) {
       if (total <= blobCap) break;
       final name = f.uri.pathSegments.last;
-      if (f.path == keep || name.startsWith(uploadBlobPrefix)) continue;
+      if (f.path == keep ||
+          name.startsWith(uploadBlobPrefix) ||
+          queued.contains(name)) {
+        continue;
+      }
       total -= files[f]!.size;
       await f.delete();
     }
@@ -411,12 +439,21 @@ class _LazyRootStore implements LocalStore {
   _LazyRootStore(this._sealer);
 
   final ChannelLocalSealer _sealer;
-  LocalStoreAndroid? _inner;
+  Future<LocalStoreAndroid>? _innerFuture;
 
-  Future<LocalStoreAndroid> _get() async => _inner ??= LocalStoreAndroid(
-    root: await _sealer.rootDir(),
-    sealer: _sealer,
-  );
+  /// One shared instance: concurrent first calls await the same future (two
+  /// instances would have separate locks and caches over the same files).
+  /// A failed creation is forgotten so the next call retries.
+  Future<LocalStoreAndroid> _get() => _innerFuture ??= _create();
+
+  Future<LocalStoreAndroid> _create() async {
+    try {
+      return LocalStoreAndroid(root: await _sealer.rootDir(), sealer: _sealer);
+    } catch (_) {
+      _innerFuture = null;
+      rethrow;
+    }
+  }
 
   @override
   Future<void> open(String boxId) async => (await _get()).open(boxId);
@@ -451,6 +488,16 @@ class _LazyRootStore implements LocalStore {
   @override
   Future<void> putBlob(String id, Uint8List b) async =>
       (await _get()).putBlob(id, b);
+  @override
+  Future<bool> hasBlob(String id) async => (await _get()).hasBlob(id);
+  @override
+  Future<void> putBlobWithDoc(
+    String blobId,
+    Uint8List b,
+    String c,
+    String docId,
+    Map<String, dynamic> doc,
+  ) async => (await _get()).putBlobWithDoc(blobId, b, c, docId, doc);
   @override
   Future<void> deleteBlob(String id) async => (await _get()).deleteBlob(id);
   @override

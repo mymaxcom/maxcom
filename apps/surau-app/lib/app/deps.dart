@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../box/box_client.dart';
 import '../box/device_key.dart';
+import '../box/discovery.dart';
+import '../box/routes.dart';
 import '../box/session_store.dart';
 import '../box/trust.dart';
 import '../features/common/contact_links.dart';
@@ -46,6 +48,9 @@ class AppDeps {
     this.initialSurau,
     this.cacheStore,
     this.boxLeaf,
+    this.probeClient,
+    this.discovery = const NoDiscovery(),
+    this.routes,
     this.scannerBuilder,
     this.localStoreBuilder,
     this.uploadRunnerBuilder,
@@ -89,6 +94,18 @@ class AppDeps {
   /// tests and on the web.
   final Future<Uint8List?> Function(EnrolledBox box)? boxLeaf;
 
+  /// A pinned client for ONE probe of a box candidate: [EnrolledBox.box] is
+  /// the candidate's origin and, when [ip] is given, that host opens [ip]
+  /// for this client only. Null where the app does not pin the CA (web,
+  /// tests): the box is then found by its enrolled address only.
+  final Future<BoxClient> Function(EnrolledBox box, String? ip)? probeClient;
+
+  /// Finds boxes on the Wi-Fi (hints only; see lib/box/discovery.dart).
+  final BoxDiscovery discovery;
+
+  /// Where boxes' local names point (shared with the trust store's clients).
+  final BoxRoutes? routes;
+
   /// Persistent read cache; null keeps the cache for one run.
   final ReadCacheStore? cacheStore;
 
@@ -119,7 +136,8 @@ class AppDeps {
     final prefs = await SharedPreferences.getInstance();
     final session = SessionStore(prefs);
     final surauStore = SurauInfoPrefsStore(prefs);
-    final trustStore = TrustStore();
+    final routes = BoxRoutes();
+    final trustStore = TrustStore(routes: routes);
     final trust = PinnedEnrolTrust(trustStore, session);
     final platform = detectEnrolPlatform(
       isWeb: kIsWeb,
@@ -134,6 +152,16 @@ class AppDeps {
       clientFor: trust.clientFor,
       enrolledClient: (box) => trustStore.boxClient(box, session),
       boxLeaf: (box) => trustStore.boxLeaf(box, session),
+      probeClient: trustStore.pinsCa
+          ? (box, ip) => trustStore.boxClient(
+              box,
+              session,
+              candidateHost: box.box.host,
+              candidateIp: ip,
+            )
+          : null,
+      discovery: platformDiscovery(),
+      routes: routes,
       platform: platform,
       cameraAvailable: cameraLikelyAvailable(),
       initialBox: await session.load(),

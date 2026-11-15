@@ -1300,6 +1300,10 @@ class SMs extends S {
   String get userNotFound => 'Pengguna tidak dijumpai.';
 
   @override
+  String get enrolBoxOnly =>
+      'Kod peranti mesti dibuat oleh MAXCOM di surau. Gunakan telefon Pentadbir Surau di Wi-Fi surau.';
+
+  @override
   String get enrolQrTitle => 'Daftar peranti';
 
   @override
@@ -1648,6 +1652,12 @@ class SMs extends S {
   String get settingsOptionalHint => 'Biarkan kosong untuk tetapan asal.';
 
   @override
+  String get settingsShortNameHint => 'cth. SDM';
+
+  @override
+  String get settingsShortNameHelper => 'Kosongkan untuk guna nama surau.';
+
+  @override
   String get settingsDecrease => 'Kurang';
 
   @override
@@ -1695,7 +1705,8 @@ class SMs extends S {
   String get settingsBackgroundsUpload => 'Muat naik gambar latar';
 
   @override
-  String get settingsBackgroundUploaded => 'Gambar latar dimuat naik';
+  String get settingsBackgroundUploaded =>
+      'Gambar latar disimpan, akan dimuat naik';
 
   @override
   String settingsBackgroundTile(int n) {
@@ -1880,10 +1891,22 @@ class SMs extends S {
   String get imagePreparing => 'Menyediakan gambar';
 
   @override
-  String get imageUploading => 'Memuat naik gambar';
+  String get imageUploading => 'Menyimpan gambar';
+
+  @override
+  String get imageQueued => 'Memuat naik…';
+
+  @override
+  String get imageLost => 'Gagal dimuat naik';
+
+  @override
+  String get imageChooseAgain => 'Pilih semula gambar';
 
   @override
   String get imageUploaded => 'Gambar dimuat naik';
+
+  @override
+  String get imageSaved => 'Gambar disimpan, akan dimuat naik';
 
   @override
   String get imagePickFailed => 'Gambar tidak dapat dibaca. Cuba gambar lain.';

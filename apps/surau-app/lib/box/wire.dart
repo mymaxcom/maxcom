@@ -181,6 +181,7 @@ class HealthDto {
     this.assetsBytes,
     this.appLock,
     this.cloud,
+    this.name,
   });
 
   factory HealthDto.fromJson(Map<String, dynamic> j) {
@@ -199,6 +200,7 @@ class HealthDto {
       assetsBytes: (j['assetsBytes'] as num?)?.toInt(),
       appLock: j['appLock'] is bool ? j['appLock'] as bool : null,
       cloud: j['cloud'] is String ? j['cloud'] as String : null,
+      name: j['name'] is String ? j['name'] as String : null,
     );
   }
 
@@ -218,6 +220,10 @@ class HealthDto {
   /// The https origin of the MAXCOM cloud the box is linked to; null when
   /// the box has none (or is older).
   final String? cloud;
+
+  /// The box's local name (`box1-surau.local`); null on a legacy root or an
+  /// older box. A hint only: never trusted until a handshake proves it.
+  final String? name;
 }
 
 class AuditEntry {

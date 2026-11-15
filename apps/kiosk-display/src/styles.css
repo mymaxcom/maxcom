@@ -848,6 +848,7 @@ body {
 }
 .box-id dt { opacity: 0.8; }
 .box-id dd { margin: 0; font-weight: 700; letter-spacing: 0; }
+.box-id__ip { display: block; font-size: 0.7em; font-weight: 400; opacity: 0.75; margin-top: 0.15em; }
 .box-note { margin: 0; font-size: 1.45rem; opacity: 0.88; }
 .box-warn { margin: 0; font-size: 1.6rem; font-weight: 700; color: #ffb3a7; }
 .box-foot {
@@ -874,6 +875,11 @@ body {
   border-radius: 0.9rem;
   padding: 0.65rem 1rem;
   cursor: none;
+}
+/* The pointer shows while the mouse moves (ui/cursorIdle.ts toggles this class on <html>). */
+html.cursor-visible body,
+html.cursor-visible .tvbtn {
+  cursor: default;
 }
 /* The focus ring must read from across a room: gold fill, white ring. */
 .tvbtn.is-focused {

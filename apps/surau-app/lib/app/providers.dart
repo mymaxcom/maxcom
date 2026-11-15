@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../box/box_client.dart';
+import '../box/box_name.dart';
 import '../box/cloud_origin.dart';
 import '../features/common/surau_info.dart';
 import '../features/enrol/enrol_flow.dart';
@@ -52,10 +53,21 @@ class EnrolledBoxNotifier extends Notifier<EnrolledBox?> {
     if (ref.mounted) state = next;
   }
 
+  // The three learns below are read-modify-write on the enrolled box. They
+  // run one after another, each re-reading the current state when it starts,
+  // so two that overlap cannot drop each other's field.
+  Future<void> _learnQueue = Future<void>.value();
+
+  Future<void> _serialized(Future<void> Function() task) {
+    final run = _learnQueue.then((_) => task());
+    _learnQueue = run.then<void>((_) {}, onError: (Object _) {});
+    return run;
+  }
+
   /// The box named its cloud in `GET /api/health`: keep it when it is an
   /// https origin on the MAXCOM domain ([acceptedCloudOrigin]) and differs
   /// from the one kept. Anything else is ignored.
-  Future<void> learnCloud(String? raw) async {
+  Future<void> learnCloud(String? raw) => _serialized(() async {
     final box = state;
     if (box == null) return;
     final origin = acceptedCloudOrigin(box, raw);
@@ -63,7 +75,28 @@ class EnrolledBoxNotifier extends Notifier<EnrolledBox?> {
     final next = box.withCloud(origin);
     await ref.read(appDepsProvider).boxStore.save(next);
     if (ref.mounted && state?.boxId == next.boxId) state = next;
-  }
+  });
+
+  /// A direct answer was verified (pinned CA, matching boxId) at [ip]: keep
+  /// it as the last known address.
+  Future<void> learnLastIp(String? ip) => _serialized(() async {
+    final box = state;
+    if (box == null || ip == null || !isIpv4(ip) || box.lastIp == ip) return;
+    final next = box.withLastIp(ip);
+    await ref.read(appDepsProvider).boxStore.save(next);
+    if (ref.mounted && state?.boxId == next.boxId) state = next;
+  });
+
+  /// A handshake by [name] to the pinned CA, with the enrolled boxId,
+  /// worked: the enrolment now carries the name. The IP origin stays as the
+  /// fallback.
+  Future<void> learnName(String name) => _serialized(() async {
+    final box = state;
+    if (box == null || !isBoxName(name) || box.name == name) return;
+    final next = box.withName(name);
+    await ref.read(appDepsProvider).boxStore.save(next);
+    if (ref.mounted && state?.boxId == next.boxId) state = next;
+  });
 
   /// "Bukan anda? Daftar semula": forget the box and the key's owner, and
   /// every answer cached from it.
@@ -101,10 +134,14 @@ final rolesProvider = Provider<Set<String>>((ref) {
 });
 
 /// The signed-in person holds the Pentadbir MAXCOM role.
-final isSuperadminProvider = Provider<bool>((ref) => ref.watch(rolesProvider).contains('superadmin'));
+final isSuperadminProvider = Provider<bool>(
+  (ref) => ref.watch(rolesProvider).contains('superadmin'),
+);
 
 /// Whether the lock applies to this person: the surau's lock, or the Pentadbir MAXCOM rule.
-final effectiveLockProvider = Provider<bool>((ref) => ref.watch(appLockProvider));
+final effectiveLockProvider = Provider<bool>(
+  (ref) => ref.watch(appLockProvider),
+);
 
 /// True when the app talks to the MAXCOM cloud rather than the surau's box:
 /// the current session was issued by the cloud.
@@ -114,7 +151,9 @@ final isCloudGatewayProvider = Provider<bool>(
 
 /// May this person give or take the Pentadbir MAXCOM role: on the cloud, with `superadmin:manage`.
 final canGrantSuperadminProvider = Provider<bool>(
-  (ref) => ref.watch(isCloudGatewayProvider) && canSee(ref.watch(rolesProvider), 'superadmin:manage'),
+  (ref) =>
+      ref.watch(isCloudGatewayProvider) &&
+      canSee(ref.watch(rolesProvider), 'superadmin:manage'),
 );
 
 // ---- the surau ----
@@ -178,8 +217,37 @@ final readCacheProvider = Provider<ReadCache>((ref) {
 final enrolledClientProvider = FutureProvider<BoxClient?>((ref) async {
   final box = ref.watch(enrolledBoxProvider);
   if (box == null) return null;
-  return ref.watch(appDepsProvider).enrolledClient(box);
+  final deps = ref.watch(appDepsProvider);
+  // A proven name whose address was found by discovery: talk to the name
+  // (verified against the pinned CA by name), so a changed IP does not
+  // matter. Otherwise the enrolled address, as before.
+  final routes = deps.routes;
+  if (routes != null) {
+    ref.watch(boxRoutesEpochProvider);
+    final name = box.name;
+    if (name != null && routes.addressOf(name) != null) {
+      return deps.enrolledClient(boxAt(box, boxNameOrigin(name, box.box.port)));
+    }
+  }
+  return deps.enrolledClient(box);
 });
+
+/// Moves when a box's name is pointed at a new address ([BoxRoutes]).
+class BoxRoutesEpoch extends Notifier<int> {
+  @override
+  int build() {
+    final routes = ref.watch(appDepsProvider).routes;
+    if (routes == null) return 0;
+    void listener() => state = routes.epoch.value;
+    routes.epoch.addListener(listener);
+    ref.onDispose(() => routes.epoch.removeListener(listener));
+    return routes.epoch.value;
+  }
+}
+
+final boxRoutesEpochProvider = NotifierProvider<BoxRoutesEpoch, int>(
+  BoxRoutesEpoch.new,
+);
 
 /// A client for a cloud origin that issued the session: public TLS on the
 /// MAXCOM domain, else pinned to the surau's CA.

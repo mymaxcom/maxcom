@@ -21,6 +21,8 @@ export interface RelayStatus {
   bitrateKbps: number | null;
   speed: number | null;
   dropFrames: number | null;
+  /** The last ffmpeg stderr lines of the current or latest run (redacted), so a failure is diagnosable from the status. */
+  stderrTail: string[];
 }
 
 /** `youtube`: the RTMPS push (needs a key). `kioskAudio`: video copy plus Opus republished to a second loopback path. */
@@ -58,6 +60,13 @@ export interface RelayOptions {
   logName?: string;
   rtspPort?: number;
   ingestUrl?: string;
+  /**
+   * PEM bundle of trusted roots for rtmps (ffmpeg `-ca_file`). Default: env SSL_CERT_FILE when that file exists.
+   * ffmpeg built with mbedTLS verifies the server certificate (default on) but loads no system store and does not
+   * read SSL_CERT_FILE itself (libavformat/tls_mbedtls.c: the CA chain is only filled from `ca_file`), so without
+   * it every rtmps handshake fails with "I/O error". `null` passes none (Windows builds use the OS store).
+   */
+  caFile?: string | null;
   /** How often the path is polled while waiting for the picture (default 1000). */
   pollMs?: number;
   /** How long one wait for the picture lasts before it starts over (default 60000). */
@@ -159,6 +168,7 @@ export class Relay {
   private bitrateKbps: number | null = null;
   private speed: number | null = null;
   private dropFrames: number | null = null;
+  private stderrTail: string[] = [];
   private started = false;
   private stopped = false;
   private child: ChildProcess | null = null;
@@ -182,7 +192,7 @@ export class Relay {
   }
 
   status(): RelayStatus {
-    return { state: this.state, restarts: this.restarts, lastError: this.lastError, bitrateKbps: this.bitrateKbps, speed: this.speed, dropFrames: this.dropFrames };
+    return { state: this.state, restarts: this.restarts, lastError: this.lastError, bitrateKbps: this.bitrateKbps, speed: this.speed, dropFrames: this.dropFrames, stderrTail: [...this.stderrTail] };
   }
 
   /** Begins relaying in the background. Never throws; problems show in status(). */
@@ -299,7 +309,23 @@ export class Relay {
         ? ['-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-g', '60', '-keyint_min', '60', '-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`, '-pix_fmt', 'yuv420p']
         : ['-c:v', 'copy'];
     const audio = ['-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2'];
-    return [...base, ...video, ...audio, '-f', 'flv', '-rtmp_live', 'live', `${this.o.ingestUrl ?? YOUTUBE_INGEST}/${encodeURIComponent(opts.key)}`];
+    const url = `${this.o.ingestUrl ?? YOUTUBE_INGEST}/${encodeURIComponent(opts.key)}`;
+    const ca = url.startsWith('rtmps://') ? this.caFile() : null;
+    return [...base, ...video, ...audio, '-f', 'flv', '-rtmp_live', 'live', ...(ca === null ? [] : ['-ca_file', ca]), url];
+  }
+
+  /** The CA bundle for rtmps: the option, else SSL_CERT_FILE when it is a regular file (never on Windows); null when none. */
+  private caFile(): string | null {
+    if (this.o.caFile !== undefined) return this.o.caFile;
+    // Windows builds use the OS store (schannel); an SSL_CERT_FILE there (Git sets one sometimes) must not change that.
+    if (process.platform === 'win32') return null;
+    const env = process.env.SSL_CERT_FILE;
+    if (env === undefined || env === '') return null;
+    try {
+      return statSync(env).isFile() ? env : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Message kind to its last logged time (kiosk audio leg only); see {@link throttle}. */
@@ -392,6 +418,7 @@ export class Relay {
   private runOnce(opts: RelayStartOptions): Promise<string> {
     return new Promise((resolve) => {
       let lastLine: string | null = null;
+      let prevLine: string | null = null;
       let settled = false;
       const finish = (reason: string): void => {
         if (settled) return;
@@ -413,6 +440,7 @@ export class Relay {
       this.bitrateKbps = null;
       this.speed = null;
       this.dropFrames = null;
+      this.stderrTail = [];
       this.line(`spawned pid ${proc.pid ?? 0}`);
       if (this.stopped) this.killChild();
 
@@ -437,7 +465,14 @@ export class Relay {
         const shown = this.kind === 'kioskAudio' ? this.throttle(r.text) : r.text;
         if (shown !== null) this.log.write(`${new Date(this.now()).toISOString()} ffmpeg: ${shown}\n`);
         // a line that carried a secret is never offered as the reason
-        if (!r.hit) lastLine = r.text.slice(0, 200);
+        if (!r.hit) {
+          const t = r.text.slice(0, 200);
+          // ffmpeg ends with a generic "Error opening output files: I/O error"; the line before it names the cause
+          lastLine = prevLine !== null && /^Error opening output files?: I\/O error$/.test(t) ? `${prevLine} | ${t}`.slice(0, 400) : t;
+          prevLine = t;
+          this.stderrTail.push(t);
+          if (this.stderrTail.length > 12) this.stderrTail.shift();
+        }
       });
       lines(proc.stdout, (raw) => {
         const eq = raw.indexOf('=');

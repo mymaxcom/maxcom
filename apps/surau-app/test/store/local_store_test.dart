@@ -149,6 +149,38 @@ void main() {
         expect(await small.getBlob('b3'), isNotNull);
       });
 
+      test('a blob named by a queued outbox doc is never evicted', () async {
+        final small = entry.value(cap: entry.key == 'android' ? 90 : 25);
+        await small.open('box3');
+        // Written together: the doc names b1 and eviction already sees it.
+        await small.putBlobWithDoc('b1', Uint8List(10), Collections.outbox, 'op1', {
+          'op': {'opId': 'op1'},
+          'blob': 'b1',
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        await small.putBlob('b2', Uint8List(10));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        await small.putBlob('b3', Uint8List(10));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        await small.putBlob('b4', Uint8List(10));
+        expect(await small.hasBlob('b1'), isTrue);
+        expect(await small.hasBlob('b2'), isFalse);
+        expect(await small.getBlob('b1'), Uint8List(10));
+        expect((await small.getDoc(Collections.outbox, 'op1'))!['blob'], 'b1');
+        // Once the queue entry is gone the blob is evictable again.
+        await small.deleteDoc(Collections.outbox, 'op1');
+        await small.putBlob('b5', Uint8List(10));
+        expect(await small.hasBlob('b1'), isFalse);
+      });
+
+      test('hasBlob tells present from absent without reading', () async {
+        await s.putBlob('x', Uint8List(3));
+        expect(await s.hasBlob('x'), isTrue);
+        expect(await s.hasBlob('nope'), isFalse);
+        await s.deleteBlob('x');
+        expect(await s.hasBlob('x'), isFalse);
+      });
+
       test('a bad box id is refused', () async {
         await expectLater(entry.value().open('../x'), throwsArgumentError);
         await expectLater(entry.value().open(''), throwsArgumentError);

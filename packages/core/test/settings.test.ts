@@ -204,7 +204,7 @@ describe('surauInfo', () => {
     expect(f.labelMs).toBe('Maklumat surau');
     expect(f.labelEn).toBe('Surau details');
     expect(resolveSettings({}).surauInfo).toEqual({
-      enabled: true, name: 'Surau', kind: 'surau', shortAddress: '', helpName: '', helpPhone: '', helpEmail: '', logo: '', showName: true,
+      enabled: true, name: 'Surau', shortName: '', kind: 'surau', shortAddress: '', helpName: '', helpPhone: '', helpEmail: '', logo: '', showName: true,
     });
     expect(resolveSettings({ surauInfo: { enabled: false } }).surauInfo.enabled).toBe(true);
   });
@@ -222,6 +222,9 @@ describe('surauInfo', () => {
     expect(validateFeatureSettings('surauInfo', good)).toEqual({ ok: true, value: good });
     expect(validateFeatureSettings('surauInfo', { helpPhone: '+60123456789', helpEmail: '', helpName: '' }).ok).toBe(true);
     expect(validateFeatureSettings('surauInfo', { name: 'x'.repeat(80) }).ok).toBe(true);
+    expect(validateFeatureSettings('surauInfo', { shortName: 'SDM' }).ok).toBe(true);
+    expect(validateFeatureSettings('surauInfo', { shortName: '' }).ok).toBe(true);
+    expect(validateFeatureSettings('surauInfo', { shortName: 'x'.repeat(12) }).ok).toBe(true);
   });
   it('logo is an asset id or empty text', () => {
     const ok = (p: Record<string, unknown>) => validateFeatureSettings('surauInfo', p).ok;
@@ -244,6 +247,10 @@ describe('surauInfo', () => {
     expect(bad({ name: 'x'.repeat(81) })).toBe(false);
     expect(bad({ kind: 'dewan' })).toBe(false);
     expect(bad({ shortAddress: 'x'.repeat(121) })).toBe(false);
+    expect(bad({ shortName: 'x'.repeat(13) })).toBe(false);
+    expect(bad({ shortName: '<img>' })).toBe(false);
+    expect(bad({ shortName: 5 })).toBe(false);
+    expect(bad({ shortName: null })).toBe(false);
     expect(bad({ helpName: 'x'.repeat(61) })).toBe(false);
     expect(bad({ helpPhone: '12345' })).toBe(false);
     expect(bad({ helpPhone: 'call me' })).toBe(false);

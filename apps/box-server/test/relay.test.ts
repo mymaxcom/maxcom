@@ -33,6 +33,18 @@ if (mode.mode === 'die') {
   process.stderr.write('Error opening output file: Connection refused\\n');
   process.exit(1);
 }
+if (mode.mode === 'ioerror') {
+  process.stderr.write('[tls @ 0x7f1] mbedtls_x509_crt_verify not correctly signed by the trusted CA\\n');
+  process.stderr.write('[tls @ 0x7f1] The certificate is not correctly signed by the trusted CA.\\n');
+  process.stderr.write('Error opening output files: I/O error\\n');
+  process.exit(1);
+}
+if (mode.mode === 'ioerrorsecret') {
+  process.stderr.write('[tls @ 0x7f1] The certificate is not correctly signed by the trusted CA.\\n');
+  process.stderr.write('Failed to open ' + key + '\\n');
+  process.stderr.write('Error opening output files: I/O error\\n');
+  process.exit(1);
+}
 if (mode.mode === 'flood' || mode.mode === 'floodthendie') {
   for (let i = 0; i < 20; i++) process.stderr.write('[mp4 @ 0x55' + (80 + i) + '] Non-monotonic DTS in output stream 0:1; previous: ' + (1000 + i) + ', current: ' + (900 + i) + '; changing to ' + (1001 + i) + '.\\n');
   for (let i = 0; i < 5; i++) process.stderr.write('[libopus @ 0x7f' + i + '] Queue input is backward in time' + '\\n');
@@ -52,7 +64,7 @@ interface Rig {
   fake: FakeMediamtx;
   api: MediamtxApi;
   opts: RelayOptions;
-  setMode: (m: 'run' | 'die' | 'flood' | 'floodthendie') => void;
+  setMode: (m: 'run' | 'die' | 'flood' | 'floodthendie' | 'ioerror' | 'ioerrorsecret') => void;
   runs: () => string[][];
   logText: () => string;
 }
@@ -119,7 +131,102 @@ async function until(cond: () => boolean, ms = 5000): Promise<void> {
   }
 }
 
+const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+const platform = (p: string): void => {
+  Object.defineProperty(process, 'platform', { ...realPlatform, value: p });
+};
+
 describe('relay command line', () => {
+  it('rtmps: passes -ca_file (the option, else SSL_CERT_FILE) right before the URL; null passes none', async () => {
+    const ca = join(tmpdir(), `surau-ca-${process.pid}.pem`);
+    writeFileSync(ca, '-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n');
+    try {
+      const a = await rig({ caFile: '/data/runtime/etc/cert.pem' });
+      a.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+      make(a).start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+      await until(() => a.runs().length >= 1);
+      const argv = a.runs()[0]!;
+      expect(argv.slice(-3)).toEqual(['-ca_file', '/data/runtime/etc/cert.pem', `rtmps://a.rtmps.youtube.com:443/live2/${KEY}`]);
+
+      platform('linux');
+      vi.stubEnv('SSL_CERT_FILE', ca);
+      const b = await rig();
+      b.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+      make(b).start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+      await until(() => b.runs().length >= 1);
+      expect(b.runs()[0]!.slice(-3, -1)).toEqual(['-ca_file', ca]);
+
+      const c = await rig({ caFile: null });
+      c.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+      make(c).start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+      await until(() => c.runs().length >= 1);
+      expect(c.runs()[0]).not.toContain('-ca_file');
+
+      vi.stubEnv('SSL_CERT_FILE', join(tmpdir(), 'surau-no-such-ca.pem'));
+      const d = await rig();
+      d.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+      make(d).start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+      await until(() => d.runs().length >= 1);
+      expect(d.runs()[0]).not.toContain('-ca_file');
+
+      // a directory is not a bundle
+      vi.stubEnv('SSL_CERT_FILE', tmpdir());
+      const e = await rig();
+      e.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+      make(e).start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+      await until(() => e.runs().length >= 1);
+      expect(e.runs()[0]).not.toContain('-ca_file');
+
+      // Windows: the file is ignored, the OS store stays in use
+      platform('win32');
+      vi.stubEnv('SSL_CERT_FILE', ca);
+      const f = await rig();
+      f.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+      make(f).start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+      await until(() => f.runs().length >= 1);
+      expect(f.runs()[0]).not.toContain('-ca_file');
+    } finally {
+      Object.defineProperty(process, 'platform', realPlatform);
+      vi.unstubAllEnvs();
+      rmSync(ca, { force: true });
+    }
+  });
+
+  it('a plain rtmp ingest gets no -ca_file', async () => {
+    const r = await rig({ caFile: '/x/cert.pem', ingestUrl: 'rtmp://a.rtmp.youtube.com/live2' });
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    make(r).start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => r.runs().length >= 1);
+    expect(r.runs()[0]).not.toContain('-ca_file');
+  });
+
+  it('the generic I/O error pairs with the previous non-redacted line when the line between carried the key', async () => {
+    const r = await rig({ caFile: null, maxFailures: 2 });
+    r.setMode('ioerrorsecret');
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    const relay = make(r);
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => relay.status().state === 'failed');
+    const st = relay.status();
+    expect(st.lastError).toBe('[tls @ 0x7f1] The certificate is not correctly signed by the trusted CA. | Error opening output files: I/O error');
+    expect(JSON.stringify(st)).not.toContain(KEY);
+  });
+
+  it('the generic I/O error keeps the line before it, and the status carries the stderr tail', async () => {
+    const r = await rig({ caFile: null, maxFailures: 2 });
+    r.setMode('ioerror');
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    const relay = make(r);
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => relay.status().state === 'failed');
+    const st = relay.status();
+    expect(st.lastError).toBe('[tls @ 0x7f1] The certificate is not correctly signed by the trusted CA. | Error opening output files: I/O error');
+    expect(st.stderrTail).toHaveLength(3);
+    expect(st.stderrTail[2]).toBe('Error opening output files: I/O error');
+    expect(JSON.stringify(st)).not.toContain(KEY);
+    expect(r.logText()).toContain('ffmpeg: [tls @ 0x7f1] mbedtls_x509_crt_verify');
+  });
+
   it('copy mode: video is copied, audio goes to AAC, output is RTMPS with the key', async () => {
     const r = await rig();
     r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });

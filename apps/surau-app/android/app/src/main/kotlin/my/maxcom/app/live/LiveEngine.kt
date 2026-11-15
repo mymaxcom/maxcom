@@ -20,7 +20,7 @@ import android.provider.MediaStore
 import android.view.Display
 import android.view.Surface
 import android.util.Log
-import android.view.SurfaceView
+import android.view.TextureView
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.sources.OrientationForced
 import com.pedro.encoder.input.sources.audio.MicrophoneSource
@@ -229,7 +229,7 @@ class LiveEngine private constructor(private val app: Context) {
     private var camera: Camera2Source? = null
     private var mic: MicrophoneSource? = null
     private var stream: MultiStream? = null
-    private var previewView: SurfaceView? = null
+    private var previewView: TextureView? = null
     private var previewing = false
     private var frontCamera = false
     private var displayListenerOn = false
@@ -446,14 +446,14 @@ class LiveEngine private constructor(private val app: Context) {
 
     private val previewLayout = android.view.View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyFraming() }
 
-    fun attachPreview(view: SurfaceView) {
+    fun attachPreview(view: TextureView) {
         previewView = view
         view.addOnLayoutChangeListener(previewLayout)
         applyFraming()
         attachPreviewIfReady()
     }
 
-    fun detachPreview(view: SurfaceView) {
+    fun detachPreview(view: TextureView) {
         if (previewView !== view) return
         view.removeOnLayoutChangeListener(previewLayout)
         previewView = null

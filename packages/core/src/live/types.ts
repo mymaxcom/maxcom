@@ -34,7 +34,7 @@ export interface LiveStatus {
    */
   warnings: string[];
   ingest: { ready: boolean; protocol: 'whip' | 'srt' | null; bitrateKbps: number; since: string | null };
-  relay: { state: 'off' | 'starting' | 'running' | 'retrying' | 'failed'; restarts: number; lastError: string | null };
+  relay: { state: 'off' | 'starting' | 'running' | 'retrying' | 'failed'; restarts: number; lastError: string | null; stderrTail?: string[] };
   youtube: {
     signedIn: boolean;
     channelTitle: string | null;

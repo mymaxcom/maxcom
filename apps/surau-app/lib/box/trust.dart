@@ -16,6 +16,7 @@ import 'package:pointycastle/digests/sha256.dart';
 
 import '../features/enrol/enrol_flow.dart';
 import 'box_client.dart';
+import 'routes.dart';
 import 'session_store.dart';
 import 'trust_platform_io.dart'
     if (dart.library.js_interop) 'trust_platform_web.dart'
@@ -62,7 +63,11 @@ class TrustStore {
   TrustStore({
     this.connect = const Duration(seconds: 8),
     this.read = const Duration(seconds: 10),
-  });
+    BoxRoutes? routes,
+  }) : routes = routes ?? BoxRoutes();
+
+  /// Where the boxes' local names point right now (see [BoxRoutes]).
+  final BoxRoutes routes;
 
   final Duration connect;
   final Duration read;
@@ -78,14 +83,14 @@ class TrustStore {
   Future<http.Client> pinnedClient(Uint8List? caDer) async =>
       pinnedClientSync(caDer);
 
-  http.Client pinnedClientSync(Uint8List? caDer) {
+  http.Client pinnedClientSync(Uint8List? caDer, {String? Function(String host)? addressOf}) {
     // Where the app pins the CA there is no unpinned client: without the
     // CA the system roots would decide who the box is.
     if (pinsCa && caDer == null) {
       throw const TrustError('Sijil akar tiada. Daftar semula');
     }
     try {
-      return platform.createClient(caDer, connect);
+      return platform.createClient(caDer, connect, addressOf: addressOf ?? routes.addressOf);
     } on TrustError {
       rethrow;
     } on Object {
@@ -145,7 +150,17 @@ class TrustStore {
   /// Throws [TrustError] when the pinned CA is missing (the app was
   /// enrolled elsewhere or its storage was cleared): the user must enrol
   /// again.
-  Future<BoxClient> boxClient(EnrolledBox b, CaDerSource cas) async {
+  ///
+  /// [candidate] makes a client for ONE probe of a discovered box: the host
+  /// [candidateHost] opens [candidateIp] (this client only, never the shared
+  /// [routes]); the certificate is still checked for the URL's host against
+  /// the pinned CA.
+  Future<BoxClient> boxClient(
+    EnrolledBox b,
+    CaDerSource cas, {
+    String? candidateHost,
+    String? candidateIp,
+  }) async {
     // The cloud on its public domain presents a public certificate: system
     // roots, no surau CA needed. Never true for the box's LAN address.
     if (usesPublicTls(b)) {
@@ -167,9 +182,12 @@ class TrustStore {
         throw const TrustError('Sijil akar tiada. Daftar semula');
       }
     }
+    final probe = candidateHost != null && candidateIp != null
+        ? (String h) => h == candidateHost ? candidateIp : null
+        : null;
     return BoxClient(
       b.box,
-      pinnedClientSync(der),
+      pinnedClientSync(der, addressOf: probe),
       connect: connect,
       read: read,
     );
