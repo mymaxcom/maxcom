@@ -32,7 +32,7 @@
   --radius-lg: 0.4rem;
   --radius-md: 0.4rem;
   --cut-top: 46%;
-  --bar-pitch: 5.85rem; /* one bar plus the gap under it */
+  --bar-pitch: 5.85rem; /* one bar plus the gap under it (the bar column below sets its own from the number of bars) */
 }
 /* Every phase screen: the slab widens to carry the phase. */
 .stage[data-template='creative']:not([data-phase='normal']) { --cut-top: 72%; }
@@ -145,12 +145,20 @@
   border-radius: 0;
   box-shadow: none;
   overflow: visible;
+  /* The column of bars fills the same height whatever the number of prayers shown (data-cells: 7, or 6 and 5 with
+     Imsak and/or Syuruk off): --bar-span is the column, --bar-h one bar, --bar-pitch one bar plus the gap under it. */
+  --bar-n: 7;
+  --bar-span: 40.4rem;
+  --bar-h: calc((var(--bar-span) - (var(--bar-n) - 1) * 0.55rem) / var(--bar-n));
+  --bar-pitch: calc(var(--bar-h) + 0.55rem);
 }
+.stage[data-template='creative'] .pbar[data-cells='6'] { --bar-n: 6; }
+.stage[data-template='creative'] .pbar[data-cells='5'] { --bar-n: 5; }
 .stage[data-template='creative'] .screen--main .pbar { position: absolute; left: 38.4rem; top: 3rem; width: 19.5rem; }
 .stage[data-template='creative'] .pbar .pcell {
   flex: none;
   width: 19.5rem;
-  height: 5.3rem;
+  height: var(--bar-h);
   align-self: flex-start;
   flex-direction: row;
   align-items: center;
@@ -162,20 +170,22 @@
   transform: skewX(calc(var(--slant-angle) * -1));
 }
 .stage[data-template='creative'] .pbar .pcell > * { transform: skewX(var(--slant-angle)); }
-.stage[data-template='creative'] .pbar .pcell:nth-child(1) { margin-left: calc(var(--slant) * var(--bar-pitch) * 6); }
-.stage[data-template='creative'] .pbar .pcell:nth-child(2) { margin-left: calc(var(--slant) * var(--bar-pitch) * 5); }
-.stage[data-template='creative'] .pbar .pcell:nth-child(3) { margin-left: calc(var(--slant) * var(--bar-pitch) * 4); }
-.stage[data-template='creative'] .pbar .pcell:nth-child(4) { margin-left: calc(var(--slant) * var(--bar-pitch) * 3); }
-.stage[data-template='creative'] .pbar .pcell:nth-child(5) { margin-left: calc(var(--slant) * var(--bar-pitch) * 2); }
-.stage[data-template='creative'] .pbar .pcell:nth-child(6) { margin-left: calc(var(--slant) * var(--bar-pitch)); }
+/* The steps count from the bottom bar, so any number of bars follows the cut. A bar taller than the seven-bar 5.3 rem
+   has its middle higher up the cut: the second term moves every step by that half difference. */
+.stage[data-template='creative'] .pbar .pcell { margin-left: calc(var(--slant) * (var(--bar-h) - 5.3rem) / 2); }
+.stage[data-template='creative'] .pbar .pcell:nth-last-child(2) { margin-left: calc(var(--slant) * (var(--bar-pitch) + (var(--bar-h) - 5.3rem) / 2)); }
+.stage[data-template='creative'] .pbar .pcell:nth-last-child(3) { margin-left: calc(var(--slant) * (var(--bar-pitch) * 2 + (var(--bar-h) - 5.3rem) / 2)); }
+.stage[data-template='creative'] .pbar .pcell:nth-last-child(4) { margin-left: calc(var(--slant) * (var(--bar-pitch) * 3 + (var(--bar-h) - 5.3rem) / 2)); }
+.stage[data-template='creative'] .pbar .pcell:nth-last-child(5) { margin-left: calc(var(--slant) * (var(--bar-pitch) * 4 + (var(--bar-h) - 5.3rem) / 2)); }
+.stage[data-template='creative'] .pbar .pcell:nth-last-child(6) { margin-left: calc(var(--slant) * (var(--bar-pitch) * 5 + (var(--bar-h) - 5.3rem) / 2)); }
+.stage[data-template='creative'] .pbar .pcell:nth-last-child(7) { margin-left: calc(var(--slant) * (var(--bar-pitch) * 6 + (var(--bar-h) - 5.3rem) / 2)); }
 .stage[data-template='creative'] .pcell__label { flex: 1; min-width: 0; font-size: 1.2rem; font-weight: 800; letter-spacing: 0.12em; line-height: 1.3; color: #a9bccd; opacity: 1; overflow: hidden; text-overflow: ellipsis; }
 .stage[data-template='creative'] .pcell__time { order: 2; margin: 0; font-size: 3rem; }
 .stage[data-template='creative'] .pbar .pcell.is-minor .pcell__time { padding-top: 0; font-size: 2.3rem; opacity: 0.8; }
-.stage[data-template='creative'] .pcell__cd { order: 1; margin: 0; background: #06231c; color: var(--mint); font-size: 1.05rem; padding: 0.25rem 0.7rem; }
 .stage[data-template='creative'] .pbar .pcell.is-current { width: 21rem; background: var(--mint); color: #06231c; box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 0.4); }
 .stage[data-template='creative'] .pbar .pcell.is-current .pcell__label { color: #06231c; }
-/* The highlighted bar stacks its name over the countdown chip, the time beside both, so a long name
-   (Maghrib) with a long chip (Iqamah 00:04:58, 24-hour times) still fits the bar whole. */
+/* The highlighted bar: the name on the left, the time beside it, so a long name
+   (Maghrib) with a 24-hour time still fits the bar whole. */
 .stage[data-template='creative'] .pbar .pcell.is-current {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -185,7 +195,6 @@
   row-gap: 0.3rem;
 }
 .stage[data-template='creative'] .pbar .pcell.is-current .pcell__label { grid-column: 1; grid-row: 1; }
-.stage[data-template='creative'] .pbar .pcell.is-current .pcell__cd { grid-column: 1; grid-row: 2; justify-self: start; }
 .stage[data-template='creative'] .pbar .pcell.is-current .pcell__time { grid-column: 2; grid-row: 1 / 3; }
 /* The card: a tall portrait panel on the dark side. */
 .stage[data-template='creative'] .screen--main .content { position: absolute; left: 67.6rem; right: 3rem; top: 3rem; bottom: 12.2rem; width: auto; margin: 0; }
@@ -201,9 +210,6 @@
   box-shadow: 0 1rem 2.6rem rgb(0 0 0 / 0.4);
 }
 .stage[data-template='creative'] .card__tag { color: var(--mint); font-weight: 800; font-size: 1.3rem; }
-.stage[data-template='creative'] .kuliah__when b,
-.stage[data-template='creative'] .kuliah__next-when { color: var(--accent); }
-.stage[data-template='creative'] .kuliah__name { text-transform: uppercase; font-size: 2.7rem; letter-spacing: 0; }
 .stage[data-template='creative'] .card--pengumuman { justify-content: flex-start; padding: 2.4rem; }
 .stage[data-template='creative'] .pengumuman__title { text-transform: uppercase; font-size: calc(2.6rem * var(--fit, 1) * var(--scale, 1)); line-height: 1.12; color: var(--accent); margin-bottom: 1.2rem; }
 .stage[data-template='creative'] .pengumuman__body { font-size: calc(1.75rem * var(--fit, 1) * var(--scale, 1)); }
@@ -224,37 +230,6 @@
 .stage[data-template='creative'] .ticker__dot { color: var(--mint); }
 .stage[data-template='creative'] .screen--main .emergency-band { position: absolute; left: 37.4rem; right: 3rem; bottom: 8.3rem; }
 .stage[data-template='creative'] .screen--main .source-footer { left: 37.4rem; right: 6rem; bottom: 1.3rem; }
-/* Portrait card (Kreatif and Minimalis): photo and kitab on top, the words under them. */
-.stage[data-template='creative'] .card--kuliah {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: 'photo kitab' 'body body';
-  gap: 1.6rem 1.4rem;
-  padding: 2.2rem 2.4rem;
-}
-.stage[data-template='creative'] .kuliah__photo { grid-area: photo; align-self: start; width: 10rem; height: 10rem; }
-.stage[data-template='creative'] .kuliah__kitab { grid-area: kitab; justify-self: end; align-self: start; width: 7.2rem; height: 10rem; }
-.stage[data-template='creative'] .kuliah__body { grid-area: body; justify-content: flex-start; gap: 0.45rem; }
-.stage[data-template='creative'] .kuliah__head { flex-direction: column; align-items: flex-start; gap: 0.3rem; }
-.stage[data-template='creative'] .kuliah__next li { display: flex; flex-direction: column; gap: 0; line-height: 1.25; margin-top: 0.5rem; }
-/* A kitab without a cover image spells its title on the block: the padding moves to the block, so the clamp box
-   ends exactly at its last line and a fifth line never shows half-cut in the padding. */
-.stage[data-template='creative'] .kuliah__kitab:not(.has-img) { padding: 0.6rem 0.5rem; }
-.stage[data-template='creative'] .kuliah__kitab-title { padding: 0; font-size: 1.1rem; }
-/* Every layout template sizes the card differently from the default the row estimate (KuliahCard) was made for:
-   only whole following rows show. The list may shrink to the space left, and a row that no longer fits wraps
-   into a second column outside the card instead of being cut mid-line. */
-.stage[data-template='creative'] .kuliah__next { flex: 0 1 auto; min-height: 0; flex-wrap: wrap; align-content: flex-start; overflow: hidden; }
-.stage[data-template='creative'] .kuliah__next li { width: 100%; }
-/* The rule above the following rows belongs to the first row, so it goes with it when no row fits. */
-.stage[data-template='creative'] .kuliah__next { border-top: 0; padding-top: 0; }
-.stage[data-template='creative'] .kuliah__next li:first-child { border-top: 1px solid rgb(var(--accent-rgb) / 0.28); padding-top: 0.45rem; }
-.stage[data-template='creative'] .kuliah__when { font-size: 1.6rem; }
-.stage[data-template='creative'] .kuliah__when b { font-size: 1.8rem; margin-left: 0.4rem; }
-.stage[data-template='creative'] .kuliah__topic { font-size: 1.9rem; }
-.stage[data-template='creative'] .kuliah__meta { font-size: 1.45rem; white-space: normal; }
-.stage[data-template='creative'] .kuliah__next li { font-size: 1.35rem; }
 /* The Islamic text cards are narrower here than the default's gutter-to-gutter wide card: the source and credit
    lines wrap rather than cut an attribution short. */
 .stage[data-template='creative'] .ayat__credit { flex-wrap: wrap; white-space: normal; row-gap: 0.2rem; line-height: 1.25; }
@@ -280,6 +255,21 @@
 .stage[data-template='creative'] .program__title { font-size: 2.8rem; }
 .stage[data-template='creative'] .program__when { font-size: 1.8rem; }
 .stage[data-template='creative'] .program__note { font-size: 1.6rem; }
+/* The programme screen (theme round 2, maximise the screen): the column above is for the narrow portrait panel; on the
+   full-width content screen it cropped the picture to a thin band. There the picture stands whole (contained) beside
+   the words, as in the other themes, and the words are larger (Ubah suai Saiz teks still applies). */
+.stage[data-template='creative'][data-kind='content'] .card--program { flex-direction: row; gap: 2.4rem; }
+.stage[data-template='creative'][data-kind='content'] .program__img { width: 40%; height: auto; flex: none; min-height: 0; }
+.stage[data-template='creative'][data-kind='content'] .card--program.is-wide .program__img { width: 56%; }
+.stage[data-template='creative'][data-kind='content'] .program__body { flex: 1; justify-content: center; }
+.stage[data-template='creative'][data-kind='content'] .program__title { font-size: calc(4rem * var(--scale, 1)); -webkit-line-clamp: 3; }
+.stage[data-template='creative'][data-kind='content'] .program__when { font-size: calc(2.6rem * var(--scale, 1)); }
+.stage[data-template='creative'][data-kind='content'] .program__note { font-size: calc(2.2rem * var(--scale, 1)); -webkit-line-clamp: 4; }
+/* The notice and the calendar on the full-width content screen: the base sizes of the other themes (the notice's fit
+   then grows a short one to fill the card) and the calendar's full days block, not the narrow panel's. */
+.stage[data-template='creative'][data-kind='content'] .pengumuman__title { font-size: calc(3.3rem * var(--fit, 1) * var(--scale, 1)); }
+.stage[data-template='creative'][data-kind='content'] .pengumuman__body { font-size: calc(2.05rem * var(--fit, 1) * var(--scale, 1)); }
+.stage[data-template='creative'][data-kind='content'] .takwim__days { width: 13rem; }
 /* World times in the narrow column: up to three cities stack, more go two abreast. */
 .stage[data-template='creative'] .wt__grid:not(.is-two-rows) { grid-template-columns: minmax(0, 1fr); }
 .stage[data-template='creative'] .wt__grid.is-two-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -302,12 +292,10 @@
 .stage[data-template='creative'] .screen--main.is-idle .clock__hm { font-size: 13.5rem; letter-spacing: -0.04em; }
 .stage[data-template='creative'] .screen--main.is-idle .clock__aside { font-size: 2.6rem; }
 .stage[data-template='creative'] .screen--main.is-idle .ident__dates { top: 23rem; font-size: 2rem; margin: 0; gap: 0.25rem; }
-.stage[data-template='creative'] .screen--main.is-idle .pbar { --bar-pitch: 6.45rem; }
-.stage[data-template='creative'] .screen--main.is-idle .pbar .pcell { height: 5.9rem; }
+.stage[data-template='creative'] .screen--main.is-idle .pbar { --bar-span: 44.6rem; }
 /* With the emergency band (bottom 8.3rem, across from 37.4rem) the idle bars keep the card-time size: seven bars
    then end at 43.4rem, clear of the band's top (about 44.8rem), instead of 47.6rem, under it. */
-.stage[data-template='creative'] .screen--main.is-idle.has-emergency .pbar { --bar-pitch: 5.85rem; }
-.stage[data-template='creative'] .screen--main.is-idle.has-emergency .pbar .pcell { height: 5.3rem; }
+.stage[data-template='creative'] .screen--main.is-idle.has-emergency .pbar { --bar-span: 40.4rem; }
 .stage[data-template='creative'] .screen--main.is-idle .next {
   left: 67.6rem;
   right: 3rem;
@@ -484,6 +472,8 @@
 .stage[data-template='creative'][data-kind='content'] .brand-name { letter-spacing: 0.36em; }
 .stage[data-template='creative'][data-kind='content'] .region-clock.clock--compact { border-left: 0.417rem solid var(--accent); padding-left: 1.042rem; }
 .stage[data-template='creative'][data-kind='content'] .next--chip { border-radius: 0 2.083rem 0 2.083rem; }
+/* The chip keeps its dark ink on amber with a picture too (the picture rule turns --ink light for the free text). */
+.stage[data-template='creative'][data-kind='content'] .next--chip { color: #1a1306; --chip-cd-bg: #1a1306; --chip-cd-ink: var(--accent); }
 .stage[data-template='creative'][data-kind='content'] .strip {
   border: 0;
   border-top: 0.156rem solid var(--mint);
@@ -495,9 +485,37 @@
 .stage[data-template='creative'][data-kind='content'] .strip .pcell:first-child { border-left: 0; }
 .stage[data-template='creative'][data-kind='content'] .strip .pcell.is-current { background: var(--mint); color: #06231c; }
 .stage[data-template='creative'][data-kind='content'] .eyebrow { color: var(--mint); }
-.stage[data-template='creative'][data-kind='content'] .kul-photo { border-radius: 0 6.25rem 0 6.25rem; border-color: var(--accent); }
+/* penceramahPhoto.shape wins: round is the circle, square is the theme's leaf. */
+.stage[data-template='creative'][data-kind='content'] .kul-photo { border-color: var(--accent); }
+.stage[data-template='creative'][data-kind='content'] .kul-photo.is-square { border-radius: 0 6.25rem 0 6.25rem; }
 .stage[data-template='creative'][data-kind='content'] .kul-topic { color: var(--mint); }
 .stage[data-template='creative'][data-kind='content'] .kul-label { color: var(--accent); }
 .stage[data-template='creative'][data-screen='hadis'] .deco .d1 { left: -32.292rem; }
 .stage[data-template='creative'][data-screen='hadis'] .hadis { padding-left: 12.5rem; padding-right: 3.125rem; }
 .stage[data-template='creative'][data-screen='poster'] .poster-frame img { border-left: 0.729rem solid var(--accent); }
+/* ======================================================================================================
+   Biasa, theme round 2 (rule 16, the operator picked the Cadangan mockup): the logo beside the name in sentence case,
+   the clock under it, the dates in sentence case (Gregorian, then Hijri); the prayer bars keep their slant and step
+   but end on one edge, the times right-aligned on it, the highlighted bar no wider than the others; the next prayer
+   is a sentence-case panel set right, in the middle of the dark side. Only the main screen with no card
+   ([data-kind='full'] ... .is-idle); a card on the main screen keeps the 2026.11.10 layout.
+   ====================================================================================================== */
+.stage[data-template='creative'][data-kind='full'] .screen--main.is-idle .ident__head { top: 2.6rem; max-width: 34rem; }
+.stage[data-template='creative'][data-kind='full'] .screen--main.is-idle .ident__name { font-size: 1.75rem; letter-spacing: 0; text-transform: none; }
+.stage[data-template='creative'][data-kind='full'] .screen--main.is-idle .clock { top: 11.2rem; }
+.stage[data-template='creative'][data-kind='full'] .screen--main.is-idle .ident__dates { top: 27.4rem; font-size: 2.6rem; font-weight: 700; text-transform: none; letter-spacing: 0; gap: 0.35rem; }
+.stage[data-template='creative'][data-kind='full'] .screen--main.is-idle .pbar { width: 28rem; }
+.stage[data-template='creative'][data-kind='full'] .screen--main.is-idle .pbar .pcell { width: auto; align-self: stretch; padding: 0 2.4rem 0 2.2rem; }
+.stage[data-template='creative'][data-kind='full'] .screen--main.is-idle .pbar .pcell.is-current { width: auto; }
+.stage[data-template='creative'][data-kind='full'] .screen--main.is-idle .next {
+  left: 68.75rem;
+  top: 18.3rem;
+  text-align: right;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 2.2rem;
+  font-weight: 700;
+  border-radius: 0 0 2.4rem 0;
+}
+.stage[data-template='creative'][data-kind='full'] .screen--main.is-idle .next .num { font-size: 5.6rem; }
+.stage[data-template='creative'][data-kind='full'][data-pic] .screen--main.is-idle .ident__dates { top: 28.6rem; }

@@ -4,14 +4,12 @@ export type Lang = 'ms' | 'en';
 export const STRINGS: Record<Lang, Record<string, string>> = {
   ms: {
     nextIn: '{prayer} dalam',
+    // The next-prayer chip for three minutes after a prayer time (theme round 2, rule 6).
+    chipNow: 'Masuk waktu',
     factTime: 'Masa',
     factAfter: 'Selepas',
     factAfterPrayer: 'Solat {prayer}',
     factBook: 'Kitab',
-    chipRelHM: '{h} jam {m} minit lagi',
-    chipRelH: '{h} jam lagi',
-    chipRelM: '{m} minit lagi',
-    chipRelNow: 'sebentar lagi',
     azanIn: 'Azan {prayer} dalam',
     masukWaktu: 'Telah masuk waktu {prayer}',
     iqamahIn: 'Iqamah dalam',
@@ -27,15 +25,9 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     surauName: 'Surau',
     // The prayer bar's accessible name (also the printed caption of the Klasik Lama jadual).
     barCaption: 'Waktu solat',
-    // Prayer-bar pill words while a prayer is in progress.
-    barAzan: 'Azan',
-    barIqamah: 'Iqamah',
-    barSolat: 'Solat',
-    barKhutbah: 'Khutbah',
-    barTarawih: 'Tarawih',
     // Content cards (Plan 2).
-    kuliahToday: 'Kuliah hari ini',
-    kuliahNext: 'Kuliah seterusnya',
+    kuliahWhenToday: 'Hari ini',
+    kuliahWhenTomorrow: 'Esok',
     pengumuman: 'Pengumuman',
     programKhas: 'Program khas',
     takwim: 'Takwim',
@@ -163,17 +155,16 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     cloudOffline: 'Luar talian',
     cloudSyncedAt: 'Diselaraskan {time}',
     pairConnectedTo: 'Disambung ke {name}',
+    // Tetapan build 2026-11-16: the whole-screen azan countdown.
+    azanAt: 'Azan pada {time}',
   },
   en: {
     nextIn: '{prayer} in',
+    chipNow: 'Prayer time',
     factTime: 'Time',
     factAfter: 'After',
     factAfterPrayer: '{prayer} prayer',
     factBook: 'Book',
-    chipRelHM: 'in {h} h {m} min',
-    chipRelH: 'in {h} h',
-    chipRelM: 'in {m} min',
-    chipRelNow: 'in a moment',
     azanIn: 'Azan {prayer} in',
     masukWaktu: 'It is now time for {prayer}',
     iqamahIn: 'Iqamah in',
@@ -188,13 +179,8 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     'kiosk.emergency': 'Temporary calculated times; no official JAKIM data for today',
     surauName: 'Surau',
     barCaption: 'Prayer times',
-    barAzan: 'Azan',
-    barIqamah: 'Iqamah',
-    barSolat: 'Prayer',
-    barKhutbah: 'Sermon',
-    barTarawih: 'Tarawih',
-    kuliahToday: 'Lecture today',
-    kuliahNext: 'Next lecture',
+    kuliahWhenToday: 'Today',
+    kuliahWhenTomorrow: 'Tomorrow',
     pengumuman: 'Announcement',
     programKhas: 'Special programme',
     takwim: 'Calendar',
@@ -317,6 +303,8 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     cloudOffline: 'Offline',
     cloudSyncedAt: 'Synced {time}',
     pairConnectedTo: 'Connected to {name}',
+    // Tetapan build 2026-11-16: the whole-screen azan countdown.
+    azanAt: 'Azan at {time}',
   },
 };
 
@@ -410,6 +398,18 @@ export function fmtDateLong(date: string, lang: Lang): string {
   const p = ymdParts(date);
   if (!p) return date;
   return `${DAYS_LONG[lang][p.wd]}, ${p.d} ${MONTHS_LONG[lang][p.m - 1]} ${p.y}`;
+}
+
+/** 'Khamis'. A malformed date is returned as given. */
+export function fmtWeekday(date: string, lang: Lang): string {
+  const p = ymdParts(date);
+  return p ? DAYS_LONG[lang][p.wd]! : date;
+}
+
+/** '5 November'. A malformed date is returned as given. */
+export function fmtDayMonth(date: string, lang: Lang): string {
+  const p = ymdParts(date);
+  return p ? `${p.d} ${MONTHS_LONG[lang][p.m - 1]}` : date;
 }
 
 /** Whole calendar days from `from` to `to` ('YYYY-MM-DD' each), or null when either is malformed. */

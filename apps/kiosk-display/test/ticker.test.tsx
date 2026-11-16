@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render } from '@testing-library/preact';
+import { cleanup, fireEvent, render } from '@testing-library/preact';
 import { buildRotation, currentSlot } from '@surau/core';
 import type { KioskContent } from '@surau/core';
 import { makeView } from './helpers.tsx';
@@ -20,6 +20,7 @@ vi.mock('../src/data/content.ts', async (importOriginal) => {
 import { App } from '../src/app.tsx';
 import { Main } from '../src/screens/Main.tsx';
 import { activeTickerItems, tickerSeconds } from '../src/content/Ticker.tsx';
+import { resetCardPictureFailures } from '../src/content/cardPictures.ts';
 
 const base = { updatedAt: '2026-11-01T00:00:00Z', updatedBy: 'test' };
 const TICKER = [
@@ -115,5 +116,67 @@ describe('Ticker', () => {
     expect(r.container.querySelector('.stage')!.getAttribute('data-phase')).toBe('solat');
     expect(r.container.querySelector('[data-layer="ticker"]')).toBeNull();
     expect(r.queryByText(/Kutipan derma/)).toBeNull();
+  });
+
+  it('gives way on a notice with its picture and stays on a text-only notice (rule 13, pengumuman bergambar)', () => {
+    const notice = { ...base, id: 'a1', title: 'Ruang solat wanita dibuka semula', body: 'Mulai hari ini.', from: '2026-11-01', to: '2026-11-30', priority: 2 as const };
+    const onNotice = (pengumuman: KioskContent['pengumuman']) => {
+      const c = fixture({ kuliah: [], pengumuman });
+      const view = makeView('2026-11-03', '15:00');
+      const rotation = buildRotation(c, view.settings, view.now);
+      holder.view = view;
+      holder.cv = { content: c, rotation, current: currentSlot(rotation, view.now), zikir: null, override: 'pengumuman' };
+      return render(<Main view={view} lang="ms" />);
+    };
+    const text = onNotice([notice]);
+    expect(text.container.querySelector('[data-card="pengumuman"]')).toBeTruthy();
+    expect(strip(text)).toBeTruthy();
+    cleanup();
+    const pic = onNotice([{ ...notice, pictureAssetId: 'e'.repeat(64) } as KioskContent['pengumuman'][number]]);
+    const card = pic.container.querySelector('[data-card="pengumuman"]')!;
+    expect(card.classList.contains('has-picture')).toBe(true);
+    expect(card.querySelector(`.pengumuman__pic img[src="/assets/${'e'.repeat(64)}"]`)).toBeTruthy();
+    expect(strip(pic)).toBeNull();
+    cleanup();
+    // A picture id that is not an asset id is no picture: the text card and its ticker stay.
+    const bad = onNotice([{ ...notice, pictureAssetId: '../x.png' } as KioskContent['pengumuman'][number]]);
+    expect(bad.container.querySelector('.pengumuman__pic')).toBeNull();
+    expect(strip(bad)).toBeTruthy();
+  });
+
+  it('a notice or programme picture that fails to load: text-only card and the ticker comes back (Q4)', () => {
+    resetCardPictureFailures();
+    const notice = { ...base, id: 'a1', title: 'Ruang solat wanita dibuka semula', body: 'Mulai hari ini.', from: '2026-11-01', to: '2026-11-30', priority: 2 as const };
+    const at = (over: Partial<KioskContent>, feature: 'pengumuman' | 'programKhas') => {
+      const c = fixture({ kuliah: [], ...over });
+      const view = makeView('2026-11-03', '15:00');
+      const rotation = buildRotation(c, view.settings, view.now);
+      holder.view = view;
+      holder.cv = { content: c, rotation, current: currentSlot(rotation, view.now), zikir: null, override: feature };
+      return render(<Main view={view} lang="ms" />);
+    };
+    const missing = '9'.repeat(64);
+    const r = at({ pengumuman: [{ ...notice, pictureAssetId: missing } as KioskContent['pengumuman'][number]] }, 'pengumuman');
+    expect(strip(r)).toBeNull();
+    fireEvent.error(r.container.querySelector('.pengumuman__pic img')!);
+    const card = r.container.querySelector('[data-card="pengumuman"]')!;
+    expect(card.classList.contains('has-picture')).toBe(false);
+    expect(card.querySelector('.pengumuman__pic, .pengumuman__main')).toBeNull();
+    expect([...card.children].map((e) => e.className)).toEqual(['card__tag', 'pengumuman__text']);
+    expect(r.getByText('Ruang solat wanita dibuka semula')).toBeTruthy();
+    expect(strip(r)).toBeTruthy();
+    cleanup();
+
+    const prog = {
+      ...base, id: 'pk1', title: 'Majlis Maulidur Rasul', at: '2026-11-20T20:30', assetId: '8'.repeat(64),
+      note: 'Jamuan ringan.', status: 'aktif' as const,
+    } as unknown as KioskContent['programKhas'][number];
+    const p = at({ programKhas: [prog] }, 'programKhas');
+    expect(strip(p)).toBeNull();
+    fireEvent.error(p.container.querySelector('.program__img img')!);
+    expect(p.container.querySelector('.program__img')).toBeNull();
+    expect(p.getByText('Majlis Maulidur Rasul')).toBeTruthy();
+    expect(strip(p)).toBeTruthy();
+    resetCardPictureFailures();
   });
 });

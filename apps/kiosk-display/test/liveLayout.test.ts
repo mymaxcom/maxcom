@@ -120,7 +120,7 @@ describe('the kuliah strip: read across the hall', () => {
   it('the side column and the next prayer chip are legible too', () => {
     expect(rem(rule(live, ".stage[data-kind='live'] .screen--live .live-screen__time .clock--compact .hm"), 'font-size')).toBeGreaterThanOrEqual(4);
     expect(rem(rule(live, ".stage[data-kind='live'] .screen--live .next--chip .chip-t"), 'font-size')).toBeGreaterThanOrEqual(2);
-    expect(rem(rule(live, ".stage[data-kind='live'] .screen--live .next--chip .chip-rel"), 'font-size')).toBeGreaterThanOrEqual(1.2);
+    expect(rem(rule(live, ".stage[data-kind='live'] .screen--live .next--chip .chip-cd b"), 'font-size')).toBeGreaterThanOrEqual(1.8);
     expect(rem(rule(live, '.live-screen__ident .brand-name'), 'font-size')).toBeGreaterThanOrEqual(FLOOR);
   });
 });

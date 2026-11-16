@@ -86,6 +86,10 @@ body {
   transition: opacity 900ms ease;
 }
 .bg__img.is-ready { opacity: 1; }
+/* The night picture's moon would sit behind the enlarged kuliah date and the book on the Default look's content screens:
+   there the same night without the moon covers it (it stays on Biasa and the prayer screens). */
+.bg__plain { display: none; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.stage[data-template='default'][data-kind='content'] .bg__plain { display: block; }
 /* The surau's own picture for this screen (themeStyle). Fit, size and position come from the stage variables. */
 .bg__menu {
   position: absolute;
@@ -96,6 +100,7 @@ body {
 /* Default look, a menu picture shown: the background list's picture steps back, so only the theme's own field (colour and
    gradient) shows around a picture that does not fill the screen (sederhana, kecil), as in the other themes. */
 .stage[data-template='default'][data-bg='image'] .bg__img { display: none; }
+.stage[data-template='default'][data-bg='image'] .bg__plain { display: none; }
 /* Two layers: the measured shade (top and foot darker, the middle open for the picture) and a fixed floor under
    the ticker and the prayer bar, so whatever the picture has down there (a mosque base, arches, a crowd) is
    pushed back to a calm tone before the bars sit on it. */
@@ -198,6 +203,13 @@ body {
   background: rgb(248 246 240);
   box-sizing: border-box;
   padding: 0.42rem;
+}
+/* The MAXCOM mark in the place of a surau without a logo (rule 10): square, on a light round plate. */
+.logo--maxcom {
+  border-radius: 50%;
+  background: rgb(248 246 240);
+  box-sizing: border-box;
+  padding: 0.3rem;
 }
 .ident__logo {
   height: min(4.2rem, var(--logo-cap, 999rem));
@@ -367,35 +379,6 @@ body {
   color: var(--ink);
 }
 .pcell.is-current .pcell__label { opacity: 0.8; }
-.pcell__cd {
-  margin-top: 0.15rem;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  font-size: 0.9rem;
-  line-height: 1;
-  padding: 0.14rem 0.6rem 0.12rem;
-  border-radius: 2rem;
-  background: rgb(0 0 0 / 0.8);
-  color: var(--accent);
-  white-space: nowrap;
-}
-/* Phase pill: a small word ("Iqamah") beside the remaining time of the phase. */
-.pcell__tag {
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  opacity: 0.9;
-}
-/* Word-only pill for calm phases (azan, khutbah, solat, tarawih): no ticking digits. */
-.pcell__cd--word {
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  padding: 0.14rem 0.75rem 0.12rem;
-}
 
 /* ---- Prayer source: footer line and emergency band (Plan 13) ---------------
    The footer is one 18 px line (0.94rem at 1080p) in the bottom margin under the bar, quiet on any background.

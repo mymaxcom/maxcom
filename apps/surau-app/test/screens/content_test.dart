@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:surau_app/app/providers.dart';
+import 'package:surau_app/content/adjusted_picture.dart' show AssetPicture;
 import 'package:surau_app/content/image_adjust.dart' show CropEditor;
 
 import '../features/fakes.dart';
@@ -144,6 +145,57 @@ void main() {
     expect(h.location, '/content/kuliah');
     expect(find.text('Kuliah disimpan.'), findsOneWidget);
     expect(find.text('4 rekod'), findsOneWidget);
+  });
+
+  Future<void> pickPicture(WidgetTester tester, ShellHarness h) async {
+    await reveal(tester, find.byKey(const ValueKey('image-pick')));
+    h.pickedImage = photo();
+    await tester.tap(find.byKey(const ValueKey('image-pick')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('adjust-save')));
+    await settle(tester);
+    await tester.pump(const Duration(seconds: 5));
+    await settle(tester);
+  }
+
+  testWidgets('pengumuman list: a row with a picture shows its thumbnail, a text-only row none', (tester) async {
+    await openContent(tester, '/content/pengumuman');
+    expect(find.text('Gotong-royong surau'), findsOneWidget);
+    expect(find.text('Kutipan tabung anak yatim'), findsOneWidget);
+    expect(find.byType(AssetPicture), findsOneWidget, reason: 'only the first announcement has a picture');
+  });
+
+  testWidgets('pengumuman: a picture is added (Gambar (pilihan)), uploaded once, and the PUT carries it', (tester) async {
+    final h = await openContent(tester, '/content/pengumuman/a2');
+    await pumpAtSize(tester, h.app, GoldenSize.phone);
+    await reveal(tester, find.byKey(const ValueKey('image-pick')));
+    expect(find.text('Gambar (pilihan)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('image-remove')), findsNothing, reason: 'text only to begin with');
+    await pickPicture(tester, h);
+    expect(find.byKey(const ValueKey('image-remove')), findsOneWidget);
+    expect(h.assetsPosted, hasLength(1));
+    await reveal(tester, save);
+    await tester.tap(save);
+    await settle(tester);
+    final body = jsonDecode(h.box.seen.firstWhere((r) => r.method == 'PUT').body) as Map<String, dynamic>;
+    final ref = body['pictureAssetId'];
+    expect(ref is String ? ref : (ref as Map)['asset'], sha256Hex(h.assetsPosted.single.$2));
+  });
+
+  testWidgets('pengumuman: a picture can be replaced, then removed: the PUT has no pictureAssetId key', (tester) async {
+    final h = await openContent(tester, '/content/pengumuman/a2');
+    await pumpAtSize(tester, h.app, GoldenSize.phone);
+    await pickPicture(tester, h);
+    await pickPicture(tester, h);
+    await reveal(tester, find.byKey(const ValueKey('image-remove')));
+    await tester.tap(find.byKey(const ValueKey('image-remove')));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('image-remove')), findsNothing);
+    await reveal(tester, save);
+    await tester.tap(save);
+    await settle(tester);
+    final body = jsonDecode(h.box.seen.firstWhere((r) => r.method == 'PUT').body) as Map<String, dynamic>;
+    expect(body.containsKey('pictureAssetId'), isFalse);
   });
 
   testWidgets('pengumuman: from after to is refused here, nothing sent', (tester) async {

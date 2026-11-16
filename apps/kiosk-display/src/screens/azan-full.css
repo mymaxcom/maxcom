@@ -1,0 +1,216 @@
+/* The azan countdown on the whole screen (Tetapan: Kiraan detik azan > Skrin penuh).
+   Phase.tsx puts `.screen--azanfull` on the phase screen and App puts `data-azan-full` on the stage; with the setting off
+   neither exists and nothing in this file applies. Every size is rem (1 rem = 1 % of the stage width) and every colour is
+   one of the theme's own tokens (--accent, --accent-rgb, --text, --ink, --glass-rgb, --radius-md), so each of the six
+   built-in themes keeps its own colours and type. The theme files are not touched: this file loads after them and
+   wins by specificity (it names the stage twice). Chrome 91 only: flex, absolute boxes and rgb(r g b / a).
+   Layout (1920 x 1080 as 100 x 56.25 rem): head (surau name, clock) on top, the prayer name, one big countdown and
+   the azan time in the middle, the compact prayer strip along the bottom; no side column in any theme. */
+
+.stage[data-azan-full][data-template] .screen--azanfull {
+  display: block;
+  padding: 0;
+}
+
+/* Head: the surau name left, the clock right, across the whole width. */
+.stage[data-azan-full][data-template] .screen--azanfull .phase__head {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  top: 2.4rem;
+  bottom: auto;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Centre: the whole middle of the screen, one block, text centred. */
+.stage[data-azan-full][data-template] .screen--azanfull .phase__centre {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  top: 9rem;
+  bottom: 11.8rem;
+  width: auto;
+  margin: 0;
+  padding: 0 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.stage[data-azan-full][data-template] .screen--azanfull .phase__title {
+  font-size: calc(4.6rem * var(--scale, 1));
+  line-height: 1.1;
+  max-width: 100%;
+}
+.stage[data-azan-full][data-template] .screen--azanfull .phase__big {
+  font-size: 19rem;
+  line-height: 1;
+  margin: 0.8rem 0 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.stage[data-azan-full][data-template] .screen--azanfull .azanfull__at {
+  margin-top: 1.2rem;
+  font-size: calc(3.8rem * var(--scale, 1));
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+  color: var(--accent);
+}
+
+/* The prayer strip: seven cells in one row along the bottom (the content screens' compact strip, in the theme's tokens). */
+.stage[data-azan-full][data-template] .screen--azanfull .strip {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  top: auto;
+  bottom: 2.7rem;
+  width: auto;
+  height: 6.4rem;
+  margin: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  border: 1px solid rgb(var(--accent-rgb) / 0.4);
+  border-radius: var(--radius-md);
+  background: rgb(var(--glass-rgb) / 0.82);
+  box-shadow: none;
+  color: var(--text);
+  text-shadow: none;
+  opacity: 1;
+}
+.stage[data-azan-full][data-template] .screen--azanfull .strip .pcell {
+  flex: 1 1 0;
+  min-width: 0;
+  height: auto;
+  margin: 0;
+  padding: 0 0.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  transform: none;
+  clip-path: none;
+  -webkit-clip-path: none;
+  color: inherit;
+}
+.stage[data-azan-full][data-template] .screen--azanfull .strip .pcell > * { transform: none; }
+.stage[data-azan-full][data-template] .screen--azanfull .strip .pcell-label {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+.stage[data-azan-full][data-template] .screen--azanfull .strip .pcell-time {
+  font-size: 2.7rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.stage[data-azan-full][data-template] .screen--azanfull .strip .pcell.is-minor .pcell-time { font-size: 2.3rem; opacity: 0.8; }
+.stage[data-azan-full][data-template] .screen--azanfull .strip .pcell.is-current {
+  background: var(--accent);
+  color: var(--ink);
+}
+.stage[data-azan-full][data-template] .screen--azanfull .strip .pcell.is-current .pcell-time { opacity: 1; }
+
+/* The source line sits under the strip, as on every phase screen. */
+.stage[data-azan-full][data-template] .screen--azanfull .source-footer {
+  left: var(--gutter);
+  right: var(--gutter);
+}
+
+/* ---- Colourful: the sunset block spans the width; its own colours stay ---- */
+.stage[data-azan-full][data-template='colourful'] .screen--azanfull .phase__centre {
+  top: 8.4rem;
+  bottom: 11.4rem;
+  border-radius: 2.2rem;
+}
+.stage[data-azan-full][data-template='colourful'] .screen--azanfull .azanfull__at { color: #ffe3a3; }
+.stage[data-azan-full][data-template='colourful'] .screen--azanfull .strip { background: rgb(var(--glass-rgb) / 0.9); }
+
+/* ---- Creative: the saffron slab covers the whole stage (its cut moves off the right edge) ---- */
+.stage[data-azan-full][data-template='creative'] { --cut-top: 130%; }
+.stage[data-azan-full][data-template='creative'] .screen--azanfull .phase__head .phase__clock { color: var(--ink); }
+.stage[data-azan-full][data-template='creative'] .screen--azanfull .phase__centre { color: var(--ink); }
+.stage[data-azan-full][data-template='creative'] .screen--azanfull .phase__big { margin-left: 0; }
+.stage[data-azan-full][data-template='creative'] .screen--azanfull .azanfull__at { color: var(--ink); }
+.stage[data-azan-full][data-template='creative'] .screen--azanfull .strip {
+  background: rgb(var(--glass-rgb) / 0.95);
+  border-color: var(--mint);
+  border-radius: 0;
+}
+.stage[data-azan-full][data-template='creative'] .screen--azanfull .strip .pcell.is-current { background: var(--mint); color: #06231c; }
+.stage[data-azan-full][data-template='creative'] .screen--azanfull .source-footer { color: var(--ink); }
+
+/* ---- Old School: the framed paper board spans the width ---- */
+.stage[data-azan-full][data-template='oldschool'] .screen--azanfull .phase__head {
+  left: 3.6rem;
+  right: 3.6rem;
+  top: 2.3rem;
+  justify-content: center;
+  padding: 0 12rem 0.9rem;
+  border-bottom: 0.34rem double var(--rule);
+}
+.stage[data-azan-full][data-template='oldschool'] .screen--azanfull .phase__head .phase__clock { position: absolute; right: 0; top: 0.6rem; }
+.stage[data-azan-full][data-template='oldschool'] .screen--azanfull .phase__centre {
+  left: 3.6rem;
+  right: 3.6rem;
+  top: 10.4rem;
+  bottom: 11.8rem;
+}
+.stage[data-azan-full][data-template='oldschool'] .screen--azanfull .azanfull__at { font-family: var(--serif); color: var(--accent); }
+.stage[data-azan-full][data-template='oldschool'] .screen--azanfull .strip {
+  left: 3.6rem;
+  right: 3.6rem;
+  border-radius: 0;
+  background: var(--paper);
+  border: 0.24rem double var(--rule);
+}
+.stage[data-azan-full][data-template='oldschool'] .screen--azanfull .strip .pcell-label { font-family: var(--serif); font-size: 1.4rem; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.stage[data-azan-full][data-template='oldschool'] .screen--azanfull .strip .pcell.is-current { background: var(--green); color: #f6e7bf; }
+
+/* ---- Minimal: air, thin type, a hairline strip ---- */
+.stage[data-azan-full][data-template='minimal'] .screen--azanfull .phase__head { left: 4rem; right: 4rem; }
+.stage[data-azan-full][data-template='minimal'] .screen--azanfull .strip {
+  left: 4rem;
+  right: 4rem;
+  border: 0;
+  border-top: 1px solid var(--hair);
+  border-radius: 0;
+  background: none;
+}
+.stage[data-azan-full][data-template='minimal'] .screen--azanfull .strip .pcell-label { text-transform: none; letter-spacing: 0; font-weight: 600; opacity: 0.8; }
+.stage[data-azan-full][data-template='minimal'] .screen--azanfull .strip .pcell.is-current { background: none; color: var(--accent); box-shadow: inset 0 0.3rem 0 var(--accent); }
+
+/* ---- Arabic Art: the Arabic word over the title and the gilded strip with the Arabic names; type a little smaller to fit under the arch ---- */
+.stage[data-azan-full][data-template='arabic'] .screen--azanfull .phase__title { font-size: calc(3.6rem * var(--scale, 1)); }
+.stage[data-azan-full][data-template='arabic'] .screen--azanfull .phase__title::before { font-size: 4.4rem; line-height: 1.2; }
+.stage[data-azan-full][data-template='arabic'] .screen--azanfull .phase__big { font-size: 15rem; margin-top: 0.4rem; }
+.stage[data-azan-full][data-template='arabic'] .screen--azanfull .azanfull__at { font-size: calc(3.2rem * var(--scale, 1)); margin-top: 0.6rem; }
+.stage[data-azan-full][data-template='arabic'] .screen--azanfull .strip .pcell.is-current .pcell-ar { color: var(--ink); }
+.stage[data-azan-full][data-template='arabic'] .screen--azanfull .strip { border-color: var(--hair); border-radius: 0; }
+.stage[data-azan-full][data-template='arabic'] .screen--azanfull .strip .pcell-ar {
+  display: block;
+  font-size: 2.1rem;
+  line-height: 1;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.stage[data-azan-full][data-template='arabic'] .screen--azanfull .strip .pcell-label { display: none; }
+.stage[data-azan-full][data-template='arabic'] .screen--azanfull .azanfull__at { color: var(--accent-2); }

@@ -16,7 +16,8 @@ vi.mock('../src/data/content.ts', async (importOriginal) => {
 
 import { App } from '../src/app.tsx';
 import { kindOf } from '../src/screens/kind.ts';
-import { chipRelative } from '../src/ui/NextChip.tsx';
+import { chipLeft } from '../src/ui/NextChip.tsx';
+import { STRINGS } from '../src/i18n.ts';
 import { fmtHijriAr, PRAYER_AR } from '../src/i18n.ts';
 
 const PHOTO = 'a'.repeat(64);
@@ -109,10 +110,10 @@ describe('stage kinds and the content shell', () => {
     expect(r.container.querySelector('.region-brand [data-role="logo"]')).toBeTruthy();
   });
 
-  it('the in-cell countdown shows on biasa only', async () => {
+  it('no countdown inside a prayer cell on any screen (theme round 2, rule 7)', async () => {
     const r = showWithCard(null);
     await flush();
-    expect(r.container.querySelector('.pcell__cd')).toBeTruthy();
+    expect(r.container.querySelector('.pcell__cd, [data-prayer] [role="timer"]')).toBeNull();
     cleanup();
     const iq = showWithCard(null, {}, '2026-11-03', '16:25');
     await flush();
@@ -132,12 +133,160 @@ describe('stage kinds and the content shell', () => {
     expect(fmtHijriAr(new Date('2026-11-15T04:00:00Z'), { d: 5, m: 6, y: 1448 }, 'Asia/Kuala_Lumpur')).toBe('الأحد، ٥ جمادى الآخرة ١٤٤٨ هـ');
   });
 
-  it('chip relative text', () => {
-    expect(chipRelative((60 + 42) * 60_000 + 5_000, 'ms')).toBe('1 jam 42 minit lagi');
-    expect(chipRelative(39 * 60_000, 'ms')).toBe('39 minit lagi');
-    expect(chipRelative(20_000, 'ms')).toBe('sebentar lagi');
-    expect(chipRelative((60 + 42) * 60_000, 'en')).toBe('in 1 h 42 min');
-    expect(chipRelative(39 * 60_000, 'en')).toBe('in 39 min');
-    expect(chipRelative(20_000, 'en')).toBe('in a moment');
+  it('chip countdown: hh:mm, minutes rounded up, the seconds alone in the last minute only with clock seconds on (rules 4, 5)', () => {
+    expect(chipLeft(27 * 60_000, false)).toBe('00:27');
+    expect(chipLeft(26 * 60_000 + 1_000, false)).toBe('00:27');
+    expect(chipLeft((2 * 60 + 12) * 60_000, false)).toBe('02:12');
+    expect(chipLeft((2 * 60 + 11) * 60_000 + 30_000, false)).toBe('02:12');
+    expect(chipLeft(45_000, false)).toBe('00:01');
+    expect(chipLeft(1_000, false)).toBe('00:01');
+    expect(chipLeft(45_000, true)).toBe('45');
+    expect(chipLeft(44_200, true)).toBe('45');
+    expect(chipLeft(60_000, true)).toBe('60');
+    expect(chipLeft(61_000, true)).toBe('00:02');
+    expect(chipLeft(0, false)).toBe('00:00');
+    expect(chipLeft(-5, true)).toBe('00:00');
+    // No words: the old relative phrases are gone.
+    for (const k of ['chipRelHM', 'chipRelH', 'chipRelM', 'chipRelNow']) expect(STRINGS.ms[k], k).toBeUndefined();
+  });
+
+  it('the chip: name, time, an hourglass and the hh:mm left, updated once a minute', async () => {
+    const r = showWithCard('kuliahCard');
+    await flush();
+    const chip = r.container.querySelector('.next--chip')!;
+    expect(chip.querySelector('.chip-k')!.textContent).toBe('Asar');
+    expect(chip.querySelector('.chip-t')!.textContent).toBe('4:20PTG');
+    expect(chip.querySelector('.chip-cd svg.chip-hg')).toBeTruthy();
+    expect(chip.querySelector('.chip-cd b')!.textContent).toBe('00:28');
+    expect(chip.classList.contains('is-now')).toBe(false);
+    expect(chip.textContent).not.toMatch(/lagi|minit/);
+  });
+
+  it('"Masuk waktu" on the chip for three minutes after the prayer time, then the next prayer (rule 6)', async () => {
+    // Asar is 16:20 on the fixture day; the content screen is back after the phases at 16:22 only in this probe.
+    const { justInOf } = await import('../src/ui/visibleNext.ts');
+    const v = makeView('2026-11-03', '16:22');
+    expect(justInOf(v.state, v.settings, v.now, v.tz)?.name).toBe('asar');
+    const later = makeView('2026-11-03', '16:23');
+    expect(justInOf(later.state, later.settings, later.now, later.tz)).toBeNull();
+    const before = makeView('2026-11-03', '16:19:59');
+    expect(justInOf(before.state, before.settings, before.now, before.tz)).toBeNull();
+    const { NextChip } = await import('../src/ui/NextChip.tsx');
+    const now = render(<NextChip view={v} lang="ms" />);
+    const chip = now.container.querySelector('.next--chip')!;
+    expect(chip.classList.contains('is-now')).toBe(true);
+    expect(chip.querySelector('.chip-k')!.textContent).toBe('Asar');
+    expect(chip.querySelector('.chip-cd--now')!.textContent).toBe('Masuk waktu');
+    expect(chip.querySelector('[role="timer"]')).toBeNull();
+    cleanup();
+    const next = render(<NextChip view={later} lang="ms" />);
+    expect(next.container.querySelector('.chip-k')!.textContent).toBe('Maghrib');
+    expect(next.container.querySelector('.next--chip')!.classList.contains('is-now')).toBe(false);
+  });
+
+  it('the chip shows the seconds alone in the last minute when the clock shows seconds', async () => {
+    const { NextChip } = await import('../src/ui/NextChip.tsx');
+    const on = makeView('2026-11-03', '16:19:15', { settings: { clock: { showSeconds: true } } });
+    const r = render(<NextChip view={on} lang="ms" />);
+    expect(r.container.querySelector('.chip-cd b')!.textContent).toBe('45');
+    cleanup();
+    const off = makeView('2026-11-03', '16:19:15');
+    const r2 = render(<NextChip view={off} lang="ms" />);
+    expect(r2.container.querySelector('.chip-cd b')!.textContent).toBe('00:01');
+  });
+});
+
+describe('the shell head: dates and the next prayer (brief 2026-11-16 items 2 and 8)', () => {
+  it('shows the Gregorian and the Hijri date under the surau name on a content screen', async () => {
+    const r = showWithCard('kuliahCard');
+    await flush();
+    const d = r.getByTestId('shell-date');
+    expect(d.textContent).toContain('Selasa, 3 November 2026');
+    expect(d.querySelector('.shell-hijri')!.textContent).toMatch(/1448H$/);
+    expect(d.closest('.region-brand')).toBeTruthy();
+  });
+
+  it('honours hijriDate: adjustDays moves the Hijri date; no Hijri date leaves the Gregorian alone', async () => {
+    const a = showWithCard('kuliahCard');
+    await flush();
+    const plain = a.container.querySelector('.shell-hijri')!.textContent;
+    cleanup();
+    const b = showWithCard('kuliahCard', { settings: { hijriDate: { adjustDays: 1 } } });
+    await flush();
+    expect(b.container.querySelector('.shell-hijri')!.textContent).not.toBe(plain);
+    cleanup();
+    const c = content();
+    const view = { ...makeView('2026-11-03', '15:52'), hijri: null };
+    const cycle = buildCycle(c, view.settings, view.now);
+    holder.view = view;
+    holder.cv = { content: c, rotation: cycle.slots, current: currentSlot(cycle.slots, view.now, cycle.cycleStartSec), zikir: null, override: 'kuliahCard' };
+    const n = render(<App />);
+    await flush();
+    expect(n.getByTestId('shell-date').textContent).toBe('Selasa, 3 November 2026');
+    expect(n.container.querySelector('.shell-date .sep')).toBeNull();
+  });
+
+  it('the chip names the next VISIBLE prayer with the strip: Syuruk hidden at 06:30 is Zohor', async () => {
+    const r = showWithCard('kuliahCard', { settings: { prayerBar: { showSyuruk: false } } }, '2026-11-03', '06:30');
+    await flush();
+    const chip = r.container.querySelector('.next--chip')!;
+    expect(chip.querySelector('.chip-k')!.textContent).toBe('Zohor');
+    expect(r.container.querySelector('.strip .pcell.is-current')!.getAttribute('data-prayer')).toBe('zohor');
+    cleanup();
+    const shown = showWithCard('kuliahCard', {}, '2026-11-03', '06:30');
+    await flush();
+    expect(shown.container.querySelector('.next--chip .chip-k')!.textContent).toBe('Syuruk');
+  });
+});
+
+describe('the backgrounds list in every theme (brief 2026-11-16 item 5, spec 6.10.1 layer 4)', () => {
+  const OWN = 'd'.repeat(64);
+  it('a picture under the text marks the stage (data-picture): the scrim, the plates and the glow follow it', async () => {
+    for (const theme of ['default', 'colourful', 'creative', 'oldschool', 'minimal', 'arabic']) {
+      const r = showWithCard('kuliahCard', { settings: { kioskTemplate: { templateId: theme }, backgrounds: { images: [OWN] } } });
+      await flush();
+      expect(stage(r).getAttribute('data-picture'), theme).toBe('on');
+      expect(r.container.querySelector('.bg .bg__scrim'), theme).toBeTruthy();
+      cleanup();
+      // The built-in default photos (the Default look itself) and no picture at all leave every theme as it was.
+      const plain = showWithCard('kuliahCard', { settings: { kioskTemplate: { templateId: theme } } });
+      await flush();
+      expect(stage(plain).getAttribute('data-picture'), theme).toBeNull();
+      cleanup();
+    }
+  });
+  it('a theme other than Default wears the surau own list picture as its picture layer', async () => {
+    for (const theme of ['colourful', 'creative', 'oldschool', 'minimal', 'arabic']) {
+      const r = showWithCard('kuliahCard', { settings: { kioskTemplate: { templateId: theme }, backgrounds: { images: [OWN] } } });
+      await flush();
+      expect(stage(r).getAttribute('data-bg'), theme).toBe('image');
+      expect(stage(r).style.getPropertyValue('--bg-image'), theme).toContain(`/assets/${OWN}`);
+      expect(r.container.querySelector('.bg__menu'), theme).toBeTruthy();
+      cleanup();
+    }
+  });
+  it('the built-in default photos stay the Default look own: other themes keep their field', async () => {
+    const r = showWithCard('kuliahCard', { settings: { kioskTemplate: { templateId: 'creative' } } });
+    await flush();
+    expect(stage(r).getAttribute('data-bg')).toBeNull();
+    cleanup();
+    const off = showWithCard('kuliahCard', { settings: { kioskTemplate: { templateId: 'creative' }, backgrounds: { enabled: false, images: [OWN] } } });
+    await flush();
+    expect(stage(off).getAttribute('data-bg')).toBeNull();
+  });
+  it('Default draws the list itself (unchanged): no picture layer', async () => {
+    const r = showWithCard('kuliahCard', { settings: { backgrounds: { images: [OWN] } } });
+    await flush();
+    expect(stage(r).getAttribute('data-bg')).toBeNull();
+    expect(r.container.querySelector('.bg__img')!.getAttribute('src')).toBe(`/assets/${OWN}`);
+  });
+  it('a menu picture of the screen still wins over the list', async () => {
+    const MENU = 'e'.repeat(64);
+    const r = showWithCard('kuliahCard', { settings: {
+      kioskTemplate: { templateId: 'minimal' }, backgrounds: { images: [OWN] },
+      themeStyle: { styles: { minimal: { semua: { bgImage: MENU }, skrin: {} } } },
+    } });
+    await flush();
+    expect(stage(r).style.getPropertyValue('--bg-image')).toContain(MENU);
   });
 });

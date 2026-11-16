@@ -67,6 +67,16 @@ void main() {
     expect(canSee({'admin'}, 'users:manage'), isTrue);
   });
 
+  test('a feature hidden from Tetapan is off whatever the box stores', () {
+    final f = FeatureFlags.fromSettings({
+      'jemaahPage': {'enabled': true},
+      'finance': {'enabled': true},
+    });
+    expect(f.isOn('jemaahPage'), isFalse);
+    expect(f.copyWith({'jemaahPage': true}).isOn('jemaahPage'), isFalse);
+    expect(f.isOn('finance'), isTrue);
+  });
+
   test('feature flags fall back to registry defaults', () {
     const none = FeatureFlags.defaults;
     expect(none.isOn('finance'), isFalse);

@@ -29,11 +29,12 @@ Future<ShellHarness> open(
   WidgetTester tester, {
   GoldenSize size = GoldenSize.phone,
   Map<String, Object?> styles = const {},
+  Map<String, Object?> packs = const {},
   String theme = 'creative',
 }) async {
   final h = await pumpShell(tester, roles: const ['admin'], health: themedHealth, size: size);
   h.settings['kioskTemplate'] = {'enabled': true, 'templateId': theme};
-  h.settings['themeStyle'] = {'enabled': true, 'styles': styles, 'packs': <String, Object?>{}};
+  h.settings['themeStyle'] = {'enabled': true, 'styles': styles, 'packs': packs};
   h.handlers['GET /api/kiosk/bundle'] = (_) async => jsonResponse(200, t9Bundle());
   h.container.invalidate(settingsProvider);
   h.router.go('/settings/templat/$theme');
@@ -59,7 +60,7 @@ void main() {
 
   test('the editor lists the three Arabic screens last; Arabic Art starts from Uthmani Hafs', () {
     expect(themeEditorScreens.sublist(themeEditorScreens.length - 3), ['arab-ayat', 'arab-zikir', 'arab-hadis']);
-    expect(themeDefaultsOf('arabic').semua, {'arFont': 'hafs'});
+    expect(themeDefaultsOf('arabic').semua, {'arFont': 'hafs', 'goldOutline': 'on'});
   });
 
   test('arabLooksOn: Arabic Art and a pack with an arab-* screen file', () {
@@ -172,16 +173,114 @@ void main() {
     expect(find.text('Uthmani Hafs'), findsOneWidget);
   });
 
-  testWidgets('Sembunyi is offered on Ayat Arab and not on Ayat; Tetapan comes first', (tester) async {
+  testWidgets('Terjemahan only places the translation (no Sembunyi): Tetapan alone decides whether it shows', (tester) async {
     await open(tester, theme: 'arabic');
     await pick(tester, 'arab-ayat');
     await reveal(tester, k('ctl-tarjamah-bawah'));
-    expect(k('ctl-tarjamah-sembunyi'), findsOneWidget);
-    expect(find.textContaining('Tetapan diikut'), findsOneWidget);
+    expect(k('ctl-tarjamah-sisi'), findsOneWidget);
+    expect(k('ctl-tarjamah-sembunyi'), findsNothing);
+    expect(find.textContaining('Tetapan menentukan'), findsOneWidget);
+    // Elsewhere the translation always sits below: nothing to choose, so nothing is offered.
     await pick(tester, 'ayat');
-    await reveal(tester, k('ctl-tarjamah-bawah'));
+    expect(k('ctl-tarjamah-bawah'), findsNothing);
+    expect(find.textContaining('Tetapan menentukan'), findsNothing);
     expect(k('ctl-tarjamah-sembunyi'), findsNothing);
   });
+
+  group('an option is offered only on the screens where it acts', () {
+    Future<void> hasArab(WidgetTester tester, String screen, {required bool harakat, required bool hafs, required bool side}) async {
+      await pick(tester, screen);
+      await reveal(tester, k('ctl-arab-title'));
+      expect(k('ctl-harakat-follow'), harakat ? findsOneWidget : findsNothing, reason: '$screen Warna baris');
+      expect(k('ctl-arfont-hafs'), hafs ? findsOneWidget : findsNothing, reason: '$screen Uthmani Hafs');
+      expect(k('ctl-tarjamah-bawah'), side ? findsOneWidget : findsNothing, reason: '$screen Terjemahan');
+      expect(k('ctl-arfont-amiri'), findsOneWidget, reason: '$screen Amiri');
+    }
+
+    testWidgets('Warna baris, Uthmani Hafs and Terjemahan per screen', (tester) async {
+      await open(tester, theme: 'arabic');
+      await hasArab(tester, 'ayat', harakat: false, hafs: true, side: false);
+      await hasArab(tester, 'zikir', harakat: false, hafs: false, side: false);
+      await hasArab(tester, 'hadis', harakat: true, hafs: false, side: false);
+      await hasArab(tester, 'arab-ayat', harakat: true, hafs: true, side: true);
+      await hasArab(tester, 'arab-hadis', harakat: true, hafs: false, side: true);
+      await hasArab(tester, 'arab-zikir', harakat: true, hafs: false, side: false);
+    });
+
+    testWidgets('Saiz teks and Jajaran are not offered where they do nothing', (tester) async {
+      await open(tester, theme: 'creative');
+      for (final screen in ['biasa', 'live', 'poster']) {
+        await pick(tester, screen);
+        expect(k('ctl-scale-S'), findsNothing, reason: '$screen Saiz teks');
+      }
+      for (final screen in ['biasa', 'azan', 'masuk-waktu', 'iqamah', 'solat', 'jumaat', 'live', 'poster', 'takwim']) {
+        await pick(tester, screen);
+        expect(k('ctl-align-kiri'), findsNothing, reason: '$screen Jajaran');
+      }
+      for (final screen in ['kuliah', 'hadis', 'ayat', 'zikir', 'pengumuman']) {
+        await pick(tester, screen);
+        await reveal(tester, k('ctl-scale-S'));
+        expect(k('ctl-scale-S'), findsOneWidget, reason: '$screen Saiz teks');
+        await reveal(tester, k('ctl-align-kiri'));
+        expect(k('ctl-align-kiri'), findsOneWidget, reason: '$screen Jajaran');
+      }
+    });
+
+    testWidgets('an uploaded theme has no font of its own to choose', (tester) async {
+      await open(tester, theme: 'mypack', packs: {
+        'mypack': {'title': 'Tema saya', 'version': 1, 'contract': 1, 'base': 'default', 'screens': <String>[], 'fonts': ['myfont']},
+      });
+      await pick(tester, 'kuliah');
+      await reveal(tester, k('ctl-font-amiri'));
+      expect(k('ctl-font-myfont'), findsNothing);
+    });
+  });
+
+  for (final base in ['default', 'oldschool', 'arabic', 'creative']) {
+    testWidgets('Garis emas pada tajuk for an uploaded theme made on $base follows the base', (tester) async {
+      await open(tester, theme: 'mypack', packs: {
+        'mypack': {'title': 'Tema saya', 'version': 1, 'contract': 1, 'base': base, 'screens': <String>[]},
+      });
+      await pick(tester, 'kuliah');
+      await reveal(tester, k('ctl-font-follow'));
+      if (base == 'creative') {
+        expect(k('ctl-gold-on'), findsNothing);
+      } else {
+        await reveal(tester, k('ctl-gold-off'));
+        expect(k('ctl-gold-on'), findsOneWidget);
+      }
+    });
+  }
+
+  testWidgets('an uploaded theme made on Arabic Art shows its Arabic screens as in use', (tester) async {
+    await open(tester, theme: 'mypack', packs: {
+      'mypack': {'title': 'Tema saya', 'version': 1, 'contract': 1, 'base': 'arabic', 'screens': <String>[]},
+    });
+    await pick(tester, 'arab-ayat');
+    await reveal(tester, k('ctl-arab-title'));
+    expect(k('ctl-arab-looks-off'), findsNothing);
+  });
+
+  for (final t in ['default', 'oldschool', 'arabic']) {
+    testWidgets('Garis emas pada tajuk is offered in $t (on by the theme) and saved per screen', (tester) async {
+      final h = await open(tester, theme: t);
+      await pick(tester, 'kuliah');
+      await reveal(tester, k('ctl-gold-off'));
+      expect(k('ctl-gold-on'), findsOneWidget);
+      expect(find.text('Garis emas pada tajuk'), findsOneWidget);
+      await tester.tap(k('ctl-gold-off'));
+      await settle(tester);
+      expect(lastTheme(h).entry.skrin['kuliah'], {'goldOutline': 'off'});
+    });
+  }
+  for (final t in ['colourful', 'creative', 'minimal']) {
+    testWidgets('Garis emas pada tajuk is not offered in $t (it draws nothing there)', (tester) async {
+      await open(tester, theme: t);
+      await pick(tester, 'kuliah');
+      expect(k('ctl-gold-on'), findsNothing);
+      expect(find.text('Garis emas pada tajuk'), findsNothing);
+    });
+  }
 
   testWidgets('Tulisan Arab does not appear on Kuliah', (tester) async {
     await open(tester);

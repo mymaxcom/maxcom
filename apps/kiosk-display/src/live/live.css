@@ -162,7 +162,8 @@
   text-align: center;
 }
 .stage[data-kind='live'] .screen--live .next--chip .chip-t { font-size: 2.6rem; line-height: 1.05; }
-.stage[data-kind='live'] .screen--live .next--chip .chip-rel { margin: 0; font-size: 1.3rem; }
+.stage[data-kind='live'] .screen--live .next--chip .chip-cd { height: 2.917rem; margin-top: 0.3rem; }
+.stage[data-kind='live'] .screen--live .next--chip .chip-cd b { font-size: 1.875rem; }
 
 .live-screen__strip {
   grid-area: strip;
@@ -217,13 +218,14 @@
   z-index: 2;
   flex-direction: row;
   align-items: center;
-  gap: 0.729rem;
-  height: 4.167rem;
-  padding: 0 1.563rem;
-  border-radius: 2.083rem;
+  gap: 0.833rem;
+  height: 4.479rem;
+  padding: 0 0.573rem 0 1.563rem;
+  border-radius: 2.24rem;
 }
 .stage[data-live-layout='full'] .screen--live .next--chip .chip-t { font-size: 2.188rem; line-height: 1; }
-.stage[data-live-layout='full'] .screen--live .next--chip .chip-rel { margin-left: 0.2rem; font-size: 1.354rem; }
+.stage[data-live-layout='full'] .screen--live .next--chip .chip-cd { height: 3.385rem; margin-top: 0; }
+.stage[data-live-layout='full'] .screen--live .next--chip .chip-cd b { font-size: 2.292rem; }
 .stage[data-live-layout='full'] .live-screen__strip {
   position: absolute;
   left: 2.5rem;

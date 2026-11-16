@@ -50,10 +50,11 @@ void main() {
     expect(cases['coreSourceHash'], coreSourceHash);
   });
 
-  test('features: core has 54, 9 of them locked', () {
+  test('features: core has 54, 10 of them locked', () {
     expect(features.length, 54);
     final locked = features.where((f) => f.locked).map((f) => f.key).toSet();
     expect(locked, {
+      'prayerCalc',
       'prayerBar',
       'clock',
       'prayerSequenceSafety',
@@ -114,7 +115,7 @@ void main() {
   test('theme tables: screens, titles, hidden features, contract', () {
     expect(screenIds.length, 21);
     expect(themeTitles['oldschool'], 'Old School');
-    expect(hiddenFeatures.contains('themeStyle'), isTrue);
+    expect(hiddenFeatures, ['themeStyle', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage']);
     expect(themeContract, 1);
     expect(builtInThemeIds, ['default', 'colourful', 'creative', 'oldschool', 'minimal', 'arabic']);
     expect(themeTitles['arabic'], 'Arabic Art');

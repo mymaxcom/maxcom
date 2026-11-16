@@ -112,8 +112,9 @@ void main() {
       expect(run('/live', roles: {'media'}, features: youtubeOnly).redirect, isNull);
 
       expect(run('/jemaah', roles: {'admin'}).forbidden, isTrue);
+      // jemaahPage is hidden (planned): off whatever is stored, so the route stays closed.
       final jemaahOn = FeatureFlags.defaults.copyWith({'jemaahPage': true});
-      expect(run('/jemaah', roles: {'ajk'}, features: jemaahOn).redirect, isNull);
+      expect(run('/jemaah', roles: {'ajk'}, features: jemaahOn).forbidden, isTrue);
     });
 
     test('the finance settings pages follow their permission', () {
@@ -171,6 +172,7 @@ void main() {
         'finance': true,
         'jemaahPage': true,
       });
+      // jemaahPage stored on is still no menu entry: it is hidden from Tetapan, so it counts as off.
       expect(labels({'admin'}, allOn), [
         'Papan pemuka',
         'Kewangan',
@@ -179,7 +181,6 @@ void main() {
         'Pengguna & peranti',
         'Log perubahan',
         'Siaran langsung',
-        'Jemaah',
       ]);
     });
 

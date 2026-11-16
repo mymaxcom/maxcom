@@ -51,10 +51,20 @@ class ThemeCardData {
   final int changedScreenCount;
 }
 
-/// Whether the theme shows ayat, hadis and zikir in their Arabic-led looks: Arabic Art does, and an uploaded theme that
-/// ships an `arab-*` screen file does (a pack opts in that way). The twin of `arabLooksOf` in the kiosk.
+/// The built-in theme an uploaded theme is made on; null for a built-in theme or an unknown name.
+String? packBaseOf(Map<String, dynamic> settings, String theme) {
+  final ts = settings['themeStyle'];
+  final packs = ts is Map ? ts['packs'] : null;
+  final p = packs is Map ? packs[theme] : null;
+  final b = p is Map ? p['base'] : null;
+  return b is String ? b : null;
+}
+
+/// Whether the theme shows ayat, hadis and zikir in their Arabic-led looks: Arabic Art does, and so does an uploaded theme
+/// made on Arabic Art or one that ships an `arab-*` screen file (a pack opts in that way). The twin of `arabLooksOf` in
+/// the kiosk, which goes by the base theme.
 bool arabLooksOn(Map<String, dynamic> settings, String theme) {
-  if (theme == 'arabic') return true;
+  if (theme == 'arabic' || packBaseOf(settings, theme) == 'arabic') return true;
   final ts = settings['themeStyle'];
   final packs = ts is Map ? ts['packs'] : null;
   final p = packs is Map ? packs[theme] : null;

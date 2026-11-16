@@ -32,6 +32,12 @@ export const SCREEN_GROUP: Readonly<Record<ScreenId, ScreenGroup>> = {
 export type ProtectedEl = 'clock' | 'prayers' | 'countdown' | 'next' | 'logo';
 
 const CP = ['clock', 'prayers'] as const;
+/**
+ * The content screens (theme round 2, rule 2): the clock and the next-prayer chip in the top row. The prayer strip is
+ * not required there: the poster, pengumuman, programme and tabung screens have none (rule 1), and where a content
+ * screen shows it, it is not a protected element.
+ */
+const CN = ['clock', 'next'] as const;
 /** Elements the health check (plan C) requires per screen. 'logo' is added at run time when the surau has one. */
 export const PROTECTED: Readonly<Record<ScreenId, readonly ProtectedEl[]>> = {
   biasa: ['clock', 'prayers', 'next'],
@@ -39,9 +45,9 @@ export const PROTECTED: Readonly<Record<ScreenId, readonly ProtectedEl[]>> = {
   iqamah: ['clock', 'prayers', 'countdown'],
   'masuk-waktu': CP, solat: CP, jumaat: CP,
   'tiada-data': ['clock'],
-  live: ['clock', 'next'],
-  poster: CP, kuliah: CP, program: CP, hadis: CP, zikir: CP, tilawah: CP, pengumuman: CP, takwim: CP, tabung: CP, ayat: CP,
-  'arab-ayat': CP, 'arab-hadis': CP, 'arab-zikir': CP,
+  live: CN,
+  poster: CN, kuliah: CN, program: CN, hadis: CN, zikir: CN, tilawah: CN, pengumuman: CN, takwim: CN, tabung: CN, ayat: CN,
+  'arab-ayat': CN, 'arab-hadis': CN, 'arab-zikir': CN,
 };
 
 export function isScreenId(s: unknown): s is ScreenId {

@@ -191,6 +191,7 @@ void main() {
     await settle(tester);
     expect(tester.widget<Slider>(k('ctl-shade')).value, 50);
     expect(tester.widget<ChoiceChip>(k('ctl-shade-follow')).selected, isFalse);
+    await reveal(tester, k('ctl-shade-follow'));
     await tester.tap(k('ctl-shade-follow'));
     await settle(tester);
     expect(tester.widget<Slider>(k('ctl-shade')).value, 35);
@@ -218,6 +219,30 @@ void main() {
         'creative': {'semua': {'shade': 40}, 'skrin': <String, Object?>{}},
       },
     });
+  });
+
+  testWidgets('Guna untuk semua skrin names the other screens whose own choices it deletes, and Batal keeps them', (tester) async {
+    final h = await open(tester, styles: {
+      'creative': {
+        'semua': <String, Object?>{},
+        'skrin': {'kuliah': {'shade': 20}, 'hadis': {'scale': 'L'}, 'ayat': {'align': 'kiri'}},
+      },
+    });
+    await tester.tap(k('theme-screen-kuliah'));
+    await settle(tester);
+    await reveal(tester, k('theme-apply-all'));
+    await tester.tap(k('theme-apply-all'));
+    await settle(tester);
+    expect(find.textContaining('Pilihan sendiri bagi 2 skrin lain akan dipadam'), findsOneWidget);
+    await tester.tap(k('confirm-no'));
+    await settle(tester);
+    expect(lastTheme(h).entry.skrin.keys, containsAll(['kuliah', 'hadis', 'ayat']), reason: 'cancelled: nothing changed');
+    await tester.tap(k('theme-apply-all'));
+    await settle(tester);
+    await tester.tap(k('confirm-yes'));
+    await settle(tester);
+    expect(lastTheme(h).entry.semua, {'shade': 20});
+    expect(lastTheme(h).entry.skrin, isEmpty);
   });
 
   testWidgets("Set semula removes only this screen's values; Simpan sends the rest of this theme", (tester) async {

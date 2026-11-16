@@ -8,7 +8,6 @@
     "kuliah": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "iqamah": {
@@ -19,8 +18,7 @@
     },
     "pengumuman": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "solat": {
       "clock": 2.6,
@@ -29,7 +27,6 @@
     "poster": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "azan": {
@@ -50,28 +47,23 @@
     },
     "hadis": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "ayat": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "takwim": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "program": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "zikir": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "live": {
       "logo": 3.199,
@@ -88,7 +80,6 @@
     "kuliah": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "iqamah": {
@@ -99,8 +90,7 @@
     },
     "pengumuman": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "solat": {
       "clock": 3,
@@ -109,7 +99,6 @@
     "poster": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "azan": {
@@ -130,28 +119,23 @@
     },
     "hadis": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "ayat": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "takwim": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "program": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "zikir": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "live": {
       "logo": 4.6,
@@ -168,7 +152,6 @@
     "kuliah": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "iqamah": {
@@ -179,8 +162,7 @@
     },
     "pengumuman": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "solat": {
       "clock": 2.8,
@@ -189,7 +171,6 @@
     "poster": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "azan": {
@@ -210,28 +191,23 @@
     },
     "hadis": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "ayat": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "takwim": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "program": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "zikir": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "live": {
       "logo": 3.199,
@@ -248,7 +224,6 @@
     "kuliah": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "iqamah": {
@@ -259,8 +234,7 @@
     },
     "pengumuman": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "solat": {
       "clock": 2.7,
@@ -269,7 +243,6 @@
     "poster": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "azan": {
@@ -290,28 +263,23 @@
     },
     "hadis": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "ayat": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "takwim": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "program": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "zikir": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "live": {
       "logo": 4.6,
@@ -328,7 +296,6 @@
     "kuliah": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "iqamah": {
@@ -339,8 +306,7 @@
     },
     "pengumuman": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "solat": {
       "clock": 2.4,
@@ -349,7 +315,6 @@
     "poster": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "azan": {
@@ -370,28 +335,23 @@
     },
     "hadis": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "ayat": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "takwim": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "program": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "zikir": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "live": {
       "logo": 4.6,
@@ -408,7 +368,6 @@
     "kuliah": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "iqamah": {
@@ -419,8 +378,7 @@
     },
     "pengumuman": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "solat": {
       "clock": 2.6,
@@ -429,7 +387,6 @@
     "poster": {
       "next": 1,
       "clock": 1,
-      "prayers": 1,
       "logo": 4.199
     },
     "azan": {
@@ -450,28 +407,23 @@
     },
     "arab-hadis": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "arab-ayat": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "takwim": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "program": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "arab-zikir": {
       "next": 1,
-      "clock": 1,
-      "prayers": 1
+      "clock": 1
     },
     "live": {
       "logo": 4.6,

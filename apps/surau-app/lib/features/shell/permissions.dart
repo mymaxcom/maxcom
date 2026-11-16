@@ -50,8 +50,9 @@ class FeatureFlags {
 
   final Map<String, bool> _enabled;
 
+  /// A feature the Tetapan lists hide (planned) behaves as off whatever is stored: nobody could switch it off again.
   bool isOn(String feature) =>
-      _enabled[feature] ?? featureDefaultEnabled[feature] ?? false;
+      !hiddenFeatures.contains(feature) && (_enabled[feature] ?? featureDefaultEnabled[feature] ?? false);
 
   /// For tests and previews: [defaults] with some features forced.
   FeatureFlags copyWith(Map<String, bool> changes) =>

@@ -477,17 +477,26 @@ const Map<String, Map<String, String>> choiceLabelsMs = {
 
 /// The line under each Lanjutan deep link in the list, by feature key.
 const Map<String, String> lanjutanRowHintMs = {
-  'liveYoutube': 'Cara video disalurkan dan kadar bit maksimum.',
+  'liveYoutube': 'Cara video disalurkan (siaran dari pelayar) dan kadar bit maksimum.',
   'tilawah': 'Had ruang cakera MAXCOM untuk audio tilawah.',
 };
 
 /// A sentence under a setting, by setting name (BM).
 const Map<String, String> settingHelpMs = {
+  'keepOnDevice':
+      'Jika dihidupkan (lalai), salinan di peranti disimpan sebanyak hari di '
+      'Pembersihan rakaman, kemudian dipadam. Jika dimatikan, dipadam sebaik '
+      'YouTube mengesahkannya.',
   'relayVideo':
-      'Salin terus guna CPU MAXCOM paling sedikit. Kod semula untuk telefon '
-      'yang hantar kadar bit terlalu tinggi.',
+      'Untuk siaran dari pelayar sahaja; siaran dari aplikasi Android tidak '
+      'melalui MAXCOM. Salin terus guna CPU MAXCOM paling sedikit. Kod semula '
+      'untuk telefon yang hantar kadar bit terlalu tinggi.',
   'maxBitrateKbps': 'Ikut kelajuan muat naik internet surau.',
-  'cacheMaxMb': 'Audio lama dipadam bila had dicapai. Satu juzuk lebih kurang 40 MB.',
+  'cacheMaxMb':
+      'Muat turun audio berhenti bila had dicapai; audio lama tidak dipadam. '
+      'Satu juzuk lebih kurang 40 MB.',
+  'fontSize': 'Saiz asas teks. Saiz teks di Ubah suai menambah skala di atasnya.',
+  'textSize': 'Saiz asas teks. Saiz teks di Ubah suai menambah skala di atasnya.',
   'segmentMinutes': 'Fail pendek lebih selamat jika telefon terputus.',
   'noVideoSeconds':
       'Berapa lama tiada gambar dari telefon sebelum amaran muncul di aplikasi.',
@@ -513,3 +522,34 @@ const Map<String, Map<String, String>> choiceHelpMs = {
 /// Label for one choice of an enum setting; the raw value when unknown.
 String choiceLabelMs(String name, String value) =>
     choiceLabelsMs[name]?[value] ?? value;
+
+/// The same sentences in English, by setting name.
+const Map<String, String> settingHelpEn = {
+  'keepOnDevice':
+      'When on (the default), the copy on this device is kept for the days set in '
+      'Recording clean-up, then deleted. When off, it is deleted as soon as YouTube '
+      'confirms it.',
+  'relayVideo':
+      'For broadcasts from the browser only; a broadcast from the Android app does '
+      'not go through MAXCOM. Copy as is uses the least MAXCOM CPU. Re-encode is for '
+      'phones that send too high a bit rate.',
+  'maxBitrateKbps': "Follow the surau's internet upload speed.",
+  'cacheMaxMb':
+      'The audio download stops when the limit is reached; old audio is not deleted. '
+      'One juz is about 40 MB.',
+  'segmentMinutes': 'Short files are safer if the phone loses connection.',
+  'noVideoSeconds':
+      'How long without a picture from the phone before the warning shows in the app.',
+  'cloudWakeSeconds':
+      'How long MAXCOM waits for the cloud to wake before the YouTube broadcast '
+      'carries on without it.',
+  'syncHistoryDays':
+      'A device that has not synced for longer than this must reload everything.',
+  'dirtyCheckSeconds':
+      'More often means changes from home arrive sooner, but the cloud is woken more often.',
+  'fontSize': 'The base text size. Text size in Ubah suai adds a scale on top of it.',
+  'textSize': 'The base text size. Text size in Ubah suai adds a scale on top of it.',
+};
+
+/// The sentence under a setting in the language of the app: the English one when [en] and there is one, else the BM one.
+String? settingHelpFor(String name, {required bool en}) => (en ? settingHelpEn[name] : null) ?? settingHelpMs[name];

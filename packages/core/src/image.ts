@@ -46,6 +46,7 @@ export type ImageSlotKey =
   | 'takwim'
   | 'penceramah'
   | 'petugas'
+  | 'pengumuman'
   | 'kitab'
   | 'background';
 
@@ -59,6 +60,8 @@ export const IMAGE_SLOTS: Readonly<Record<ImageSlotKey, ImageSlot>> = {
   takwim: { aspect: 16 / 9, fit: 'contain', maxW: 1920, maxH: 1080 },
   penceramah: { aspect: 1, mask: 'circle', maxW: 512, maxH: 512 },
   petugas: { aspect: 1, mask: 'circle', maxW: 512, maxH: 512 },
+  /** Picture beside an announcement: shown in its own shape, never cut to a frame. */
+  pengumuman: { aspect: 'free', maxW: 1280, maxH: 960 },
   kitab: { aspect: 2 / 3, maxW: 400, maxH: 600 },
   background: { aspect: 16 / 9, fit: 'cover', maxW: 1920, maxH: 1080 },
 };
@@ -71,6 +74,7 @@ export const CONTENT_IMAGE_FIELDS: Readonly<Record<string, Readonly<Record<strin
   programKhas: { assetId: 'programKhas' },
   takwim: { assetId: 'takwim' },
   petugas: { photoAssetId: 'petugas' },
+  pengumuman: { pictureAssetId: 'pengumuman' },
 };
 
 /** Smallest crop side (1% of the picture): keeps a rendered crop from collapsing to nothing. */

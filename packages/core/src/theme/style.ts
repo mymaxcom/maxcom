@@ -31,12 +31,25 @@ export interface ScreenStyle {
   harakat?: string;
   /** Integer 16..24, tenths (plan D). */
   arLineHeight?: number;
+  /**
+   * Where a translation that Tetapan shows sits: below or beside the Arabic. Whether it shows is Tetapan's alone
+   * (hadis.showMalay, ayatCard.showTranslation). 'sembunyi' is a removed menu value: still accepted on write so an
+   * older app or peer that stored it is not refused, and dropped on read (it counts as below).
+   */
   tarjamah?: 'bawah' | 'sisi' | 'sembunyi';
+  /**
+   * "Garis emas pada tajuk" (theme round 2): a thin gold outline on the large text (clock, countdowns, surau name,
+   * big headings) of Default, Old School and Arabic Art. On in those three unless 'off'; the other themes ignore it.
+   */
+  goldOutline?: 'on' | 'off';
 }
+
+/** The themes (and packs on them) that draw the gold outline on their large text. */
+export const GOLD_OUTLINE_THEMES = ['default', 'oldschool', 'arabic'] as const;
 
 export const SCREEN_STYLE_KEYS: readonly (keyof ScreenStyle)[] = [
   'bgImage', 'bgFit', 'bgPos', 'shade', 'accent', 'text', 'font', 'scale', 'align',
-  'arFont', 'arScale', 'harakat', 'arLineHeight', 'tarjamah',
+  'arFont', 'arScale', 'harakat', 'arLineHeight', 'tarjamah', 'goldOutline',
 ];
 
 export interface ThemeStyleEntry { semua: ScreenStyle; skrin: Partial<Record<ScreenId, ScreenStyle>> }
@@ -68,6 +81,7 @@ export function styleValueError(key: string, v: unknown): string | null {
     case 'arScale': return intIn(v, 100, 160) ? null : `${key} must be an integer 100..160`;
     case 'arLineHeight': return intIn(v, 16, 24) ? null : `${key} must be an integer 16..24`;
     case 'tarjamah': return oneOf(v, ['bawah', 'sisi', 'sembunyi']) ? null : `${key} must be bawah, sisi or sembunyi`;
+    case 'goldOutline': return oneOf(v, ['on', 'off']) ? null : `${key} must be on or off`;
     default: return `${key} is not a known style value`;
   }
 }
@@ -128,6 +142,8 @@ function sanitizeScreenStyle(raw: unknown): ScreenStyle {
   for (const k of SCREEN_STYLE_KEYS) {
     if (has(raw, k) && styleValueError(k, raw[k]) === null) out[k] = raw[k];
   }
+  // The removed hide option of the translation: Tetapan alone decides whether a translation shows.
+  if (out.tarjamah === 'sembunyi') delete out.tarjamah;
   return out as ScreenStyle;
 }
 

@@ -193,6 +193,24 @@ describe('push and pull', () => {
     expect(getItem(p.box.surau.db, 'penceramah', 'pb')).toMatchObject({ photoAssetId: id2 });
   });
 
+  it('a pengumuman picture (plain and adjusted) round trips with its asset in both directions', async () => {
+    const p = await makePair();
+    const id = putAsset(p.box.surau.db, p.boxDir, PNG, 'image/png', 'local').id;
+    const note = { title: 'Notis', body: 'Isi', from: '2026-11-01', to: '2026-11-10', priority: 2 };
+    putItem(p.box.surau.db, 'pengumuman', { ...note, id: 'na', pictureAssetId: { asset: id, rotate: 90 } }, 'local');
+    await agentOf(p).runOnce();
+    expect(getItem(p.cloud.app.surau.db, 'pengumuman', 'na')).toMatchObject({ pictureAssetId: { asset: id, rotate: 90 } });
+    expect(getAssetPath(p.cloud.app.surau.db, p.cloud.dir, id)).not.toBeNull();
+
+    const other = Buffer.from(PNG);
+    other[other.length - 20] = (other[other.length - 20] ?? 0) ^ 0x01;
+    const id2 = putAsset(p.cloud.app.surau.db, p.cloud.dir, other, 'image/png', 'local').id;
+    putItem(p.cloud.app.surau.db, 'pengumuman', { ...note, id: 'nb', pictureAssetId: id2 }, 'local');
+    await agentOf(p).runOnce();
+    expect(getItem(p.box.surau.db, 'pengumuman', 'nb')).toMatchObject({ pictureAssetId: id2 });
+    expect(getAssetPath(p.box.surau.db, p.boxDir, id2)).not.toBeNull();
+  });
+
   it('finds asset ids inside nested payloads and /assets/<id> paths only', () => {
     const a = 'a'.repeat(64);
     const b = 'b'.repeat(64);

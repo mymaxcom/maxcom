@@ -2,7 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preac
 import { dateOf, screenOfCard } from '@surau/core';
 import type { SlotFeature } from '@surau/core';
 import { useTilawah } from '../audio/tilawah.ts';
-import { ContentLayer } from '../content/ContentLayer.tsx';
+import { ContentLayer, pickSlot } from '../content/ContentLayer.tsx';
+import { pengumumanPicture } from '../content/cards/PengumumanCard.tsx';
+import { programKhasPicture } from '../content/cards/ProgramKhasCard.tsx';
+import { useCardPictureFailures } from '../content/cardPictures.ts';
 import { activeTickerItems, Ticker } from '../content/Ticker.tsx';
 import { ZikirOverlay, zikirAt } from '../content/ZikirOverlay.tsx';
 import { ArabZikirScreen } from './content/ArabZikirScreen.tsx';
@@ -11,6 +14,7 @@ import type { ArabBase } from './content/arabLook.ts';
 import { num } from '../content/assets.ts';
 import { useArabEnv } from '../themes/arabContext.ts';
 import { useContent } from '../data/content.ts';
+import type { ContentView } from '../data/content.ts';
 import type { KioskView } from '../data/kiosk.ts';
 import { fmtGregorian, fmtHijri, prayerLabel } from '../format.ts';
 import { fmtHijriAr, surauNameOf, t } from '../i18n.ts';
@@ -23,6 +27,7 @@ import { PrayerBar } from '../ui/PrayerBar.tsx';
 import { QuietBoundary } from '../ui/QuietBoundary.tsx';
 import type { Shown } from './screenId.ts';
 import { SourceFooter } from '../ui/SourceFooter.tsx';
+import { visibleNextOf } from '../ui/visibleNext.ts';
 import { ContentShell } from './ContentShell.tsx';
 
 export interface MainProps {
@@ -35,24 +40,45 @@ export interface MainProps {
 }
 
 interface RegionProps extends MainProps {
+  /** The card on screen (Main's own record of it): the ticker gives way on the picture screens. */
+  shown: SlotFeature | null;
   onTicker: (has: boolean) => void;
   onShown: (feature: SlotFeature | null, arab?: ArabBase | null) => void;
   /** Whether the zikir overlay holds the band (Main lays the header out for an empty band only without it), and whether it is the Arabic-led look. */
   onZikir: (on: boolean, arab?: boolean) => void;
 }
 
+/** Whether the card on screen is a picture screen the ticker gives way to (rule 13). */
+export function tickerGivesWay(shown: SlotFeature | null, c: ContentView): boolean {
+  if (shown === 'posters' || shown === 'tabungCard') return true;
+  if ((shown !== 'programKhas' && shown !== 'pengumuman') || !c.content) return false;
+  const itemId = pickSlot(c)?.itemId ?? null;
+  // A notice (or programme) with its picture gives the room to the picture; a text-only one, or one whose picture
+  // failed to load, keeps the ticker.
+  if (shown === 'pengumuman') return pengumumanPicture(c.content.pengumuman.find((x) => x.id === itemId)) !== null;
+  return programKhasPicture(c.content.programKhas.find((x) => x.id === itemId)) !== null;
+}
+
+/** The screens with no prayer strip (rule 1): the picture and list screens keep the whole stage under the top row. */
+const NO_STRIP: ReadonlySet<SlotFeature> = new Set<SlotFeature>(['posters', 'pengumuman', 'programKhas', 'tabungCard']);
+
 /**
  * The rotating content region: content, tilawah, ticker and zikir. Everything that can throw while rendering
  * content lives in here, behind its own quiet boundary, so a bad card never takes the prayer screen down.
  */
-function ContentRegion({ view, lang, onTicker, onShown, onZikir }: RegionProps) {
+function ContentRegion({ view, lang, shown, onTicker, onShown, onZikir }: RegionProps) {
   const { settings, now } = view;
   const env = useArabEnv();
   const c = useContent(view);
   useTilawah(view, c.content);
+  // A card picture that fails to load re-renders this region, so the ticker comes back for that slot.
+  useCardPictureFailures();
   // Ticker strip (Plan 2 Task 10): only when the feature is on and a text is active on the KL date; the screen
   // is marked so the content region lifts to make room. Zikir replaces the rotation while its window is open.
-  const tickerItems = settings.ticker.enabled && c.content ? activeTickerItems(c.content.ticker, dateOf(now, view.tz)) : [];
+  // Theme round 2, rule 13: the ticker gives way where a picture needs the room (the poster, a programme with its
+  // picture, the tabung); the text screens (kuliah, hadis, pengumuman, ayat, takwim, zikir) keep it.
+  const pictureScreen = tickerGivesWay(shown, c);
+  const tickerItems = settings.ticker.enabled && c.content && !pictureScreen ? activeTickerItems(c.content.ticker, dateOf(now, view.tz)) : [];
   const hasTicker = tickerItems.length > 0;
   const showZikir = c.zikir !== null && c.content !== null && c.content.zikir.length > 0;
   useLayoutEffect(() => {
@@ -99,7 +125,8 @@ export function Main({ view, lang, onScreen, forceShell = false }: MainProps) {
   const { state, settings, now, hijri, logo, tz } = view;
   const timeFormat = settings.prayerBar.timeFormat === '24h' ? '24h' : '12h';
   const showSeconds = settings.clock.showSeconds === true;
-  const next = state.next;
+  // What the headline names as next is the prayer the bar highlights (a hidden Imsak or Syuruk is skipped).
+  const next = visibleNextOf(state, settings, now, tz);
   const [hasTicker, setHasTicker] = useState(false);
   const [shownFeature, setShownFeature] = useState<SlotFeature | null>(null);
   const [shownArab, setShownArab] = useState<ArabBase | null>(null);
@@ -124,6 +151,8 @@ export function Main({ view, lang, onScreen, forceShell = false }: MainProps) {
   useLayoutEffect(() => () => onScreen?.(null), [onScreen]);
   // The shell takes the stage for every card that has a catalog screen, for the zikir overlay, and for a forced preview.
   const shell = zikirOn || (shownFeature !== null && screenOfCard(shownFeature) !== null) || forceShell;
+  // Rule 1: no prayer strip on the poster, pengumuman, programme and tabung screens (the zikir overlay keeps it).
+  const strip = !(shell && !zikirOn && shownFeature !== null && NO_STRIP.has(shownFeature));
   const name = surauNameOf(settings, lang);
   // The text name is left out only when the logo stands in for it (surauInfo.showName off) and there is one.
   const showName = nameShownOf(settings, logo);
@@ -156,7 +185,7 @@ export function Main({ view, lang, onScreen, forceShell = false }: MainProps) {
         <ContentShell view={view} lang={lang} />
       ) : (
         <div class="ident">
-          <div class={`ident__head region-brand${logo ? ' has-logo' : ''}`}>
+          <div class={`ident__head region-brand has-logo`}>
             <SurauLogo src={logo} class="ident__logo" />
             {showName ? <div class="ident__name free-text">{name}</div> : null}
           </div>
@@ -183,11 +212,11 @@ export function Main({ view, lang, onScreen, forceShell = false }: MainProps) {
 
       {/* Rotating content: mounted only here, so every prayer phase unmounts it (and stops tilawah). */}
       <QuietBoundary>
-        <ContentRegion view={view} lang={lang} onTicker={setHasTicker} onShown={onShown} onZikir={onZikir} />
+        <ContentRegion view={view} lang={lang} shown={shownFeature} onTicker={setHasTicker} onShown={onShown} onZikir={onZikir} />
       </QuietBoundary>
 
       <EmergencyBand view={view} lang={lang} />
-      <PrayerBar state={state} settings={settings} lang={lang} now={now} tz={tz} compact={shell} cellCountdown={!shell} />
+      {strip ? <PrayerBar state={state} settings={settings} lang={lang} now={now} tz={tz} compact={shell} /> : null}
       <SourceFooter view={view} lang={lang} />
     </div>
   );

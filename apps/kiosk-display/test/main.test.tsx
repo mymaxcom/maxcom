@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render } from '@testing-library/preact';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { act, cleanup, fireEvent, render } from '@testing-library/preact';
 import { klInstant, resolveSettings } from '@surau/core';
 import { makeView } from './helpers.tsx';
+import { srcDir } from './themeCss.ts';
 import type { KioskView } from '../src/data/kiosk.ts';
 
 const holder = vi.hoisted(() => ({ view: null as unknown as KioskView }));
@@ -30,8 +33,8 @@ describe('Main screen (layout C)', () => {
     expect(r.getByText('Selasa, 3 November 2026')).toBeTruthy();
     expect(r.getByText('23 Jamadilawal 1448H')).toBeTruthy();
     expect(r.getByText('Asar dalam')).toBeTruthy();
-    // The countdown appears in the top-right box and inside the Asar cell.
-    expect(r.getAllByText('00:28:00').length).toBe(2);
+    // The countdown appears in the top-right box only (no countdown inside the Asar cell, theme round 2, rule 7).
+    expect(r.getAllByText('00:28:00').length).toBe(1);
 
     const cells = r.container.querySelectorAll('[data-prayer]');
     expect(cells.length).toBe(7);
@@ -40,18 +43,18 @@ describe('Main screen (layout C)', () => {
     expect(times[0]).toBe('5:38');
     expect(times[6]).toBe('8:09');
 
-    // Normal phase: the NEXT prayer (Asar) is highlighted and carries the countdown pill.
+    // Normal phase: the NEXT prayer (Asar) is highlighted; no countdown inside the cell (theme round 2, rule 7).
     const asar = r.container.querySelector('[data-prayer="asar"]')!;
     expect(asar.getAttribute('aria-current')).toBe('true');
     expect(asar.classList.contains('is-current')).toBe(true);
-    expect(asar.querySelector('.pcell__cd')!.textContent).toBe('00:28:00');
+    expect(asar.querySelector('[role="timer"]')).toBeNull();
     expect(r.container.querySelector('[data-prayer="maghrib"]')!.getAttribute('aria-current')).toBeNull();
     expect([...cells].filter((c) => c.getAttribute('aria-current') === 'true').length).toBe(1);
     expect(r.container.querySelector('[data-layer="content"]')).toBeTruthy();
     expect(r.container.querySelector('.stage')!.getAttribute('data-phase')).toBe('normal');
   });
 
-  it('shows the surau logo beside the name top-left when the bundle has one, else nothing changes', async () => {
+  it('shows the surau logo beside the name top-left when the bundle has one, else the MAXCOM mark (rule 10)', async () => {
     const LOGO = '/surau-logo?v=0123456789abcdef';
     const r = show(makeView('2026-11-03', '15:52', { logo: LOGO, settings: { surauInfo: { name: 'Surau Al-Hidayah' } } }));
     const head = r.container.querySelector('.ident > .ident__head')!;
@@ -61,14 +64,19 @@ describe('Main screen (layout C)', () => {
     expect(img.getAttribute('alt')).toBe('');
     expect(img.classList.contains('ident__logo')).toBe(true);
     expect(head.querySelector('.ident__name')!.textContent).toBe('Surau Al-Hidayah');
-    // A logo that cannot be fetched disappears without a trace.
+    // A logo that cannot be fetched gives way to the MAXCOM mark, never a broken picture.
     img.dispatchEvent(new Event('error'));
     await new Promise((res) => setTimeout(res, 0));
     expect(r.container.querySelector('img[data-role="logo"]')).toBeNull();
+    expect(head.querySelector('img.logo--maxcom[data-default="maxcom"]')).toBeTruthy();
     cleanup();
     const r2 = show(makeView('2026-11-03', '15:52'));
     expect(r2.container.querySelector('img[data-role="logo"]')).toBeNull();
-    expect(r2.container.querySelector('.ident > .ident__head')!.classList.contains('has-logo')).toBe(false);
+    const head2 = r2.container.querySelector('.ident > .ident__head')!;
+    expect(head2.classList.contains('has-logo')).toBe(true);
+    const mark = head2.querySelector('img.logo--maxcom.ident__logo')!;
+    expect(mark.getAttribute('alt')).toBe('');
+    expect(mark.getAttribute('src')).toMatch(/maxcom-mark/);
     expect(r2.getByText('Surau')).toBeTruthy();
   });
 
@@ -136,10 +144,10 @@ describe('Main screen (layout C)', () => {
     expect(hot.length).toBe(1);
     expect(hot[0]!.getAttribute('data-prayer')).toBe('subuh');
     expect(hot[0]!.classList.contains('is-current')).toBe(true);
-    // Its own countdown: today's Subuh (05:48) a day later, 21:30 -> 05:48 = 8 h 18 min.
-    expect(hot[0]!.querySelector('.pcell__cd')!.textContent).toBe('08:18:00');
-    // The top-right box still names the real next prayer.
-    expect(r.getByText('Imsak dalam')).toBeTruthy();
+    // The headline (today's Subuh, 05:48, a day later: 21:30 -> 05:48 = 8 h 18 min) names the prayer the bar highlights, with the same countdown (brief 2026-11-16 item 8).
+    expect(r.getByText('Subuh dalam')).toBeTruthy();
+    expect(r.queryByText('Imsak dalam')).toBeNull();
+    expect(r.container.querySelector('[data-role="next"]')!.textContent).toContain('08:18:00');
   });
 
   it('highlights Zohor when the next prayer is a hidden Syuruk (06:30)', () => {
@@ -147,7 +155,37 @@ describe('Main screen (layout C)', () => {
     const hot = [...r.container.querySelectorAll('[data-prayer][aria-current="true"]')];
     expect(hot.length).toBe(1);
     expect(hot[0]!.getAttribute('data-prayer')).toBe('zohor');
-    expect(hot[0]!.querySelector('.pcell__cd')!.textContent).toBe('06:30:00');
+    // Not "Syuruk dalam": the headline follows the bar.
+    expect(r.getByText('Zohor dalam')).toBeTruthy();
+    expect(r.queryByText('Syuruk dalam')).toBeNull();
+    expect(r.container.querySelector('[data-role="next"]')!.textContent).toContain('06:30:00');
+  });
+});
+
+describe('Background: the night picture without its moon (Default content screens)', () => {
+  const night = { backgrounds: { images: ['default-2'], rotate: 'daily' } };
+  const load = (r: ReturnType<typeof show>) => {
+    const img = r.container.querySelector('.bg__img') as HTMLImageElement;
+    Object.defineProperty(img, 'naturalWidth', { configurable: true, value: 1920 });
+    fireEvent.load(img);
+  };
+
+  it('adds the moonless copy over the night picture once it has loaded; CSS shows it on content screens only', () => {
+    const r = show(makeView('2026-11-03', '15:52', { settings: night }));
+    expect(r.container.querySelector('.bg__plain')).toBeNull();
+    load(r);
+    const plain = r.container.querySelector('.bg__plain') as HTMLImageElement;
+    expect(plain).toBeTruthy();
+    expect(plain.getAttribute('src')).toMatch(/default-2-plain/);
+    const css = readFileSync(resolve(srcDir(), 'styles.css'), 'utf8');
+    expect(css).toContain(".stage[data-template='default'][data-kind='content'] .bg__plain { display: block; }");
+    expect(css).toMatch(/\.bg__plain \{ display: none;/);
+  });
+
+  it('never with the dusk picture', () => {
+    const r = show(makeView('2026-11-03', '15:52', { settings: { backgrounds: { images: ['default-1'], rotate: 'daily' } } }));
+    load(r);
+    expect(r.container.querySelector('.bg__plain')).toBeNull();
   });
 });
 

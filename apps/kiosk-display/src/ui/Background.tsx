@@ -4,12 +4,12 @@ import type { ImageStats, Settings, Tone } from '@surau/core';
 import { assetSrc } from '../content/assets.ts';
 import bg1 from '../assets/backgrounds/default-1.jpg';
 import bg2 from '../assets/backgrounds/default-2.jpg';
+import bg2Plain from '../assets/backgrounds/default-2-plain.jpg';
 
 /** The tone used before an image has been measured (mockup theme 1). */
 export const DEFAULT_TONE: Tone = { shadeAlpha: 0.55, glass: '#06302b', accent: '#f0c97a', text: '#ffffff' };
 
 const BUILT_IN: Record<string, string> = { 'default-1': bg1, 'default-2': bg2 };
-const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 /** Mean relative luminance and a short palette from a 32x18 downsample of the image. */
 export function sampleImage(img: HTMLImageElement): ImageStats {
@@ -94,14 +94,40 @@ export function pictureTone(meanLuma: number | null, shade: number): 'light' | '
   return meanLuma * (1 - s) > 0.25 ? 'light' : 'dark';
 }
 
-/** Apply a manual override (hex accent) or disable auto tone altogether. */
+/**
+ * The tone of the default look: measured from the picture on screen while autoTone is on, else the fixed tone. The
+ * accent is styling and has one control, Ubah suai "Warna aksen" (it overrides the measured accent on the stage): the
+ * old autoTone.override colour is no longer offered in Tetapan and a stored one is ignored.
+ */
 export function resolveTone(measured: Tone | null, settings: Settings): Tone {
-  const at = settings.autoTone;
-  const base = at.enabled && measured ? measured : DEFAULT_TONE;
-  const override = at.enabled && typeof at.override === 'string' && HEX_RE.test(at.override.trim())
-    ? at.override.trim().toLowerCase()
-    : null;
-  return override ? { ...base, accent: override } : base;
+  return settings.autoTone.enabled && measured ? measured : DEFAULT_TONE;
+}
+
+/** The pictures of the surau's backgrounds list (Tetapan), in order; `ownOnly` leaves out the built-in default photos. */
+function listImages(settings: Settings, ownOnly: boolean): string[] {
+  const bg = settings.backgrounds;
+  if (!bg.enabled || !Array.isArray(bg.images)) return [];
+  const all = (bg.images as unknown[]).filter((x): x is string => typeof x === 'string');
+  return ownOnly ? all.filter((x) => !Object.prototype.hasOwnProperty.call(BUILT_IN, x)) : all;
+}
+
+/**
+ * The backgrounds list's picture for a theme other than the default look (spec 6.10.1 layer 4, under the menu and the
+ * pack pictures): the surau's own pictures only, rotated as on the default look. The built-in default photos belong to
+ * the default look; every other theme's own field stands in for them. Null when the list has none of its own.
+ */
+export function themeListPicture(settings: Settings, now: Date): string | null {
+  const name = pickBackground(listImages(settings, true), String(settings.backgrounds.rotate ?? 'daily'), now, tzOf(settings));
+  return name ? urlFor(name) : null;
+}
+
+/**
+ * Whether the default look shows one of the surau's OWN pictures from the backgrounds list right now (the built-in
+ * default photos are the look itself, not a picture the surau chose). The stage then wears `data-picture`.
+ */
+export function ownListPictureOn(settings: Settings, now: Date): boolean {
+  const name = pickBackground(listImages(settings, false), String(settings.backgrounds.rotate ?? 'daily'), now, tzOf(settings));
+  return name !== null && !Object.prototype.hasOwnProperty.call(BUILT_IN, name);
 }
 
 /** CSS custom properties for a tone; set on the stage element. */
@@ -140,11 +166,9 @@ export interface BackgroundProps {
  */
 export function Background({ settings, now, onTone, menuImage, packImageUrl, onMenuImageFailed, onMenuLuma }: BackgroundProps) {
   const bg = settings.backgrounds;
-  const images = useMemo(
-    () => (Array.isArray(bg.images) ? (bg.images as unknown[]).filter((x): x is string => typeof x === 'string') : []),
-    [bg.images],
-  );
-  const name = bg.enabled ? pickBackground(images, String(bg.rotate ?? 'daily'), now, tzOf(settings)) : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const images = useMemo(() => listImages(settings, false), [bg.images, bg.enabled]);
+  const name = pickBackground(images, String(bg.rotate ?? 'daily'), now, tzOf(settings));
   const src = name ? urlFor(name) : null;
   const [readySrc, setReadySrc] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -198,6 +222,9 @@ export function Background({ settings, now, onTone, menuImage, packImageUrl, onM
           onError={() => onTone(null)}
         />
       ) : null}
+      {/* The night picture without its moon: the Default look's content screens show it over the picture (CSS), so the
+          moon never sits behind the enlarged text there. Never measured: the tone stays the picture's. */}
+      {name === 'default-2' && readySrc === src ? <img class="bg__plain" src={bg2Plain} alt="" decoding="async" /> : null}
       {menuSrc !== null ? (
         <>
           <div class="bg__menu" />
@@ -216,6 +243,7 @@ export function Background({ settings, now, onTone, menuImage, packImageUrl, onM
         </>
       ) : null}
       <div class="bg__shade" />
+      <div class="bg__scrim" />
       <div class="bg__dim" />
     </div>
   );

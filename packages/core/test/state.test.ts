@@ -100,3 +100,73 @@ describe('computeKioskState', () => {
     expect(computeKioskState(klInstant(D, '16:12'), order, s)).toMatchObject({ phase: 'noData' });
   });
 });
+
+describe('imsak beep and first Subuh azan', () => {
+  const file = 'ab'.repeat(32);
+  const imsakOn = resolveSettings({ imsakBeep: { enabled: true }, azanCountdown: { enabled: false } });
+
+  it('beeps once at imsak, for three seconds only', () => {
+    expect(st(D, '05:38', undefined, imsakOn)).toMatchObject({ phase: 'normal', beep: 'imsak' });
+    expect(st(D, '05:38:02', undefined, imsakOn)).toMatchObject({ beep: 'imsak' });
+    expect(st(D, '05:38:03', undefined, imsakOn)).toMatchObject({ beep: null });
+    expect(st(D, '05:37:59', undefined, imsakOn)).toMatchObject({ beep: null });
+    expect(st(D, '21:30', undefined, imsakOn)).toMatchObject({ beep: null });
+  });
+  it('does not beep at imsak when the feature is off (the default)', () => {
+    expect(st(D, '05:38', undefined, resolveSettings({ azanCountdown: { enabled: false } }))).toMatchObject({ beep: null });
+    expect(st(D, '05:38', undefined, resolveSettings({ imsakBeep: { enabled: false }, azanCountdown: { enabled: false } }))).toMatchObject({ beep: null });
+  });
+  it('keeps the azan countdown beep when it starts at the same minute as imsak', () => {
+    const both = resolveSettings({ imsakBeep: { enabled: true } });
+    expect(st(D, '05:38', undefined, both)).toMatchObject({ phase: 'azanCountdown', beep: 'azanCountdown' });
+  });
+
+  it('starts the first azan minutesBefore Subuh, for 30 seconds', () => {
+    const on = resolveSettings({ firstAzanSubuh: { enabled: true, minutesBefore: 15, audioFile: file } });
+    expect(st(D, '05:32', undefined, on).firstAzan).toBeNull();
+    // Subuh 05:48, countdown 10 min: the first azan must be silent by the countdown start (05:38).
+    expect(st(D, '05:33', undefined, on).firstAzan).toEqual({ audioFile: file, startsAt: klInstant(D, '05:33'), stopsAt: klInstant(D, '05:38') });
+    expect(st(D, '05:33:29', undefined, on).firstAzan).not.toBeNull();
+    expect(st(D, '05:33:30', undefined, on).firstAzan).toBeNull();
+    expect(st(D, '16:12', undefined, on).firstAzan).toBeNull();
+  });
+  it('does nothing when off, with no file, or with an unusable file id', () => {
+    const at = (o: Record<string, unknown>) => st(D, '05:38', undefined, resolveSettings({ firstAzanSubuh: o } as never)).firstAzan;
+    expect(at({ enabled: true, minutesBefore: 10, audioFile: file })).not.toBeNull();
+    expect(at({ enabled: false, minutesBefore: 10, audioFile: file })).toBeNull();
+    expect(at({ enabled: true, minutesBefore: 10, audioFile: null })).toBeNull();
+    expect(computeKioskState(klInstant(D, '05:38'), days, { ...s, firstAzanSubuh: { enabled: true, minutesBefore: 10, audioFile: '../x' } } as never).firstAzan).toBeNull();
+  });
+  it('stops the first azan at the countdown start, or at Subuh when the countdown starts no later than it', () => {
+    const fa = (o: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+      st(D, '05:38', undefined, resolveSettings({ firstAzanSubuh: { enabled: true, audioFile: file, ...o }, ...extra } as never)).firstAzan;
+    // Same minute as the countdown (both 10): it may sound up to the real azan.
+    expect(fa({ minutesBefore: 10 })).toMatchObject({ startsAt: klInstant(D, '05:38'), stopsAt: klInstant(D, '05:48') });
+    // Countdown off: up to Subuh.
+    expect(st(D, '05:33', undefined, resolveSettings({ firstAzanSubuh: { enabled: true, minutesBefore: 15, audioFile: file }, azanCountdown: { enabled: false } })).firstAzan)
+      .toMatchObject({ stopsAt: klInstant(D, '05:48') });
+    // A longer Subuh countdown (20) than the first azan (15): the countdown starts first, so up to Subuh.
+    const long = resolveSettings({ firstAzanSubuh: { enabled: true, minutesBefore: 15, audioFile: file }, azanCountdown: { minutesBefore: { subuh: 20 } } } as never);
+    expect(st(D, '05:33', undefined, long).firstAzan).toMatchObject({ stopsAt: klInstant(D, '05:48') });
+  });
+  it('has no first azan on a no-data day', () => {
+    expect(computeKioskState(new Date('2027-01-01T01:00:00Z'), days, s).firstAzan).toBeNull();
+  });
+});
+
+describe('syurukWarning.beep', () => {
+  const sy = days.find((d) => d.date === D)!.times.syuruk;
+  const [h, m] = sy.split(':').map(Number) as [number, number];
+  const warn = `${String(h).padStart(2, '0')}:${String(m - 5).padStart(2, '0')}`;
+  const beepOn = resolveSettings({ syurukWarning: { beep: true } } as never);
+
+  it('one short beep when the warning stage starts, for three seconds only', () => {
+    expect(st(D, warn, undefined, beepOn)).toMatchObject({ phase: 'syuruk', beep: 'syuruk' });
+    expect(st(D, `${warn}:02`, undefined, beepOn)).toMatchObject({ beep: 'syuruk' });
+    expect(st(D, `${warn}:03`, undefined, beepOn)).toMatchObject({ phase: 'syuruk', beep: null });
+  });
+  it('silent when off (the default) or when the warning itself is off', () => {
+    expect(st(D, warn)).toMatchObject({ phase: 'syuruk', beep: null });
+    expect(st(D, warn, undefined, resolveSettings({ syurukWarning: { enabled: false, beep: true } } as never))).toMatchObject({ beep: null });
+  });
+});

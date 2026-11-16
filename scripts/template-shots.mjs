@@ -8,7 +8,7 @@
 //
 // States: normal (kuliah card, ticker, source footer), iqamah (countdown), emergency (calculated-times band),
 // solat (the dimmed calm screen), poster (poster takeover strip), azan, masuk-waktu, jumaat, tiada-data, hadis, ayat,
-// pengumuman, takwim, tabung, program, logo, logo-poster, logo-iqamah, arab-ayat, arab-hadis, arab-zikir, live, live-nologo (the live screen's waiting panel
+// pengumuman, pengumuman-pic, pengumuman-pic-tall, pengumuman-pic-missing, takwim, tabung, program, logo, logo-poster, logo-iqamah, arab-ayat, arab-hadis, arab-zikir, live, live-nologo (the live screen's waiting panel
 // through the preview mechanism). Files: <outDir>/<template>-<state>.png.
 // Env SHOT_SIZE=<w>x<h>@<dsf> (default 1920x1080@1). Reduced motion is emulated so two runs are pixel-equal, and every
 // state declares the data-phase it expects (the run fails when the stage differs).
@@ -30,7 +30,9 @@ const deviceScaleFactor = Number(SIZE[3]);
 const outDir = resolve(process.argv[2] ?? resolve(repo, 'ui-preview/templates'));
 const ALL_TEMPLATES = ['default', 'colourful', 'creative', 'oldschool', 'minimal', 'arabic'];
 const templates = process.argv[3] ? process.argv[3].split(',') : ALL_TEMPLATES;
-const PORT = 5181;
+// SHOT_PORT moves the script's own dev server off 5181 (two runs side by side); SHOT_VITE_CACHE gives it its own
+// optimiser cache, so it never rewrites the cache a dev server of the operator is using from the same checkout.
+const PORT = Number(process.env.SHOT_PORT ?? 5181);
 
 const core = await import(pathToFileURL(resolve(repo, 'packages/core/src/index.ts')).href);
 const baseDays = core.parseJakimCsv(readFileSync(resolve(repo, 'packages/core/test/fixtures/SGR01-2026.csv'), 'utf8'));
@@ -82,8 +84,16 @@ const STATES = {
   jumaat: { now: at(friday, rowOf(friday).times.zohor, 120), expectPhase: 'khutbah' },
   'tiada-data': { now: `${DAY}T15:52:00+08:00`, noDays: true, expectPhase: 'noData' },
   hadis: card('hadis'),
+  // 06:30, between Syuruk and Zohor's day half: with Syuruk hidden the bar, the headline and the chip name Zohor.
+  standin: { now: `${DAY}T06:30:00+08:00`, expectPhase: 'normal' },
+  'standin-kuliah': { now: `${DAY}T06:30:00+08:00`, content: 'islamic', card: 'kuliahCard', wait: '[data-layer="content"] [data-card]', expectPhase: 'normal' },
   ayat: card('ayatCard'),
   pengumuman: card('pengumuman'),
+  // A notice with its picture (landscape, portrait): the picture whole beside the text, no ticker (rule 13).
+  'pengumuman-pic': { ...card('pengumuman'), content: 'islamic-pic' },
+  'pengumuman-pic-tall': { ...card('pengumuman'), content: 'islamic-pic-tall' },
+  // The picture is missing on the box (404): the text-only notice and its ticker.
+  'pengumuman-pic-missing': { ...card('pengumuman'), content: 'islamic-pic-missing' },
   takwim: card('takwim'),
   tabung: { ...card('tabungCard'), needs: 'tabung' },
   program: card('programKhas'),
@@ -154,6 +164,7 @@ const server = await createServer({
   configFile: resolve(appDir, 'vite.config.ts'),
   root: appDir,
   logLevel: 'warn',
+  ...(process.env.SHOT_VITE_CACHE ? { cacheDir: resolve(process.env.SHOT_VITE_CACHE) } : {}),
   server: { port: PORT, strictPort: true, host: '127.0.0.1' },
 });
 await server.listen();

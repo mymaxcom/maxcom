@@ -29,14 +29,15 @@ import { Locked } from './screens/Locked.tsx';
 import { Main } from './screens/Main.tsx';
 import { NetCheck } from './screens/NetCheck.tsx';
 import { Pair } from './screens/Pair.tsx';
-import { Phase, CALM_PHASES } from './screens/Phase.tsx';
+import { Phase, CALM_PHASES, azanFullOf } from './screens/Phase.tsx';
 import { Recovery } from './screens/Recovery.tsx';
 import { kindOf } from './screens/kind.ts';
 import { screenIdOf } from './screens/screenId.ts';
 import type { Shown } from './screens/screenId.ts';
 import { Setup } from './screens/Setup.tsx';
-import { Background, pictureTone, resolveTone, toneVars } from './ui/Background.tsx';
+import { Background, ownListPictureOn, pictureTone, resolveTone, themeListPicture, toneVars } from './ui/Background.tsx';
 import { useBeep } from './ui/Beep.ts';
+import { useFirstAzan } from './audio/firstAzan.ts';
 import { CloudBadge } from './ui/CloudBadge.tsx';
 import { HostExit } from './ui/HostExit.tsx';
 import { QuietBoundary } from './ui/QuietBoundary.tsx';
@@ -54,6 +55,8 @@ import { ScaleContext } from './content/scale.ts';
 // After every component import, so the contract's rules follow styles.css and content.css and a template's rules follow the contract.
 import './themes/contract.css';
 import './templates.css';
+// After the templates: the whole-screen azan countdown restyles the phase screen with the same theme tokens.
+import './screens/azan-full.css';
 
 /** The data layer reports errors as message strings; this is the one `loadBundle` throws for a 401 with no cache. */
 const NOT_PAIRED_MESSAGE = new NotPairedError().message;
@@ -71,6 +74,9 @@ function menuImageIds(settings: Settings, theme: string, override?: ThemeStyleEn
   for (const s of Object.values(e.skrin)) if (s?.bgImage) ids.add(s.bgImage);
   return [...ids];
 }
+
+/** The themes whose ground (and so the scrim over a picture) is light. */
+const LIGHT_GROUND: ReadonlySet<string> = new Set(['minimal', 'oldschool']);
 
 export function App() {
   const view = useKiosk();
@@ -112,6 +118,7 @@ export function App() {
   // The measured mean luminance of the menu picture, with the picture it belongs to (free text over a picture is dressed from it).
   const [menuLuma, setMenuLuma] = useState<{ id: string | null; luma: number | null }>({ id: null, luma: null });
   const [failedPackPicture, setFailedPackPicture] = useState<string | null>(null);
+  const [failedListPicture, setFailedListPicture] = useState<string | null>(null);
   usePreviewExtraAssets(menuImageIds(settings, styleTheme.name, styleOverride));
   // The live (operator decision 2026-11-14): owned here, above the phase switch, so one WHEP session runs for
   // the whole live. Clear = the live screen takes priority; blurred = the prayer screen of a window (1 min either
@@ -132,6 +139,8 @@ export function App() {
   // (clear) no prayer tone sounds over it either: the tones of the windows (masuk waktu, the iqamah end warning)
   // still sound, because their screens are up then.
   useBeep(locked || liveMode === 'clear' ? { ...state, beep: null } : state, settings);
+  // The first Subuh azan (an audio file) follows the same rule: silent on a stopped box and under a live with priority.
+  useFirstAzan(state, settings, { muted: locked || liveMode === 'clear', now: view.now });
   // The card (or the zikir overlay) Main has on screen: the stage names the catalog screen after it.
   const [shown, setShown] = useState<Shown>(null);
   const liveClear = liveMode === 'clear';
@@ -230,10 +239,21 @@ export function App() {
   const packDefaults = packOn && themeNow.pack !== null ? themeNow.pack.defaults : undefined;
   const screenStyle = stageStyleFor(settings, theme, screen, packDefaults, styleOverride);
   const wall = Date.now();
+  // Spec 6.10.1: under the menu and the pack pictures, the surau's backgrounds list (Tetapan) is the picture of every
+  // theme. The default look draws it itself (Background's list picture, measured for autoTone); any other theme takes
+  // the list's own pictures as its picture layer, dressed like a menu picture: the theme's shade over it and free text
+  // on plates by the measured tone (data-pic), so the theme keeps it legible.
+  const listPicture = theme.base !== 'default' ? themeListPicture(settings, view.now) : null;
+  const layerPicture =
+    packPicture !== null && packPicture !== failedPackPicture
+      ? packPicture
+      : listPicture !== null && listPicture !== failedListPicture
+        ? listPicture
+        : null;
   const menu = styleVars(
     screenStyle,
     (id) => (failedPictures.blocked(id, settings, wall) ? null : assetSrc(id)),
-    packPicture !== null && packPicture !== failedPackPicture ? packPicture : null,
+    layerPicture,
   );
   // The layer darkness over a menu picture is always explicit on the stage: the surau's value, else the theme's own
   // default (kept above a readable minimum on the default look). Without a picture only the surau's own value applies.
@@ -246,10 +266,17 @@ export function App() {
   // Text that sits directly on the stage (not in a panel) reads against the picture: its tone, light or dark, is
   // measured from the picture and the surau's shade, and each theme dresses its free text from it (`data-pic`).
   // The calm phases (solat, khutbah...) dim the whole picture away, so no tone applies there.
-  const pic =
+  // A picture the surau (or the pack) put under the text: the menu or pack picture, the list picture of a theme, or
+  // the default look's own list picture. The stage wears `data-picture` and the contract lays a theme-tinted scrim over
+  // the picture, plates under the text blocks and a soft glow on the text (theme round 2, operator 2026-11-16).
+  const pictureOn = hasPicture || (theme.base === 'default' && ownListPictureOn(settings, view.now));
+  const measuredPic =
     !dim && pictureId !== null && menuLuma.id === pictureId
       ? pictureTone(menuLuma.luma, shade / 100)
       : null;
+  // The scrim over a picture (contract.css, data-picture) is the theme's own ground: light in Minimal and Old School,
+  // dark in the others. Text then reads against that ground, so the free-text tone follows the theme, not the picture.
+  const pic = measuredPic !== null && pictureOn ? (LIGHT_GROUND.has(theme.base) ? 'light' : 'dark') : measuredPic;
   // The default look keeps its measured tone (from the menu picture when one shows). A theme owns its colours: its
   // panels are light or dark by design, so a text colour measured from the picture is not forced onto them.
   const baseVars: Record<string, string> = theme.base === 'default' ? toneVars(tone) : {};
@@ -268,6 +295,7 @@ export function App() {
       class="stage"
       data-phase={state.phase}
       data-screen={screen}
+      data-azan-full={azanFullOf(view) && !liveClear ? 'true' : undefined}
       data-kind={kindOf(screen)}
       data-live-layout={liveLayoutOf(themeNow)}
       data-harakat={harakatOn(screenStyle) ? 'on' : undefined}
@@ -279,6 +307,7 @@ export function App() {
       data-lang={lang}
       {...menu.attrs}
       data-pic={pic ?? undefined}
+      data-picture={pictureOn ? 'on' : undefined}
       style={Object.keys(stageVars).length > 0 ? stageVars : undefined}
     >
       <SafeBoundary today={state.today} settings={settings} lang={lang}>
@@ -290,7 +319,8 @@ export function App() {
           packImageUrl={menu.packImageUrl}
           onMenuImageFailed={() => {
             if (menu.bgAssetId !== null) failedPictures.mark(menu.bgAssetId, settings, Date.now());
-            else setFailedPackPicture(menu.packImageUrl);
+            else if (menu.packImageUrl === packPicture) setFailedPackPicture(menu.packImageUrl);
+            else setFailedListPicture(menu.packImageUrl);
             bumpFailed((n) => n + 1);
           }}
           onMenuLuma={(luma) => setMenuLuma({ id: pictureId, luma })}

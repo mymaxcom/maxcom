@@ -5683,11 +5683,8 @@ class SEn extends S {
   String get themeTarjamahBeside => 'Beside';
 
   @override
-  String get themeTarjamahHide => 'Hidden';
-
-  @override
   String get themeTarjamahNote =>
-      'Hidden is for Arabic screens only. When Tetapan turns a translation off, Tetapan wins.';
+      'Tetapan decides whether a translation shows. Here you only choose where it sits.';
 
   @override
   String themeAll(int n) {
@@ -5841,10 +5838,23 @@ class SEn extends S {
 
   @override
   String get themeSizeNote =>
-      'S is today\'s size. There is no smaller size, so it stays clear from 3 metres.';
+      'A scale on top of the base size; the base size of hadith and verses is chosen in Tetapan. S is today\'s size, there is no smaller size, so it stays clear from 3 metres.';
+
+  @override
+  String get themeBgNote =>
+      'Follow the theme: the background pictures from Tetapan are used (or the picture of an uploaded theme).';
 
   @override
   String get themeAlign => 'Content alignment';
+
+  @override
+  String get themeGoldOutline => 'Gold outline on headings';
+
+  @override
+  String get themeGoldOn => 'On';
+
+  @override
+  String get themeGoldOff => 'Off';
 
   @override
   String get themeChangedBadge => 'Changed';
@@ -5871,6 +5881,11 @@ class SEn extends S {
   @override
   String themeApplyAllConfirm(String title) {
     return 'Use the look of this screen for every screen of the $title theme?';
+  }
+
+  @override
+  String themeApplyAllReplaces(String title, int n) {
+    return 'Use the look of this screen for every screen of the $title theme? The own choices of $n other screens will be deleted and replaced by the values of this screen.';
   }
 
   @override

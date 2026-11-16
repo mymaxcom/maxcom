@@ -58,6 +58,7 @@ class SettingsForm extends StatelessWidget {
     this.readOnly = false,
     this.lanjutanVisible = false,
     this.lanjutanKey,
+    this.others = const {},
   });
 
   final FeatureDef feature;
@@ -78,6 +79,9 @@ class SettingsForm extends StatelessWidget {
 
   /// Put on the Lanjutan card so the page can scroll to it (`?lj=1`).
   final Key? lanjutanKey;
+
+  /// The other features' values by feature key (with `enabled`), for fields that another setting switches off.
+  final Map<String, Map<String, dynamic>> others;
 
   /// On a page that is all system values the card would say nothing new.
   bool get _systemPage => systemFeatures.contains(feature.key);
@@ -105,6 +109,8 @@ class SettingsForm extends StatelessWidget {
       final v = values[key];
       // Phase B's stop flag is set by the fleet tools, never typed here.
       if (key == 'suspendedAt') continue;
+      // A value another control owns (autoTone.override: Ubah suai's accent) is kept but not offered.
+      if (fieldMeta(feature.key, key)?.hidden == true) continue;
       if (fieldMeta(feature.key, key)?.isSystem == true && !_systemPage) {
         if (lanjutanVisible) {
           lanjutan.add(_leafRow(context, path: key, name: key, d: d, v: v, onChanged: (nv) => onChanged(key, nv)));
@@ -278,7 +284,10 @@ class SettingsForm extends StatelessWidget {
         KeyedSubtree(
           key: lanjutanKey,
           child: LanjutanCard(
-            dimmed: feature.key == 'liveYoutube' && values['relayFrom'] == 'phone',
+            // A stored 'phone' under a hidden relayFrom (planned) must not dim the card: no control could undo it.
+            dimmed: feature.key == 'liveYoutube' &&
+                fieldMeta(feature.key, 'relayFrom')?.hidden != true &&
+                values['relayFrom'] == 'phone',
             dimNote: s.settingsLanjutanDimmed,
             children: lanjutan,
           ),
@@ -303,7 +312,7 @@ class SettingsForm extends StatelessWidget {
     required void Function(Object? value) onChanged,
   }) {
     final ro = readOnly || meta.readOnly;
-    final help = settingHelpMs[name];
+    final help = settingHelpFor(name, en: _isEn(context));
     switch (meta.ui) {
       case 'slider':
         return SliderField(
@@ -450,7 +459,44 @@ class SettingsForm extends StatelessWidget {
     return v is num ? v.toInt() : 1;
   }
 
+  /// The row, dimmed and not editable with a short note while the setting that rules it holds the value
+  /// the metadata names (`disabledWhen`); the stored value is untouched.
   Widget _leafRow(
+    BuildContext context, {
+    required String path,
+    required String name,
+    required Object? d,
+    required Object? v,
+    required void Function(Object? value) onChanged,
+  }) {
+    final row = _leafRowPlain(context, path: path, name: name, d: d, v: v, onChanged: onChanged);
+    final dep = fieldMeta(feature.key, path)?.disabledWhen;
+    if (dep == null) return row;
+    final src = dep.feature == feature.key ? values : others[dep.feature];
+    if (src == null || src[dep.field] != dep.equals) return row;
+    return Column(
+      key: ValueKey('setting-off-$path'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Dimmed and not editable: also out of the focus order and the screen reader (the note below says why).
+        ExcludeFocus(
+          child: ExcludeSemantics(
+            child: IgnorePointer(child: Opacity(opacity: 0.45, child: row)),
+          ),
+        ),
+        Padding(
+          key: ValueKey('setting-note-$path'),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: Text(_isEn(context) ? dep.noteEn : dep.noteMs, style: Theme.of(context).textTheme.bodySmall),
+        ),
+      ],
+    );
+  }
+
+  /// The app is in English: English notes and help sentences show where there are any (labels stay as they are).
+  bool _isEn(BuildContext context) => Localizations.localeOf(context).languageCode == 'en';
+
+  Widget _leafRowPlain(
     BuildContext context, {
     required String path,
     required String name,
@@ -481,6 +527,7 @@ class SettingsForm extends StatelessWidget {
         value: v is bool ? v : d,
         onChanged: readOnly ? null : onChanged,
         title: Text(label),
+        subtitle: settingHelpFor(name, en: _isEn(context)) == null ? null : Text(settingHelpFor(name, en: _isEn(context))!),
         contentPadding: const EdgeInsets.fromLTRB(20, 6, 12, 6),
       );
     }

@@ -5,6 +5,6 @@
   "contract": 1,
   "base": "oldschool",
   "defaults": {
-    "semua": { "shade": 35 }
+    "semua": { "shade": 35, "goldOutline": "on" }
   }
 }

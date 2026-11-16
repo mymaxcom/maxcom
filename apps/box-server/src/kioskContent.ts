@@ -94,7 +94,9 @@ export function buildKioskContent(db: DatabaseSync, dataDir: string, now: Date, 
   }
   kuliah.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time) || a.id.localeCompare(b.id));
 
-  const pengumuman = list(db, 'pengumuman').filter((p) => p.from <= today && today <= p.to);
+  const pengumuman = list(db, 'pengumuman')
+    .filter((p) => p.from <= today && today <= p.to)
+    .map(({ pictureAssetId, ...rest }) => ({ ...rest, ...withImg('pictureAssetId', img('pengumuman', pictureAssetId)) }));
   const ticker = list(db, 'ticker').filter((t) => t.from <= today && today <= t.to);
   const posters = list(db, 'poster').map((p) => ({ ...p, assetId: img('poster', p.assetId) ?? '' })).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   const programKhas = list(db, 'programKhas')

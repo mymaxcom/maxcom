@@ -20,10 +20,10 @@ const pct = (value: number, target: number): number => (target > 0 ? Math.max(0,
 
 // The card's measures in rem, as content.css sets them: inner width of a wide card, QR box and its gap, column gap, column side padding.
 const CARD_INNER = 90;
-const QR_BOX = 14;
+const QR_BOX = 18;
 const COL_GAP = 1;
-const COL_PAD = 2.5;
-const FIGURE_MAX = 4.6;
+const COL_PAD = 3.3;
+const FIGURE_MAX = 10;
 /** Width of the small `RM` and its margin, in ems of the figure. */
 const RM_EM = 0.85;
 
@@ -100,7 +100,7 @@ export function TabungCard({ view, lang, content }: CardProps) {
           <span class="card__tag">{tabung.manual ? tabung.title : t('tabungTag', lang)}</span>
           {updated ? <span class="tabung__updated">{t('tabungUpdated', lang).replace('{date}', updated)}</span> : null}
         </header>
-        <ul class="tabung__list" ref={ref} style={`--fit:${fit}${figure === null ? '' : `;--figure:${figure.toFixed(2)}rem`}`}>
+        <ul class="tabung__list" data-cols={rows.length} ref={ref} style={`--fit:${fit}${figure === null ? '' : `;--figure:${figure.toFixed(2)}rem`}`}>
           {rows.map((r) => {
             const hot = isHot(r);
             const money = split(r.valueSen);

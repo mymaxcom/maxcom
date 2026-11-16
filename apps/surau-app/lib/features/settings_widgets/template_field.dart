@@ -225,7 +225,13 @@ class _YoutubeCard extends StatelessWidget {
                   decoration: BoxDecoration(color: const Color(0xFFC4302B), borderRadius: BorderRadius.circular(3)),
                   child: Text('LANGSUNG', style: text.labelSmall!.copyWith(color: Colors.white, fontSize: 9.5)),
                 ),
-                Text("D'Waqaf", style: text.labelSmall!.copyWith(color: SurauColors.gold, fontSize: 10, fontWeight: FontWeight.w700)),
+                // The surau's own channel (the sample surau stands in for its name).
+                Text(
+                  _sample['surau']!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelSmall!.copyWith(color: SurauColors.gold, fontSize: 10, fontWeight: FontWeight.w700),
+                ),
               ],
             ),
           ),
@@ -236,7 +242,7 @@ class _YoutubeCard extends StatelessWidget {
               children: [
                 Text(title, style: text.bodyMedium!.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
-                Text("D'Waqaf", style: text.bodySmall),
+                Text(_sample['surau']!, style: text.bodySmall),
               ],
             ),
           ),

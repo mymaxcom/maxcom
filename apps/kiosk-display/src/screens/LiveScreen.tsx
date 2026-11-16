@@ -27,10 +27,9 @@ export interface LiveScreenProps {
  * Default and Creative, a framed video for the others (spec 6.12.6).
  */
 export function LiveScreen({ view, live, lang, onAir }: LiveScreenProps) {
-  const { state, settings, now, hijri, logo, tz } = view;
+  const { settings, now, hijri, logo, tz } = view;
   const timeFormat = settings.prayerBar.timeFormat === '24h' ? '24h' : '12h';
   const showSeconds = settings.clock.showSeconds === true;
-  const next = state.next;
   const showStrip = settings.liveOnKiosk?.showStrip !== false || !onAir;
   return (
     <div class="screen screen--live" data-screen="live" data-playing={onAir ? 'true' : 'false'}>
@@ -47,7 +46,7 @@ export function LiveScreen({ view, live, lang, onAir }: LiveScreenProps) {
       </div>
 
       <aside class="live-screen__side">
-        <div class={`live-screen__ident region-brand brand${logo ? ' has-logo' : ''}`}>
+        <div class={`live-screen__ident region-brand brand has-logo`}>
           <SurauLogo src={logo} class="ident__logo" />
           {nameShownOf(settings, logo) ? <span class="brand-name free-text">{surauNameOf(settings, lang)}</span> : null}
         </div>
@@ -58,7 +57,8 @@ export function LiveScreen({ view, live, lang, onAir }: LiveScreenProps) {
             {hijri ? <span class="live-screen__hijri free-text">{fmtHijri(hijri, lang)}</span> : null}
           </div>
         </div>
-        {next ? <NextChip next={next} now={now} lang={lang} timeFormat={timeFormat} tz={tz} testId="live-next" /> : null}
+        {/* The chip names the next prayer the TV shows (a hidden Imsak or Syuruk is skipped), as the bar and the main screen do. */}
+        <NextChip view={view} lang={lang} testId="live-next" />
       </aside>
 
       <div class="live-screen__strip">

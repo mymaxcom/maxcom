@@ -10,7 +10,8 @@ it('every id has a group and a protected list that always holds the clock', () =
   expect(PROTECTED.live).toEqual(['clock', 'next']);
   expect(PROTECTED.azan).toEqual(['clock', 'prayers', 'countdown']);
   expect(PROTECTED['tiada-data']).toEqual(['clock']);
-  expect(PROTECTED.poster).toEqual(['clock', 'prayers']);
+  // Theme round 2, rule 2: every content screen (the Arabic-led ones included) needs the clock and the next chip.
+  for (const id of SCREEN_IDS) if (SCREEN_GROUP[id] !== 'prayer') expect(PROTECTED[id], id).toEqual(['clock', 'next']);
   expect(PROTECTED.biasa).toEqual(['clock', 'prayers', 'next']);
   expect(PROTECTED.iqamah).toEqual(['clock', 'prayers', 'countdown']);
   expect(PROTECTED.jumaat).toEqual(['clock', 'prayers']);

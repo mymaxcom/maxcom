@@ -1,8 +1,8 @@
-import { dateOf, instantOf, klDateOf, klInstant, klWeekday, tzOf } from '../time.ts';
+import { dateOf, instantOf, klDateOf, klInstant, klWeekday, offsetMinutes, tzOf } from '../time.ts';
 import { DAY_KEYS } from '../features/registry.ts';
 import type { FeatureSettings, Settings } from '../features/registry.ts';
 import type { PrayerDay } from '../prayer/types.ts';
-import { buildDayIntervals } from '../kiosk/state.ts';
+import { buildDayIntervals, firstAzanPlan } from '../kiosk/state.ts';
 import type { PhaseInterval, SolatName } from '../kiosk/state.ts';
 import { hadisPlan } from './hadisDisplay.ts';
 import type { KioskContent, KioskHadis, TilawahSlot } from './types.ts';
@@ -44,6 +44,42 @@ function dateTimeInstant(v: string, tz: string): Date | null {
   } catch {
     return null;
   }
+}
+
+/** A kuliah stays on the TV for this long after its start before the screen moves on to the next one. */
+export const KULIAH_GRACE_MIN = 90;
+
+const minutesOfDay = (hhmm: string): number => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (Number.isFinite(h) ? h! : 0) * 60 + (Number.isFinite(m) ? m! : 0);
+};
+
+/**
+ * The last day of kuliah the TV shows: today plus Tetapan kuliahCard.daysAhead ("Hari ke hadapan"). 'YYYY-MM-DD'.
+ */
+export function kuliahLastDate(settings: Settings, today: string): string {
+  const f = feat(settings, 'kuliahCard');
+  return addDays(today, Math.max(0, Math.floor(num(f?.daysAhead, 7))));
+}
+
+/**
+ * The kuliah that get a screen of their own, in the order they rotate: today's (still within its grace after the start)
+ * or the nearest first, then every one after it up to kuliahLastDate. When none is left, today's latest one alone (the
+ * screen holds it until the day ends). A cancelled kuliah keeps its place. Pure function of (list, settings, now).
+ */
+export function kuliahOnScreen<K extends { id: string; date: string; time: string }>(list: readonly K[], settings: Settings, now: Date): K[] {
+  const tz = tzOf(settings);
+  const today = dateOf(now, tz);
+  const last = kuliahLastDate(settings, today);
+  const wall = new Date(now.getTime() + offsetMinutes(now, tz) * MIN);
+  const nowMin = wall.getUTCHours() * 60 + wall.getUTCMinutes();
+  const window = list
+    .filter((k) => k.date >= today && k.date <= last)
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time) || a.id.localeCompare(b.id));
+  const upcoming = window.filter((k) => k.date !== today || minutesOfDay(k.time) + KULIAH_GRACE_MIN > nowMin);
+  if (upcoming.length > 0) return upcoming;
+  const todays = window.filter((k) => k.date === today);
+  return todays.length > 0 ? [todays[todays.length - 1]!] : [];
 }
 
 const HADIS_MARK = Symbol('hadis');
@@ -129,12 +165,10 @@ function buildLayout(content: KioskContent, settings: Settings, now: Date): Layo
     if (feature === 'hadis') return hadisPoolOf(content).length > 0 ? [HADIS_MARK] : [];
 
     switch (feature) {
-      // A cancelled (batal) kuliah/programKhas still takes its slot so the card can show the DIBATALKAN ribbon.
-      case 'kuliahCard': {
-        const last = addDays(today, Math.max(0, num(f.daysAhead, 7)));
-        const any = content.kuliah.some((k) => k.date >= today && k.date <= last);
-        return any ? [one(null)] : [];
-      }
+      // One screen per kuliah (theme round 2, rule 11). A cancelled (batal) kuliah/programKhas still takes its slot so
+      // the card can show the DIBATALKAN ribbon.
+      case 'kuliahCard':
+        return many(kuliahOnScreen(content.kuliah, settings, now).map((k) => k.id));
       case 'pengumuman': {
         const max = Math.max(0, Math.floor(num(f.maxItems, 5)));
         const visible = content.pengumuman
@@ -259,6 +293,8 @@ export function tilawahWindow(
   const dayKey = DAY_KEYS[klWeekday(date)] ?? 'ahad';
   const t = now.getTime();
   const intervals = buildDayIntervals(day, settings, hijriMonth);
+  // The first Subuh azan (an audio file) must never sound over a recitation: a Subuh slot ends when it starts.
+  const firstAzan = firstAzanPlan(day, settings);
 
   for (const slot of slots) {
     if (!slot.enabled) continue;
@@ -269,6 +305,7 @@ export function tilawahWindow(
     for (const i of intervals) {
       if (i.phase === 'azanCountdown' && i.end.getTime() === prayerTime.getTime()) endMs = Math.min(endMs, i.start.getTime());
     }
+    if (slot.before === 'subuh' && firstAzan) endMs = Math.min(endMs, firstAzan.startsAt.getTime());
     const endsAt = new Date(endMs);
     if (endsAt.getTime() <= startsAt.getTime()) continue;
     if (startsAt.getTime() <= t && t < endsAt.getTime()) return { slot, startsAt, endsAt };

@@ -5689,11 +5689,8 @@ class SMs extends S {
   String get themeTarjamahBeside => 'Sisi';
 
   @override
-  String get themeTarjamahHide => 'Sembunyi';
-
-  @override
   String get themeTarjamahNote =>
-      'Sembunyi hanya untuk skrin Arab. Jika Tetapan menutup terjemahan, Tetapan diikut.';
+      'Tetapan menentukan sama ada terjemahan dipapar. Di sini hanya kedudukannya.';
 
   @override
   String themeAll(int n) {
@@ -5847,10 +5844,23 @@ class SMs extends S {
 
   @override
   String get themeSizeNote =>
-      'S ialah saiz sekarang. Tiada saiz lebih kecil supaya jelas dari 3 meter.';
+      'Skala di atas saiz asas; saiz asas hadis dan ayat dipilih di Tetapan. S ialah saiz sekarang, tiada saiz lebih kecil supaya jelas dari 3 meter.';
+
+  @override
+  String get themeBgNote =>
+      'Ikut tema: gambar latar di Tetapan digunakan (atau gambar tema yang dimuat naik).';
 
   @override
   String get themeAlign => 'Susunan kandungan';
+
+  @override
+  String get themeGoldOutline => 'Garis emas pada tajuk';
+
+  @override
+  String get themeGoldOn => 'Hidup';
+
+  @override
+  String get themeGoldOff => 'Mati';
 
   @override
   String get themeChangedBadge => 'Diubah';
@@ -5877,6 +5887,11 @@ class SMs extends S {
   @override
   String themeApplyAllConfirm(String title) {
     return 'Guna rupa skrin ini untuk semua skrin tema $title?';
+  }
+
+  @override
+  String themeApplyAllReplaces(String title, int n) {
+    return 'Guna rupa skrin ini untuk semua skrin tema $title? Pilihan sendiri bagi $n skrin lain akan dipadam dan diganti dengan nilai skrin ini.';
   }
 
   @override

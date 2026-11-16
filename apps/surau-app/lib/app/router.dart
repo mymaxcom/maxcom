@@ -27,6 +27,7 @@ import '../box/setup_client.dart';
 import '../features/enrol/enrol_screen.dart';
 import '../features/enrol/scan_router.dart';
 import '../features/enrol/scan_screen.dart';
+import '../features/registry.g.dart' show hiddenFeatures;
 import '../features/setup/recovery_screen.dart';
 import '../features/setup/setup_providers.dart';
 import '../features/setup/setup_screen.dart';
@@ -139,6 +140,14 @@ const Map<String, String> customFeatureRoutes = {
   'prayerSources': AppRoutes.settingsPrayerSources,
   'kioskTemplate': AppRoutes.settingsThemes,
 };
+
+/// Where `/settings/<feature>` goes instead of its generic page: a feature the Tetapan lists hide (planned, or edited
+/// elsewhere) is not reachable by typing its address either, so it returns to the list; a feature with a page of its own
+/// goes there; null opens the generic page.
+String? settingsFeatureRedirect(String? feature) {
+  if (feature != null && hiddenFeatures.contains(feature)) return AppRoutes.settings;
+  return customFeatureRoutes[feature];
+}
 
 /// The router, rebuilt never: the guard reads the session, the enrolled
 /// box and the feature switches at each navigation, and is re-run when
@@ -254,8 +263,7 @@ GoRouter createRouter(
               ),
               GoRoute(
                 path: ':feature',
-                redirect: (context, state) =>
-                    customFeatureRoutes[state.pathParameters['feature']],
+                redirect: (context, state) => settingsFeatureRedirect(state.pathParameters['feature']),
                 builder: (context, state) => SettingsFeatureScreen(
                   featureKey: state.pathParameters['feature']!,
                   scrollToLanjutan: state.uri.queryParameters['lj'] == '1',

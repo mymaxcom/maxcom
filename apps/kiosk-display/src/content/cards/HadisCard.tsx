@@ -3,6 +3,7 @@ import type { HadisSettings } from '@surau/core';
 import { t } from '../../i18n.ts';
 import type { CardProps } from '../ContentLayer.tsx';
 import { pageAt, splitForPages, useFit } from '../paging.ts';
+import { useScale } from '../scale.ts';
 
 export interface HadisPage {
   /** The Arabic shown on this page (null: none). */
@@ -60,7 +61,9 @@ export function useHadisSlot({ content, itemId, view, page, startedAt, durationS
   const h = (itemId === null ? content.hadisToday[0] : content.hadisToday.find((x) => x.id === itemId)) ?? null;
   const settings = (view.settings?.hadis ?? {}) as Partial<HadisSettings>;
   const part = page ?? 0;
-  const { ref, fit, pages } = useFit<HTMLDivElement>(`${h?.id ?? ''}|${part}`, { paged: true });
+  // The text size (Ubah suai) is part of the key: a new size measures the fit again from the full size.
+  const scale = useScale();
+  const { ref, fit, pages } = useFit<HTMLDivElement>(`${h?.id ?? ''}|${part}|${scale}`, { paged: true });
   if (!h) return null;
 
   const plan = hadisPlan(h, settings);

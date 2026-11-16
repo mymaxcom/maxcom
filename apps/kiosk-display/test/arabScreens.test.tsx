@@ -94,11 +94,11 @@ describe('the rule', () => {
     expect([...arabLooksOf(pack)]).toEqual(['arab-zikir']);
   });
 
-  it('translation: Tetapan off always hides; the menu places or hides', () => {
+  it('translation: Tetapan off always hides; the menu only places it (an old sembunyi counts as below)', () => {
     expect(tarjamahMode({ tarjamah: 'sisi' }, false)).toBe('hidden');
     expect(tarjamahMode({}, true)).toBe('below');
     expect(tarjamahMode({ tarjamah: 'sisi' }, true)).toBe('beside');
-    expect(tarjamahMode({ tarjamah: 'sembunyi' }, true)).toBe('hidden');
+    expect(tarjamahMode({ tarjamah: 'sembunyi' }, true)).toBe('below');
   });
 
   it('screenIdOf maps the bases that are in the arab set', () => {
@@ -191,12 +191,12 @@ describe('the screens', () => {
     expect(r.container.querySelector('.arab-hadis')).toBeNull();
   });
 
-  it('sembunyi removes the translation on arab screens and is ignored on the normal ayat screen', async () => {
+  it('an old stored sembunyi no longer hides the translation: Tetapan alone decides (one control)', async () => {
     const entry = { themeStyle: { styles: { arabic: { semua: { tarjamah: 'sembunyi' }, skrin: {} }, creative: { semua: { tarjamah: 'sembunyi' }, skrin: {} } } } };
     const on = showCard('ayatCard', { settings: entry as never });
     await flush();
-    expect(stage(on).getAttribute('data-tarjamah')).toBe('hidden');
-    expect(on.container.querySelector('.arab-ayat .aa-tr')).toBeNull();
+    expect(stage(on).getAttribute('data-tarjamah')).not.toBe('hidden');
+    expect(on.container.querySelector('.arab-ayat .aa-tr')).toBeTruthy();
     expect(on.container.querySelector('.arab-ayat .aa-text')).toBeTruthy();
     cleanup();
     const normal = showCard('ayatCard', { theme: 'creative', settings: entry as never });
@@ -217,5 +217,27 @@ describe('the screens', () => {
     expect(arabBaseOf('hadis', props, { looks: new Set(), forced: 'arab-hadis', style: {} })).toBe('hadis');
     expect(arabBaseOf('ayatCard', props, { looks: new Set(), forced: 'arab-ayat', style: {} })).toBe('ayat');
     expect(arabBaseOf('kuliahCard', props, { looks: new Set(['arab-ayat']), forced: 'arab-ayat', style: {} })).toBeNull();
+  });
+});
+
+describe('Tetapan sizes reach the Arabic-led screens (brief 2026-11-16 item 3)', () => {
+  it('ayatCard.textSize puts its size class on arab-ayat (M by default)', async () => {
+    const m = showCard('ayatCard');
+    await flush();
+    expect(m.container.querySelector('.arab-ayat')!.classList.contains('is-size-m')).toBe(true);
+    cleanup();
+    const s = showCard('ayatCard', { settings: { ayatCard: { textSize: 's' } } });
+    await flush();
+    expect(s.container.querySelector('.arab-ayat')!.classList.contains('is-size-s')).toBe(true);
+  });
+
+  it('hadis.fontSize picks the tier of arab-hadis as on the normal hadis screen', async () => {
+    const l = showCard('hadis');
+    await flush();
+    expect(l.container.querySelector('.arab-hadis')!.classList.contains('is-len-l')).toBe(true);
+    cleanup();
+    const s = showCard('hadis', { settings: { hadis: { fontSize: 's' } } });
+    await flush();
+    expect(s.container.querySelector('.arab-hadis')!.classList.contains('is-len-s')).toBe(true);
   });
 });

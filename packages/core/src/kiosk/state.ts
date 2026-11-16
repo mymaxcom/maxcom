@@ -16,7 +16,12 @@ export interface KioskState {
   next: { name: SolatName | 'imsak' | 'syuruk'; at: Date } | null;
   isJumaat: boolean;
   today: PrayerDay | null;
-  beep: 'azanCountdown' | 'masukWaktu' | 'iqamahEnd' | null;
+  beep: 'azanCountdown' | 'masukWaktu' | 'iqamahEnd' | 'imsak' | 'syuruk' | null;
+  /**
+   * The first Subuh azan: set for 30 s from `minutesBefore` minutes before Subuh when an audio file is chosen, else null.
+   * `stopsAt` is the latest moment it may still sound (see `firstAzanPlan`).
+   */
+  firstAzan: { audioFile: string; startsAt: Date; stopsAt: Date } | null;
 }
 
 export interface PhaseInterval {
@@ -28,12 +33,15 @@ export interface PhaseInterval {
 
 interface Stage extends PhaseInterval {
   beepAt?: Date;
-  beepKind?: 'azanCountdown' | 'masukWaktu' | 'iqamahEnd';
+  beepKind?: 'azanCountdown' | 'masukWaktu' | 'iqamahEnd' | 'syuruk';
 }
 
 const MIN = 60_000;
 const SEC = 1_000;
 const BEEP_WINDOW_MS = 3 * SEC;
+/** How long the first-azan start stays set: long enough for a one-second tick to see it, short enough that a late start never plays it. */
+const FIRST_AZAN_WINDOW_MS = 30 * SEC;
+const ASSET_ID = /^[0-9a-f]{64}$/;
 const SOLAT: readonly SolatKey[] = ['subuh', 'zohor', 'asar', 'maghrib', 'isyak'];
 
 type Raw = Partial<FeatureSettings> | undefined;
@@ -143,7 +151,10 @@ function buildStages(day: PrayerDay, settings: Settings, hijriMonth?: number): S
     const m = num(sw?.minutesBefore, 5);
     if (m > 0) {
       const sy = instantOf(day.date, day.times.syuruk, tz);
-      out.push({ start: new Date(sy.getTime() - m * MIN), end: sy, phase: 'syuruk', prayer: 'syuruk' });
+      const start = new Date(sy.getTime() - m * MIN);
+      // syurukWarning.beep (off by default): one short tone when the warning screen starts, like the countdown beep.
+      const beep: Partial<Stage> = bool(sw?.beep, false) ? { beepAt: start, beepKind: 'syuruk' } : {};
+      out.push({ start, end: sy, phase: 'syuruk', prayer: 'syuruk', ...beep });
     }
   }
   if (on(isy)) {
@@ -195,13 +206,53 @@ function usable(day: PrayerDay | undefined): day is PrayerDay {
   }
 }
 
+/** The imsak beep is a time of the day, not a phase: set for three seconds from the imsak time when the feature is switched on. */
+function imsakBeepNow(today: PrayerDay, settings: Settings, now: Date): boolean {
+  if (feat(settings, 'imsakBeep')?.enabled !== true) return false;
+  const at = instantOf(today.date, today.times.imsak, tzOf(settings)).getTime();
+  const t = now.getTime();
+  return at <= t && t < at + BEEP_WINDOW_MS;
+}
+
+/**
+ * The first Subuh azan of a day: off by default; nothing without a chosen audio file. It starts `minutesBefore` minutes
+ * before Subuh and must be silent again by `stopsAt`: the start of the Subuh azan countdown when that comes after the
+ * first azan's start, else the Subuh time itself (the real azan). Exported so the tilawah window can end where it starts.
+ */
+export function firstAzanPlan(day: PrayerDay, settings: Settings): { audioFile: string; startsAt: Date; stopsAt: Date } | null {
+  const f = feat(settings, 'firstAzanSubuh');
+  if (f?.enabled !== true) return null;
+  const file = f.audioFile;
+  if (typeof file !== 'string' || !ASSET_ID.test(file)) return null;
+  const m = num(f.minutesBefore, 10);
+  if (m <= 0) return null;
+  const subuh = instantOf(day.date, day.times.subuh, tzOf(settings)).getTime();
+  const startsAt = subuh - m * MIN;
+  let stopsAt = subuh;
+  const az = feat(settings, 'azanCountdown');
+  if (on(az)) {
+    const before = (az as { minutesBefore?: Record<string, unknown> })?.minutesBefore;
+    const cd = num(before?.subuh, 10);
+    if (cd > 0 && subuh - cd * MIN > startsAt) stopsAt = subuh - cd * MIN;
+  }
+  return { audioFile: file, startsAt: new Date(startsAt), stopsAt: new Date(stopsAt) };
+}
+
+/** The first-azan start stays set for 30 s from its start (a one-second tick must see it; a late start never plays it). */
+function firstAzanNow(today: PrayerDay, settings: Settings, now: Date): KioskState['firstAzan'] {
+  const p = firstAzanPlan(today, settings);
+  if (!p) return null;
+  const t = now.getTime();
+  return p.startsAt.getTime() <= t && t < p.startsAt.getTime() + FIRST_AZAN_WINDOW_MS ? p : null;
+}
+
 export function computeKioskState(now: Date, days: PrayerDay[], settings: Settings, hijriMonth?: number): KioskState {
   const date = dateOf(now, tzOf(settings));
   const isJumaat = klWeekday(date) === 5;
   const found = days.find((d) => d.date === date);
   const today = usable(found) ? found : null;
   if (!today) {
-    return { phase: 'noData', prayer: null, phaseEndsAt: null, next: null, isJumaat, today: null, beep: null };
+    return { phase: 'noData', prayer: null, phaseEndsAt: null, next: null, isJumaat, today: null, beep: null, firstAzan: null };
   }
   const y = days.find((d) => d.date === addDays(date, -1));
   const yesterday = usable(y) ? y : undefined;
@@ -221,13 +272,15 @@ export function computeKioskState(now: Date, days: PrayerDay[], settings: Settin
   let next = nextFrom(today, settings, now);
   if (!next && tomorrow) next = nextFrom(tomorrow, settings, now);
 
+  const firstAzan = firstAzanNow(today, settings, now);
+  const imsak: KioskState['beep'] = imsakBeepNow(today, settings, now) ? 'imsak' : null;
   if (!hit) {
-    return { phase: 'normal', prayer: null, phaseEndsAt: null, next, isJumaat, today, beep: null };
+    return { phase: 'normal', prayer: null, phaseEndsAt: null, next, isJumaat, today, beep: imsak, firstAzan };
   }
   let beep: KioskState['beep'] = null;
   if (hit.beepAt && hit.beepKind) {
     const b = hit.beepAt.getTime();
     if (b <= t && t < b + BEEP_WINDOW_MS) beep = hit.beepKind;
   }
-  return { phase: hit.phase, prayer: hit.prayer, phaseEndsAt: hit.end, next, isJumaat, today, beep };
+  return { phase: hit.phase, prayer: hit.prayer, phaseEndsAt: hit.end, next, isJumaat, today, beep: beep ?? imsak, firstAzan };
 }

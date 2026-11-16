@@ -31,7 +31,7 @@ const ITEM_REFS: Partial<Record<ContentKind, { field: string; kind: ContentKind 
 };
 
 /** Fields that must point at an existing asset, on any kind. */
-const ASSET_FIELDS = ['assetId', 'photoAssetId', 'coverAssetId'] as const;
+const ASSET_FIELDS = ['assetId', 'photoAssetId', 'coverAssetId', 'pictureAssetId'] as const;
 
 /** Reverse of ITEM_REFS: which kinds/fields reference a given kind. */
 const REFERRERS: Partial<Record<ContentKind, { kind: ContentKind; field: string }[]>> = {

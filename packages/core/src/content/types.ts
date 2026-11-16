@@ -60,6 +60,8 @@ export interface Pengumuman extends ContentBase {
   from: string;
   to: string;
   priority: 1 | 2 | 3;
+  /** Optional picture shown with the announcement; absent = text only. */
+  pictureAssetId?: ImageRef;
 }
 
 export interface TickerItem extends ContentBase {
@@ -219,6 +221,8 @@ export interface AyatCard {
 /** Kiosk copies of the items above: every picture is already the derived asset id (a plain string). */
 export type KioskPoster = Omit<Poster, 'assetId'> & { assetId: string };
 export type KioskProgramKhas = Omit<ProgramKhas, 'assetId'> & { assetId?: string };
+/** The kiosk copy of a pengumuman: the optional picture is the derived asset id (a plain string). */
+export type KioskPengumuman = Omit<Pengumuman, 'pictureAssetId'> & { pictureAssetId?: string };
 export type KioskTakwim = Omit<Takwim, 'assetId'> & { assetId?: string };
 
 /** One hadis of today's pool, with the BM attribution and the credit already resolved. */
@@ -242,7 +246,7 @@ export interface KioskHadis {
 export interface KioskContent {
   date: string;
   kuliah: KuliahView[];
-  pengumuman: Pengumuman[];
+  pengumuman: KioskPengumuman[];
   ticker: TickerItem[];
   posters: KioskPoster[];
   programKhas: KioskProgramKhas[];

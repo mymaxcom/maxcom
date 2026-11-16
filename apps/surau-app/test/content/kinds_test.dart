@@ -9,6 +9,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointycastle/digests/sha256.dart';
+import 'package:surau_app/content/image_ref.dart' show ImageSlot, slotForField;
 import 'package:surau_app/content/kinds.dart';
 
 String _read(String relative) {
@@ -114,6 +115,10 @@ void main() {
       expect(pengumuman.field('priority').type, FieldType.priority);
       expect(pengumuman.field('body').type, FieldType.multiline);
       expect(pengumuman.field('body').maxLength, 2000);
+      expect(pengumuman.field('pictureAssetId').type, FieldType.asset);
+      expect(pengumuman.field('pictureAssetId').required, isFalse);
+      expect(pengumuman.field('pictureAssetId').labelMs, 'Gambar');
+      expect(slotForField('pengumuman', 'pictureAssetId'), ImageSlot.pengumuman);
       expect(contentKindByKey('ticker')!.field('text').maxLength, 300);
       expect(contentKindByKey('programKhas')!.field('at').type, FieldType.dateTime);
       expect(contentKindByKey('worldTime')!.field('tz').type, FieldType.timezone);

@@ -19,6 +19,26 @@ final RegExp _hexRe = RegExp(r'^#[0-9A-Fa-f]{6}$');
 /// The screens that show Arabic text: the Tulisan Arab controls belong to them (not to Kuliah or Poster).
 const Set<String> arabControlScreens = {'ayat', 'hadis', 'zikir', 'arab-ayat', 'arab-hadis', 'arab-zikir'};
 
+// Where an option reaches the TV (checked against the kiosk's CSS and screens); an option is offered only there.
+
+/// Screens that ignore Saiz teks: the main prayer screen, the live frame and the poster draw no text the scale touches.
+const Set<String> scaleInertScreens = {'biasa', 'live', 'poster'};
+
+/// Screens that ignore Susunan kandungan (Jajaran): the prayer screens centre their one block, the live frame and the
+/// poster fill the stage, and the takwim rows shrink to their text.
+const Set<String> alignInertScreens = {
+  'biasa', 'azan', 'masuk-waktu', 'iqamah', 'solat', 'jumaat', 'tiada-data', 'live', 'poster', 'takwim',
+};
+
+/// Screens that draw the text in two layers, so the mark colour (Warna baris) shows: not the ayat card nor the zikir page.
+const Set<String> harakatScreens = {'hadis', 'arab-ayat', 'arab-hadis', 'arab-zikir'};
+
+/// Screens that lay the translation beside the Arabic (Terjemahan Sisi); elsewhere it always sits below.
+const Set<String> tarjamahSideScreens = {'arab-ayat', 'arab-hadis'};
+
+/// Screens that show Quranic text, the only text Uthmani Hafs draws (hadis and zikir stay in Amiri).
+const Set<String> quranScreens = {'ayat', 'arab-ayat'};
+
 Color _colour(String hex) => Color(0xFF000000 | int.parse(hex.substring(1), radix: 16));
 
 class ThemeControls extends StatelessWidget {
@@ -29,7 +49,7 @@ class ThemeControls extends StatelessWidget {
     required this.screen,
     required this.onChange,
     required this.onPickPicture,
-    this.packFonts = const [],
+    this.base,
     this.arabLooksOn = true,
     this.readOnly = false,
     this.busyPicture = false,
@@ -43,8 +63,8 @@ class ThemeControls extends StatelessWidget {
   final StyleChange onChange;
   final VoidCallback onPickPicture;
 
-  /// Font ids of the uploaded theme, offered after the two built-in fonts.
-  final List<String> packFonts;
+  /// The built-in theme an uploaded theme is made on (null for a built-in theme): the gold outline follows the base.
+  final String? base;
 
   /// Whether the theme shows ayat, hadis and zikir in their Arabic-led looks (else a note says the Arabic screens are unused).
   final bool arabLooksOn;
@@ -62,13 +82,14 @@ class ThemeControls extends StatelessWidget {
     // while a picture shows (its text sits straight on the picture).
     final minShade = theme == 'default' && hasPicture ? minDefaultShade : 0;
     final shade = ((v['shade'] as num?) ?? (themeDefaultsOf(theme).semua['shade'] as num?) ?? otherThemeShade).toInt().clamp(minShade, 80);
-    final fonts = <(String, String)>[('jakarta', 'Plus Jakarta Sans'), ('amiri', 'Amiri'), for (final f in packFonts) (f, f)];
+    final fonts = <(String, String)>[('jakarta', 'Plus Jakarta Sans'), ('amiri', 'Amiri')];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Section(
           label: s.themeBg,
           changed: changed('bgImage'),
+          note: s.themeBgNote,
           child: Row(
             children: [
               _Choice(
@@ -193,29 +214,46 @@ class ThemeControls extends StatelessWidget {
             ],
           ),
         ),
-        _Section(
-          label: s.themeSize,
-          changed: changed('scale'),
-          note: s.themeSizeNote,
-          child: _Choices(
-            prefix: 'ctl-scale',
-            value: v['scale'] as String?,
-            follow: _Follow(label: s.themeFollowTheme, selected: !hasOwn(entry, screen, 'scale'), onPick: readOnly ? null : () => onChange('scale', null)),
-            options: const [('S', 'S'), ('M', 'M'), ('L', 'L'), ('XL', 'XL')],
-            onPick: readOnly ? null : (x) => onChange('scale', x),
+        // The text scale and the alignment are offered only on the screens where they change something.
+        if (!scaleInertScreens.contains(screen))
+          _Section(
+            label: s.themeSize,
+            changed: changed('scale'),
+            note: s.themeSizeNote,
+            child: _Choices(
+              prefix: 'ctl-scale',
+              value: v['scale'] as String?,
+              follow: _Follow(label: s.themeFollowTheme, selected: !hasOwn(entry, screen, 'scale'), onPick: readOnly ? null : () => onChange('scale', null)),
+              options: const [('S', 'S'), ('M', 'M'), ('L', 'L'), ('XL', 'XL')],
+              onPick: readOnly ? null : (x) => onChange('scale', x),
+            ),
           ),
-        ),
-        _Section(
-          label: s.themeAlign,
-          changed: changed('align'),
-          child: _Choices(
-            prefix: 'ctl-align',
-            value: v['align'] as String?,
-            follow: _Follow(label: s.themeFollowTheme, selected: !hasOwn(entry, screen, 'align'), onPick: readOnly ? null : () => onChange('align', null)),
-            options: [('kiri', s.themeLeft), ('tengah', s.themeCentre), ('kanan', s.themeRight)],
-            onPick: readOnly ? null : (x) => onChange('align', x),
+        if (!alignInertScreens.contains(screen))
+          _Section(
+            label: s.themeAlign,
+            changed: changed('align'),
+            child: _Choices(
+              prefix: 'ctl-align',
+              value: v['align'] as String?,
+              follow: _Follow(label: s.themeFollowTheme, selected: !hasOwn(entry, screen, 'align'), onPick: readOnly ? null : () => onChange('align', null)),
+              options: [('kiri', s.themeLeft), ('tengah', s.themeCentre), ('kanan', s.themeRight)],
+              onPick: readOnly ? null : (x) => onChange('align', x),
+            ),
           ),
-        ),
+        // A thin gold outline on the large text: Default, Old School and Arabic Art, and an uploaded theme made on one of
+        // them (on by the theme's default).
+        if (goldOutlineThemes.contains(base ?? theme))
+          _Section(
+            label: s.themeGoldOutline,
+            changed: changed('goldOutline'),
+            child: _Choices(
+              prefix: 'ctl-gold',
+              value: v['goldOutline'] as String?,
+              follow: _Follow(label: s.themeFollowTheme, selected: !hasOwn(entry, screen, 'goldOutline'), onPick: readOnly ? null : () => onChange('goldOutline', null)),
+              options: [('on', s.themeGoldOn), ('off', s.themeGoldOff)],
+              onPick: readOnly ? null : (x) => onChange('goldOutline', x),
+            ),
+          ),
         if (arabControlScreens.contains(screen)) ..._arabControls(context, s, v, changed),
       ],
     );
@@ -226,11 +264,12 @@ class ThemeControls extends StatelessWidget {
   List<Widget> _arabControls(BuildContext context, S s, StyleMap v, bool Function(String) changed) {
     final text = Theme.of(context).textTheme;
     final isArab = screen.startsWith('arab-');
+    // Uthmani Hafs draws Quranic text only: offered on the Quran screens (and kept visible where one is already chosen).
+    final showHafs = quranScreens.contains(screen) || (v['arFont'] == 'hafs' && changed('arFont'));
     final arFonts = <(String, String)>[
-      ('hafs', s.themeArFontHafs),
+      if (showHafs) ('hafs', s.themeArFontHafs),
       ('amiri-quran', s.themeArFontAmiriQuran),
       ('amiri', s.themeArFontAmiri),
-      for (final f in packFonts) (f, f),
     ];
     // The values in force, the theme's own included (Uthmani Hafs until the surau or the theme chooses another face).
     final allowed = harakatAllowed({...themeDefaultsOf(theme).semua, ...v});
@@ -310,21 +349,23 @@ class ThemeControls extends StatelessWidget {
           ],
         ),
       ),
-      _Section(
-        label: s.themeHarakat,
-        changed: changed('harakat'),
-        note: allowed ? null : s.themeHarakatNote,
-        child: _ColourPick(
-          prefix: 'ctl-harakat',
-          value: v['harakat'] as String?,
-          followLabel: s.themeHarakatFollow,
-          otherLabel: s.themeHarakatOwn,
-          hexLabel: s.themeCustomColour,
-          swatches: accentSwatches,
-          // A stored colour stays (dormant) under Uthmani Hafs; the control is only switched off.
-          onChanged: readOnly || !allowed ? null : (x) => onChange('harakat', x),
+      // The mark colour needs the two-layer text: not on the ayat card nor the zikir page.
+      if (harakatScreens.contains(screen))
+        _Section(
+          label: s.themeHarakat,
+          changed: changed('harakat'),
+          note: allowed ? null : s.themeHarakatNote,
+          child: _ColourPick(
+            prefix: 'ctl-harakat',
+            value: v['harakat'] as String?,
+            followLabel: s.themeHarakatFollow,
+            otherLabel: s.themeHarakatOwn,
+            hexLabel: s.themeCustomColour,
+            swatches: accentSwatches,
+            // A stored colour stays (dormant) under Uthmani Hafs; the control is only switched off.
+            onChanged: readOnly || !allowed ? null : (x) => onChange('harakat', x),
+          ),
         ),
-      ),
       _Section(
         label: s.themeArLine,
         changed: changed('arLineHeight'),
@@ -355,18 +396,20 @@ class ThemeControls extends StatelessWidget {
           ],
         ),
       ),
-      _Section(
-        label: s.themeTarjamah,
-        changed: changed('tarjamah'),
-        note: s.themeTarjamahNote,
-        child: _Choices(
-          prefix: 'ctl-tarjamah',
-          value: v['tarjamah'] as String?,
-          follow: _Follow(label: s.themeFollowTheme, selected: !hasOwn(entry, screen, 'tarjamah'), onPick: readOnly ? null : () => onChange('tarjamah', null)),
-          options: [('bawah', s.themeTarjamahBelow), ('sisi', s.themeTarjamahBeside), if (isArab) ('sembunyi', s.themeTarjamahHide)],
-          onPick: readOnly ? null : (x) => onChange('tarjamah', x),
+      // The translation sits beside the Arabic only on the two Arabic Art screens; elsewhere it is always below.
+      if (tarjamahSideScreens.contains(screen))
+        _Section(
+          label: s.themeTarjamah,
+          changed: changed('tarjamah'),
+          note: s.themeTarjamahNote,
+          child: _Choices(
+            prefix: 'ctl-tarjamah',
+            value: v['tarjamah'] as String?,
+            follow: _Follow(label: s.themeFollowTheme, selected: !hasOwn(entry, screen, 'tarjamah'), onPick: readOnly ? null : () => onChange('tarjamah', null)),
+            options: [('bawah', s.themeTarjamahBelow), ('sisi', s.themeTarjamahBeside)],
+            onPick: readOnly ? null : (x) => onChange('tarjamah', x),
+          ),
         ),
-      ),
     ];
   }
 }

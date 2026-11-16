@@ -26,7 +26,11 @@ CleanupSettings cleanupSettingsFrom(Map<String, dynamic>? settings) {
     return v is Map<String, dynamic> ? v : null;
   }
 
-  return CleanupSettings.fromDocs(doc('recordingCleanup'), doc('liveYoutube'));
+  return CleanupSettings.fromDocs(
+    doc('recordingCleanup'),
+    doc('liveYoutube'),
+    doc('recording'),
+  );
 }
 
 /// The clean-up settings for the screens.
@@ -90,6 +94,7 @@ final recordingCleanupProvider = Provider<RecordingCleanup?>((ref) {
     settings: () async => CleanupSettings.fromDocs(
       await store.getDoc(Collections.settings, 'recordingCleanup'),
       await store.getDoc(Collections.settings, 'liveYoutube'),
+      await store.getDoc(Collections.settings, 'recording'),
     ),
     jobs: queue.jobs,
     recordingNow: () async => liveOrRecordingNow(ref),

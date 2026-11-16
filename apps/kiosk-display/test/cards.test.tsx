@@ -21,7 +21,7 @@ vi.mock('../src/data/content.ts', async (importOriginal) => {
 
 import { App } from '../src/app.tsx';
 import { Main } from '../src/screens/Main.tsx';
-import { PengumumanCard } from '../src/content/cards/PengumumanCard.tsx';
+import { PENGUMUMAN_FIT_MAX, PengumumanCard } from '../src/content/cards/PengumumanCard.tsx';
 import { paginateAyat } from '../src/content/cards/AyatCard.tsx';
 import { cityTime } from '../src/content/cards/WorldTimesCard.tsx';
 
@@ -104,7 +104,7 @@ describe('KuliahCard', () => {
     const card = section(r).querySelector('[data-card="kuliahCard"]')!;
     expect(card).toBeTruthy();
     expect(card.getAttribute('data-item')).toBe('k1');
-    expect(r.getByText('Kuliah hari ini')).toBeTruthy();
+    expect(card.querySelector('.kul-day.is-today .kul-day-word')!.textContent).toBe('Hari ini');
     expect(r.getByText('Ustaz Abu Bakar Ahmad')).toBeTruthy();
     expect(r.getByText('Tafsir Surah Al-Kahfi (siri 4)')).toBeTruthy();
     expect(r.getByText(/7:15 malam/)).toBeTruthy();
@@ -116,11 +116,11 @@ describe('KuliahCard', () => {
     expect(r.queryByText('DIBATALKAN')).toBeNull();
   });
 
-  it('says Kuliah seterusnya when the first kuliah is on a later day', () => {
+  it('says Esok when the first kuliah is tomorrow', () => {
     const c = fixture();
     c.kuliah = c.kuliah.filter((k) => k.id !== 'k1');
     const r = show(c, 'kuliahCard');
-    expect(r.getByText('Kuliah seterusnya')).toBeTruthy();
+    expect(r.getByText('Esok')).toBeTruthy();
     expect(r.getByText('Ustaz Hafiz Rahman')).toBeTruthy();
   });
 
@@ -160,7 +160,7 @@ describe('KuliahCard', () => {
 
   it('skips today\'s kuliah once it is well past and shows the next one', () => {
     const r = show(fixture(), 'kuliahCard', '2026-11-03', '22:30');
-    expect(r.getByText('Kuliah seterusnya')).toBeTruthy();
+    expect(r.getByText('Esok')).toBeTruthy();
     expect(r.getByText('Ustaz Hafiz Rahman')).toBeTruthy();
   });
 });
@@ -184,6 +184,26 @@ describe('PengumumanCard', () => {
     expect(r.getByText('Gotong-royong perdana')).toBeTruthy();
     expect(r.getByText(/Semua jemaah dijemput/)).toBeTruthy();
     expect(card.classList.contains('is-priority')).toBe(true);
+  });
+
+  it('a text-only notice keeps the round 2 markup (tag, text) and starts large enough to fill its card', () => {
+    const r = show(fixture(), 'pengumuman');
+    const card = section(r).querySelector('[data-card="pengumuman"]')!;
+    expect(card.classList.contains('has-picture')).toBe(false);
+    expect(card.querySelector('.pengumuman__pic, .pengumuman__main')).toBeNull();
+    expect([...card.children].map((e) => e.className)).toEqual(['card__tag', 'pengumuman__text']);
+    // jsdom measures nothing, so the fit stays where it starts: above 1 (a short notice grows to fill the card).
+    expect(card.querySelector('.pengumuman__text')!.getAttribute('style')!.replace(/\s/g, '')).toBe(`--fit:${PENGUMUMAN_FIT_MAX};`);
+  });
+
+  it('a notice with its picture shows it beside the same text', () => {
+    const c = fixture();
+    (c.pengumuman[0] as { pictureAssetId?: string }).pictureAssetId = PROGRAM;
+    const r = show(c, 'pengumuman');
+    const card = section(r).querySelector('[data-card="pengumuman"]')!;
+    expect(card.classList.contains('has-picture')).toBe(true);
+    expect(card.querySelector(`.pengumuman__pic img[src="/assets/${PROGRAM}"]`)).toBeTruthy();
+    expect(card.querySelector('.pengumuman__main .pengumuman__title')!.textContent).toBe('Gotong-royong perdana');
   });
 
   it('priority 2 is not marked', () => {
@@ -249,11 +269,12 @@ describe('Poster in the content shell', () => {
     expect(s.querySelector('[data-role="clock"]')!.textContent).toContain('3:52');
     expect(s.querySelector('.region-brand .brand-name')!.textContent).toBe('Surau Al-Hidayah');
     expect(s.querySelector('.next--chip .chip-k')!.textContent).toBe('Asar');
-    expect(s.querySelector('.next--chip .chip-rel')!.textContent).toBe('28 minit lagi');
+    expect(s.querySelector('.next--chip .chip-cd b')!.textContent).toBe('00:28');
     expect(s.querySelector('img[data-role="logo"]')).toBeNull();
     expect(s.querySelector('.ident')).toBeNull();
     expect(r.container.querySelector('[data-testid="poster-strip"]')).toBeNull();
-    expect(s.querySelector('.region-prayers.strip--compact .pcell')).toBeTruthy();
+    // No prayer strip on the poster screen (theme round 2, rule 1).
+    expect(s.querySelector('[data-role="prayers"]')).toBeNull();
     expect(s.querySelector('.pbar')).toBeNull();
     expect(section(r).querySelectorAll('[data-card]').length).toBe(1);
   });
@@ -339,7 +360,7 @@ describe('Poster in the content shell', () => {
     expect(r.container.querySelector('[data-card="posters"]')).toBeNull();
     expect(r.container.querySelector('.card--poster')).toBeNull();
     expect(r.container.querySelector('.screen--shell')).toBeNull();
-    expect(r.container.querySelector('.pbar')).toBeTruthy();
+    expect(r.container.querySelector('.pbar, .strip--compact')).toBeTruthy();
   });
 
   it('shows nothing of a poster slot on the no-data screen', async () => {
@@ -408,7 +429,7 @@ describe('TakwimCard', () => {
 describe('ContentLayer', () => {
   it('renders the current rotation slot when there is no override', () => {
     const c = fixture();
-    const view = makeView('2026-11-03', '00:00:20'); // 20 s into the day: second slot (pengumuman, order 2)
+    const view = makeView('2026-11-03', '00:00:50'); // 50 s into the day: after the three kuliah slots (15 s each), pengumuman
     const rotation = buildRotation(c, view.settings, view.now);
     holder.view = view;
     holder.cv = { content: c, rotation, current: currentSlot(rotation, view.now), zikir: null, override: null };

@@ -126,7 +126,6 @@
 .stage[data-template='arabic'] .pbar .pcell.is-current::after { background: var(--ink); }
 .stage[data-template='arabic'] .pbar .pcell.is-current .pcell-ar,
 .stage[data-template='arabic'] .pbar .pcell.is-current .pcell__label { color: var(--ink); }
-.stage[data-template='arabic'] .pbar .pcell__cd { background: var(--ink); color: #ecd08a; }
 .stage[data-template='arabic'] .ticker__cap { background: linear-gradient(180deg, #ecd08a, #c99a40); }
 .stage[data-template='arabic'] .emergency-band { background: #f5b335; color: #1a1405; border: 0.2rem solid #1a1405; border-radius: 0.3rem; text-shadow: none; }
 
@@ -164,6 +163,8 @@
 
 /* ---- Content screens (kind content): a flat gilded strip with the Arabic names, a hexagonal chip ---- */
 .stage[data-template='arabic'][data-kind='content'] .brand-name { font-size: 1.1rem; letter-spacing: 0.36em; color: var(--accent-2); }
+/* The date stays under the small tracked name: one step smaller than the contract's, in the parchment text colour. */
+.stage[data-template='arabic'][data-kind='content'] .shell-date { font-size: 1.146rem; margin-top: 0.5rem; color: #efe4c8; }
 .stage[data-template='arabic'][data-kind='content'] .deco .d2 { opacity: 0.08; }
 .stage[data-template='arabic'][data-kind='content'] .next--chip {
   gap: 0.8rem;
@@ -188,16 +189,18 @@
 .stage[data-template='arabic'][data-kind='content'] .strip .pcell-label { display: none; }
 .stage[data-template='arabic'][data-kind='content'] .strip .pcell.is-current { background: linear-gradient(180deg, #ecd08a, #c99a40); color: var(--ink); }
 .stage[data-template='arabic'][data-kind='content'] .strip .pcell.is-current .pcell-ar { color: var(--ink); }
-.stage[data-template='arabic'] .kul-photo {
+/* penceramahPhoto.shape wins: square is the theme's arch (a framed rectangle with a pointed top), round is the circle
+   with the gold ring of the base contract. */
+.stage[data-template='arabic'] .kul-photo.is-square {
   border: 0;
   border-radius: 0;
-  width: 22.917rem;
-  height: 27.083rem;
+  width: 25.5rem;
+  height: 30.2rem;
   padding: 0.26rem;
   background: var(--accent);
   clip-path: var(--arch);
 }
-.stage[data-template='arabic'] .kul-photo img { clip-path: var(--arch); }
+.stage[data-template='arabic'] .kul-photo.is-square img { clip-path: var(--arch); }
 .stage[data-template='arabic'] .kul-label { color: var(--muted); }
 .stage[data-template='arabic'] .kul-topic { color: var(--accent-2); }
 .stage[data-template='arabic'] .hadis-ar { color: var(--text); }

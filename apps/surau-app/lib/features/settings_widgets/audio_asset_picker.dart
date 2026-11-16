@@ -2,8 +2,8 @@
 // (`GET /api/assets?mime=audio/mpeg`) as a radio list, `Tiada fail`, and
 // `Muat naik audio`. Picking a file is a browser feature here (the app has
 // no file picker package), so the Android app says where to upload; the
-// list and the choice work everywhere. Nothing plays yet: no audio package
-// is available to the app.
+// list and the choice work everywhere. The app plays nothing (no audio
+// package); the TV plays the chosen file once at Subuh minus `minutesBefore`.
 
 import 'dart:typed_data';
 

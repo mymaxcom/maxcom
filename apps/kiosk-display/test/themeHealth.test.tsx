@@ -166,7 +166,7 @@ describe('the health check', () => {
 
   it('with a logo set the logo is required on every screen, live and poster included', () => {
     expect(requiredRoles('live', true)).toEqual(['clock', 'next', 'logo']);
-    expect(requiredRoles('poster', true)).toEqual(['clock', 'prayers', 'logo']);
+    expect(requiredRoles('poster', true)).toEqual(['clock', 'next', 'logo']);
     expect(requiredRoles('live', false)).toEqual(['clock', 'next']);
     expect(run('live', { clock: good, next: good }, true).failed).toEqual(['logo']);
     expect(run('live', { clock: good, next: good, logo: good }, true).ok).toBe(true);

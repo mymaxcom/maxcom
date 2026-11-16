@@ -17,6 +17,7 @@ class _Clock {
 class _Remover implements RecordingRemover {
   final Map<String, RecordingFootprint> prints = {};
   final List<String> removed = [];
+  final List<List<String>> removedFootprints = [];
   int skipped = 0;
   Object? fail;
 
@@ -30,6 +31,7 @@ class _Remover implements RecordingRemover {
   Future<RemoveResult> remove(String sessionId, RecordingFootprint fp) async {
     if (fail != null) throw fail!;
     removed.add(sessionId);
+    removedFootprints.add(fp.names);
     return RemoveResult(
       deleted: skipped > 0 ? 0 : fp.names.length,
       skipped: skipped,
@@ -799,5 +801,107 @@ void main() {
     expect(text.contains('content://'), isFalse);
     expect(text.contains('file://'), isFalse);
     expect(text.contains('http'), isFalse);
+  });
+
+  group('recording.keepOnDevice', () {
+    CleanupSettings from({bool? keep, int keepDays = 1}) =>
+        CleanupSettings.fromDocs(
+          {'enabled': true, 'keepDays': keepDays},
+          null,
+          keep == null ? null : {'keepOnDevice': keep},
+        );
+
+    Future<void> full() =>
+        r.record('s1', youtubeSeconds: 1800, liveVideoId: 'live1');
+
+    test('ON (or no value) keeps the kept days, as before', () async {
+      for (final keep in [true, null]) {
+        final s = from(keep: keep, keepDays: 3);
+        expect(s.keepOnDevice, isTrue);
+        expect(s.keepDays, 3);
+      }
+      r.settings = from(keep: true);
+      await full();
+      await r.cleanup.run();
+      expect(r.remover.removed, isEmpty);
+      r.clock.add(const Duration(days: 2));
+      await r.cleanup.run();
+      expect(r.remover.removed, ['s1']);
+    });
+
+    test('OFF deletes as soon as YouTube has verified, not before', () async {
+      r.settings = from(keep: false, keepDays: 30);
+      expect(r.settings.keepDays, 0);
+      await full();
+      r.verifyFail = true;
+      await r.cleanup.run();
+      expect(r.remover.removed, isEmpty);
+      r.verifyFail = false;
+      r.clock.add(const Duration(hours: 2));
+      await r.cleanup.run();
+      expect(r.remover.removed, ['s1']);
+      expect((await r.rec('s1'))!.deletedAt, isNotNull);
+    });
+
+    test('OFF never deletes a recording YouTube does not have in full',
+        () async {
+      r.settings = from(keep: false);
+      await r.record('s1', youtubeSeconds: 1000, liveVideoId: 'live1');
+      await r.cleanup.run();
+      r.clock.add(const Duration(days: 5));
+      await r.cleanup.run();
+      expect(r.verifyCalls, isEmpty);
+      expect(r.remover.removed, isEmpty);
+      await r.record('s2', youtubeSeconds: 1800, liveVideoId: 'live2');
+      r.answers['live2'] = _ok('live2', 600);
+      await r.cleanup.run();
+      expect(r.remover.removed, isEmpty);
+      expect((await r.rec('s2'))!.verifiedAt, isNull);
+    });
+
+    test('OFF while a live is on, or with a failed job, keeps the files',
+        () async {
+      r.settings = from(keep: false);
+      await full();
+      r.recordingNow = true;
+      await r.cleanup.run();
+      expect(r.remover.removed, isEmpty);
+      r.recordingNow = false;
+      r.jobs = [_job('s1', videoIds: ['p1'], done: false, last: UploadPartState.failed)];
+      await r.cleanup.run();
+      expect(r.remover.removed, isEmpty);
+    });
+
+    test('OFF deletes only the exact names recorded for that session',
+        () async {
+      r.settings = from(keep: false);
+      await r.record('s1',
+          youtubeSeconds: 1800,
+          liveVideoId: 'live1',
+          names: ['MAXCOM-2026-11-06-1140-siaran-01.mp4']);
+      await r.record('s2',
+          youtubeSeconds: 1800,
+          liveVideoId: 'live2',
+          names: ['MAXCOM-2026-11-06-1140-siaran-02.mp4']);
+      r.jobs = [_job('s2', videoIds: ['p1'], done: false, last: UploadPartState.queued)];
+      await r.cleanup.run();
+      expect(r.remover.removed, ['s1']);
+      expect(r.remover.removedFootprints, [
+        ['MAXCOM-2026-11-06-1140-siaran-01.mp4'],
+      ]);
+    });
+
+    test('OFF with the clean-up feature off still deletes nothing', () async {
+      r.settings = CleanupSettings.fromDocs(
+        {'enabled': false, 'keepDays': 1},
+        null,
+        {'keepOnDevice': false},
+      );
+      await full();
+      await r.cleanup.run();
+      r.clock.add(const Duration(days: 5));
+      await r.cleanup.run();
+      expect(r.remover.removed, isEmpty);
+    });
   });
 }

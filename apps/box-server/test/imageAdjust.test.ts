@@ -267,6 +267,45 @@ describe('through the API', () => {
     expect(stored.assetId).toEqual(ref);
   });
 
+  it('a pengumuman picture: round trip, derived id on the kiosk, asset kept after delete, text-only unchanged', async () => {
+    const { app, admin, upload } = await boot();
+    const id = await upload(MAXCOM);
+    const note = { title: 'Notis gambar', body: 'Isi', from: '2000-01-01', to: '2999-12-31', priority: 1 };
+    const ref = { asset: id, crop: { x: 0.03, y: 0.05, w: 0.94, h: 0.94 } };
+    const put = await app.inject({ method: 'PUT', url: '/api/content/pengumuman/n1', headers: admin.headers, payload: { ...note, pictureAssetId: ref } });
+    expect(put.statusCode).toBe(201);
+    expect(put.json().item.pictureAssetId).toEqual(ref);
+    const legacy = await app.inject({ method: 'PUT', url: '/api/content/pengumuman/n2', headers: admin.headers, payload: { ...note, title: 'Notis id', pictureAssetId: id } });
+    expect(legacy.statusCode).toBe(201);
+    const plain = await app.inject({ method: 'PUT', url: '/api/content/pengumuman/n3', headers: admin.headers, payload: { ...note, title: 'Notis teks' } });
+    expect(plain.statusCode).toBe(201);
+
+    const read = (await app.inject({ method: 'GET', url: '/api/content/pengumuman/n1', headers: admin.headers })).json().item;
+    expect(read.pictureAssetId).toEqual(ref);
+    const kiosk = (await app.inject({ method: 'GET', url: '/api/kiosk/content' })).json().content.pengumuman as { id: string; pictureAssetId?: string }[];
+    const n1 = kiosk.find((p) => p.id === 'n1')!;
+    const n2 = kiosk.find((p) => p.id === 'n2')!;
+    const n3 = kiosk.find((p) => p.id === 'n3')!;
+    expect(n1.pictureAssetId).toMatch(ID);
+    expect(n1.pictureAssetId).not.toBe(id);
+    expect(n2.pictureAssetId).toBe(id);
+    expect('pictureAssetId' in n3).toBe(false);
+    expect((await app.inject({ method: 'GET', url: `/assets/${n1.pictureAssetId}` })).statusCode).toBe(200);
+
+    // Replace then remove the picture: the field goes away, the original asset is not pruned.
+    const removed = await app.inject({ method: 'PUT', url: '/api/content/pengumuman/n1', headers: admin.headers, payload: note });
+    expect(removed.statusCode).toBe(200);
+    expect('pictureAssetId' in removed.json().item).toBe(false);
+    const del = await app.inject({ method: 'DELETE', url: '/api/content/pengumuman/n2', headers: admin.headers });
+    expect(del.statusCode).toBe(204);
+    expect((await app.inject({ method: 'GET', url: `/assets/${id}` })).statusCode).toBe(200);
+    // A picture that is not stored is refused (409), and a bad adjustment is refused (400).
+    const missing = await app.inject({ method: 'PUT', url: '/api/content/pengumuman/n4', headers: admin.headers, payload: { ...note, pictureAssetId: 'e'.repeat(64) } });
+    expect(missing.statusCode).toBe(409);
+    const badCrop = await app.inject({ method: 'PUT', url: '/api/content/pengumuman/n4', headers: admin.headers, payload: { ...note, pictureAssetId: { asset: id, crop: { x: 0, y: 0, w: 1e9, h: 1e9 } } } });
+    expect(badCrop.statusCode).toBe(400);
+  });
+
   it('refuses huge or wrong adjustments and a missing source (400 / 409)', async () => {
     const { app, admin, upload } = await boot();
     const id = await upload(MAXCOM);

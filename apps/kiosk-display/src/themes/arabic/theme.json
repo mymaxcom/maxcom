@@ -5,6 +5,6 @@
   "contract": 1,
   "base": "arabic",
   "defaults": {
-    "semua": { "arFont": "hafs" }
+    "semua": { "arFont": "hafs", "goldOutline": "on" }
   }
 }

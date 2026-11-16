@@ -40,7 +40,7 @@ function player(): BeepPlayer {
   return defaultPlayer;
 }
 
-/** Short tone for the countdown start and the iqamah end warning; long tone when the time enters. */
+/** Short tone for the countdown start, the iqamah end warning and imsak; long tone when the time enters. */
 export function kindFor(beep: NonNullable<KioskState['beep']>): BeepKind {
   return beep === 'masukWaktu' ? 'long' : 'short';
 }
@@ -52,7 +52,8 @@ export function kindFor(beep: NonNullable<KioskState['beep']>): BeepKind {
  */
 export function useBeep(state: KioskState, settings: Settings, impl?: BeepPlayer): void {
   const last = useRef<string | null>(null);
-  const key = state.beep ? `${state.beep}@${state.phase}@${state.phaseEndsAt?.getTime() ?? 0}` : null;
+  // The date keeps the imsak beep (no phase end) distinct from one day to the next.
+  const key = state.beep ? `${state.beep}@${state.phase}@${state.phaseEndsAt?.getTime() ?? 0}@${state.today?.date ?? ''}` : null;
   useEffect(() => {
     if (!key || key === last.current || isPreview()) return;
     last.current = key;

@@ -87,6 +87,7 @@ class SettingsSearchIndex {
       _leaves(f.defaults, '', (path, name) {
         if (name == 'suspendedAt') return;
         if (!seesSystem && fieldMetaTable[f.key]?[path]?['scope'] == 'system') return;
+        if (fieldMetaTable[f.key]?[path]?['hidden'] == true) return;
         final label = settingLabelsMs[name];
         if (label != null) fields.add(label);
         choices.addAll(choiceLabelsMs[name]?.values ?? const []);

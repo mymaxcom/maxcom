@@ -5,7 +5,11 @@
 //
 // default-1.jpg: warm dusk, brighter (auto tone must shade it more).
 // default-2.jpg: deep night, darker (auto tone shades it less, accent from the moon).
-// Both 1920x1080, target < 400 KB.
+// default-2-plain.jpg: the same night with no moon and no moon glow, shown over default-2 on the Default look's content
+//   screens so the moon never sits behind the enlarged text there (the moon stays on Biasa and the prayer screens).
+// All 1920x1080, target < 400 KB.
+//
+//   node scripts/make-backgrounds.mjs [name,name...]   (default: all three; e.g. default-2-plain renders only that one)
 
 import { mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -116,7 +120,7 @@ function duskScene() {
   </svg>`;
 }
 
-function nightScene() {
+function nightScene({ moon = true } = {}) {
   let stars = '';
   let seed = 7;
   const rnd = () => {
@@ -152,9 +156,9 @@ function nightScene() {
   <rect width="${W}" height="${H}" fill="url(#sky)"/>
   <rect width="${W}" height="${H}" fill="url(#lattice)"/>
   ${stars}
-  <ellipse cx="1430" cy="300" rx="420" ry="320" fill="url(#moonglow)"/>
+  ${moon ? `<ellipse cx="1430" cy="300" rx="420" ry="320" fill="url(#moonglow)"/>
   <mask id="crescent"><circle cx="1430" cy="300" r="78" fill="#fff"/><circle cx="1462" cy="272" r="70" fill="#000"/></mask>
-  <circle cx="1430" cy="300" r="78" fill="#ffe3b0" mask="url(#crescent)"/>
+  <circle cx="1430" cy="300" r="78" fill="#ffe3b0" mask="url(#crescent)"/>` : ''}
   <rect y="560" width="${W}" height="320" fill="url(#horizon)"/>
   ${silhouette('#061016')}
   </svg>`;
@@ -179,6 +183,10 @@ async function renderJpeg(page, svg, file) {
 mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
-await renderJpeg(page, duskScene(), resolve(outDir, 'default-1.jpg'));
-await renderJpeg(page, nightScene(), resolve(outDir, 'default-2.jpg'));
+const SCENES = { 'default-1': () => duskScene(), 'default-2': () => nightScene(), 'default-2-plain': () => nightScene({ moon: false }) };
+const only = process.argv[2] ? process.argv[2].split(',') : Object.keys(SCENES);
+for (const name of only) {
+  if (!SCENES[name]) throw new Error(`unknown background ${name}`);
+  await renderJpeg(page, SCENES[name](), resolve(outDir, `${name}.jpg`));
+}
 await browser.close();

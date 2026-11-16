@@ -12,13 +12,13 @@ export function arabLookFor(
 }
 
 /**
- * below | beside | hidden. Tetapan off (showMalay false, or the ayat mode without translation) is always 'hidden';
- * else the menu value; 'hidden' from the menu counts on arab-* screens only (the normal screens never ask).
+ * below | beside | hidden. Whether a translation shows is Tetapan's alone (showMalay, ayatCard.showTranslation): off
+ * is always 'hidden'. The menu only places a shown translation, below or beside; an old stored 'sembunyi' (the
+ * menu's former hide option, removed so one setting decides) counts as below.
  */
 export function tarjamahMode(style: Pick<ScreenStyle, 'tarjamah'>, tetapanShows: boolean): 'below' | 'beside' | 'hidden' {
   if (!tetapanShows) return 'hidden';
   if (style.tarjamah === 'sisi') return 'beside';
-  if (style.tarjamah === 'sembunyi') return 'hidden';
   return 'below';
 }
 

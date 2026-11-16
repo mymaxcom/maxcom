@@ -159,25 +159,11 @@ void main() {
     expect(k('test-source'), findsNothing);
   });
 
-  testWidgets('colour: Auto writes null, a swatch its colour, Lain with #12ab is red and blocks Simpan', (tester) async {
-    final h = await open(tester, 'autoTone', stored: {'override': '#F0C97A'});
-    await tester.tap(k('swatch-auto'));
-    await settle(tester);
-    expect(await saved(tester, h, 'autoTone'), {'override': null});
-
-    await reveal(tester, k('swatch-#FBEFD3'));
-    await tester.tap(k('swatch-#FBEFD3'));
-    await settle(tester);
-    await reveal(tester, k('swatch-custom'));
-    await tester.tap(k('swatch-custom'));
-    await settle(tester);
-    await tester.enterText(k('setting-override'), '#12ab');
-    await settle(tester);
-    expect(find.text('Tulis # diikuti 6 aksara, contoh #F6E7B8'), findsOneWidget);
-    expect(tester.widget<FilledButton>(save).enabled, isFalse);
-    await tester.enterText(k('setting-override'), '#12AB34');
-    await settle(tester);
-    expect(await saved(tester, h, 'autoTone'), {'override': '#12AB34'});
+  testWidgets('autoTone: the accent override is not offered (Ubah suai Warna aksen owns the accent)', (tester) async {
+    await open(tester, 'autoTone', stored: {'override': '#F0C97A'});
+    expect(k('swatch-auto'), findsNothing);
+    expect(k('setting-override'), findsNothing);
+    expect(find.text('Warna teks'), findsNothing);
   });
 
   testWidgets('audio: Tiada fail plus the box files; a tap writes the id; the list asks for audio only', (tester) async {
@@ -268,17 +254,68 @@ void main() {
 
     await open(tester, 'liveYoutube', roles: const ['admin', 'superadmin'], stored: {'relayFrom': 'phone'});
     await reveal(tester, k('lanjutan-card'));
-    expect(find.text('Tidak digunakan bila Telefon terus dipilih'), findsOneWidget);
-    expect(find.ancestor(of: find.text('Video ke YouTube'), matching: find.byType(IgnorePointer)), findsWidgets);
+    // relayFrom is hidden (planned): a stored 'phone' must not dim the card, no control could undo it.
+    expect(find.text('Tidak digunakan bila Telefon terus dipilih'), findsNothing);
+    expect(k('lanjutan-dim-note'), findsNothing);
   });
 
-  testWidgets('relayFrom: Telefon terus is drawn but cannot be chosen yet', (tester) async {
+  testWidgets('relayFrom is hidden from Tetapan (planned), the stored value untouched', (tester) async {
     await open(tester, 'liveYoutube');
-    await reveal(tester, k('setting-relayFrom-phone'));
-    expect(find.text('Tersedia dalam keluaran akan datang'), findsOneWidget);
-    await tester.tap(k('setting-relayFrom-phone'));
-    await settle(tester);
-    expect(tester.widget<FilledButton>(save).enabled, isFalse, reason: 'nothing changed');
+    expect(k('setting-relayFrom-phone'), findsNothing);
+    expect(k('setting-relayFrom-box'), findsNothing);
+  });
+
+  group('a setting another one switches off (disabledWhen)', () {
+    Future<ShellHarness> openWith(WidgetTester tester, String feature, Map<String, Map<String, Object?>> other) async {
+      final h = await pumpShell(tester, roles: const ['admin']);
+      for (final e in other.entries) {
+        h.settings[e.key] = {...(h.settings[e.key] as Map? ?? const {}), ...e.value};
+      }
+      h.container.invalidate(settingsProvider);
+      await settle(tester);
+      h.router.go('/settings/$feature');
+      await settle(tester);
+      return h;
+    }
+
+    test('the metadata names both sides', () {
+      expect(fieldMeta('recordingCleanup', 'keepDays')!.disabledWhen!.field, 'keepOnDevice');
+      expect(fieldMeta('recording', 'keepOnDevice')!.disabledWhen!.feature, 'recordingCleanup');
+    });
+
+    testWidgets('keepOnDevice off: the days field is dimmed with a note, its value untouched', (tester) async {
+      final h = await openWith(tester, 'recordingCleanup', {
+        'recording': {'keepOnDevice': false},
+        'recordingCleanup': {'keepDays': 7},
+      });
+      await reveal(tester, k('setting-note-keepDays'));
+      expect(find.textContaining('dipadam sebaik YouTube mengesahkannya'), findsOneWidget);
+      expect(find.ancestor(of: k('setting-keepDays'), matching: find.byType(IgnorePointer)), findsWidgets);
+      expect(tester.widget<FilledButton>(save).enabled, isFalse, reason: 'nothing edited');
+      expect(h.settings['recordingCleanup'], containsPair('keepDays', 7));
+    });
+
+    testWidgets('keepOnDevice on: the days field is a normal control', (tester) async {
+      await openWith(tester, 'recordingCleanup', {});
+      await reveal(tester, k('setting-keepDays'));
+      expect(k('setting-note-keepDays'), findsNothing);
+    });
+
+    testWidgets('clean-up off: the keepOnDevice switch is dimmed with a note', (tester) async {
+      await openWith(tester, 'recording', {
+        'recordingCleanup': {'enabled': false},
+      });
+      await reveal(tester, k('setting-note-keepOnDevice'));
+      expect(find.textContaining('selagi Pembersihan rakaman dimatikan'), findsOneWidget);
+      expect(find.ancestor(of: k('setting-keepOnDevice'), matching: find.byType(IgnorePointer)), findsWidgets);
+      expect(find.textContaining('Jika dimatikan, dipadam sebaik YouTube mengesahkannya', skipOffstage: false), findsOneWidget);
+    });
+
+    testWidgets('clean-up on: no note on keepOnDevice', (tester) async {
+      await openWith(tester, 'recording', {});
+      await reveal(tester, k('setting-keepOnDevice'));
+      expect(k('setting-note-keepOnDevice'), findsNothing);
+    });
   });
 
   testWidgets('phone and email fields use their keyboards', (tester) async {

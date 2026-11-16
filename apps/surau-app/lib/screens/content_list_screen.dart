@@ -309,7 +309,7 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
         title: str('title'),
         subtitle: range('from', 'to'),
         badges: [if (p != '1') chip(spec.field('priority').choiceLabelMs(p), gold: true)],
-        image: null, slot: ImageSlot.poster,
+        image: it['pictureAssetId'], slot: ImageSlot.pengumuman,
       );
     case 'ticker':
       return (title: str('text'), subtitle: range('from', 'to'), badges: const [], image: null, slot: ImageSlot.poster);

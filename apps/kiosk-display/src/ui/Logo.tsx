@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import maxcomMark from '../assets/brand/maxcom-mark.svg';
 import { imageWantsLightPlate } from './logoInk.ts';
 
 export interface SurauLogoProps {
@@ -28,8 +29,18 @@ interface Natural {
 }
 
 /**
- * The surau logo beside the name. Renders nothing without a URL, and hides itself for good (for that URL)
- * when the picture cannot be loaded: a missing logo never leaves a broken-image icon on the TV.
+ * The MAXCOM mark in the surau logo's place (theme round 2, rule 10): every screen has a logo left of the name, and a
+ * surau without one of its own (or whose picture cannot be loaded) gets this. It is drawn on its own light round
+ * plate so it reads on every theme, dark or light. It is not the surau's logo, so it carries no `data-role`: the health
+ * check never requires it.
+ */
+export function DefaultLogo({ class: cls }: { class?: string }) {
+  return <img class={`logo logo--maxcom${cls ? ` ${cls}` : ''}`} src={maxcomMark} alt="" aria-hidden="true" data-default="maxcom" decoding="async" />;
+}
+
+/**
+ * The surau logo beside the name. Without a URL, or once the picture has failed to load (for that URL), the MAXCOM
+ * mark stands in (DefaultLogo): a missing logo never leaves a broken-image icon or an empty place on the TV.
  *
  * Once the picture has decoded it carries two sizing hints for the CSS: `--logo-cap` (twice the bitmap's
  * pixel height, so a tiny file is never blown up into a blur) and `data-shape` ("wide" for a wordmark whose
@@ -40,7 +51,7 @@ export function SurauLogo({ src, class: cls }: SurauLogoProps) {
   const [failed, setFailed] = useState<string | null>(null);
   const [natural, setNatural] = useState<Natural | null>(null);
   useEffect(() => setFailed(null), [src]);
-  if (!src || failed === src) return null;
+  if (!src || failed === src) return <DefaultLogo class={cls} />;
   const n = natural && natural.src === src && natural.w > 0 && natural.h > 0 ? natural : null;
   return (
     <img

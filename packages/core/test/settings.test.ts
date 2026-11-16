@@ -78,7 +78,7 @@ describe('registry', () => {
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys).toHaveLength(54);
     expect(new Set(FEATURES.map((f) => f.group)).size).toBe(11);
-    expect(FEATURES.filter((f) => f.locked)).toHaveLength(9);
+    expect(FEATURES.filter((f) => f.locked)).toHaveLength(10);
   });
   it('DAY_KEYS and minutesFor', () => {
     expect(DAY_KEYS[5]).toBe('jumaat');

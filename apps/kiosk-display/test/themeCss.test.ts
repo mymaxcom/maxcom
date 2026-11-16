@@ -15,7 +15,7 @@ function rule(css: string, sel: string): string {
 
 it('every fitted card text also follows --scale', () => {
   const fits = content.match(/font-size:[^;]*var\(--fit[^;]*;/g) ?? [];
-  expect(fits.length).toBe(13);
+  expect(fits.length).toBe(14); // + the four-fund tabung name (theme round 2, maximise the screen)
   for (const d of fits) expect(d, d).toContain('var(--scale, 1)');
 });
 it('the phase title and sub line follow --scale; the big countdown and the clock do not', () => {

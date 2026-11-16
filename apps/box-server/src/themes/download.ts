@@ -35,7 +35,8 @@ export const STARTER_CSS = `/* MAXCOM theme file, contract 1.
 
    Screens (data-screen on the stage): biasa, azan, masuk-waktu, iqamah, solat, jumaat, tiada-data, live, poster, kuliah,
    program, hadis, zikir, tilawah, pengumuman, takwim, tabung, ayat, arab-ayat, arab-hadis, arab-zikir.
-   Other hooks: data-phase, data-card, data-kind, data-live, data-live-layout, data-harakat, data-align, data-lang.
+   Other hooks: data-phase, data-card, data-kind, data-live, data-live-layout, data-harakat, data-align, data-lang,
+   data-picture (a background picture is under the text), data-gold (the gold outline on large text: on or off).
    Regions: .region-main, .region-prayers, .region-clock, .region-brand, .region-ticker, .region-live-strip.
    Arabic text: .arab, .arab-tarjamah.
    Variables the menu sets: --bg-image, --bg-fit, --bg-size, --bg-pos, --shade, --accent, --text, --font, --scale.

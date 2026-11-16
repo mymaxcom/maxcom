@@ -97,17 +97,7 @@
 .stage[data-template='colourful'] .card--wide { right: 0; }
 .stage[data-template='colourful'] .card:not(.card--poster) { border-left: 0.5rem solid #ff7aa2; }
 .stage[data-template='colourful'] .card__tag { color: var(--accent); }
-.stage[data-template='colourful'] .card--kuliah { padding: 2rem 2.6rem; gap: 2.4rem; }
-.stage[data-template='colourful'] .kuliah__photo { width: 14.5rem; height: 14.5rem; }
-.stage[data-template='colourful'] .kuliah__kitab { width: 9.4rem; height: 13.2rem; }
-.stage[data-template='colourful'] .kuliah__body { gap: 0.5rem; }
 .stage[data-template='colourful'] .card__tag { font-size: 1.3rem; }
-.stage[data-template='colourful'] .kuliah__when { font-size: 1.6rem; }
-.stage[data-template='colourful'] .kuliah__when b { font-size: 1.8rem; }
-.stage[data-template='colourful'] .kuliah__name { font-size: 3.3rem; }
-.stage[data-template='colourful'] .kuliah__topic { font-size: 2.1rem; }
-.stage[data-template='colourful'] .kuliah__meta { font-size: 1.6rem; }
-.stage[data-template='colourful'] .kuliah__next li { font-size: 1.45rem; }
 .stage[data-template='colourful'] .pengumuman__title { font-size: calc(3.2rem * var(--fit, 1) * var(--scale, 1)); }
 .stage[data-template='colourful'] .pengumuman__body { font-size: calc(2.1rem * var(--fit, 1) * var(--scale, 1)); max-width: 58rem; }
 .stage[data-template='colourful'] .screen--main .ticker { height: 2.8rem; }
@@ -146,7 +136,6 @@
 .stage[data-template='colourful'] .pcell__time { grid-column: 2; grid-row: 1 / 3; margin: 0; font-size: 3.3rem; }
 .stage[data-template='colourful'] .pbar .pcell.is-minor .pcell__time { padding-top: 0; font-size: 2.5rem; opacity: 0.88; }
 .stage[data-template='colourful'] .pbar .pcell.is-minor .pcell__label { font-size: 1.15rem; opacity: 0.85; }
-.stage[data-template='colourful'] .pcell__cd { grid-column: 1; grid-row: 2; justify-self: start; margin: 0.35rem 0 0; font-size: 1.15rem; padding: 0.22rem 0.75rem; }
 .stage[data-template='colourful'] .pbar .pcell[data-prayer='imsak'] { --cell-a: #4b4fb8; --cell-b: #33378f; }
 .stage[data-template='colourful'] .pbar .pcell[data-prayer='subuh'] { --cell-a: #2f74c8; --cell-b: #1d4f94; }
 .stage[data-template='colourful'] .pbar .pcell[data-prayer='syuruk'] { --cell-a: #d98a1e; --cell-b: #a9620c; }
@@ -164,7 +153,6 @@
 }
 .stage[data-template='colourful'] .pbar .pcell.is-current .pcell__label { color: var(--cell-b); opacity: 1; font-size: 1.45rem; }
 .stage[data-template='colourful'] .pbar .pcell.is-current .pcell__time { font-size: 4rem; opacity: 1; }
-.stage[data-template='colourful'] .pbar .pcell.is-current .pcell__cd { background: var(--cell-b); color: #ffffff; }
 /* No card: the two blocks grow into hero size in the middle of the left side. */
 .stage[data-template='colourful'] .screen--main.is-idle {
   grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
@@ -248,18 +236,6 @@
 .stage[data-template='colourful'][data-dim='true'] .phase__centre { background: rgb(255 255 255 / 0.04); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08); text-shadow: none; }
 .stage[data-template='colourful'][data-dim='true'] .pbar.is-dimmed { opacity: 0.28; }
 .stage[data-template='colourful'][data-dim='true'] .phase__head { opacity: 0.6; }
-/* A kitab without a cover image spells its title on the block: the padding moves to the block, so the clamp box
-   ends exactly at its last line and a fifth line never shows half-cut in the padding. */
-.stage[data-template='colourful'] .kuliah__kitab:not(.has-img) { padding: 0.6rem 0.5rem; }
-.stage[data-template='colourful'] .kuliah__kitab-title { padding: 0; font-size: 1.1rem; }
-/* Every layout template sizes the card differently from the default the row estimate (KuliahCard) was made for:
-   only whole following rows show. The list may shrink to the space left, and a row that no longer fits wraps
-   into a second column outside the card instead of being cut mid-line. */
-.stage[data-template='colourful'] .kuliah__next { flex: 0 1 auto; min-height: 0; flex-wrap: wrap; align-content: flex-start; overflow: hidden; }
-.stage[data-template='colourful'] .kuliah__next li { width: 100%; }
-/* The rule above the following rows belongs to the first row, so it goes with it when no row fits. */
-.stage[data-template='colourful'] .kuliah__next { border-top: 0; padding-top: 0; }
-.stage[data-template='colourful'] .kuliah__next li:first-child { border-top: 1px solid rgb(var(--accent-rgb) / 0.28); padding-top: 0.45rem; }
 /* The Islamic text cards are narrower here than the default's gutter-to-gutter wide card: the source and credit
    lines wrap rather than cut an attribution short. */
 .stage[data-template='colourful'] .ayat__credit { flex-wrap: wrap; white-space: normal; row-gap: 0.2rem; line-height: 1.25; }
@@ -374,6 +350,10 @@
   box-shadow: inset 0 0 0 0.26rem #ff8a3c;
 }
 .stage[data-template='colourful'][data-kind='content'] .kul-photo { border-color: var(--accent); }
+/* The notice fills its card (theme round 2, maximise the screen): the body's line may run as wide as the title's. */
+.stage[data-template='colourful'][data-kind='content'] .pengumuman__body { max-width: 76rem; }
 .stage[data-template='colourful'][data-kind='content'] .kul-label,
 .stage[data-template='colourful'][data-kind='content'] .kul-topic { color: var(--accent); }
 .stage[data-template='colourful'][data-screen='poster'] .poster-fill { filter: blur(2.396rem) brightness(0.5) saturate(1.2); }
+/* Theme round 2 (rules 4 to 6): the chip's countdown pill is white with the chip's own pink, as in the mockup. */
+.stage[data-template='colourful'][data-kind='content'] .next--chip { --chip-cd-bg: #ffffff; --chip-cd-ink: #c2305c; }

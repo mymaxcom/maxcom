@@ -41,8 +41,8 @@ function flushFrames(): void {
   });
 }
 
-function Probe({ k }: { k: string }) {
-  const { ref, fit } = useFit<HTMLDivElement>(k);
+function Probe({ k, max }: { k: string; max?: number }) {
+  const { ref, fit } = useFit<HTMLDivElement>(k, max === undefined ? {} : { max });
   return <div ref={ref} data-testid="probe" data-fit={String(fit)} />;
 }
 
@@ -167,5 +167,39 @@ describe('useFit: ResizeObserver path', () => {
     expect(frames.size).toBe(0);
     flushFrames();
     expect(fitOf(r)).toBe(0.7);
+  });
+});
+
+describe('useFit: max (a short text grows to fill its box)', () => {
+  it('starts at max and steps down only as far as the box needs', () => {
+    box.threshold = 1.3;
+    const r = render(<Probe k="a" max={1.6} />);
+    expect(fitOf(r)).toBe(1.3);
+  });
+
+  it('a text that fits at max stays at max; a long one ends where it would without max', () => {
+    box.threshold = 2;
+    const short = render(<Probe k="a" max={1.6} />);
+    expect(fitOf(short)).toBe(1.6);
+    cleanup();
+    box.threshold = 0.8;
+    const long = render(<Probe k="b" max={1.6} />);
+    expect(fitOf(long)).toBe(0.8);
+  });
+
+  it('a refit (the box opens or changes width) starts again from max, not from 1', () => {
+    box.threshold = 1.3;
+    const r = render(<Probe k="a" max={1.6} />);
+    box.threshold = 1.45;
+    box.w = 300;
+    act(() => FakeRO.all[0]!.fire());
+    flushFrames();
+    expect(fitOf(r)).toBe(1.45);
+  });
+
+  it('a max of 1 or less is no max', () => {
+    box.threshold = 2;
+    const r = render(<Probe k="a" max={0.5} />);
+    expect(fitOf(r)).toBe(1);
   });
 });

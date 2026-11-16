@@ -1,23 +1,13 @@
-import { instantOf } from '@surau/core';
 import type { KioskState, PrayerName, Settings } from '@surau/core';
 import { fmtPrayerTime, prayerLabel } from '../format.ts';
 import { PRAYER_AR, t } from '../i18n.ts';
 import type { Lang } from '../i18n.ts';
-import { Countdown } from './Countdown.tsx';
+import { cellOf, visibleNextOf, visiblePrayers } from './visibleNext.ts';
 
-const ORDER: readonly PrayerName[] = ['imsak', 'subuh', 'syuruk', 'zohor', 'asar', 'maghrib', 'isyak'];
 const MINOR = new Set<PrayerName>(['imsak', 'syuruk']);
 
 /** Phases during which the highlighted cell is the prayer in progress, not the next one. */
 const IN_PROGRESS = new Set<KioskState['phase']>(['azanCountdown', 'masukWaktu', 'khutbah', 'iqamah', 'solat', 'tarawih']);
-
-/** Static pill word per in-progress phase (i18n key); iqamah/azanCountdown count down instead. */
-const PHASE_WORD: Partial<Record<KioskState['phase'], string>> = {
-  masukWaktu: 'barAzan',
-  khutbah: 'barKhutbah',
-  solat: 'barSolat',
-  tarawih: 'barTarawih',
-};
 
 export interface PrayerBarProps {
   state: KioskState;
@@ -27,24 +17,16 @@ export interface PrayerBarProps {
   dimmed?: boolean;
   /** The compact strip of the content screens (`strip--compact`, the mockup's own markup, no `.pbar`). */
   compact?: boolean;
-  /** The countdown and phase tags inside the highlighted cell: the main (biasa) screen only (spec 6.12.5). */
-  cellCountdown?: boolean;
   /** The surau's IANA zone; Kuala Lumpur when omitted. */
   tz?: string;
 }
 
-/** The bar cell a state prayer name lands on: Friday 'jumaat' is the Zohor cell. */
-function cellOf(name: string | null | undefined): PrayerName | null {
-  if (!name) return null;
-  return (name === 'jumaat' ? 'zohor' : name) as PrayerName;
-}
-
 /**
- * Bottom frosted bar: seven cells. Outside a prayer the next prayer is filled with the
- * accent and counts down; while a prayer is in progress (azan, iqamah, solat, khutbah,
- * tarawih) that prayer keeps the highlight and its pill names the phase.
+ * Bottom frosted bar: seven cells (five or six when Tetapan hides Imsak or Syuruk). Outside a prayer the next prayer
+ * is filled with the accent; while a prayer is in progress (azan, iqamah, solat, khutbah, tarawih) that prayer keeps
+ * the highlight. No countdown inside the cell (theme round 2, rule 7): the big countdown and the chip say how long.
  */
-export function PrayerBar({ state, settings, lang, now, dimmed = false, compact = false, cellCountdown = false, tz = 'Asia/Kuala_Lumpur' }: PrayerBarProps) {
+export function PrayerBar({ state, settings, lang, now, dimmed = false, compact = false, tz = 'Asia/Kuala_Lumpur' }: PrayerBarProps) {
   const day = state.today;
   if (!day) return null;
   const pb = settings.prayerBar;
@@ -52,55 +34,15 @@ export function PrayerBar({ state, settings, lang, now, dimmed = false, compact 
   const inProgress = IN_PROGRESS.has(state.phase) && !!state.prayer;
   const currentCell: PrayerName | null = inProgress ? cellOf(state.prayer) : cellOf(state.next?.name);
 
-  const cells = ORDER.filter((p) => {
-    if (p === 'imsak' && pb.showImsak === false) return false;
-    if (p === 'syuruk' && pb.showSyuruk === false) return false;
-    return true;
-  });
+  const cells = visiblePrayers(settings);
 
   // The cell to highlight may be hidden (Imsak or Syuruk switched off): then the next
-  // VISIBLE prayer takes the highlight with its own countdown. Its instant comes from
-  // today's row; once that time has passed (tomorrow's Imsak is next after Isyak) the
-  // same wall-clock time a day later stands in until the day rolls over.
+  // VISIBLE prayer takes the highlight (visibleNextOf, the same prayer the headline and the chip name as next).
   let highlight: PrayerName | null = currentCell;
-  let standInAt: Date | null = null;
   if (currentCell && !cells.includes(currentCell)) {
-    const after = ORDER.slice(ORDER.indexOf(currentCell) + 1);
-    highlight = after.find((p) => cells.includes(p)) ?? null;
-    if (highlight) {
-      try {
-        let at = instantOf(day.date, day.times[highlight], tz);
-        if (at.getTime() <= now.getTime()) at = new Date(at.getTime() + 86_400_000);
-        standInAt = at;
-      } catch {
-        standInAt = null;
-      }
-    }
+    const vn = visibleNextOf({ next: { name: currentCell, at: now }, today: day, isJumaat: state.isJumaat }, settings, now, tz);
+    highlight = cellOf(vn?.name);
   }
-
-  const pill = () => {
-    if (highlight !== currentCell) {
-      return standInAt ? <Countdown to={standInAt} now={now} class="pcell__cd" /> : null;
-    }
-    if (!inProgress) {
-      return state.next ? <Countdown to={state.next.at} now={now} class="pcell__cd" /> : null;
-    }
-    switch (state.phase) {
-      case 'azanCountdown':
-        return <Countdown to={state.phaseEndsAt} now={now} class="pcell__cd" />;
-      case 'iqamah':
-        return (
-          <span class="pcell__cd pcell__cd--phase">
-            <span class="pcell__tag">{t('barIqamah', lang)}</span>
-            <Countdown to={state.phaseEndsAt} now={now} />
-          </span>
-        );
-      default: {
-        const key = PHASE_WORD[state.phase];
-        return key ? <span class="pcell__cd pcell__cd--word">{t(key, lang)}</span> : null;
-      }
-    }
-  };
 
   // The compact strip of the content screens (the mockup's DOM: .strip--compact > .pcell > .pcell-ar, .pcell-label,
   // .pcell-time). It is not the main bar: no `.pbar`, no in-cell countdown, so the main layout's rules never reach it.
@@ -146,7 +88,6 @@ export function PrayerBar({ state, settings, lang, now, dimmed = false, compact 
             <span class="pcell-ar arab">{PRAYER_AR[label]}</span>
             <span class="pcell__label" data-must="">{prayerLabel(label, lang)}</span>
             <span class="pcell__time num" data-must="">{fmtPrayerTime(day.times[p], timeFormat)}</span>
-            {isCurrent && cellCountdown ? pill() : null}
           </div>
         );
       })}

@@ -71,23 +71,20 @@ describe('kiosk layout contract', () => {
     expect(time).toBeLessThanOrEqual(3.1 * 0.85);
     expect(rem(rule(styles, '.pcell.is-minor .pcell__time'), 'font-size')).toBeLessThan(time);
     expect(rem(rule(styles, '.pcell__label'), 'font-size')).toBeLessThan(1);
-    // Label, time and countdown pill stack in flow (a column), each line box sized by its own font, so the pill
-    // can never be drawn over the digits whatever the face's metrics (the T95 drew it over them with fixed rows).
+    // Label and time stack in flow (a column), each line box sized by its own font, so nothing can be drawn over the
+    // digits whatever the face's metrics (the T95 drew a pill over them with fixed rows). No pill since theme round 2.
     const cell = rule(styles, '.pcell');
     expect(cell).toMatch(/display:\s*flex/);
     expect(cell).toMatch(/flex-direction:\s*column/);
     expect(cell).not.toMatch(/grid-template-rows/);
     const label = rule(styles, '.pcell__label');
     const timeRule = rule(styles, '.pcell__time');
-    const pill = rule(styles, '.pcell__cd');
     expect(label).toMatch(/line-height:\s*1;/);
     expect(timeRule).toMatch(/line-height:\s*1;/);
-    expect(rem(pill, 'margin-top')).toBeGreaterThan(0);
-    // Everything plus the gaps fits inside the bar: top padding, label, gap, time, gap, pill (font + padding).
+    expect(styles).not.toMatch(/\.pcell__cd/);
+    // Everything plus the gaps fits inside the bar: top padding, label, gap, time.
     const padTop = Number(cell.match(/padding:\s*([\d.]+)rem/)![1]);
-    const pillPad = pill.match(/padding:\s*([\d.]+)rem\s+[\d.]+rem\s+([\d.]+)rem/)!;
-    const pillH = rem(pill, 'font-size') + Number(pillPad[1]) + Number(pillPad[2]);
-    const total = padTop + rem(label, 'font-size') + rem(timeRule, 'margin-top') + time + rem(pill, 'margin-top') + pillH;
+    const total = padTop + rem(label, 'font-size') + rem(timeRule, 'margin-top') + time;
     expect(total).toBeLessThanOrEqual(h - 0.2);
     // Phase screens place the same bar at the same low position.
     const phaseBar = rule(styles, '.screen--phase .pbar');

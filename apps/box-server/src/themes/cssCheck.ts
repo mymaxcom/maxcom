@@ -44,7 +44,7 @@ const isBoxClass = (name: string): boolean => BOX_CLASS_TARGETS.includes(name) |
 /** The data-* hooks of the theme contract (and the guide) that a selector may read. */
 const ALLOWED_DATA_ATTRS = new Set([
   'data-screen', 'data-kind', 'data-phase', 'data-card', 'data-live', 'data-live-layout', 'data-harakat', 'data-align', 'data-lang', 'data-dim', 'data-pic',
-  'data-role', 'data-theme', 'data-template', 'data-bg', 'data-arfont', 'data-tarjamah',
+  'data-role', 'data-theme', 'data-template', 'data-bg', 'data-arfont', 'data-tarjamah', 'data-gold', 'data-picture',
 ]);
 /** Structural pseudo-classes (and :not of allowed simple selectors) a selector may use. */
 const ALLOWED_PSEUDO_CLASSES = new Set(['first-child', 'last-child', 'only-child', 'nth-child', 'nth-last-child', 'not', 'root']);

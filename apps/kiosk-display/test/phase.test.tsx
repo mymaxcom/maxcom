@@ -119,26 +119,27 @@ describe('Phase screens', () => {
   });
 });
 
-/** The highlighted bar cell (aria-current) and the text of its pill. */
+/** The highlighted bar cell (aria-current). No cell carries a countdown or a word (theme round 2, rule 7). */
 function current(r: ReturnType<typeof show>) {
   const cells = [...r.container.querySelectorAll('[data-prayer]')];
   const hot = cells.filter((c) => c.getAttribute('aria-current') === 'true');
   expect(hot.length).toBe(1);
   const cell = hot[0]!;
   expect(cell.classList.contains('is-current')).toBe(true);
-  return { prayer: cell.getAttribute('data-prayer'), pill: cell.querySelector('.pcell__cd')?.textContent ?? null };
+  expect(cell.querySelector('.pcell__cd, [role="timer"]')).toBeNull();
+  return { prayer: cell.getAttribute('data-prayer') };
 }
 
-/** The bar with its in-cell countdown on (the main screen's setting): the highlight and pill rules live in PrayerBar. */
+/** The bar on its own: the highlight rules live in PrayerBar. */
 function showBar(view: KioskView) {
-  return render(<PrayerBar state={view.state} settings={view.settings} lang={view.settings.language.lang === 'en' ? 'en' : 'ms'} now={view.now} tz={view.tz} cellCountdown />);
+  return render(<PrayerBar state={view.state} settings={view.settings} lang={view.settings.language.lang === 'en' ? 'en' : 'ms'} now={view.now} tz={view.tz} />);
 }
 
 describe('Prayer bar highlight during a phase', () => {
   it('the phase screens (hero kind) carry no countdown or tag inside the highlighted cell', () => {
     for (const hhmm of ['16:12', '16:20:10', '16:25', '16:35']) {
       const r = show(makeView('2026-11-03', hhmm));
-      expect(r.container.querySelector('.pbar .is-current')).toBeTruthy();
+      expect(r.container.querySelector('.pbar .is-current, .strip--compact .is-current')).toBeTruthy();
       expect(r.container.querySelector('.pcell__cd'), hhmm).toBeNull();
       cleanup();
     }
@@ -146,57 +147,50 @@ describe('Prayer bar highlight during a phase', () => {
 
   it('azanCountdown 16:12 highlights Asar and counts down to its time', () => {
     const r = showBar(makeView('2026-11-03', '16:12'));
-    expect(current(r)).toEqual({ prayer: 'asar', pill: '00:08:00' });
+    expect(current(r)).toEqual({ prayer: 'asar' });
   });
 
   it('masukWaktu 16:20:10 keeps Asar with the Azan word', () => {
     const r = showBar(makeView('2026-11-03', '16:20:10'));
-    expect(current(r)).toEqual({ prayer: 'asar', pill: 'Azan' });
+    expect(current(r)).toEqual({ prayer: 'asar' });
     expect(r.container.querySelector('[data-prayer="maghrib"]')!.getAttribute('aria-current')).toBeNull();
   });
 
-  it('iqamah 16:25 keeps Asar, not Maghrib, and the pill shows the iqamah remaining', () => {
+  it('iqamah 16:25 keeps Asar, not Maghrib', () => {
     const r = showBar(makeView('2026-11-03', '16:25'));
-    expect(current(r)).toEqual({ prayer: 'asar', pill: 'Iqamah00:05:00' });
+    expect(current(r)).toEqual({ prayer: 'asar' });
     expect(r.container.querySelector('[data-prayer="maghrib"]')!.getAttribute('aria-current')).toBeNull();
-    expect(r.container.querySelector('[data-prayer="asar"] .pcell__tag')!.textContent).toBe('Iqamah');
-    expect(r.container.querySelector('[data-prayer="asar"] [role="timer"]')!.textContent).toBe('00:05:00');
     cleanup();
     const r2 = showBar(makeView('2026-11-03', '16:29:45'));
-    expect(current(r2)).toEqual({ prayer: 'asar', pill: 'Iqamah00:00:15' });
+    expect(current(r2)).toEqual({ prayer: 'asar' });
   });
 
   it('solat 16:35 keeps Asar, not Maghrib, with a calm Solat word', () => {
     const r = showBar(makeView('2026-11-03', '16:35'));
-    expect(current(r)).toEqual({ prayer: 'asar', pill: 'Solat' });
+    expect(current(r)).toEqual({ prayer: 'asar' });
     expect(r.container.querySelector('[data-prayer="maghrib"]')!.getAttribute('aria-current')).toBeNull();
     expect(r.container.querySelector('[data-prayer="asar"] [role="timer"]')).toBeNull();
   });
 
   it('khutbah 2026-11-06 13:05 highlights the Jumaat (Zohor) cell', () => {
     const r = showBar(makeView('2026-11-06', '13:05'));
-    expect(current(r)).toEqual({ prayer: 'zohor', pill: 'Khutbah' });
+    expect(current(r)).toEqual({ prayer: 'zohor' });
     expect(r.container.querySelector('[data-prayer="zohor"] .pcell__label')!.textContent).toBe('Jumaat');
     expect(r.container.querySelector('[data-prayer="asar"]')!.getAttribute('aria-current')).toBeNull();
   });
 
   it('tarawih 20:50 highlights Isyak', () => {
     const r = showBar(makeView('2026-11-03', '20:50', { hijriMonth: 9 }));
-    expect(current(r)).toEqual({ prayer: 'isyak', pill: 'Tarawih' });
+    expect(current(r)).toEqual({ prayer: 'isyak' });
     expect(r.container.querySelector('[data-prayer="imsak"]')!.getAttribute('aria-current')).toBeNull();
   });
 
   it('syuruk 06:52 and isyraq 07:12 still highlight state.next (Syuruk, then Zohor)', () => {
     const r = showBar(makeView('2026-11-03', '06:52'));
-    expect(current(r)).toEqual({ prayer: 'syuruk', pill: '00:03:00' });
+    expect(current(r)).toEqual({ prayer: 'syuruk' });
     cleanup();
     const r2 = showBar(makeView('2026-11-03', '07:12'));
     expect(current(r2).prayer).toBe('zohor');
-  });
-
-  it('english pill words', () => {
-    const r = showBar(makeView('2026-11-03', '16:35', { settings: { language: { lang: 'en' } } }));
-    expect(current(r).pill).toBe('Prayer');
   });
 
   it('syuruk 06:52 with Syuruk hidden highlights Zohor and counts down to 1:00', () => {
@@ -204,8 +198,7 @@ describe('Prayer bar highlight during a phase', () => {
     const r = showBar(v);
     expect(r.container.querySelectorAll('[data-prayer]').length).toBe(6);
     expect(r.container.querySelector('[data-prayer="syuruk"]')).toBeNull();
-    // Zohor is 13:00 on the fixture day: 06:52 -> 13:00 is 6 h 08 min.
-    expect(current(r)).toEqual({ prayer: 'zohor', pill: '06:08:00' });
+    expect(current(r)).toEqual({ prayer: 'zohor' });
     // The big centre countdown still counts to Syuruk itself (the hero screen; its bar has no in-cell pill).
     cleanup();
     const app = show(v);
@@ -279,7 +272,7 @@ describe('surau name comes from settings.surauInfo', () => {
 
 describe('surau logo on the phase screens', () => {
   const LOGO = '/surau-logo?v=0123456789abcdef';
-  it('sits beside the name in the head when the bundle has one, and is absent otherwise', () => {
+  it('sits beside the name in the head when the bundle has one, else the MAXCOM mark (rule 10)', () => {
     const r = show(makeView('2026-11-03', '16:12', { logo: LOGO }));
     const head = r.container.querySelector('.phase__head .ident__head')!;
     expect(head.classList.contains('has-logo')).toBe(true);
@@ -289,7 +282,8 @@ describe('surau logo on the phase screens', () => {
     cleanup();
     const r2 = show(makeView('2026-11-03', '16:25'));
     expect(r2.container.querySelector('img[data-role="logo"]')).toBeNull();
-    expect(r2.container.querySelector('.phase__head .ident__head')!.classList.contains('has-logo')).toBe(false);
+    expect(r2.container.querySelector('.phase__head .ident__head')!.classList.contains('has-logo')).toBe(true);
+    expect(r2.container.querySelector('.phase__head .ident__head img.logo--maxcom')).toBeTruthy();
   });
 
   it('is shown on the no-data screen too and hides itself when the picture fails', async () => {

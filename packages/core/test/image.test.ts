@@ -107,6 +107,23 @@ describe('image refs in content items', () => {
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.errors.join()).toMatch(/photoAssetId/);
   });
+  it('a pengumuman takes an optional pictureAssetId (id or adjusted); absent stays text only', () => {
+    const base = { title: 'Notis', body: 'Isi', from: '2026-11-01', to: '2026-11-10', priority: 1 };
+    const none = validateContent('pengumuman', base);
+    expect(none.ok).toBe(true);
+    if (none.ok) expect('pictureAssetId' in JSON.parse(JSON.stringify(none.value))).toBe(false);
+    const plain = validateContent('pengumuman', { ...base, pictureAssetId: A });
+    expect(plain.ok).toBe(true);
+    if (plain.ok) expect((plain.value as { pictureAssetId: unknown }).pictureAssetId).toBe(A);
+    const adj = validateContent('pengumuman', { ...base, pictureAssetId: adjusted });
+    expect(adj.ok).toBe(true);
+    if (adj.ok) expect((adj.value as { pictureAssetId: unknown }).pictureAssetId).toEqual(adjusted);
+    const bad = validateContent('pengumuman', { ...base, pictureAssetId: 'not-an-id' });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.errors.join()).toMatch(/pictureAssetId/);
+    const badCrop = validateContent('pengumuman', { ...base, pictureAssetId: { asset: A, crop: { x: 0, y: 0, w: 9, h: 9 } } });
+    expect(badCrop.ok).toBe(false);
+  });
 });
 
 describe('surauInfo logo and showName', () => {

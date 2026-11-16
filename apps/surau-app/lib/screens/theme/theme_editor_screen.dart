@@ -135,7 +135,10 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
     final s = S.of(context);
     final e = _entry;
     if (e == null) return;
-    if (!await _confirm(s.themeApplyAllConfirm(_title()), s.themeApplyAll)) return;
+    // Screens other than this one with values of their own lose them (all-screens takes this screen's values): say so.
+    final others = e.skrin.entries.where((x) => x.key != _screen && x.value.isNotEmpty).length;
+    final question = others == 0 ? s.themeApplyAllConfirm(_title()) : s.themeApplyAllReplaces(_title(), others);
+    if (!await _confirm(question, s.themeApplyAll)) return;
     setState(() => _entry = applyToAll(e, _screen));
   }
 
@@ -224,7 +227,6 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
     final offset = utcOffsetOf(info);
     final entry = _entry;
     final now = bundle == null ? null : previewNowForScreen(_screen, bundle, utcOffsetMinutes: offset);
-    final packFonts = _packFontsOf(settings);
     final title = _title();
 
     if (entry == null) {
@@ -261,7 +263,7 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
           screen: _screen,
           onChange: _change,
           onPickPicture: _pickPicture,
-          packFonts: packFonts,
+          base: packBaseOf(settings, widget.theme),
           arabLooksOn: arabLooksOn(settings, widget.theme),
           readOnly: !canWrite,
           busyPicture: _picking,
@@ -364,13 +366,5 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
         },
       ),
     );
-  }
-
-  List<String> _packFontsOf(Map<String, dynamic> settings) {
-    final ts = settings['themeStyle'];
-    final packs = ts is Map ? ts['packs'] : null;
-    final p = packs is Map ? packs[widget.theme] : null;
-    final fonts = p is Map ? p['fonts'] : null;
-    return fonts is List ? [for (final f in fonts) if (f is String) f] : const [];
   }
 }

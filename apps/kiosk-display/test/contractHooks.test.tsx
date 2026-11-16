@@ -104,15 +104,16 @@ describe('contract v1 hooks on the screens', () => {
       expect(r.container.querySelector(sel), sel).toBeTruthy();
   });
 
-  it('the content shell: brand, clock, next chip and strip regions', () => {
+  it('the content shell: brand, clock, next chip and the card region; the strip on the text screens only (rule 1)', () => {
     const content = fixture({ posters: [{ ...base, id: 'po1', title: 'P', assetId: 'a'.repeat(64), days: ['umum'], order: 1 }] as never });
     const view = makeView('2026-11-03', '15:52');
     holder.view = view;
     holder.cv = { content, rotation: [], current: null, zikir: null, override: 'posters' };
     const r = render(<Main view={view} lang="ms" />);
-    for (const sel of ['.region-brand', '.region-clock[data-role="clock"]', '.region-next[data-role="next"]', '.region-prayers[data-role="prayers"]', '.region-main']) {
+    for (const sel of ['.region-brand', '.region-clock[data-role="clock"]', '.region-next[data-role="next"]', '.region-main']) {
       expect(r.container.querySelectorAll(sel).length, sel).toBe(1);
     }
+    expect(r.container.querySelectorAll('.region-prayers[data-role="prayers"]').length).toBe(0);
   });
 
   it('hadis and ayat cards carry the Arabic classes', () => {

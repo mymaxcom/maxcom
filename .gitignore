@@ -29,6 +29,9 @@ tools/live/
 auto.crt
 auto.key
 
+# Flutter golden failure output (generated on a failed run)
+apps/surau-app/test/goldens/failures/
+
 # Test TLS material made by scripts/gen-test-fixtures.mjs (test keys; never committed)
 apps/box-server/test/fixtures/test-box*.pfx
 apps/box-server/test/fixtures/test-box*-key.pem

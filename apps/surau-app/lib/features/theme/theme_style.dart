@@ -5,8 +5,10 @@
 // Values: bgImage (64-hex asset id), bgFit (penuh, regang, sederhana, kecil),
 // bgPos (kiri, tengah, kanan), shade (0..80), accent / text / harakat
 // (#rrggbb), font / arFont (id), scale (S, M, L, XL), align (kiri, tengah,
-// kanan), arScale (100..160), arLineHeight (16..24), tarjamah (bawah, sisi,
-// sembunyi).
+// kanan), arScale (100..160), arLineHeight (16..24), tarjamah (bawah, sisi).
+// 'sembunyi' was a tarjamah value (hide the translation): removed so Tetapan
+// alone decides whether a translation shows. A stored one is still valid (an
+// older box or app may hold it) and is dropped when the entry is read.
 
 import '../registry.g.dart';
 
@@ -17,7 +19,11 @@ typedef StyleMap = Map<String, Object>;
 const List<String> styleKeys = [
   'bgImage', 'bgFit', 'bgPos', 'shade', 'accent', 'text', 'font', 'scale',
   'align', 'arFont', 'arScale', 'harakat', 'arLineHeight', 'tarjamah',
+  'goldOutline',
 ];
+
+/// The themes that draw a thin gold outline on their large text ("Garis emas pada tajuk", on unless switched off).
+const List<String> goldOutlineThemes = ['default', 'oldschool', 'arabic'];
 
 final RegExp _hex6 = RegExp(r'^#[0-9A-Fa-f]{6}$');
 final RegExp _asset64 = RegExp(r'^[0-9a-f]{64}$');
@@ -55,6 +61,8 @@ String? styleValueProblem(String key, Object value) {
       return _intIn(value, 16, 24) ? null : 'Mesti nombor bulat 16 hingga 24';
     case 'tarjamah':
       return _oneOf(value, const ['bawah', 'sisi', 'sembunyi']) ? null : 'Pilihan tidak sah';
+    case 'goldOutline':
+      return _oneOf(value, const ['on', 'off']) ? null : 'Pilihan tidak sah';
     default:
       return 'Nilai tidak dikenali';
   }
@@ -69,6 +77,7 @@ StyleMap _cleanStyle(Object? raw) {
     if (v is double && v == v.truncate()) v = v.toInt();
     if (styleValueProblem(k, v) == null) out[k] = v;
   }
+  if (out['tarjamah'] == 'sembunyi') out.remove('tarjamah');
   return out;
 }
 
@@ -181,8 +190,11 @@ const int minDefaultShade = 25;
 /// The theme's own values (the twin of the `defaults` of its `theme.json`). Arabic Art declares no layer darkness
 /// (the kiosk wears 35 over a picture then) and starts from Uthmani Hafs.
 ThemeStyleEntry themeDefaultsOf(String theme) => theme == 'arabic'
-    ? const ThemeStyleEntry(semua: {'arFont': 'hafs'})
-    : ThemeStyleEntry(semua: {'shade': theme == 'default' ? defaultThemeShade : otherThemeShade});
+    ? const ThemeStyleEntry(semua: {'arFont': 'hafs', 'goldOutline': 'on'})
+    : ThemeStyleEntry(semua: {
+        'shade': theme == 'default' ? defaultThemeShade : otherThemeShade,
+        if (goldOutlineThemes.contains(theme)) 'goldOutline': 'on',
+      });
 
 /// The harakat colour is drawn only with Amiri Quran or Amiri (a marks-only copy of those fonts draws it; the Uthmani
 /// Hafs file may not be modified). Takes the values in force on the screen, the theme's own included.

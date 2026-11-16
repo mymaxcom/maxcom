@@ -55,7 +55,7 @@ export interface SyurukWarningSettings extends FeatureSettings { minutesBefore: 
 export interface IsyraqSettings extends FeatureSettings { minutesAfterSyuruk: number; durationMinutes: number }
 export interface HijriDateSettings extends FeatureSettings { adjustDays: number; switchAt: 'maghrib' | 'midnight' }
 export interface AutoToneSettings extends FeatureSettings { override: string | null }
-/** The TV presentation templates; 'default' is the original single-colour look (backgrounds and autoTone apply to it only). */
+/** The TV presentation templates; 'default' is the original single-colour look (autoTone applies to it only; backgrounds apply to every theme). */
 export const KIOSK_TEMPLATE_IDS = ['default', 'colourful', 'creative', 'oldschool', 'minimal', 'arabic'] as const;
 export type KioskTemplateId = (typeof KIOSK_TEMPLATE_IDS)[number];
 /** `templateId` is a built-in id or the name of an uploaded theme. */
@@ -191,7 +191,7 @@ export const FEATURES: readonly FeatureDef[] = [
   def('location', 'solat', true, true,
     { country: 'MY', timezone: 'Asia/Kuala_Lumpur', latitude: null, longitude: null, city: '' },
     'Lokasi surau', 'Surau location'),
-  def('prayerCalc', 'solat', false, true,
+  def('prayerCalc', 'solat', true, true,
     {
       method: 'auto',
       madhab: 'auto',

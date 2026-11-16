@@ -26,6 +26,9 @@ enum ImageSlot {
   takwim(aspect: 16 / 9, contain: true),
   penceramah(aspect: 1, circle: true),
   petugas(aspect: 1, circle: true),
+
+  /// The optional picture of a pengumuman: kept in its own shape.
+  pengumuman(aspect: null),
   kitab(aspect: 2 / 3),
 
   /// A kiosk background: the whole TV screen, the crop covers the frame.
@@ -51,6 +54,7 @@ ImageSlot slotForField(String kind, String field) => switch ((kind, field)) {
   ('programKhas', 'assetId') => ImageSlot.programKhas,
   ('takwim', 'assetId') => ImageSlot.takwim,
   ('petugas', 'photoAssetId') => ImageSlot.petugas,
+  ('pengumuman', 'pictureAssetId') => ImageSlot.pengumuman,
   _ => ImageSlot.poster,
 };
 

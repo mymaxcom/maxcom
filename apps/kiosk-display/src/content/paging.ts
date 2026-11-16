@@ -84,10 +84,13 @@ export function splitForPages(text: string, n: number): string[] {
  * sizes by). The estimate picks the size; this is the guarantee that no Quran or hadis line is ever cut.
  * No-op where layout is not measured (jsdom), and resets when `key` (the page) changes.
  */
-export function useFit<T extends HTMLElement>(key: string, opts: { paged?: boolean } = {}): { ref: RefObject<T | null>; fit: number; pages: number } {
+export function useFit<T extends HTMLElement>(key: string, opts: { paged?: boolean; max?: number } = {}): { ref: RefObject<T | null>; fit: number; pages: number } {
   const paged = opts.paged === true;
+  // `max` above 1 lets a short text start larger and fill its box (theme round 2, "maximise the screen"): the fit
+  // starts at `max` and steps down as before, so a long text ends where it always did.
+  const start = typeof opts.max === 'number' && opts.max > 1 ? opts.max : 1;
   const ref = useRef<T>(null);
-  const [fit, setFit] = useState(1);
+  const [fit, setFit] = useState(start);
   // Paged mode (long text): once the text will not fit at FIT_PAGED_MIN, it is split over `pages` pages (the card
   // cuts its text with splitForPages) and the fit starts again, so the text stays as large as the pages allow.
   const [pages, setPages] = useState(1);
@@ -95,9 +98,9 @@ export function useFit<T extends HTMLElement>(key: string, opts: { paged?: boole
   // until the first card reports in) or a template gives the band a different size; the fit starts again then.
   const [box, setBox] = useState(0);
   useLayoutEffect(() => {
-    setFit(1);
+    setFit(start);
     setPages(1);
-  }, [key]);
+  }, [key, start]);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
@@ -117,17 +120,32 @@ export function useFit<T extends HTMLElement>(key: string, opts: { paged?: boole
       if (!opened && !widthChanged) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        setFit(1);
+        setFit(start);
         setPages(1);
         setBox((n) => n + 1);
       });
     });
     ro.observe(el);
+    // The web fonts change the text's measure without changing the box: once they have loaded, fit again.
+    let alive = true;
+    const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+    if (fonts && fonts.status !== 'loaded') {
+      fonts.ready.then(() => {
+        if (!alive) return;
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          setFit(start);
+          setPages(1);
+          setBox((n) => n + 1);
+        });
+      }).catch(() => {});
+    }
     return () => {
+      alive = false;
       cancelAnimationFrame(frame);
       ro.disconnect();
     };
-  }, [key]);
+  }, [key, start]);
   const floor = paged ? FIT_PAGED_MIN : FIT_MIN;
   useLayoutEffect(() => {
     const el = ref.current;
@@ -137,7 +155,7 @@ export function useFit<T extends HTMLElement>(key: string, opts: { paged?: boole
       setFit(Math.round((fit - FIT_STEP) * 100) / 100);
     } else if (paged && pages < MAX_PAGES) {
       setPages(pages + 1);
-      setFit(1);
+      setFit(start);
     }
     // A paged card is checked after every render: the page on screen changes with the clock, not only with the key.
   }, paged ? undefined : [fit, key, box]);

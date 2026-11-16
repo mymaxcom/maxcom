@@ -9919,16 +9919,10 @@ abstract class S {
   /// **'Sisi'**
   String get themeTarjamahBeside;
 
-  /// No description provided for @themeTarjamahHide.
-  ///
-  /// In ms, this message translates to:
-  /// **'Sembunyi'**
-  String get themeTarjamahHide;
-
   /// No description provided for @themeTarjamahNote.
   ///
   /// In ms, this message translates to:
-  /// **'Sembunyi hanya untuk skrin Arab. Jika Tetapan menutup terjemahan, Tetapan diikut.'**
+  /// **'Tetapan menentukan sama ada terjemahan dipapar. Di sini hanya kedudukannya.'**
   String get themeTarjamahNote;
 
   /// No description provided for @themeAll.
@@ -10222,14 +10216,38 @@ abstract class S {
   /// No description provided for @themeSizeNote.
   ///
   /// In ms, this message translates to:
-  /// **'S ialah saiz sekarang. Tiada saiz lebih kecil supaya jelas dari 3 meter.'**
+  /// **'Skala di atas saiz asas; saiz asas hadis dan ayat dipilih di Tetapan. S ialah saiz sekarang, tiada saiz lebih kecil supaya jelas dari 3 meter.'**
   String get themeSizeNote;
+
+  /// No description provided for @themeBgNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ikut tema: gambar latar di Tetapan digunakan (atau gambar tema yang dimuat naik).'**
+  String get themeBgNote;
 
   /// No description provided for @themeAlign.
   ///
   /// In ms, this message translates to:
   /// **'Susunan kandungan'**
   String get themeAlign;
+
+  /// No description provided for @themeGoldOutline.
+  ///
+  /// In ms, this message translates to:
+  /// **'Garis emas pada tajuk'**
+  String get themeGoldOutline;
+
+  /// No description provided for @themeGoldOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hidup'**
+  String get themeGoldOn;
+
+  /// No description provided for @themeGoldOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mati'**
+  String get themeGoldOff;
 
   /// No description provided for @themeChangedBadge.
   ///
@@ -10272,6 +10290,12 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Guna rupa skrin ini untuk semua skrin tema {title}?'**
   String themeApplyAllConfirm(String title);
+
+  /// No description provided for @themeApplyAllReplaces.
+  ///
+  /// In ms, this message translates to:
+  /// **'Guna rupa skrin ini untuk semua skrin tema {title}? Pilihan sendiri bagi {n} skrin lain akan dipadam dan diganti dengan nilai skrin ini.'**
+  String themeApplyAllReplaces(String title, int n);
 
   /// No description provided for @themeResetScreen.
   ///

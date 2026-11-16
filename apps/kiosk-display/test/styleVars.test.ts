@@ -45,3 +45,7 @@ it('the Arabic controls', () => {
   expect(s.vars).toEqual({ '--ar-scale': '1.2', '--harakat': '#d9b25f', '--ar-lh': '1.9' });
   expect(s.attrs).toEqual({ 'data-arfont': 'amiri-quran', 'data-tarjamah': 'beside' });
 });
+it('the gold outline switch puts data-gold on the stage', () => {
+  expect(styleVars({ goldOutline: 'off' }, url).attrs).toEqual({ 'data-gold': 'off' });
+  expect(styleVars({ goldOutline: 'on' }, url).attrs).toEqual({ 'data-gold': 'on' });
+});

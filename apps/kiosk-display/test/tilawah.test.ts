@@ -29,7 +29,7 @@ const view = (offsetMin: number): KioskView =>
   makeView(date, minus(subuh, offsetMin), { settings: { tilawah: { enabled: true } } });
 
 function fakePlayer() {
-  return { start: vi.fn(), stop: vi.fn(), playing: () => false } satisfies Player;
+  return { start: vi.fn(), setVolume: vi.fn(), stop: vi.fn(), playing: () => false } satisfies Player;
 }
 interface P { view: KioskView; content: KioskContent | null; impl: Player }
 function Probe(p: P) {
@@ -67,6 +67,20 @@ describe('useTilawah', () => {
     expect(impl.start).toHaveBeenCalledTimes(1);
     unmount();
     await waitFor(() => expect(impl.stop).toHaveBeenCalledTimes(1));
+  });
+
+  it('a volume change while it plays applies the new volume without restarting the recitation', () => {
+    const impl = fakePlayer();
+    const c = content(avail);
+    const at = (vol: number, off: number) =>
+      makeView(date, minus(subuh, off), { settings: { tilawah: { enabled: true, volume: vol } } });
+    const { rerender } = render(el({ view: at(60, 13), content: c, impl }));
+    expect(impl.start).toHaveBeenCalledTimes(1);
+    expect(impl.setVolume).toHaveBeenLastCalledWith(60);
+    rerender(el({ view: at(25, 12), content: c, impl }));
+    expect(impl.start).toHaveBeenCalledTimes(1);
+    expect(impl.stop).not.toHaveBeenCalled();
+    expect(impl.setVolume).toHaveBeenLastCalledWith(25);
   });
 
   it('never starts when the surah is not cached', () => {
@@ -122,6 +136,21 @@ describe('createTilawahPlayer', () => {
     expect(main.src).toBe('/islamic/audio/Husary_64kbps/18/002.mp3');
     main.fire('ended');
     expect(p.playing()).toBe(false);
+  });
+
+  it('setVolume changes the playing ayat and the next ones, not the starting volume', () => {
+    vi.stubGlobal('Audio', FakeAudio);
+    const p = createTilawahPlayer({ base: '/islamic/audio', volume: 60 });
+    p.start('r', 1, 3);
+    const main = FakeAudio.all[0]!;
+    p.setVolume(20);
+    expect(main.volume).toBeCloseTo(0.2);
+    expect(main.src).toBe('/islamic/audio/r/1/001.mp3');
+    main.fire('ended');
+    expect(main.volume).toBeCloseTo(0.2);
+    p.stop();
+    p.start('r', 1, 3);
+    expect(main.volume).toBeCloseTo(0.2);
   });
 
   it('stop() pauses playback', () => {

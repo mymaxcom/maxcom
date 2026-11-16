@@ -140,6 +140,15 @@ Map<String, dynamic> _merge(FeatureDef f, Map<String, dynamic> box) {
   };
 }
 
+/// Every feature's values (with `enabled`), for fields another setting switches off.
+Map<String, Map<String, dynamic>> _othersOf(WidgetRef ref) {
+  final all = ref.watch(settingsProvider).value?.value;
+  return {
+    for (final f in features)
+      f.key: _merge(f, all?[f.key] is Map ? (all![f.key] as Map).cast<String, dynamic>() : const {}),
+  };
+}
+
 class _FeatureForm extends ConsumerStatefulWidget {
   const _FeatureForm({
     super.key,
@@ -456,6 +465,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
             onChanged: _set,
             lanjutanVisible: canSee(ref.watch(rolesProvider), 'system:read'),
             lanjutanKey: _lanjutanKey,
+            others: _othersOf(ref),
           ),
         if (_error != null && fieldError == null) ...[
           ErrorLine(_error!),

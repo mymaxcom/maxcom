@@ -1,5 +1,5 @@
 {
- "coreSourceHash": "fea08d7d375f589e814220e9d5a3e79f2d615835dbe9a151354144a07859c601",
+ "coreSourceHash": "fabbd536eb51ed940201d4de9b340be7c08cb1e510e56ad9272a9fcf52811641",
  "cases": [
   {
    "key": "prayerBar",
@@ -696,7 +696,7 @@
    "patch": {
     "enabled": false
    },
-   "ok": true
+   "ok": false
   },
   {
    "key": "prayerCalc",

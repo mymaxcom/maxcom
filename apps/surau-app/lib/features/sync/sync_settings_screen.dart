@@ -236,7 +236,7 @@ class _CloudFormState extends ConsumerState<_CloudForm> {
               label: settingLabelMs('dirtyCheckSeconds'),
               value: _dirtyCheck,
               meta: fieldMeta(cloudSyncKey, 'dirtyCheckSeconds')!,
-              help: settingHelpMs['dirtyCheckSeconds'],
+              help: settingHelpFor('dirtyCheckSeconds', en: Localizations.localeOf(context).languageCode == 'en'),
               readOnly: ro || _busy,
               padding: const EdgeInsets.symmetric(vertical: 10),
               onChanged: (v) => setState(() => _dirtyCheck = v as int),

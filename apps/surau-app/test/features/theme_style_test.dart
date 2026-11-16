@@ -36,9 +36,9 @@ void main() {
     expect(e.toJson()['skrin'], {'kuliah': {'font': 'jakarta', 'scale': 'S', 'align': 'kiri'}});
   });
   test('the theme default layer darkness mirrors theme.json', () {
-    expect(themeDefaultsOf('default').semua, {'shade': 55});
+    expect(themeDefaultsOf('default').semua, {'shade': 55, 'goldOutline': 'on'});
     expect(themeDefaultsOf('creative').semua, {'shade': 35});
-    expect(themeDefaultsOf('oldschool').semua, {'shade': 35});
+    expect(themeDefaultsOf('oldschool').semua, {'shade': 35, 'goldOutline': 'on'});
   });
   test('setValue edits one screen; null removes; an emptied screen disappears', () {
     var e = setValue(const ThemeStyleEntry(), 'kuliah', 'shade', 20);

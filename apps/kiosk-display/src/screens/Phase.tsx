@@ -25,6 +25,15 @@ function warningActive(view: KioskView): boolean {
   return state.phaseEndsAt.getTime() - now.getTime() <= secs * 1000;
 }
 
+/**
+ * The azan countdown on the whole screen (Tetapan: Kiraan detik azan > Skrin penuh). On unless the surau switched it off;
+ * an older box that does not send the value gets the default (on). The stage wears `data-azan-full` for it.
+ */
+export function azanFullOf(view: Pick<KioskView, 'state' | 'settings'>): boolean {
+  if (view.state.phase !== 'azanCountdown') return false;
+  return (view.settings.azanCountdown as { fullScreen?: unknown } | undefined)?.fullScreen !== false;
+}
+
 /** Full-screen prayer states. Nothing from the content layer renders here (anti-goal 1). */
 export function Phase({ view, lang }: PhaseProps) {
   const { state, settings, now, tz } = view;
@@ -33,17 +42,23 @@ export function Phase({ view, lang }: PhaseProps) {
   const prayer = state.prayer ? prayerLabel(state.prayer, lang) : '';
   const calm = CALM_PHASES.has(state.phase);
   const noData = state.phase === 'noData';
+  const azanFull = azanFullOf(view);
 
   let centre;
   switch (state.phase) {
-    case 'azanCountdown':
+    case 'azanCountdown': {
+      // Whole-screen version: the prayer name, a big countdown, then the azan time under it.
+      const key = state.prayer === 'jumaat' ? 'zohor' : state.prayer;
+      const hhmm = azanFull && key && state.today ? state.today.times[key as keyof typeof state.today.times] : null;
       centre = (
         <>
           <h1 class="phase__title">{t('azanIn', lang, { prayer })}</h1>
           <Countdown to={state.phaseEndsAt} now={now} class="phase__big" dataRole="countdown" />
+          {hhmm ? <div class="azanfull__at num">{t('azanAt', lang, { time: fmtPrayerTime(hhmm, timeFormat) })}</div> : null}
         </>
       );
       break;
+    }
     case 'masukWaktu': {
       const key = state.prayer === 'jumaat' ? 'zohor' : state.prayer;
       const hhmm = key && state.today ? state.today.times[key as keyof typeof state.today.times] : null;
@@ -117,9 +132,9 @@ export function Phase({ view, lang }: PhaseProps) {
   }
 
   return (
-    <div class={`screen screen--phase screen--${state.phase}`}>
+    <div class={`screen screen--phase screen--${state.phase}${azanFull ? ' screen--azanfull' : ''}`}>
       <div class="phase__head">
-        <div class={`ident__head region-brand${view.logo ? ' has-logo' : ''}`}>
+        <div class={`ident__head region-brand has-logo`}>
           <SurauLogo src={view.logo} class="ident__logo" />
           {nameShownOf(settings, view.logo) ? <div class="ident__name free-text">{surauNameOf(settings, lang)}</div> : null}
         </div>
@@ -131,7 +146,7 @@ export function Phase({ view, lang }: PhaseProps) {
         <div class="phase__plate">{centre}</div>
       </div>
       {noData ? null : <EmergencyBand view={view} lang={lang} />}
-      {noData ? null : <PrayerBar state={state} settings={settings} lang={lang} now={now} dimmed={calm} tz={tz} />}
+      {noData ? null : <PrayerBar state={state} settings={settings} lang={lang} now={now} dimmed={calm} compact={azanFull} tz={tz} />}
       {noData ? null : <SourceFooter view={view} lang={lang} />}
     </div>
   );

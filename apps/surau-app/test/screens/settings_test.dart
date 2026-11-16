@@ -61,7 +61,9 @@ void main() {
 
     // Open every group, then scroll to every feature row.
     await pumpAtSize(tester, h.app, GoldenSize.ipadMiniLandscape);
-    for (final g in ['skrin', 'kandungan', 'quran', 'audio', 'live', 'kewangan', 'jemaah', 'awan', 'keselamatan']) {
+    // A group whose features are all hidden is not drawn (e.g. jemaah while jemaahPage and calendarFeed are planned).
+    bool hasVisible(String g) => features.any((f) => f.group == g && !hiddenFeatures.contains(f.key));
+    for (final g in ['skrin', 'kandungan', 'quran', 'audio', 'live', 'kewangan', 'jemaah', 'awan', 'keselamatan'].where(hasVisible)) {
       final head = find.byKey(ValueKey('settings-group-$g'));
       await reveal(tester, head);
       await tester.tap(head);
@@ -77,7 +79,7 @@ void main() {
       if (find.descendant(of: row, matching: find.text('Mati')).evaluate().isNotEmpty) off.add(f.key);
       if (find.descendant(of: row, matching: find.text('Sentiasa hidup')).evaluate().isNotEmpty) locked++;
     }
-    expect(locked, 7, reason: 'prayerBar, clock, prayerSequenceSafety, zone, location, prayerSources, surauInfo; the Lanjutan features are hidden from an admin');
+    expect(locked, 8, reason: 'prayerBar, clock, prayerSequenceSafety, zone, location, prayerSources, prayerCalc, surauInfo; the Lanjutan features are hidden from an admin');
     expect(off, unorderedEquals(['firstAzanSubuh', 'tilawah', 'appLock', 'finance', 'tabungCard']), reason: 'the features with no settings are switches now; Kewangan and Kad tabung are off until switched on');
 
     await reveal(tester, find.text('Kiraan detik iqamah'));

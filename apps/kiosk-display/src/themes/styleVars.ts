@@ -15,7 +15,8 @@ const FIT: Record<NonNullable<ScreenStyle['bgFit']>, { fit: string; size: string
 };
 const POS: Record<NonNullable<ScreenStyle['bgPos']>, string> = { kiri: 'left center', tengah: 'center', kanan: 'right center' };
 const ALIGN: Record<NonNullable<ScreenStyle['align']>, string> = { kiri: 'left', tengah: 'center', kanan: 'right' };
-const TARJAMAH: Record<NonNullable<ScreenStyle['tarjamah']>, string> = { bawah: 'below', sisi: 'beside', sembunyi: 'hidden' };
+// An old stored 'sembunyi' (the removed hide option) places the translation below: Tetapan alone hides it.
+const TARJAMAH: Record<string, string> = { bawah: 'below', sisi: 'beside', sembunyi: 'below' };
 
 const rgb = (hex: string): string =>
   `${parseInt(hex.slice(1, 3), 16)} ${parseInt(hex.slice(3, 5), 16)} ${parseInt(hex.slice(5, 7), 16)}`;
@@ -70,7 +71,8 @@ export function styleVars(style: ScreenStyle, assetUrl: (id: string) => string |
   if (style.arScale !== undefined) vars['--ar-scale'] = String(style.arScale / 100);
   if (style.harakat !== undefined) vars['--harakat'] = style.harakat;
   if (style.arLineHeight !== undefined) vars['--ar-lh'] = String(style.arLineHeight / 10);
-  if (style.tarjamah !== undefined) attrs['data-tarjamah'] = TARJAMAH[style.tarjamah];
+  if (style.tarjamah !== undefined) attrs['data-tarjamah'] = TARJAMAH[style.tarjamah] ?? 'below';
+  if (style.goldOutline !== undefined) attrs['data-gold'] = style.goldOutline;
   return { vars, attrs, bgAssetId, packImageUrl };
 }
 

@@ -97,7 +97,7 @@ describe('the live screen (the live takes priority)', () => {
       fireEvent(video, new Event('playing'));
     });
     expect(r.getByTestId('live-strip').textContent).toContain('Bab Ikhlas dan Niat');
-    expect(r.getByTestId('live-next').textContent).toMatch(/Asar.*minit lagi/);
+    expect(r.getByTestId('live-next').textContent).toMatch(/Asar.*4:20.*00:30/);
     expect(r.container.querySelector('[data-role="clock"]')).toBeTruthy();
     expect(r.container.querySelectorAll('[data-prayer]').length).toBe(0);
     expect(r.container.querySelector('.pbar')).toBeNull();
@@ -193,7 +193,7 @@ describe('the live screen (the live takes priority)', () => {
     holder.live = { ...ON_AIR, kuliah: { get label(): string { throw new Error('bad'); }, penceramah: 'x', topic: null } } as LiveView;
     const r = renderLive(<App />);
     expect(r.queryByTestId('safe-screen')).toBeNull();
-    expect(r.getByTestId('live-next').textContent).toMatch(/Asar.*minit lagi/);
+    expect(r.getByTestId('live-next').textContent).toMatch(/Asar.*4:20.*00:30/);
     expect(r.container.querySelector('[data-role="clock"]')).toBeTruthy();
   });
 });

@@ -38,26 +38,40 @@ class CleanupSettings {
     this.enabled = true,
     this.keepDays = 1,
     this.allowPrivate = false,
+    this.keepOnDevice = true,
   });
 
-  /// [clean] is the `recordingCleanup` doc, [live] the `liveYoutube` doc. A
-  /// missing doc means the registry's defaults (on, 1 day, unlisted).
+  /// [clean] is the `recordingCleanup` doc, [live] the `liveYoutube` doc and
+  /// [recording] the `recording` doc. A missing doc means the registry's
+  /// defaults (on, 1 day, unlisted, keep on the device). `recording.keepOnDevice`
+  /// off means no waiting after verification: [keepDays] is then 0 (the
+  /// deletion still needs the verified upload, and `recordingCleanup.enabled`).
   factory CleanupSettings.fromDocs(
     Map<String, dynamic>? clean,
-    Map<String, dynamic>? live,
-  ) {
+    Map<String, dynamic>? live, [
+    Map<String, dynamic>? recording,
+  ]) {
     final days = clean?['keepDays'];
+    final keep = recording?['keepOnDevice'] != false;
     return CleanupSettings(
       enabled: clean == null ? true : clean['enabled'] == true,
-      keepDays: days is num && const [0, 1, 3, 7, 30].contains(days.toInt())
+      keepDays: !keep
+          ? 0
+          : days is num && const [0, 1, 3, 7, 30].contains(days.toInt())
           ? days.toInt()
           : 1,
       allowPrivate: live?['privacy'] == 'private',
+      keepOnDevice: keep,
     );
   }
 
   final bool enabled;
+
+  /// Days to keep a verified recording; 0 when `recording.keepOnDevice` is off.
   final int keepDays;
+
+  /// `recording.keepOnDevice`: false deletes as soon as YouTube has verified.
+  final bool keepOnDevice;
 
   /// The surau publishes its videos private, so private is not a reason to wait.
   final bool allowPrivate;

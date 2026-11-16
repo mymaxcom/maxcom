@@ -199,9 +199,10 @@ function buildPengumuman(src: Record<string, unknown>, errors: string[]): Conten
   const from = checkDate('from', src.from, errors);
   const to = checkDate('to', src.to, errors);
   const priority = checkInt('priority', src.priority, 1, 3, errors) as 1 | 2 | 3 | undefined;
+  const pictureAssetId = checkOptionalImage('pictureAssetId', src.pictureAssetId, 'pengumuman', errors);
   checkRange(from, to, errors);
   if (!title || !body || !from || !to || priority === undefined) return undefined;
-  return { title, body, from, to, priority } as ContentItemOf<'pengumuman'>;
+  return { title, body, from, to, priority, pictureAssetId } as ContentItemOf<'pengumuman'>;
 }
 
 function buildTicker(src: Record<string, unknown>, errors: string[]): ContentItemOf<'ticker'> | undefined {

@@ -16,12 +16,12 @@ export function ArabHadisScreen(props: CardProps) {
   const slot = useHadisSlot(props);
   // (a page of the Malay translation, once the layout pages a long hadis, has no Arabic: it still shows, on this screen)
   if (!slot || (slot.shown.ar === null && slot.shown.ms === '' && slot.text.body === '')) return null;
-  const { h, shown, text, grade, attribution, ref, fit, nPages, sub } = slot;
+  const { h, tier, shown, text, grade, attribution, ref, fit, nPages, sub } = slot;
   const showMalay = (view.settings.hadis as { showMalay?: unknown } | undefined)?.showMalay !== false;
   const mode = tarjamahMode(env.style, showMalay);
   const ms = nPages > 1 ? shown.ms : text.intro ? `${text.intro} ${text.body}` : text.body;
   return (
-    <article class="arab-hadis" data-card="hadis" data-item={h.id} ref={ref} style={`--fit:${fit}`}>
+    <article class={`arab-hadis is-len-${tier}`} data-card="hadis" data-item={h.id} ref={ref} style={`--fit:${fit}`}>
       {shown.ar !== null ? <Hk class="ah-ar" text={shown.ar} /> : null}
       {(mode !== 'hidden' || shown.ar === null) && ms !== '' ? <p class="ah-ms arab-tarjamah">{ms}</p> : null}
       {attribution || grade ? (

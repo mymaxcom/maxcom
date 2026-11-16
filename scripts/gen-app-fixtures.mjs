@@ -378,7 +378,7 @@ const VALID_ITEMS = {
     status: 'aktif',
     seriesId: 's1',
   },
-  pengumuman: { title: 'Gotong-royong', body: 'Sabtu ini selepas Subuh.', from: '2026-11-01', to: '2026-11-07', priority: 2 },
+  pengumuman: { title: 'Gotong-royong', body: 'Sabtu ini selepas Subuh.', from: '2026-11-01', to: '2026-11-07', priority: 2, pictureAssetId: ASSET_ID },
   ticker: { text: 'Selamat datang ke surau kami', from: '2026-11-01', to: '2026-11-30' },
   poster: { title: 'Poster Maulidur Rasul', assetId: ASSET_ID, days: ['umum', 'jumaat'], from: '2026-11-01', to: '2026-11-30', order: 1 },
   programKhas: {
@@ -404,7 +404,7 @@ const OPTIONAL = {
   penceramah: ['title', 'phone', 'photoAssetId'],
   kitab: ['author', 'coverAssetId'],
   kuliah: ['kitabId', 'topic', 'seriesId'],
-  pengumuman: [],
+  pengumuman: ['pictureAssetId'],
   ticker: [],
   poster: ['from', 'to'],
   programKhas: ['assetId', 'note'],
@@ -440,6 +440,7 @@ const EXTRA = {
   pengumuman: [
     ['from', '2026-11-08'], ['to', '2026-10-31'], ['priority', 1], ['priority', 3], ['priority', 0], ['priority', 4], ['priority', 1.5], ['priority', '2'],
     ['body', 'a'.repeat(2000)], ['body', 'a'.repeat(2001)], ['title', '   '],
+    ...imageCases('pictureAssetId'),
   ],
   ticker: [['text', 'a'.repeat(300)], ['text', 'a'.repeat(301)], ['from', '2026-12-01']],
   poster: [

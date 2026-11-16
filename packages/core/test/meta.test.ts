@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FEATURES } from '../src/features/registry.ts';
-import { validateFeatureSettings } from '../src/features/settings.ts';
+import { resolveSettings, validateFeatureSettings } from '../src/features/settings.ts';
 import {
   FEATURE_DESC, FIELD_META, HIDDEN_FEATURES, LANJUTAN_ROWS, ORDERED_FEATURES, SYSTEM_FEATURES, fieldMeta, isSystemField,
   patchNeedsSystemWrite,
@@ -18,6 +18,24 @@ const leafAt = (o: unknown, path: string): boolean => {
 };
 
 describe('field metadata', () => {
+  it('autoTone.override is hidden: the accent has one control, Ubah suai Warna aksen', () => {
+    expect(fieldMeta('autoTone', 'override')?.hidden).toBe(true);
+    const hidden = Object.entries(FIELD_META).flatMap(([f, t]) => Object.entries(t!).filter(([, m]) => m.hidden).map(([p]) => `${f}.${p}`));
+    expect(hidden.sort()).toEqual(['autoTone.override', 'liveYoutube.relayFrom', 'pengumuman.daysAhead', 'programKhas.daysAhead']);
+  });
+  it('hides the dead daysAhead windows, locks the local calculation on and caps the takwim rows at 3', () => {
+    // A notice and a special programme show by their own dates: nothing reads the window, so it is not offered.
+    expect(fieldMeta('pengumuman', 'daysAhead')?.hidden).toBe(true);
+    expect(fieldMeta('programKhas', 'daysAhead')?.hidden).toBe(true);
+    // The kuliah and tugasan windows are read, so they stay visible.
+    expect(fieldMeta('kuliahCard', 'daysAhead')?.hidden).not.toBe(true);
+    // prayerCalc always runs as the fallback: no switch, and a stored `enabled: false` is ignored.
+    expect(BY.get('prayerCalc')?.locked).toBe(true);
+    expect(resolveSettings({ prayerCalc: { enabled: false } }).prayerCalc.enabled).toBe(true);
+    expect(validateFeatureSettings('prayerCalc', { enabled: false }).ok).toBe(false);
+    // The card shows three rows at most (TakwimCard MAX_ROWS), so the chips stop there.
+    expect(fieldMeta('takwim', 'count')).toMatchObject({ ui: 'chips', choices: [1, 2, 3] });
+  });
   it('only names paths that exist in the feature defaults', () => {
     for (const [feature, table] of Object.entries(FIELD_META)) {
       const f = BY.get(feature as FeatureKey);
@@ -35,7 +53,13 @@ describe('field metadata', () => {
         const at = `${feature}.${path}`;
         expect(accepts(m.min!), `${at} min`).toBe(true);
         expect(accepts(m.max!), `${at} max`).toBe(true);
-        expect(accepts(m.min! - 1), `${at} below min`).toBe(false);
+        // A card duration slider starts at 5 s because a stored 0 plays 15 s without saying so; the rule still accepts 0.
+        if (path === 'durationSeconds') {
+          expect(m.min, `${at} min`).toBe(5);
+          expect(accepts(0), `${at} keeps a stored 0`).toBe(true);
+        } else {
+          expect(accepts(m.min! - 1), `${at} below min`).toBe(false);
+        }
         expect(accepts(m.max! + 1), `${at} above max`).toBe(false);
         expect((m.max! - m.min!) % m.step!, `${at} step`).toBe(0);
       }
@@ -58,7 +82,7 @@ describe('field metadata', () => {
     for (const c of ['default', 'colourful', 'creative', 'oldschool', 'minimal']) expect(validateFeatureSettings('kioskTemplate', { templateId: c }).ok, c).toBe(true);
     expect(isSystemField('kioskTemplate', 'templateId')).toBe(false);
     expect(FEATURE_DESC.kioskTemplate.ms).toContain('Setiap skrin boleh diubah suai');
-    expect(HIDDEN_FEATURES).toEqual(['themeStyle']);
+    expect(HIDDEN_FEATURES).toEqual(['themeStyle', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage']);
   });
 });
 

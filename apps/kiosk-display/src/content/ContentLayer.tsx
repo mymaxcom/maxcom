@@ -10,7 +10,6 @@ import type { Lang } from '../i18n.ts';
 import { num } from './assets.ts';
 import { AyatCard } from './cards/AyatCard.tsx';
 import { HadisCard } from './cards/HadisCard.tsx';
-import { KuliahCard } from './cards/KuliahCard.tsx';
 import { PengumumanCard } from './cards/PengumumanCard.tsx';
 import { ProgramKhasCard } from './cards/ProgramKhasCard.tsx';
 import { TabungCard } from './cards/TabungCard.tsx';
@@ -150,7 +149,6 @@ function renderCard(feature: SlotFeature, props: CardProps, env: ArabEnv): Compo
   const Body = screenBodyFor(feature);
   if (Body) return <Body {...props} />;
   switch (feature) {
-    case 'kuliahCard': return <KuliahCard {...props} />;
     case 'pengumuman': return <PengumumanCard {...props} />;
     case 'programKhas': return <ProgramKhasCard {...props} />;
     case 'takwim': return <TakwimCard {...props} />;

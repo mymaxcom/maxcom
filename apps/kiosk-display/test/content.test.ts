@@ -168,6 +168,14 @@ describe('assetIdsOf', () => {
     expect(assetIdsOf(rich)).toEqual([id('a'), id('b'), id('c'), id('d'), id('e')]);
   });
 
+  it('collects a notice picture (pengumuman bergambar) and skips a notice without one', () => {
+    const withNotice = {
+      ...content,
+      pengumuman: [{ id: 'a1', title: 'T', body: 'B', pictureAssetId: id('f') }, { id: 'a2', title: 'T', body: 'B' }, { id: 'a3', title: 'T', body: 'B', pictureAssetId: '../x.png' }],
+    } as unknown as Parameters<typeof assetIdsOf>[0];
+    expect(assetIdsOf(withNotice)).toEqual([id('f')]);
+  });
+
   it('is empty for content without pictures', () => {
     expect(assetIdsOf(content as unknown as Parameters<typeof assetIdsOf>[0])).toEqual([]);
   });

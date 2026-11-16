@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { klInstant, parseJakimCsv, resolveSettings } from '../src/index.ts';
 import type { KioskContent, KioskPoster, KioskProgramKhas, TilawahSlot } from '../src/index.ts';
-import { buildRotation, currentSlot, tilawahWindow, zikirWindow } from '../src/content/rotation.ts';
+import { buildRotation, currentSlot, kuliahOnScreen, tilawahWindow, zikirWindow } from '../src/content/rotation.ts';
 import type { Slot } from '../src/content/rotation.ts';
 
 const csv = readFileSync(fileURLToPath(new URL('./fixtures/SGR01-2026.csv', import.meta.url)), 'utf8');
@@ -116,6 +116,20 @@ describe('buildRotation', () => {
     expect(buildRotation(onlyBatal, s, now).some((x) => x.feature === 'kuliahCard')).toBe(true);
     const some = content({ kuliah: [k('far', '2026-11-20'), k('soon', '2026-11-10')] });
     expect(buildRotation(some, s, now).some((x) => x.feature === 'kuliahCard')).toBe(true);
+  });
+  it('one kuliah slot per kuliah (rule 11): today or the nearest first, up to today + kuliahCard.daysAhead (default 7)', () => {
+    const k = (id: string, date: string, time = '19:30') => ({ ...kuliah, id, date, time });
+    const c = content({ kuliah: [k('d4', '2026-11-07'), k('d0b', '2026-11-03', '21:00'), k('d0', '2026-11-03'), k('d1', '2026-11-04'), k('d8', '2026-11-11')] });
+    const ids = (set: ReturnType<typeof resolveSettings>, at = now) => buildRotation(c, set, at).filter((x) => x.feature === 'kuliahCard').map((x) => x.itemId);
+    expect(ids(s)).toEqual(['d0', 'd0b', 'd1', 'd4']);
+    expect(ids(resolveSettings({ kuliahCard: { daysAhead: 8 } }))).toEqual(['d0', 'd0b', 'd1', 'd4', 'd8']);
+    expect(ids(resolveSettings({ kuliahCard: { daysAhead: 1 } }))).toEqual(['d0', 'd0b', 'd1']);
+    // 90 minutes after its start a kuliah gives way to the next one.
+    expect(ids(s, klInstant('2026-11-03', '21:05'))).toEqual(['d0b', 'd1', 'd4']);
+    // Nothing still to come in the window: today's latest kuliah stays on until the day ends.
+    const late = content({ kuliah: [k('d0', '2026-11-03'), k('d0b', '2026-11-03', '21:00')] });
+    expect(buildRotation(late, s, klInstant('2026-11-03', '23:30')).filter((x) => x.feature === 'kuliahCard').map((x) => x.itemId)).toEqual(['d0b']);
+    expect(kuliahOnScreen(c.kuliah, s, now).map((x) => x.id)).toEqual(['d0', 'd0b', 'd1', 'd4']);
   });
   it('takwim needs a date today or later', () => {
     const t = (id: string, date: string) => ({ ...base, id, date, title: id });
@@ -232,6 +246,24 @@ describe('tilawahWindow', () => {
   it('azanCountdown disabled: ends at prayer time', () => {
     const off = resolveSettings({ tilawah: { enabled: true }, azanCountdown: { enabled: false } });
     expect(tilawahWindow(at('2026-11-06', minus(subuhFri, 5)), days, off, [sl])).toMatchObject({ endsAt: at('2026-11-06', subuhFri) });
+  });
+  it('a Subuh slot ends when the first Subuh azan starts (no overlap)', () => {
+    const file = 'ab'.repeat(32);
+    const fa = (mb: number) => resolveSettings({ tilawah: { enabled: true }, firstAzanSubuh: { enabled: true, minutesBefore: mb, audioFile: file } } as never);
+    const long: TilawahSlot = { ...sl, minutesBefore: 30 };
+    // First azan 20 min before Subuh: the recitation stops there, not at the countdown (10).
+    expect(tilawahWindow(at('2026-11-06', minus(subuhFri, 25)), days, fa(20), [long])).toMatchObject({ endsAt: at('2026-11-06', minus(subuhFri, 20)) });
+    expect(tilawahWindow(at('2026-11-06', minus(subuhFri, 20)), days, fa(20), [long])).toBeNull();
+    expect(tilawahWindow(at('2026-11-06', minus(subuhFri, 15)), days, fa(20), [long])).toBeNull();
+    // First azan at or after the countdown start: the countdown still ends it.
+    expect(tilawahWindow(at('2026-11-06', minus(subuhFri, 25)), days, fa(5), [long])).toMatchObject({ endsAt: at('2026-11-06', minus(subuhFri, 10)) });
+    // No file chosen: the first azan never plays, the window is unchanged.
+    const noFile = resolveSettings({ tilawah: { enabled: true }, firstAzanSubuh: { enabled: true, minutesBefore: 20, audioFile: null } } as never);
+    expect(tilawahWindow(at('2026-11-06', minus(subuhFri, 15)), days, noFile, [long])).toMatchObject({ endsAt: at('2026-11-06', minus(subuhFri, 10)) });
+    // A Zohor slot is not touched.
+    const zoh = timesOf('2026-11-06').zohor;
+    const z: TilawahSlot = { ...sl, days: ['daily'], before: 'zohor', minutesBefore: 30 };
+    expect(tilawahWindow(at('2026-11-06', minus(zoh, 20)), days, fa(20), [z])).toMatchObject({ endsAt: at('2026-11-06', minus(zoh, 10)) });
   });
   it('window fully inside azanCountdown yields nothing', () => {
     const tight: TilawahSlot = { ...sl, minutesBefore: 8 };

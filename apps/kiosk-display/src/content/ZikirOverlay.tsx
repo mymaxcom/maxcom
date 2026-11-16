@@ -7,6 +7,7 @@ import type { Lang } from '../i18n.ts';
 import { num } from './assets.ts';
 import { planHadisPages } from './cards/HadisCard.tsx';
 import { pageAt, useFit } from './paging.ts';
+import { useScale } from './scale.ts';
 
 export type ZikirWindow = NonNullable<ContentView['zikir']>;
 
@@ -62,7 +63,9 @@ export function useZikirSlot({ view, content, zikir }: ZikirOverlayProps): Zikir
   const dur = num(z.durationSeconds, 20) > 0 ? num(z.durationSeconds, 20) : 20;
   const cur = zikirAt(sorted, now, zikir, num(z.durationSeconds, 20), num(z.minutesAfterSolat, 10));
   const key = cur ? `${cur.item.id}|${cur.index}` : '';
-  const { ref, fit, pages } = useFit<HTMLDivElement>(key, { paged: true });
+  // The text size (Ubah suai) re-measures the fit too, without remounting the page (`key` stays the item's).
+  const scale = useScale();
+  const { ref, fit, pages } = useFit<HTMLDivElement>(`${key}|${scale}`, { paged: true });
   if (!cur) return null;
   const { item, index } = cur;
   // A long doa, or a larger text size, that will not fit shows over pages (Arabic first, then the meaning), never cut.

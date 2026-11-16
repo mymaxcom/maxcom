@@ -7,6 +7,8 @@ import { tarawihMonthFor } from '../data/tarawih.ts';
 
 export interface Player {
   start(reciter: string, surah: number, ayatCount: number): void;
+  /** Volume 0..100: applies to the ayat playing now and the ones after it, without restarting. */
+  setVolume(volume: number): void;
   stop(): void;
   playing(): boolean;
 }
@@ -22,6 +24,7 @@ export function createTilawahPlayer(opts: { base: string; volume: number }): Pla
   let next: HTMLAudioElement | null = null;
   let active = false;
   let loggedError = false;
+  let volume = opts.volume;
   let reciter = '';
   let surah = 0;
   let count = 0;
@@ -106,8 +109,13 @@ export function createTilawahPlayer(opts: { base: string; volume: number }): Pla
       failures = 0;
       failedAt = 0;
       active = true;
-      main.volume = Math.min(1, Math.max(0, opts.volume / 100));
+      main.volume = Math.min(1, Math.max(0, volume / 100));
       playCurrent();
+    },
+    setVolume(v) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) return;
+      volume = v;
+      if (main) main.volume = Math.min(1, Math.max(0, v / 100));
     },
     stop() {
       halt();
@@ -143,17 +151,25 @@ export function useTilawah(view: KioskView, content: KioskContent | null, impl?:
   const planRef = useRef(plan);
   planRef.current = plan;
   const key = plan ? plan.key : null;
+  // Read at start without making the volume a reason to start again: a volume change goes through setVolume below.
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
 
   useEffect(() => {
     const p = planRef.current;
     if (key === null || !p) return undefined;
     let player = impl;
     if (!player) {
-      own.current ??= createTilawahPlayer({ base: AUDIO_BASE, volume });
+      own.current ??= createTilawahPlayer({ base: AUDIO_BASE, volume: volumeRef.current });
       player = own.current;
     }
     const target = player;
+    target.setVolume(volumeRef.current);
     target.start(p.reciter, p.surah, p.ayatCount);
     return () => target.stop();
-  }, [key, impl, volume]);
+  }, [key, impl]);
+
+  useEffect(() => {
+    (impl ?? own.current)?.setVolume(volume);
+  }, [volume, impl]);
 }

@@ -324,6 +324,7 @@ Map<String, List<Map<String, Object?>>> contentFixture() {
         'from': '2026-11-01',
         'to': '2026-11-07',
         'priority': 2,
+        'pictureAssetId': fixtureAssetPoster,
       },
       {
         ...meta('a2'),

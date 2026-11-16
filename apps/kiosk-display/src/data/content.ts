@@ -121,7 +121,7 @@ export async function loadContent(
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
-/** Every picture the content refers to (speaker and duty photos, covers, posters, programme and calendar images), once each. */
+/** Every picture the content refers to (speaker and duty photos, covers, posters, notice pictures, programme and calendar images), once each. */
 export function assetIdsOf(content: KioskContent): string[] {
   const found = new Set<string>();
   const add = (v: unknown): void => {
@@ -132,6 +132,8 @@ export function assetIdsOf(content: KioskContent): string[] {
     add(k.kitab?.coverAssetId);
   }
   for (const p of content.posters) add(p.assetId);
+  // A notice's picture (pengumuman bergambar, 2026.11.11): optional (`KioskPengumuman.pictureAssetId`).
+  for (const p of content.pengumuman) add(p.pictureAssetId);
   for (const p of content.programKhas) add(p.assetId);
   for (const t of content.takwim) add(t.assetId);
   for (const t of content.tugasan) add(t.petugas?.photoAssetId);

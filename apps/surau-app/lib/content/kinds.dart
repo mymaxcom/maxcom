@@ -15,7 +15,7 @@ import '../features/validate.dart' show SettingError, ValidationResult, imageRef
 /// sha256 of core content/schema.ts + content/types.ts (CRLF as LF) this
 /// port was written against; kinds_test fails when core moved on.
 const String contentSourceHash =
-    '8043917b5c23a0ec9db65b94e788de0aa1a2c74b39e5e66a228ec9230e8f9d03';
+    'af14b65e83b49ed291134b27525a07771348a33fde6fa5d577374d7605d80f8b';
 
 enum FieldType {
   text,
@@ -215,6 +215,7 @@ const List<ContentKindSpec> contentKinds = [
       FieldSpec(key: 'from', type: FieldType.date, labelMs: 'Tarikh mula'),
       FieldSpec(key: 'to', type: FieldType.date, labelMs: 'Tarikh tamat'),
       FieldSpec(key: 'priority', type: FieldType.priority, labelMs: 'Keutamaan', min: 1, max: 3, choices: ['1', '2', '3'], choiceLabels: _priorityLabels),
+      FieldSpec(key: 'pictureAssetId', type: FieldType.asset, labelMs: 'Gambar', required: false),
     ],
   ),
   ContentKindSpec(

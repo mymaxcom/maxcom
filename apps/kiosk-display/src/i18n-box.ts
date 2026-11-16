@@ -118,6 +118,10 @@ export const AR: Record<string, string> = {
   pairRetrying: 'تتم إعادة المحاولة تلقائيًا',
   pairDone: 'تم ربط الشاشة',
   pairConnectedTo: 'متصل بـ {name}',
+  // The kuliah screen's day line (the kiosk program itself speaks Malay and English; kept here so
+  // every language the box knows has the words).
+  kuliahWhenToday: 'اليوم',
+  kuliahWhenTomorrow: 'غدًا',
 };
 
 /**

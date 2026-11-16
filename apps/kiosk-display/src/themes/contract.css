@@ -47,6 +47,25 @@
   line-height: 1.25;
   text-transform: uppercase;
 }
+/* The name over the day's dates (Gregorian, then Hijri when Tetapan gives one). The date is the quiet line: body
+   case, the text colour, one size under the name; it keeps one line and may run past the name's width, never under the
+   chip (the head leaves it about 48 rem). */
+.stage[data-kind='content'] .brand-text { display: flex; flex-direction: column; min-width: 0; }
+.stage[data-kind='content'] .shell-date {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+  font-size: 1.354rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--text);
+  opacity: 0.86;
+}
+.stage[data-kind='content'] .shell-date .sep { flex: none; width: 0.36rem; height: 0.36rem; border-radius: 50%; background: var(--accent); }
+.stage[data-kind='content'] .shell-hijri { font-weight: 500; }
 .stage[data-kind='content'] .shell-top {
   position: absolute;
   top: 1.563rem;
@@ -59,21 +78,37 @@
 .stage:is([data-kind='content'], [data-kind='live']) .region-clock.clock--compact { display: flex; align-items: baseline; gap: 0.5rem; }
 .stage:is([data-kind='content'], [data-kind='live']) .clock--compact .hm { font-size: 4.375rem; font-weight: 800; line-height: 0.92; letter-spacing: -0.01em; }
 .stage:is([data-kind='content'], [data-kind='live']) .clock--compact small { font-size: 1.563rem; font-weight: 700; margin-left: 0.2rem; opacity: 0.9; }
+/* The next-prayer chip (theme round 2, rules 4 to 6): the name and the time, then an inner pill with a small hourglass
+   and the hours and minutes left (no words). For three minutes after a prayer time the pill says "Masuk waktu" instead
+   (.is-now). The inner pill takes the theme's ink on its accent, or --chip-cd-bg / --chip-cd-ink when a theme sets them. */
 .stage:is([data-kind='content'], [data-kind='live']) .next--chip {
   display: flex;
   align-items: center;
-  gap: 0.729rem;
-  height: 4.167rem;
-  padding: 0 1.563rem;
-  border-radius: 2.083rem;
+  gap: 0.833rem;
+  height: 4.479rem;
+  padding: 0 0.573rem 0 1.563rem;
+  border-radius: 2.24rem;
   background: var(--accent);
   color: var(--ink);
   text-shadow: none;
   white-space: nowrap;
 }
-.stage:is([data-kind='content'], [data-kind='live']) .chip-k { font-size: 1.458rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-.stage:is([data-kind='content'], [data-kind='live']) .chip-t { font-size: 2.188rem; font-weight: 800; letter-spacing: 0; }
-.stage:is([data-kind='content'], [data-kind='live']) .chip-rel { font-size: 1.354rem; font-weight: 600; opacity: 0.85; margin-left: 0.2rem; }
+.stage:is([data-kind='content'], [data-kind='live']) .chip-k { font-size: 1.458rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.stage:is([data-kind='content'], [data-kind='live']) .chip-t { font-size: 2.292rem; font-weight: 800; line-height: 1; letter-spacing: 0; }
+.stage:is([data-kind='content'], [data-kind='live']) .chip-ap { font-size: 1.146rem; font-weight: 800; margin-left: 0.3rem; }
+.stage:is([data-kind='content'], [data-kind='live']) .chip-cd {
+  display: flex;
+  align-items: center;
+  gap: 0.521rem;
+  height: 3.385rem;
+  padding: 0 1.146rem 0 0.938rem;
+  border-radius: 1.693rem;
+  background: var(--chip-cd-bg, var(--ink));
+  color: var(--chip-cd-ink, var(--accent));
+}
+.stage:is([data-kind='content'], [data-kind='live']) .chip-cd b { font-size: 2.292rem; font-weight: 800; line-height: 1; }
+.stage:is([data-kind='content'], [data-kind='live']) .chip-hg { flex: none; width: 1.042rem; height: 1.354rem; opacity: 0.85; }
+.stage:is([data-kind='content'], [data-kind='live']) .chip-cd--now { padding: 0 1.25rem; font-size: 1.458rem; font-weight: 800; }
 
 /* The card region: the whole main area between the head and the strip. */
 .stage[data-kind='content'] .content,
@@ -122,9 +157,12 @@
   color: var(--accent);
 }
 
-/* ---- Poster: the whole stage is the poster, fitted whole over a blurred copy of itself ---- */
+/* ---- Poster (theme round 2, rules 1 and 3): the top row stays (brand, date line, chip, clock); the poster's frame
+   starts below it and takes everything down to the bottom edge (no strip, no ticker on this screen), over a blurred copy
+   of the poster that fills the stage. The picture is as large as the frame allows, its own proportions kept: PosterScreen
+   sets --poster-ar (width over height) once it has loaded, and the height is the smaller of the frame's height and
+   the frame's width over that ratio. 1 rem is 1 % of the stage width, so the frame is 100rem minus the side gutters. */
 .stage[data-screen='poster'] .content { grid-area: auto; position: absolute; inset: 0; width: auto; margin: 0; z-index: 0; }
-.stage[data-screen='poster'] .ticker { display: none; }
 .poster-stage { position: absolute; inset: 0; overflow: hidden; }
 .poster-fill {
   position: absolute;
@@ -135,41 +173,89 @@
 }
 .poster-frame {
   position: absolute;
-  top: 1.354rem;
-  height: 46.875rem;
-  left: 0;
-  right: 0;
+  top: 8.333rem;
+  bottom: 1.875rem;
+  left: 3.333rem;
+  right: 3.333rem;
   display: flex;
+  align-items: center;
   justify-content: center;
 }
-.poster-frame img { display: block; height: 100%; width: auto; max-width: 96rem; object-fit: contain; box-shadow: 0 1.563rem 4.167rem rgb(0 0 0 / 0.55); }
-/* A wide poster would run under the chip (top right, under the clock): its frame starts below the chip instead. */
-.poster-stage.is-wide .poster-frame { top: 12.083rem; height: 36rem; }
-/* The chip sits under the clock, never over the poster (spec 6.12.3). */
-.stage[data-screen='poster'] .shell-top { flex-direction: column-reverse; align-items: flex-end; gap: 0.6rem; }
+.poster-frame img {
+  display: block;
+  height: min(46.042rem, calc(93.333rem / var(--poster-ar, 0.707)));
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  box-shadow: 0 1.563rem 4.167rem rgb(0 0 0 / 0.55);
+}
 .stage[data-screen='poster'] .region-brand,
 .stage[data-screen='poster'] .region-clock.clock--compact { text-shadow: 0 0.104rem 0.938rem rgb(0 0 0 / 0.5); }
-.stage[data-screen='poster'] .region-brand { max-width: 27.083rem; }
 
 /* ---- Kuliah ---- */
-.kuliah { position: absolute; inset: 0; display: flex; align-items: center; gap: 4.167rem; padding: 0 2.083rem; overflow: hidden; }
-.kul-photo { flex: none; width: 23.958rem; height: 23.958rem; border-radius: 50%; overflow: hidden; border: 0.417rem solid var(--accent); }
+/* Theme round 2, maximise the screen (operator 2026-11-16): the same layout as round 2 at larger sizes, so the block
+   fills the main area; KuliahScreen's fit starts above 1 for a short kuliah and steps down for a long name or topic. */
+.kuliah { position: absolute; inset: 0; display: flex; align-items: center; gap: 3.75rem; padding: 1.25rem 2.083rem; overflow: hidden; }
+.kul-photo { flex: none; width: 28.5rem; height: 28.5rem; border-radius: 50%; overflow: hidden; border: 0.417rem solid var(--accent); }
 .kul-photo.is-square { border-radius: 1.4rem; }
 .kul-photo img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .kul-body { min-width: 0; flex: 1; overflow-wrap: anywhere; }
-.kul-label { font-size: calc(2.292rem * var(--scale, 1) * var(--fit, 1)); font-weight: 700; color: var(--accent-2, var(--accent)); margin-top: 0.938rem; }
-.kul-name { font-size: calc(4.792rem * var(--scale, 1) * var(--fit, 1)); font-weight: 800; line-height: 1.04; margin-top: 0.417rem; letter-spacing: -0.01em; }
-.kul-topic { font-size: calc(3.333rem * var(--scale, 1) * var(--fit, 1)); font-weight: 700; color: var(--accent); margin-top: 0.729rem; }
-.kul-facts { display: flex; flex-wrap: wrap; gap: calc(1.2rem * var(--fit, 1)) 2.917rem; margin-top: calc(2.396rem * var(--fit, 1)); }
-.kul-facts span { display: block; font-size: 1.146rem; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.72; }
-.kul-facts b { display: block; font-size: calc(1.875rem * var(--scale, 1)); font-weight: 700; margin-top: 0.313rem; }
-.kul-batal { display: inline-block; margin-top: 1.4rem; padding: 0.3rem 1.2rem; border-radius: 0.8rem; background: var(--accent); color: var(--ink); font-size: 1.4rem; font-weight: 800; letter-spacing: 0.14em; }
+/* The enlarged day line (theme round 2, rule 11): "Hari ini" highlighted, "Esok", else the weekday; the date beside it. */
+.kul-day { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.25rem; line-height: 1.15; }
+.kul-day-word { font-size: calc(4rem * var(--scale, 1) * var(--fit, 1)); font-weight: 800; color: var(--accent); }
+.kul-day.is-today .kul-day-word { padding: 0.15rem 1.5rem 0.3rem; border-radius: 1.1rem; background: var(--accent); color: var(--ink); }
+.kul-day-date { font-size: calc(3.333rem * var(--scale, 1) * var(--fit, 1)); font-weight: 700; }
+.stage[data-align='center'] .kul-day { justify-content: center; }
+.stage[data-align='right'] .kul-day { justify-content: flex-end; }
+.kul-label { font-size: calc(2.708rem * var(--scale, 1) * var(--fit, 1)); font-weight: 700; color: var(--accent-2, var(--accent)); margin-top: calc(1.25rem * var(--fit, 1)); }
+.kul-name { font-size: calc(5.833rem * var(--scale, 1) * var(--fit, 1)); font-weight: 800; line-height: 1.04; margin-top: 0.417rem; letter-spacing: -0.01em; }
+.kul-topic { font-size: calc(3.75rem * var(--scale, 1) * var(--fit, 1)); font-weight: 700; line-height: 1.15; color: var(--accent); margin-top: calc(0.938rem * var(--fit, 1)); }
+.kul-facts { display: flex; flex-wrap: wrap; gap: calc(1rem * var(--fit, 1)) 2.5rem; margin-top: calc(2.5rem * var(--fit, 1)); }
+.kul-facts span { display: block; font-size: 1.354rem; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.72; }
+.kul-facts b { display: block; font-size: calc(2.292rem * var(--scale, 1) * var(--fit, 1)); font-weight: 700; margin-top: 0.417rem; }
+.kul-batal { display: inline-block; margin-top: 1.6rem; padding: 0.35rem 1.4rem; border-radius: 0.9rem; background: var(--accent); color: var(--ink); font-size: 1.875rem; font-weight: 800; letter-spacing: 0.14em; }
+.kul-kitab {
+  flex: none;
+  position: relative;
+  width: 17.708rem;
+  height: 25.2rem;
+  border-radius: 0.313rem 0.729rem 0.729rem 0.313rem;
+  overflow: hidden;
+  box-shadow: inset 0.729rem 0 0 rgb(0 0 0 / 0.22), 0 0.938rem 2.5rem rgb(0 0 0 / 0.35);
+  background: var(--accent);
+  color: var(--ink);
+}
+.kul-kitab img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* No cover picture: a printed title block (the facts then leave the title out). */
+.kul-kitab-title {
+  position: absolute;
+  top: 1.563rem;
+  bottom: 1.563rem;
+  left: 1.563rem;
+  right: 1.042rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.kuliah.has-kitab { gap: 3.125rem; }
+.kuliah.has-kitab .kul-photo { width: 23.5rem; height: 23.5rem; }
+.kuliah.has-kitab .kul-kitab { width: 16.146rem; height: 23rem; }
+.kuliah.is-batal .kul-kitab,
+.kuliah.is-batal .kul-photo img { filter: grayscale(1); }
+.stage[data-align='center'] .kul-kitab { position: absolute; top: 1.042rem; right: 2.083rem; width: 11.25rem; height: 16rem; }
+.stage[data-align='center'] .kul-kitab-title { font-size: 1.6rem; top: 0.938rem; bottom: 0.938rem; left: 1.146rem; right: 0.729rem; }
 .stage[data-align='center'] .kuliah { flex-direction: column; justify-content: center; text-align: center; gap: 1.563rem; }
-.stage[data-align='center'] .kul-photo { width: 13.021rem; height: 13.021rem; }
+.stage[data-align='center'] .kul-photo,
+.stage[data-align='center'] .kuliah.has-kitab .kul-photo { width: 15.625rem; height: 15.625rem; }
 .stage[data-align='center'] .kul-facts { justify-content: center; margin-top: 1.563rem; }
 .stage[data-align='right'] .kuliah { flex-direction: row-reverse; text-align: right; }
 .stage[data-align='right'] .kul-facts { justify-content: flex-end; }
-
 /* ---- Hadis ---- */
 .hadis {
   position: absolute;
@@ -190,16 +276,16 @@
 .hadis .eyebrow .hadis-part { margin-left: 1.2rem; letter-spacing: 0.08em; opacity: 0.8; }
 .hadis-ar {
   margin: 0.313rem 0 0;
-  font-size: calc(4.063rem * var(--tier, 1) * var(--fit, 1) * var(--ar-scale, 1));
+  font-size: calc(4.896rem * var(--tier, 1) * var(--scale, 1) * var(--fit, 1) * var(--ar-scale, 1));
   line-height: var(--ar-lh, 1.75);
   direction: rtl;
   font-family: var(--font-arab, var(--font-arabic));
 }
-.hadis-ms { margin: 1.354rem 0 0; font-size: calc(2.396rem * var(--tier, 1) * var(--fit, 1)); font-weight: 600; line-height: 1.35; max-width: 78rem; }
-.hadis-src { margin-top: 1.563rem; font-size: 1.563rem; font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.5rem 0.938rem; }
+.hadis-ms { margin: calc(1.354rem * var(--scale, 1)) 0 0; font-size: calc(2.917rem * var(--tier, 1) * var(--scale, 1) * var(--fit, 1)); font-weight: 600; line-height: 1.35; max-width: 84rem; }
+.hadis-src { margin-top: 1.875rem; font-size: 1.875rem; font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.5rem 0.938rem; }
 .hadis-src .sep { margin: 0 0.2rem; }
 .hadis-grade { color: var(--accent); }
-.hadis-credit { font-size: 1.1rem; font-weight: 600; opacity: 0.75; flex-basis: 100%; }
+.hadis-credit { font-size: 1.35rem; font-weight: 600; opacity: 0.75; flex-basis: 100%; }
 .stage[data-align='left'] .hadis { align-items: flex-start; text-align: left; }
 .stage[data-align='right'] .hadis { align-items: flex-end; text-align: right; }
 
@@ -249,7 +335,13 @@
   overflow: hidden;
 }
 .arab-ayat { padding: 0 4.688rem; }
+/* Tetapan ayatCard.textSize (S/M/L) as on the ayat card: M is the mockup's size, S and L its card ratios (2.3 and 3.3 to 2.8). */
+.arab-ayat.is-size-s { --ts: 0.82; }
+.arab-ayat.is-size-l { --ts: 1.18; }
 .arab-hadis { padding: 0 5.208rem; }
+/* Tetapan hadis.fontSize (and the length of the text) pick the tier, as on the normal hadis screen. */
+.arab-hadis.is-len-m { --tier: 0.82; }
+.arab-hadis.is-len-s { --tier: 0.7; }
 /* Auto margins centre the text while it fits and let it overflow downwards only, so the fit measure sees it. */
 .arab-ayat > :first-child,
 .arab-hadis > :first-child { margin-top: auto; }
@@ -257,14 +349,14 @@
 .arab-hadis > :last-child { margin-bottom: auto; }
 
 .aa-head { display: flex; flex-direction: column; align-items: center; }
-.aa-surah { font-size: 1.354rem; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.78; margin-top: 0.208rem; }
+.aa-surah { font-size: 1.6rem; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.78; margin-top: 0.208rem; }
 .aa-text {
   margin: 0.938rem 0 0;
   max-width: 85.417rem;
-  font-size: calc(3.542rem * var(--scale, 1) * var(--fit, 1) * var(--ar-scale, 1));
+  font-size: calc(4.167rem * var(--ts, 1) * var(--scale, 1) * var(--fit, 1) * var(--ar-scale, 1));
   line-height: var(--ar-lh, 1.95);
 }
-.aa-tr { margin: 0.938rem 0 0; max-width: 81.25rem; font-size: 1.51rem; line-height: 1.42; font-weight: 500; opacity: 0.9; }
+.aa-tr { margin: 0.938rem 0 0; max-width: 84rem; font-size: calc(1.927rem * var(--ts, 1) * var(--scale, 1) * var(--fit, 1)); line-height: 1.42; font-weight: 500; opacity: 0.9; }
 .tr-n {
   display: inline-block;
   min-width: 1.979rem;
@@ -280,16 +372,16 @@
   vertical-align: 0.1rem;
 }
 .aa-credit,
-.ah-credit { margin-top: 0.7rem; font-size: 1rem; opacity: 0.7; display: flex; justify-content: center; gap: 1.2rem; }
+.ah-credit { margin-top: 0.7rem; font-size: 1.25rem; opacity: 0.7; display: flex; justify-content: center; gap: 1.2rem; }
 
 .ah-ar {
   margin: 0.208rem 0 0;
-  font-size: calc(5.417rem * var(--fit, 1) * var(--ar-scale, 1));
+  font-size: calc(6.25rem * var(--tier, 1) * var(--scale, 1) * var(--fit, 1) * var(--ar-scale, 1));
   line-height: var(--ar-lh, 1.7);
   font-weight: 700;
 }
-.ah-ms { margin: 1.354rem 0 0; max-width: 77.083rem; font-size: 2.083rem; font-weight: 600; line-height: 1.38; opacity: 0.9; }
-.ah-src { margin-top: 1.146rem; font-size: 1.458rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.8; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.4rem 0.73rem; }
+.ah-ms { margin: calc(1.354rem * var(--scale, 1)) 0 0; max-width: 84rem; font-size: calc(2.604rem * var(--tier, 1) * var(--scale, 1) * var(--fit, 1)); font-weight: 600; line-height: 1.38; opacity: 0.9; }
+.ah-src { margin-top: 1.354rem; font-size: 1.719rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.8; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.4rem 0.73rem; }
 .ah-src .sep { margin: 0; }
 .ah-pg { letter-spacing: 0.06em; }
 
@@ -312,6 +404,20 @@
 .stage[data-tarjamah='beside'] .ah-ar { grid-column: 2; grid-row: 1; }
 .stage[data-tarjamah='beside'] .ah-ms { grid-column: 1; grid-row: 1; margin-top: 0; text-align: left; }
 
+/* Ubah suai "Jajaran" (data-align) on the Arabic-led screens and the zikir page. The block follows the chosen side and
+   the translation, the surah line, the source and the meta are set flush to it. Arabic lines keep their own start edge
+   (right) for kiri and kanan: Arabic set flush left would leave the ragged edge at the start of each line. Centre is the
+   default and centres everything. The ring of the zikir screen stays in the middle; its meaning line follows. */
+.stage[data-align='left'] :is(.arab-ayat, .arab-hadis, .aa-head) { align-items: flex-start; text-align: left; }
+.stage[data-align='right'] :is(.arab-ayat, .arab-hadis, .aa-head) { align-items: flex-end; text-align: right; }
+.stage[data-align='left'] :is(.aa-credit, .ah-credit, .ah-src) { justify-content: flex-start; }
+.stage[data-align='right'] :is(.aa-credit, .ah-credit, .ah-src) { justify-content: flex-end; }
+.stage:is([data-align='left'], [data-align='right']) :is(.aa-text, .ah-ar, .zikir__ar) { text-align: right; }
+.stage[data-align='left'] .zk-ms { text-align: left; }
+.stage[data-align='right'] .zk-ms { text-align: right; }
+.stage[data-align='left'] .zikir__page { align-items: flex-start; text-align: left; }
+.stage[data-align='right'] .zikir__page { align-items: flex-end; text-align: right; }
+
 /* Zikir: a ring of 33 beads, the Arabic large in the middle, the meaning under it, the count at the side. */
 .arab-zikir { position: absolute; inset: 0; overflow: hidden; --zk: 1; }
 .arab-zikir.is-l { --zk: 0.76; }
@@ -327,13 +433,74 @@
   top: 50%;
   transform: translateY(-62%);
   text-align: center;
-  font-size: calc(8.854rem * var(--zk, 1) * var(--fit, 1) * var(--ar-scale, 1));
+  font-size: calc(8.854rem * var(--zk, 1) * var(--scale, 1) * var(--fit, 1) * var(--ar-scale, 1));
   font-weight: 700;
   line-height: var(--ar-lh, 1.6);
 }
-.zk-ms { position: absolute; left: 8rem; right: 8rem; top: calc(50% + 6.2rem); text-align: center; font-size: 1.771rem; font-weight: 600; opacity: 0.85; }
+/* The meaning line hangs under the Arabic: its offset grows with the Arabic's own size (text size and Arabic size). */
+.zk-ms { position: absolute; left: 8rem; right: 8rem; top: calc(50% + 6.2rem * var(--scale, 1) * var(--ar-scale, 1)); text-align: center; font-size: calc(1.771rem * var(--scale, 1) * var(--fit, 1)); font-weight: 600; opacity: 0.85; }
 .zk-side { position: absolute; left: 1.042rem; top: 50%; transform: translateY(-50%); width: 21.875rem; }
 .zk-pg { display: block; margin-top: 0.8rem; font-size: 1.4rem; font-weight: 700; opacity: 0.8; }
 .zk-count { position: absolute; right: 2.083rem; top: 50%; transform: translateY(-50%); width: 17.708rem; text-align: center; }
 .zk-count b { display: block; font-size: 10.417rem; font-weight: 800; line-height: 1; color: var(--accent); }
 .zk-count span { display: block; font-size: 2.083rem; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; }
+
+/* ---- A picture under the text (theme round 2, operator 2026-11-16) ----
+   App sets data-picture when the surau's (or the pack's) picture is the background: the Ubah suai picture, the pack
+   picture, the backgrounds list on a theme, or the default look's own list picture. Then, in every theme:
+   1. a scrim tinted with the theme's own ground (--glass-rgb: dark in the dark themes, the light page in Minimal and
+      Old School, whose text is dark) over the whole picture, a little stronger under the top row and the foot, so
+      the picture stays recognisable but no longer fights the text;
+   2. a plate under the text blocks: the card region of a content screen (not the poster: the poster is the picture)
+      and the strip and ticker, in the same tint;
+   3. a soft glow on every piece of text (two shadows, no blur over 0.4rem: cheap on the T95), dark in the dark themes
+      and light in the two light ones.
+   Together they keep body text at 4.5:1 and large text at 3:1 or more over a mid-tone or a bright picture. Without a
+   picture nothing here applies, so no theme's own look changes. */
+.bg__scrim { display: none; position: absolute; inset: 0; pointer-events: none; }
+.stage[data-picture] {
+  --scrim-rgb: var(--glass-rgb);
+  --glow: 0 0 0.4rem rgb(0 0 0 / 0.6), 0 0.06rem 0.12rem rgb(0 0 0 / 0.55);
+}
+.stage[data-picture][data-template='minimal'],
+.stage[data-picture][data-template='oldschool'] {
+  --glow: 0 0 0.4rem rgb(var(--glass-rgb) / 0.85), 0 0.06rem 0.12rem rgb(var(--glass-rgb) / 0.7);
+}
+.stage[data-picture] .bg__scrim {
+  display: block;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgb(var(--scrim-rgb) / 0.65) 0, rgb(var(--scrim-rgb) / 0.3) 7.292rem, rgb(var(--scrim-rgb) / 0) 12.5rem),
+    linear-gradient(0deg, rgb(var(--scrim-rgb) / 0.4) 0, rgb(var(--scrim-rgb) / 0) 12.5rem),
+    rgb(var(--scrim-rgb) / 0.45);
+}
+.stage[data-picture][data-kind='content']:not([data-screen='poster']) .screen--shell > .region-main {
+  background-color: rgb(var(--scrim-rgb) / 0.6);
+  border-radius: var(--radius-lg, 1.4rem);
+}
+.stage[data-picture][data-kind='content'] .screen--shell .strip,
+.stage[data-picture][data-kind='content'] .screen--shell .ticker { background-color: rgb(var(--scrim-rgb) / 0.62); }
+.stage[data-picture][data-picture] .screen,
+.stage[data-picture][data-picture] .screen * { text-shadow: var(--glow); }
+/* Not on what changes every second (Q8, the T95's WebView 91 repaints a shadowed box at every tick): the countdowns and
+   the clock's seconds. They sit on the scrim and the plates; the hours and minutes (once a minute) keep the glow, and the
+   gold outline (below, later and as specific) still draws its own shadows where a theme has it. */
+.stage[data-picture][data-picture] .screen :where(span[role='timer'], span[role='timer'] *, .region-clock small.num, .clock__aside .num) { text-shadow: none; }
+
+/* ---- "Garis emas pada tajuk" (theme round 2, operator 2026-11-16): a thin gold outline on the large text only (the
+   clocks, the countdowns, the surau name, the big headings), never on body, Arabic or small text. Default, Old School
+   and Arabic Art (and packs on them) draw it unless Ubah suai switches it off (data-gold='off'). Chrome 91 has no
+   paint-order for HTML text and -webkit-text-stroke eats into the glyphs, so it is four tight diagonal shadows, about
+   1 % of the font size (never under 1 px at 1080p), with the picture glow after them when a picture is on. */
+.stage[data-template='default'] { --outline-gold: #e3bb63; }
+.stage[data-template='oldschool'] { --outline-gold: #c1953a; }
+.stage[data-template='arabic'] { --outline-gold: #e2bd6a; }
+.stage:is([data-template='default'], [data-template='oldschool'], [data-template='arabic']):not([data-gold='off']) :is(.clock__hm, .clock--compact .hm, .phase__clock > .num, .phase__big, .screen--main .next .num, .ident__name, .brand-name, .phase__title, .kul-name) {
+  --gw: max(0.052rem, 0.011em);
+  text-shadow:
+    var(--gw) var(--gw) 0 var(--outline-gold),
+    calc(var(--gw) * -1) var(--gw) 0 var(--outline-gold),
+    var(--gw) calc(var(--gw) * -1) 0 var(--outline-gold),
+    calc(var(--gw) * -1) calc(var(--gw) * -1) 0 var(--outline-gold),
+    var(--glow, 0 0 0 transparent);
+}

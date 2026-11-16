@@ -22,9 +22,28 @@ class FieldMeta {
   bool get testable => raw['testable'] == true;
   bool get readOnly => raw['readOnly'] == true;
 
+  /// Not offered in Tetapan: another control owns the job (core FieldMeta.hidden).
+  bool get hidden => raw['hidden'] == true;
+
+  /// Another setting that switches this one off while it holds a value (core FieldMeta.disabledWhen).
+  DisabledWhen? get disabledWhen {
+    final r = raw['disabledWhen'];
+    return r is Map ? DisabledWhen(r.cast<String, Object?>()) : null;
+  }
+
   List<Object> get choices => [...?(raw['choices'] as List?)?.cast<Object>()];
   List<String> get disabledChoices => [...?(raw['disabledChoices'] as List?)?.cast<String>()];
   List<String> get presets => [...?(raw['presets'] as List?)?.cast<String>()];
+}
+
+class DisabledWhen {
+  const DisabledWhen(this.raw);
+  final Map<String, Object?> raw;
+  String get feature => raw['feature'] as String;
+  String get field => raw['field'] as String;
+  Object? get equals => raw['equals'];
+  String get noteMs => raw['noteMs'] as String;
+  String get noteEn => raw['noteEn'] as String;
 }
 
 /// The metadata of [path] (dot-joined for a nested value) in [feature].

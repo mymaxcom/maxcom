@@ -38,6 +38,8 @@ function newRules(id: string): Array<{ sel: string; body: string }> {
 }
 
 const FIVE_DRESSED = ['colourful', 'creative', 'oldschool', 'minimal'];
+/** Themes whose main screen changed in theme round 2 (DECISIONS rules 14 and 16), on [data-kind='full'] only. */
+const ROUND2_FULL = ['creative', 'minimal'];
 
 describe('content screens in the built-in themes', () => {
   for (const id of FIVE_DRESSED) {
@@ -45,7 +47,16 @@ describe('content screens in the built-in themes', () => {
       const added = newRules(id);
       expect(added.length).toBeGreaterThan(5);
       for (const r of added) {
-        for (const sel of selectors(r.sel)) expect(sel, sel).toMatch(/\[data-kind='content'\]|\[data-screen='[a-z-]+'\]/);
+        // (rules on the main layout's bar column, `.pbar`, cannot reach a content screen: its strip is not a .pbar)
+        // (theme round 2: Creative's biasa is the Cadangan mockup (rule 16) and Minimal's main clock is bold (rule 14),
+        // both scoped to the main screen kind, [data-kind='full'])
+        for (const sel of selectors(r.sel)) {
+          if (/\.pbar(?![\w-])/.test(sel)) continue;
+          const scoped = ROUND2_FULL.includes(id)
+            ? /\[data-kind='content'\]|\[data-screen='[a-z-]+'\]|\[data-kind='full'\]/
+            : /\[data-kind='content'\]|\[data-screen='[a-z-]+'\]/;
+          expect(sel, sel).toMatch(scoped);
+        }
       }
       expect(themeCss(id)).toContain(`.stage[data-template='${id}'][data-kind='content']`);
     });
@@ -58,7 +69,10 @@ describe('content screens in the built-in themes', () => {
 
   it('only Old School keeps a vertical timetable, and only on the main screen: no theme restyles biasa in the content block', () => {
     for (const id of FIVE_DRESSED) {
-      for (const r of newRules(id)) expect(r.sel, id).not.toMatch(/\[data-screen='biasa'\]|\[data-kind='full'\]/);
+      for (const r of newRules(id)) {
+        if (ROUND2_FULL.includes(id) && /\[data-kind='full'\]/.test(r.sel)) continue;
+        expect(r.sel, id).not.toMatch(/\[data-screen='biasa'\]|\[data-kind='full'\]/);
+      }
     }
     // The vertical timetable is the main layout's own (.pbar under .screen--main), so the content strip stays horizontal.
     const old = themeCss('oldschool');

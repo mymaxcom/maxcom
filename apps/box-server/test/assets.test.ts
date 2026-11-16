@@ -223,6 +223,29 @@ describe('POST /api/assets and GET /assets/:id', () => {
     expect((await upload(app, Buffer.from('not audio at all'), 'audio/mpeg')).statusCode).toBe(400);
   });
 
+  it('first Subuh azan path: the chosen MP3 reaches the kiosk settings and is served to the kiosk as audio/mpeg', async () => {
+    const { app } = makeApp();
+    const mp3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(300, 9)]);
+    const song = (await upload(app, mp3, 'audio/mpeg')).json();
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/firstAzanSubuh',
+      payload: { enabled: true, minutesBefore: 15, audioFile: song.id },
+    });
+    expect(saved.statusCode).toBe(200);
+    const bundle = (await app.inject({ method: 'GET', url: '/api/kiosk/bundle' })).json();
+    expect(bundle.settings.firstAzanSubuh).toMatchObject({ enabled: true, minutesBefore: 15, audioFile: song.id });
+    const served = await app.inject({ method: 'GET', url: `/assets/${bundle.settings.firstAzanSubuh.audioFile}` });
+    expect(served.statusCode).toBe(200);
+    expect(served.headers['content-type']).toBe('audio/mpeg');
+    expect(served.rawPayload.equals(mp3)).toBe(true);
+    // A path or a picture id is refused by the settings validation: only a 64-hex id (or none) can be saved.
+    const bad = await app.inject({ method: 'PUT', url: '/api/settings/firstAzanSubuh', payload: { enabled: true, minutesBefore: 15, audioFile: '../secret.mp3' } });
+    expect(bad.statusCode).toBe(400);
+    const none = await app.inject({ method: 'PUT', url: '/api/settings/firstAzanSubuh', payload: { enabled: true, minutesBefore: 15, audioFile: null } });
+    expect(none.statusCode).toBe(200);
+  });
+
   it('lists only the MP3 files for ?mime=audio/mpeg, only the pictures without it, and refuses another filter', async () => {
     const { app } = makeApp();
     const mp3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(200, 5)]);

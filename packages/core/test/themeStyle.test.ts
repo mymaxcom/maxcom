@@ -1,5 +1,5 @@
-import { expect, it } from 'vitest';
-import { THEME_STYLE_MAX_BYTES, resolveScreenStyle, sanitizeThemeStyles, styleValueError, themeStylesError, packsError, sanitizePacks, themeOfferable } from '../src/index.ts';
+import { describe, expect, it } from 'vitest';
+import { GOLD_OUTLINE_THEMES, THEME_STYLE_MAX_BYTES, resolveScreenStyle, sanitizeThemeStyles, styleValueError, themeStylesError, packsError, sanitizePacks, themeOfferable } from '../src/index.ts';
 
 it('accepts every control value of the table and refuses its neighbours', () => {
   const ok: [string, unknown][] = [['bgImage', 'a'.repeat(64)], ['bgFit', 'sederhana'], ['bgPos', 'kanan'], ['shade', 0], ['shade', 80], ['accent', '#2fd1b0'], ['text', '#FFFFFF'], ['font', 'jakarta'], ['scale', 'XL'], ['align', 'tengah'], ['arFont', 'amiri-quran'], ['arScale', 100], ['arScale', 160], ['harakat', '#d9b25f'], ['arLineHeight', 19], ['tarjamah', 'sembunyi']];
@@ -78,4 +78,29 @@ it('themeOfferable: only when the list is complete and every box has the contrac
   expect(themeOfferable({ boxes: [b(1, ['default', 'arabic']), b(2, ['default', 'arabic'])], complete: true }, { contract: 1, builtIn: 'arabic' })).toBe(true);
   expect(themeOfferable({ boxes: [b(1)], complete: true }, { contract: 2 })).toBe(false);
   expect(themeOfferable({ boxes: [], complete: true }, { contract: 1 })).toBe(true);
+});
+
+describe('tarjamah sembunyi (removed option: Tetapan alone hides a translation)', () => {
+  it('is still accepted on write, so an older app or peer that stored it is not refused', () => {
+    expect(themeStylesError({ arabic: { semua: { tarjamah: 'sembunyi' }, skrin: {} } })).toBeNull();
+  });
+  it('is dropped on read; bawah and sisi stay', () => {
+    const s = sanitizeThemeStyles({ arabic: { semua: { tarjamah: 'sembunyi', scale: 'L' }, skrin: { 'arab-ayat': { tarjamah: 'sisi' } } } });
+    expect(s.arabic!.semua).toEqual({ scale: 'L' });
+    expect(s.arabic!.skrin['arab-ayat']).toEqual({ tarjamah: 'sisi' });
+  });
+});
+
+describe('goldOutline ("Garis emas pada tajuk", theme round 2)', () => {
+  it('takes on or off, refuses anything else, and keeps it on read', () => {
+    expect(styleValueError('goldOutline', 'on')).toBeNull();
+    expect(styleValueError('goldOutline', 'off')).toBeNull();
+    for (const v of [true, 'yes', '', 1]) expect(styleValueError('goldOutline', v)).not.toBeNull();
+    expect(themeStylesError({ default: { semua: { goldOutline: 'off' }, skrin: {} } })).toBeNull();
+    expect(sanitizeThemeStyles({ oldschool: { semua: { goldOutline: 'off', scale: 'L' }, skrin: { kuliah: { goldOutline: 'maybe' } } } }).oldschool)
+      .toEqual({ semua: { goldOutline: 'off', scale: 'L' }, skrin: { kuliah: {} } });
+  });
+  it('is drawn by Default, Old School and Arabic Art only', () => {
+    expect([...GOLD_OUTLINE_THEMES]).toEqual(['default', 'oldschool', 'arabic']);
+  });
 });

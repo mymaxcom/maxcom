@@ -1,14 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, it } from 'vitest';
-import { KIOSK_TEMPLATE_IDS, THEME_TITLES } from '@surau/core';
+import { GOLD_OUTLINE_THEMES, KIOSK_TEMPLATE_IDS, THEME_TITLES } from '@surau/core';
 import { BUILT_IN_THEMES, resolveTheme } from '../src/themes/index.ts';
 import { srcDir } from './themeCss.ts';
 const file = (id: string, name: string) => resolve(srcDir(), 'themes', id, name);
 it('every built-in is a pack: theme.json and theme.css', () => {
   for (const id of KIOSK_TEMPLATE_IDS) {
     expect(existsSync(file(id, 'theme.css')), id).toBe(true);
-    expect(BUILT_IN_THEMES[id]).toEqual({ name: id, title: THEME_TITLES[id], version: 1, contract: 1, base: id, defaults: { semua: id === 'arabic' ? { arFont: 'hafs' } : { shade: id === 'default' ? 55 : 35 } } });
+    expect(BUILT_IN_THEMES[id]).toEqual({ name: id, title: THEME_TITLES[id], version: 1, contract: 1, base: id, defaults: { semua: { ...(id === 'arabic' ? { arFont: 'hafs' } : { shade: id === 'default' ? 55 : 35 }), ...(GOLD_OUTLINE_THEMES as readonly string[]).includes(id) ? { goldOutline: 'on' } : {} } } });
   }
 });
 it('a theme file styles only its own template', () => {
