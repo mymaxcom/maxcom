@@ -1,6 +1,8 @@
 /** Feature registry: every switchable feature, its group, lock state, defaults and labels. */
 
 import type { ImageRef } from '../image.ts';
+import type { ThemeStyles } from '../theme/style.ts';
+import type { InstalledPacks } from '../theme/packs.ts';
 
 export type FeatureGroup = 'solat' | 'skrin' | 'kandungan' | 'quran' | 'audio' | 'live' | 'kewangan' | 'jemaah' | 'awan' | 'keselamatan' | 'lanjutan';
 
@@ -17,7 +19,7 @@ export type FeatureKey =
   | 'prayerBar' | 'clock' | 'prayerSequenceSafety' | 'zone' | 'azanCountdown' | 'masukWaktu'
   | 'iqamahCountdown' | 'solatScreen' | 'jumaat' | 'tarawih' | 'syurukWarning' | 'imsakBeep'
   | 'isyraq' | 'firstAzanSubuh' | 'dataSources' | 'location' | 'prayerCalc' | 'prayerSources'
-  | 'surauInfo' | 'hijriDate' | 'backgrounds' | 'autoTone' | 'language' | 'orientation' | 'kioskTemplate'
+  | 'surauInfo' | 'hijriDate' | 'backgrounds' | 'autoTone' | 'language' | 'orientation' | 'kioskTemplate' | 'themeStyle'
   | 'kuliahCard' | 'penceramahPhoto' | 'kitabCover' | 'pengumuman' | 'ticker' | 'posters'
   | 'programKhas' | 'takwim' | 'hadis' | 'worldTimes' | 'tugasan'
   | 'ayatCard' | 'zikirSelepasSolat' | 'quranReader' | 'tilawah'
@@ -54,9 +56,12 @@ export interface IsyraqSettings extends FeatureSettings { minutesAfterSyuruk: nu
 export interface HijriDateSettings extends FeatureSettings { adjustDays: number; switchAt: 'maghrib' | 'midnight' }
 export interface AutoToneSettings extends FeatureSettings { override: string | null }
 /** The TV presentation templates; 'default' is the original single-colour look (backgrounds and autoTone apply to it only). */
-export const KIOSK_TEMPLATE_IDS = ['default', 'colourful', 'creative', 'oldschool', 'minimal'] as const;
+export const KIOSK_TEMPLATE_IDS = ['default', 'colourful', 'creative', 'oldschool', 'minimal', 'arabic'] as const;
 export type KioskTemplateId = (typeof KIOSK_TEMPLATE_IDS)[number];
-export interface KioskTemplateSettings extends FeatureSettings { templateId: KioskTemplateId }
+/** `templateId` is a built-in id or the name of an uploaded theme. */
+export interface KioskTemplateSettings extends FeatureSettings { templateId: string }
+/** Per-theme menu values and installed pack records; each map is one whole value. */
+export interface ThemeStyleSettings extends FeatureSettings { styles: ThemeStyles; packs: InstalledPacks }
 
 /** Typed views keyed by feature; features not listed use the plain FeatureSettings shape. */
 export interface TypedSettings {
@@ -71,6 +76,7 @@ export interface TypedSettings {
   hijriDate: HijriDateSettings;
   autoTone: AutoToneSettings;
   kioskTemplate: KioskTemplateSettings;
+  themeStyle: ThemeStyleSettings;
   surauInfo: SurauInfoSettings;
   dataSources: DataSourcesSettings;
   location: LocationSettings;
@@ -233,6 +239,7 @@ export const FEATURES: readonly FeatureDef[] = [
   def('language', 'skrin', false, true, { lang: 'ms' }, 'Bahasa', 'Language'),
   def('orientation', 'skrin', false, true, { mode: 'landscape' }, 'Orientasi skrin', 'Screen orientation'),
   def('kioskTemplate', 'skrin', false, true, { templateId: 'default' }, 'Templat paparan', 'Display template'),
+  def('themeStyle', 'skrin', false, true, { styles: {}, packs: {} }, 'Gaya tema', 'Theme style'),
 
   def('kuliahCard', 'kandungan', false, true, { durationSeconds: 15, order: 1, daysAhead: 7 }, 'Kad kuliah', 'Lecture card'),
   def('penceramahPhoto', 'kandungan', false, true, { shape: 'round' }, 'Gambar penceramah', 'Speaker photo'),

@@ -1,0 +1,12 @@
+/* Arabic Art: the Arabic typography of the theme (spec 6.8 and 6.11). Uthmani Hafs (QPC Hafs, unmodified) for Quranic
+   text, Amiri for every other Arabic text, a generous line distance so the marks never touch the line above. The
+   surau's Arabic controls (face, size, harakat colour, line distance, translation place) change these through the
+   stage variables and attributes; this file only sets what the theme starts from. */
+.stage[data-template='arabic'] {
+  --font-arab: 'Amiri', 'Amiri Quran', serif;
+  --font-quran: 'QPC Hafs', 'Amiri Quran', serif;
+  --ar-lh: 1.95;
+}
+/* :where keeps these defaults below the surau's own choice of face (the data-arfont rules of the contract). */
+.stage[data-template='arabic'] :where(.arab, .arabic) { font-family: var(--font-arab); }
+.stage[data-template='arabic'] :where(.quran, .ayat__ar) { font-family: var(--font-quran); }

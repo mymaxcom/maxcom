@@ -25,12 +25,19 @@ MAXCOM is for non-commercial use by a surau. If it is ever offered to other sura
 
 - Plus Jakarta Sans: SIL Open Font License 1.1.
 - Amiri Quran: SIL Open Font License 1.1.
-- Amiri (@fontsource/amiri 5.3.0, Latin 400 and 700 only): SIL Open Font License 1.1. Headings of the kiosk's Old School template.
+- Amiri (@fontsource/amiri 5.3.0, Latin 400 and 700 for the Old School headings; Arabic 400 and 700 for Arabic text in Arabic Art and for the Arabic controls): SIL Open Font License 1.1.
+- MX Harakat Quran and MX Harakat Naskh (themes plan D): marks-only modified versions of Amiri Quran and Amiri (every glyph but the combining marks emptied, new family names, built by `scripts/build-marks-fonts.py`), SIL Open Font License 1.1, used to draw the harakat in their own colour. Files and licence text: `apps/kiosk-display/src/assets/fonts/marks/`. The KFGQPC Hafs font is never modified.
 
 ## Box server image libraries (Plan 4)
 
-- jpeg-js 0.4.4 (https://github.com/jpeg-js/jpeg-js): BSD 3-Clause License. Used to decode and re-encode uploaded JPEG images (logo, posters) on the box.
-- pngjs 7.0.0 (https://github.com/pngjs/pngjs): MIT License. Used to decode and re-encode uploaded PNG images on the box.
+- jpeg-js 0.4.4 (https://github.com/jpeg-js/jpeg-js): BSD 3-Clause License. Used to decode and re-encode uploaded JPEG images (logo, posters, and the pictures inside an uploaded theme file) on the box.
+- pngjs 7.0.0 (https://github.com/pngjs/pngjs): MIT License. Used to decode and re-encode uploaded PNG images (and the pictures inside an uploaded theme file) on the box.
+
+## Theme file checking (themes plan C)
+
+- css-tree 3.2.1 (https://github.com/csstree/csstree): MIT License. Used on the box to parse uploaded theme files (.maxtheme) before they are accepted.
+- mdn-data 2.27.1 (https://github.com/mdn/data): CC0-1.0, a dependency of css-tree.
+- source-map-js 1.2.2 (https://github.com/7rulnik/source-map-js): BSD-3-Clause License, a dependency of css-tree.
 
 ## Kiosk QR drawing (Plan 14)
 

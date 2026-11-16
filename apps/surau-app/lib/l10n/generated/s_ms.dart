@@ -5598,4 +5598,519 @@ class SMs extends S {
   String offlinePinWrong(int left) {
     return 'PIN salah. $left cubaan lagi.';
   }
+
+  @override
+  String get themeGalleryTitle => 'Templat paparan';
+
+  @override
+  String get themeInUse => 'Sedang digunakan';
+
+  @override
+  String get themeActive => 'Aktif';
+
+  @override
+  String get themeBuiltIn => 'Bawaan MAXCOM';
+
+  @override
+  String get themeNewBadge => 'BAHARU';
+
+  @override
+  String get themeGroupArab => 'Arab';
+
+  @override
+  String get themeScreenArabAyat => 'Ayat Arab';
+
+  @override
+  String get themeScreenArabZikir => 'Zikir Arab';
+
+  @override
+  String get themeScreenArabHadis => 'Hadis Arab';
+
+  @override
+  String get themeArabLooksOff =>
+      'Tema ini memaparkan ayat, hadis dan zikir dalam rupa biasa. Skrin Arab digunakan oleh tema Arabic Art dan tema yang menyertakannya.';
+
+  @override
+  String get themeArabSection => 'Tulisan Arab';
+
+  @override
+  String get themeArFont => 'Fon Arab';
+
+  @override
+  String get themeArFontHafs => 'Uthmani Hafs';
+
+  @override
+  String get themeArFontAmiriQuran => 'Amiri Quran';
+
+  @override
+  String get themeArFontAmiri => 'Amiri';
+
+  @override
+  String get themeArFontSample => 'ٱلْحَمْدُ لِلَّهِ';
+
+  @override
+  String get themeArSize => 'Saiz Arab';
+
+  @override
+  String get themeArSizeSmall => 'Kecil';
+
+  @override
+  String get themeArSizeBig => 'Besar';
+
+  @override
+  String get themeHarakat => 'Warna baris';
+
+  @override
+  String get themeHarakatFollow => 'Ikut warna teks';
+
+  @override
+  String get themeHarakatOwn => 'Warna sendiri';
+
+  @override
+  String get themeHarakatNote =>
+      'Warna baris memerlukan fon Amiri Quran atau Amiri. Uthmani Hafs dipapar dalam satu warna.';
+
+  @override
+  String get themeArLine => 'Jarak baris';
+
+  @override
+  String get themeArLineTight => 'Rapat';
+
+  @override
+  String get themeArLineWide => 'Luas';
+
+  @override
+  String get themeTarjamah => 'Terjemahan';
+
+  @override
+  String get themeTarjamahBelow => 'Bawah';
+
+  @override
+  String get themeTarjamahBeside => 'Sisi';
+
+  @override
+  String get themeTarjamahHide => 'Sembunyi';
+
+  @override
+  String get themeTarjamahNote =>
+      'Sembunyi hanya untuk skrin Arab. Jika Tetapan menutup terjemahan, Tetapan diikut.';
+
+  @override
+  String themeAll(int n) {
+    return 'Semua tema ($n)';
+  }
+
+  @override
+  String get themeCustomise => 'Ubah suai';
+
+  @override
+  String get themeUse => 'Guna tema ini';
+
+  @override
+  String themeChangedScreens(int n) {
+    return '$n skrin diubah suai.';
+  }
+
+  @override
+  String get themeNeedsUpdate =>
+      'Kemas kini MAXCOM di surau untuk mengubah suai tema.';
+
+  @override
+  String get themeGalleryHint => 'Tekan tema untuk lihat dan pilih.';
+
+  @override
+  String get themeChosen => 'Tema ditukar';
+
+  @override
+  String get themeScreenBiasa => 'Biasa';
+
+  @override
+  String get themeScreenAzan => 'Azan';
+
+  @override
+  String get themeScreenMasukWaktu => 'Masuk waktu';
+
+  @override
+  String get themeScreenIqamah => 'Iqamah';
+
+  @override
+  String get themeScreenSolat => 'Solat';
+
+  @override
+  String get themeScreenJumaat => 'Jumaat';
+
+  @override
+  String get themeScreenLive => 'Live';
+
+  @override
+  String get themeScreenPoster => 'Poster';
+
+  @override
+  String get themeScreenKuliah => 'Kuliah';
+
+  @override
+  String get themeScreenProgram => 'Program';
+
+  @override
+  String get themeScreenHadis => 'Hadis';
+
+  @override
+  String get themeScreenZikir => 'Zikir';
+
+  @override
+  String get themeScreenPengumuman => 'Pengumuman';
+
+  @override
+  String get themeScreenTakwim => 'Takwim';
+
+  @override
+  String get themeScreenTabung => 'Tabung';
+
+  @override
+  String get themeScreenAyat => 'Ayat';
+
+  @override
+  String get themeGroupPrayer => 'Waktu solat';
+
+  @override
+  String get themeGroupContent => 'Kandungan';
+
+  @override
+  String get themeBg => 'Latar belakang';
+
+  @override
+  String get themeFollowTheme => 'Ikut tema';
+
+  @override
+  String get themeOwnPicture => 'Gambar sendiri';
+
+  @override
+  String get themeChange => 'Tukar';
+
+  @override
+  String get themeFit => 'Paparan gambar';
+
+  @override
+  String get themeFitFull => 'Penuh';
+
+  @override
+  String get themeFitStretch => 'Regang';
+
+  @override
+  String get themeFitMedium => 'Sederhana';
+
+  @override
+  String get themeFitSmall => 'Kecil';
+
+  @override
+  String get themePos => 'Kedudukan gambar';
+
+  @override
+  String get themeLeft => 'Kiri';
+
+  @override
+  String get themeCentre => 'Tengah';
+
+  @override
+  String get themeRight => 'Kanan';
+
+  @override
+  String get themeShade => 'Kegelapan lapisan';
+
+  @override
+  String get themeShadeNote =>
+      'Teks kekal jelas: warna teks auto diukur dari gambar.';
+
+  @override
+  String get themeAccent => 'Warna utama';
+
+  @override
+  String get themeAccentTheme => '(tema)';
+
+  @override
+  String get themeAccentOther => 'Warna lain';
+
+  @override
+  String get themeText => 'Warna teks';
+
+  @override
+  String get themeTextAuto => 'Auto';
+
+  @override
+  String get themeTextPick => 'Pilih warna';
+
+  @override
+  String get themeFont => 'Fon';
+
+  @override
+  String get themeSize => 'Saiz teks';
+
+  @override
+  String get themeSizeNote =>
+      'S ialah saiz sekarang. Tiada saiz lebih kecil supaya jelas dari 3 meter.';
+
+  @override
+  String get themeAlign => 'Susunan kandungan';
+
+  @override
+  String get themeChangedBadge => 'Diubah';
+
+  @override
+  String get themeReset => 'Set semula';
+
+  @override
+  String get themeApplyAll => 'Guna untuk semua skrin';
+
+  @override
+  String themeEditTitle(String title) {
+    return 'Ubah suai: $title';
+  }
+
+  @override
+  String themeEditScreen(String name) {
+    return 'Skrin $name';
+  }
+
+  @override
+  String get themeLivePreview => 'Pratonton langsung';
+
+  @override
+  String themeApplyAllConfirm(String title) {
+    return 'Guna rupa skrin ini untuk semua skrin tema $title?';
+  }
+
+  @override
+  String get themeResetScreen => 'Set semula skrin ini';
+
+  @override
+  String themeResetScreenConfirm(String screen) {
+    return 'Kembali kepada rupa tema bagi skrin $screen?';
+  }
+
+  @override
+  String get themeResetAll => 'Set semula semua skrin';
+
+  @override
+  String get themeFreshFailed =>
+      'Tidak dapat memuatkan nilai terkini. Tiada yang disimpan. Cuba lagi.';
+
+  @override
+  String themeResetConfirm(String title) {
+    return 'Kembali kepada rupa asal tema $title?';
+  }
+
+  @override
+  String get themeDiscardTitle => 'Buang perubahan yang belum disimpan?';
+
+  @override
+  String get themeDiscard => 'Buang';
+
+  @override
+  String get themeKeepEditing => 'Terus sunting';
+
+  @override
+  String get themeSaved => 'Gaya tema disimpan';
+
+  @override
+  String get themePickPicture => 'Pilih gambar';
+
+  @override
+  String get themeCustomColour => 'Warna sendiri (#rrggbb)';
+
+  @override
+  String get themeUploadTitle => 'Muat naik tema';
+
+  @override
+  String themeUploadStep(int n) {
+    return 'Langkah $n daripada 3';
+  }
+
+  @override
+  String get themeUploadPickTitle => 'Pilih fail tema';
+
+  @override
+  String get themeUploadPickHint => 'Fail .maxtheme, paling besar 15 MB.';
+
+  @override
+  String get themeUploadPickButton => 'Pilih fail';
+
+  @override
+  String get themeUploadChecksNote =>
+      'MAXCOM di surau akan menyemak fail ini: saiz, kandungan, gaya CSS dan versi. Tiada apa dipasang sebelum anda tekan Pasang.';
+
+  @override
+  String get themeUploadCancel => 'Batal';
+
+  @override
+  String get themeUploadCheck => 'Semak fail';
+
+  @override
+  String get themeUploadChecking => 'Menyemak fail...';
+
+  @override
+  String get themeUploadValid => 'Tema sah dan sedia dipasang';
+
+  @override
+  String get themeUploadNoProblems => 'Tiada masalah ditemui.';
+
+  @override
+  String themeUploadPreview(String screen) {
+    return 'Pratonton: $screen';
+  }
+
+  @override
+  String get themeUploadName => 'Nama';
+
+  @override
+  String get themeUploadVersion => 'Versi';
+
+  @override
+  String themeUploadVersionNew(int n) {
+    return '$n (tema baharu)';
+  }
+
+  @override
+  String themeUploadVersionUpdate(int n, int m) {
+    return '$n (kemas kini daripada versi $m)';
+  }
+
+  @override
+  String get themeUploadBase => 'Berasaskan';
+
+  @override
+  String get themeUploadContract => 'Kontrak';
+
+  @override
+  String get themeUploadContent => 'Kandungan';
+
+  @override
+  String themeUploadContentValue(int n, String size) {
+    return '$n fail, $size';
+  }
+
+  @override
+  String get themeUploadOwnScreens => 'Skrin bergaya sendiri';
+
+  @override
+  String get themeUploadInstall => 'Pasang';
+
+  @override
+  String get themeUploadInstallAnyway => 'Pasang juga';
+
+  @override
+  String themeUploadWarnTitle(int n) {
+    return 'Boleh dipasang, dengan $n amaran';
+  }
+
+  @override
+  String get themeUploadClose => 'Tutup';
+
+  @override
+  String themeUploadInstalled(String title) {
+    return '$title dipasang';
+  }
+
+  @override
+  String themeUploadInstalledNote(String current) {
+    return 'Tema kini ada dalam galeri. TV masih memakai $current sehingga anda memilih tema ini.';
+  }
+
+  @override
+  String get themeUploadSavedNote =>
+      'Disimpan di MAXCOM surau dan diselaraskan ke awan.';
+
+  @override
+  String get themeUploadBack => 'Kembali ke galeri';
+
+  @override
+  String get themeUploadUseNow => 'Guna sekarang';
+
+  @override
+  String get themeUploadTooBig => 'Fail melebihi 15 MB.';
+
+  @override
+  String get themeUploadWrongType =>
+      'Pilih fail yang berakhir dengan .maxtheme.';
+
+  @override
+  String get themeUploadUnreadable => 'Fail tidak dapat dibaca.';
+
+  @override
+  String get themeUploadExpired =>
+      'Semakan sudah tamat tempoh. Semak fail sekali lagi.';
+
+  @override
+  String themeUploadedBadge(int n) {
+    return 'Dimuat naik, versi $n';
+  }
+
+  @override
+  String get themeInvalidBadge => 'Tema tidak sah';
+
+  @override
+  String get themeInvalidNote =>
+      'TV memakai tema asas kerana tema ini menyembunyikan jam, waktu solat atau logo. Betulkan fail tema dan muat naik versi baharu.';
+
+  @override
+  String get themeNotReady => 'Belum boleh digunakan';
+
+  @override
+  String get themeNotReadyNote =>
+      'Tema ini belum boleh digunakan: ada MAXCOM di surau yang perlu dikemas kini dahulu.';
+
+  @override
+  String get themeCannotConfirm =>
+      'Tidak dapat mengesahkan semua MAXCOM surau sekarang. Cuba lagi apabila talian awan pulih.';
+
+  @override
+  String get themeDownloadTitle => 'Muat turun tema';
+
+  @override
+  String get themeDownloadLine =>
+      'Satu fail untuk disunting di luar MAXCOM atau dikongsi dengan surau lain.';
+
+  @override
+  String get themeFileName => 'Nama fail';
+
+  @override
+  String get themeBake => 'Sertakan ubah suai saya';
+
+  @override
+  String themeBakeNote(int n, int m) {
+    return 'Fail akan menghasilkan rupa yang sama seperti TV surau sekarang ($n skrin diubah, $m gambar latar).';
+  }
+
+  @override
+  String get themeDownloadButton => 'Muat turun';
+
+  @override
+  String get themeShare => 'Kongsi';
+
+  @override
+  String get themeNameBad =>
+      'Nama tidak sah. Guna huruf kecil, nombor dan sempang (paling panjang 32 aksara).';
+
+  @override
+  String get themeDownloaded => 'Fail tema disimpan';
+
+  @override
+  String get themeDownloadFailed => 'Fail tema tidak dapat disediakan.';
+
+  @override
+  String get themeDelete => 'Padam tema';
+
+  @override
+  String themeDeleteConfirm(String title) {
+    return 'Padam tema $title? Ubah suai anda untuk tema ini disimpan.';
+  }
+
+  @override
+  String get themeDeleteInUse =>
+      'Tema ini sedang digunakan. Pilih tema lain dahulu.';
+
+  @override
+  String get themeDeleteBuiltIn => 'Tema bawaan MAXCOM tidak boleh dipadam.';
+
+  @override
+  String get themeDeleted => 'Tema dipadam';
 }

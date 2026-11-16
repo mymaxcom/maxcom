@@ -61,7 +61,7 @@ describe('migration 008', () => {
     db.prepare("INSERT INTO devices (id, user_id, name, platform, enrolled_at) VALUES ('d1', 'u1', 'Telefon', 'android', '2026-10-04T01:00:00.000Z')").run();
     db.prepare("INSERT INTO change_log (at, actor, entity, entity_id, after_json) VALUES ('2026-10-01T01:00:00.000Z', 'local', 'content:penceramah', 'p1', '{}')").run();
 
-    expect(runMigrations(db)).toEqual(['008-sync', '009-worker-outbox', '010-gate-fixes', '011-upload-replace', '012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair']);
+    expect(runMigrations(db)).toEqual(['008-sync', '009-worker-outbox', '010-gate-fixes', '011-upload-replace', '012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair', '019-site-theme-support']);
 
     expect(db.prepare('SELECT rev, edited_at, origin FROM content_items WHERE id = ?').get('p1')).toMatchObject({
       rev: '2026-10-01T01:00:00.000Z|local', edited_at: '2026-10-01T01:00:00.000Z', origin: 'local',

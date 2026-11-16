@@ -4,6 +4,8 @@
 
 import 'dart:convert';
 
+import '../features/theme/theme_style.dart';
+
 /// Same shape the box accepts in `Authorization: Bearer` and the kiosk page
 /// accepts in the message (apps/box-server/src/auth/authz.ts).
 final RegExp _tokenRe = RegExp(r'^[A-Za-z0-9_-]{1,200}$');
@@ -122,3 +124,56 @@ Map<String, Object?> previewPosterMessage(PreviewPoster p) => {
 /// only while the page is on [origin]).
 String previewPosterMessageJs(PreviewPoster p, {required String origin}) =>
     _onlyOnOrigin(origin, 'window.postMessage(${jsonEncode(previewPosterMessage(p))}, location.origin);');
+
+// ---- "show this theme, this screen, with these unsaved values" (Ubah suai) ----
+
+/// The third message type the kiosk preview accepts, after the token (and the
+/// poster): the theme to wear, the catalog screen to show and the surau's
+/// values for that theme as they are in the editor, not yet saved.
+const String previewThemeMessageType = 'surau-preview-theme';
+
+class PreviewThemeRequest {
+  const PreviewThemeRequest({required this.theme, required this.screen, required this.entry, this.staged, this.pack});
+
+  /// A theme name (a-z, 0-9, hyphen).
+  final String theme;
+
+  /// A catalog screen id (`kuliah`, `masuk-waktu`, ...).
+  final String screen;
+
+  /// The values of [theme], in memory only.
+  final ThemeStyleEntry entry;
+
+  /// A staged pack id (the box check of a theme file, not yet installed); null for the built-in and installed themes.
+  final String? staged;
+
+  /// What the staged file says: base, version, images (screen to jpg or png) and defaults, so the page can wear it.
+  final Map<String, Object?>? pack;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PreviewThemeRequest &&
+      other.theme == theme &&
+      other.screen == screen &&
+      other.staged == staged &&
+      jsonEncode(other.pack) == jsonEncode(pack) &&
+      jsonEncode(other.entry.toJson()) == jsonEncode(entry.toJson());
+
+  @override
+  int get hashCode => Object.hash(theme, screen, staged, jsonEncode(pack), jsonEncode(entry.toJson()));
+}
+
+/// The message the kiosk preview reads as "wear this theme on this screen".
+Map<String, Object?> previewThemeMessage(PreviewThemeRequest r) => {
+  'type': previewThemeMessageType,
+  'theme': r.theme,
+  'screen': r.screen,
+  'entry': r.entry.toJson(),
+  if (r.staged != null) 'staged': r.staged,
+  if (r.pack != null) 'pack': r.pack,
+};
+
+/// JavaScript for a WebView: posts [previewThemeMessage] like the other two
+/// (JSON-encoded, own origin only, and only while the page is on [origin]).
+String previewThemeMessageJs(PreviewThemeRequest r, {required String origin}) =>
+    _onlyOnOrigin(origin, 'window.postMessage(${jsonEncode(previewThemeMessage(r))}, location.origin);');

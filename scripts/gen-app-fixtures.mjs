@@ -112,6 +112,8 @@ async function writeRegistry() {
   const {
     FEATURES, PERMISSIONS, ROLES, ROLE_LABELS_MS, ROLE_LABELS_EN, validateFeatureSettings,
     FIELD_META, FEATURE_DESC, SURAHS, HIJRI_MONTHS, RECITERS, SYSTEM_FEATURES, ORDERED_FEATURES, LANJUTAN_ROWS,
+    THEME_CONTRACT, SCREEN_IDS, SCREEN_GROUP, KIOSK_TEMPLATE_IDS, THEME_TITLES, HIDDEN_FEATURES, SCALE_FACTOR,
+    ACCENT_SWATCHES, THEME_STYLE_MAX_BYTES,
   } = core;
   const hash = coreSourceHash();
 
@@ -191,6 +193,17 @@ async function writeRegistry() {
     '',
     `const List<String> systemFeatures = ${dartValue(SYSTEM_FEATURES)};`,
     `const List<String> orderedFeatures = ${dartValue(ORDERED_FEATURES)};`,
+    '',
+    '/// Theme contract tables from core (theme/catalog.ts, theme/style.ts, features/meta.ts).',
+    `const int themeContract = ${THEME_CONTRACT};`,
+    `const List<String> screenIds = ${dartValue([...SCREEN_IDS])};`,
+    `const Map<String, String> screenGroups = ${dartValue(SCREEN_GROUP)};`,
+    `const List<String> builtInThemeIds = ${dartValue([...KIOSK_TEMPLATE_IDS])};`,
+    `const Map<String, String> themeTitles = ${dartValue(THEME_TITLES)};`,
+    `const List<String> hiddenFeatures = ${dartValue(HIDDEN_FEATURES)};`,
+    `const Map<String, double> scaleFactor = ${dartValue(SCALE_FACTOR)};`,
+    `const List<String> accentSwatches = ${dartValue([...ACCENT_SWATCHES])};`,
+    `const int themeStyleMaxBytes = ${THEME_STYLE_MAX_BYTES};`,
     '',
     '/// LANJUTAN_ROWS from core.',
     `const List<Map<String, Object?>> lanjutanRows = ${dartValue(LANJUTAN_ROWS)};`,

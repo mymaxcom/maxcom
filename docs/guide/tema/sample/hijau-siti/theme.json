@@ -1,0 +1,11 @@
+{
+  "name": "hijau-siti",
+  "title": "Hijau Siti",
+  "version": 1,
+  "contract": 1,
+  "base": "creative",
+  "defaults": {
+    "semua": { "accent": "#7fdc9a" },
+    "skrin": { "kuliah": { "align": "tengah" } }
+  }
+}

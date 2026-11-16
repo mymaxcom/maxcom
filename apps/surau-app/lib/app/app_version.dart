@@ -4,7 +4,7 @@
 
 const String appVersion = String.fromEnvironment(
   'MAXCOM_VERSION',
-  defaultValue: '2026.11.9',
+  defaultValue: '2026.11.10',
 );
 
 /// `MAX Admin Client 2026.11.2`: the line shown at the foot of the Lagi sheet.

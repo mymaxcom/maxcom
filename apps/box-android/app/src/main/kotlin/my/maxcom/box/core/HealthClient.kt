@@ -31,6 +31,34 @@ class HealthClient(private val host: String = "127.0.0.1", private val timeoutMs
         }
     }
 
+    /**
+     * The `themeOk` key of the health answer: false when the display had to fall back from an uploaded theme, true when
+     * it is fine, null when the key is absent (an older box) or the box does not answer.
+     */
+    fun themeOk(port: Int): Boolean? {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = (URL("http", host, port, "/api/health").openConnection() as HttpURLConnection).apply {
+                connectTimeout = timeoutMs
+                readTimeout = timeoutMs
+                instanceFollowRedirects = false
+                useCaches = false
+                requestMethod = "GET"
+            }
+            if (conn.responseCode != 200) return null
+            val body = conn.inputStream.use { readCapped(it, MAX_BODY) }
+            val json = JSONObject(String(body, Charsets.UTF_8))
+            if (json.has("themeOk") && json.get("themeOk") is Boolean) json.getBoolean("themeOk") else null
+        } catch (_: Exception) {
+            null
+        } finally {
+            try {
+                conn?.disconnect()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     private fun readCapped(input: InputStream, max: Int): ByteArray {
         val out = ByteArrayOutputStream()
         val buf = ByteArray(2048)

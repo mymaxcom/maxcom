@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { autoTone, dateOf, hourOf, instantOf, tzOf } from '@surau/core';
 import type { ImageStats, Settings, Tone } from '@surau/core';
+import { assetSrc } from '../content/assets.ts';
 import bg1 from '../assets/backgrounds/default-1.jpg';
 import bg2 from '../assets/backgrounds/default-2.jpg';
 
@@ -83,6 +84,16 @@ export function urlFor(name: string): string {
   return bg1;
 }
 
+/**
+ * Whether the picture, after the surau's black shade (0..1) has darkened it, is 'light' or 'dark' (the stage's
+ * `data-pic`): themes dress free text over it light-on-dark or dark-on-light. Null while it has not been measured.
+ */
+export function pictureTone(meanLuma: number | null, shade: number): 'light' | 'dark' | null {
+  if (meanLuma === null || !Number.isFinite(meanLuma)) return null;
+  const s = Number.isFinite(shade) ? Math.min(1, Math.max(0, shade)) : 0;
+  return meanLuma * (1 - s) > 0.25 ? 'light' : 'dark';
+}
+
 /** Apply a manual override (hex accent) or disable auto tone altogether. */
 export function resolveTone(measured: Tone | null, settings: Settings): Tone {
   const at = settings.autoTone;
@@ -113,13 +124,21 @@ export interface BackgroundProps {
   now: Date;
   /** Reports the measured tone of the image that is on screen (null while none is). */
   onTone: (tone: Tone | null) => void;
+  /** A box picture id the surau chose for this screen's menu background; null/absent = none. */
+  menuImage?: string | null;
+  /** The pack's own picture for this screen (used only when no menu picture shows); drawn and measured like `menuImage`. */
+  packImageUrl?: string | null;
+  /** The menu picture could not be loaded: the caller drops it and the next layer shows. */
+  onMenuImageFailed?: () => void;
+  /** Mean luminance (0..1) of the menu picture once measured; null when it cannot be (or there is none). */
+  onMenuLuma?: (luma: number | null) => void;
 }
 
 /**
  * Full-screen background: the picture, its gradient shade and the solat dim layer.
  * Shared by Main and Phase so the picture never flashes between screens.
  */
-export function Background({ settings, now, onTone }: BackgroundProps) {
+export function Background({ settings, now, onTone, menuImage, packImageUrl, onMenuImageFailed, onMenuLuma }: BackgroundProps) {
   const bg = settings.backgrounds;
   const images = useMemo(
     () => (Array.isArray(bg.images) ? (bg.images as unknown[]).filter((x): x is string => typeof x === 'string') : []),
@@ -129,25 +148,42 @@ export function Background({ settings, now, onTone }: BackgroundProps) {
   const src = name ? urlFor(name) : null;
   const [readySrc, setReadySrc] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const probeRef = useRef<HTMLImageElement>(null);
+  // The menu picture (spec 6.10.1): the tone is measured from it instead of the background list's picture.
+  const menuSrc = menuImage ? assetSrc(menuImage) : (packImageUrl ?? null);
 
-  const measure = (img: HTMLImageElement): void => {
+  const report = (img: HTMLImageElement): void => {
     try {
-      onTone(autoTone(sampleImage(img)));
+      const stats = sampleImage(img);
+      onTone(autoTone(stats));
+      if (menuSrc !== null) onMenuLuma?.(stats.meanLuma);
     } catch {
       onTone(null);
+      if (menuSrc !== null) onMenuLuma?.(null);
     }
+  };
+  const measure = (img: HTMLImageElement): void => {
+    if (menuSrc === null) report(img);
     setReadySrc(src);
   };
 
   useEffect(() => {
     const img = imgRef.current;
+    if (menuSrc !== null) return;
     if (!src || !img) {
       onTone(null);
       return;
     }
     if (img.complete && img.naturalWidth > 0) measure(img);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src]);
+  }, [src, menuSrc]);
+
+  useEffect(() => {
+    const probe = probeRef.current;
+    if (menuSrc === null || !probe) return;
+    if (probe.complete && probe.naturalWidth > 0) report(probe);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuSrc]);
 
   return (
     <div class="bg" aria-hidden="true">
@@ -161,6 +197,23 @@ export function Background({ settings, now, onTone }: BackgroundProps) {
           onLoad={(e) => measure(e.currentTarget)}
           onError={() => onTone(null)}
         />
+      ) : null}
+      {menuSrc !== null ? (
+        <>
+          <div class="bg__menu" />
+          <img
+            ref={probeRef}
+            class="bg__probe"
+            src={menuSrc}
+            alt=""
+            onLoad={(e) => report(e.currentTarget)}
+            onError={() => {
+              onTone(null);
+              onMenuLuma?.(null);
+              onMenuImageFailed?.();
+            }}
+          />
+        </>
       ) : null}
       <div class="bg__shade" />
       <div class="bg__dim" />

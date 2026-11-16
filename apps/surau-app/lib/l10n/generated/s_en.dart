@@ -5592,4 +5592,518 @@ class SEn extends S {
   String offlinePinWrong(int left) {
     return 'Wrong PIN. $left tries left.';
   }
+
+  @override
+  String get themeGalleryTitle => 'Display template';
+
+  @override
+  String get themeInUse => 'In use';
+
+  @override
+  String get themeActive => 'Active';
+
+  @override
+  String get themeBuiltIn => 'Built in';
+
+  @override
+  String get themeNewBadge => 'NEW';
+
+  @override
+  String get themeGroupArab => 'Arabic';
+
+  @override
+  String get themeScreenArabAyat => 'Arabic verse';
+
+  @override
+  String get themeScreenArabZikir => 'Arabic zikir';
+
+  @override
+  String get themeScreenArabHadis => 'Arabic hadith';
+
+  @override
+  String get themeArabLooksOff =>
+      'This theme shows verses, hadith and zikir in the normal look. Arabic screens are used by Arabic Art and by themes that include them.';
+
+  @override
+  String get themeArabSection => 'Arabic text';
+
+  @override
+  String get themeArFont => 'Arabic font';
+
+  @override
+  String get themeArFontHafs => 'Uthmani Hafs';
+
+  @override
+  String get themeArFontAmiriQuran => 'Amiri Quran';
+
+  @override
+  String get themeArFontAmiri => 'Amiri';
+
+  @override
+  String get themeArFontSample => 'ٱلْحَمْدُ لِلَّهِ';
+
+  @override
+  String get themeArSize => 'Arabic size';
+
+  @override
+  String get themeArSizeSmall => 'Small';
+
+  @override
+  String get themeArSizeBig => 'Large';
+
+  @override
+  String get themeHarakat => 'Mark colour';
+
+  @override
+  String get themeHarakatFollow => 'Same as text';
+
+  @override
+  String get themeHarakatOwn => 'Own colour';
+
+  @override
+  String get themeHarakatNote =>
+      'The mark colour needs the Amiri Quran or Amiri font. Uthmani Hafs is shown in one colour.';
+
+  @override
+  String get themeArLine => 'Line spacing';
+
+  @override
+  String get themeArLineTight => 'Tight';
+
+  @override
+  String get themeArLineWide => 'Wide';
+
+  @override
+  String get themeTarjamah => 'Translation';
+
+  @override
+  String get themeTarjamahBelow => 'Below';
+
+  @override
+  String get themeTarjamahBeside => 'Beside';
+
+  @override
+  String get themeTarjamahHide => 'Hidden';
+
+  @override
+  String get themeTarjamahNote =>
+      'Hidden is for Arabic screens only. When Tetapan turns a translation off, Tetapan wins.';
+
+  @override
+  String themeAll(int n) {
+    return 'All themes ($n)';
+  }
+
+  @override
+  String get themeCustomise => 'Customise';
+
+  @override
+  String get themeUse => 'Use this theme';
+
+  @override
+  String themeChangedScreens(int n) {
+    return '$n screens customised.';
+  }
+
+  @override
+  String get themeNeedsUpdate =>
+      'Update MAXCOM at the surau to customise themes.';
+
+  @override
+  String get themeGalleryHint => 'Tap a theme to view and choose it.';
+
+  @override
+  String get themeChosen => 'Theme changed';
+
+  @override
+  String get themeScreenBiasa => 'Normal';
+
+  @override
+  String get themeScreenAzan => 'Azan';
+
+  @override
+  String get themeScreenMasukWaktu => 'Prayer time';
+
+  @override
+  String get themeScreenIqamah => 'Iqamah';
+
+  @override
+  String get themeScreenSolat => 'Prayer';
+
+  @override
+  String get themeScreenJumaat => 'Friday';
+
+  @override
+  String get themeScreenLive => 'Live';
+
+  @override
+  String get themeScreenPoster => 'Poster';
+
+  @override
+  String get themeScreenKuliah => 'Lecture';
+
+  @override
+  String get themeScreenProgram => 'Programme';
+
+  @override
+  String get themeScreenHadis => 'Hadith';
+
+  @override
+  String get themeScreenZikir => 'Zikir';
+
+  @override
+  String get themeScreenPengumuman => 'Announcement';
+
+  @override
+  String get themeScreenTakwim => 'Calendar';
+
+  @override
+  String get themeScreenTabung => 'Fund';
+
+  @override
+  String get themeScreenAyat => 'Verse';
+
+  @override
+  String get themeGroupPrayer => 'Prayer times';
+
+  @override
+  String get themeGroupContent => 'Content';
+
+  @override
+  String get themeBg => 'Background';
+
+  @override
+  String get themeFollowTheme => 'Follow the theme';
+
+  @override
+  String get themeOwnPicture => 'Own picture';
+
+  @override
+  String get themeChange => 'Change';
+
+  @override
+  String get themeFit => 'Picture display';
+
+  @override
+  String get themeFitFull => 'Full';
+
+  @override
+  String get themeFitStretch => 'Stretch';
+
+  @override
+  String get themeFitMedium => 'Medium';
+
+  @override
+  String get themeFitSmall => 'Small';
+
+  @override
+  String get themePos => 'Picture position';
+
+  @override
+  String get themeLeft => 'Left';
+
+  @override
+  String get themeCentre => 'Centre';
+
+  @override
+  String get themeRight => 'Right';
+
+  @override
+  String get themeShade => 'Layer darkness';
+
+  @override
+  String get themeShadeNote =>
+      'Text stays clear: the text colour is measured from the picture.';
+
+  @override
+  String get themeAccent => 'Main colour';
+
+  @override
+  String get themeAccentTheme => '(theme)';
+
+  @override
+  String get themeAccentOther => 'Other colour';
+
+  @override
+  String get themeText => 'Text colour';
+
+  @override
+  String get themeTextAuto => 'Auto';
+
+  @override
+  String get themeTextPick => 'Pick a colour';
+
+  @override
+  String get themeFont => 'Font';
+
+  @override
+  String get themeSize => 'Text size';
+
+  @override
+  String get themeSizeNote =>
+      'S is today\'s size. There is no smaller size, so it stays clear from 3 metres.';
+
+  @override
+  String get themeAlign => 'Content alignment';
+
+  @override
+  String get themeChangedBadge => 'Changed';
+
+  @override
+  String get themeReset => 'Reset';
+
+  @override
+  String get themeApplyAll => 'Use for all screens';
+
+  @override
+  String themeEditTitle(String title) {
+    return 'Customise: $title';
+  }
+
+  @override
+  String themeEditScreen(String name) {
+    return '$name screen';
+  }
+
+  @override
+  String get themeLivePreview => 'Live preview';
+
+  @override
+  String themeApplyAllConfirm(String title) {
+    return 'Use the look of this screen for every screen of the $title theme?';
+  }
+
+  @override
+  String get themeResetScreen => 'Reset this screen';
+
+  @override
+  String themeResetScreenConfirm(String screen) {
+    return 'Go back to the theme\'s look for the $screen screen?';
+  }
+
+  @override
+  String get themeResetAll => 'Reset all screens';
+
+  @override
+  String get themeFreshFailed =>
+      'Could not load the latest values. Nothing was saved. Try again.';
+
+  @override
+  String themeResetConfirm(String title) {
+    return 'Go back to the original look of the $title theme?';
+  }
+
+  @override
+  String get themeDiscardTitle => 'Discard the changes that are not saved?';
+
+  @override
+  String get themeDiscard => 'Discard';
+
+  @override
+  String get themeKeepEditing => 'Keep editing';
+
+  @override
+  String get themeSaved => 'Theme style saved';
+
+  @override
+  String get themePickPicture => 'Choose a picture';
+
+  @override
+  String get themeCustomColour => 'Own colour (#rrggbb)';
+
+  @override
+  String get themeUploadTitle => 'Upload theme';
+
+  @override
+  String themeUploadStep(int n) {
+    return 'Step $n of 3';
+  }
+
+  @override
+  String get themeUploadPickTitle => 'Choose the theme file';
+
+  @override
+  String get themeUploadPickHint => 'A .maxtheme file, 15 MB at most.';
+
+  @override
+  String get themeUploadPickButton => 'Choose file';
+
+  @override
+  String get themeUploadChecksNote =>
+      'MAXCOM at the surau will check this file: size, contents, CSS styles and version. Nothing is installed until you press Install.';
+
+  @override
+  String get themeUploadCancel => 'Cancel';
+
+  @override
+  String get themeUploadCheck => 'Check file';
+
+  @override
+  String get themeUploadChecking => 'Checking the file...';
+
+  @override
+  String get themeUploadValid => 'The theme is valid and ready to install';
+
+  @override
+  String get themeUploadNoProblems => 'No problems found.';
+
+  @override
+  String themeUploadPreview(String screen) {
+    return 'Preview: $screen';
+  }
+
+  @override
+  String get themeUploadName => 'Name';
+
+  @override
+  String get themeUploadVersion => 'Version';
+
+  @override
+  String themeUploadVersionNew(int n) {
+    return '$n (new theme)';
+  }
+
+  @override
+  String themeUploadVersionUpdate(int n, int m) {
+    return '$n (update from version $m)';
+  }
+
+  @override
+  String get themeUploadBase => 'Based on';
+
+  @override
+  String get themeUploadContract => 'Contract';
+
+  @override
+  String get themeUploadContent => 'Contents';
+
+  @override
+  String themeUploadContentValue(int n, String size) {
+    return '$n files, $size';
+  }
+
+  @override
+  String get themeUploadOwnScreens => 'Screens with their own styles';
+
+  @override
+  String get themeUploadInstall => 'Install';
+
+  @override
+  String get themeUploadInstallAnyway => 'Install anyway';
+
+  @override
+  String themeUploadWarnTitle(int n) {
+    return 'Can be installed, with $n warnings';
+  }
+
+  @override
+  String get themeUploadClose => 'Close';
+
+  @override
+  String themeUploadInstalled(String title) {
+    return '$title installed';
+  }
+
+  @override
+  String themeUploadInstalledNote(String current) {
+    return 'The theme is now in the gallery. The TV still wears $current until you choose this theme.';
+  }
+
+  @override
+  String get themeUploadSavedNote =>
+      'Kept on the surau MAXCOM and synced to the cloud.';
+
+  @override
+  String get themeUploadBack => 'Back to the gallery';
+
+  @override
+  String get themeUploadUseNow => 'Use now';
+
+  @override
+  String get themeUploadTooBig => 'The file is larger than 15 MB.';
+
+  @override
+  String get themeUploadWrongType => 'Choose a file that ends with .maxtheme.';
+
+  @override
+  String get themeUploadUnreadable => 'The file cannot be read.';
+
+  @override
+  String get themeUploadExpired =>
+      'The check has expired. Check the file again.';
+
+  @override
+  String themeUploadedBadge(int n) {
+    return 'Uploaded, version $n';
+  }
+
+  @override
+  String get themeInvalidBadge => 'Theme not valid';
+
+  @override
+  String get themeInvalidNote =>
+      'The TV wears the base theme because this theme hides the clock, the prayer times or the logo. Fix the theme file and upload a new version.';
+
+  @override
+  String get themeNotReady => 'Not usable yet';
+
+  @override
+  String get themeNotReadyNote =>
+      'This theme cannot be used yet: a MAXCOM at the surau needs to be updated first.';
+
+  @override
+  String get themeCannotConfirm =>
+      'Cannot confirm all the surau MAXCOMs right now. Try again when the cloud connection is back.';
+
+  @override
+  String get themeDownloadTitle => 'Download theme';
+
+  @override
+  String get themeDownloadLine =>
+      'One file to edit outside MAXCOM or share with another surau.';
+
+  @override
+  String get themeFileName => 'File name';
+
+  @override
+  String get themeBake => 'Include my changes';
+
+  @override
+  String themeBakeNote(int n, int m) {
+    return 'The file will look the same as the surau TV now ($n screens changed, $m background pictures).';
+  }
+
+  @override
+  String get themeDownloadButton => 'Download';
+
+  @override
+  String get themeShare => 'Share';
+
+  @override
+  String get themeNameBad =>
+      'The name is not valid. Use lowercase letters, digits and hyphens (32 characters at most).';
+
+  @override
+  String get themeDownloaded => 'Theme file saved';
+
+  @override
+  String get themeDownloadFailed => 'The theme file could not be prepared.';
+
+  @override
+  String get themeDelete => 'Delete theme';
+
+  @override
+  String themeDeleteConfirm(String title) {
+    return 'Delete the theme $title? Your changes for this theme are kept.';
+  }
+
+  @override
+  String get themeDeleteInUse =>
+      'This theme is in use. Choose another theme first.';
+
+  @override
+  String get themeDeleteBuiltIn => 'A built-in MAXCOM theme cannot be deleted.';
+
+  @override
+  String get themeDeleted => 'Theme deleted';
 }

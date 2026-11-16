@@ -75,6 +75,7 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'DELETE', pattern: /^\/api\/kiosk\/live\/whep\/[^/]+$/, permission: 'kiosk:read', sample: '/api/kiosk/live/whep/x' },
   { method: 'GET', pattern: /^\/assets\/[^/.]+$/, permission: 'kiosk:read', sample: `/assets/${'a'.repeat(64)}` },
   { method: 'GET', pattern: /^\/islamic\/audio\/.+$/, permission: 'kiosk:read', sample: '/islamic/audio/x/001/001.mp3' },
+  { method: 'GET', pattern: /^\/themes\/[^/]+\/[^/]+\/.+$/, permission: 'kiosk:read', sample: '/themes/hijau-siti/0123456789abcdef/bundle.css' },
 
   { method: 'GET', pattern: /^\/api\/settings$/, permission: 'settings:read', sample: '/api/settings' },
   { method: 'PUT', pattern: /^\/api\/settings\/[^/]+$/, permission: 'settings:write', sample: '/api/settings/clock' },
@@ -106,6 +107,15 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'POST', pattern: /^\/api\/assets$/, permission: 'assets:write', sample: '/api/assets' },
   { method: 'GET', pattern: /^\/api\/assets$/, permission: 'assets:write', sample: '/api/assets' },
   { method: 'GET', pattern: /^\/api\/assets\/[0-9a-f]{64}\/analyze$/, permission: 'assets:write', sample: `/api/assets/${'a'.repeat(64)}/analyze` },
+
+  // Themes plan C: theme files (.maxtheme). The Pentadbir Surau checks, installs, previews and deletes them.
+  { method: 'POST', pattern: /^\/api\/themes\/check$/, permission: 'settings:write', sample: '/api/themes/check' },
+  { method: 'POST', pattern: /^\/api\/themes\/install$/, permission: 'settings:write', sample: '/api/themes/install' },
+  { method: 'GET', pattern: /^\/api\/themes\/staged\/[^/]+\/.+$/, permission: 'settings:write', sample: `/api/themes/staged/${'a'.repeat(32)}/bundle.css` },
+  { method: 'POST', pattern: /^\/api\/kiosk\/theme-health$/, permission: 'kiosk:read', sample: '/api/kiosk/theme-health' },
+  { method: 'GET', pattern: /^\/api\/themes\/support$/, permission: 'settings:read', sample: '/api/themes/support' },
+  { method: 'GET', pattern: /^\/api\/themes\/[^/]+\/pack$/, permission: 'settings:write', sample: '/api/themes/creative/pack' },
+  { method: 'DELETE', pattern: /^\/api\/themes\/[^/]+$/, permission: 'settings:write', sample: '/api/themes/hijau-siti' },
 
   { method: 'POST', pattern: /^\/api\/islamic\/fetch$/, permission: 'islamic:fetch', sample: '/api/islamic/fetch' },
   { method: 'GET', pattern: /^\/api\/islamic\/.+$/, permission: 'settings:read', sample: '/api/islamic/status' },
@@ -180,6 +190,7 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
 
   { method: 'POST', pattern: /^\/api\/sync\/ops$/, permission: 'session_or_site', sample: '/api/sync/ops' },
   { method: 'GET', pattern: /^\/api\/sync\/snapshot$/, permission: 'session_or_site', sample: '/api/sync/snapshot' },
+  { method: 'GET', pattern: /^\/api\/sync\/theme-support$/, permission: 'session_or_site', sample: '/api/sync/theme-support' },
   { method: 'GET', pattern: /^\/api\/sync\/changes$/, permission: 'session_or_site', sample: '/api/sync/changes' },
   { method: 'POST', pattern: /^\/api\/sync\/link$/, permission: 'public', sample: '/api/sync/link' },
   { method: 'POST', pattern: /^\/api\/sync\/claim$/, permission: 'public', sample: '/api/sync/claim' },
@@ -230,6 +241,8 @@ function inProtectedSpace(path: string): boolean {
   if (path === '/api' || path.startsWith('/api/')) return true;
   if (path === '/islamic' || path.startsWith('/islamic/')) return true;
   if (path === '/assets') return true;
+  // Extracted theme packs: only what a rule lists is served, never an unlisted path or a file with a dot.
+  if (path === '/themes' || path.startsWith('/themes/')) return true;
   if (path.startsWith('/assets/')) {
     // Built page files (hashed, with an extension) are public; asset-store ids have no dot.
     const last = path.slice(path.lastIndexOf('/') + 1);

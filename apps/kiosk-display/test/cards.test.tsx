@@ -99,7 +99,7 @@ afterEach(() => {
 const section = (r: ReturnType<typeof render>) => r.container.querySelector('[data-layer="content"]')!;
 
 describe('KuliahCard', () => {
-  it('shows today\'s kuliah with photo, kitab cover, time and the following kuliah', () => {
+  it('shows today kuliah with photo, label, speaker, topic, time, the prayer and the kitab', () => {
     const r = show(fixture(), 'kuliahCard');
     const card = section(r).querySelector('[data-card="kuliahCard"]')!;
     expect(card).toBeTruthy();
@@ -108,11 +108,11 @@ describe('KuliahCard', () => {
     expect(r.getByText('Ustaz Abu Bakar Ahmad')).toBeTruthy();
     expect(r.getByText('Tafsir Surah Al-Kahfi (siri 4)')).toBeTruthy();
     expect(r.getByText(/7:15 malam/)).toBeTruthy();
-    expect(card.querySelector(`img[src="/assets/${PHOTO}"]`)).toBeTruthy();
-    expect(card.querySelector(`img[src="/assets/${COVER}"]`)).toBeTruthy();
-    expect(r.getByText(/Rab 4 Nov, Maghrib/)).toBeTruthy();
-    expect(r.getByText(/Ustaz Hafiz Rahman/)).toBeTruthy();
-    expect(r.getByText(/Kha 5 Nov, Subuh/)).toBeTruthy();
+    expect(card.querySelector(`.kul-photo img[src="/assets/${PHOTO}"]`)).toBeTruthy();
+    expect(card.querySelector('.kul-label')!.textContent).toBe('Kuliah Maghrib');
+    expect([...card.querySelectorAll('.kul-facts span')].map((e) => e.textContent)).toEqual(['Masa', 'Selepas', 'Kitab']);
+    expect(r.getByText('Solat Maghrib')).toBeTruthy();
+    expect(r.getByText('Tafsir Ibnu Kathir')).toBeTruthy();
     expect(r.queryByText('DIBATALKAN')).toBeNull();
   });
 
@@ -143,10 +143,10 @@ describe('KuliahCard', () => {
 
   it('renders the photo as a circle or a square per penceramahPhoto.shape', () => {
     const r1 = show(fixture(), 'kuliahCard');
-    expect(section(r1).querySelector('.kuliah__photo.is-round')).toBeTruthy();
+    expect(section(r1).querySelector('.kul-photo.is-round')).toBeTruthy();
     cleanup();
     const r2 = show(fixture(), 'kuliahCard', '2026-11-03', '15:00', { settings: { penceramahPhoto: { shape: 'square' } } });
-    expect(section(r2).querySelector('.kuliah__photo.is-square')).toBeTruthy();
+    expect(section(r2).querySelector('.kul-photo.is-square')).toBeTruthy();
   });
 
   it('never emits an image for an asset id that is not a sha256 hex', () => {
@@ -228,83 +228,77 @@ describe('PosterCard', () => {
   });
 });
 
-// The poster takes the whole screen; the normal chrome gives way to one thin strip.
-describe('Poster takeover (full screen + strip)', () => {
+// The poster takes the whole main area of the content shell: brand, compact clock, chip and strip stay over it.
+describe('Poster in the content shell', () => {
   const LOGO = '/surau-logo?v=0123456789abcdef';
   // Effects chain two levels deep (card -> layer -> Main) and Preact runs each after paint (~a few tens of
   // ms in jsdom): give it time rather than microtasks.
   const flush = async () => {
     for (let i = 0; i < 8; i++) await new Promise((res) => setTimeout(res, 10));
   };
-  const strip = (r: ReturnType<typeof render>) => r.container.querySelector('[data-testid="poster-strip"]');
-  const screen = (r: ReturnType<typeof render>) => r.container.querySelector('.screen--main')!;
+  const shell = (r: ReturnType<typeof render>) => r.container.querySelector('.screen--shell');
+  const screen = (r: ReturnType<typeof render>) => r.container.querySelector('.screen')!;
 
-  it('marks the screen, hides the identity block and next box, and shows clock + countdown + surau in the strip', async () => {
+  it('is the shell: brand with the surau name, compact clock, chip, strip; no identity block, no old strip', async () => {
     const r = show(fixture(), 'posters', '2026-11-03', '15:52', {
       settings: { surauInfo: { name: 'Surau Al-Hidayah' } },
     });
     await flush();
-    expect(screen(r).classList.contains('is-poster')).toBe(true);
-    expect(screen(r).getAttribute('data-poster')).toBe('true');
-    expect(r.container.querySelector('.ident')!.getAttribute('aria-hidden')).toBe('true');
-    expect(r.container.querySelector('.next')!.getAttribute('aria-hidden')).toBe('true');
-    const s = strip(r)!;
+    const s = shell(r)!;
     expect(s).toBeTruthy();
     expect(s.querySelector('[data-role="clock"]')!.textContent).toContain('3:52');
-    expect(s.querySelector('.poster-strip__name')!.textContent).toBe('Surau Al-Hidayah');
-    expect(s.querySelector('.poster-strip__label')!.textContent).toBe('Asar dalam');
-    expect(s.querySelector('.poster-strip__cd')!.textContent).toBe('00:28:00');
+    expect(s.querySelector('.region-brand .brand-name')!.textContent).toBe('Surau Al-Hidayah');
+    expect(s.querySelector('.next--chip .chip-k')!.textContent).toBe('Asar');
+    expect(s.querySelector('.next--chip .chip-rel')!.textContent).toBe('28 minit lagi');
     expect(s.querySelector('img[data-role="logo"]')).toBeNull();
-    // The prayer bar is still in the DOM (it fades out in CSS) and the poster is the only card.
-    expect(r.container.querySelector('.pbar')).toBeTruthy();
+    expect(s.querySelector('.ident')).toBeNull();
+    expect(r.container.querySelector('[data-testid="poster-strip"]')).toBeNull();
+    expect(s.querySelector('.region-prayers.strip--compact .pcell')).toBeTruthy();
+    expect(s.querySelector('.pbar')).toBeNull();
     expect(section(r).querySelectorAll('[data-card]').length).toBe(1);
   });
 
-  it('carries the surau logo small in the strip when the bundle has one', async () => {
+  it('carries the surau logo in the shell brand when the bundle has one', async () => {
     const r = show(fixture(), 'posters', '2026-11-03', '15:52', { logo: LOGO });
     await flush();
-    const img = strip(r)!.querySelector('img[data-role="logo"]')!;
+    const img = shell(r)!.querySelector('.region-brand img[data-role="logo"]')!;
     expect(img.getAttribute('src')).toBe(LOGO);
-    expect(img.classList.contains('poster-strip__logo')).toBe(true);
   });
 
-  it('shows seconds and the 24h clock in the strip when the clock settings say so', async () => {
+  it('shows seconds and the 24h clock when the clock settings say so', async () => {
     const r = show(fixture(), 'posters', '2026-11-03', '15:52:07', {
       settings: { prayerBar: { timeFormat: '24h' }, clock: { showSeconds: true } },
     });
     await flush();
-    const clock = strip(r)!.querySelector('[data-role="clock"]')!;
+    const clock = shell(r)!.querySelector('[data-role="clock"]')!;
     expect(clock.textContent).toContain('15:52');
     expect(clock.textContent).toContain('07');
   });
 
-  it('is the normal layout for every other card', async () => {
+  it('every other card with a catalog screen takes the shell too; the main layout is for cards without one', async () => {
     const r = show(fixture(), 'kuliahCard');
     await flush();
-    expect(screen(r).classList.contains('is-poster')).toBe(false);
-    expect(screen(r).getAttribute('data-poster')).toBe('false');
-    expect(strip(r)).toBeNull();
-    expect(r.container.querySelector('.ident')!.getAttribute('aria-hidden')).toBeNull();
+    expect(shell(r)).toBeTruthy();
+    expect(r.container.querySelector('.screen--main')).toBeNull();
   });
 
-  it('leaves poster mode again when the picture fails to load', async () => {
+  it('goes back to the main layout in the same render when the picture fails to load', async () => {
     const r = show(fixture(), 'posters');
     await flush();
-    expect(screen(r).classList.contains('is-poster')).toBe(true);
+    expect(shell(r)).toBeTruthy();
     section(r).querySelector('img[data-item="po1"]')!.dispatchEvent(new Event('error'));
     await flush();
-    expect(screen(r).classList.contains('is-poster')).toBe(false);
-    expect(strip(r)).toBeNull();
+    expect(shell(r)).toBeNull();
+    expect(screen(r).classList.contains('screen--main')).toBe(true);
     expect(section(r).querySelector('[data-card="posters"]')).toBeNull();
   });
 
-  it('never enters poster mode for a poster whose asset id is not a box asset', async () => {
+  it('never takes the shell for a poster whose asset id is not a box asset', async () => {
     const c = fixture();
     c.posters[0]!.assetId = 'javascript:alert(1)';
     const r = show(c, 'posters');
     await flush();
-    expect(screen(r).classList.contains('is-poster')).toBe(false);
-    expect(strip(r)).toBeNull();
+    expect(shell(r)).toBeNull();
   });
 
   it('switches cleanly when the rotation moves from a poster to another card', async () => {
@@ -315,13 +309,12 @@ describe('Poster takeover (full screen + strip)', () => {
     holder.cv = { content: c, rotation, current: currentSlot(rotation, view.now), zikir: null, override: 'posters' };
     const r = render(<Main view={view} lang="ms" />);
     await flush();
-    expect(screen(r).classList.contains('is-poster')).toBe(true);
+    expect(shell(r)).toBeTruthy();
     holder.cv = { ...holder.cv, override: 'pengumuman' };
     r.rerender(<Main view={view} lang="ms" />);
     await flush();
-    expect(screen(r).classList.contains('is-poster')).toBe(false);
-    expect(strip(r)).toBeNull();
     expect(section(r).querySelector('[data-card="pengumuman"]')).toBeTruthy();
+    expect(shell(r)).toBeTruthy(); // the announcement has its own catalog screen: still the shell
   });
 
   // The prayer sequence always wins: a poster slot during a phase must not show, nor its strip.
@@ -345,8 +338,7 @@ describe('Poster takeover (full screen + strip)', () => {
     expect(r.container.querySelector('[data-layer="content"]')).toBeNull();
     expect(r.container.querySelector('[data-card="posters"]')).toBeNull();
     expect(r.container.querySelector('.card--poster')).toBeNull();
-    expect(r.container.querySelector('[data-testid="poster-strip"]')).toBeNull();
-    expect(r.container.querySelector('.is-poster')).toBeNull();
+    expect(r.container.querySelector('.screen--shell')).toBeNull();
     expect(r.container.querySelector('.pbar')).toBeTruthy();
   });
 
@@ -359,10 +351,10 @@ describe('Poster takeover (full screen + strip)', () => {
     await flush();
     expect(r.container.querySelector('.stage')!.getAttribute('data-phase')).toBe('noData');
     expect(r.container.querySelector('.card--poster')).toBeNull();
-    expect(r.container.querySelector('[data-testid="poster-strip"]')).toBeNull();
+    expect(r.container.querySelector('.screen--shell')).toBeNull();
   });
 
-  it('a poster slot in the normal phase through App takes over, with the strip', async () => {
+  it('a poster slot in the normal phase through App takes the shell', async () => {
     const c = fixture();
     const view = makeView('2026-11-03', '15:52');
     const rotation = buildRotation(c, view.settings, view.now);
@@ -371,8 +363,8 @@ describe('Poster takeover (full screen + strip)', () => {
     const r = render(<App />);
     await flush();
     expect(r.container.querySelector('.stage')!.getAttribute('data-phase')).toBe('normal');
-    expect(r.container.querySelector('.screen--main.is-poster')).toBeTruthy();
-    expect(r.container.querySelector('[data-testid="poster-strip"]')).toBeTruthy();
+    expect(r.container.querySelector('.screen--shell')).toBeTruthy();
+    expect(r.container.querySelector('.stage')!.getAttribute('data-screen')).toBe('poster');
   });
 });
 
@@ -531,29 +523,29 @@ describe('HadisCard', () => {
 
   it('an own-list card has no grade chip and no credit; an unstated source prints no attribution', () => {
     const own = show(fixture({ hadisToday: [HADIS] }), 'hadis');
-    expect(hadisCard(own).querySelector('.hadis__grade')).toBeNull();
-    expect(hadisCard(own).querySelector('.hadis__credit')).toBeNull();
+    expect(hadisCard(own).querySelector('.hadis-grade')).toBeNull();
+    expect(hadisCard(own).querySelector('.hadis-credit')).toBeNull();
     cleanup();
     const none = show(fixture({ hadisToday: [{ ...HADIS, attribution: null }] }), 'hadis');
-    expect(hadisCard(none).querySelector('.hadis__src')).toBeNull();
+    expect(hadisCard(none).querySelector('.hadis-attr')).toBeNull();
     expect(hadisCard(none).textContent).not.toMatch(/Tidak dinyatakan/);
   });
 
   it('a HadeethEnc card has the grade chip, Muttafaq alaih with the kitab names, and the credit', () => {
     const r = show(fixture({ hadisToday: [PROVIDER] }), 'hadis');
     const card = hadisCard(r);
-    expect(card.querySelector('.hadis__grade')!.textContent).toBe('Sahih');
-    expect(card.querySelector('.hadis__src')!.textContent).toBe('Muttafaq alaih (al-Bukhari dan Muslim)');
-    expect(card.querySelector('.hadis__credit')!.textContent).toBe('Sumber: HadeethEnc.com');
+    expect(card.querySelector('.hadis-grade')!.textContent).toBe('Sahih');
+    expect(card.querySelector('.hadis-attr')!.textContent).toBe('Muttafaq alaih (al-Bukhari dan Muslim)');
+    expect(card.querySelector('.hadis-credit')!.textContent).toBe('Sumber: HadeethEnc.com');
     // the opening sentence is part of the single card, styled apart
-    expect(card.querySelector('.hadis__intro')!.textContent).toContain('Daripada Ibnu Umar');
+    expect(card.querySelector('.hadis-intro')!.textContent).toContain('Daripada Ibnu Umar');
     expect(card.querySelector('[dir="rtl"]')).toBeTruthy();
     expect(card.getAttribute('data-page')).toBeNull();
   });
 
   it('a short attribution is printed as it is, with no brackets', () => {
     const r = show(fixture({ hadisToday: [{ ...PROVIDER, attribution: 'Riwayat Muslim', attributionLong: undefined }] }), 'hadis');
-    expect(hadisCard(r).querySelector('.hadis__src')!.textContent).toBe('Riwayat Muslim');
+    expect(hadisCard(r).querySelector('.hadis-attr')!.textContent).toBe('Riwayat Muslim');
   });
 
   it('the fields settings hide Arabic, attribution and grade, but never the credit', () => {
@@ -562,9 +554,9 @@ describe('HadisCard', () => {
     });
     const card = hadisCard(r);
     expect(card.querySelector('[dir="rtl"]')).toBeNull();
-    expect(card.querySelector('.hadis__src')).toBeNull();
-    expect(card.querySelector('.hadis__grade')).toBeNull();
-    expect(card.querySelector('.hadis__credit')!.textContent).toBe('Sumber: HadeethEnc.com');
+    expect(card.querySelector('.hadis-attr')).toBeNull();
+    expect(card.querySelector('.hadis-grade')).toBeNull();
+    expect(card.querySelector('.hadis-credit')!.textContent).toBe('Sumber: HadeethEnc.com');
     expect(r.getByText(/Islam itu dibina/)).toBeTruthy();
   });
 
@@ -587,19 +579,17 @@ describe('HadisCard', () => {
     const first = show(content, null, '2026-11-03', '00:00');
     let card = hadisCard(first);
     expect(card.getAttribute('data-page')).toBe('0');
-    expect(card.querySelector('.hadis__parts-label')!.textContent).toBe(`Bahagian 1 daripada ${parts.length}`);
-    expect(card.querySelectorAll('.hadis__dots i')).toHaveLength(parts.length);
-    expect(card.querySelectorAll('.hadis__dots i.is-on')).toHaveLength(1);
+    expect(card.querySelector('.hadis-part')!.textContent).toBe(`Bahagian 1 daripada ${parts.length}`);
     expect(card.querySelector('[dir="rtl"]')).toBeNull();
-    expect(card.querySelector('.hadis__intro')).toBeNull();
-    expect(card.querySelector('.hadis__ms')!.textContent).toBe(parts[0]);
-    expect(card.querySelector('.hadis__credit')!.textContent).toBe('Sumber: HadeethEnc.com');
+    expect(card.querySelector('.hadis-intro')).toBeNull();
+    expect(card.querySelector('.hadis-ms')!.textContent).toBe(parts[0]);
+    expect(card.querySelector('.hadis-credit')!.textContent).toBe('Sumber: HadeethEnc.com');
     cleanup();
     const second = show(content, null, '2026-11-03', '00:00:25');
     card = hadisCard(second);
     expect(card.getAttribute('data-page')).toBe('1');
-    expect(card.querySelector('.hadis__parts-label')!.textContent).toBe(`Bahagian 2 daripada ${parts.length}`);
-    expect(card.querySelector('.hadis__ms')!.textContent).toBe(parts[1]);
+    expect(card.querySelector('.hadis-part')!.textContent).toBe(`Bahagian 2 daripada ${parts.length}`);
+    expect(card.querySelector('.hadis-ms')!.textContent).toBe(parts[1]);
   });
 
   it('a chosen size larger than the text allows falls back to the one that fits', () => {
@@ -770,7 +760,7 @@ describe('Idle main screen (no card in the band)', () => {
   const flush = async () => {
     for (let i = 0; i < 8; i++) await new Promise((res) => setTimeout(res, 10));
   };
-  const screen = (r: ReturnType<typeof render>) => r.container.querySelector('.screen--main')!;
+  const screen = (r: ReturnType<typeof render>) => r.container.querySelector('.screen')!;
   const empty = () =>
     fixture({
       kuliah: [], pengumuman: [], posters: [], programKhas: [], takwim: [], hadisToday: [], worldTimes: [], tugasan: [],
@@ -800,7 +790,6 @@ describe('Idle main screen (no card in the band)', () => {
     expect(screen(r).classList.contains('is-idle')).toBe(false);
     section(r).querySelector('img[data-item="po1"]')!.dispatchEvent(new Event('error'));
     await flush();
-    expect(screen(r).classList.contains('is-poster')).toBe(false);
     expect(screen(r).classList.contains('is-idle')).toBe(true);
   });
 });

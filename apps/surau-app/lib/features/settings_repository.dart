@@ -55,7 +55,7 @@ bool _deepEqual(Object? a, Object? b) {
 /// Settings whose object value is one thing, not a group of cells: an
 /// image reference (`{asset, crop, bg, ...}`) is validated and stored as
 /// a whole, so a change to any part sends all of it.
-const Set<String> wholeValueKeys = {'logo'};
+const Set<String> wholeValueKeys = {'logo', 'styles', 'packs'};
 
 /// The keys of [edited] whose value differs from [original], nested
 /// objects reduced to their changed cells (except [wholeValueKeys]);

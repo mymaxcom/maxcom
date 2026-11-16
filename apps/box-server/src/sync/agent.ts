@@ -5,7 +5,7 @@ import { Readable } from 'node:stream';
 import { rootCertificates } from 'node:tls';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { CONTENT_KINDS, MAX_PHOTO_BYTES, isoInstantMs } from '@surau/core';
+import { CONTENT_KINDS, KIOSK_TEMPLATE_IDS, MAX_PHOTO_BYTES, THEME_CONTRACT, isoInstantMs } from '@surau/core';
 import type { FeedEntry, Snapshot } from '@surau/core';
 import { getAssetPath, isAssetId, putAsset } from '../assets/store.ts';
 import { PHOTO_ID_RE, checkJpeg, checkReplicatedBytes, markPresent, photoMeta, photoPath, writePhotoFile } from '../finance/photos.ts';
@@ -46,6 +46,9 @@ const PAGE = 500;
 const MAX_WAKE_TRIES = 5;
 const MAX_ASSETS_PER_CYCLE = 200;
 const ASSET_MAX_BYTES = 20 * 1024 * 1024;
+/** What this box supports for themes, sent on every request to the cloud: `<contract>;<built-in ids>`. */
+export const THEMES_HEADER = 'X-Maxcom-Themes';
+export const THEMES_HEADER_VALUE = `${THEME_CONTRACT};${KIOSK_TEMPLATE_IDS.join(',')}`;
 const API_TIMEOUT_MS = 30_000;
 const ASSET_TIMEOUT_MS = 120_000;
 const ALL = { users: true, devices: true, keys: true, finance: true, financeWrite: true } as const;
@@ -549,7 +552,7 @@ export class SyncAgent {
   private async call(key: SyncKeyData, path: string, mk: () => RequestInit, timeoutMs = API_TIMEOUT_MS): Promise<Response> {
     for (let attempt = 1; ; attempt++) {
       const init = mk();
-      const res = await this.send(`${this.baseUrl(key)}${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${key.siteToken}` } }, timeoutMs);
+      const res = await this.send(`${this.baseUrl(key)}${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${key.siteToken}`, [THEMES_HEADER]: THEMES_HEADER_VALUE } }, timeoutMs);
       if (!(await this.isWaking(res))) return res;
       await res.arrayBuffer().catch(() => undefined);
       this.state = 'waking';
@@ -653,12 +656,45 @@ export class SyncAgent {
     const { head, pulledAssets } = await this.pull(key);
     await this.assetsDown(key, pulledAssets);
     await this.photosDown(key);
+    await this.themeSupportDown(key);
     const at = this.o.now().toISOString();
     this.setState('last_push', at);
     this.setState('last_pull', at);
     this.setState('pending_out', String(this.pendingCount()));
     this.recordRefusals();
     await this.clearDirty(key, head);
+  }
+
+  /**
+   * The theme contract of the surau's other boxes, from the cloud, kept in sync_state for `GET /api/themes/support`.
+   * Best effort: a refusal or a bad answer keeps the older copy (which then ages out), it never fails the cycle.
+   */
+  private async themeSupportDown(key: SyncKeyData): Promise<void> {
+    try {
+      const res = await this.call(key, '/api/sync/theme-support', () => ({ method: 'GET' }));
+      if (res.status !== 200) {
+        await res.arrayBuffer().catch(() => undefined);
+        return;
+      }
+      const body = JSON.parse(await this.readCapped(res, 64 * 1024)) as unknown;
+      const raw = typeof body === 'object' && body !== null ? (body as { boxes?: unknown }).boxes : undefined;
+      if (!Array.isArray(raw) || raw.length > 100) return;
+      const boxes = raw.flatMap((b: unknown) => {
+        if (typeof b !== 'object' || b === null) return [];
+        const o = b as Record<string, unknown>;
+        if (typeof o.boxId !== 'string' || !/^[0-9a-f]{16}$/.test(o.boxId)) return [];
+        return [{
+          boxId: o.boxId,
+          name: typeof o.name === 'string' ? o.name.slice(0, 80) : '',
+          contract: typeof o.contract === 'number' && Number.isInteger(o.contract) && o.contract >= 0 && o.contract < 1000 ? o.contract : null,
+          builtIn: Array.isArray(o.builtIn) ? o.builtIn.filter((x): x is string => typeof x === 'string' && /^[a-z]{1,30}$/.test(x)).slice(0, 20) : [],
+        }];
+      });
+      this.setState('theme_support_json', JSON.stringify(boxes));
+      this.setState('theme_support_at', this.o.now().toISOString());
+    } catch {
+      /* the cached list ages out; "cannot confirm" is the safe answer */
+    }
   }
 
   private async push(key: SyncKeyData): Promise<Set<string>> {

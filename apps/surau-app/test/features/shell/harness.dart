@@ -678,6 +678,17 @@ class ShellHarness {
       final patch = jsonDecode(r.body) as Map<String, dynamic>;
       final current = (settings[key] as Map?)?.cast<String, Object?>() ?? {};
       settings[key] = _deepMerge(current, patch);
+      // As the box: every theme (and every pack) is its own field, replaced whole; the others are left as they are.
+      for (final map in const ['styles', 'packs']) {
+        final sent = patch[map];
+        if (key == 'themeStyle' && sent is Map) {
+          final kept = <String, Object?>{...?(current[map] as Map?)?.cast<String, Object?>()};
+          for (final e in sent.entries) {
+            kept[e.key as String] = e.value;
+          }
+          (settings[key]! as Map)[map] = kept;
+        }
+      }
       return jsonResponse(200, settings);
     }
     final kindList = RegExp(r'^/api/content/([^/]+)$').firstMatch(path);

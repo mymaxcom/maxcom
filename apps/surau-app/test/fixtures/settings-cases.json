@@ -1,5 +1,5 @@
 {
- "coreSourceHash": "d408dc9aa303a4697604d9548a1a88f12e9d9e1ea2cbeba64de77a20d94d5754",
+ "coreSourceHash": "fea08d7d375f589e814220e9d5a3e79f2d615835dbe9a151354144a07859c601",
  "cases": [
   {
    "key": "prayerBar",
@@ -11894,7 +11894,7 @@
    "patch": {
     "templateId": "zzz-wrong"
    },
-   "ok": false
+   "ok": true
   },
   {
    "key": "kioskTemplate",
@@ -11933,6 +11933,93 @@
    "note": "templateId null",
    "patch": {
     "templateId": null
+   },
+   "ok": false
+  },
+  {
+   "key": "themeStyle",
+   "note": "defaults",
+   "patch": {
+    "styles": {},
+    "packs": {}
+   },
+   "ok": true
+  },
+  {
+   "key": "themeStyle",
+   "note": "reset",
+   "patch": {
+    "enabled": true,
+    "styles": {},
+    "packs": {}
+   },
+   "ok": true
+  },
+  {
+   "key": "themeStyle",
+   "note": "enabled true",
+   "patch": {
+    "enabled": true
+   },
+   "ok": true
+  },
+  {
+   "key": "themeStyle",
+   "note": "enabled false",
+   "patch": {
+    "enabled": false
+   },
+   "ok": true
+  },
+  {
+   "key": "themeStyle",
+   "note": "enabled not bool",
+   "patch": {
+    "enabled": "yes"
+   },
+   "ok": false
+  },
+  {
+   "key": "themeStyle",
+   "note": "unknown key",
+   "patch": {
+    "zzUnknown": 1
+   },
+   "ok": false
+  },
+  {
+   "key": "themeStyle",
+   "note": "unknown nested key under styles",
+   "patch": {
+    "styles": {
+     "zzUnknown": 1
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "themeStyle",
+   "note": "styles not an object",
+   "patch": {
+    "styles": 5
+   },
+   "ok": false
+  },
+  {
+   "key": "themeStyle",
+   "note": "unknown nested key under packs",
+   "patch": {
+    "packs": {
+     "zzUnknown": 1
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "themeStyle",
+   "note": "packs not an object",
+   "patch": {
+    "packs": 5
    },
    "ok": false
   },

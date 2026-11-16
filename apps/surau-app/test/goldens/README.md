@@ -145,3 +145,9 @@ from this file.
 | `prayer_records` | Rekod import: file, range, choice, person and state | `test/screens/prayer_records_test.dart` |
 | `prayer_sources` | Sumber waktu solat: order of official, local calculation and file | `test/screens/prayer_sources_test.dart` |
 | `prayer_zone` | Zon JAKIM: the list by district and what is stored | `test/screens/prayer_zone_test.dart` |
+| `theme_gallery` | Templat paparan: the active theme with its live preview and Ubah suai, then the grid of the five built-in themes and the Muat naik tema button | `test/screens/theme_gallery_test.dart` |
+| `theme_editor` | Ubah suai for Creative on the Kuliah screen: live preview, screen chips with a gold dot, the controls with Diubah badges | `test/screens/theme_editor_test.dart` |
+| `theme_editor_arab` | Ubah suai for Arabic Art on the Ayat Arab screen: the Arab group, Tulisan Arab with the three faces and their sample, size, mark colour (switched off with its note under Uthmani Hafs), line spacing, translation place | `test/screens/theme_editor_arab_test.dart` |
+| `theme_upload_ok` | Muat naik tema, step 2: the theme file is valid, preview of the staged pack, its details, Batal and Pasang | `test/screens/theme_upload_test.dart` |
+| `theme_upload_refused` | Muat naik tema, step 2: a file made for a newer contract, the box's sentence and Tutup | `test/screens/theme_upload_test.dart` |
+| `theme_upload_warn` | Muat naik tema, step 2: valid with two warnings (CSS newer than Chrome 91, a large font) and Pasang juga | `test/screens/theme_upload_test.dart` |

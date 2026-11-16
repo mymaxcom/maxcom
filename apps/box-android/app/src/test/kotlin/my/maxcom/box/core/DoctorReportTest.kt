@@ -50,4 +50,13 @@ class DoctorReportTest {
         assertTrue(DoctorReport.freeSpace(1024L * 1024 * 1024).ok)
         assertFalse(DoctorReport.freeSpace(1024L * 1024 * 1024 - 1).ok)
     }
+
+    @Test
+    fun themeLines() {
+        assertEquals("OK: tema paparan sah", DoctorReport.theme(true).render())
+        assertEquals("GAGAL: Tema tidak sah: TV memakai tema asas. Buka apl MAXCOM, Tetapan, Templat paparan.", DoctorReport.theme(false).render())
+        assertEquals("OK: tema paparan: tiada laporan", DoctorReport.theme(null).render())
+        assertFalse(DoctorReport(listOf(DoctorReport.theme(false))).allOk)
+        assertTrue(DoctorReport(listOf(DoctorReport.theme(null))).allOk)
+    }
 }

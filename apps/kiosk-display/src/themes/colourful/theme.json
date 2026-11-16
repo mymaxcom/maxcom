@@ -1,0 +1,10 @@
+{
+  "name": "colourful",
+  "title": "Colourful",
+  "version": 1,
+  "contract": 1,
+  "base": "colourful",
+  "defaults": {
+    "semua": { "shade": 35 }
+  }
+}

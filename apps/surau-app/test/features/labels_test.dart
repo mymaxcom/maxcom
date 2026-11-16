@@ -68,16 +68,13 @@ void main() {
     }
   });
 
-  test('kiosk template: the setting and its five choices read in BM', () {
+  test('kiosk template: the setting and its five English theme names', () {
     expect(settingLabelsMs['templateId'], 'Templat');
     expect(settingLabelsEn['templateId'], 'Template');
-    expect(ruleFor('templateId')!.vals,
-        ['default', 'colourful', 'creative', 'oldschool', 'minimal']);
-    expect(choiceLabelMs('templateId', 'default'), 'Satu Warna (Lalai)');
-    expect(choiceLabelMs('templateId', 'colourful'), 'Berwarna-warni');
-    expect(choiceLabelMs('templateId', 'creative'), 'Kreatif');
-    expect(choiceLabelMs('templateId', 'oldschool'), 'Klasik Lama');
-    expect(choiceLabelMs('templateId', 'minimal'), 'Minimalis Cerah');
+    for (final id in builtInThemeIds) {
+      expect(choiceLabelMs('templateId', id), themeTitles[id], reason: id);
+    }
+    expect(choiceLabelMs('templateId', 'oldschool'), 'Old School');
   });
 
   test('every enum choice has a BM label', () {

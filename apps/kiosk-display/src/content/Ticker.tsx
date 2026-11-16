@@ -69,7 +69,7 @@ export function Ticker({ items, speed, now, lang, tz }: TickerProps) {
     const idx = Math.floor(secondsSinceKlMidnight(now, tz) / STATIC_SECONDS) % items.length;
     const item = items[idx]!;
     return (
-      <div class="ticker glass" data-layer="ticker" data-speed={speedName} data-motion="static">
+      <div class="ticker region-ticker glass" data-layer="ticker" data-speed={speedName} data-motion="static">
         <span class="ticker__cap">{t('tickerCap', lang)}</span>
         <div class="ticker__strip">
           <span class="ticker__static" key={item.id}>{item.text}</span>
@@ -80,7 +80,7 @@ export function Ticker({ items, speed, now, lang, tz }: TickerProps) {
 
   const style = anim ? `animation-duration:${anim.duration.toFixed(2)}s;animation-delay:${anim.delay.toFixed(2)}s` : undefined;
   return (
-    <div class="ticker glass" data-layer="ticker" data-speed={speedName} data-motion="scroll">
+    <div class="ticker region-ticker glass" data-layer="ticker" data-speed={speedName} data-motion="scroll">
       <span class="ticker__cap">{t('tickerCap', lang)}</span>
       <div class="ticker__strip" ref={stripRef}>
         <div class={`ticker__track${anim ? ' is-live' : ''}`} ref={trackRef} style={style}>

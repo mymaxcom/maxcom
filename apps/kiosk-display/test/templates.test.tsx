@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/preact';
 import { KIOSK_TEMPLATE_IDS } from '@surau/core';
 import { makeView } from './helpers.tsx';
+import { themesCss } from './themeCss.ts';
 import type { KioskView } from '../src/data/kiosk.ts';
 
 const holder = vi.hoisted(() => ({ view: null as unknown as KioskView }));
@@ -70,7 +71,8 @@ describe('presentation templates: data-template on the stage', () => {
 
 describe('presentation templates: the stylesheet', () => {
   const file = ['src/templates.css', 'apps/kiosk-display/src/templates.css'].map((p) => resolve(process.cwd(), p)).find(existsSync);
-  const css = file ? readFileSync(file, 'utf8') : '';
+  // The rules live per theme since plan A; templates.css only imports them.
+  const css = file ? themesCss() : '';
   /** Every top-level selector (comments and @-rule wrappers stripped). */
   const selectors = css
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -83,6 +85,8 @@ describe('presentation templates: the stylesheet', () => {
     expect(file).toBeTruthy();
     const app = readFileSync(resolve(file!, '../app.tsx'), 'utf8');
     expect(app.match(/import '\.\/templates\.css';/g)?.length).toBe(1);
+    const imports = [...readFileSync(file!, 'utf8').matchAll(/@import '\.\/themes\/([a-z]+)\/theme\.css';/g)].map((m) => m[1]);
+    expect(imports).toEqual(['default', ...KIOSK_TEMPLATE_IDS.filter((x) => x !== 'default').sort((a, b) => ['colourful', 'creative', 'oldschool', 'minimal', 'arabic'].indexOf(a) - ['colourful', 'creative', 'oldschool', 'minimal', 'arabic'].indexOf(b))]);
   });
 
   it('never restyles the default: every selector is scoped to one non-default template', () => {

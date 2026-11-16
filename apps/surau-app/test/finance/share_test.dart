@@ -89,6 +89,16 @@ void main() {
       );
     });
 
+    test('a theme file (.maxtheme) is accepted with its own type, a name of at most 100 characters', () async {
+      const mime = 'application/vnd.maxcom.theme+zip';
+      expect(shareMimes, contains(mime));
+      expect(() => checkShareArgs('${'a' * 32}.maxtheme', mime, bytes()), returnsNormally);
+      expect(() => checkShareArgs('a' * 100, mime, bytes()), returnsNormally);
+      expect(() => checkShareArgs('a' * 101, mime, bytes()), throwsA(isA<ShareArgsError>()));
+      expect(() => checkShareArgs('../x.maxtheme', mime, bytes()), throwsA(isA<ShareArgsError>()));
+      expect(() => checkShareArgs('a.maxtheme', 'application/zip', bytes()), throwsA(isA<ShareArgsError>()));
+    });
+
     test('a refused argument never reaches the platform', () async {
       handler(null);
       await expectLater(

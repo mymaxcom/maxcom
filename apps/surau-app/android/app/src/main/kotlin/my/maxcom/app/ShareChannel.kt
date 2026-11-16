@@ -28,6 +28,7 @@ object ShareArgs {
         "application/pdf",
         "text/csv",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.maxcom.theme+zip",
     )
 
     private val EMAIL_PACKAGES = setOf(

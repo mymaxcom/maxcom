@@ -1,0 +1,70 @@
+/* Theme author guide. Self-contained: system fonts only, nothing loaded from outside. */
+:root {
+  --ink: #17231f;
+  --muted: #4d5d57;
+  --line: #cfd9d5;
+  --bg: #ffffff;
+  --soft: #f2f6f4;
+  --brand: #0d6b57;
+  --code-bg: #eef3f1;
+}
+* { box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  margin: 0 auto;
+  padding: 1rem 1rem 4rem;
+  max-width: 62rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+}
+.kicker { margin: 0 0 0.25rem; color: var(--brand); font-weight: 700; letter-spacing: 0.02em; }
+h1 { margin: 0 0 0.75rem; font-size: 2rem; line-height: 1.2; }
+.lead { font-size: 1.1rem; color: var(--muted); }
+h2 { margin: 2.5rem 0 0.75rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--brand); font-size: 1.45rem; }
+h3 { margin: 1.5rem 0 0.5rem; font-size: 1.1rem; }
+p { margin: 0.6rem 0; }
+.promise { padding: 0.75rem 1rem; border-left: 4px solid var(--brand); background: var(--soft); font-weight: 600; }
+code, pre { font-family: Consolas, 'Courier New', monospace; font-size: 0.9em; }
+code { padding: 0.05em 0.3em; border-radius: 3px; background: var(--code-bg); overflow-wrap: anywhere; }
+pre { margin: 0.6rem 0; padding: 0.75rem 1rem; border: 1px solid var(--line); border-radius: 6px; background: var(--code-bg); white-space: pre-wrap; overflow-wrap: anywhere; }
+pre code { padding: 0; background: none; }
+.file-name { margin: 1rem 0 0.2rem; font-weight: 700; }
+.wrap { width: 100%; overflow-x: auto; }
+table { width: 100%; margin: 0.8rem 0; border-collapse: collapse; font-size: 0.92rem; }
+th, td { padding: 0.45rem 0.6rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+td.shot-cell { width: 42%; }
+img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; }
+.shot-missing { color: var(--muted); font-style: italic; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1rem; margin: 0.8rem 0; }
+.grid figure { margin: 0; }
+figcaption { margin-top: 0.3rem; font-size: 0.9rem; }
+.note { color: var(--muted); }
+@media (max-width: 40rem) {
+  body { padding: 0.75rem 1rem 3rem; }
+  h1 { font-size: 1.6rem; }
+  td.shot-cell { width: auto; }
+}
+
+/* Print: A4 with 18 mm margins, a new page for every section, no table row cut in two.
+   The footer line (guide name, contract and page number) is printed by the PDF step, not here. */
+@page { size: A4; margin: 18mm; }
+@media print {
+  html { font-size: 10.5pt; }
+  body { max-width: none; padding: 0; }
+  .cover { break-after: avoid; }
+  h2 { break-before: page; break-after: avoid; margin-top: 0; }
+  h2:first-of-type { break-before: auto; }
+  h3 { break-after: avoid; }
+  tr, figure, pre, .promise { break-inside: avoid; }
+  thead { display: table-header-group; }
+  table { font-size: 9pt; }
+  .wrap { overflow: visible; }
+  img { max-height: 90mm; width: auto; max-width: 100%; }
+  td.shot-cell { width: 40%; }
+  .grid { grid-template-columns: repeat(3, 1fr); }
+}
+/* A name that stands alone in a cell (an attribute, a class, a code) is not broken across two lines. */
+td > code:only-child { white-space: nowrap; overflow-wrap: normal; }

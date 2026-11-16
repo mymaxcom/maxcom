@@ -9,7 +9,7 @@
   Checks that need an administrator window (tasks, the box account, the folder rights, the log lines) say
   "LANGKAU: perlukan Run as administrator" when the window is not elevated.
 
-  Check ids: health_http, health_https, release, cert_days, fw_webrtc, fw_srt, fw_https, tools, task_box,
+  Check ids: health_http, theme, health_https, release, cert_days, fw_webrtc, fw_srt, fw_https, tools, task_box,
   task_renew, task_firewall, task_kiosk, box_account, acl_data, acl_root, disk, log_warnings, box_id.
 
 .PARAMETER InstallRoot        Install root (default: the folder above this script when it lives in bin, else C:\Program Files\MAXCOM).
@@ -178,11 +178,23 @@ if (-not $Json -and $Wait -gt 0) { Write-Host "Menunggu kotak menjawab (paling l
 # Checks
 # ---------------------------------------------------------------------------------------------
 
+$script:HealthData = $null
 Test-Run 'health_http' {
   $r = Get-Json "http://127.0.0.1:$port/api/health" $Wait
+  if ($r.Ok) { $script:HealthData = $r.Data }
   if ($r.Ok -and $r.Data.ok -eq $true) { Add-Check 'health_http' 'ok' ("kotak menjawab di http://127.0.0.1:$port/ (versi $($r.Data.version))") }
   elseif ($r.Ok) { Add-Check 'health_http' 'fail' "kotak menjawab di port $port tetapi tidak melaporkan ok" }
   else { Add-Check 'health_http' 'fail' ("kotak tidak menjawab di http://127.0.0.1:$port/ : " + $r.Error) }
+}
+
+# The theme the TV wears: an uploaded theme that hides the clock, the prayer times or the logo is replaced by its base
+# theme on the display and reported here ("themeOk" in the same health answer; an older box has no such key).
+Test-Run 'theme' {
+  $d = $script:HealthData
+  if ($null -eq $d) { Add-Check 'theme' 'skip' 'kotak tidak menjawab (lihat health_http)'; return }
+  if ($null -eq $d.PSObject.Properties['themeOk']) { Add-Check 'theme' 'ok' 'tema paparan: tiada laporan'; return }
+  if ($d.themeOk -eq $false) { Add-Check 'theme' 'fail' 'Tema tidak sah: TV memakai tema asas. Buka apl MAXCOM, Tetapan, Templat paparan.' }
+  else { Add-Check 'theme' 'ok' 'tema paparan sah' }
 }
 
 if ($skipSys) { Add-Check 'health_https' 'skip' $sysSkipText }

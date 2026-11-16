@@ -1,0 +1,292 @@
+/* MAXCOM kiosk theme: arabic (Arabic Art, the sixth built-in; spec 6.11 and 6.12). Islamic art and calligraphy: a deep
+   navy field with a gold star lattice, a double gilded frame, Arabic names beside the Malay ones, mihrab arches, and the
+   Arabic-led screens of ayat, hadis and zikir. The stage stays left to right: only Arabic text blocks are right to left
+   (6.12.1). Every ornament is CSS or one of the four SVG files in img/ (the theme's own, no script, no outside address).
+   The Arabic typography is in arabic.css. Every selector starts with .stage[data-template='arabic'].
+   Chrome 91 only: clip-path, grid, :is(); no backdrop-filter. */
+.stage[data-template='arabic'] {
+  --glass-rgb: 8 20 44;
+  --accent: #d9b25f;
+  --accent-rgb: 217 178 95;
+  --accent-2: #e9c977;
+  --text: #f6ecd4;
+  --ink: #1a1206;
+  --muted: rgb(246 236 212 / 0.72);
+  --hair: rgb(217 178 95 / 0.5);
+  --radius-lg: 0.3rem;
+  --radius-md: 0.3rem;
+  --arch: polygon(0 100%, 0 36%, 1% 30.5%, 2.5% 26.5%, 5% 23%, 10% 17.9%, 15% 14.1%, 20% 11.1%, 25% 8.5%, 30% 6.3%, 35% 4.4%, 40% 2.7%, 45% 1.3%, 50% 0, 55% 1.3%, 60% 2.7%, 65% 4.4%, 70% 6.3%, 75% 8.5%, 80% 11.1%, 85% 14.1%, 90% 17.9%, 95% 23%, 97.5% 26.5%, 99% 30.5%, 100% 36%, 100% 100%);
+  --live-pad-top: 2.083rem;
+  --live-pad-x: 2.083rem;
+  --live-pad-bottom: 1.2rem;
+  --live-gap: 1.2rem;
+  --live-frame-w: 80rem;
+  --live-frame-radius: 0;
+  --live-frame-ring: #d9b25f;
+  --live-frame-fill: rgb(8 20 44 / 0.9);
+  --live-veil: rgb(8 20 44 / 0.72);
+  --live-veil-dim: rgb(4 10 24 / 0.94);
+  --live-side-shadow: none;
+}
+.stage[data-template='arabic'] .bg {
+  background:
+    radial-gradient(ellipse at 50% 38%, rgb(41 74 128 / 0.55), rgb(10 22 48 / 0) 62%) no-repeat,
+    url('./img/khat-star.svg') 0 0 / 6.875rem 6.875rem repeat,
+    #0a1630;
+}
+.stage[data-template='arabic'] .bg__img,
+.stage[data-template='arabic'] .bg__shade { display: none; }
+.stage[data-template='arabic'] .bg__dim { background: rgb(4 10 24 / 0.94); }
+/* The surau's own picture (themeStyle bgImage): above this theme's own field, below all content; the shade is theirs. */
+.stage[data-template='arabic'][data-bg='image'] .bg__menu { z-index: 0; }
+.stage[data-template='arabic'][data-bg='image'] .bg__shade { display: block; background: rgb(0 0 0 / var(--shade, 0)); }
+.stage[data-template='arabic'][data-bg='image'] .deco .d2 { display: none; }
+.stage[data-template='arabic'] .glass {
+  background: rgb(8 20 44 / 0.9);
+  border: 1px solid rgb(217 178 95 / 0.5);
+  border-radius: 0.3rem;
+  box-shadow: inset 0 0 0 0.417rem rgb(8 20 44 / 0.9), inset 0 0 0 0.469rem rgb(217 178 95 / 0.28);
+}
+.stage[data-template='arabic'] :is(.ident, .clock__hm, .source-footer, .phase__head, .phase__centre, .card, .ticker, .zikir, .safe) { text-shadow: none; }
+
+/* ---- Ornament: the gilded frame, the rosette behind the content ---- */
+.stage[data-template='arabic'] .deco .d1 {
+  inset: 0.833rem;
+  border: 0.104rem solid rgb(217 178 95 / 0.55);
+  box-shadow: inset 0 0 0 0.417rem rgb(10 22 48 / 0), inset 0 0 0 0.521rem rgb(217 178 95 / 0.28);
+}
+.stage[data-template='arabic'] .deco .d2 {
+  width: 52.083rem;
+  height: 52.083rem;
+  left: 50%;
+  top: 50%;
+  margin: -26.042rem 0 0 -26.042rem;
+  background: url('./img/khat-rosette.svg') center / contain no-repeat;
+  opacity: 0.1;
+}
+.stage[data-template='arabic'][data-kind='live'] .deco .d2 { display: none; }
+.stage[data-template='arabic'] .sep { border-radius: 0; transform: rotate(45deg); }
+.stage[data-template='arabic'] .eyebrow { letter-spacing: 0.3em; }
+
+/* ---- Arabic beside the Malay: prayer names, the next prayer, the date ---- */
+.stage[data-template='arabic'] .pcell-ar,
+.stage[data-template='arabic'] .next-ar,
+.stage[data-template='arabic'] .date-ar { display: block; font-family: var(--font-arab); color: var(--accent); font-weight: 700; line-height: 1.3; }
+.stage[data-template='arabic'] .date-ar { flex-basis: 100%; font-size: 2.1rem; margin-top: 0.1rem; }
+.stage[data-template='arabic'] .ident__dates { flex-wrap: wrap; }
+.stage[data-template='arabic'] .next-ar { font-size: 2.1rem; }
+
+/* ---- Main screen (kind full): the seven prayers as arches with the Arabic name above the Malay ---- */
+.stage[data-template='arabic'] .ident__name { color: var(--accent-2); letter-spacing: 0.36em; }
+.stage[data-template='arabic'] .clock__aside { color: var(--accent); }
+.stage[data-template='arabic'] .ident__hijri { color: var(--accent-2); }
+.stage[data-template='arabic'] .next { text-align: center; }
+.stage[data-template='arabic'] .next__label { color: var(--accent); }
+.stage[data-template='arabic'] .pbar {
+  height: 9.2rem;
+  gap: 0.8rem;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+}
+.stage[data-template='arabic'] .pbar .pcell {
+  position: relative;
+  justify-content: flex-end;
+  padding: 0.3rem 0.4rem 0.9rem;
+  background: linear-gradient(180deg, #e2c47c, #9c7632);
+  clip-path: var(--arch);
+}
+.stage[data-template='arabic'] .pbar .pcell::before {
+  content: '';
+  position: absolute;
+  inset: 0.156rem;
+  background: linear-gradient(180deg, #13264a, #0b1834);
+  clip-path: var(--arch);
+}
+.stage[data-template='arabic'] .pbar .pcell::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 1rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-left: -0.4rem;
+  background: var(--accent);
+  transform: rotate(45deg);
+}
+.stage[data-template='arabic'] .pbar .pcell > * { position: relative; z-index: 1; }
+.stage[data-template='arabic'] .pbar .pcell-ar { font-size: 2.1rem; }
+.stage[data-template='arabic'] .pbar .pcell__label { color: var(--muted); letter-spacing: 0.16em; }
+.stage[data-template='arabic'] .pbar .pcell__time { font-size: 2.4rem; }
+.stage[data-template='arabic'] .pbar .pcell.is-minor .pcell__time { font-size: 1.9rem; }
+.stage[data-template='arabic'] .pbar .pcell.is-current { color: var(--ink); background: linear-gradient(180deg, #f6dc9a, #c99a40); }
+.stage[data-template='arabic'] .pbar .pcell.is-current::before { background: linear-gradient(180deg, #f0d592, #c99a40); }
+.stage[data-template='arabic'] .pbar .pcell.is-current::after { background: var(--ink); }
+.stage[data-template='arabic'] .pbar .pcell.is-current .pcell-ar,
+.stage[data-template='arabic'] .pbar .pcell.is-current .pcell__label { color: var(--ink); }
+.stage[data-template='arabic'] .pbar .pcell__cd { background: var(--ink); color: #ecd08a; }
+.stage[data-template='arabic'] .ticker__cap { background: linear-gradient(180deg, #ecd08a, #c99a40); }
+.stage[data-template='arabic'] .emergency-band { background: #f5b335; color: #1a1405; border: 0.2rem solid #1a1405; border-radius: 0.3rem; text-shadow: none; }
+
+/* ---- Prayer states (kind hero): inside a mihrab arch ---- */
+.stage[data-template='arabic'][data-kind='hero'] .deco .d2 {
+  width: 64.583rem;
+  height: 39.583rem;
+  top: 6.875rem;
+  left: 50%;
+  margin: 0 0 0 -32.292rem;
+  background: url('./img/khat-arch.svg') center top / 100% 100% no-repeat;
+  opacity: 0.9;
+}
+.stage[data-template='arabic'] .phase__title { color: var(--accent); letter-spacing: 0.1em; }
+.stage[data-template='arabic'] .phase__big { color: var(--text); }
+.stage[data-template='arabic'] .phase__time { color: var(--text); }
+.stage[data-template='arabic'][data-screen='azan'] .phase__title::before,
+.stage[data-template='arabic'][data-screen='iqamah'] .phase__title::before,
+.stage[data-template='arabic'][data-screen='solat'] .phase__title::before,
+.stage[data-template='arabic'][data-screen='jumaat'] .phase__title::before {
+  display: block;
+  font-family: var(--font-arab);
+  font-size: 5.4rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0;
+  color: var(--accent-2);
+}
+.stage[data-template='arabic'][data-screen='azan'] .phase__title::before { content: '\0627\0644\0623\0630\0627\0646'; }
+.stage[data-template='arabic'][data-screen='iqamah'] .phase__title::before { content: '\0627\0644\0625\0642\0627\0645\0629'; }
+.stage[data-template='arabic'][data-screen='solat'] .phase__title::before { content: '\0627\0644\0635\0644\0627\0629'; }
+.stage[data-template='arabic'][data-screen='jumaat'] .phase__title::before { content: '\0627\0644\062c\0645\0639\0629'; }
+.stage[data-template='arabic'][data-screen='solat'] .deco .d2 { opacity: 0.4; }
+.stage[data-template='arabic'][data-dim='true'] .pbar.is-dimmed { opacity: 0.35; }
+
+/* ---- Content screens (kind content): a flat gilded strip with the Arabic names, a hexagonal chip ---- */
+.stage[data-template='arabic'][data-kind='content'] .brand-name { font-size: 1.1rem; letter-spacing: 0.36em; color: var(--accent-2); }
+.stage[data-template='arabic'][data-kind='content'] .deco .d2 { opacity: 0.08; }
+.stage[data-template='arabic'][data-kind='content'] .next--chip {
+  gap: 0.8rem;
+  padding: 0 2.1rem;
+  border: 1px solid var(--hair);
+  border-radius: 0;
+  background: rgb(217 178 95 / 0.14);
+  color: var(--text);
+  clip-path: polygon(1.15rem 0, calc(100% - 1.15rem) 0, 100% 50%, calc(100% - 1.15rem) 100%, 1.15rem 100%, 0 50%);
+}
+.stage[data-template='arabic'][data-kind='content'] .next--chip .next-ar { font-size: 2.1rem; }
+.stage[data-template='arabic'][data-kind='content'] .chip-t { color: var(--accent-2); }
+.stage[data-template='arabic'][data-kind='content'] .clock--compact small { color: var(--accent); opacity: 1; }
+.stage[data-template='arabic'][data-kind='content'] .strip {
+  border: 1px solid var(--hair);
+  border-radius: 0;
+  background: rgb(8 20 44 / 0.9);
+}
+.stage[data-template='arabic'][data-kind='content'] .strip .pcell { gap: 0.6rem; border-left: 1px solid rgb(217 178 95 / 0.22); }
+.stage[data-template='arabic'][data-kind='content'] .strip .pcell:first-child { border-left: 0; }
+.stage[data-template='arabic'][data-kind='content'] .strip .pcell-ar { font-size: 1.8rem; }
+.stage[data-template='arabic'][data-kind='content'] .strip .pcell-label { display: none; }
+.stage[data-template='arabic'][data-kind='content'] .strip .pcell.is-current { background: linear-gradient(180deg, #ecd08a, #c99a40); color: var(--ink); }
+.stage[data-template='arabic'][data-kind='content'] .strip .pcell.is-current .pcell-ar { color: var(--ink); }
+.stage[data-template='arabic'] .kul-photo {
+  border: 0;
+  border-radius: 0;
+  width: 22.917rem;
+  height: 27.083rem;
+  padding: 0.26rem;
+  background: var(--accent);
+  clip-path: var(--arch);
+}
+.stage[data-template='arabic'] .kul-photo img { clip-path: var(--arch); }
+.stage[data-template='arabic'] .kul-label { color: var(--muted); }
+.stage[data-template='arabic'] .kul-topic { color: var(--accent-2); }
+.stage[data-template='arabic'] .hadis-ar { color: var(--text); }
+.stage[data-template='arabic'][data-screen='poster'] .poster-frame img {
+  border: 0.156rem solid var(--accent);
+  box-shadow: 0 0 0 0.52rem #0a1630, 0 0 0 0.625rem rgb(217 178 95 / 0.55), 0 1.563rem 4.167rem rgb(0 0 0 / 0.6);
+}
+.stage[data-template='arabic'][data-screen='poster'] .deco .d2 { display: none; }
+
+/* ---- Arabic-led screens ---- */
+.stage[data-template='arabic'][data-screen='arab-ayat'] .deco .d2 {
+  width: 78.125rem;
+  height: 46.25rem;
+  top: 5.729rem;
+  margin: 0 0 0 -39.0625rem;
+  background: url('./img/khat-arch.svg') center top / 100% 100% no-repeat;
+  opacity: 0.85;
+}
+.stage[data-template='arabic'] .aa-head {
+  min-width: 31.25rem;
+  height: 5.365rem;
+  padding: 0 3.2rem;
+  justify-content: center;
+  background: url('./img/khat-cartouche.svg') center / 100% 100% no-repeat;
+}
+.stage[data-template='arabic'] .aa-surah { color: var(--accent-2); letter-spacing: 0.14em; opacity: 1; }
+.stage[data-template='arabic'] .aa-text { color: var(--text); margin-top: 0.7rem; }
+/* The translation over the lattice gets a darker backing for contrast (spec 6.12.10). */
+.stage[data-template='arabic'][data-screen='arab-ayat'] .aa-tr {
+  padding: 0.8rem 2rem 1rem;
+  background: rgb(4 10 24 / 0.84);
+  border: 1px solid rgb(217 178 95 / 0.35);
+  color: #efe4c8;
+  opacity: 1;
+}
+.stage[data-template='arabic'] .tr-n {
+  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+  border-radius: 0;
+  background: rgb(217 178 95 / 0.28);
+  color: var(--accent-2);
+}
+.stage[data-template='arabic'][data-screen='arab-hadis'] .arab-hadis {
+  border: 2px solid var(--hair);
+  box-shadow: inset 0 0 0 0.521rem rgb(10 22 48 / 0), inset 0 0 0 0.625rem rgb(217 178 95 / 0.25);
+  background: rgb(8 20 44 / 0.76);
+}
+.stage[data-template='arabic'] .ah-ar { color: var(--text); }
+.stage[data-template='arabic'] .ah-ms { color: #efe4c8; opacity: 1; }
+.stage[data-template='arabic'][data-screen='arab-zikir'] .deco .d2 { opacity: 0.16; }
+.stage[data-template='arabic'] .zk-ar { color: var(--accent-2); }
+.stage[data-template='arabic'] .zk-orbit { stroke: rgb(217 178 95 / 0.4); stroke-dasharray: 2 10; }
+.stage[data-template='arabic'] .zk-count b { color: var(--text); }
+.stage[data-template='arabic'] .zk-count span { color: var(--accent); }
+
+/* ---- The live: a framed video in a gilded frame, the side column beside it ---- */
+.stage[data-template='arabic'] .live-screen__frame { box-shadow: 0 0 0 0.156rem var(--accent), 0 0 0 0.521rem #0a1630, 0 0 0 0.625rem rgb(217 178 95 / 0.5); }
+.stage[data-template='arabic'] .live-screen__ident .brand-name { font-size: 1.1rem; letter-spacing: 0.3em; color: var(--accent); }
+.stage[data-template='arabic'] .live-screen__time {
+  padding: 0.8rem 0.6rem 1rem;
+  border: 1px solid var(--hair);
+  background: rgb(10 22 48 / 0.88);
+  text-align: center;
+}
+.stage[data-template='arabic'] .screen--live .next--chip { background: rgb(10 22 48 / 0.9); color: var(--text); border: 1px solid var(--hair); border-radius: 0; }
+.stage[data-template='arabic'] .screen--live .next--chip .next-ar { font-size: 2.4rem; }
+.stage[data-template='arabic'] .screen--live .next--chip .chip-t { color: var(--accent-2); }
+.stage[data-template='arabic'] .live-strip { border-top: 2px solid var(--accent); border-bottom: 1px solid var(--hair); border-radius: 0; text-shadow: none; }
+.stage[data-template='arabic'] .live-strip__tag { background: #d6262c; color: #ffffff; border-right: 0; border-radius: 0; }
+.stage[data-template='arabic'] .live-screen__waiting { color: var(--accent); }
+
+/* ---- Free text over a menu picture (spec 6.3): one dark plate per visual group, as in the other dark themes ---- */
+.stage[data-template='arabic'][data-pic='dark'] { --plate-bg: rgb(6 14 34 / 0.66); }
+.stage[data-template='arabic'][data-pic='light'] { --plate-bg: rgb(255 249 232 / 0.78); }
+.stage[data-template='arabic'][data-pic='dark'] .screen .free-text:not(.clock__hm):not(.clock__aside),
+.stage[data-template='arabic'][data-pic='dark'] .screen .free-text:not(.clock__hm):not(.clock__aside) * {
+  color: #f6ecd4;
+  text-shadow: 0 0.05em 0.14em rgb(0 0 0 / 0.5);
+}
+.stage[data-template='arabic'][data-pic='light'] .screen .free-text:not(.clock__hm):not(.clock__aside),
+.stage[data-template='arabic'][data-pic='light'] .screen .free-text:not(.clock__hm):not(.clock__aside) * {
+  color: #1a2850;
+  text-shadow: 0 0.05em 0.14em rgb(255 255 255 / 0.6);
+}
+.stage[data-template='arabic'][data-pic] .screen .ident__name.free-text,
+.stage[data-template='arabic'][data-pic] .screen .ident__dates,
+.stage[data-template='arabic'][data-pic] .screen .live-screen__dates,
+.stage[data-template='arabic'][data-pic] .screen .phase__clock.free-text,
+.stage[data-template='arabic'][data-pic] .screen .source-footer.free-text {
+  background-color: var(--plate-bg);
+  box-shadow: 0 0 0 var(--plate-pad) var(--plate-bg);
+  border-radius: var(--plate-radius);
+}

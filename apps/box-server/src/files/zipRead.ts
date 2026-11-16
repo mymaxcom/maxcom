@@ -112,6 +112,8 @@ export function readZipEntries(
     const nameLen = buf.readUInt16LE(p + 28);
     const extraLen = buf.readUInt16LE(p + 30);
     const commentLen = buf.readUInt16LE(p + 32);
+    const madeBy = buf.readUInt16LE(p + 4);
+    const externalAttrs = buf.readUInt32LE(p + 38);
     const localOffset = buf.readUInt32LE(p + 42);
     const next = p + 46 + nameLen + extraLen + commentLen;
     if (next > cdEnd) throw new ZipError('bad central directory');
@@ -127,6 +129,8 @@ export function readZipEntries(
     }
     if (seen.has(name)) throw new ZipError('duplicate entry name');
     seen.add(name);
+    // A unix symlink (made by a unix host, mode type 0120000) is never read: it could point anywhere once unpacked.
+    if (madeBy >>> 8 === 3 && ((externalAttrs >>> 16) & 0o170000) === 0o120000) throw new ZipError('a link is not allowed');
     if (name.endsWith('/') || !wanted(name)) continue;
 
     if ((flags & 1) !== 0) throw new ZipError('encrypted entries not supported');

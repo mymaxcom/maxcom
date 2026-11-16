@@ -1,0 +1,10 @@
+{
+  "name": "default",
+  "title": "Default",
+  "version": 1,
+  "contract": 1,
+  "base": "default",
+  "defaults": {
+    "semua": { "shade": 55 }
+  }
+}

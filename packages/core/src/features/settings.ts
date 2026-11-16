@@ -1,7 +1,10 @@
 import { sourceUrlError } from '../net.ts';
 import { validateImageRef } from '../image.ts';
 import { isoInstantMs } from '../sync/merge.ts';
-import { FEATURES, KIOSK_TEMPLATE_IDS } from './registry.ts';
+import { FEATURES } from './registry.ts';
+import { THEME_NAME_RE } from '../theme/catalog.ts';
+import { sanitizeThemeStyles, themeStylesError } from '../theme/style.ts';
+import { packsError, sanitizePacks } from '../theme/packs.ts';
 import { SURAHS } from './lists.ts';
 import { isCountryCode } from '../prayer/countries.ts';
 import { isValidTimeZone } from '../time.ts';
@@ -54,7 +57,7 @@ function ruleFor(name: string): Rule | undefined {
     case 'timeFormat': return { t: 'enum', vals: ['12h', '24h'] };
     case 'lang': return { t: 'enum', vals: ['ms', 'en'] };
     case 'mode': return { t: 'enum', vals: ['landscape', 'portrait'] };
-    case 'templateId': return { t: 'enum', vals: KIOSK_TEMPLATE_IDS };
+    case 'templateId': return { t: 'regex', re: THEME_NAME_RE, what: 'a theme name (a-z, 0-9, hyphen, at most 32)' };
     case 'rotate': return { t: 'enum', vals: ['daily', 'hourly', 'off'] };
     case 'order': return { t: 'int', min: 0, max: 99 };
     case 'daysAhead': return { t: 'int', min: 1, max: 60 };
@@ -117,6 +120,11 @@ function ruleFor(name: string): Rule | undefined {
     default: return undefined;
   }
 }
+
+/** Fields that hold one whole map: checked by their own function on write, sanitised on read, replaced whole on save. */
+export const MAP_FIELDS: ReadonlySet<string> = new Set(['styles', 'packs']);
+const mapFieldError = (k: string, v: unknown): string | null => (k === 'styles' ? themeStylesError(v) : packsError(v));
+const mapFieldClean = (k: string, v: unknown): unknown => (k === 'styles' ? sanitizeThemeStyles(v) : sanitizePacks(v));
 
 const MAX_TEXT = 500;
 const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
@@ -253,7 +261,8 @@ export function resolveSettings(stored: Partial<Record<string, Partial<FeatureSe
     const merged: Plain = {};
     for (const k of Object.keys(f.defaults)) {
       const dv = f.defaults[k];
-      if (isPlain(dv)) merged[k] = mergeObject(k, s[k], dv);
+      if (MAP_FIELDS.has(k)) merged[k] = mapFieldClean(k, has(s, k) ? s[k] : undefined);
+      else if (isPlain(dv)) merged[k] = mergeObject(k, s[k], dv);
       else {
         const hit = storedLeaf(k, s, k, dv);
         merged[k] = clone(hit ? hit.v : dv);
@@ -303,7 +312,10 @@ export function validateFeatureSettings(
     }
     if (!has(f.defaults, k)) { errors.push(`${k} is not a known setting`); continue; }
     const dv = f.defaults[k];
-    if (isPlain(dv)) checkObject(k, k, patch[k], dv, errors);
+    if (MAP_FIELDS.has(k)) {
+      const e = mapFieldError(k, patch[k]);
+      if (e) errors.push(e);
+    } else if (isPlain(dv)) checkObject(k, k, patch[k], dv, errors);
     else {
       const e = leafError(k, k, patch[k], dv);
       if (e) errors.push(e);

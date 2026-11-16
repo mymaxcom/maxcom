@@ -10,6 +10,8 @@ export interface RawEntry {
   crc?: number;
   /** Name written in the local header when it should differ from the directory. */
   localName?: string;
+  /** Unix mode written to the external attributes (host 3), for example 0o120777 for a symlink. */
+  unixMode?: number;
 }
 
 /** A zip built by hand so tests can make hostile ones (lying sizes, odd names, thousands of entries). */
@@ -32,6 +34,7 @@ export function buildZip(entries: RawEntry[]): Buffer {
     ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0x800 | (e.flags ?? 0), 8);
     ch.writeUInt16LE(method, 10); ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(body.length, 20); ch.writeUInt32LE(size, 24);
     ch.writeUInt16LE(name.length, 28); ch.writeUInt32LE(offset, 42);
+    if (e.unixMode !== undefined) { ch.writeUInt16LE((3 << 8) | 20, 4); ch.writeUInt32LE((e.unixMode << 16) >>> 0, 38); }
     central.push(ch, name);
     offset += 30 + lname.length + body.length;
   }

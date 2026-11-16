@@ -3,7 +3,9 @@ package my.maxcom.box.core
 import java.net.InetAddress
 import java.net.ServerSocket
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -74,5 +76,30 @@ class HealthClientTest {
         val t0 = System.currentTimeMillis()
         assertFalse(HealthClient(timeoutMs = 300).check(port))
         assertTrue(System.currentTimeMillis() - t0 < 1400)
+    }
+
+    @Test
+    fun themeOkReadsTheKey() {
+        assertEquals(false, HealthClient().themeOk(serve(200, """{"ok":true,"version":1,"themeOk":false}""")))
+    }
+
+    @Test
+    fun themeOkTrueAndAbsentAndBroken() {
+        assertEquals(true, HealthClient().themeOk(serve(200, """{"ok":true,"themeOk":true}""")))
+        server?.close()
+        assertNull(HealthClient().themeOk(serve(200, """{"ok":true,"version":1}""")))
+        server?.close()
+        assertNull(HealthClient().themeOk(serve(200, """{"ok":true,"themeOk":"no"}""")))
+        server?.close()
+        assertNull(HealthClient().themeOk(serve(200, "hello")))
+        server?.close()
+        assertNull(HealthClient().themeOk(serve(503, """{"themeOk":false}""")))
+    }
+
+    @Test
+    fun themeOkNullWhenTheBoxIsDown() {
+        val port = serve(200, "{}")
+        server?.close()
+        assertNull(HealthClient(timeoutMs = 300).themeOk(port))
     }
 }

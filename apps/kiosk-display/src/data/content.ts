@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { buildCycle, currentSlot, dateOf, zikirWindow } from '@surau/core';
 import type { KioskContent, Slot, SlotFeature } from '@surau/core';
+import { num } from '../content/assets.ts';
 import { subscribe } from './bundle.ts';
 import { clearMedia, keepMedia } from './media.ts';
 import {
-  PREVIEW_POLL_MS, isPreview, kioskFetch, preparePreviewAssets, usePreviewPoster, usePreviewToken,
+  PREVIEW_POLL_MS, isPreview, kioskFetch, preparePreviewAssets, usePreviewPoster, usePreviewTheme, usePreviewToken,
 } from './preview.ts';
 import type { PreviewPoster } from './preview.ts';
 import type { KioskView } from './kiosk.ts';
@@ -168,7 +169,31 @@ export function parseCardOverride(search: string): SlotFeature | null {
   return FEATURES.find((f) => f === raw) ?? null;
 }
 
+/** The rotation card a catalog screen shows (the inverse of screenOfCard); null for a screen with no card. */
+export function cardOfScreen(screen: string): SlotFeature | null {
+  switch (screen) {
+    case 'kuliah': return 'kuliahCard';
+    case 'pengumuman': return 'pengumuman';
+    case 'poster': return 'posters';
+    case 'program': return 'programKhas';
+    case 'takwim': return 'takwim';
+    case 'hadis': return 'hadis';
+    case 'ayat': return 'ayatCard';
+    case 'arab-ayat': return 'ayatCard';
+    case 'arab-hadis': return 'hadis';
+    case 'tabung': return 'tabungCard';
+    default: return null;
+  }
+}
+
+/** The catalog screens the preview forces onto the stage: the card screens, the zikir overlay and the live screen. */
+export function isForcedScreen(screen: string): boolean {
+  return cardOfScreen(screen) !== null || screen === 'zikir' || screen === 'arab-zikir' || screen === 'live';
+}
+
 export interface ContentView {
+  /** The preview shows one forced content screen: no card of it means a notice, never a rotation card. */
+  forced?: boolean;
   content: KioskContent | null;
   rotation: Slot[];
   current: ReturnType<typeof currentSlot>;
@@ -294,9 +319,21 @@ export function useContent(view: KioskView): ContentView {
       return null;
     }
   }, []);
-  const override: SlotFeature | null = preview && previewPoster ? 'posters' : urlOverride;
+  // Preview only: the Ubah suai editor asks for one catalog screen (spec 6.10.4); a card screen forces its card, the
+  // zikir screen forces the overlay with the first zikir item.
+  const previewTheme = usePreviewTheme();
+  const themeScreen = preview && previewTheme && !previewPoster ? previewTheme.screen : null;
+  const themeCard = themeScreen ? cardOfScreen(themeScreen) : null;
+  const forced = themeScreen !== null && isForcedScreen(themeScreen);
+  const override: SlotFeature | null = preview && previewPoster ? 'posters' : themeCard ?? (forced ? null : urlOverride);
+  const zikirOut = themeScreen === 'zikir' || themeScreen === 'arab-zikir'
+    ? {
+        prayer: 'zohor' as const,
+        endsAt: new Date(view.now.getTime() + Math.max(1, num(settings.zikirSelepasSolat.minutesAfterSolat, 10)) * 60_000),
+      }
+    : forced ? null : zikir;
 
-  return { content, rotation, current, zikir, override };
+  return { forced, content, rotation, current, zikir: zikirOut, override };
 }
 
 /** The id the preview gives the host's poster; never a box item id (those are UUIDs). */

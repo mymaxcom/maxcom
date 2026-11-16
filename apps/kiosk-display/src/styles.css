@@ -37,6 +37,9 @@ body {
   inset: 0;
   overflow: hidden;
   color: var(--text);
+  /* The stage owns the text font: the surau's font choice (themeStyle font) sets --font on the stage, and every region
+     inside inherits it. Arabic blocks and the number classes a theme fixes name their own family. */
+  font-family: var(--font);
 }
 .stage[data-phase] > .screen {
   position: absolute;
@@ -83,6 +86,16 @@ body {
   transition: opacity 900ms ease;
 }
 .bg__img.is-ready { opacity: 1; }
+/* The surau's own picture for this screen (themeStyle). Fit, size and position come from the stage variables. */
+.bg__menu {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-image) var(--bg-pos, center) / var(--bg-size, cover) no-repeat;
+}
+.bg__probe { display: none; }
+/* Default look, a menu picture shown: the background list's picture steps back, so only the theme's own field (colour and
+   gradient) shows around a picture that does not fill the screen (sederhana, kecil), as in the other themes. */
+.stage[data-template='default'][data-bg='image'] .bg__img { display: none; }
 /* Two layers: the measured shade (top and foot darker, the middle open for the picture) and a fixed floor under
    the ticker and the prayer bar, so whatever the picture has down there (a mosque base, arches, a crowd) is
    pushed back to a calm tone before the bars sit on it. */
@@ -113,6 +126,12 @@ body {
   transition: opacity 900ms ease;
 }
 .stage[data-dim='true'] .bg__dim { opacity: 1; }
+
+/* The surau's alignment of the main region (themeStyle align). An explicit choice always wins over a theme's own
+   alignment (one attribute class higher than the theme rules), and a chosen 'kiri' is a value of its own. */
+.stage[data-align='left'][data-phase] .region-main { text-align: left; }
+.stage[data-align='center'][data-phase] .region-main { text-align: center; }
+.stage[data-align='right'][data-phase] .region-main { text-align: right; }
 
 /* ---- Main screen: one grid --------------------------------------------------
    Header row (identity block left, next-prayer box right), then the content band, the ticker and the prayer
@@ -422,83 +441,6 @@ body {
   right: var(--gutter);
   bottom: 8.1rem;
 }
-.screen--main.is-poster .emergency-band,
-.screen--main.is-poster .source-footer { opacity: 0; visibility: hidden; }
-
-/* ---- Poster takeover (main screen only) -----------------------------------
-   While a poster card is on screen (`.screen--main.is-poster`) the poster itself is fixed over the whole stage
-   (content.css) and the identity block, the next-prayer box, the ticker and the bar fade out behind it; one
-   thin strip at the bottom carries the clock, the next prayer and the surau. Both directions are a 400 ms
-   fade, matched to the card cross-fade, so nothing jumps. */
-.screen--main .ident,
-.screen--main .next,
-.screen--main .pbar,
-.screen--main .ticker { transition: opacity 400ms ease, visibility 0s linear 0s; }
-.screen--main.is-poster .ident,
-.screen--main.is-poster .next,
-.screen--main.is-poster .pbar,
-.screen--main.is-poster .ticker {
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 400ms ease, visibility 0s linear 400ms;
-}
-.screen--main.is-poster .ident,
-.screen--main.is-poster .next { animation: none; }
-.poster-strip {
-  position: absolute;
-  left: var(--gutter);
-  right: var(--gutter);
-  bottom: 1.6rem;
-  height: 4.4rem;
-  z-index: 6;
-  border-radius: var(--radius-md);
-  padding: 0 1.6rem;
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-  text-shadow: 0 0.1rem 0.5rem rgb(0 0 0 / 0.35);
-  animation: screen-in 400ms ease-out both;
-}
-.poster-strip__surau {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-}
-/* Same treatment as the header logo, scaled to the strip: by height, own aspect, capped at 2x its bitmap. */
-.poster-strip__logo {
-  height: min(3.2rem, var(--logo-cap, 999rem));
-  width: auto;
-  max-width: 20rem;
-}
-.poster-strip__name {
-  color: var(--accent);
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.poster-strip .phase__clock { flex: none; font-size: 2.4rem; }
-.poster-strip .phase__clock small { font-size: 1.15rem; }
-.poster-strip__next {
-  flex: none;
-  display: flex;
-  align-items: baseline;
-  gap: 0.7rem;
-  font-size: 1.3rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.poster-strip__cd {
-  color: var(--accent);
-  font-size: 2.4rem;
-  line-height: 1;
-}
-
 /* ---- Phase screens ------------------------------------------------------ */
 .phase__head {
   position: absolute;
@@ -556,7 +498,7 @@ body {
 }
 .stage[data-template='default'][data-phase='noData'] .phase__centre::before { content: none; }
 .phase__title {
-  font-size: 3.2rem;
+  font-size: calc(3.2rem * var(--scale, 1));
   font-weight: 600;
   line-height: 1.15;
   margin: 0;
@@ -576,19 +518,19 @@ body {
   50% { opacity: 0.72; transform: scale(0.985); }
 }
 .phase__sub {
-  font-size: 2.4rem;
+  font-size: calc(2.4rem * var(--scale, 1));
   font-weight: 500;
   opacity: 0.9;
   margin-top: 1.2rem;
 }
 .phase__calm .phase__title {
-  font-size: 5.4rem;
+  font-size: calc(5.4rem * var(--scale, 1));
   font-weight: 700;
   line-height: 1.1;
   max-width: 72rem;
   text-wrap: balance;
 }
-.phase__calm .phase__sub { font-size: 2.6rem; margin-top: 1.4rem; }
+.phase__calm .phase__sub { font-size: calc(2.6rem * var(--scale, 1)); margin-top: 1.4rem; }
 .phase__time {
   font-size: 9rem;
   line-height: 1;
@@ -610,7 +552,7 @@ body {
   opacity: 0.92;
 }
 .phase__nodata .phase__title {
-  font-size: 2.6rem;
+  font-size: calc(2.6rem * var(--scale, 1));
   font-weight: 500;
   max-width: 54rem;
   line-height: 1.3;
@@ -1038,13 +980,21 @@ html.cursor-visible .tvbtn {
   .stage[data-phase] > .screen { animation: none; }
   .phase__big.is-warning { animation: none; }
   .bg__img, .bg__dim, .pbar, .pair-badge { transition: none; }
-  .poster-strip { animation: none; }
-  .screen--main .ident, .screen--main .next, .screen--main .pbar, .screen--main .ticker { transition: none; }
   .screen--main.is-settling .ident, .screen--main.is-settling .next,
   .screen--main.is-settling.is-idle .ident, .screen--main.is-settling.is-idle .next { animation: none; }
 }
 
 /* ---- Preview ribbon (admin app pratonton) ------------------------------- */
+.preview-nocontent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 2.4rem;
+  font-weight: 600;
+  opacity: 0.7;
+  text-align: center;
+}
 .preview-ribbon {
   position: absolute;
   top: 0;
@@ -1060,3 +1010,57 @@ html.cursor-visible .tvbtn {
   background: rgba(255, 193, 7, 0.92);
   pointer-events: none;
 }
+
+/* Plates behind free text (see each theme's own block for the colours): one shape for every theme. */
+.stage[data-pic] { --plate-pad: 0.55rem; --plate-radius: 1rem; }
+/* The phase text of a screen (title, countdown, sub line) is one group: the wrapper has no box of its own until a
+   picture is shown, so the layout of every theme is exactly what it was. */
+.phase__plate { display: contents; }
+.stage[data-pic] .phase__plate {
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+  justify-content: inherit;
+  max-width: 100%;
+  padding: 0.5rem 1.2rem;
+}
+/* A plate is as wide as its content, never a full-width bar, and groups that sit on top of each other keep a gap
+   wider than two spreads so two plates never touch. */
+.stage[data-pic] .screen :is(.ident__dates, .clock, .source-footer.free-text) { width: fit-content; max-width: 100%; }
+.stage[data-pic] .screen--main .ident > * + * { margin-top: 1.4rem; }
+/* Free text over a menu picture (spec 6.3): text that sits directly on the stage, not inside a panel, is dressed from
+   the picture's measured tone (App sets data-pic='dark' for a dark picture, 'light' for a light one) on a plate, so it
+   reads on any picture. ONE plate per visual group, never one per word: the brand name, the dates (Gregorian and Hijri
+   together), the clock (digits and seconds or am/pm together), the source line and the phase text (title and countdown
+   together, `.phase__plate`). Every plate of the theme has the same colour, the same even padding (a box-shadow spread:
+   no layout change) and the same radius. Panels and cards keep this theme's own colours. No backdrop-filter (Chrome 91).
+   `.screen` lifts the rules above the theme's own colour rules. */
+.stage[data-template='default'][data-pic='dark'] { --plate-bg: rgb(6 24 22 / 0.5); }
+.stage[data-template='default'][data-pic='light'] { --plate-bg: rgb(255 255 255 / 0.74); }
+.stage[data-template='default'][data-pic='dark'] .screen .free-text,
+.stage[data-template='default'][data-pic='dark'] .screen .free-text * {
+  color: #ffffff;
+  text-shadow: 0 0.05em 0.14em rgb(0 0 0 / 0.5);
+}
+.stage[data-template='default'][data-pic='light'] .screen .free-text,
+.stage[data-template='default'][data-pic='light'] .screen .free-text *,
+.stage[data-template='default'][data-pic='light'] .screen .phase__title,
+.stage[data-template='default'][data-pic='light'] .screen .phase__big:not(.is-warning),
+.stage[data-template='default'][data-pic='light'] .screen .phase__time,
+.stage[data-template='default'][data-pic='light'] .screen .phase__sub {
+  color: #10211e;
+  text-shadow: 0 0.05em 0.14em rgb(255 255 255 / 0.6);
+}
+.stage[data-template='default'][data-pic] .screen .ident__name.free-text,
+.stage[data-template='default'][data-pic] .screen .ident__dates,
+.stage[data-template='default'][data-pic] .screen .live-screen__dates,
+.stage[data-template='default'][data-pic] .screen .clock,
+.stage[data-template='default'][data-pic] .screen .phase__clock.free-text,
+.stage[data-template='default'][data-pic] .screen .source-footer.free-text,
+.stage[data-template='default'][data-pic] .screen .phase__plate {
+  background-color: var(--plate-bg);
+  box-shadow: 0 0 0 var(--plate-pad) var(--plate-bg);
+  border-radius: var(--plate-radius);
+}
+/* The halo behind the default phase words gives way to the plate. */
+.stage[data-template='default'][data-pic] .phase__centre::before { content: none; }

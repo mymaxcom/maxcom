@@ -2,6 +2,7 @@ import type { AyatCard as AyatData } from '@surau/core';
 import { t } from '../../i18n.ts';
 import type { CardProps } from '../ContentLayer.tsx';
 import { arabicIndic, pageAt, useFit } from '../paging.ts';
+import { useScale } from '../scale.ts';
 
 export type TextSize = 's' | 'm' | 'l';
 
@@ -55,14 +56,17 @@ export function textSizeOf(v: unknown): TextSize {
  */
 export function paginateAyat(
   card: { arabic: string[]; malay: string[] },
-  opts: { showTranslation: boolean; textSize: TextSize },
+  opts: { showTranslation: boolean; textSize: TextSize; scale?: number },
 ): AyatPage[] {
   const sz = SIZES[opts.textSize] ?? SIZES.m;
+  // The surau's text-size factor (stage `--scale`): the CSS multiplies every font size by it, so the estimate must too,
+  // and a larger size takes fewer ayat per page (or an Arabic page and a translation page) instead of shrinking.
+  const k = opts.scale !== undefined && opts.scale > 0 ? opts.scale : 1;
   const n = card.arabic.length;
   const ar = (from: number, to: number) => card.arabic.slice(from, to + 1);
   const ms = (from: number, to: number) => card.malay.slice(from, to + 1).map((s) => s ?? '');
   const fits = (from: number, to: number, arFs: number, msFs: number): boolean => {
-    const h = arHeight(ar(from, to), arFs) + (opts.showTranslation ? GAP_REM + msHeight(ms(from, to), msFs) : 0);
+    const h = arHeight(ar(from, to), arFs * k) + (opts.showTranslation ? GAP_REM + msHeight(ms(from, to), msFs * k) : 0);
     return h <= BLOCK_REM;
   };
   const mode: AyatPage['mode'] = opts.showTranslation ? 'both' : 'arabic';
@@ -97,13 +101,13 @@ export function paginateAyat(
     // Still too long: the Arabic alone (as large as fits, the minimum at worst), then the translation alone.
     let arFs = sz.arMin;
     for (let f = sz.ar; f >= sz.arMin - 1e-9; f -= 0.1) {
-      if (arHeight(ar(i, i), f) <= BLOCK_REM) { arFs = Math.round(f * 100) / 100; break; }
+      if (arHeight(ar(i, i), f * k) <= BLOCK_REM) { arFs = Math.round(f * 100) / 100; break; }
     }
     pages.push({ from: i, to: i, mode: 'arabic', arFs, msFs: 0 });
     if (opts.showTranslation) {
       let msFs = sz.msMin;
       for (let f = sz.ms + 0.4; f >= sz.msMin - 1e-9; f -= 0.05) {
-        if (msHeight(ms(i, i), f) <= BLOCK_REM) { msFs = Math.round(f * 100) / 100; break; }
+        if (msHeight(ms(i, i), f * k) <= BLOCK_REM) { msFs = Math.round(f * 100) / 100; break; }
       }
       pages.push({ from: i, to: i, mode: 'malay', arFs: 0, msFs });
     }
@@ -134,9 +138,10 @@ export function AyatCard({ view, lang, content, startedAt, durationSeconds }: Ca
   const f = view.settings.ayatCard as unknown as { showTranslation?: unknown; textSize?: unknown };
   const showTranslation = f.showTranslation !== false;
   const size = textSizeOf(f.textSize);
-  const pages = a ? paginateAyat(a, { showTranslation, textSize: size }) : [];
+  const scale = useScale();
+  const pages = a ? paginateAyat(a, { showTranslation, textSize: size, scale }) : [];
   const pageNo = pages.length > 0 ? pageAt(view.now, startedAt, durationSeconds / pages.length, pages.length, view.tz) : 0;
-  const key = `${a?.surah ?? 0}:${a?.ayatFrom ?? 0}-${a?.ayatTo ?? 0}|${size}|${showTranslation ? 1 : 0}|${pageNo}`;
+  const key = `${a?.surah ?? 0}:${a?.ayatFrom ?? 0}-${a?.ayatTo ?? 0}|${size}|${scale}|${showTranslation ? 1 : 0}|${pageNo}`;
   const { ref, fit } = useFit<HTMLDivElement>(key);
   if (!a || pages.length === 0) return null;
   const p = pages[pageNo]!;
@@ -156,7 +161,7 @@ export function AyatCard({ view, lang, content, startedAt, durationSeconds }: Ca
       </header>
       <div class="ayat__page" key={key} ref={ref} style={`--ar-fs:${p.arFs}rem;--ms-fs:${p.msFs}rem;--fit:${fit}`}>
         {p.mode !== 'malay' ? (
-          <p class="ayat__ar" dir="rtl" lang="ar">
+          <p class="ayat__ar arab" dir="rtl" lang="ar">
             {a.arabic.slice(p.from, p.to + 1).map((txt, k) => (
               <span class="ayat__aya" key={p.from + k}>
                 {txt}
@@ -167,7 +172,7 @@ export function AyatCard({ view, lang, content, startedAt, durationSeconds }: Ca
           </p>
         ) : null}
         {p.mode !== 'arabic' ? (
-          <p class="ayat__ms">
+          <p class="ayat__ms arab-tarjamah">
             {a.malay.slice(p.from, p.to + 1).map((txt, k) => (
               <span class="ayat__tr" key={p.from + k}>
                 {multi ? <b class="ayat__trno num">{`${a.ayatFrom + p.from + k}.`}</b> : null}

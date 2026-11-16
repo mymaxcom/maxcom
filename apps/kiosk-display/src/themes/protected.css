@@ -1,0 +1,183 @@
+/* Protected rules (themes plan C, spec 6.6; hardened by the pack security fix, round 2). Added as the last stylesheet in <head> only
+   while an uploaded theme is on the stage (never for a built-in theme, so those screens never change). Whatever a pack
+   does, the clock, the prayer times, the countdowns, the next-prayer chip and the logo, and everything inside them,
+   stay visible, opaque, unfiltered, unmoved, unscaled, still, undecorated and drawn in their own colour. Display, position and
+   size are left to the health check (health.ts), which puts the display back on the base theme when a pack hides, covers or
+   fades them. The validator (box-server cssCheck.ts) is an allow-list, so a pack cannot even write most of these properties;
+   these rules are the second line, and the health check the third. The box's own overlays (the way out to the box, the
+   preview ribbon, the network check) are pinned here as well. A complex selector inside :not() works from Chrome 88,
+   :where() from Chrome 88. */
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *),
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *) *,
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *) *::after,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *),
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *) *,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *) *::after,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *),
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *) *,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *) *::after,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *),
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *) *,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *) *::after,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *),
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *) *,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *) *::after {
+  visibility: visible !important;
+  opacity: 1 !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+  transform: none !important;
+  zoom: 1 !important;
+  animation: none !important;
+  transition: none !important;
+  clip-path: none !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  -webkit-text-security: none !important;
+  -webkit-text-stroke: 0 !important;
+  text-decoration: none !important;
+  unicode-bidi: normal !important;
+}
+/* No generated text or picture inside them: a pseudo-element cannot cover the digits, and a list marker cannot stand in for them. */
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *) *::after,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *) *::after,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *) *::after,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *) *::after,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *)::before,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *)::after,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *) *::before,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *) *::after {
+  content: none !important;
+}
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *) *::marker,
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *)::marker,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *) *::marker,
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *)::marker,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *) *::marker,
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *)::marker,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *) *::marker,
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *)::marker,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *) *::marker,
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *)::marker {
+  content: none !important;
+}
+/* The text parts that must show read left to right in their own order (no bidi override, no mirrored digits). */
+html body .stage[data-pack] [data-must] {
+  direction: ltr !important;
+  unicode-bidi: normal !important;
+}
+/* Where a picture is behind such a part (the health check sets data-mx-plate), the part sits on its own solid plate. */
+html body .stage[data-pack] [data-must][data-mx-plate] {
+  background-color: #0b1f19 !important;
+  background-image: none !important;
+  color: #f4f1e6 !important;
+  box-shadow: 0 0 0 0.12em #0b1f19 !important;
+}
+/* Above every layer a pack can make (a pack's z-index stops at 30), below the box's own overlays (40 and up). The
+   position has no specificity: a rule that already positions the element wins, and a static one becomes relative so
+   that its z-index counts. */
+:where(
+  .stage[data-pack] [data-role='clock'],
+  .stage[data-pack] [data-role='prayers'],
+  .stage[data-pack] [data-role='countdown'],
+  .stage[data-pack] [data-role='next'],
+  .stage[data-pack] [data-role='logo']
+) {
+  position: relative;
+}
+html body .stage[data-pack] [data-role='clock']:not([aria-hidden='true'] *),
+html body .stage[data-pack] [data-role='prayers']:not([aria-hidden='true'] *),
+html body .stage[data-pack] [data-role='countdown']:not([aria-hidden='true'] *),
+html body .stage[data-pack] [data-role='next']:not([aria-hidden='true'] *),
+html body .stage[data-pack] [data-role='logo']:not([aria-hidden='true'] *) {
+  z-index: 35 !important;
+}
+/* The box's own overlays cannot be moved, resized, recoloured, faded or hidden. The way out to the box keeps its corner,
+   the preview ribbon its strip, the network check its screen. */
+html body .stage[data-pack] .host-exit {
+  position: fixed !important;
+  right: 0.7rem !important;
+  bottom: 0.35rem !important;
+  left: auto !important;
+  top: auto !important;
+  width: auto !important;
+  height: 1.6rem !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  z-index: 40 !important;
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 0.8 !important;
+  background: var(--mark-plate, #082824) !important;
+  filter: none !important;
+  clip-path: none !important;
+  mix-blend-mode: normal !important;
+  pointer-events: auto !important;
+}
+html body .stage[data-pack] .host-exit:not([data-pulse='true']) {
+  transform: none !important;
+}
+html body .stage[data-pack][data-dim='true'] .host-exit {
+  opacity: 0.45 !important;
+}
+html body .stage[data-pack] .host-exit:hover,
+html body .stage[data-pack] .host-exit[data-pulse='true'] {
+  opacity: 1 !important;
+}
+html body .stage[data-pack] .preview-ribbon {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: auto !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  z-index: 50 !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  clip-path: none !important;
+  background: rgba(255, 193, 7, 0.92) !important;
+}
+html body .stage[data-pack] .netcheck {
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  clip-path: none !important;
+  z-index: 40 !important;
+}

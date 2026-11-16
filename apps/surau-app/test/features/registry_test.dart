@@ -50,8 +50,8 @@ void main() {
     expect(cases['coreSourceHash'], coreSourceHash);
   });
 
-  test('features: core has 53, 9 of them locked', () {
-    expect(features.length, 53);
+  test('features: core has 54, 9 of them locked', () {
+    expect(features.length, 54);
     final locked = features.where((f) => f.locked).map((f) => f.key).toSet();
     expect(locked, {
       'prayerBar',
@@ -109,5 +109,18 @@ void main() {
     expect(roleLabelsMs['superadmin'], 'Pentadbir MAXCOM');
     expect(roleLabelsEn['superadmin'], 'MAXCOM Administrator');
     expect(roleLabelsMs['treasurer'], 'Bendahari');
+  });
+
+  test('theme tables: screens, titles, hidden features, contract', () {
+    expect(screenIds.length, 21);
+    expect(themeTitles['oldschool'], 'Old School');
+    expect(hiddenFeatures.contains('themeStyle'), isTrue);
+    expect(themeContract, 1);
+    expect(builtInThemeIds, ['default', 'colourful', 'creative', 'oldschool', 'minimal', 'arabic']);
+    expect(themeTitles['arabic'], 'Arabic Art');
+    expect(scaleFactor['XL'], 1.3);
+    expect(themeStyleMaxBytes, 32768);
+    expect(accentSwatches.length, 7);
+    expect(screenGroups['kuliah'], 'content');
   });
 }

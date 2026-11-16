@@ -80,6 +80,9 @@ class FilePickChannel private constructor(private val activity: Activity) : Meth
     private var pending: MethodChannel.Result? = null
     private var maxBytes: Int = 0
 
+    /** When set (a theme file), a name that does not end with it is answered `wrongType` without reading the file. */
+    private var suffix: String? = null
+
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         if (call.method != "pick") {
             result.notImplemented()
@@ -92,6 +95,7 @@ class FilePickChannel private constructor(private val activity: Activity) : Meth
         val types = (call.argument<List<*>>("mimeTypes") ?: emptyList<Any>()).filterIsInstance<String>()
             .ifEmpty { DEFAULT_TYPES }
         maxBytes = (call.argument<Number>("maxBytes") ?: 0).toInt()
+        suffix = call.argument<String>("suffix")
         if (maxBytes <= 0) {
             result.error("bad_args", "maxBytes", null)
             return
@@ -121,6 +125,11 @@ class FilePickChannel private constructor(private val activity: Activity) : Meth
         }
         try {
             val name = FilePick.cleanName(displayName(uri))
+            val must = suffix
+            if (must != null && FilePickRules.accept(name, 0, maxBytes.toLong(), must) == "type") {
+                result.success(mapOf("name" to name, "wrongType" to true))
+                return
+            }
             val stream = activity.contentResolver.openInputStream(uri)
             if (stream == null) {
                 result.error("unreadable", "cannot open", null)

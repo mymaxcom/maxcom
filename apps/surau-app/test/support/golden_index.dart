@@ -111,6 +111,14 @@ const List<String> requiredExtraScreens = [
   'prayer_records',
   'prayer_sources',
   'prayer_zone',
+  // Themes B: the Templat paparan gallery and the Ubah suai editor.
+  'theme_gallery',
+  'theme_editor',
+  'theme_editor_arab',
+  // Themes plan C: Muat naik tema.
+  'theme_upload_ok',
+  'theme_upload_refused',
+  'theme_upload_warn',
 ];
 
 /// Goldens captured at the phone size only.

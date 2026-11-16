@@ -33,3 +33,6 @@ export * from './sync/canonical.ts';
 export * from './sync/merge.ts';
 export * from './setup/boxQr.ts';
 export * from './setup/boxState.ts';
+export * from './theme/catalog.ts';
+export * from './theme/style.ts';
+export * from './theme/packs.ts';

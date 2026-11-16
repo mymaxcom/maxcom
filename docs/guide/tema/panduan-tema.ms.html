@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAXCOM: panduan pembuat tema</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<header class="cover">
+<p class="kicker">MAXCOM, panduan pembuat tema, kontrak {{contract}}</p>
+<h1>Cara membuat tema untuk paparan TV surau</h1>
+<p class="lead">Panduan ini untuk orang yang tahu CSS tetapi belum kenal MAXCOM. Semua senarai jadual di dalamnya dijana terus daripada kod MAXCOM, jadi apa yang tertulis di sini ialah apa yang kotak MAXCOM benar-benar buat. Contoh dalam panduan ini ialah tema sebenar yang telah disemak oleh pengesah kotak.</p>
+</header>
+
+<section id="apa-itu-tema">
+<h2>1. Apa itu tema</h2>
+<p>Tema ialah satu fail dengan nama <code>nama-tema.maxtheme</code>. Ia mengubah rupa paparan TV surau: warna, susunan dan gambar latar. Ia tidak mengubah apa yang dipaparkan. Waktu solat, jam, kiraan detik, cip waktu solat seterusnya dan logo surau sentiasa ada pada setiap skrin, kerana jemaah bergantung kepadanya.</p>
+<p>Ada dua cara mengubah rupa paparan. Yang pertama ialah menu <strong>Ubah suai</strong> dalam aplikasi, yang selamat dan tidak memerlukan CSS. Yang kedua ialah fail tema, yang memberi kebebasan penuh kepada orang yang boleh menulis CSS. Panduan ini mengenai cara kedua.</p>
+<p>Setiap tema dipasang di atas satu tema bawaan yang dipanggil <code>base</code>. Apa sahaja yang tema anda tidak gayakan jatuh kepada tema asas itu. Anda hanya perlu menulis perbezaannya.</p>
+<p>Nilai sesuatu gaya diputuskan mengikut lapisan, daripada yang paling rendah kepada yang paling tinggi:</p>
+<ol>
+<li>Gaya asas MAXCOM, termasuk peraturan terlindung (bahagian 10).</li>
+<li>Tema bawaan yang menjadi <code>base</code>.</li>
+<li>Fail tema anda: <code>theme.css</code>, kemudian <code>screens/&lt;id&gt;.css</code>, kemudian <code>arabic.css</code>.</li>
+<li>Nilai <code>defaults</code> dalam <code>theme.json</code>.</li>
+<li>Pilihan surau dalam menu Ubah suai untuk semua skrin tema itu.</li>
+<li>Pilihan surau dalam menu Ubah suai untuk satu skrin sahaja.</li>
+</ol>
+<p>Pilihan surau diletakkan terus pada pentas sebagai pemboleh ubah gaya, jadi ia sentiasa mengatasi fail tema anda. Itu memang dikehendaki: surau berhak mengubah warna atau saiz teks tema yang mereka pasang.</p>
+<p>Enam tema bawaan MAXCOM, yang boleh dijadikan <code>base</code>, ialah:</p>
+<!--slot:themes-->
+</section>
+
+<section id="mula">
+<h2>2. Mula dengan muat turun</h2>
+<p>Cara paling mudah untuk bermula ialah muat turun tema yang sudah ada. Dalam aplikasi: Tetapan, Templat paparan, pilih tema, kemudian Muat turun tema. Tema bawaan dimuat turun sebagai pek permulaan. Kotak pilihan <strong>Sertakan ubah suai saya</strong> (dihidupkan secara lalai) memasukkan pilihan surau ke dalam <code>defaults</code>, supaya fail itu menghasilkan semula apa yang surau nampak sekarang.</p>
+<p>Buka fail itu sebagai zip, ubah <code>theme.css</code>, tukar <code>name</code> dan <code>title</code> dalam <code>theme.json</code>, zip semula, dan muat naik melalui Tetapan, Templat paparan, Muat naik tema. Kotak menyemak fail dan menunjukkan pratonton. Tekan Pasang, kemudian Guna sekarang.</p>
+<p>Di bawah ialah tema contoh <strong>Hijau Siti</strong>, tema sebenar yang dibina daripada sumber ini dan diterima oleh pengesah kotak tanpa ralat dan tanpa amaran. Komen dalam fail ditulis dalam BM untuk pembaca panduan ini. Fail siapnya, <code>hijau-siti.maxtheme</code>, disertakan bersama panduan ini.</p>
+<!--slot:sample-->
+</section>
+
+<section id="kandungan">
+<h2>3. Kandungan fail .maxtheme</h2>
+<p>Fail <code>.maxtheme</code> ialah zip biasa. Nama fail ialah nama tema dalam huruf kecil, nombor dan sempang, paling panjang 32 aksara, diikuti <code>.maxtheme</code>, contohnya <code>hijau-siti.maxtheme</code>. Hanya laluan tetap di bawah dibenarkan. Fail lain, folder bersarang, zip dalam zip dan pautan simbolik ditolak.</p>
+<!--slot:files-->
+<p>Fail tema <strong>tidak boleh membawa fon</strong> dalam versi MAXCOM ini: folder <code>fonts/</code> dan apa-apa <code>@font-face</code> ditolak. Fon ialah pilihan surau dalam menu Ubah suai, daripada fon yang sudah dibawa oleh MAXCOM. Gambar dirujuk dengan <code>url(../images/kuliah.png)</code> atau <code>url(images/kuliah.png)</code>. Alamat lain ditolak. Gambar hanya PNG atau JPEG (WebP ditolak). Kotak tidak menyimpan bait yang anda hantar: ia membaca setiap gambar dan melukisnya semula sebagai PNG atau JPEG biasa dengan saiz yang sama, dan hanya salinan itu yang dipaparkan pada skrin.</p>
+<p>Setiap peraturan dalam CSS anda diletakkan di bawah pentas tema anda sendiri apabila tema dipasang (<code>.stage[data-theme='nama-anda']</code>), sama ada dalam <code>theme.css</code>, <code>arabic.css</code> atau <code>screens/&lt;id&gt;.css</code>. Satu peraturan hanya boleh sampai kepada elemen di dalam pentas anda, tidak kepada tema lain, halaman di sekelilingnya atau skrin MAXCOM untuk tetapan, pasangan, pemulihan, kotak dihentikan dan semakan rangkaian, yang tidak memuatkan tema anda langsung. Kerana itu <code>html</code>, <code>body</code>, <code>#root</code> dan <code>:root</code> tidak boleh digayakan; peraturan <code>:root</code> yang hanya menetapkan <code>--pemboleh-ubah</code> dibenarkan dan terpakai pada pentas anda. Pemilih atribut pada <code>class</code> dibenarkan hanya sebagai <code>[class~='nama']</code> dengan satu nama kelas biasa. Peraturan yang sampai kepada elemen di sebelah pentas (<code>.stage + x</code>, <code>.stage ~ x</code>) ditolak.</p>
+<p>Dalam versi ini sebuah tema ialah <strong>kulit baharu</strong> bagi salah satu tema bawaan, bukan susun atur baharu. Kotak membaca CSS anda dengan senarai yang dibenarkan: apa yang tidak disenaraikan ditolak. Pemilih hanya boleh berupa kelas (contohnya <code>.region-clock</code>), atribut data dalam kontrak (<code>data-screen</code>, <code>data-kind</code>, <code>data-phase</code>, <code>data-card</code>, <code>data-live</code>, <code>data-live-layout</code>, <code>data-harakat</code>, <code>data-align</code>, <code>data-lang</code>, <code>data-dim</code>, <code>data-pic</code>, <code>data-role</code>, <code>data-theme</code>, <code>data-template</code>), serta <code>:first-child</code>, <code>:last-child</code>, <code>:nth-child()</code> dan <code>:not()</code>. Pemilih jenis, <code>*</code>, <code>#id</code>, pseudo-elemen (<code>::before</code>, <code>::after</code>, <code>::marker</code>, <code>::selection</code>), <code>:has()</code>, <code>:is()</code>, dan setiap kelas lapisan kotak sendiri (<code>.host-exit</code>, <code>.netcheck</code>, <code>.preview-ribbon</code>) ditolak.</p>
+<p>Sifat yang boleh dipakai ialah: <code>color</code>, <code>background-color</code>, <code>background</code> dan <code>background-image</code> (gambar anda sendiri dan kecerunan sahaja), <code>background-size</code>, <code>background-position</code>, <code>background-repeat</code>, <code>border</code> (lebar sehingga 0.5rem), <code>border-radius</code>, <code>outline</code> (sehingga 0.3rem), <code>box-shadow</code> dan <code>text-shadow</code> (kabur sehingga 2rem, sebaran sehingga 0.5rem, ofset sehingga 1rem), <code>padding</code>, <code>margin</code>, <code>gap</code>, <code>font-weight</code>, <code>font-style</code>, <code>text-transform</code>, <code>letter-spacing</code> (0 hingga 0.3em), <code>word-spacing</code>, <code>line-height</code> (1 atau lebih), <code>text-align</code>, sifat saiz (<code>width</code>, <code>height</code>, <code>min-*</code>, <code>max-*</code>, tidak pernah pada jam, waktu solat, cip waktu solat seterusnya atau logo), dan pemboleh ubah: pemboleh ubah anda sendiri <code>--pack-nama</code> (warna, kecerunan, gambar anda, nombor dan panjang kecil) serta warna asas <code>--accent</code>, <code>--accent-2</code>, <code>--text</code>, <code>--ink</code>, <code>--muted</code>, <code>--paper</code>, <code>--hair</code>, <code>--rule</code>, <code>--mint</code>, <code>--green</code>, <code>--sunset</code>, <code>--harakat</code>, <code>--accent-rgb</code> dan <code>--glass-rgb</code> (warna sahaja). Pemboleh ubah tema yang lain ditolak, kerana tema bawaan memakainya untuk fon, saiz dan sudut. Sifat yang berhad tidak menerima <code>var()</code> atau <code>calc()</code>: tulis nombornya. Selebihnya ditolak, termasuk <code>transform</code>, <code>scale</code>, <code>rotate</code>, <code>zoom</code>, <code>opacity</code>, <code>visibility</code>, <code>display</code>, <code>position</code>, <code>top</code> dan ofset lain, <code>z-index</code>, <code>overflow</code>, <code>clip</code>, <code>mask</code>, <code>filter</code>, <code>mix-blend-mode</code>, <code>font-family</code>, <code>font-size</code> (kawalan saiz teks dalam menu yang melakukannya), <code>direction</code>, <code>text-indent</code>, <code>text-decoration</code>, <code>list-style</code>, <code>content</code>, <code>animation</code>, <code>transition</code>, <code>cursor</code> dan <code>pointer-events</code>, dengan atau tanpa awalan vendor. <code>!important</code>, rentetan dalam pemboleh ubah (<code>--nama</code>) dan <code>var()</code> di dalam <code>image-set()</code> juga ditolak. At-rule selain <code>@media</code>, <code>@supports</code>, <code>@layer</code>, <code>@container</code> dan <code>@charset</code> ditolak.</p>
+</section>
+
+<section id="theme-json">
+<h2>4. theme.json</h2>
+<p><code>theme.json</code> ialah kad pengenalan tema. Medan <code>name</code> ialah nama fail dan pengenal tema, tidak boleh ditukar kemudian kerana tema yang sama dikenali melalui nama itu. Medan <code>title</code> ialah nama yang surau nampak dalam galeri, dipaparkan seperti yang anda tulis. Medan <code>version</code> ialah nombor bulat yang anda naikkan setiap kali memuat naik versi baharu. Medan <code>contract</code> ialah nombor kontrak yang tema anda dibuat untuknya. Medan <code>base</code> ialah tema bawaan yang dilanjutkan.</p>
+<p>Medan <code>defaults</code> ialah pilihan menu yang dibawa oleh tema, dalam bentuk yang sama dengan pilihan surau: <code>semua</code> untuk semua skrin dan <code>skrin</code> untuk skrin tertentu mengikut id. Kunci yang dikenali disenaraikan dalam jadual di bahagian 7. Kunci yang tidak dikenali ditolak dan namanya disebut dalam mesej. Gambar latar tidak boleh ada dalam <code>defaults</code>; letakkan gambar dalam <code>images/</code>.</p>
+<p>Jadual dalam bahagian 3 menyenaraikan had setiap medan.</p>
+</section>
+
+<section id="skrin">
+<h2>5. Skrin</h2>
+<p>Pentas paparan (<code>.stage</code>) membawa beberapa atribut yang boleh anda pilih dalam CSS. Enam yang berikut ialah janji kontrak:</p>
+<!--slot:attributes-->
+<p>Pentas juga membawa <code>data-template</code>, <code>data-theme</code>, <code>data-pack</code> dan <code>data-bg</code>. Ia ada, tetapi bukan sebahagian janji kontrak, jadi jangan bergantung kepadanya dalam tema yang mahu hidup lama.</p>
+<p>Setiap skrin ada satu id tetap yang tidak akan ditukar nama. Pilih skrin dengan <code>.stage[data-screen='poster']</code>, atau letakkan CSS skrin itu dalam <code>screens/poster.css</code>. Dalam fail <code>screens/&lt;id&gt;.css</code>, setiap pemilih dihadkan secara automatik kepada skrin itu, jadi anda tidak perlu menulis <code>[data-screen]</code> sendiri. Gambar latar satu skrin diletakkan sebagai <code>images/&lt;id&gt;.jpg</code> atau <code>.png</code>. Gambar <code>images/semua.*</code> dipakai pada semua skrin yang tidak ada gambar sendiri.</p>
+<p>Gambar latar yang dipaparkan dipilih mengikut urutan ini, yang tertinggi dahulu: gambar surau untuk skrin itu, gambar surau untuk semua skrin, gambar dalam tema anda, senarai latar belakang surau, dan akhir sekali gambar lalai MAXCOM.</p>
+<p>Jadual berikut menyenaraikan setiap skrin, dengan gambar dalam tema Creative dan apa yang mesti kekal kelihatan di situ. Skrin yang belum ada gambar ditanda dalam jadual.</p>
+<!--slot:screens-->
+</section>
+
+<section id="kawasan">
+<h2>6. Kawasan</h2>
+<p>Setiap skrin dibahagi kepada kawasan dengan nama kelas yang tetap. Gunakan kelas ini untuk menggayakan semula bahagian skrin (warna, sempadan, jarak). Tidak semua kawasan ada pada setiap skrin, jadi tulis CSS yang tidak rosak apabila sesuatu kawasan tiada.</p>
+<!--slot:regions-->
+<p>Atribut <code>data-align</code> pada pentas (kiri, tengah atau kanan menurut pilihan surau) menetapkan penjajaran teks dalam <code>.region-main</code>. Jika tema anda menyusun semula kawasan itu, baca atribut yang sama dalam CSS anda.</p>
+<p><strong>Skrin kandungan.</strong> Skrin yang <code>data-kind</code>nya <code>content</code> (poster, kuliah, program, hadis, zikir, pengumuman, takwim, tabung, ayat, dan tiga skrin berasaskan Arab <code>arab-ayat</code>, <code>arab-hadis</code> dan <code>arab-zikir</code>) memenuhi seluruh pentas dengan satu cangkerang, <code>.screen--shell</code>: nama dan logo surau dalam <code>.region-brand</code>, jam kecil dan cip waktu solat seterusnya bersama dalam <code>.shell-top</code>, kad dalam <code>.region-main</code> dan jalur waktu solat kecil dalam <code>.region-prayers</code>. Susun atur utama skrin solat ialah <code>.screen--main</code>; tema bawaan tidak pernah berkongsi satu peraturan antara keduanya, jadi tulis untuk yang anda maksudkan. Jam kecil, cip waktu solat seterusnya dan jalur kecil dilindungi seperti bentuk besarnya (bahagian 10). Atribut <code>data-live-layout</code> pada pentas menyatakan bagaimana skrin siaran langsung dilukis, dan <code>data-harakat</code> ada apabila warna baris surau dihidupkan untuk teks Arab (bahagian 8).</p>
+</section>
+
+<section id="pemboleh-ubah">
+<h2>7. Pemboleh ubah gaya</h2>
+<p>Setiap kawalan dalam menu Ubah suai menulis satu pemboleh ubah CSS atau atribut pada pentas. CSS tema anda membaca pemboleh ubah yang sama, jadi pilihan menu dan fail tema tidak bertelagah. Jika anda menetapkan <code>--accent</code> dalam CSS, surau masih boleh menukarnya dalam menu, dan nilai surau yang menang.</p>
+<!--slot:variables-->
+<p>Nilai dalam <code>defaults</code> ditulis dengan perkataan BM yang sama seperti menu (contohnya <code>"align": "tengah"</code>), manakala atribut pada pentas membawa perkataan Inggeris (<code>data-align="center"</code>). Jadual di atas menunjukkan kedua-duanya.</p>
+</section>
+
+<section id="arab">
+<h2>8. Tulisan Arab</h2>
+<p>Teks Arab pada kad ayat, hadis dan zikir membawa kelas <code>.arab</code>, dan terjemahannya membawa <code>.arab-tarjamah</code>. Tulis gaya tulisan Arab dalam <code>arabic.css</code> (pilihan) atau dalam <code>theme.css</code>. Arah kanan ke kiri hanya dipakai dalam blok teks Arab; susunan pentas kekal kiri ke kanan.</p>
+<!--slot:arabic-->
+</section>
+
+<section id="ditolak">
+<h2>9. Apa yang ditolak dan amaran</h2>
+<p>Apabila anda memuat naik fail, kotak menyemak segalanya dan mengumpul semua masalah dalam satu laporan, bukan hanya yang pertama. Ada dua jenis. <strong>Ralat</strong> menghalang pemasangan. <strong>Amaran</strong> tidak menghalang; ia memberitahu bahawa sesuatu gaya tidak akan kelihatan pada kotak T95 (bahagian 11).</p>
+<p>CSS dibaca oleh pembaca CSS sebenar, bukan dicari dengan corak teks. Nama yang disamarkan dengan escape CSS dibaca seperti nama biasa. Jadual berikut menyenaraikan setiap penolakan dengan ayat yang surau akan nampak, dalam BM dan Inggeris.</p>
+<!--slot:refused-->
+</section>
+
+<section id="dilindungi">
+<h2>10. Elemen yang dilindungi</h2>
+<p>Waktu solat, jam, kiraan detik, cip waktu solat seterusnya dan logo surau tidak boleh hilang. Tiada tema boleh menyembunyikannya, dan peraturan di bawah dipasang paling akhir supaya ia menang.</p>
+<!--slot:protected-->
+</section>
+
+<section id="had-chrome-91">
+<h2>11. Had Chrome 91</h2>
+<p>Kotak T95 memakai pelayar Chrome 91. CSS yang lebih baharu tidak berfungsi di sana, dan kotak itu tidak akan menunjukkan gaya tersebut. Pengesah memberi amaran (bukan ralat) apabila ia menjumpai salah satu daripada yang berikut. Waktu solat dan jam tidak terjejas, tetapi rupa tema anda akan berbeza daripada yang anda lihat pada komputer.</p>
+<!--slot:warnings-->
+<p>Cara selamat: uji tema anda pada kotak T95 sebenar, atau pada pelayar yang sama versinya, sebelum dikongsi.</p>
+</section>
+
+<section id="muat-naik">
+<h2>12. Muat naik dan versi</h2>
+<p>Muat naik tema dibuat oleh Pentadbir Surau, dengan kebenaran yang sama seperti tetapan skrin lain. Kotak menyemak fail, menyimpannya sementara dan menunjukkan pratonton sebelum anda menekan Pasang. Tema yang dimuat naik tidak digunakan sehingga surau memilihnya dengan Guna sekarang.</p>
+<p>Satu kotak menerima paling banyak 10 pemasangan tema dalam sejam. Nama yang sama dengan nombor versi yang lebih tinggi mengemas kini tema yang dipasang. Versi yang sama atau lebih rendah ditolak dengan mesej yang jelas. Nama yang berbeza memasang tema baharu. Sehingga 30 tema dimuat naik boleh dipasang. Pilihan surau dalam menu Ubah suai kekal selepas kemas kini. Nilai bagi skrin atau pemboleh ubah yang tidak lagi dipakai oleh versi baharu disimpan tetapi tidak dipedulikan, supaya versi akan datang boleh menggunakannya semula.</p>
+<p>Tema yang dipasang disimpan pada kotak dan disalin ke awan dalam had simpanan surau, jadi kotak ganti dan suntingan dari luar surau tidak kehilangannya. Hanya tema yang tidak sedang digunakan boleh dipadam, dan tema bawaan tidak boleh dipadam.</p>
+<p>Aplikasi hanya menawarkan tema yang dimuat naik apabila setiap kotak surau melaporkan kontrak yang sama atau lebih tinggi daripada kontrak tema itu. Kotak yang lebih lama daripada kontrak anda tidak akan menerimanya, jadi tema tidak muncul sehingga kotak itu dikemas kini.</p>
+<p>Tema yang dipasang disimpan sekali sahaja: apabila tema dikemas kini atau dipadam, fail versi lamanya dibuang daripada kotak. Alamat fail tema mengandungi kod pendek yang diambil daripada fail itu sendiri, jadi versi baharu sentiasa mendapat alamat baharu.</p>
+<p>Selepas tema dimuat, paparan menyemak sendiri elemen terlindung pada setiap skrin, sekali lagi setiap minit, dan sekali lagi selepas apa-apa animasi atau peralihan tamat. Jika sesuatu hilang, paparan kembali kepada tema <code>base</code>, kad tema dalam aplikasi menunjukkan Tema tidak sah, dan Semak MAXCOM melaporkannya. Penonton tidak pernah ditinggalkan tanpa waktu solat.</p>
+</section>
+
+<section id="janji-kontrak">
+<h2>13. Janji kontrak</h2>
+<p>Semua yang disenaraikan dalam panduan ini (id skrin, atribut, kelas kawasan, kelas Arab, pemboleh ubah gaya, laluan fail dan had) ialah kontrak {{contract}}.</p>
+<p class="promise">Nombor kontrak hanya naik apabila ada perubahan yang memecahkan tema lama. Tema lama terus berfungsi pada versi kontraknya sekurang-kurangnya setahun.</p>
+<p>Perkara baharu yang tidak memecahkan apa-apa ditambah tanpa menaikkan nombor kontrak. Jika anda menulis <code>"contract": 2</code> sedangkan kotak hanya menyokong kontrak {{contract}}, kotak berkata bahawa tema ini memerlukan MAXCOM yang lebih baharu.</p>
+</section>
+
+<section id="berkongsi">
+<h2>14. Berkongsi tema</h2>
+<p>Fail <code>.maxtheme</code> kecil dan boleh dihantar melalui aplikasi pesanan telefon atau e-mel seperti fail biasa. Penerima memuat naiknya dalam aplikasi MAXCOM mereka dengan langkah dalam bahagian 2.</p>
+<p>Pilih nama yang jarang sama dengan orang lain, supaya tema anda tidak tersalah dikemas kini oleh tema lain yang bernama sama. Naikkan <code>version</code> setiap kali anda mengedar versi baharu. Fail tema tidak membawa rahsia dan tidak membawa data surau; ia hanya rupa.</p>
+<p>Gambar dalam fail ialah tanggungjawab pembuat tema. Pastikan anda berhak menggunakannya dan membenarkan orang lain menggunakannya, dan jangan letakkan gambar yang anda tidak boleh edarkan.</p>
+<p>Panduan ini ada sebagai halaman web dan sebagai PDF, dalam BM dan Inggeris. PDF boleh dihantar melalui aplikasi pesanan seperti fail lain.</p>
+</section>
+</body>
+</html>

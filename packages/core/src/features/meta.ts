@@ -4,13 +4,12 @@
  * keywords. The rules themselves stay in settings.ts; this file never decides what is valid.
  */
 
-import { KIOSK_TEMPLATE_IDS } from './registry.ts';
 import type { FeatureKey } from './registry.ts';
 
 export type FieldUi =
   | 'switch' | 'stepper' | 'slider' | 'chips' | 'segment' | 'dropdown' | 'hijriMonth' | 'surah'
   | 'ayatRange' | 'reciter' | 'colour' | 'audioAsset' | 'template' | 'presetText' | 'phone' | 'email'
-  | 'url' | 'zone' | 'text';
+  | 'url' | 'zone' | 'text' | 'theme';
 
 export interface FieldMeta {
   ui?: FieldUi;
@@ -51,7 +50,7 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
     audioFile: { ui: 'audioAsset' },
   },
   autoTone: { override: { ui: 'colour' } },
-  kioskTemplate: { templateId: { ui: 'dropdown', choices: KIOSK_TEMPLATE_IDS } },
+  kioskTemplate: { templateId: { ui: 'theme' } },
   solatScreen: {
     message: {
       ui: 'presetText',
@@ -157,6 +156,9 @@ export const LANJUTAN_ROWS: readonly { feature: FeatureKey; fields: readonly str
   { feature: 'tilawah', fields: ['cacheMaxMb'], labelMs: 'Ruang simpanan tilawah', labelEn: 'Recitation storage' },
 ];
 
+/** Features with no generic settings page (the app edits them in its own screen). */
+export const HIDDEN_FEATURES: readonly FeatureKey[] = ['themeStyle'];
+
 /** The features that take part in the TV card rotation (they have an `order` setting). */
 export const ORDERED_FEATURES: readonly FeatureKey[] = [
   'kuliahCard', 'pengumuman', 'posters', 'programKhas', 'takwim', 'hadis', 'worldTimes', 'tugasan', 'ayatCard', 'tabungCard',
@@ -196,10 +198,11 @@ export const FEATURE_DESC: Record<FeatureKey, FeatureDesc> = {
   language: d('Bahasa paparan skrin TV.', 'The display language of the TV screen.', 'bahasa'),
   orientation: d('Skrin TV mendatar atau menegak.', 'The TV screen landscape or portrait.', 'mendatar', 'menegak'),
   kioskTemplate: d(
-    'Templat menukar seluruh rupa skrin TV. Gambar latar dan warna teks automatik hanya digunakan oleh templat Satu Warna (Lalai).',
-    'The template changes the whole look of the TV screen. Background pictures and the automatic text colour apply to Single Colour - Default only.',
+    'Tema menukar seluruh rupa skrin TV. Setiap skrin boleh diubah suai.',
+    'The theme changes the whole look of the TV screen. Every screen can be customised.',
     'templat', 'tema', 'rupa', 'warna',
   ),
+  themeStyle: d('Ubah suai rupa setiap skrin bagi tema.', 'Customise the look of each screen of a theme.', 'tema', 'ubah suai'),
   kuliahCard: d('Kuliah akan datang di skrin TV.', 'Upcoming lectures on the TV screen.', 'kuliah'),
   penceramahPhoto: d('Bentuk gambar penceramah pada kad kuliah.', 'The shape of the speaker photo on the lecture card.', 'penceramah'),
   kitabCover: d('Papar kulit kitab pada kad kuliah.', 'Show the book cover on the lecture card.', 'kitab'),

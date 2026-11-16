@@ -29,7 +29,7 @@ const String surauInfoPath = '/api/surau/info';
 
 // ---- the clock a phase chip hands the page (pure) ----
 
-enum PreviewPhase { biasa, azan, iqamah, solat, jumaat, tiadaData }
+enum PreviewPhase { biasa, azan, iqamah, solat, jumaat, tiadaData, masukWaktu }
 
 /// Kuala Lumpur, the offset used when the box does not say another.
 const int defaultUtcOffsetMinutes = 480;
@@ -103,8 +103,48 @@ DateTime? previewNowFor(
     PreviewPhase.azan => _middleOf(stages, _StageKind.azanCountdown, prayer),
     PreviewPhase.iqamah => _middleOf(stages, _StageKind.iqamah, prayer),
     PreviewPhase.solat => _middleOf(stages, _StageKind.solat, prayer),
+    PreviewPhase.masukWaktu => _startPlus(stages, _StageKind.masukWaktu, prayer, const Duration(seconds: 5)),
     _ => null,
   };
+}
+
+/// 10:30 of the bundle's day in the surau's offset: a time with no prayer
+/// screen, so a content screen of the Ubah suai editor shows undisturbed.
+DateTime previewCalmNow(Map<String, dynamic> bundle, {int utcOffsetMinutes = defaultUtcOffsetMinutes}) {
+  final off = _off(utcOffsetMinutes);
+  final serverTime = DateTime.tryParse(bundle['serverTime'] as String? ?? '')?.toUtc() ?? DateTime.now().toUtc();
+  return _klInstant(_klDateOf(serverTime, off), '10:30', off);
+}
+
+/// The catalog screens the Ubah suai editor offers, in order (the three
+/// the three Arabic-led screens close the list; Tiada data and Tilawah are not
+/// offered).
+const List<String> themeEditorScreens = [
+  'biasa', 'azan', 'masuk-waktu', 'iqamah', 'solat', 'jumaat', 'live', 'poster', 'kuliah', 'program',
+  'hadis', 'zikir', 'pengumuman', 'takwim', 'tabung', 'ayat', 'arab-ayat', 'arab-zikir', 'arab-hadis',
+];
+
+/// The clock to pin the page at for a catalog [screen]: the prayer screens
+/// get their phase clock, every other screen the calm clock. Null when the
+/// bundle cannot show that prayer screen.
+DateTime? previewNowForScreen(String screen, Map<String, dynamic> bundle, {int utcOffsetMinutes = defaultUtcOffsetMinutes}) {
+  final PreviewPhase? phase = switch (screen) {
+    'azan' => PreviewPhase.azan,
+    'masuk-waktu' => PreviewPhase.masukWaktu,
+    'iqamah' => PreviewPhase.iqamah,
+    'solat' => PreviewPhase.solat,
+    'jumaat' => PreviewPhase.jumaat,
+    _ => null,
+  };
+  if (phase == null) return previewCalmNow(bundle, utcOffsetMinutes: utcOffsetMinutes);
+  return previewNowFor(phase, bundle, utcOffsetMinutes: utcOffsetMinutes);
+}
+
+DateTime? _startPlus(List<_Stage> stages, _StageKind kind, String prayer, Duration by) {
+  for (final s in stages) {
+    if (s.kind == kind && s.prayer == prayer) return s.start.add(by);
+  }
+  return null;
 }
 
 List<Map<String, dynamic>> _days(Map<String, dynamic> bundle) => [
@@ -292,6 +332,7 @@ class PreviewRequest {
     required this.onSslError,
     this.utcOffsetMinutes = defaultUtcOffsetMinutes,
     this.poster,
+    this.theme,
     this.pinnedLeaf,
   });
 
@@ -311,6 +352,9 @@ class PreviewRequest {
   /// One poster to show on its own (the poster editor's preview); null for
   /// the TV's normal rotation.
   final PreviewPoster? poster;
+
+  /// A theme, a screen and unsaved values to wear (Ubah suai, the gallery); null for the page as the box has it.
+  final PreviewThemeRequest? theme;
 }
 
 typedef PreviewBuilder = Widget Function(BuildContext context, PreviewRequest request);
@@ -323,6 +367,7 @@ Widget defaultPreviewBuilder(BuildContext context, PreviewRequest r) => PreviewH
   now: r.now,
   utcOffsetMinutes: r.utcOffsetMinutes,
   poster: r.poster,
+  theme: r.theme,
   onSslError: r.onSslError,
   pinnedLeaf: r.pinnedLeaf,
 );
@@ -380,7 +425,8 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final p in PreviewPhase.values)
+              // Masuk waktu is for the Ubah suai editor only; this page keeps its six chips.
+              for (final p in PreviewPhase.values.where((p) => p != PreviewPhase.masukWaktu))
                 ChoiceChip(
                   label: Text(_phaseLabel(t, p)),
                   selected: _phase == p,
@@ -481,6 +527,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
     PreviewPhase.solat => t.previewPhaseSolat,
     PreviewPhase.jumaat => t.previewPhaseJumaat,
     PreviewPhase.tiadaData => t.previewPhaseNoData,
+    PreviewPhase.masukWaktu => t.themeScreenMasukWaktu,
   };
 }
 

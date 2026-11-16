@@ -12,6 +12,8 @@ export function buildFileList(files: readonly string[]): string[] {
   for (const file of files) {
     const clean = file.split(sep).join('/').split('\\').join('/').replace(/^\/+/, '');
     if (clean === '' || clean === SW_FILE || clean.endsWith('.map')) continue;
+    // The built-in theme files are for the box server (starting packs), not for the display.
+    if (clean.startsWith('builtin-themes/')) continue;
     const url = `/${clean}`;
     if (url === '/api' || url.startsWith('/api/')) continue;
     urls.add(url);
@@ -125,6 +127,36 @@ async function mediaFirst(request) {
   return response;
 }
 
+// An installed theme pack (/themes/<name>/<16 hex>-<bundle format>/...) is kept as it is fetched, in a cache of its own that the shell
+// clean-up never deletes, so a paired display keeps its theme offline. When a new file of a theme is requested (a new hash) the
+// files of that theme under other hashes are deleted.
+const THEMES = 'surau-themes-v1';
+const THEME_PATH = /^\\/themes\\/([a-z0-9-]{1,32})\\/([0-9a-f]{16}-[1-9][0-9]{0,2})\\/(?:bundle\\.css|images\\/[a-z-]{1,12}\\.(?:jpg|png))$/;
+
+async function pruneThemes(name, version) {
+  const cache = await caches.open(THEMES);
+  for (const req of await cache.keys()) {
+    const m = THEME_PATH.exec(new URL(req.url).pathname);
+    if (m && m[1] === name && m[2] !== version) await cache.delete(req);
+  }
+}
+
+async function themeFirst(request, name, version) {
+  const cache = await caches.open(THEMES);
+  const hit = await cache.match(request.url);
+  if (hit) return hit;
+  const response = await fetch(request);
+  if (response.ok) {
+    try {
+      await cache.put(request.url, response.clone());
+      await pruneThemes(name, version);
+    } catch {
+      /* storage full or a partial response: serve it without keeping it */
+    }
+  }
+  return response;
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -143,6 +175,11 @@ self.addEventListener('fetch', (event) => {
   }
   if (MEDIA_PATH.test(url.pathname)) {
     event.respondWith(mediaFirst(request));
+    return;
+  }
+  const theme = THEME_PATH.exec(url.pathname);
+  if (theme) {
+    event.respondWith(themeFirst(request, theme[1], theme[2]));
   }
 });
 `;

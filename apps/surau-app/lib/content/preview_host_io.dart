@@ -20,6 +20,7 @@ class PlatformPreview extends StatefulWidget {
     required this.url,
     required this.token,
     this.poster,
+    this.theme,
     this.onSslError,
     this.pinnedLeaf,
   });
@@ -27,6 +28,7 @@ class PlatformPreview extends StatefulWidget {
   final Uri url;
   final String token;
   final PreviewPoster? poster;
+  final PreviewThemeRequest? theme;
 
   /// Called when the certificate was refused.
   final SslRefused? onSslError;
@@ -120,6 +122,16 @@ class _PlatformPreviewState extends State<PlatformPreview> {
     if (!isPreviewToken(widget.token)) return;
     await _controller.runJavaScript(previewMessageJs(widget.token, origin: previewOrigin(widget.url)));
     await _postPoster();
+    await _postTheme();
+  }
+
+  /// The theme request, after the token, under the same origin check.
+  Future<void> _postTheme() async {
+    final t = widget.theme;
+    if (t == null) return;
+    final current = await _controller.currentUrl();
+    if (!mounted || current == null || !_sameOrigin(current)) return;
+    await _controller.runJavaScript(previewThemeMessageJs(t, origin: previewOrigin(widget.url)));
   }
 
   /// The poster, after the token, under the same origin check.
@@ -140,6 +152,8 @@ class _PlatformPreviewState extends State<PlatformPreview> {
       _postToken();
     } else if (old.poster != widget.poster) {
       _postPoster();
+    } else if (old.theme != widget.theme) {
+      _postTheme();
     }
   }
 

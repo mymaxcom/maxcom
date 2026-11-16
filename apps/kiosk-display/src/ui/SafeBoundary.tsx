@@ -75,7 +75,7 @@ export function SafeScreen({ today, settings, lang }: Omit<SafeBoundaryProps, 'c
       <div class="safe">
         <div class="ident__name">{surauNameOf(settings, lang)}</div>
         <div class="clock" role="timer" data-role="clock">
-          <span class="clock__hm num">{c.hm}</span>
+          <span class="clock__hm num" data-must="">{c.hm}</span>
           {showSeconds || c.ampm ? (
             <span class="clock__aside">
               {showSeconds ? <span class="num">{c.s}</span> : null}

@@ -20,6 +20,7 @@ import my.maxcom.box.core.BoxCa
 import my.maxcom.box.core.BoxPaths
 import my.maxcom.box.core.DoctorLine
 import my.maxcom.box.core.DoctorReport
+import my.maxcom.box.core.HealthClient
 import my.maxcom.box.core.NioLinks
 import my.maxcom.box.core.ProcReaper
 import my.maxcom.box.core.ReleaseStore
@@ -38,6 +39,7 @@ class BoxDoctor(
     fun run(): DoctorReport {
         val lines = ArrayList<DoctorLine>()
         lines += safe("Kesihatan pelayan") { health() }
+        lines += safe("Tema paparan") { DoctorReport.theme(HealthClient(timeoutMs = TIMEOUT_MS).themeOk(BoxReducer.PORT)) }
         val ips = try { lanIps() } catch (_: Exception) { emptyList() }
         lines += if (ips.isEmpty()) DoctorLine(false, "Tiada alamat rangkaian setempat (Ethernet atau Wi-Fi).")
         else DoctorLine(true, "Alamat rangkaian: " + ips.joinToString(", "))

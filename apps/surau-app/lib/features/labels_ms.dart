@@ -114,6 +114,8 @@ const Map<String, String> settingLabelsMs = {
   'lang': 'Bahasa',
   'mode': 'Orientasi',
   'templateId': 'Templat',
+  'styles': 'Gaya tema',
+  'packs': 'Tema dimuat naik',
   // kandungan
   'durationSeconds': 'Tempoh paparan (saat)',
   'order': 'Susunan',
@@ -283,6 +285,8 @@ const Map<String, String> settingLabelsEn = {
   'lang': 'Language',
   'mode': 'Orientation',
   'templateId': 'Template',
+  'styles': 'Theme styles',
+  'packs': 'Uploaded themes',
   'durationSeconds': 'Display time (seconds)',
   'order': 'Order',
   'daysAhead': 'Days ahead',
@@ -371,12 +375,14 @@ const Map<String, Map<String, String>> choiceLabelsMs = {
   'switchAt': {'maghrib': 'Waktu Maghrib', 'midnight': 'Tengah malam'},
   'lang': {'ms': 'Bahasa Melayu', 'en': 'English'},
   'mode': {'landscape': 'Mendatar', 'portrait': 'Menegak'},
+  // The theme names are one English name in every language (spec 6.10.2).
   'templateId': {
-    'default': 'Satu Warna (Lalai)',
-    'colourful': 'Berwarna-warni',
-    'creative': 'Kreatif',
-    'oldschool': 'Klasik Lama',
-    'minimal': 'Minimalis Cerah',
+    'default': 'Default',
+    'colourful': 'Colourful',
+    'creative': 'Creative',
+    'oldschool': 'Old School',
+    'minimal': 'Minimal',
+    'arabic': 'Arabic Art',
   },
   'rotate': {
     'daily': 'Setiap hari',

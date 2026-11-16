@@ -32,6 +32,7 @@ class ShareChannelTest {
         assertTrue(ShareArgs.mimeOk("application/pdf"))
         assertTrue(ShareArgs.mimeOk("text/csv"))
         assertTrue(ShareArgs.mimeOk("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        assertTrue(ShareArgs.mimeOk("application/vnd.maxcom.theme+zip"))
         assertFalse(ShareArgs.mimeOk(null))
         assertFalse(ShareArgs.mimeOk("text/html"))
         assertFalse(ShareArgs.mimeOk("application/zip"))

@@ -182,6 +182,8 @@ class HealthDto {
     this.appLock,
     this.cloud,
     this.name,
+    this.themes,
+    this.themeHealth,
   });
 
   factory HealthDto.fromJson(Map<String, dynamic> j) {
@@ -201,6 +203,10 @@ class HealthDto {
       appLock: j['appLock'] is bool ? j['appLock'] as bool : null,
       cloud: j['cloud'] is String ? j['cloud'] as String : null,
       name: j['name'] is String ? j['name'] as String : null,
+      themes: j['themes'] is Map<String, dynamic>
+          ? ThemeSupport.fromJson(j['themes'] as Map<String, dynamic>)
+          : null,
+      themeHealth: j['themeHealth'] is Map<String, dynamic> ? ThemeHealth.fromJson(j['themeHealth'] as Map<String, dynamic>) : null,
     );
   }
 
@@ -224,6 +230,53 @@ class HealthDto {
   /// The box's local name (`box1-surau.local`); null on a legacy root or an
   /// older box. A hint only: never trusted until a handshake proves it.
   final String? name;
+
+  /// What display themes the box (or the cloud) supports; null on an older
+  /// box that sends no `themes` block.
+  final ThemeSupport? themes;
+
+  /// What the display saw when it loaded the uploaded theme in use (admin answer only); null when there is no report.
+  final ThemeHealth? themeHealth;
+}
+
+/// The last health report of an uploaded theme: did the clock, the prayer
+/// times, the countdowns, the next-prayer chip and the logo all still show.
+class ThemeHealth {
+  const ThemeHealth({required this.theme, required this.version, required this.ok, required this.screen, required this.failed});
+
+  factory ThemeHealth.fromJson(Map<String, dynamic> j) => ThemeHealth(
+    theme: j['theme'] is String ? j['theme'] as String : '',
+    version: (j['version'] as num?)?.toInt() ?? 0,
+    ok: j['ok'] != false,
+    screen: j['screen'] is String ? j['screen'] as String : '',
+    failed: [
+      for (final f in (j['failed'] is List ? j['failed'] as List : const []))
+        if (f is String) f,
+    ],
+  );
+
+  final String theme;
+  final int version;
+  final bool ok;
+  final String screen;
+  final List<String> failed;
+}
+
+/// The `themes` block of `GET /api/health`: the theme contract version and
+/// the built-in theme ids.
+class ThemeSupport {
+  const ThemeSupport({required this.contract, required this.builtIn});
+
+  factory ThemeSupport.fromJson(Map<String, dynamic> j) => ThemeSupport(
+        contract: (j['contract'] as num?)?.toInt() ?? 0,
+        builtIn: [
+          for (final b in (j['builtIn'] is List ? j['builtIn'] as List : const []))
+            if (b is String) b,
+        ],
+      );
+
+  final int contract;
+  final List<String> builtIn;
 }
 
 class AuditEntry {

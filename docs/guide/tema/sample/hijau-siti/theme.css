@@ -1,0 +1,50 @@
+/* Hijau Siti: tema contoh untuk panduan pembuat tema MAXCOM.
+   Fail ini terpakai pada semua skrin. Ia hanya menyentuh kelas kawasan dan pemboleh ubah
+   yang diterbitkan dalam kontrak 1. Tiada gaya yang lebih baharu daripada Chrome 91. */
+
+/* Warna asas. .stage[data-screen] sentiasa ada pada pentas, dan kerana fail ini dimuatkan
+   selepas tema asas, nilai di sini menang. Nilai yang surau pilih dalam menu Ubah suai
+   diletakkan terus pada pentas dan tetap mengatasi semua ini. */
+.stage[data-screen] {
+  --accent: #7fdc9a;
+  --accent-rgb: 127 220 154;
+  --pack-emas: #f3e27a; /* pemboleh ubah kita sendiri, namanya bermula dengan --pack-, dipakai di bawah */
+  --text: #eef8f1;
+}
+
+/* Jenama: nama surau berwarna hijau muda. */
+.region-brand {
+  color: var(--accent);
+}
+
+/* Jam: angka kuning lembut. Jam sentiasa dipaparkan oleh peraturan terlindung. */
+.region-clock {
+  color: var(--pack-emas);
+}
+
+/* Waktu solat: panel hijau tua dengan garis halus. Saiz dan kedudukan tidak diubah,
+   kerana waktu solat mesti kekal jelas dari jauh. */
+.region-prayers {
+  background-color: rgb(10 34 25 / 0.82);
+  border: 0.15rem solid rgb(var(--accent-rgb) / 0.45);
+}
+
+/* Cip waktu solat seterusnya. */
+.region-next {
+  background-color: rgb(10 34 25 / 0.9);
+  border: 0.15rem solid #f3e27a;
+}
+
+/* Ticker di bawah. */
+.region-ticker {
+  background-color: rgb(8 28 20 / 0.9);
+  border-top: 0.2rem solid #7fdc9a;
+}
+
+/* Tulisan Arab dan terjemahannya. */
+.arab {
+  color: var(--pack-emas);
+}
+.arab-tarjamah {
+  color: var(--text);
+}

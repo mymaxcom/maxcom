@@ -5,6 +5,7 @@ import { openSecret, randomToken, sealSecret, sha256hex } from '../auth/crypto.t
 import type { JsonWebKey } from '../auth/crypto.ts';
 import { isAssetId, putAsset, AssetError } from '../assets/store.ts';
 import { logChange, tx } from '../auth/users.ts';
+import { PACK_MIME } from '../themes/packFormat.ts';
 import { DEFAULT_SURAU_ID } from './verify.ts';
 import { enqueueSiteDelete, enqueueSitePut } from './workerOutbox.ts';
 import type { WorkerAdminConfig, WorkerOutboxSender } from './workerOutbox.ts';
@@ -351,13 +352,49 @@ export interface SiteSummary {
   boxId: string;
   name: string;
   lastSeenAt: string | null;
+  /** The theme contract the box reported (X-Maxcom-Themes), or null when it never did (an older MAXCOM). */
+  themeContract: number | null;
+  themeBuiltIn: string[];
+}
+
+const THEME_HEADER_RE = /^(\d{1,3});([a-z,]{0,200})$/;
+
+/** Records what a box says it supports. Anything that does not match the exact shape is ignored. */
+export function noteThemeSupport(db: DatabaseSync, boxId: string, header: unknown): void {
+  if (typeof header !== 'string') return;
+  const m = THEME_HEADER_RE.exec(header);
+  if (m === null) return;
+  const contract = Number(m[1]);
+  const builtins = m[2]!;
+  const row = db.prepare('SELECT theme_contract AS c, theme_builtins AS b FROM sites WHERE box_id = ?').get(boxId);
+  if (row === undefined || (row.c === contract && row.b === builtins)) return;
+  db.prepare('UPDATE sites SET theme_contract = ?, theme_builtins = ? WHERE box_id = ?').run(contract, builtins, boxId);
+}
+
+/** The boxes of one surau with what each supports, for the cloud's answers. */
+export function themeSupportOf(db: DatabaseSync, surauId: string): Array<{ boxId: string; name: string; contract: number | null; builtIn: string[] }> {
+  return db
+    .prepare('SELECT box_id, name, theme_contract, theme_builtins FROM sites WHERE surau_id = ? AND linked_at IS NOT NULL AND revoked_at IS NULL ORDER BY box_id')
+    .all(surauId)
+    .map((r) => ({
+      boxId: String(r.box_id),
+      name: String(r.name),
+      contract: typeof r.theme_contract === 'number' ? r.theme_contract : null,
+      builtIn: typeof r.theme_builtins === 'string' && r.theme_builtins !== '' ? r.theme_builtins.split(',') : [],
+    }));
 }
 
 export function listSites(db: DatabaseSync): SiteSummary[] {
   return db
-    .prepare('SELECT box_id, name, last_seen_at FROM sites WHERE linked_at IS NOT NULL AND revoked_at IS NULL ORDER BY box_id')
+    .prepare('SELECT box_id, name, last_seen_at, theme_contract, theme_builtins FROM sites WHERE linked_at IS NOT NULL AND revoked_at IS NULL ORDER BY box_id')
     .all()
-    .map((r) => ({ boxId: String(r.box_id), name: String(r.name), lastSeenAt: typeof r.last_seen_at === 'string' ? r.last_seen_at : null }));
+    .map((r) => ({
+      boxId: String(r.box_id),
+      name: String(r.name),
+      lastSeenAt: typeof r.last_seen_at === 'string' ? r.last_seen_at : null,
+      themeContract: typeof r.theme_contract === 'number' ? r.theme_contract : null,
+      themeBuiltIn: typeof r.theme_builtins === 'string' && r.theme_builtins !== '' ? r.theme_builtins.split(',') : [],
+    }));
 }
 
 /** The `POST /api/sync/link` handler body (rate limiting and the role gate are in the route). */
@@ -392,7 +429,7 @@ const ASSET_UPLOAD_LIMIT = 20 * 1024 * 1024;
 export function registerSiteAssetRoute(app: FastifyInstance, deps: { db: DatabaseSync; dataDir: string }): void {
   void app.register(async (scope) => {
     scope.addContentTypeParser(
-      ['image/jpeg', 'image/png', 'image/webp', 'audio/mpeg'],
+      ['image/jpeg', 'image/png', 'image/webp', 'audio/mpeg', PACK_MIME],
       { parseAs: 'buffer', bodyLimit: ASSET_UPLOAD_LIMIT },
       (_request, body, done) => done(null, body),
     );

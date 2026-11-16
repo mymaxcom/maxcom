@@ -1,0 +1,339 @@
+/* MAXCOM theme contract v1: the structural rules every theme sits on.
+   Ported from the approved mockup stylesheet (mockups tv/tv.css, 1920 px stage); every size is the mockup's pixels
+   divided by 19.2, because 1 rem is 1 % of the stage width. No colour lives here: the colours come from the variables
+   each theme defines (--accent, --accent-2, --text, --ink, --muted, --glass-rgb), with today's look as the fall-back.
+   Loaded after styles.css and content.css and before templates.css, so a theme's own rules win.
+   Chrome 91 only: nothing newer than the T95 WebView understands (test/compat91.test.ts checks the list). */
+
+/* Arabic extras of the regions: present in every theme, shown by the themes that want them. */
+.pcell-ar,
+.next-ar,
+.date-ar,
+.brand-ar { display: none; }
+
+/* The decoration layer of the stage: empty and unstyled until a theme dresses it. */
+.deco { position: absolute; inset: 0; pointer-events: none; }
+.deco i { position: absolute; display: block; }
+
+/* ---- Content screens (kind content): brand, compact clock, chip, the card over the main area, compact strip ----
+   The shell is its own screen (`.screen--shell`, not `.screen--main`): the main layout's grid, identity block and idle
+   rules of the five built-in themes are written for `.screen--main` and never reach it. */
+.stage[data-kind='content'] .screen--shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 7.708rem minmax(0, 1fr) auto auto auto;
+  grid-template-areas: 'head' 'band' 'ticker' 'emerg' 'bar';
+  row-gap: 0;
+  padding: 0 3.333rem 1.875rem;
+}
+.stage[data-kind='content'] .region-brand {
+  position: absolute;
+  left: 3.333rem;
+  top: 2.708rem;
+  z-index: 2;
+  max-width: 34rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  color: var(--accent);
+}
+.stage:is([data-kind='content'], [data-kind='live']) .brand-name {
+  display: block;
+  min-width: 0;
+  font-size: 1.563rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+.stage[data-kind='content'] .shell-top {
+  position: absolute;
+  top: 1.563rem;
+  right: 3.333rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+.stage:is([data-kind='content'], [data-kind='live']) .region-clock.clock--compact { display: flex; align-items: baseline; gap: 0.5rem; }
+.stage:is([data-kind='content'], [data-kind='live']) .clock--compact .hm { font-size: 4.375rem; font-weight: 800; line-height: 0.92; letter-spacing: -0.01em; }
+.stage:is([data-kind='content'], [data-kind='live']) .clock--compact small { font-size: 1.563rem; font-weight: 700; margin-left: 0.2rem; opacity: 0.9; }
+.stage:is([data-kind='content'], [data-kind='live']) .next--chip {
+  display: flex;
+  align-items: center;
+  gap: 0.729rem;
+  height: 4.167rem;
+  padding: 0 1.563rem;
+  border-radius: 2.083rem;
+  background: var(--accent);
+  color: var(--ink);
+  text-shadow: none;
+  white-space: nowrap;
+}
+.stage:is([data-kind='content'], [data-kind='live']) .chip-k { font-size: 1.458rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.stage:is([data-kind='content'], [data-kind='live']) .chip-t { font-size: 2.188rem; font-weight: 800; letter-spacing: 0; }
+.stage:is([data-kind='content'], [data-kind='live']) .chip-rel { font-size: 1.354rem; font-weight: 600; opacity: 0.85; margin-left: 0.2rem; }
+
+/* The card region: the whole main area between the head and the strip. */
+.stage[data-kind='content'] .content,
+.stage[data-kind='content'] .zikir { width: auto; margin-top: 0; }
+.stage[data-kind='content'] .content > .card-slot,
+.stage[data-kind='content'] .content > .card-slot > .card { width: 100%; height: 100%; }
+.stage[data-kind='content'] .source-footer { display: none; }
+.stage[data-kind='content'] .screen--shell .ticker { margin-top: 0.8rem; }
+.stage[data-kind='content'] .screen--shell .emergency-band { grid-area: emerg; margin-top: 0.8rem; }
+
+/* The compact prayer strip (the mockup's markup: .strip--compact > .pcell > .pcell-ar, .pcell-label, .pcell-time). */
+.stage[data-kind='content'] .screen--shell .strip {
+  grid-area: bar;
+  height: 5.417rem;
+  margin-top: 1.563rem;
+  display: flex;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+.stage[data-kind='content'] .strip .pcell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.833rem;
+  padding: 0 0.5rem;
+}
+.stage[data-kind='content'] .strip .pcell-label { font-size: 1.146rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.9; white-space: nowrap; }
+.stage[data-kind='content'] .strip .pcell-time { font-size: 2.604rem; font-weight: 800; line-height: 1; white-space: nowrap; }
+.stage[data-kind='content'] .strip .pcell.is-minor .pcell-time { font-size: 2.188rem; opacity: 0.78; }
+.stage[data-kind='content'] .strip .pcell.is-current { background: var(--accent); color: var(--ink); }
+
+/* The strip and the emergency band stay above a full-stage body (the poster covers the whole stage). */
+.stage[data-kind='content'] .screen--shell .strip,
+.stage[data-kind='content'] .screen--shell .emergency-band,
+.stage[data-kind='content'] .screen--shell .ticker { position: relative; z-index: 2; }
+
+/* ---- Eyebrow, the small line over a body ---- */
+.eyebrow {
+  font-size: 1.458rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ---- Poster: the whole stage is the poster, fitted whole over a blurred copy of itself ---- */
+.stage[data-screen='poster'] .content { grid-area: auto; position: absolute; inset: 0; width: auto; margin: 0; z-index: 0; }
+.stage[data-screen='poster'] .ticker { display: none; }
+.poster-stage { position: absolute; inset: 0; overflow: hidden; }
+.poster-fill {
+  position: absolute;
+  inset: -4.167rem;
+  background-size: cover;
+  background-position: center;
+  filter: blur(2.396rem) brightness(0.55) saturate(1.1);
+}
+.poster-frame {
+  position: absolute;
+  top: 1.354rem;
+  height: 46.875rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+}
+.poster-frame img { display: block; height: 100%; width: auto; max-width: 96rem; object-fit: contain; box-shadow: 0 1.563rem 4.167rem rgb(0 0 0 / 0.55); }
+/* A wide poster would run under the chip (top right, under the clock): its frame starts below the chip instead. */
+.poster-stage.is-wide .poster-frame { top: 12.083rem; height: 36rem; }
+/* The chip sits under the clock, never over the poster (spec 6.12.3). */
+.stage[data-screen='poster'] .shell-top { flex-direction: column-reverse; align-items: flex-end; gap: 0.6rem; }
+.stage[data-screen='poster'] .region-brand,
+.stage[data-screen='poster'] .region-clock.clock--compact { text-shadow: 0 0.104rem 0.938rem rgb(0 0 0 / 0.5); }
+.stage[data-screen='poster'] .region-brand { max-width: 27.083rem; }
+
+/* ---- Kuliah ---- */
+.kuliah { position: absolute; inset: 0; display: flex; align-items: center; gap: 4.167rem; padding: 0 2.083rem; overflow: hidden; }
+.kul-photo { flex: none; width: 23.958rem; height: 23.958rem; border-radius: 50%; overflow: hidden; border: 0.417rem solid var(--accent); }
+.kul-photo.is-square { border-radius: 1.4rem; }
+.kul-photo img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.kul-body { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.kul-label { font-size: calc(2.292rem * var(--scale, 1) * var(--fit, 1)); font-weight: 700; color: var(--accent-2, var(--accent)); margin-top: 0.938rem; }
+.kul-name { font-size: calc(4.792rem * var(--scale, 1) * var(--fit, 1)); font-weight: 800; line-height: 1.04; margin-top: 0.417rem; letter-spacing: -0.01em; }
+.kul-topic { font-size: calc(3.333rem * var(--scale, 1) * var(--fit, 1)); font-weight: 700; color: var(--accent); margin-top: 0.729rem; }
+.kul-facts { display: flex; flex-wrap: wrap; gap: calc(1.2rem * var(--fit, 1)) 2.917rem; margin-top: calc(2.396rem * var(--fit, 1)); }
+.kul-facts span { display: block; font-size: 1.146rem; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.72; }
+.kul-facts b { display: block; font-size: calc(1.875rem * var(--scale, 1)); font-weight: 700; margin-top: 0.313rem; }
+.kul-batal { display: inline-block; margin-top: 1.4rem; padding: 0.3rem 1.2rem; border-radius: 0.8rem; background: var(--accent); color: var(--ink); font-size: 1.4rem; font-weight: 800; letter-spacing: 0.14em; }
+.stage[data-align='center'] .kuliah { flex-direction: column; justify-content: center; text-align: center; gap: 1.563rem; }
+.stage[data-align='center'] .kul-photo { width: 13.021rem; height: 13.021rem; }
+.stage[data-align='center'] .kul-facts { justify-content: center; margin-top: 1.563rem; }
+.stage[data-align='right'] .kuliah { flex-direction: row-reverse; text-align: right; }
+.stage[data-align='right'] .kul-facts { justify-content: flex-end; }
+
+/* ---- Hadis ---- */
+.hadis {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 6.25rem;
+  overflow: hidden;
+}
+/* Auto margins centre the text while it fits and let it overflow downwards only, so the fit measure sees it. */
+.hadis > :first-child { margin-top: auto; }
+/* Tetapan hadis.fontSize (and the length of the text) pick the tier: the largest keeps the mockup's sizes. */
+.hadis.is-len-m { --tier: 0.82; }
+.hadis.is-len-s { --tier: 0.7; }
+.hadis > :last-child { margin-bottom: auto; }
+.hadis .eyebrow .hadis-part { margin-left: 1.2rem; letter-spacing: 0.08em; opacity: 0.8; }
+.hadis-ar {
+  margin: 0.313rem 0 0;
+  font-size: calc(4.063rem * var(--tier, 1) * var(--fit, 1) * var(--ar-scale, 1));
+  line-height: var(--ar-lh, 1.75);
+  direction: rtl;
+  font-family: var(--font-arab, var(--font-arabic));
+}
+.hadis-ms { margin: 1.354rem 0 0; font-size: calc(2.396rem * var(--tier, 1) * var(--fit, 1)); font-weight: 600; line-height: 1.35; max-width: 78rem; }
+.hadis-src { margin-top: 1.563rem; font-size: 1.563rem; font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.5rem 0.938rem; }
+.hadis-src .sep { margin: 0 0.2rem; }
+.hadis-grade { color: var(--accent); }
+.hadis-credit { font-size: 1.1rem; font-weight: 600; opacity: 0.75; flex-basis: 100%; }
+.stage[data-align='left'] .hadis { align-items: flex-start; text-align: left; }
+.stage[data-align='right'] .hadis { align-items: flex-end; text-align: right; }
+
+/* ---- Arabic: the marks-only fonts of the harakat colour, the faces the surau can choose ----
+   The three MX Harakat files are derived from the OFL Amiri fonts (scripts/build-marks-fonts.py, licence beside them);
+   the KFGQPC Hafs file is never modified. */
+@font-face { font-family: 'MX Harakat Quran'; font-weight: 400; src: url('../assets/fonts/marks/mx-harakat-quran.woff') format('woff'); font-display: block; }
+@font-face { font-family: 'MX Harakat Naskh'; font-weight: 400; src: url('../assets/fonts/marks/mx-harakat-naskh-400.woff') format('woff'); font-display: block; }
+@font-face { font-family: 'MX Harakat Naskh'; font-weight: 700; src: url('../assets/fonts/marks/mx-harakat-naskh-700.woff') format('woff'); font-display: block; }
+
+/* The face of the Arabic text: Uthmani Hafs for Quranic text unless the surau chose another face. */
+.stage[data-arfont='hafs'] .quran { font-family: 'QPC Hafs', 'Amiri Quran', serif; }
+.stage[data-arfont='amiri-quran'] .quran,
+.stage[data-arfont='amiri-quran'] .arab { font-family: 'Amiri Quran', serif; }
+.stage[data-arfont='amiri'] .quran,
+.stage[data-arfont='amiri'] .arab { font-family: 'Amiri', serif; }
+.hk.quran { font-family: var(--font-quran, 'QPC Hafs', 'Amiri Quran', serif); direction: rtl; }
+.hk.arab { font-family: var(--font-arab, var(--font-arabic)); direction: rtl; }
+
+/* Harakat colour: the full text below, the marks-only copy on top in the harakat colour. The top layer sets no font
+   size, line height, letter spacing or width of its own: it takes them from the box it is laid over, so every mark
+   lands on its letter. */
+.hk { position: relative; }
+:where(.hk) { margin: 0; }
+.hk > span { display: block; }
+.hk-t { display: none; position: absolute; inset: 0; color: inherit; pointer-events: none; }
+.stage[data-harakat='on'] .hk-t { display: block; color: var(--harakat); }
+.stage[data-harakat='on'][data-arfont='amiri-quran'] .hk .hk-t { font-family: 'MX Harakat Quran'; }
+.stage[data-harakat='on'][data-arfont='amiri'] .hk .hk-t { font-family: 'MX Harakat Naskh'; }
+
+/* ---- Arabic-led screens (an alternate look of ayat, hadis and zikir, chosen by the theme: spec 6.8) ----
+   The Arabic leads and the translation follows. Sizes are the mockup's pixels over 19.2; --scale is the text size,
+   --ar-scale and --ar-lh the Arabic size and line distance, --fit the shrink of a text that does not fit. */
+.stage[data-screen^='arab'] .screen--shell { padding-bottom: 1.458rem; }
+.stage[data-screen^='arab'] .screen--shell .strip { height: 4.583rem; margin-top: 0.8rem; }
+.stage[data-screen^='arab'] .strip .pcell-time { font-size: 2.292rem; }
+.stage[data-screen^='arab'] .strip .pcell.is-minor .pcell-time { font-size: 1.979rem; }
+
+.arab-ayat,
+.arab-hadis {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  overflow: hidden;
+}
+.arab-ayat { padding: 0 4.688rem; }
+.arab-hadis { padding: 0 5.208rem; }
+/* Auto margins centre the text while it fits and let it overflow downwards only, so the fit measure sees it. */
+.arab-ayat > :first-child,
+.arab-hadis > :first-child { margin-top: auto; }
+.arab-ayat > :last-child,
+.arab-hadis > :last-child { margin-bottom: auto; }
+
+.aa-head { display: flex; flex-direction: column; align-items: center; }
+.aa-surah { font-size: 1.354rem; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.78; margin-top: 0.208rem; }
+.aa-text {
+  margin: 0.938rem 0 0;
+  max-width: 85.417rem;
+  font-size: calc(3.542rem * var(--scale, 1) * var(--fit, 1) * var(--ar-scale, 1));
+  line-height: var(--ar-lh, 1.95);
+}
+.aa-tr { margin: 0.938rem 0 0; max-width: 81.25rem; font-size: 1.51rem; line-height: 1.42; font-weight: 500; opacity: 0.9; }
+.tr-n {
+  display: inline-block;
+  min-width: 1.979rem;
+  height: 1.979rem;
+  line-height: 1.979rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 1.146rem;
+  font-weight: 800;
+  text-align: center;
+  margin: 0 0.313rem 0 0.208rem;
+  vertical-align: 0.1rem;
+}
+.aa-credit,
+.ah-credit { margin-top: 0.7rem; font-size: 1rem; opacity: 0.7; display: flex; justify-content: center; gap: 1.2rem; }
+
+.ah-ar {
+  margin: 0.208rem 0 0;
+  font-size: calc(5.417rem * var(--fit, 1) * var(--ar-scale, 1));
+  line-height: var(--ar-lh, 1.7);
+  font-weight: 700;
+}
+.ah-ms { margin: 1.354rem 0 0; max-width: 77.083rem; font-size: 2.083rem; font-weight: 600; line-height: 1.38; opacity: 0.9; }
+.ah-src { margin-top: 1.146rem; font-size: 1.458rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.8; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.4rem 0.73rem; }
+.ah-src .sep { margin: 0; }
+.ah-pg { letter-spacing: 0.06em; }
+
+/* Translation beside the Arabic (Tetapan or the menu): the Arabic 60 percent on the right, the translation 40 percent on the left. */
+.stage[data-tarjamah='beside'] :is(.arab-ayat, .arab-hadis) {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-content: center;
+  align-items: center;
+  column-gap: 3rem;
+}
+.stage[data-tarjamah='beside'] :is(.arab-ayat, .arab-hadis) > :first-child,
+.stage[data-tarjamah='beside'] :is(.arab-ayat, .arab-hadis) > :last-child { margin-top: 0; margin-bottom: 0; }
+.stage[data-tarjamah='beside'] .arab-ayat > .aa-head,
+.stage[data-tarjamah='beside'] .arab-ayat > .aa-credit,
+.stage[data-tarjamah='beside'] .arab-hadis > .ah-src,
+.stage[data-tarjamah='beside'] .arab-hadis > .ah-credit { grid-column: 1 / -1; }
+.stage[data-tarjamah='beside'] .aa-text { grid-column: 2; grid-row: 2; margin-top: 0; }
+.stage[data-tarjamah='beside'] .aa-tr { grid-column: 1; grid-row: 2; margin-top: 0; text-align: left; }
+.stage[data-tarjamah='beside'] .ah-ar { grid-column: 2; grid-row: 1; }
+.stage[data-tarjamah='beside'] .ah-ms { grid-column: 1; grid-row: 1; margin-top: 0; text-align: left; }
+
+/* Zikir: a ring of 33 beads, the Arabic large in the middle, the meaning under it, the count at the side. */
+.arab-zikir { position: absolute; inset: 0; overflow: hidden; --zk: 1; }
+.arab-zikir.is-l { --zk: 0.76; }
+.arab-zikir.is-m { --zk: 0.59; }
+.arab-zikir.is-s { --zk: 0.45; }
+.zk-ring { position: absolute; left: 50%; top: 50%; width: 40.625rem; height: 40.625rem; transform: translate(-50%, -50%); }
+.zk-orbit { fill: none; stroke: rgb(var(--accent-rgb) / 0.4); stroke-width: 2; }
+.zk-beads circle { fill: var(--accent); }
+.zk-ar {
+  position: absolute;
+  left: 8rem;
+  right: 8rem;
+  top: 50%;
+  transform: translateY(-62%);
+  text-align: center;
+  font-size: calc(8.854rem * var(--zk, 1) * var(--fit, 1) * var(--ar-scale, 1));
+  font-weight: 700;
+  line-height: var(--ar-lh, 1.6);
+}
+.zk-ms { position: absolute; left: 8rem; right: 8rem; top: calc(50% + 6.2rem); text-align: center; font-size: 1.771rem; font-weight: 600; opacity: 0.85; }
+.zk-side { position: absolute; left: 1.042rem; top: 50%; transform: translateY(-50%); width: 21.875rem; }
+.zk-pg { display: block; margin-top: 0.8rem; font-size: 1.4rem; font-weight: 700; opacity: 0.8; }
+.zk-count { position: absolute; right: 2.083rem; top: 50%; transform: translateY(-50%); width: 17.708rem; text-align: center; }
+.zk-count b { display: block; font-size: 10.417rem; font-weight: 800; line-height: 1; color: var(--accent); }
+.zk-count span { display: block; font-size: 2.083rem; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; }

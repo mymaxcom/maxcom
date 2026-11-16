@@ -141,6 +141,12 @@ void main() {
         validateFeatureSettings('solatScreen', {'message': 'a' * 100}).ok,
         isTrue,
       );
+      for (final id in ['default', 'arabic', 'hijau-siti']) {
+        expect(validateFeatureSettings('kioskTemplate', {'templateId': id}).ok, isTrue, reason: id);
+      }
+      for (final id in ['Hijau', '', '../x', 'a' * 33]) {
+        expect(validateFeatureSettings('kioskTemplate', {'templateId': id}).ok, isFalse, reason: id);
+      }
       expect(validateFeatureSettings('zone', {'zone': 'sgr01'}).ok, isFalse);
       expect(validateFeatureSettings('zone', {'zone': 'SGR02'}).ok, isTrue);
       expect(

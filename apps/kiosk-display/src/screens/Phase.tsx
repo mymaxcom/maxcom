@@ -40,7 +40,7 @@ export function Phase({ view, lang }: PhaseProps) {
       centre = (
         <>
           <h1 class="phase__title">{t('azanIn', lang, { prayer })}</h1>
-          <Countdown to={state.phaseEndsAt} now={now} class="phase__big" />
+          <Countdown to={state.phaseEndsAt} now={now} class="phase__big" dataRole="countdown" />
         </>
       );
       break;
@@ -59,7 +59,7 @@ export function Phase({ view, lang }: PhaseProps) {
       centre = (
         <>
           <h1 class="phase__title">{t('iqamahIn', lang)}</h1>
-          <Countdown to={state.phaseEndsAt} now={now} class={`phase__big${warningActive(view) ? ' is-warning' : ''}`} />
+          <Countdown to={state.phaseEndsAt} now={now} class={`phase__big${warningActive(view) ? ' is-warning' : ''}`} dataRole="countdown" />
         </>
       );
       break;
@@ -83,7 +83,7 @@ export function Phase({ view, lang }: PhaseProps) {
       centre = (
         <>
           <h1 class="phase__title">{t('syurukIn', lang)}</h1>
-          <Countdown to={state.phaseEndsAt} now={now} class="phase__big" />
+          <Countdown to={state.phaseEndsAt} now={now} class="phase__big" dataRole="countdown" />
           <p class="phase__sub">{t('subuhEnding', lang)}</p>
         </>
       );
@@ -119,15 +119,17 @@ export function Phase({ view, lang }: PhaseProps) {
   return (
     <div class={`screen screen--phase screen--${state.phase}`}>
       <div class="phase__head">
-        <div class={`ident__head${view.logo ? ' has-logo' : ''}`}>
+        <div class={`ident__head region-brand${view.logo ? ' has-logo' : ''}`}>
           <SurauLogo src={view.logo} class="ident__logo" />
-          {nameShownOf(settings, view.logo) ? <div class="ident__name">{surauNameOf(settings, lang)}</div> : null}
+          {nameShownOf(settings, view.logo) ? <div class="ident__name free-text">{surauNameOf(settings, lang)}</div> : null}
         </div>
         {noData ? null : (
           <Clock now={now} timeFormat={timeFormat} showSeconds={showSeconds} lang={lang} variant="compact" tz={tz} />
         )}
       </div>
-      <div class="phase__centre">{centre}</div>
+      <div class="phase__centre region-main">
+        <div class="phase__plate">{centre}</div>
+      </div>
       {noData ? null : <EmergencyBand view={view} lang={lang} />}
       {noData ? null : <PrayerBar state={state} settings={settings} lang={lang} now={now} dimmed={calm} tz={tz} />}
       {noData ? null : <SourceFooter view={view} lang={lang} />}

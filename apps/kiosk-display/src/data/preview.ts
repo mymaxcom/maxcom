@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
+import { THEME_CONTRACT, THEME_STYLE_MAX_BYTES, isBuiltInTheme, isScreenId, isThemeName, packsError, sanitizeThemeStyles } from '@surau/core';
+import type { InstalledPack, ScreenId, ThemeStyleEntry } from '@surau/core';
 
 /**
  * Preview mode: the real kiosk page opened as `/?preview=1` inside the admin app (an iframe on the web, a
@@ -85,6 +87,75 @@ export function readPreviewPosterMessage(ev: MessageEvent, win: Window = window)
   return { assetId: m.assetId, title };
 }
 
+/**
+ * "Show this theme, this screen, with these unsaved values" from the admin app's Ubah suai editor. Same sender
+ * checks and same token rule as the poster; nothing is stored, the stage just wears it.
+ */
+export const PREVIEW_THEME_MESSAGE_TYPE = 'surau-preview-theme';
+const STAGED_RE = /^[0-9a-f]{32}$/;
+
+export interface PreviewTheme {
+  theme: string;
+  screen: ScreenId;
+  entry: ThemeStyleEntry;
+  /** A staged pack id (plan C), or null. */
+  staged: string | null;
+  /** What the staged pack's file says (base, version, pictures, defaults), so the stage can wear it before it is installed; null otherwise. */
+  pack: InstalledPack | null;
+}
+
+/** The staged pack's facts from the host message as an installed-pack record, or null when they do not pass the same rules as a real record. */
+function readStagedPack(theme: string, raw: unknown): InstalledPack | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const p = raw as Record<string, unknown>;
+  if (!isBuiltInTheme(p.base) || typeof p.version !== 'number') return null;
+  const record = {
+    assetId: '0'.repeat(64), version: p.version, title: theme, base: p.base, contract: THEME_CONTRACT, bytes: 0,
+    fonts: [], screens: [], images: p.images ?? {}, defaults: p.defaults ?? {},
+  };
+  return packsError({ [theme]: record }) === null ? (record as InstalledPack) : null;
+}
+
+/**
+ * The theme request from a host message, or null when it must be ignored: same sender checks as the token; the theme
+ * a theme name, the screen a catalog screen, the entry sanitised as one ThemeStyleEntry (at most 32 KB of JSON),
+ * `staged` 32 hex or absent.
+ */
+export function readPreviewThemeMessage(ev: MessageEvent, win: Window = window): PreviewTheme | null {
+  const m = trustedMessage(ev, win);
+  if (!m || m.type !== PREVIEW_THEME_MESSAGE_TYPE) return null;
+  if (!isThemeName(m.theme) || !isScreenId(m.screen)) return null;
+  if (typeof m.entry !== 'object' || m.entry === null || Array.isArray(m.entry)) return null;
+  let bytes: number;
+  try {
+    bytes = new TextEncoder().encode(JSON.stringify(m.entry)).length;
+  } catch {
+    return null;
+  }
+  if (bytes > THEME_STYLE_MAX_BYTES) return null;
+  let staged: string | null = null;
+  if (m.staged !== undefined && m.staged !== null) {
+    if (typeof m.staged !== 'string' || !STAGED_RE.test(m.staged)) return null;
+    staged = m.staged;
+  }
+  const entry = sanitizeThemeStyles({ [m.theme]: m.entry })[m.theme];
+  if (!entry) return null;
+  let pack: InstalledPack | null = null;
+  if (m.pack !== undefined && m.pack !== null) {
+    pack = readStagedPack(m.theme, m.pack);
+    if (pack === null) return null;
+  }
+  return { theme: m.theme, screen: m.screen, entry, staged, pack };
+}
+
+let themeReq: PreviewTheme | null = null;
+const themeListeners = new Set<(p: PreviewTheme | null) => void>();
+
+function setPreviewThemeReq(p: PreviewTheme): void {
+  themeReq = p;
+  for (const fn of [...themeListeners]) fn(p);
+}
+
 let poster: PreviewPoster | null = null;
 const posterListeners = new Set<(p: PreviewPoster | null) => void>();
 
@@ -114,7 +185,12 @@ export function installPreviewListener(win: Window = window): () => void {
     // A poster is only meaningful once the page can fetch it: no token, no poster.
     if (token === null) return;
     const p = readPreviewPosterMessage(ev, win);
-    if (p !== null) setPreviewPoster(p);
+    if (p !== null) {
+      setPreviewPoster(p);
+      return;
+    }
+    const th = readPreviewThemeMessage(ev, win);
+    if (th !== null) setPreviewThemeReq(th);
   };
   listener = fn;
   win.addEventListener('message', fn);
@@ -154,6 +230,40 @@ export function usePreviewPoster(): PreviewPoster | null {
   return p;
 }
 
+/** Preact hook: the theme request of the host (null outside preview and before the token and the request). */
+export function usePreviewTheme(): PreviewTheme | null {
+  const [p, setP] = useState<PreviewTheme | null>(() => (isPreview() ? themeReq : null));
+  useEffect(() => {
+    if (!isPreview()) return undefined;
+    installPreviewListener();
+    setP(themeReq);
+    themeListeners.add(setP);
+    return () => {
+      themeListeners.delete(setP);
+    };
+  }, []);
+  return p;
+}
+
+/** Preact hook: fetches the extra pictures in preview (a no-op elsewhere); the result changes when they arrive. */
+export function usePreviewExtraAssets(ids: readonly string[]): number {
+  const [n, setN] = useState(0);
+  const key = ids.join(',');
+  const tok = usePreviewToken();
+  useEffect(() => {
+    if (!isPreview() || tok === null) return undefined;
+    let alive = true;
+    preparePreviewExtraAssets(ids).then(() => {
+      if (alive) setN((x) => x + 1);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, tok]);
+  return n;
+}
+
 /** The kiosk's fetch: plain outside preview; in preview a Bearer header and no cookies. */
 export const kioskFetch: Fetch = (input, init) => {
   if (!isPreview()) return globalThis.fetch(input, init);
@@ -172,6 +282,9 @@ export function previewAssetUrl(id: string): string | null {
 }
 
 let prepareChain: Promise<void> = Promise.resolve();
+/** The last list the content loader asked for, and the extra ids (menu backgrounds) the stage asked for. */
+let contentIds: readonly string[] = [];
+let extraIds: readonly string[] = [];
 
 /**
  * Fetches the pictures the content uses (once each) and drops the ones it no longer uses. Failures are
@@ -179,6 +292,7 @@ let prepareChain: Promise<void> = Promise.resolve();
  * Calls run one after another, so two overlapping calls never fetch or create a URL for the same id twice.
  */
 export function preparePreviewAssets(ids: readonly string[], fetchImpl: Fetch = kioskFetch): Promise<void> {
+  contentIds = ids;
   const run = prepareChain.then(() => prepareNow(ids, fetchImpl));
   prepareChain = run.catch(() => undefined);
   return run;
@@ -187,6 +301,7 @@ export function preparePreviewAssets(ids: readonly string[], fetchImpl: Fetch = 
 async function prepareNow(ids: readonly string[], fetchImpl: Fetch): Promise<void> {
   const want = new Set(ids);
   if (poster) want.add(poster.assetId);
+  for (const id of extraIds) want.add(id);
   for (const [id, url] of [...objectUrls]) {
     if (want.has(id)) continue;
     objectUrls.delete(id);
@@ -207,6 +322,17 @@ async function prepareNow(ids: readonly string[], fetchImpl: Fetch): Promise<voi
   }
 }
 
+/**
+ * Menu background pictures of the screen on stage: fetched like the content pictures and kept whatever the
+ * content loader passes. Resolves when they are available (or failed).
+ */
+export function preparePreviewExtraAssets(ids: readonly string[], fetchImpl: Fetch = kioskFetch): Promise<void> {
+  extraIds = ids;
+  const run = prepareChain.then(() => prepareNow(contentIds, fetchImpl));
+  prepareChain = run.catch(() => undefined);
+  return run;
+}
+
 function revoke(url: string): void {
   try {
     URL.revokeObjectURL(url);
@@ -225,6 +351,8 @@ export function resetPreviewForTest(): void {
   tokenListeners.clear();
   poster = null;
   posterListeners.clear();
+  themeReq = null;
+  themeListeners.clear();
   for (const url of objectUrls.values()) {
     try {
       URL.revokeObjectURL(url);
@@ -233,5 +361,7 @@ export function resetPreviewForTest(): void {
     }
   }
   objectUrls.clear();
+  contentIds = [];
+  extraIds = [];
   prepareChain = Promise.resolve();
 }

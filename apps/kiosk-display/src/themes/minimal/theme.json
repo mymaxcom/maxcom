@@ -1,0 +1,10 @@
+{
+  "name": "minimal",
+  "title": "Minimal",
+  "version": 1,
+  "contract": 1,
+  "base": "minimal",
+  "defaults": {
+    "semua": { "shade": 35 }
+  }
+}

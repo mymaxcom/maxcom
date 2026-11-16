@@ -372,7 +372,7 @@ describe('migrations: auth schema', () => {
           "INSERT INTO schema_migrations (name, applied_at) VALUES ('002-content', '2026-11-03T00:00:00.000Z');" +
           'CREATE TABLE content_items (id TEXT PRIMARY KEY, updated_at TEXT);',
       );
-      expect(runMigrations(db)).toEqual(['003-auth', '004-kiosk-cookies', '005-poster-titles', '006-asset-derivatives', '007-asset-derivative-failures', '008-sync', '009-worker-outbox', '010-gate-fixes', '011-upload-replace', '012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair']);
+      expect(runMigrations(db)).toEqual(['003-auth', '004-kiosk-cookies', '005-poster-titles', '006-asset-derivatives', '007-asset-derivative-failures', '008-sync', '009-worker-outbox', '010-gate-fixes', '011-upload-replace', '012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair', '019-site-theme-support']);
       expect(runMigrations(db)).toEqual([]);
       expect(tableNames(db)).toContain('content_items');
     } finally {

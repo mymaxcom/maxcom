@@ -14,7 +14,7 @@ const cmd = readFileSync(cmdPath, 'utf8');
 const isWin = process.platform === 'win32';
 
 const CHECK_IDS = [
-  'health_http', 'health_https', 'release', 'cert_days', 'fw_webrtc', 'fw_srt', 'fw_https', 'tools', 'task_box',
+  'health_http', 'theme', 'health_https', 'release', 'cert_days', 'fw_webrtc', 'fw_srt', 'fw_https', 'tools', 'task_box',
   'task_renew', 'task_firewall', 'task_kiosk', 'box_account', 'acl_data', 'acl_root', 'disk', 'log_warnings', 'box_id',
 ];
 const PFX_PASS = 'SECRET-PFX-PASS-9f3a1c7e-do-not-print';
@@ -48,6 +48,15 @@ describe('doctor.ps1 static checks', () => {
   it('declares the documented parameters and every check id', () => {
     for (const p of ['$InstallRoot', '$Wait', '[switch]$Json', '$ExpectBoxId', '[switch]$SkipSystemChecks']) expect(src).toContain(p);
     for (const id of CHECK_IDS) expect(src, id).toContain(`'${id}'`);
+  });
+
+  it('reports an invalid theme in the same health answer, with the exact BM sentences', () => {
+    expect(src).toContain("Add-Check 'theme' 'fail' 'Tema tidak sah: TV memakai tema asas. Buka apl MAXCOM, Tetapan, Templat paparan.'");
+    expect(src).toContain("Add-Check 'theme' 'ok' 'tema paparan sah'");
+    expect(src).toContain("Add-Check 'theme' 'ok' 'tema paparan: tiada laporan'");
+    expect(src).toContain('themeOk');
+    expect(src.indexOf("Test-Run 'theme'")).toBeGreaterThan(src.indexOf("Test-Run 'health_http'"));
+    expect(src.indexOf("Test-Run 'theme'")).toBeLessThan(src.indexOf("Test-Run 'release'"));
   });
 
   it('uses the names the setup writes: tasks, firewall rules, accounts, data ACL', () => {
@@ -125,16 +134,16 @@ async function makeEnv(version = '2026.11.1'): Promise<Env> {
   return { base, root, data, port, boxKey };
 }
 
-async function startFakeBox(e: Env, version = '2026.11.1'): Promise<ChildProcess> {
+async function startFakeBox(e: Env, version = '2026.11.1', extra: Record<string, unknown> = {}): Promise<ChildProcess> {
   const code = [
     "const http = require('node:http');",
     "http.createServer((q, s) => {",
-    "  if (q.url === '/api/health') { s.setHeader('content-type', 'application/json'); s.end(JSON.stringify({ ok: true, version: process.env.FAKE_VERSION })); return; }",
+    "  if (q.url === '/api/health') { s.setHeader('content-type', 'application/json'); s.end(JSON.stringify({ ok: true, version: process.env.FAKE_VERSION, ...JSON.parse(process.env.FAKE_EXTRA || '{}') })); return; }",
     "  s.statusCode = 404; s.end('x');",
     "}).listen(Number(process.env.FAKE_PORT), '127.0.0.1');",
   ].join('\n');
   const child = spawn(process.execPath, ['-e', code], {
-    env: { ...process.env, FAKE_PORT: String(e.port), FAKE_VERSION: version },
+    env: { ...process.env, FAKE_PORT: String(e.port), FAKE_VERSION: version, FAKE_EXTRA: JSON.stringify(extra) },
     stdio: 'ignore',
   });
   children.push(child);
@@ -199,6 +208,22 @@ describe.runIf(isWin)('doctor.ps1 runs', () => {
       expect(byId(rep, id).state, id).toBe('skip');
     }
     expect(byId(rep, 'box_id').state).toBe('skip');
+    // an older box sends no themeOk: nothing to report, and that is not a failure
+    expect(byId(rep, 'theme')).toMatchObject({ state: 'ok', text: 'tema paparan: tiada laporan' });
+  }, 120_000);
+
+  it('the theme check: themeOk true is ok, themeOk false fails with the instruction and exit 1', async () => {
+    const good = await makeEnv();
+    await startFakeBox(good, '2026.11.1', { themeOk: true });
+    const ok = parse(runDoctor(['-InstallRoot', good.root, '-Json', '-SkipSystemChecks']).out);
+    expect(byId(ok, 'theme')).toMatchObject({ state: 'ok', text: 'tema paparan sah' });
+    const bad = await makeEnv();
+    await startFakeBox(bad, '2026.11.1', { themeOk: false });
+    const r = runDoctor(['-InstallRoot', bad.root, '-Json', '-SkipSystemChecks']);
+    expect(r.status).toBe(1);
+    expect(byId(parse(r.out), 'theme')).toMatchObject({ state: 'fail', text: 'Tema tidak sah: TV memakai tema asas. Buka apl MAXCOM, Tetapan, Templat paparan.' });
+    const text = runDoctor(['-InstallRoot', bad.root, '-SkipSystemChecks']);
+    expect(text.out).toContain('GAGAL: theme: Tema tidak sah: TV memakai tema asas. Buka apl MAXCOM, Tetapan, Templat paparan.');
   }, 120_000);
 
   it('text mode prints OK / LANGKAU lines in BM and never the pfx.pass content', async () => {

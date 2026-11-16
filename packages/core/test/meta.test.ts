@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FEATURES } from '../src/features/registry.ts';
 import { validateFeatureSettings } from '../src/features/settings.ts';
 import {
-  FEATURE_DESC, FIELD_META, LANJUTAN_ROWS, ORDERED_FEATURES, SYSTEM_FEATURES, fieldMeta, isSystemField,
+  FEATURE_DESC, FIELD_META, HIDDEN_FEATURES, LANJUTAN_ROWS, ORDERED_FEATURES, SYSTEM_FEATURES, fieldMeta, isSystemField,
   patchNeedsSystemWrite,
 } from '../src/features/meta.ts';
 import type { FeatureKey } from '../src/features/registry.ts';
@@ -52,13 +52,13 @@ describe('field metadata', () => {
     expect(fieldMeta('system', 'noVideoSeconds')).toMatchObject({ min: 5, max: 60 });
     expect(fieldMeta('cloudSync', 'dirtyCheckSeconds')!.choices).toEqual([60, 120, 300, 600, 900]);
   });
-  it('offers the five kiosk templates as a dropdown, every choice valid and nothing else', () => {
+  it('offers the theme picker widget; every built-in theme name is valid', () => {
     const m = fieldMeta('kioskTemplate', 'templateId')!;
-    expect(m.ui).toBe('dropdown');
-    expect(m.choices).toEqual(['default', 'colourful', 'creative', 'oldschool', 'minimal']);
-    for (const c of m.choices!) expect(validateFeatureSettings('kioskTemplate', { templateId: c }).ok, String(c)).toBe(true);
+    expect(m.ui).toBe('theme');
+    for (const c of ['default', 'colourful', 'creative', 'oldschool', 'minimal']) expect(validateFeatureSettings('kioskTemplate', { templateId: c }).ok, c).toBe(true);
     expect(isSystemField('kioskTemplate', 'templateId')).toBe(false);
-    expect(FEATURE_DESC.kioskTemplate.ms).toContain('Satu Warna (Lalai)');
+    expect(FEATURE_DESC.kioskTemplate.ms).toContain('Setiap skrin boleh diubah suai');
+    expect(HIDDEN_FEATURES).toEqual(['themeStyle']);
   });
 });
 

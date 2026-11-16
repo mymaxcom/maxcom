@@ -71,6 +71,9 @@ import '../sync/sync_providers.dart';
 import '../sync/transport.dart';
 import 'guards.dart';
 import 'providers.dart';
+import '../screens/theme/theme_editor_screen.dart';
+import '../screens/theme/theme_gallery_screen.dart';
+import '../screens/theme/theme_upload_screen.dart';
 import 'shell.dart';
 import 'theme.dart';
 
@@ -114,10 +117,13 @@ abstract final class AppRoutes {
   static const String settingsLocation = '/settings/location';
   static const String settingsZone = '/settings/zone';
   static const String settingsPrayerSources = '/settings/prayer-sources';
+  static const String settingsThemes = '/settings/templat';
+  static const String settingsThemeUpload = '/settings/templat/muat-naik';
 
   static const String hadisCari = '/content/hadis/cari';
 
   static String settingsFor(String feature) => '/settings/$feature';
+  static String themeEditorFor(String theme) => '/settings/templat/$theme';
   static String hadisDetailFor(String heId) => '/content/hadis/cari/$heId';
   static String contentFor(String kind) => '/content/$kind';
   static String contentNewFor(String kind) => '/content/$kind/new';
@@ -131,6 +137,7 @@ abstract final class AppRoutes {
 /// page's path is not the feature's key (`location` and `zone` are).
 const Map<String, String> customFeatureRoutes = {
   'prayerSources': AppRoutes.settingsPrayerSources,
+  'kioskTemplate': AppRoutes.settingsThemes,
 };
 
 /// The router, rebuilt never: the guard reads the session, the enrolled
@@ -230,6 +237,20 @@ GoRouter createRouter(
               GoRoute(
                 path: 'prayer-sources',
                 builder: (context, state) => const SourcesScreen(),
+              ),
+              GoRoute(
+                path: 'templat',
+                builder: (context, state) => const ThemeGalleryScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'muat-naik',
+                    builder: (context, state) => const ThemeUploadScreen(),
+                  ),
+                  GoRoute(
+                    path: ':theme',
+                    builder: (context, state) => ThemeEditorScreen(theme: state.pathParameters['theme']!),
+                  ),
+                ],
               ),
               GoRoute(
                 path: ':feature',

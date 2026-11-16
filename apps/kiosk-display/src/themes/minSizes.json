@@ -1,0 +1,482 @@
+{
+  "default": {
+    "biasa": {
+      "clock": 1,
+      "next": 2.1,
+      "prayers": 1
+    },
+    "kuliah": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "iqamah": {
+      "clock": 2.6,
+      "countdown": 16,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "pengumuman": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "solat": {
+      "clock": 2.6,
+      "prayers": 1
+    },
+    "poster": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "azan": {
+      "clock": 2.6,
+      "countdown": 16,
+      "prayers": 1
+    },
+    "masuk-waktu": {
+      "clock": 2.6,
+      "prayers": 1
+    },
+    "jumaat": {
+      "clock": 2.6,
+      "prayers": 1
+    },
+    "tiada-data": {
+      "clock": 1
+    },
+    "hadis": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "ayat": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "takwim": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "program": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "zikir": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "live": {
+      "logo": 3.199,
+      "clock": 1,
+      "next": 1
+    }
+  },
+  "colourful": {
+    "biasa": {
+      "clock": 1,
+      "next": 2.1,
+      "prayers": 1
+    },
+    "kuliah": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "iqamah": {
+      "clock": 3,
+      "countdown": 11.5,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "pengumuman": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "solat": {
+      "clock": 3,
+      "prayers": 1
+    },
+    "poster": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "azan": {
+      "clock": 3,
+      "countdown": 11.5,
+      "prayers": 1
+    },
+    "masuk-waktu": {
+      "clock": 3,
+      "prayers": 1
+    },
+    "jumaat": {
+      "clock": 3,
+      "prayers": 1
+    },
+    "tiada-data": {
+      "clock": 1
+    },
+    "hadis": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "ayat": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "takwim": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "program": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "zikir": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "live": {
+      "logo": 4.6,
+      "clock": 1,
+      "next": 1
+    }
+  },
+  "creative": {
+    "biasa": {
+      "clock": 1,
+      "next": 1.7,
+      "prayers": 1
+    },
+    "kuliah": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "iqamah": {
+      "clock": 2.8,
+      "countdown": 12.4,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "pengumuman": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "solat": {
+      "clock": 2.8,
+      "prayers": 1
+    },
+    "poster": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "azan": {
+      "clock": 2.8,
+      "countdown": 12.4,
+      "prayers": 1
+    },
+    "masuk-waktu": {
+      "clock": 2.8,
+      "prayers": 1
+    },
+    "jumaat": {
+      "clock": 2.8,
+      "prayers": 1
+    },
+    "tiada-data": {
+      "clock": 1
+    },
+    "hadis": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "ayat": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "takwim": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "program": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "zikir": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "live": {
+      "logo": 3.199,
+      "clock": 1,
+      "next": 1
+    }
+  },
+  "oldschool": {
+    "biasa": {
+      "clock": 1,
+      "next": 2.4,
+      "prayers": 1
+    },
+    "kuliah": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "iqamah": {
+      "clock": 2.7,
+      "countdown": 10,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "pengumuman": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "solat": {
+      "clock": 2.7,
+      "prayers": 1
+    },
+    "poster": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "azan": {
+      "clock": 2.7,
+      "countdown": 10,
+      "prayers": 1
+    },
+    "masuk-waktu": {
+      "clock": 2.7,
+      "prayers": 1
+    },
+    "jumaat": {
+      "clock": 2.7,
+      "prayers": 1
+    },
+    "tiada-data": {
+      "clock": 1
+    },
+    "hadis": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "ayat": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "takwim": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "program": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "zikir": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "live": {
+      "logo": 4.6,
+      "clock": 1,
+      "next": 1
+    }
+  },
+  "minimal": {
+    "biasa": {
+      "clock": 1,
+      "next": 2.6,
+      "prayers": 1
+    },
+    "kuliah": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "iqamah": {
+      "clock": 2.4,
+      "countdown": 18,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "pengumuman": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "solat": {
+      "clock": 2.4,
+      "prayers": 1
+    },
+    "poster": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "azan": {
+      "clock": 2.4,
+      "countdown": 18,
+      "prayers": 1
+    },
+    "masuk-waktu": {
+      "clock": 2.4,
+      "prayers": 1
+    },
+    "jumaat": {
+      "clock": 2.4,
+      "prayers": 1
+    },
+    "tiada-data": {
+      "clock": 1
+    },
+    "hadis": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "ayat": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "takwim": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "program": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "zikir": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "live": {
+      "logo": 4.6,
+      "clock": 1,
+      "next": 1
+    }
+  },
+  "arabic": {
+    "biasa": {
+      "clock": 1,
+      "next": 2.1,
+      "prayers": 1
+    },
+    "kuliah": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "iqamah": {
+      "clock": 2.6,
+      "countdown": 16,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "pengumuman": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "solat": {
+      "clock": 2.6,
+      "prayers": 1
+    },
+    "poster": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1,
+      "logo": 4.199
+    },
+    "azan": {
+      "clock": 2.6,
+      "countdown": 16,
+      "prayers": 1
+    },
+    "masuk-waktu": {
+      "clock": 2.6,
+      "prayers": 1
+    },
+    "jumaat": {
+      "clock": 2.6,
+      "prayers": 1
+    },
+    "tiada-data": {
+      "clock": 1
+    },
+    "arab-hadis": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "arab-ayat": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "takwim": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "program": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "arab-zikir": {
+      "next": 1,
+      "clock": 1,
+      "prayers": 1
+    },
+    "live": {
+      "logo": 4.6,
+      "clock": 1,
+      "next": 1
+    }
+  }
+}

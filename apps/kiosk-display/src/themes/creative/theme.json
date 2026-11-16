@@ -1,0 +1,10 @@
+{
+  "name": "creative",
+  "title": "Creative",
+  "version": 1,
+  "contract": 1,
+  "base": "creative",
+  "defaults": {
+    "semua": { "shade": 35 }
+  }
+}

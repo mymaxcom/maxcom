@@ -18,22 +18,29 @@ const int pickMaxBytes = 2 * 1024 * 1024;
 /// What the pick gave back. [tooBig] means the file was over the cap and
 /// [bytes] is empty.
 class PickedFile {
-  PickedFile(this.name, this.bytes) : tooBig = false;
-  PickedFile.tooBig(this.name) : bytes = Uint8List(0), tooBig = true;
+  PickedFile(this.name, this.bytes) : tooBig = false, wrongType = false;
+  PickedFile.tooBig(this.name) : bytes = Uint8List(0), tooBig = true, wrongType = false;
+  PickedFile.wrongType(this.name) : bytes = Uint8List(0), tooBig = false, wrongType = true;
 
   final String name;
   final Uint8List bytes;
   final bool tooBig;
+
+  /// The name did not end with what the caller required.
+  final bool wrongType;
 }
 
 bool get filePickSupported => platform.supported;
 
 /// [extensions] are lower-case without the dot (`csv`, `xlsx`, `zip`).
-/// Null when the person backs out or the platform has no pick.
+/// Null when the person backs out or the platform has no pick. With
+/// [mustEndWith] (`.maxtheme`) a file of another name comes back as
+/// [PickedFile.wrongType] with no bytes (the file is not read).
 Future<PickedFile?> pickFile({
   required List<String> extensions,
   required int maxBytes,
-}) => platform.pick(extensions, maxBytes);
+  String? mustEndWith,
+}) => platform.pick(extensions, maxBytes, mustEndWith);
 
 /// The MIME types a document picker should offer for [extensions].
 List<String> mimeTypesFor(List<String> extensions) {
@@ -41,6 +48,8 @@ List<String> mimeTypesFor(List<String> extensions) {
     'csv': ['text/csv', 'text/comma-separated-values'],
     'xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
     'zip': ['application/zip'],
+    // A theme file has no registered type: providers call it a zip or a plain binary.
+    'maxtheme': ['application/octet-stream', 'application/vnd.maxcom.theme+zip', 'application/zip', 'application/x-zip-compressed'],
   };
   final out = <String>[];
   for (final e in extensions) {

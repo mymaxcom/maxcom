@@ -74,17 +74,17 @@ describe('Ticker', () => {
     expect(el.textContent).not.toContain('belum bermula');
     expect(el.getAttribute('data-speed')).toBe('normal');
     // The strip precedes the prayer bar in the DOM and the screen is marked so the content region moves up.
-    const screen = r.container.querySelector('.screen--main')!;
+    const screen = r.container.querySelector('.screen')!;
     expect(screen.classList.contains('has-ticker')).toBe(true);
     const order = [...screen.children].map((c) => c.getAttribute('data-layer') ?? c.className);
-    expect(order.indexOf('ticker')).toBeLessThan(order.findIndex((c) => String(c).includes('pbar')));
+    expect(order.indexOf('ticker')).toBeLessThan(order.findIndex((c) => String(c).includes('region-prayers')));
     expect(r.container.querySelector('[data-layer="content"] [data-card="kuliahCard"]')).toBeTruthy();
   });
 
   it('is absent when the ticker feature is off, when no text is active, and when there is no content', () => {
     const off = show(fixture(), '2026-11-03', '15:00', { settings: { ticker: { enabled: false } } });
     expect(strip(off)).toBeNull();
-    expect(off.container.querySelector('.screen--main')!.classList.contains('has-ticker')).toBe(false);
+    expect(off.container.querySelector('.screen')!.classList.contains('has-ticker')).toBe(false);
     cleanup();
     const none = show(fixture({ ticker: [TICKER[2]!] }));
     expect(strip(none)).toBeNull();

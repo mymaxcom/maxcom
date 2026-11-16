@@ -1,0 +1,379 @@
+/* MAXCOM kiosk theme: colourful. Split out of templates.css; selectors and rule order are unchanged.
+   Every selector starts with .stage[data-template='colourful'] (test/builtinThemes.test.ts checks it). */
+/* ======================================================================================================
+   BERWARNA-WARNI (colourful): the colour column. The seven prayers are a stack of jewel tiles down the right,
+   one fixed colour per time of day; the next prayer steps out as the larger white tile. The clock and the next
+   prayer are two bold colour blocks side by side, the countdown in the sunset block; the card fills the rest.
+   ====================================================================================================== */
+.stage[data-template='colourful'] {
+  --glass-rgb: 24 20 70;
+  --accent: #ffd166;
+  --accent-rgb: 255 209 102;
+  --text: #ffffff;
+  --ink: #1d1442;
+  --sunset: linear-gradient(135deg, #e2457a 0%, #f2793f 100%);
+}
+.stage[data-template='colourful'] .bg {
+  background:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'><g fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='1.4'><rect x='27' y='27' width='42' height='42'/><rect x='27' y='27' width='42' height='42' transform='rotate(45 48 48)'/><circle cx='48' cy='48' r='9'/><path d='M0 48h12M84 48h12M48 0v12M48 84v12'/></g></svg>") 0 0 / 6rem 6rem,
+    radial-gradient(60rem 40rem at 6% 0%, rgb(140 70 220 / 0.5), transparent 70%),
+    radial-gradient(55rem 38rem at 70% 100%, rgb(0 160 150 / 0.42), transparent 70%),
+    linear-gradient(140deg, #1b1446 0%, #14204f 45%, #0b2c48 100%);
+}
+.stage[data-template='colourful'] .bg__img,
+.stage[data-template='colourful'] .bg__shade { display: none; }
+.stage[data-template='colourful'] .bg__dim { background: rgb(8 6 26 / 0.93); }
+/* The surau's own picture (themeStyle bgImage): above this theme's own field, below all content; the shade is theirs. */
+.stage[data-template='colourful'][data-bg='image'] .bg__menu { z-index: 0; }
+.stage[data-template='colourful'][data-bg='image'] .bg__shade { display: block; background: rgb(0 0 0 / var(--shade, 0)); }
+.stage[data-template='colourful'] .glass {
+  /* No blur behind it (styles.css .glass): a deeper indigo fill keeps the star lattice out of the text. */
+  background: linear-gradient(160deg, rgb(52 44 128 / 0.82), rgb(30 30 92 / 0.86));
+  border: 1px solid rgb(255 255 255 / 0.16);
+  box-shadow: 0 0.8rem 2.4rem rgb(5 5 30 / 0.35);
+}
+.stage[data-template='colourful'] .screen--main {
+  grid-template-columns: auto minmax(0, 1fr) 25rem;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name   name   bar'
+    'clock  next   bar'
+    'dates  dates  bar'
+    'band   band   bar'
+    'ticker ticker bar';
+  column-gap: 1.4rem;
+  row-gap: 1rem;
+  padding: 2.4rem 3rem 3.1rem;
+}
+.stage[data-template='colourful'] .screen--main.has-emergency {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'name   name   bar'
+    'clock  next   bar'
+    'dates  dates  bar'
+    'band   band   bar'
+    'emerg  emerg  bar'
+    'ticker ticker bar';
+}
+.stage[data-template='colourful'] .screen--main .ident { display: contents; }
+.stage[data-template='colourful'] .screen--main .ident__head { grid-area: name; min-width: 0; margin: 0; }
+.stage[data-template='colourful'] .ident__name { margin: 0; color: var(--accent); font-size: 1.4rem; letter-spacing: 0.22em; }
+.stage[data-template='colourful'] .screen--main .clock {
+  grid-area: clock;
+  padding: 1.3rem 2.2rem 1.5rem 1.9rem;
+  border-radius: 1.6rem;
+  line-height: 0.88;
+  background: linear-gradient(150deg, #6c4ad0 0%, #3d2c9a 100%);
+  box-shadow: 0 1rem 2.6rem rgb(40 20 120 / 0.4), inset 0 0 0 1px rgb(255 255 255 / 0.14);
+}
+.stage[data-template='colourful'] .screen--main .clock__hm { font-size: 9.4rem; text-shadow: none; }
+.stage[data-template='colourful'] .clock__aside { color: var(--accent); opacity: 1; font-weight: 800; }
+.stage[data-template='colourful'] .screen--main .clock__aside { font-size: 2.2rem; }
+.stage[data-template='colourful'] .clock__aside .num { color: #ffffff; }
+.stage[data-template='colourful'] .screen--main .next {
+  grid-area: next;
+  justify-self: stretch;
+  align-self: stretch;
+  margin: 0;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.2rem 2.2rem;
+  border: 0;
+  border-radius: 1.6rem;
+  background: var(--sunset);
+  box-shadow: 0 1rem 2.6rem rgb(226 69 122 / 0.32);
+  font-size: 1.9rem;
+  font-weight: 700;
+  text-shadow: none;
+}
+.stage[data-template='colourful'] .screen--main .next .num { color: #ffffff; font-size: 5.4rem; margin-top: 0.3rem; }
+.stage[data-template='colourful'] .screen--main .ident__dates { grid-area: dates; margin: 0.1rem 0 0.2rem; font-size: 1.8rem; }
+.stage[data-template='colourful'] .ident__dates .sep { background: #ff7aa2; }
+.stage[data-template='colourful'] .screen--main .content { grid-area: band; width: auto; margin: 0; }
+.stage[data-template='colourful'] .screen--main .zikir { grid-area: band; margin: 0; }
+.stage[data-template='colourful'] .card--wide { right: 0; }
+.stage[data-template='colourful'] .card:not(.card--poster) { border-left: 0.5rem solid #ff7aa2; }
+.stage[data-template='colourful'] .card__tag { color: var(--accent); }
+.stage[data-template='colourful'] .card--kuliah { padding: 2rem 2.6rem; gap: 2.4rem; }
+.stage[data-template='colourful'] .kuliah__photo { width: 14.5rem; height: 14.5rem; }
+.stage[data-template='colourful'] .kuliah__kitab { width: 9.4rem; height: 13.2rem; }
+.stage[data-template='colourful'] .kuliah__body { gap: 0.5rem; }
+.stage[data-template='colourful'] .card__tag { font-size: 1.3rem; }
+.stage[data-template='colourful'] .kuliah__when { font-size: 1.6rem; }
+.stage[data-template='colourful'] .kuliah__when b { font-size: 1.8rem; }
+.stage[data-template='colourful'] .kuliah__name { font-size: 3.3rem; }
+.stage[data-template='colourful'] .kuliah__topic { font-size: 2.1rem; }
+.stage[data-template='colourful'] .kuliah__meta { font-size: 1.6rem; }
+.stage[data-template='colourful'] .kuliah__next li { font-size: 1.45rem; }
+.stage[data-template='colourful'] .pengumuman__title { font-size: calc(3.2rem * var(--fit, 1) * var(--scale, 1)); }
+.stage[data-template='colourful'] .pengumuman__body { font-size: calc(2.1rem * var(--fit, 1) * var(--scale, 1)); max-width: 58rem; }
+.stage[data-template='colourful'] .screen--main .ticker { height: 2.8rem; }
+.stage[data-template='colourful'] .ticker__cap { background: linear-gradient(135deg, #ffd166, #f2a541); }
+.stage[data-template='colourful'] .ticker__track,
+.stage[data-template='colourful'] .ticker__static { font-size: 1.45rem; }
+.stage[data-template='colourful'] .source-footer { left: 3rem; right: 28.4rem; }
+/* The tile column: one fixed colour per time of day. */
+.stage[data-template='colourful'] .pbar {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+}
+.stage[data-template='colourful'] .pbar .pcell {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-items: center;
+  padding: 0 1.5rem 0 1.4rem;
+  border-radius: 1rem;
+  color: #ffffff;
+  background: linear-gradient(160deg, var(--cell-a), var(--cell-b));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+.stage[data-template='colourful'] .pcell__label { grid-column: 1; grid-row: 1; font-size: 1.3rem; font-weight: 800; letter-spacing: 0.12em; line-height: 1.3; opacity: 0.95; overflow: hidden; text-overflow: ellipsis; }
+.stage[data-template='colourful'] .pbar .pcell:not(.is-current) .pcell__label { grid-row: 1 / 3; }
+.stage[data-template='colourful'] .pcell__time { grid-column: 2; grid-row: 1 / 3; margin: 0; font-size: 3.3rem; }
+.stage[data-template='colourful'] .pbar .pcell.is-minor .pcell__time { padding-top: 0; font-size: 2.5rem; opacity: 0.88; }
+.stage[data-template='colourful'] .pbar .pcell.is-minor .pcell__label { font-size: 1.15rem; opacity: 0.85; }
+.stage[data-template='colourful'] .pcell__cd { grid-column: 1; grid-row: 2; justify-self: start; margin: 0.35rem 0 0; font-size: 1.15rem; padding: 0.22rem 0.75rem; }
+.stage[data-template='colourful'] .pbar .pcell[data-prayer='imsak'] { --cell-a: #4b4fb8; --cell-b: #33378f; }
+.stage[data-template='colourful'] .pbar .pcell[data-prayer='subuh'] { --cell-a: #2f74c8; --cell-b: #1d4f94; }
+.stage[data-template='colourful'] .pbar .pcell[data-prayer='syuruk'] { --cell-a: #d98a1e; --cell-b: #a9620c; }
+.stage[data-template='colourful'] .pbar .pcell[data-prayer='zohor'] { --cell-a: #1f9e8f; --cell-b: #13726a; }
+.stage[data-template='colourful'] .pbar .pcell[data-prayer='asar'] { --cell-a: #d0642c; --cell-b: #9e4317; }
+.stage[data-template='colourful'] .pbar .pcell[data-prayer='maghrib'] { --cell-a: #c43d64; --cell-b: #8f2446; }
+.stage[data-template='colourful'] .pbar .pcell[data-prayer='isyak'] { --cell-a: #6b45bf; --cell-b: #48298c; }
+/* The next prayer (or the one in progress) steps out of the column as the larger white tile. */
+.stage[data-template='colourful'] .pbar .pcell.is-current {
+  background: #ffffff;
+  color: var(--ink);
+  flex-grow: 1.45;
+  margin-left: -1.6rem;
+  box-shadow: 0 0 0 0.3rem var(--cell-a), 0 0.8rem 2rem rgb(0 0 0 / 0.4);
+}
+.stage[data-template='colourful'] .pbar .pcell.is-current .pcell__label { color: var(--cell-b); opacity: 1; font-size: 1.45rem; }
+.stage[data-template='colourful'] .pbar .pcell.is-current .pcell__time { font-size: 4rem; opacity: 1; }
+.stage[data-template='colourful'] .pbar .pcell.is-current .pcell__cd { background: var(--cell-b); color: #ffffff; }
+/* No card: the two blocks grow into hero size in the middle of the left side. */
+.stage[data-template='colourful'] .screen--main.is-idle {
+  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name   name   bar'
+    '.      .      bar'
+    'clock  clock  bar'
+    'next   dates  bar'
+    '.      .      bar'
+    'ticker ticker bar';
+}
+.stage[data-template='colourful'] .screen--main.is-idle.has-emergency {
+  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'name   name   bar'
+    '.      .      bar'
+    'clock  clock  bar'
+    'next   dates  bar'
+    '.      .      bar'
+    'emerg  emerg  bar'
+    'ticker ticker bar';
+}
+.stage[data-template='colourful'] .screen--main.is-idle .content { display: none; }
+.stage[data-template='colourful'] .screen--main.is-idle .clock { justify-self: stretch; align-self: auto; text-align: center; padding: 2.4rem 2rem 2.8rem; border-radius: 2.2rem; }
+.stage[data-template='colourful'] .screen--main.is-idle .clock__hm { font-size: 17rem; letter-spacing: -0.03em; }
+.stage[data-template='colourful'] .screen--main.is-idle .clock__aside { font-size: 3.4rem; margin-left: 1.3rem; }
+.stage[data-template='colourful'] .screen--main.is-idle .next { margin: 0; padding: 1.4rem 2.4rem; font-size: 2.1rem; align-self: start; }
+.stage[data-template='colourful'] .screen--main.is-idle .next .num { font-size: 5.6rem; margin-top: 0.3rem; }
+.stage[data-template='colourful'] .screen--main.is-idle .ident__dates { align-self: center; flex-direction: column; align-items: flex-start; gap: 0.5rem; margin: 0 0 0 0.6rem; font-size: 2.1rem; }
+.stage[data-template='colourful'] .screen--main.is-idle .ident__dates .sep { display: none; }
+/* Phases: the sunset block carries the phase, the tile column stays. */
+.stage[data-template='colourful'] .screen--phase {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 25rem;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: 'head bar' 'centre bar';
+  column-gap: 1.4rem;
+  padding: 2.4rem 3rem 3.1rem;
+}
+.stage[data-template='colourful'] .phase__head { position: static; grid-area: head; align-items: center; min-width: 0; gap: 1.6rem; }
+.stage[data-template='colourful'] .phase__head .ident__head { min-width: 0; }
+.stage[data-template='colourful'] .phase__clock { font-size: 3rem; flex: none; }
+.stage[data-template='colourful'] .phase__clock small { color: var(--accent); opacity: 1; }
+.stage[data-template='colourful'] .screen--phase .pbar { position: static; grid-area: bar; }
+.stage[data-template='colourful'] .phase__centre {
+  position: static;
+  grid-area: centre;
+  min-width: 0;
+  margin-top: 1.6rem;
+  padding: 2rem;
+  border-radius: 2.2rem;
+  background: var(--sunset);
+  box-shadow: 0 1.4rem 3.4rem rgb(226 69 122 / 0.35);
+  text-shadow: 0 0.2rem 1rem rgb(90 10 40 / 0.3);
+}
+.stage[data-template='colourful'] .phase__title { font-size: calc(3.6rem * var(--scale, 1)); font-weight: 700; color: #ffffff; }
+.stage[data-template='colourful'] .phase__big { font-size: 11.5rem; color: #ffffff; }
+.stage[data-template='colourful'] .phase__big.is-warning { color: var(--ink); text-shadow: none; }
+.stage[data-template='colourful'] .phase__time { color: #ffffff; }
+.stage[data-template='colourful'] .phase__sub { color: rgb(255 255 255 / 0.9); opacity: 1; }
+.stage[data-template='colourful'] .phase__calm .phase__title { color: #ffe3a3; font-size: calc(5.2rem * var(--scale, 1)); max-width: 100%; }
+.stage[data-template='colourful'] .phase__calm .phase__sub { color: rgb(255 255 255 / 0.78); font-size: calc(2.4rem * var(--scale, 1)); }
+.stage[data-template='colourful'] .screen--phase .emergency-band { left: 3rem; right: 28.4rem; bottom: 4.6rem; }
+.stage[data-template='colourful'] .screen--phase .source-footer { left: 3rem; right: 28.4rem; }
+/* No prayer data: no tiles; the hero clock on the indigo field. */
+.stage[data-template='colourful'][data-phase='noData'] .phase__centre {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  background: none;
+  box-shadow: none;
+}
+.stage[data-template='colourful'] .phase__nodata .clock {
+  padding: 2.4rem 3rem 2.8rem;
+  border-radius: 2.2rem;
+  background: linear-gradient(150deg, #6c4ad0 0%, #3d2c9a 100%);
+  box-shadow: 0 1rem 2.6rem rgb(40 20 120 / 0.4), inset 0 0 0 1px rgb(255 255 255 / 0.14);
+}
+.stage[data-template='colourful'] .phase__nodata .clock__hm { font-size: 14rem; text-shadow: none; }
+.stage[data-template='colourful'] .phase__nodata .clock__aside { font-size: 3rem; }
+/* Solat and tarawih: the block steps back to a faint outline; the tiles dim. */
+.stage[data-template='colourful'][data-dim='true'] .phase__centre { background: rgb(255 255 255 / 0.04); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08); text-shadow: none; }
+.stage[data-template='colourful'][data-dim='true'] .pbar.is-dimmed { opacity: 0.28; }
+.stage[data-template='colourful'][data-dim='true'] .phase__head { opacity: 0.6; }
+/* A kitab without a cover image spells its title on the block: the padding moves to the block, so the clamp box
+   ends exactly at its last line and a fifth line never shows half-cut in the padding. */
+.stage[data-template='colourful'] .kuliah__kitab:not(.has-img) { padding: 0.6rem 0.5rem; }
+.stage[data-template='colourful'] .kuliah__kitab-title { padding: 0; font-size: 1.1rem; }
+/* Every layout template sizes the card differently from the default the row estimate (KuliahCard) was made for:
+   only whole following rows show. The list may shrink to the space left, and a row that no longer fits wraps
+   into a second column outside the card instead of being cut mid-line. */
+.stage[data-template='colourful'] .kuliah__next { flex: 0 1 auto; min-height: 0; flex-wrap: wrap; align-content: flex-start; overflow: hidden; }
+.stage[data-template='colourful'] .kuliah__next li { width: 100%; }
+/* The rule above the following rows belongs to the first row, so it goes with it when no row fits. */
+.stage[data-template='colourful'] .kuliah__next { border-top: 0; padding-top: 0; }
+.stage[data-template='colourful'] .kuliah__next li:first-child { border-top: 1px solid rgb(var(--accent-rgb) / 0.28); padding-top: 0.45rem; }
+/* The Islamic text cards are narrower here than the default's gutter-to-gutter wide card: the source and credit
+   lines wrap rather than cut an attribution short. */
+.stage[data-template='colourful'] .ayat__credit { flex-wrap: wrap; white-space: normal; row-gap: 0.2rem; line-height: 1.25; }
+.stage[data-template='colourful'] .hadis__foot { flex-wrap: wrap; row-gap: 0.2rem; }
+/* Hadis: the Arabic and the Malay keep their clamp height, so a text taller than the narrower card overflows
+   the body and the card's own fit (useFit) shrinks it, instead of a squeezed clamp box cutting a line in half. */
+.stage[data-template='colourful'] .hadis__body > * { flex-shrink: 0; }
+/* Berwarna-warni: a framed video in a gradient ring, the side column of colour blocks (the clock on a soft plate,
+   the chip in violet), the strip an indigo plate with the pink edge. */
+.stage[data-template='colourful'] {
+  --live-pad-top: 2.083rem;
+  --live-pad-x: 2.083rem;
+  --live-pad-bottom: 1.2rem;
+  --live-gap: 1.2rem;
+  --live-frame-w: 80rem;
+  --live-frame-radius: 1.6rem;
+  --live-frame-ring: #ff9a3c;
+  --live-frame-fill: rgb(30 30 92 / 0.9);
+  --live-veil: rgb(24 20 70 / 0.7);
+  --live-veil-dim: rgb(8 6 26 / 0.94);
+  --live-side-shadow: none;
+}
+.stage[data-template='colourful'] .live-screen__ident .brand-name { font-size: 1.15rem; letter-spacing: 0.16em; color: var(--accent); }
+.stage[data-template='colourful'] .live-screen__time {
+  padding: 1.1rem 0.6rem 1.2rem;
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 1.35rem;
+  text-align: center;
+}
+.stage[data-template='colourful'] .screen--live .live-screen__time .clock--compact .hm { text-shadow: none; }
+.stage[data-template='colourful'] .screen--live .next--chip { background: #6b40c4; color: #ffffff; }
+.stage[data-template='colourful'] .live-strip { border-left: 0.5rem solid #ff7aa2; text-shadow: none; }
+/* ======================================================================================================
+   Every layout template: the identity block is `display: contents` on the main screen, so its own fade (the
+   poster takeover, the idle <-> card settle in styles.css) is carried by its three children instead.
+   ====================================================================================================== */
+.stage[data-template='colourful'] .screen--main .ident > * { transition: opacity 400ms ease, visibility 0s linear 0s; }
+.stage[data-template='colourful'] .screen--main.is-settling .ident > * { animation: head-settle 520ms ease-out backwards; }
+.stage[data-template='colourful'] .screen--main.is-settling.is-idle .ident > * { animation: head-settle-idle 520ms ease-out backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .stage[data-template='colourful'] .screen--main .ident > * { transition: none; animation: none; }
+}
+/* Every template: the emergency band keeps its amber warning look with dark ink, framed so it reads on light and
+   dark fields alike. */
+.stage[data-template='colourful'] .emergency-band {
+  background: #f5b335;
+  color: #1a1405;
+  border: 0.2rem solid #1a1405;
+  border-radius: 0.6rem;
+  font-family: var(--font);
+  text-shadow: none;
+}
+
+/* Free text over a menu picture (spec 6.3): text that sits directly on the stage, not inside a panel, is dressed from
+   the picture's measured tone (App sets data-pic='dark' for a dark picture, 'light' for a light one) on a plate, so it
+   reads on any picture. ONE plate per visual group, never one per word: the brand name, the dates (Gregorian and Hijri
+   together), the clock (digits and seconds or am/pm together), the source line and the phase text (title and countdown
+   together, `.phase__plate`). Every plate of the theme has the same colour, the same even padding (a box-shadow spread:
+   no layout change) and the same radius. Panels and cards keep this theme's own colours. No backdrop-filter (Chrome 91).
+   `.screen` lifts the rules above the theme's own colour rules. */
+.stage[data-template='colourful'][data-pic='dark'] { --plate-bg: rgb(24 14 64 / 0.62); }
+.stage[data-template='colourful'][data-pic='light'] { --plate-bg: rgb(255 255 255 / 0.74); }
+.stage[data-template='colourful'][data-pic='dark'] .screen .free-text:not(.clock__hm):not(.clock__aside),
+.stage[data-template='colourful'][data-pic='dark'] .screen .free-text:not(.clock__hm):not(.clock__aside) * {
+  color: #ffffff;
+  text-shadow: 0 0.05em 0.14em rgb(0 0 0 / 0.5);
+}
+.stage[data-template='colourful'][data-pic='light'] .screen .free-text:not(.clock__hm):not(.clock__aside),
+.stage[data-template='colourful'][data-pic='light'] .screen .free-text:not(.clock__hm):not(.clock__aside) * {
+  color: #2a1760;
+  text-shadow: 0 0.05em 0.14em rgb(255 255 255 / 0.6);
+}
+.stage[data-template='colourful'][data-pic] .screen .ident__name.free-text,
+.stage[data-template='colourful'][data-pic] .screen .ident__dates,
+.stage[data-template='colourful'][data-pic] .screen .live-screen__dates,
+.stage[data-template='colourful'][data-pic] .screen .phase__clock.free-text,
+.stage[data-template='colourful'][data-pic] .screen .source-footer.free-text {
+  background-color: var(--plate-bg);
+  box-shadow: 0 0 0 var(--plate-pad) var(--plate-bg);
+  border-radius: var(--plate-radius);
+}
+/* ======================================================================================================
+   Content screens (kind content), ported from the approved mockup: the chip in the sunset block, the seven
+   prayers as a row of jewel tiles with the next one white and ringed, the card over the star lattice.
+   Every rule below is scoped to [data-kind='content'] (test/themeContentCss.test.ts).
+   ====================================================================================================== */
+.stage[data-template='colourful'][data-kind='content'] .next--chip { background: var(--sunset); color: #ffffff; }
+.stage[data-template='colourful'][data-kind='content'] .strip {
+  gap: 0.729rem;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+}
+.stage[data-template='colourful'][data-kind='content'] .strip .pcell {
+  border-radius: 0.938rem;
+  color: #ffffff;
+  background: linear-gradient(160deg, var(--cell-a), var(--cell-b));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+.stage[data-template='colourful'][data-kind='content'] .strip .pcell[data-prayer='imsak'] { --cell-a: #4b4fb8; --cell-b: #33378f; }
+.stage[data-template='colourful'][data-kind='content'] .strip .pcell[data-prayer='subuh'] { --cell-a: #2f74c8; --cell-b: #1d4f94; }
+.stage[data-template='colourful'][data-kind='content'] .strip .pcell[data-prayer='syuruk'] { --cell-a: #d98a1e; --cell-b: #a9620c; }
+.stage[data-template='colourful'][data-kind='content'] .strip .pcell[data-prayer='zohor'] { --cell-a: #1f9e8f; --cell-b: #13726a; }
+.stage[data-template='colourful'][data-kind='content'] .strip .pcell[data-prayer='asar'] { --cell-a: #d0642c; --cell-b: #9e4317; }
+.stage[data-template='colourful'][data-kind='content'] .strip .pcell[data-prayer='maghrib'] { --cell-a: #c43d64; --cell-b: #8f2446; }
+.stage[data-template='colourful'][data-kind='content'] .strip .pcell[data-prayer='isyak'] { --cell-a: #6b45bf; --cell-b: #48298c; }
+.stage[data-template='colourful'][data-kind='content'] .strip .pcell.is-current {
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 0.26rem #ff8a3c;
+}
+.stage[data-template='colourful'][data-kind='content'] .kul-photo { border-color: var(--accent); }
+.stage[data-template='colourful'][data-kind='content'] .kul-label,
+.stage[data-template='colourful'][data-kind='content'] .kul-topic { color: var(--accent); }
+.stage[data-template='colourful'][data-screen='poster'] .poster-fill { filter: blur(2.396rem) brightness(0.5) saturate(1.2); }

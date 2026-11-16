@@ -6,8 +6,8 @@ import '@fontsource/plus-jakarta-sans/800.css';
 import '@fontsource/amiri-quran/400.css';
 import './styles.css';
 
-import { useEffect, useState } from 'preact/hooks';
-import type { Tone } from '@surau/core';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import type { Settings, ThemeStyleEntry, Tone } from '@surau/core';
 import { useBoxLang } from './data/boxLang.ts';
 import { useBoxState } from './data/boxState.ts';
 import { NotPairedError } from './data/bundle.ts';
@@ -15,7 +15,9 @@ import { useCloudStatus } from './data/cloud.ts';
 import { useKiosk } from './data/kiosk.ts';
 import { useLive } from './data/live.ts';
 import { useNotPaired } from './data/pairing.ts';
-import { isPreview } from './data/preview.ts';
+import { isForcedScreen } from './data/content.ts';
+import { isPreview, usePreviewExtraAssets, usePreviewTheme } from './data/preview.ts';
+import { assetSrc } from './content/assets.ts';
 import { useRemoteKeys } from './data/remote.ts';
 import { isBoxLang } from './i18n-box.ts';
 import { t } from './i18n.ts';
@@ -29,17 +31,28 @@ import { NetCheck } from './screens/NetCheck.tsx';
 import { Pair } from './screens/Pair.tsx';
 import { Phase, CALM_PHASES } from './screens/Phase.tsx';
 import { Recovery } from './screens/Recovery.tsx';
+import { kindOf } from './screens/kind.ts';
 import { screenIdOf } from './screens/screenId.ts';
+import type { Shown } from './screens/screenId.ts';
 import { Setup } from './screens/Setup.tsx';
-import { Background, resolveTone, toneVars } from './ui/Background.tsx';
+import { Background, pictureTone, resolveTone, toneVars } from './ui/Background.tsx';
 import { useBeep } from './ui/Beep.ts';
 import { CloudBadge } from './ui/CloudBadge.tsx';
 import { HostExit } from './ui/HostExit.tsx';
 import { QuietBoundary } from './ui/QuietBoundary.tsx';
 import { useBoxNav } from './ui/LangSwitch.tsx';
 import { SafeBoundary } from './ui/SafeBoundary.tsx';
-import { templateOf } from './templates.ts';
-// After every component import, so a template's rules follow styles.css and content.css in the bundle.
+import { arabLooksOf, builtInTheme, liveLayoutOf, packPictureKey, resolvePreviewTheme } from './themes/index.ts';
+import { ArabEnvContext } from './themes/arabContext.ts';
+import type { ResolvedTheme } from './themes/index.ts';
+import { usePackCss, usePackPicture } from './themes/packLoader.ts';
+import { useThemeHealth } from './themes/useThemeHealth.ts';
+import { createFailedPictures } from './themes/failedPictures.ts';
+import { effectiveShade, harakatOn, stageStyleFor, styleVars } from './themes/styleVars.ts';
+import { SCALE_FACTOR, sanitizeThemeStyles } from '@surau/core';
+import { ScaleContext } from './content/scale.ts';
+// After every component import, so the contract's rules follow styles.css and content.css and a template's rules follow the contract.
+import './themes/contract.css';
 import './templates.css';
 
 /** The data layer reports errors as message strings; this is the one `loadBundle` throws for a 401 with no cache. */
@@ -47,6 +60,17 @@ const NOT_PAIRED_MESSAGE = new NotPairedError().message;
 
 /** The admin app's preview shows the normal kiosk: it never asks the box which state it is in. */
 const noBoxFetch: typeof fetch = () => Promise.reject(new Error('preview'));
+
+/** Every menu picture id the surau set for a theme (all-screens layer and each screen). */
+function menuImageIds(settings: Settings, theme: string, override?: ThemeStyleEntry): string[] {
+  const all = sanitizeThemeStyles(settings.themeStyle?.styles);
+  const e = override ?? (Object.prototype.hasOwnProperty.call(all, theme) ? all[theme] : undefined);
+  if (!e) return [];
+  const ids = new Set<string>();
+  if (e.semua.bgImage) ids.add(e.semua.bgImage);
+  for (const s of Object.values(e.skrin)) if (s?.bgImage) ids.add(s.bgImage);
+  return [...ids];
+}
 
 export function App() {
   const view = useKiosk();
@@ -56,6 +80,11 @@ export function App() {
   const tone = resolveTone(measured, settings);
   // A preview is not a display of its own: it never pairs, and a thin ribbon says so.
   const preview = isPreview();
+  // The menu pictures of the theme on stage: fetched in preview (a paired display loads /assets/<id> itself); one that
+  // fails to load is dropped for good so the next layer shows (spec 6.10.1).
+  // The preview page may be asked (Ubah suai) to wear another theme, another screen and unsaved values.
+  const previewTheme = usePreviewTheme();
+  const themeNow: ResolvedTheme = resolvePreviewTheme(previewTheme, settings);
   // A failed poll keeps the last answer, and no answer yet means the normal kiosk: display fails safe.
   const box = useBoxState(preview ? { fetchImpl: noBoxFetch } : {}).view;
   const locked = box?.state === 'locked';
@@ -66,6 +95,24 @@ export function App() {
     box !== null &&
     (box.state === 'setup' || box.state === 'recovery') &&
     (box.qr !== undefined || box.recoveryCodeSet !== undefined || box.reason === 'db_damaged');
+  // Pairing takes the whole screen only when there is nothing else to show: the box refused this
+  // display and no cached bundle exists. With data on screen the prayer layer wins and pairing is a badge.
+  const showPair = !preview && view.error === NOT_PAIRED_MESSAGE && state.phase === 'noData';
+  const onBoxScreen = (box !== null && (locked || boxScreen)) || showPair;
+  // An uploaded theme: its stylesheet over the base theme. Until it has loaded (and whenever it failed the health check)
+  // the stage is the base theme exactly: no pack defaults, no pack pictures, none of the surau's values for the pack.
+  // The box's own screens (setup, pairing, recovery, stopped) never load it: no pack stylesheet is in the page there.
+  const packLoad = usePackCss(themeNow, { staged: previewTheme?.staged ?? null, enabled: !onBoxScreen });
+  const packOn = themeNow.pack !== null && packLoad.state === 'ready';
+  const styleTheme: ResolvedTheme = themeNow.pack !== null && !packOn ? builtInTheme(themeNow.base) : themeNow;
+  const styleOverride = previewTheme !== null && styleTheme.name === previewTheme.theme ? previewTheme.entry : undefined;
+  // Failed pictures are kept per id and retried (a settings change, else once a minute); `bump` re-renders when one fails.
+  const failedPictures = useRef(createFailedPictures()).current;
+  const [, bumpFailed] = useState(0);
+  // The measured mean luminance of the menu picture, with the picture it belongs to (free text over a picture is dressed from it).
+  const [menuLuma, setMenuLuma] = useState<{ id: string | null; luma: number | null }>({ id: null, luma: null });
+  const [failedPackPicture, setFailedPackPicture] = useState<string | null>(null);
+  usePreviewExtraAssets(menuImageIds(settings, styleTheme.name, styleOverride));
   // The live (operator decision 2026-11-14): owned here, above the phase switch, so one WHEP session runs for
   // the whole live. Clear = the live screen takes priority; blurred = the prayer screen of a window (1 min either
   // side of the azan or the iqamah time) on top of the still-playing, blurred video; none = no live.
@@ -78,11 +125,23 @@ export function App() {
   const liveWanted = liveDisplayMode(view.now, state, settings, live.live === true, liveAnchors);
   const [liveOnAir, setLiveOnAir] = useState(false);
   // The preview has no player by design (nothing can play): it keeps showing the live screen as the illustration.
-  const liveMode = liveOnAir || (live.live === true && !live.playable) ? liveWanted : 'none';
+  // The Ubah suai preview can ask for the live screen with no video (the waiting panel).
+  const forcedLive = preview && previewTheme?.screen === 'live';
+  const liveMode = forcedLive ? 'clear' : liveOnAir || (live.live === true && !live.playable) ? liveWanted : 'none';
   // A stopped box shows nothing of the surau, and that includes the prayer tones. While the live has priority
   // (clear) no prayer tone sounds over it either: the tones of the windows (masuk waktu, the iqamah end warning)
   // still sound, because their screens are up then.
   useBeep(locked || liveMode === 'clear' ? { ...state, beep: null } : state, settings);
+  // The card (or the zikir overlay) Main has on screen: the stage names the catalog screen after it.
+  const [shown, setShown] = useState<Shown>(null);
+  const liveClear = liveMode === 'clear';
+  // A forced content screen of the preview is on the stage's data-screen even when its card has nothing to show.
+  const forcedScreen = preview && previewTheme && state.phase === 'normal' && isForcedScreen(previewTheme.screen) ? previewTheme.screen : null;
+  const screen = forcedScreen ?? screenIdOf(state, liveClear, shown);
+  // The pack's own picture for this screen (the surau's menu picture, when there is one, comes first).
+  const packKey = packOn && themeNow.pack !== null ? packPictureKey(themeNow.pack, screen) : null;
+  const packPicture = usePackPicture(themeNow, packKey, previewTheme?.staged ?? null);
+  useThemeHealth({ active: packOn, theme: themeNow, screen, logoSet: view.logo !== null, reject: packLoad.reject, report: !preview });
   const notPaired = useNotPaired();
   const cloud = useCloudStatus(preview ? { fetchImpl: noBoxFetch } : {});
   const [netCheckOpen, setNetCheckOpen] = useState(false);
@@ -92,10 +151,6 @@ export function App() {
   // The box's own screens (setup, recovery, stopped, pairing, network check) speak BM, English or Arabic, chosen on
   // this display. Everything else keeps the surau's language: the main program does not change.
   const [boxLang, setBoxLang] = useBoxLang(lang, { remember: !preview });
-  // Pairing takes the whole screen only when there is nothing else to show: the box refused this
-  // display and no cached bundle exists. With data on screen the prayer layer wins and pairing is a badge.
-  const showPair = !preview && view.error === NOT_PAIRED_MESSAGE && state.phase === 'noData';
-  const onBoxScreen = (box !== null && (locked || boxScreen)) || showPair;
   const boxFocus = useBoxNav({ enabled: onBoxScreen && !netCheckOpen, hasNet: hasNetButton && !locked, lang: boxLang });
   useRemoteKeys({
     onOk: () => {
@@ -153,7 +208,6 @@ export function App() {
     );
   }
 
-  const liveClear = liveMode === 'clear';
   const normal = state.phase === 'normal' && !liveClear;
   const dim = !liveClear && CALM_PHASES.has(state.phase);
   const showDot = view.stale || (view.ready && view.daysAhead < 30);
@@ -172,19 +226,80 @@ export function App() {
   }
 
   // A presentation template owns its colours (templates.css); the measured tone dresses only the default look.
-  const template = templateOf(settings.kioskTemplate);
+  const theme = styleTheme;
+  const packDefaults = packOn && themeNow.pack !== null ? themeNow.pack.defaults : undefined;
+  const screenStyle = stageStyleFor(settings, theme, screen, packDefaults, styleOverride);
+  const wall = Date.now();
+  const menu = styleVars(
+    screenStyle,
+    (id) => (failedPictures.blocked(id, settings, wall) ? null : assetSrc(id)),
+    packPicture !== null && packPicture !== failedPackPicture ? packPicture : null,
+  );
+  // The layer darkness over a menu picture is always explicit on the stage: the surau's value, else the theme's own
+  // default (kept above a readable minimum on the default look). Without a picture only the surau's own value applies.
+  const ownShade = stageStyleFor(settings, theme, screen, packDefaults ?? {}, styleOverride).shade;
+  const hasPicture = menu.bgAssetId !== null || menu.packImageUrl !== null;
+  const pictureId = menu.bgAssetId ?? menu.packImageUrl;
+  const shade = effectiveShade(screenStyle.shade, theme.base, tone.shadeAlpha, hasPicture);
+  if (hasPicture) menu.vars['--shade'] = String(shade / 100);
+  else if (ownShade === undefined) delete menu.vars['--shade'];
+  // Text that sits directly on the stage (not in a panel) reads against the picture: its tone, light or dark, is
+  // measured from the picture and the surau's shade, and each theme dresses its free text from it (`data-pic`).
+  // The calm phases (solat, khutbah...) dim the whole picture away, so no tone applies there.
+  const pic =
+    !dim && pictureId !== null && menuLuma.id === pictureId
+      ? pictureTone(menuLuma.luma, shade / 100)
+      : null;
+  // The default look keeps its measured tone (from the menu picture when one shows). A theme owns its colours: its
+  // panels are light or dark by design, so a text colour measured from the picture is not forced onto them.
+  const baseVars: Record<string, string> = theme.base === 'default' ? toneVars(tone) : {};
+  const stageVars = { ...baseVars, ...menu.vars };
+  const scaleFactor = SCALE_FACTOR[screenStyle.scale ?? 'S'] ?? 1;
+  // The Arabic-led looks of this theme, the preview's forced arab-* screen, and the style of the screen (translation place).
+  const arabEnv = {
+    looks: arabLooksOf(theme),
+    forced: forcedScreen !== null && String(forcedScreen).startsWith('arab-') ? String(forcedScreen) : null,
+    style: screenStyle,
+  };
   return (
+    <ScaleContext.Provider value={scaleFactor}>
+    <ArabEnvContext.Provider value={arabEnv}>
     <div
       class="stage"
       data-phase={state.phase}
-      data-screen={screenIdOf(state, liveClear)}
+      data-screen={screen}
+      data-kind={kindOf(screen)}
+      data-live-layout={liveLayoutOf(themeNow)}
+      data-harakat={harakatOn(screenStyle) ? 'on' : undefined}
       data-live={liveMode}
       data-dim={dim ? 'true' : 'false'}
-      data-template={template}
-      style={template === 'default' ? toneVars(tone) : undefined}
+      data-template={themeNow.base}
+      data-theme={packLoad.state === 'failed' ? themeNow.base : themeNow.name}
+      data-pack={themeNow.pack !== null ? packLoad.state : undefined}
+      data-lang={lang}
+      {...menu.attrs}
+      data-pic={pic ?? undefined}
+      style={Object.keys(stageVars).length > 0 ? stageVars : undefined}
     >
       <SafeBoundary today={state.today} settings={settings} lang={lang}>
-        <Background settings={settings} now={view.now} onTone={setMeasured} />
+        <Background
+          settings={settings}
+          now={view.now}
+          onTone={setMeasured}
+          menuImage={menu.bgAssetId}
+          packImageUrl={menu.packImageUrl}
+          onMenuImageFailed={() => {
+            if (menu.bgAssetId !== null) failedPictures.mark(menu.bgAssetId, settings, Date.now());
+            else setFailedPackPicture(menu.packImageUrl);
+            bumpFailed((n) => n + 1);
+          }}
+          onMenuLuma={(luma) => setMenuLuma({ id: pictureId, luma })}
+        />
+        <div class="deco" aria-hidden="true">
+          <i class="d1" />
+          <i class="d2" />
+          <i class="d3" />
+        </div>
         {liveWanted !== 'none' ? (
           <QuietBoundary>
             <LiveVideo key={live.since ?? 'live'} live={live} settings={settings} mode={liveWanted} onAir={setLiveOnAir} />
@@ -193,7 +308,7 @@ export function App() {
         {liveClear ? (
           <LiveScreen key="live" view={view} live={live} lang={lang} onAir={liveOnAir} />
         ) : normal ? (
-          <Main key="main" view={view} lang={lang} />
+          <Main key="main" view={view} lang={lang} onScreen={setShown} forceShell={forcedScreen !== null} />
         ) : (
           <Phase key={state.phase} view={view} lang={lang} />
         )}
@@ -212,5 +327,7 @@ export function App() {
         {overlay}
       </SafeBoundary>
     </div>
+    </ArabEnvContext.Provider>
+    </ScaleContext.Provider>
   );
 }

@@ -1,0 +1,10 @@
+{
+  "name": "arabic",
+  "title": "Arabic Art",
+  "version": 1,
+  "contract": 1,
+  "base": "arabic",
+  "defaults": {
+    "semua": { "arFont": "hafs" }
+  }
+}

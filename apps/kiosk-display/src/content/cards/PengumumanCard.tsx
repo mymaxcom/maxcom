@@ -1,27 +1,25 @@
 import { useEffect } from 'preact/hooks';
 import { t } from '../../i18n.ts';
 import type { CardProps } from '../ContentLayer.tsx';
-import { useFit } from '../paging.ts';
+import { pageAt, splitForPages, useFit } from '../paging.ts';
 
 /**
- * Body lines allowed before the clamp cuts: generous on purpose. The text starts at its large size (read from the
- * back of the hall) and `useFit` steps the title and body down together until they fit the card, so a short
- * notice fills the card and a long one still shows whole; the clamp is only the last guard at the smallest size.
+ * The text starts at its large size (read from the back of the hall, times the surau's text size) and `useFit` steps
+ * the title and body down together a little; when that is not enough the body is split over pages (shown one after
+ * the other for equal shares of the slot), so a long notice, or a larger text size, never loses a word.
  */
-const BODY_LINES = 12;
-const BODY_LINES_LONG_TITLE = 10;
-const TITLE_WRAP_CHARS = 34;
-
-export function PengumumanCard({ lang, content, itemId, onRendered }: CardProps) {
+export function PengumumanCard({ view, lang, content, itemId, startedAt, durationSeconds, onRendered }: CardProps) {
   const p = content.pengumuman.find((x) => x.id === itemId);
-  const { ref, fit } = useFit<HTMLDivElement>(`${itemId ?? ''}|${p?.title ?? ''}|${p?.body ?? ''}`);
+  const { ref, fit, pages } = useFit<HTMLDivElement>(`${itemId ?? ''}|${p?.title ?? ''}|${p?.body ?? ''}`, { paged: true });
   // No item (removed or expired under the rotation): tell the content layer, so the band reads as empty and Main goes idle.
   const rendered = !!p;
   useEffect(() => {
     onRendered?.(rendered);
   }, [rendered, onRendered]);
   if (!p) return null;
-  const lines = p.title.length > TITLE_WRAP_CHARS ? BODY_LINES_LONG_TITLE : BODY_LINES;
+  const chunks = pages > 1 ? splitForPages(p.body, pages) : [p.body];
+  const n = chunks.length;
+  const sub = n > 1 ? pageAt(view.now, startedAt, durationSeconds / n, n, view.tz) : 0;
   return (
     <article
       class={`card glass card--pengumuman${p.priority === 1 ? ' is-priority' : ''}`}
@@ -29,9 +27,10 @@ export function PengumumanCard({ lang, content, itemId, onRendered }: CardProps)
       data-item={p.id}
     >
       <span class="card__tag">{t('pengumuman', lang)}</span>
+      {n > 1 ? <span class="pengumuman__sub num">{`${sub + 1} / ${n}`}</span> : null}
       <div class="pengumuman__text" ref={ref} style={`--fit:${fit}`}>
         <h2 class="pengumuman__title">{p.title}</h2>
-        <p class="pengumuman__body" style={{ '--lines': String(lines) }}>{p.body}</p>
+        <p class="pengumuman__body">{chunks[sub]}</p>
       </div>
     </article>
   );

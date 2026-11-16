@@ -87,14 +87,18 @@
 .stage[data-dim='true'] .live--blurred .live__veil { background: var(--live-veil-dim); }
 
 /* ---- The live screen ----------------------------------------------------------------------------------------
-   Frame top-left, side column right; the kuliah strip under the frame and the next prayer chip under the side. */
+   Two layouts, chosen by the theme (`data-live-layout` on the stage, themes/index.ts). Framed (the default of this
+   file): the video frame top-left, one side column to its right (brand, compact clock, next-prayer chip), the kuliah
+   strip under the frame. Full (Default, Creative): the video is the whole stage and the brand, the clock, the chip and
+   the strip sit over it on their own pills. The chip and the clock are never over a framed video (spec 6.12.6).
+   The app's .live element takes the same box from the same custom properties either way. */
 .screen--live {
   display: grid;
   grid-template-columns: var(--live-frame-w) minmax(0, 1fr);
   grid-template-rows: var(--live-frame-h) minmax(0, 1fr);
   grid-template-areas:
     'frame side'
-    'strip next';
+    'strip side';
   column-gap: var(--live-gap);
   row-gap: var(--live-gap);
   padding: var(--live-pad-top) var(--live-pad-x) var(--live-pad-bottom);
@@ -129,61 +133,106 @@
 .live-screen__waiting-tag .live-strip__dot { width: 1.2rem; height: 1.2rem; animation: none; }
 .live-screen__waiting-text { font-size: 1.6rem; font-weight: 600; opacity: 0.85; }
 
+/* The side column: brand, clock, chip, top to bottom. */
 .live-screen__side {
   grid-area: side;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2.2rem;
+  align-items: stretch;
+  gap: 1.6rem;
   text-shadow: var(--live-side-shadow);
 }
-.live-screen__ident { flex-wrap: wrap; row-gap: 0.7rem; margin: 0; }
-.live-screen__ident .ident__name {
-  margin: 0;
-  font-size: 1.35rem;
-  line-height: 1.35;
-  letter-spacing: 0.16em;
-}
+.live-screen__ident { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; margin: 0; }
+.live-screen__ident .brand-name { font-size: 1.2rem; line-height: 1.35; letter-spacing: 0.16em; overflow-wrap: anywhere; }
 .live-screen__ident .ident__logo { height: min(4.6rem, var(--logo-cap, 999rem)); max-width: 100%; }
-/* The clock and the dates sit in the middle of the column's free height, between the name and the chip row. */
-.live-screen__time { margin: auto 0; }
-.screen--live .clock__hm { font-size: 6rem; }
-.screen--live .clock__aside { margin-left: 0.5rem; font-size: 1.5rem; }
-.screen--live .clock__aside > * + * { margin-top: 0.2rem; }
-.live-screen__dates {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-top: 1rem;
-  font-size: 1.3rem;
-  font-weight: 600;
-  line-height: 1.25;
-}
+.live-screen__time { min-width: 0; }
+.stage[data-kind='live'] .screen--live .live-screen__time .region-clock { flex-direction: column; align-items: center; gap: 0; }
+.stage[data-kind='live'] .screen--live .live-screen__time .clock--compact .hm { font-size: 4.2rem; }
+.stage[data-kind='live'] .screen--live .live-screen__time .clock--compact small { margin: 0; font-size: 1.5rem; }
+/* The dates are in the DOM for the themes that show them; none of the six does today. */
+.live-screen__dates { display: none; font-size: 1.3rem; font-weight: 600; line-height: 1.25; }
 .live-screen__hijri { opacity: 0.85; }
-
-.live-screen__next {
-  grid-area: next;
-  min-width: 0;
-  display: flex;
+.stage[data-kind='live'] .screen--live .next--chip {
+  height: auto;
   flex-direction: column;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 1rem 1.6rem;
-  border-radius: var(--radius-md);
+  gap: 0.2rem;
+  padding: 1.2rem 0.6rem;
+  border-radius: 1.35rem;
+  text-align: center;
 }
-.live-screen__next-label {
-  color: var(--accent);
-  font-size: 1.45rem;
-  font-weight: 700;
-  line-height: 1.15;
-}
-.live-screen__next-cd { font-size: 3.8rem; line-height: 1; }
+.stage[data-kind='live'] .screen--live .next--chip .chip-t { font-size: 2.6rem; line-height: 1.05; }
+.stage[data-kind='live'] .screen--live .next--chip .chip-rel { margin: 0; font-size: 1.3rem; }
 
 .live-screen__strip {
   grid-area: strip;
   min-width: 0;
   display: flex;
 }
+
+/* ---- Full-screen layout: the video is the stage; brand, clock, chip and strip are pills over it ---- */
+.stage[data-live-layout='full'] {
+  --live-pad-top: 0rem;
+  --live-pad-x: 0rem;
+  --live-pad-bottom: 0rem;
+  --live-frame-w: 100rem;
+  --live-frame-h: 56.25rem;
+  --live-frame-radius: 0;
+  --live-frame-ring: transparent;
+}
+.stage[data-live-layout='full'] .screen--live { display: block; padding: 0; }
+.stage[data-live-layout='full'] .live-screen__frame { position: absolute; inset: 0; box-shadow: none; border-radius: 0; }
+.stage[data-live-layout='full'] .live-screen__side { display: contents; }
+.stage[data-live-layout='full'] .live-screen__ident {
+  position: absolute;
+  left: 2.5rem;
+  top: 2.083rem;
+  z-index: 2;
+  max-width: 36rem;
+  flex-wrap: nowrap;
+  padding: 0.7rem 1.4rem;
+  border-radius: 2.083rem;
+  background: rgb(var(--glass-rgb) / 0.86);
+  border: 1px solid rgb(var(--accent-rgb) / 0.35);
+}
+.stage[data-live-layout='full'] .live-screen__ident .brand-name { font-size: 1.25rem; }
+.stage[data-live-layout='full'] .live-screen__ident .ident__logo { height: min(3.2rem, var(--logo-cap, 999rem)); }
+.stage[data-live-layout='full'] .live-screen__time {
+  position: absolute;
+  right: 2.5rem;
+  top: 1.563rem;
+  z-index: 2;
+  padding: 0.3rem 1.5rem 0.5rem;
+  border-radius: 1.354rem;
+  background: rgb(var(--glass-rgb) / 0.86);
+  border: 1px solid rgb(var(--accent-rgb) / 0.35);
+}
+.stage[data-live-layout='full'] .screen--live .live-screen__time .region-clock { flex-direction: row; align-items: baseline; gap: 0.5rem; }
+.stage[data-live-layout='full'] .screen--live .live-screen__time .clock--compact .hm { font-size: 4.375rem; }
+.stage[data-live-layout='full'] .screen--live .live-screen__time .clock--compact small { margin-left: 0.2rem; }
+.stage[data-live-layout='full'] .screen--live .next--chip {
+  position: absolute;
+  right: 2.5rem;
+  top: 7.5rem;
+  z-index: 2;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.729rem;
+  height: 4.167rem;
+  padding: 0 1.563rem;
+  border-radius: 2.083rem;
+}
+.stage[data-live-layout='full'] .screen--live .next--chip .chip-t { font-size: 2.188rem; line-height: 1; }
+.stage[data-live-layout='full'] .screen--live .next--chip .chip-rel { margin-left: 0.2rem; font-size: 1.354rem; }
+.stage[data-live-layout='full'] .live-screen__strip {
+  position: absolute;
+  left: 2.5rem;
+  right: 2.5rem;
+  bottom: 2.083rem;
+  height: 6.6rem;
+  z-index: 2;
+}
+.stage[data-live-layout='full'] .live-screen__waiting { color: var(--text); }
 
 /* ---- The kuliah strip --------------------------------------------------------------------------------------
    Under the video, as wide as it: the red tally block, then the penceramah large and the kuliah label and topic

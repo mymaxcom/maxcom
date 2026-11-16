@@ -5,12 +5,16 @@ export interface CountdownProps {
   to: Date | null;
   now: Date;
   class?: string;
+  /** Optional `data-role` hook (the theme contract finds the azan, iqamah and syuruk countdown by it). */
+  dataRole?: string;
+  /** A part of a protected element that must show (health check): always so when it carries a `data-role`. */
+  must?: boolean;
 }
 
-export function Countdown({ to, now, class: cls }: CountdownProps) {
+export function Countdown({ to, now, class: cls, dataRole, must }: CountdownProps) {
   const ms = to ? to.getTime() - now.getTime() : 0;
   return (
-    <span class={`num${cls ? ` ${cls}` : ''}`} role="timer">
+    <span class={`num${cls ? ` ${cls}` : ''}`} role="timer" data-role={dataRole} data-must={must === true || dataRole !== undefined ? '' : undefined}>
       {fmtCountdown(ms)}
     </span>
   );

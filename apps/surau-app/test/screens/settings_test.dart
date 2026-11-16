@@ -69,7 +69,7 @@ void main() {
     }
     final off = <String>[];
     var locked = 0;
-    for (final f in features.where((f) => f.group != 'lanjutan')) {
+    for (final f in features.where((f) => f.group != 'lanjutan' && !hiddenFeatures.contains(f.key))) {
       final row = find.byKey(ValueKey('settings-row-${f.key}'));
       await reveal(tester, row);
       expect(row, findsOneWidget, reason: f.key);

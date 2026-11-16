@@ -80,7 +80,6 @@ SHOTS.push({ name: 'logo-wide-removed-noname-preview', now: T, size: 'preview', 
 SHOTS.push({ name: 'logo-square-1920', now: T, size: '1920', settings: NAME, content: 'default', card: 'takwim', logo: 'square' });
 SHOTS.push({ name: 'logo-tiny-1920', now: T, size: '1920', settings: NAME, logo: 'tiny' });
 SHOTS.push({ name: 'zikir-ticker-1920', now: '2026-11-03T16:50:00+08:00', size: '1920', settings: NAME, content: 'islamic', logo: 'wide' });
-SHOTS.push({ name: 'poster-strip-1920', now: T, size: '1920', settings: NAME, content: 'default', card: 'posters', logo: 'wide' });
 SHOTS.push({ name: 'iqamah-1366', now: '2026-11-03T16:25:00+08:00', size: '1366', settings: NAME, logo: 'wide' });
 
 mkdirSync(outDir, { recursive: true });
@@ -126,8 +125,7 @@ try {
     await page.waitForSelector('.stage[data-phase]');
     await page.evaluate(() => document.fonts.ready);
     await page.waitForFunction(() => { const img = document.querySelector('.bg__img'); return !img || img.classList.contains('is-ready'); });
-    if (shot.card && shot.card !== 'posters') await page.waitForSelector('[data-layer="content"] [data-card]');
-    if (shot.card === 'posters') await page.waitForSelector('[data-testid="poster-strip"]');
+    if (shot.card) await page.waitForSelector('[data-layer="content"] [data-card]');
     if (shot.name.startsWith('zikir')) await page.waitForSelector('[data-layer="zikir"]');
     await page.waitForFunction(() => [...document.images].every((i) => i.complete));
     await page.waitForTimeout(1200);
@@ -146,8 +144,6 @@ try {
       const name = r('.ident__name');
       const head = r('.ident__head');
       const next = r('.next');
-      const strip = r('.poster-strip');
-      const stripLogo = r('.poster-strip img[data-role="logo"]');
       return {
         phase: document.querySelector('.stage')?.getAttribute('data-phase'),
         rem,
@@ -163,8 +159,6 @@ try {
         logoCap: logoEl?.style.getPropertyValue('--logo-cap') || null,
         nameHRem: name ? name.h / rem : null,
         headNextOverlap: head && next ? head.right > next.left : false,
-        stripLogoHRem: strip && stripLogo ? stripLogo.h / rem : null,
-        stripLogoInside: strip && stripLogo ? stripLogo.top >= strip.top && stripLogo.bottom <= strip.bottom : null,
       };
     });
     const fails = [];
@@ -182,12 +176,10 @@ try {
     if (!shot.noName && m.nameHRem === null) fails.push('text name missing');
     if (shot.logo === 'wide' || shot.logo === 'wideRemoved' || shot.logo === 'square') {
       if (m.logoHRem !== null && Math.abs(m.logoHRem - 4.2) > 0.05) fails.push(`logo ${m.logoHRem.toFixed(2)}rem tall (want 4.2rem)`);
-      if (shot.card === 'posters' && (m.stripLogoHRem === null || Math.abs(m.stripLogoHRem - 3.2) > 0.05)) fails.push(`poster-strip logo ${m.stripLogoHRem?.toFixed(2)}rem tall (want 3.2rem)`);
       if (m.logoAspect !== null && m.logoNatural && Math.abs(m.logoAspect - m.logoNatural[0] / m.logoNatural[1]) > 0.05) fails.push(`logo aspect ${m.logoAspect.toFixed(2)} vs natural ${(m.logoNatural[0] / m.logoNatural[1]).toFixed(2)}`);
       if (m.logoShape !== (shot.logo === 'square' ? 'compact' : 'wide')) fails.push(`logo shape ${m.logoShape}`);
     }
     if (shot.logo === 'tiny' && m.logoHRem !== null && Math.abs(m.logoHRem * m.rem - 48) > 1) fails.push(`tiny logo ${(m.logoHRem * m.rem).toFixed(1)}px tall (want 48px = 2x its bitmap)`);
-    if (shot.card === 'posters' && m.stripLogoInside === false) fails.push('poster-strip logo outside the strip');
     if (fails.length) failures += 1;
     results.push({ shot: shot.name, ...m, fails });
     const nums = `gap=${m.gapRem?.toFixed(2) ?? '-'}rem band=${m.bandHRem?.toFixed(1) ?? '-'}rem bar=${m.barHRem?.toFixed(2) ?? '-'}rem bottom=${m.barBottomPct?.toFixed(2) ?? '-'}% logo=${m.logoHRem?.toFixed(2) ?? '-'}rem${m.logoShape ? `/${m.logoShape}` : ''}`;

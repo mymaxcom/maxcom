@@ -302,7 +302,7 @@ describe('preview poster message', () => {
     });
   }
 
-  it('after the token: fetches the poster with the Bearer header and shows it alone, full screen, with the strip', async () => {
+  it('after the token: fetches the poster with the Bearer header and shows it alone, full screen, in the content shell', async () => {
     stubDraftAsset();
     const r = render(<App />);
     post(msg(TOKEN));
@@ -317,8 +317,8 @@ describe('preview poster message', () => {
     expect(card.querySelector('img.poster__img')!.getAttribute('src')).toBe('blob:preview-1');
     // Once the cross-fade is over the host's poster is the only card.
     await waitFor(() => expect(r.container.querySelectorAll('[data-card]').length).toBe(1));
-    expect(r.container.querySelector('.screen--main.is-poster')).toBeTruthy();
-    expect(r.container.querySelector('[data-testid="poster-strip"]')).toBeTruthy();
+    expect(r.container.querySelector('.screen--shell')).toBeTruthy();
+    expect(r.container.querySelector('.stage')!.getAttribute('data-screen')).toBe('poster');
     expect(r.container.querySelector('[data-testid="preview-ribbon"]')!.textContent).toBe('PRATONTON');
     // The title is for the admin app: it never appears on the kiosk page.
     expect(r.container.textContent).not.toContain('Kempen Derma');

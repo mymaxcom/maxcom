@@ -69,6 +69,7 @@ final RegExp _phoneRe = RegExp(r'^\+?[0-9][0-9 -]{6,18}$');
 final RegExp _emailRe = RegExp(r'^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$');
 final RegExp _reciterRe = RegExp(r'^[A-Za-z0-9_]{3,64}$');
 final RegExp _zoneRe = RegExp(r'^[A-Z]{3}\d{2}$');
+final RegExp _themeNameRe = RegExp(r'^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$');
 final RegExp _qrAssetRe = RegExp(r'^$|^[0-9a-f]{64}$');
 final RegExp _fundIdRe = RegExp(r'^$|^[A-Za-z0-9_-]{1,100}$');
 final RegExp _dateOrEmptyRe = RegExp(r'^$|^\d{4}-\d{2}-\d{2}$');
@@ -129,8 +130,7 @@ SettingRule? ruleFor(String name) {
     case 'mode':
       return const SettingRule.enumOf(['landscape', 'portrait']);
     case 'templateId':
-      return const SettingRule.enumOf(
-          ['default', 'colourful', 'creative', 'oldschool', 'minimal']);
+      return SettingRule.regex(_themeNameRe, 'nama tema (a-z, 0-9, sempang, paling banyak 32 aksara)');
     case 'rotate':
       return const SettingRule.enumOf(['daily', 'hourly', 'off']);
     case 'order':

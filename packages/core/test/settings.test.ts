@@ -76,7 +76,7 @@ describe('registry', () => {
     expect(FEATURES.every((f) => f.labelMs && f.labelEn)).toBe(true);
     const keys = FEATURES.map((f) => f.key as FeatureKey);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys).toHaveLength(53);
+    expect(keys).toHaveLength(54);
     expect(new Set(FEATURES.map((f) => f.group)).size).toBe(11);
     expect(FEATURES.filter((f) => f.locked)).toHaveLength(9);
   });
@@ -343,10 +343,22 @@ describe('kioskTemplate', () => {
     }
   });
   it('refuses an unknown, empty or non-text id, and a stored bad one reads as default', () => {
-    for (const bad of ['Default', 'neon', '', 5, null, ['default']]) {
+    for (const bad of ['Default', '', 5, null, ['default']]) {
       expect(validateFeatureSettings('kioskTemplate', { templateId: bad }).ok, String(bad)).toBe(false);
       expect(resolveSettings({ kioskTemplate: { templateId: bad as any } }).kioskTemplate.templateId).toBe('default');
     }
     expect(validateFeatureSettings('kioskTemplate', { id: 'colourful' }).ok).toBe(false);
   });
+});
+
+it('kioskTemplate.templateId accepts any theme name and refuses anything else', () => {
+  for (const id of ['default', 'arabic', 'hijau-siti']) expect(validateFeatureSettings('kioskTemplate', { templateId: id }).ok).toBe(true);
+  for (const id of ['Hijau', '', '../x', 'a'.repeat(33)]) expect(validateFeatureSettings('kioskTemplate', { templateId: id }).ok).toBe(false);
+});
+it('themeStyle: styles and packs are whole values, validated on write, sanitised on read', () => {
+  expect(validateFeatureSettings('themeStyle', { styles: { creative: { semua: { shade: 20 }, skrin: {} } } }).ok).toBe(true);
+  expect(validateFeatureSettings('themeStyle', { styles: { creative: { semua: { shade: 200 }, skrin: {} } } }).ok).toBe(false);
+  expect(validateFeatureSettings('themeStyle', { packs: { default: {} } }).ok).toBe(false);
+  expect(resolveSettings({}).themeStyle).toEqual({ enabled: true, styles: {}, packs: {} });
+  expect(resolveSettings({ themeStyle: { styles: { creative: { semua: { shade: 20, zzz: 1 }, skrin: {} } } } }).themeStyle.styles).toEqual({ creative: { semua: { shade: 20 }, skrin: {} } });
 });

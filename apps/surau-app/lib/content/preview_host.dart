@@ -12,7 +12,7 @@ import 'preview_tls.dart';
 export 'preview_message.dart';
 
 class PreviewHost extends StatelessWidget {
-  const PreviewHost(this.box, this.token, {super.key, this.now, this.utcOffsetMinutes = 480, this.onSslError, this.poster, this.pinnedLeaf});
+  const PreviewHost(this.box, this.token, {super.key, this.now, this.utcOffsetMinutes = 480, this.onSslError, this.poster, this.theme, this.pinnedLeaf});
 
   /// The box origin, e.g. `https://<box-ip>:8443`.
   final Uri box;
@@ -43,11 +43,17 @@ class PreviewHost extends StatelessWidget {
   /// preview), posted right after the token; null for the normal rotation.
   final PreviewPoster? poster;
 
+  /// The theme, the screen and the unsaved values the page should wear
+  /// (Ubah suai and the gallery), posted after the token and again whenever
+  /// it changes; null for the page as the box has it.
+  final PreviewThemeRequest? theme;
+
   @override
   Widget build(BuildContext context) => platform.PlatformPreview(
         url: url,
         token: token,
         poster: poster,
+        theme: theme,
         onSslError: onSslError,
         pinnedLeaf: pinnedLeaf,
       );

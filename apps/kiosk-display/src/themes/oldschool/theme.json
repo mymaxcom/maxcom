@@ -1,0 +1,10 @@
+{
+  "name": "oldschool",
+  "title": "Old School",
+  "version": 1,
+  "contract": 1,
+  "base": "oldschool",
+  "defaults": {
+    "semua": { "shade": 35 }
+  }
+}

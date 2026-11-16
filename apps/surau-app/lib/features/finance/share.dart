@@ -27,6 +27,8 @@ const Set<String> shareMimes = {
   'application/pdf',
   'text/csv',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  // A theme file (.maxtheme), the Muat turun tema download.
+  'application/vnd.maxcom.theme+zip',
 };
 
 /// Longest file name accepted.

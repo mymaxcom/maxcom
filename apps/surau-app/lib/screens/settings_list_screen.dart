@@ -133,7 +133,7 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
         );
       }
       for (final f in features) {
-        if (f.group != g || !shown(f.key)) continue;
+        if (f.group != g || !shown(f.key) || hiddenFeatures.contains(f.key)) continue;
         // Zon JAKIM is for Malaysia only (operator 2026-11-07).
         if (f.key == 'zone' && outsideMalaysia) continue;
         rows.add(
@@ -186,7 +186,7 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
       final rows = rowsOf(g);
       if (rows.isEmpty) continue;
       total += rows.length;
-      final mine = features.where((f) => f.group == g).toList();
+      final mine = features.where((f) => f.group == g && !hiddenFeatures.contains(f.key)).toList();
       groups.add(
         _Group(
           group: g,

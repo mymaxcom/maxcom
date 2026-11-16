@@ -247,13 +247,14 @@ describe('static files stay public', () => {
 });
 
 describe('health', () => {
-  it('anonymous sees only ok and version; a signed-in user sees the full report', async () => {
+  it('anonymous sees only ok, version and the theme support; a signed-in user sees the full report', async () => {
     const app = makeApp();
     const anon = await app.inject({ method: 'GET', url: '/api/health', remoteAddress: '10.168.1.9' });
-    expect(Object.keys(anon.json()).sort()).toEqual(['name', 'ok', 'version']);
+    // across the network: nothing about the theme state (themeOk is for the box's own machine and for admins)
+    expect(Object.keys(anon.json()).sort()).toEqual(['name', 'ok', 'themes', 'version']);
     expect(anon.json().name).toBeNull();
     const kiosk = await app.inject({ method: 'GET', url: '/api/health' });
-    expect(Object.keys(kiosk.json()).sort()).toEqual(['name', 'ok', 'version']);
+    expect(Object.keys(kiosk.json()).sort()).toEqual(['name', 'ok', 'themeOk', 'themes', 'version']);
     const ajk = await loginAs(app, 'ajk');
     await loginAsAdmin(app);
     const full = (await app.inject({ method: 'GET', url: '/api/health', headers: ajk.headers })).json();

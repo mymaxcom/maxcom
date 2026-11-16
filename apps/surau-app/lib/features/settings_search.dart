@@ -81,6 +81,7 @@ class SettingsSearchIndex {
 
     for (final f in features) {
       if (f.group == 'lanjutan' && !seesSystem) continue;
+      if (hiddenFeatures.contains(f.key)) continue;
       final fields = <String>[];
       final choices = <String>[];
       _leaves(f.defaults, '', (path, name) {

@@ -50,11 +50,18 @@ describe('every template: the live screen gives the main area to the video', () 
       const stage = r.container.querySelector('.stage')!;
       expect(stage.getAttribute('data-template')).toBe(id);
       expect(stage.getAttribute('data-screen')).toBe('live');
+      expect(stage.getAttribute('data-kind')).toBe('live');
+      expect(stage.getAttribute('data-live-layout')).toBe(id === 'default' || id === 'creative' ? 'full' : 'framed');
       const screen = r.container.querySelector('.screen--live')!;
       expect(screen).toBeTruthy();
       // the four pieces, each a direct child in its own grid area
       const kids = [...screen.children].map((c) => c.className.split(' ')[0]);
-      expect(kids).toEqual(['live-screen__frame', 'live-screen__side', 'live-screen__strip', 'live-screen__next']);
+      expect(kids).toEqual(['live-screen__frame', 'live-screen__side', 'live-screen__strip']);
+      // brand with the logo place, the compact clock and the next-prayer chip are in the side column
+      const side = screen.querySelector('.live-screen__side')!;
+      for (const sel of ['.region-brand', '.region-clock.clock--compact[data-role="clock"]', '.region-next.next--chip[data-role="next"]']) {
+        expect(side.querySelectorAll(sel).length, `${id} ${sel}`).toBe(1);
+      }
       // the frame holds nothing but the waiting card (gone once pictures play): no panel over the video
       const frame = screen.querySelector('.live-screen__frame')!;
       expect([...frame.querySelectorAll('*')].every((el) => el.closest('.live-screen__waiting'))).toBe(true);

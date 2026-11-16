@@ -1,0 +1,7 @@
+/* Skrin kuliah sahaja. Fail ini dipasang dengan skop skrin kuliah, jadi tidak perlu
+   menulis [data-screen='kuliah']. Gambar datang daripada images/kuliah.png dalam tema ini. */
+.region-main {
+  background-image: linear-gradient(rgb(8 30 20 / 0.5), rgb(8 30 20 / 0.5)), url(../images/kuliah.png);
+  background-size: cover;
+  background-position: center;
+}

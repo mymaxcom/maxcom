@@ -9,7 +9,10 @@ import { buildApp } from '../src/app.ts';
 import { loginAs, withAdmin } from './authHelpers.ts';
 import type { AdminApp } from './authHelpers.ts';
 import { readImageHeader } from '../src/assets/imageHeader.ts';
-import { assetsMaxBytes, putAsset } from '../src/assets/store.ts';
+import { assetsMaxBytes, getAssetPath, putAsset } from '../src/assets/store.ts';
+import { MAX_PACK_BYTES, PACK_MIME } from '../src/themes/packFormat.ts';
+import { manifestJson, woff2, zip as packZip } from './support/themePacks.ts';
+import { DatabaseSync } from 'node:sqlite';
 
 const apps: FastifyInstance[] = [];
 const tempDirs: string[] = [];
@@ -353,5 +356,47 @@ describe('GET /api/assets (the list the backgrounds picker draws)', () => {
     expect((await app.inject({ method: 'GET', url: '/api/assets', headers: ajk.headers })).statusCode).toBe(403);
     const anon = await app.inject({ method: 'GET', url: '/api/assets', headers: { authorization: 'Bearer not-a-session' }, remoteAddress: LAN });
     expect(anon.statusCode).toBe(401);
+  });
+});
+
+describe('asset kinds theme and font', () => {
+  const db = (app: AdminApp): DatabaseSync => app.surau.db;
+  const pack = (): Buffer => packZip({ 'theme.json': manifestJson(), 'theme.css': '' });
+
+  it('putAsset stores a pack zip with its own extension and no size, and takes no font (a pack holds none)', () => {
+    const { app, dir } = makeApp();
+    const d = db(app);
+    const p = putAsset(d, dir, pack(), PACK_MIME, 'u1');
+    expect(p).toMatchObject({ mime: PACK_MIME, width: null, height: null, created: true });
+    expect(existsSync(join(dir, 'assets', `${p.id}.maxtheme`))).toBe(true);
+    expect(getAssetPath(d, dir, p.id)?.mime).toBe(PACK_MIME);
+    // Q7: the box's asset store takes no font any more (nothing uses one, and it was dead weight on a public route)
+    expect(() => putAsset(d, dir, woff2(500), 'font/woff2', 'u1')).toThrow(/unsupported type/);
+  });
+
+  it('refuses a pack over 15 MB and a pack mime with non-zip bytes', () => {
+    const { app, dir } = makeApp();
+    const d = db(app);
+    const big = Buffer.alloc(MAX_PACK_BYTES + 1); big.writeUInt32LE(0x04034b50, 0);
+    expect(() => putAsset(d, dir, big, PACK_MIME, 'u1')).toThrow(/15 MB/);
+    expect(() => putAsset(d, dir, Buffer.from('this is plainly not a zip file at all'), PACK_MIME, 'u1')).toThrow(/theme file/);
+    expect(existsSync(join(dir, 'assets')) ? readdirSync(join(dir, 'assets')) : []).toEqual([]);
+  });
+
+  it('POST /api/assets does not take a theme file: it answers 4xx and stores nothing', async () => {
+    const { app, dir } = makeApp();
+    const r = await upload(app, pack(), PACK_MIME);
+    expect(r.statusCode).toBeGreaterThanOrEqual(400);
+    expect(r.statusCode).toBeLessThan(500);
+    const f = await upload(app, woff2(500), 'font/woff2');
+    expect(f.statusCode).toBeGreaterThanOrEqual(400);
+    expect(existsSync(join(dir, 'assets')) ? readdirSync(join(dir, 'assets')) : []).toEqual([]);
+  });
+
+  it('a stored pack is not in the picture list', async () => {
+    const { app, dir } = makeApp();
+    putAsset(db(app), dir, pack(), PACK_MIME, 'u1');
+    const r = await app.inject({ method: 'GET', url: '/api/assets' });
+    expect(r.json().assets).toEqual([]);
   });
 });

@@ -177,7 +177,7 @@ export interface LiveStripProps {
 export function LiveStrip({ live, lang, onAir }: LiveStripProps) {
   const k = live.kuliah;
   return (
-    <div class={`live-strip glass${onAir ? '' : ' is-waiting'}`} data-testid="live-strip" role="status">
+    <div class={`live-strip region-live-strip glass${onAir ? '' : ' is-waiting'}`} data-testid="live-strip" role="status">
       <span class="live-strip__tag">
         <i class="live-strip__dot" aria-hidden="true" />
         {t('liveNow', lang)}

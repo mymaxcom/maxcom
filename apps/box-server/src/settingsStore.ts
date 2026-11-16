@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { decide, isFeatureKey, isoInstantMs, offsetMinutes, resolveSettings, tzOf, validateFeatureSettings } from '@surau/core';
+import { PACKS_MAX_BYTES, THEME_STYLE_MAX_BYTES, decide, isFeatureKey, isoInstantMs, offsetMinutes, resolveSettings, tzOf, validateFeatureSettings } from '@surau/core';
 import type { FeatureKey, FeatureSettings, FieldStamp, Settings } from '@surau/core';
 import { deviceOfRev, revOf } from './sync/meta.ts';
 import type { ChangeMeta } from './sync/meta.ts';
@@ -24,12 +24,18 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 /** Settings whose object value is one thing (an adjusted image) and replaces the old value whole. */
 const ATOMIC_KEYS: ReadonlySet<string> = new Set(['logo']);
+/** Row-level maps (`themeStyle.styles`, `themeStyle.packs`) whose every entry (one theme, one pack) is atomic, so two editors on different entries never erase each other. */
+const ENTRY_MAPS: ReadonlySet<string> = new Set(['styles', 'packs']);
 
-function deepMerge(base: Plain, patch: Plain): Plain {
+/** A key that holds one whole value; `path` is the dot path of the value, `key` its own name. */
+const isAtomic = (path: string, key: string): boolean => ATOMIC_KEYS.has(key) || ENTRY_MAPS.has(path.split('.')[0]!) && path.includes('.') && path.split('.').length === 2;
+
+function deepMerge(base: Plain, patch: Plain, prefix = ''): Plain {
   const out: Plain = { ...base };
   for (const [key, value] of Object.entries(patch)) {
+    const path = prefix === '' ? key : `${prefix}.${key}`;
     const current = out[key];
-    out[key] = isPlain(value) && isPlain(current) && !ATOMIC_KEYS.has(key) ? deepMerge(current, value) : clone(value);
+    out[key] = isPlain(value) && isPlain(current) && !isAtomic(path, key) ? deepMerge(current, value, path) : clone(value);
   }
   return out;
 }
@@ -82,12 +88,15 @@ export function bumpVersion(db: DatabaseSync): number {
 
 export type FieldStamps = Record<string, FieldStamp>;
 
-/** Dot-joined paths of every field of a settings value; an atomic key (the logo) and any non-object value is one field. */
+/**
+ * Dot-joined paths of every field of a settings value; an atomic key (the logo), one entry of a row-level map
+ * (`styles.<theme>`, `packs.<name>`) and any non-object value is one field.
+ */
 export function leafPaths(value: Plain, prefix = ''): string[] {
   const out: string[] = [];
   for (const [key, v] of Object.entries(value)) {
     const path = prefix === '' ? key : `${prefix}.${key}`;
-    if (isPlain(v) && !ATOMIC_KEYS.has(key) && Object.keys(v).length > 0) out.push(...leafPaths(v, path));
+    if (isPlain(v) && !isAtomic(path, key) && Object.keys(v).length > 0) out.push(...leafPaths(v, path));
     else out.push(path);
   }
   return out;
@@ -139,6 +148,13 @@ export function readFieldStamps(db: DatabaseSync, key: string): FieldStamps {
     try {
       const st: unknown = JSON.parse(row.field_stamps);
       if (isPlain(st)) {
+        // A stamp kept for a whole map (`styles`, from before each theme was its own field) covers the entries that have none of their own.
+        for (const map of ENTRY_MAPS) {
+          const old = st[map];
+          if (isPlain(old) && typeof old.editedAt === 'string' && typeof old.deviceId === 'string') {
+            for (const p of Object.keys(out)) if (p.startsWith(`${map}.`) && !(p in st)) out[p] = { editedAt: old.editedAt, deviceId: old.deviceId };
+          }
+        }
         for (const [p, v] of Object.entries(st)) {
           if (p in out && isPlain(v) && typeof v.editedAt === 'string' && typeof v.deviceId === 'string') {
             out[p] = { editedAt: v.editedAt, deviceId: v.deviceId };
@@ -256,6 +272,12 @@ export function putFeatureIn(
   const rev = meta?.rev !== undefined && isMine ? meta.rev : revOf(top.editedAt, { deviceId: top.deviceId });
 
   const merged = deepMerge(before ?? {}, taken);
+  // Each patch is checked for its own entries above; the whole stored map keeps its caps too (the entries add up).
+  if (key === 'themeStyle' && meta?.trusted !== true) {
+    const size = (v: unknown): number => (isPlain(v) ? Buffer.byteLength(JSON.stringify(v)) : 0);
+    if (size(merged.styles) > THEME_STYLE_MAX_BYTES) throw new SettingsError(['styles must be at most 32 KB in all']);
+    if (size(merged.packs) > PACKS_MAX_BYTES) throw new SettingsError(['packs must be at most 64 KB in all']);
+  }
   const afterJson = JSON.stringify(merged);
   const stampsJson = JSON.stringify(next);
 

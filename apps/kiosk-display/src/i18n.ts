@@ -1,8 +1,17 @@
+import { dateOf, klWeekday } from '@surau/core';
 export type Lang = 'ms' | 'en';
 
 export const STRINGS: Record<Lang, Record<string, string>> = {
   ms: {
     nextIn: '{prayer} dalam',
+    factTime: 'Masa',
+    factAfter: 'Selepas',
+    factAfterPrayer: 'Solat {prayer}',
+    factBook: 'Kitab',
+    chipRelHM: '{h} jam {m} minit lagi',
+    chipRelH: '{h} jam lagi',
+    chipRelM: '{m} minit lagi',
+    chipRelNow: 'sebentar lagi',
     azanIn: 'Azan {prayer} dalam',
     masukWaktu: 'Telah masuk waktu {prayer}',
     iqamahIn: 'Iqamah dalam',
@@ -47,6 +56,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     tugasan: 'Tugasan',
     ayatToday: 'Ayat hari ini',
     surahLine: 'Surah {name} ({n}): {range}',
+    arabSurahLine: 'Surah {name}, ayat {range}',
     translation: 'Terjemahan',
     zikirAfter: 'Zikir selepas solat {prayer}',
     roleImam: 'Imam',
@@ -71,6 +81,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // Plan 5 Task 6: the live layer.
     liveNow: 'SIARAN LANGSUNG',
     liveRunning: 'Siaran langsung sedang berjalan',
+    previewNoContent: 'Tiada kandungan untuk skrin ini lagi',
     // Plan 14 Tasks 8 and 9: the box states and the network check.
     setupSub: 'Persediaan pertama',
     boxLangLabel: 'Bahasa',
@@ -155,6 +166,14 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
   },
   en: {
     nextIn: '{prayer} in',
+    factTime: 'Time',
+    factAfter: 'After',
+    factAfterPrayer: '{prayer} prayer',
+    factBook: 'Book',
+    chipRelHM: 'in {h} h {m} min',
+    chipRelH: 'in {h} h',
+    chipRelM: 'in {m} min',
+    chipRelNow: 'in a moment',
     azanIn: 'Azan {prayer} in',
     masukWaktu: 'It is now time for {prayer}',
     iqamahIn: 'Iqamah in',
@@ -195,6 +214,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     tugasan: 'Duty roster',
     ayatToday: 'Verse of the day',
     surahLine: 'Surah {name} ({n}): {range}',
+    arabSurahLine: 'Surah {name}, verses {range}',
     translation: 'Translation',
     zikirAfter: 'Zikir after {prayer} prayer',
     roleImam: 'Imam',
@@ -216,6 +236,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     pairBadge: 'Not paired yet',
     liveNow: 'LIVE',
     liveRunning: 'Live broadcast in progress',
+    previewNoContent: 'No content for this screen yet',
     setupSub: 'First setup',
     boxLangLabel: 'Language',
     setupTitle: 'Set up this MAXCOM',
@@ -311,6 +332,32 @@ export function surauNameOf(settings: { surauInfo?: { name?: unknown } } | null 
     /* fall through */
   }
   return t('surauName', lang);
+}
+
+/** Arabic names of the prayers (the Arabic Art theme shows them; every theme carries them hidden). */
+export const PRAYER_AR: Readonly<Record<'imsak' | 'subuh' | 'syuruk' | 'zohor' | 'asar' | 'maghrib' | 'isyak' | 'jumaat', string>> = {
+  imsak: 'الإمساك',
+  subuh: 'الفجر',
+  syuruk: 'الشروق',
+  zohor: 'الظهر',
+  asar: 'العصر',
+  maghrib: 'المغرب',
+  isyak: 'العشاء',
+  jumaat: 'الجمعة',
+};
+
+const WEEKDAY_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const HIJRI_MONTH_AR = [
+  'محرم', 'صفر', 'ربيع الأول', 'ربيع الآخر',
+  'جمادى الأولى', 'جمادى الآخرة', 'رجب', 'شعبان',
+  'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة',
+];
+const arDigits = (n: number): string => String(n).replace(/\d/g, (d) => String.fromCharCode(0x0660 + Number(d)));
+
+/** The date line in Arabic: weekday, day, Hijri month, year (Arabic-Indic digits), then the Hijri mark. */
+export function fmtHijriAr(now: Date, hijri: { d: number; m: number; y: number }, tz: string): string {
+  const wd = klWeekday(dateOf(now, tz));
+  return `${WEEKDAY_AR[wd]}، ${arDigits(hijri.d)} ${HIJRI_MONTH_AR[hijri.m - 1] ?? ''} ${arDigits(hijri.y)} هـ`;
 }
 
 export function t(key: string, lang: Lang, vars?: Record<string, string | number>): string {

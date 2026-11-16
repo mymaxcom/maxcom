@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
+import { MAX_PACK_BYTES, PACK_MIME } from '../themes/packFormat.ts';
 import { readImageHeader } from './imageHeader.ts';
 
 export class AssetError extends Error {
@@ -46,6 +47,7 @@ const EXT: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'audio/mpeg': 'mp3',
+  [PACK_MIME]: 'maxtheme',
 };
 
 export const isAssetId = (id: string): boolean => ID_RE.test(id);
@@ -92,6 +94,11 @@ export function putAsset(
     mime = header.mime;
     width = header.width;
     height = header.height;
+  } else if (declared === PACK_MIME) {
+    // A theme file (.maxtheme): only the zip shape is checked here; the validator checks what is inside.
+    if (buf.length > MAX_PACK_BYTES) throw new AssetError(['theme file is larger than 15 MB']);
+    if (buf.length < 22 || buf.readUInt32LE(0) !== 0x04034b50) throw new AssetError(['file is not a theme file (type mismatch with a .maxtheme)']);
+    mime = PACK_MIME;
   } else {
     throw new AssetError(['unsupported type; use image/jpeg, image/png, image/webp or audio/mpeg']);
   }
@@ -136,6 +143,19 @@ export function getAssetPath(db: DatabaseSync, dataDir: string, id: string): { p
   if (ext === undefined) return null;
   const path = join(assetsDirOf(dataDir), `${id}.${ext}`);
   return existsSync(path) ? { path, mime: row.mime } : null;
+}
+
+/**
+ * Removes a stored theme file (and its row) that nothing refers to any more. Only a .maxtheme asset can be removed
+ * here, so a wrong id can never take a picture or a sound the surau uses. Missing is fine.
+ */
+export function deletePackAsset(db: DatabaseSync, dataDir: string, id: string): boolean {
+  if (!ID_RE.test(id)) return false;
+  const row = db.prepare('SELECT mime FROM assets WHERE id = ?').get(id);
+  if (row === undefined || row.mime !== PACK_MIME) return false;
+  db.prepare('DELETE FROM assets WHERE id = ?').run(id);
+  rmSync(join(assetsDirOf(dataDir), `${id}.${EXT[PACK_MIME]}`), { force: true });
+  return true;
 }
 
 export function assetsTotalBytes(db: DatabaseSync): number {

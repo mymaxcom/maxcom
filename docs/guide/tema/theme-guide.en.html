@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAXCOM: theme author guide</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<header class="cover">
+<p class="kicker">MAXCOM, theme author guide, contract {{contract}}</p>
+<h1>How to make a theme for the surau TV display</h1>
+<p class="lead">This guide is for people who know CSS but not MAXCOM. Every table in it is generated straight from the MAXCOM code, so what is written here is what the MAXCOM box really does. The example in this guide is a real theme that the box validator has already checked.</p>
+</header>
+
+<section id="what-is-a-theme">
+<h2>1. What a theme is</h2>
+<p>A theme is one file named <code>theme-name.maxtheme</code>. It changes how the surau TV display looks: colours, layout and background pictures. It does not change what is shown. Prayer times, the clock, the countdowns, the next-prayer chip and the surau logo are on every screen at all times, because the congregation relies on them.</p>
+<p>There are two ways to change the look. The first is the <strong>Ubah suai</strong> menu in the app, which is safe and needs no CSS. The second is a theme file, which gives full freedom to anyone who can write CSS. This guide is about the second way.</p>
+<p>Every theme is installed on top of one built-in theme, called its <code>base</code>. Anything your theme does not style falls back to that base, so you only write the differences.</p>
+<p>The value of a style is decided by layers, from the lowest to the highest:</p>
+<ol>
+<li>MAXCOM base styles, including the protected rules (section 10).</li>
+<li>The built-in theme named as <code>base</code>.</li>
+<li>Your theme files: <code>theme.css</code>, then <code>screens/&lt;id&gt;.css</code>, then <code>arabic.css</code>.</li>
+<li>The <code>defaults</code> in <code>theme.json</code>.</li>
+<li>The surau's choice in the Ubah suai menu for all screens of the theme.</li>
+<li>The surau's choice in the Ubah suai menu for one screen only.</li>
+</ol>
+<p>The surau's choices are written straight onto the stage as style variables, so they always override your theme files. That is intended: a surau has the right to change the colour or text size of a theme it installed.</p>
+<p>The six built-in themes, any of which can be a <code>base</code>, are:</p>
+<!--slot:themes-->
+</section>
+
+<section id="start">
+<h2>2. Start by downloading</h2>
+<p>The easiest start is to download a theme that already exists. In the app: Tetapan, Templat paparan, pick a theme, then Muat turun tema. A built-in theme downloads as a starting pack. The checkbox <strong>Sertakan ubah suai saya</strong> (on by default) bakes the surau's own choices into <code>defaults</code>, so the file reproduces what the surau sees now.</p>
+<p>Open the file as a zip, edit <code>theme.css</code>, change <code>name</code> and <code>title</code> in <code>theme.json</code>, zip it again and upload it through Tetapan, Templat paparan, Muat naik tema. The box checks the file and shows a preview. Press Pasang, then Guna sekarang.</p>
+<p>Below is the sample theme <strong>Hijau Siti</strong>, a real theme built from this source and accepted by the box validator with no errors and no warnings. The comments in the files are written in BM for the readers of the Malay guide. The finished file, <code>hijau-siti.maxtheme</code>, comes with this guide.</p>
+<!--slot:sample-->
+</section>
+
+<section id="contents">
+<h2>3. Inside a .maxtheme file</h2>
+<p>A <code>.maxtheme</code> file is an ordinary zip. The file name is the theme name in lowercase letters, digits and hyphens, at most 32 characters, followed by <code>.maxtheme</code>, for example <code>hijau-siti.maxtheme</code>. Only the fixed paths below are allowed. Any other file, nested folders, a zip inside a zip and symbolic links are refused.</p>
+<!--slot:files-->
+<p>A theme file holds <strong>no fonts</strong> in this version of MAXCOM: a folder <code>fonts/</code> and any <code>@font-face</code> are refused. The font is the surau's choice in the Ubah suai menu, from the fonts MAXCOM already carries. A picture is referred to as <code>url(../images/kuliah.png)</code> or <code>url(images/kuliah.png)</code>. Any other address is refused. Pictures are PNG or JPEG only (WebP is refused). The box does not keep the bytes you send: it reads each picture and draws it again as a plain PNG or JPEG of the same size, and only that copy is ever shown on a display.</p>
+<p>Every rule in your CSS is placed under your own theme's stage when the theme is installed (<code>.stage[data-theme='your-name']</code>), whether it is in <code>theme.css</code>, <code>arabic.css</code> or <code>screens/&lt;id&gt;.css</code>. A rule can only reach the elements inside your stage, never another theme, the page around it or the MAXCOM screens for setup, pairing, recovery, stopped box and network check, which never load your theme at all. Because of this, <code>html</code>, <code>body</code>, <code>#root</code> and <code>:root</code> cannot be styled; a <code>:root</code> rule that sets only <code>--variables</code> is allowed and applies to your stage. An attribute selector on <code>class</code> is allowed only as <code>[class~='name']</code> with one plain class name. A rule that reaches the elements next to the stage (<code>.stage + x</code>, <code>.stage ~ x</code>) is refused.</p>
+<p>In this version a theme is a <strong>re-skin</strong> of one of the built-in themes, not a new layout. The box reads your CSS with an allow-list: what is not listed is refused. Selectors may only be classes (for example <code>.region-clock</code>), the data attributes of the contract (<code>data-screen</code>, <code>data-kind</code>, <code>data-phase</code>, <code>data-card</code>, <code>data-live</code>, <code>data-live-layout</code>, <code>data-harakat</code>, <code>data-align</code>, <code>data-lang</code>, <code>data-dim</code>, <code>data-pic</code>, <code>data-role</code>, <code>data-theme</code>, <code>data-template</code>), and <code>:first-child</code>, <code>:last-child</code>, <code>:nth-child()</code> and <code>:not()</code>. Type selectors, <code>*</code>, <code>#id</code>, pseudo-elements (<code>::before</code>, <code>::after</code>, <code>::marker</code>, <code>::selection</code>), <code>:has()</code>, <code>:is()</code>, and every class of the box's own overlays (<code>.host-exit</code>, <code>.netcheck</code>, <code>.preview-ribbon</code>) are refused.</p>
+<p>The properties you may use are: <code>color</code>, <code>background-color</code>, <code>background</code> and <code>background-image</code> (your own pictures and gradients only), <code>background-size</code>, <code>background-position</code>, <code>background-repeat</code>, <code>border</code> (width up to 0.5rem), <code>border-radius</code>, <code>outline</code> (up to 0.3rem), <code>box-shadow</code> and <code>text-shadow</code> (blur up to 2rem, spread up to 0.5rem, offsets up to 1rem), <code>padding</code>, <code>margin</code>, <code>gap</code>, <code>font-weight</code>, <code>font-style</code>, <code>text-transform</code>, <code>letter-spacing</code> (0 to 0.3em), <code>word-spacing</code>, <code>line-height</code> (1 or more), <code>text-align</code>, size properties (<code>width</code>, <code>height</code>, <code>min-*</code>, <code>max-*</code>, never on the clock, the prayer times, the next-prayer chip or the logo), and variables: your own <code>--pack-name</code> variables (colours, gradients, your pictures, numbers and small lengths) and the base colours <code>--accent</code>, <code>--accent-2</code>, <code>--text</code>, <code>--ink</code>, <code>--muted</code>, <code>--paper</code>, <code>--hair</code>, <code>--rule</code>, <code>--mint</code>, <code>--green</code>, <code>--sunset</code>, <code>--harakat</code>, <code>--accent-rgb</code> and <code>--glass-rgb</code> (colours only). Every other theme variable is refused, because the built-in themes use them for fonts, sizes and angles. A property with a bound does not accept <code>var()</code> or <code>calc()</code>: write the number. Everything else is refused, including <code>transform</code>, <code>scale</code>, <code>rotate</code>, <code>zoom</code>, <code>opacity</code>, <code>visibility</code>, <code>display</code>, <code>position</code>, <code>top</code> and the other offsets, <code>z-index</code>, <code>overflow</code>, <code>clip</code>, <code>mask</code>, <code>filter</code>, <code>mix-blend-mode</code>, <code>font-family</code>, <code>font-size</code> (the menu's text size controls do that), <code>direction</code>, <code>text-indent</code>, <code>text-decoration</code>, <code>list-style</code>, <code>content</code>, <code>animation</code>, <code>transition</code>, <code>cursor</code> and <code>pointer-events</code>, with or without a vendor prefix. <code>!important</code>, a string inside a custom property (<code>--name</code>) and a <code>var()</code> inside <code>image-set()</code> are refused too. Any at-rule other than <code>@media</code>, <code>@supports</code>, <code>@layer</code>, <code>@container</code> and <code>@charset</code> is refused.</p>
+</section>
+
+<section id="theme-json">
+<h2>4. theme.json</h2>
+<p><code>theme.json</code> is the identity card of the theme. The field <code>name</code> is the file name and the identifier of the theme. It cannot change later, because the same theme is recognised by that name. The field <code>title</code> is the name the surau sees in the gallery, shown exactly as you write it. The field <code>version</code> is a whole number that you raise each time you upload a new version. The field <code>contract</code> is the contract number your theme was made for. The field <code>base</code> is the built-in theme that it extends.</p>
+<p>The field <code>defaults</code> holds the menu choices that the theme ships with, in the same shape as the surau's own choices: <code>semua</code> for all screens and <code>skrin</code> for single screens by id. The known keys are listed in the table in section 7. An unknown key is refused, and the message names it. A background picture cannot be in <code>defaults</code>; put the picture in <code>images/</code>.</p>
+<p>The table in section 3 lists the limit of every field.</p>
+</section>
+
+<section id="screens">
+<h2>5. Screens</h2>
+<p>The display stage (<code>.stage</code>) carries a few attributes you can select in CSS. These six are the contract promise:</p>
+<!--slot:attributes-->
+<p>The stage also carries <code>data-template</code>, <code>data-theme</code>, <code>data-pack</code> and <code>data-bg</code>. They exist, but they are not part of the contract promise, so do not depend on them in a theme that should last.</p>
+<p>Each screen has one fixed id that will never be renamed. Select a screen with <code>.stage[data-screen='poster']</code>, or put that screen's CSS in <code>screens/poster.css</code>. In a <code>screens/&lt;id&gt;.css</code> file every selector is scoped to that screen automatically, so you do not write <code>[data-screen]</code> yourself. The background picture of one screen goes in <code>images/&lt;id&gt;.jpg</code> or <code>.png</code>. A picture <code>images/semua.*</code> is used on every screen that has no picture of its own.</p>
+<p>The background picture that shows is chosen in this order, highest first: the surau's picture for that screen, the surau's picture for all screens, the picture in your theme, the surau's background list, and last the MAXCOM default pictures.</p>
+<p>The table below lists every screen, with a picture in the Creative theme and what must stay visible there. A screen without a picture yet is marked in the table.</p>
+<!--slot:screens-->
+</section>
+
+<section id="regions">
+<h2>6. Regions</h2>
+<p>Every screen is divided into regions with fixed class names. Use them to restyle parts of a screen (colours, borders, spacing). Not every region exists on every screen, so write CSS that does not break when a region is missing.</p>
+<!--slot:regions-->
+<p>The attribute <code>data-align</code> on the stage (left, center or right, following the surau's choice) sets the text alignment inside <code>.region-main</code>. If your theme rearranges that region, read the same attribute in your CSS.</p>
+<p><strong>Content screens.</strong> The screens whose <code>data-kind</code> is <code>content</code> (the poster, the lecture, the programme, the hadith, the zikir, the announcements, the calendar, the donation box, the verse and the three Arabic-led screens <code>arab-ayat</code>, <code>arab-hadis</code> and <code>arab-zikir</code>) fill the whole stage with a shell, <code>.screen--shell</code>: the surau name and logo in <code>.region-brand</code>, the compact clock and the next-prayer chip together in <code>.shell-top</code>, the card in <code>.region-main</code> and the compact prayer strip in <code>.region-prayers</code>. The main layout of the prayer screen is <code>.screen--main</code>; the two never share a rule of the built-in themes, so write for the one you mean. The compact clock, the next-prayer chip and the compact strip are protected like their large forms (section 10). In <code>data-live-layout</code> the stage says how the live screen is drawn, and <code>data-harakat</code> is present when the surau's mark colour is on for Arabic text (section 8).</p>
+</section>
+
+<section id="variables">
+<h2>7. Style variables</h2>
+<p>Every control in the Ubah suai menu writes one CSS variable or one attribute on the stage. Your theme CSS reads the same variables, so a menu choice and a theme file never fight. If you set <code>--accent</code> in your CSS, the surau can still change it in the menu, and the surau's value wins.</p>
+<!--slot:variables-->
+<p>Values in <code>defaults</code> are written with the same Malay words as the menu (for example <code>"align": "tengah"</code>), while the attributes on the stage carry English words (<code>data-align="center"</code>). The table above shows both.</p>
+</section>
+
+<section id="arabic">
+<h2>8. Arabic text</h2>
+<p>Arabic text on the verse, hadith and zikir cards carries the class <code>.arab</code>, and its translation carries <code>.arab-tarjamah</code>. Write your Arabic typography in <code>arabic.css</code> (optional) or in <code>theme.css</code>. Right to left is used only inside Arabic text blocks; the layout of the stage stays left to right.</p>
+<!--slot:arabic-->
+</section>
+
+<section id="refused">
+<h2>9. What is refused, and warnings</h2>
+<p>When you upload a file the box checks everything and collects all the problems into one report, not only the first. There are two kinds. An <strong>error</strong> blocks the install. A <strong>warning</strong> does not; it tells you that a style will not show on the T95 box (section 11).</p>
+<p>The CSS is read by a real CSS parser, not searched with text patterns. A name disguised with CSS escapes is read like the plain name. The table below lists every refusal with the sentence the surau will see, in Malay and in English.</p>
+<!--slot:refused-->
+</section>
+
+<section id="protected">
+<h2>10. Protected elements</h2>
+<p>Prayer times, the clock, the countdowns, the next-prayer chip and the surau logo cannot be lost. No theme can hide them, and the rules below are added last so that they win.</p>
+<!--slot:protected-->
+</section>
+
+<section id="chrome-91">
+<h2>11. Chrome 91 limits</h2>
+<p>The T95 box runs the Chrome 91 browser. Newer CSS does not work there, and the box will not show those styles. The validator gives a warning (not an error) when it finds any of the following. Prayer times and the clock are not affected, but your theme will look different from what you see on a computer.</p>
+<!--slot:warnings-->
+<p>The safe way: test your theme on a real T95 box, or in a browser of the same version, before sharing it.</p>
+</section>
+
+<section id="upload">
+<h2>12. Uploading and versions</h2>
+<p>A theme is uploaded by a Pentadbir Surau, with the same permission as the other screen settings. The box checks the file, keeps it aside and shows a preview before you press Pasang. An uploaded theme is not used until the surau chooses it with Guna sekarang.</p>
+<p>A box accepts at most 10 theme installs in an hour. The same name with a higher version number updates the installed theme. The same or a lower version is refused with a clear message. A different name installs a new theme. Up to 30 uploaded themes can be installed. The surau's own menu choices stay after an update. Values for screens or variables that the new version no longer uses are kept but ignored, so a later version can use them again.</p>
+<p>An installed theme is stored on the box and copied to the cloud within the surau's storage limit, so a replacement box and editing away from the surau do not lose it. Only a theme that is not in use can be deleted, and built-in themes cannot be deleted.</p>
+<p>The app offers an uploaded theme only when every box of the surau reports a contract equal to or higher than the contract of that theme. A box older than your contract would not accept it, so the theme does not appear until that box is updated.</p>
+<p>An installed theme is stored once: when a theme is updated or deleted, the file of the old version is removed from the box. The address of a theme's files contains a short code taken from the file itself, so a new version always has a new address.</p>
+<p>After a theme loads, the display checks the protected elements on every screen by itself, again every minute, and again after any animation or transition ends. If something is lost, the display goes back to the <code>base</code> theme, the theme card in the app shows Tema tidak sah, and Semak MAXCOM reports it. The viewers are never left without prayer times.</p>
+</section>
+
+<section id="contract-promise">
+<h2>13. The contract promise</h2>
+<p>Everything listed in this guide (screen ids, attributes, region classes, Arabic classes, style variables, file paths and limits) is contract {{contract}}.</p>
+<p class="promise">The contract number goes up only on a breaking change. Older themes keep working on their contract version for at least a year.</p>
+<p>New things that break nothing are added without raising the contract number. If you write <code>"contract": 2</code> while the box supports only contract {{contract}}, the box says that this theme needs a newer MAXCOM.</p>
+</section>
+
+<section id="sharing">
+<h2>14. Sharing a theme</h2>
+<p>A <code>.maxtheme</code> file is small and can be sent through a phone messaging app or e-mail like any file. The receiver uploads it in their MAXCOM app with the steps in section 2.</p>
+<p>Choose a name that other people are unlikely to use, so that your theme is not mistaken for an update of another theme with the same name. Raise <code>version</code> each time you hand out a new version. A theme file carries no secrets and no surau data; it is only a look.</p>
+<p>The pictures in the file are the responsibility of the theme author. Make sure you have the right to use them and to let others use them, and do not include a picture that you may not distribute.</p>
+<p>This guide exists as a web page and as a PDF, in Malay and in English. The PDF can be sent through a messaging app like any other file.</p>
+</section>
+</body>
+</html>

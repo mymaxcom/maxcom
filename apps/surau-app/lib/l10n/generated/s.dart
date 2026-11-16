@@ -9744,6 +9744,930 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'PIN salah. {left} cubaan lagi.'**
   String offlinePinWrong(int left);
+
+  /// No description provided for @themeGalleryTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Templat paparan'**
+  String get themeGalleryTitle;
+
+  /// No description provided for @themeInUse.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sedang digunakan'**
+  String get themeInUse;
+
+  /// No description provided for @themeActive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Aktif'**
+  String get themeActive;
+
+  /// No description provided for @themeBuiltIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bawaan MAXCOM'**
+  String get themeBuiltIn;
+
+  /// No description provided for @themeNewBadge.
+  ///
+  /// In ms, this message translates to:
+  /// **'BAHARU'**
+  String get themeNewBadge;
+
+  /// No description provided for @themeGroupArab.
+  ///
+  /// In ms, this message translates to:
+  /// **'Arab'**
+  String get themeGroupArab;
+
+  /// No description provided for @themeScreenArabAyat.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ayat Arab'**
+  String get themeScreenArabAyat;
+
+  /// No description provided for @themeScreenArabZikir.
+  ///
+  /// In ms, this message translates to:
+  /// **'Zikir Arab'**
+  String get themeScreenArabZikir;
+
+  /// No description provided for @themeScreenArabHadis.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hadis Arab'**
+  String get themeScreenArabHadis;
+
+  /// No description provided for @themeArabLooksOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema ini memaparkan ayat, hadis dan zikir dalam rupa biasa. Skrin Arab digunakan oleh tema Arabic Art dan tema yang menyertakannya.'**
+  String get themeArabLooksOff;
+
+  /// No description provided for @themeArabSection.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tulisan Arab'**
+  String get themeArabSection;
+
+  /// No description provided for @themeArFont.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fon Arab'**
+  String get themeArFont;
+
+  /// No description provided for @themeArFontHafs.
+  ///
+  /// In ms, this message translates to:
+  /// **'Uthmani Hafs'**
+  String get themeArFontHafs;
+
+  /// No description provided for @themeArFontAmiriQuran.
+  ///
+  /// In ms, this message translates to:
+  /// **'Amiri Quran'**
+  String get themeArFontAmiriQuran;
+
+  /// No description provided for @themeArFontAmiri.
+  ///
+  /// In ms, this message translates to:
+  /// **'Amiri'**
+  String get themeArFontAmiri;
+
+  /// No description provided for @themeArFontSample.
+  ///
+  /// In ms, this message translates to:
+  /// **'ٱلْحَمْدُ لِلَّهِ'**
+  String get themeArFontSample;
+
+  /// No description provided for @themeArSize.
+  ///
+  /// In ms, this message translates to:
+  /// **'Saiz Arab'**
+  String get themeArSize;
+
+  /// No description provided for @themeArSizeSmall.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kecil'**
+  String get themeArSizeSmall;
+
+  /// No description provided for @themeArSizeBig.
+  ///
+  /// In ms, this message translates to:
+  /// **'Besar'**
+  String get themeArSizeBig;
+
+  /// No description provided for @themeHarakat.
+  ///
+  /// In ms, this message translates to:
+  /// **'Warna baris'**
+  String get themeHarakat;
+
+  /// No description provided for @themeHarakatFollow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ikut warna teks'**
+  String get themeHarakatFollow;
+
+  /// No description provided for @themeHarakatOwn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Warna sendiri'**
+  String get themeHarakatOwn;
+
+  /// No description provided for @themeHarakatNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Warna baris memerlukan fon Amiri Quran atau Amiri. Uthmani Hafs dipapar dalam satu warna.'**
+  String get themeHarakatNote;
+
+  /// No description provided for @themeArLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jarak baris'**
+  String get themeArLine;
+
+  /// No description provided for @themeArLineTight.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rapat'**
+  String get themeArLineTight;
+
+  /// No description provided for @themeArLineWide.
+  ///
+  /// In ms, this message translates to:
+  /// **'Luas'**
+  String get themeArLineWide;
+
+  /// No description provided for @themeTarjamah.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terjemahan'**
+  String get themeTarjamah;
+
+  /// No description provided for @themeTarjamahBelow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bawah'**
+  String get themeTarjamahBelow;
+
+  /// No description provided for @themeTarjamahBeside.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sisi'**
+  String get themeTarjamahBeside;
+
+  /// No description provided for @themeTarjamahHide.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sembunyi'**
+  String get themeTarjamahHide;
+
+  /// No description provided for @themeTarjamahNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sembunyi hanya untuk skrin Arab. Jika Tetapan menutup terjemahan, Tetapan diikut.'**
+  String get themeTarjamahNote;
+
+  /// No description provided for @themeAll.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semua tema ({n})'**
+  String themeAll(int n);
+
+  /// No description provided for @themeCustomise.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ubah suai'**
+  String get themeCustomise;
+
+  /// No description provided for @themeUse.
+  ///
+  /// In ms, this message translates to:
+  /// **'Guna tema ini'**
+  String get themeUse;
+
+  /// No description provided for @themeChangedScreens.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} skrin diubah suai.'**
+  String themeChangedScreens(int n);
+
+  /// No description provided for @themeNeedsUpdate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kemas kini MAXCOM di surau untuk mengubah suai tema.'**
+  String get themeNeedsUpdate;
+
+  /// No description provided for @themeGalleryHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tekan tema untuk lihat dan pilih.'**
+  String get themeGalleryHint;
+
+  /// No description provided for @themeChosen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema ditukar'**
+  String get themeChosen;
+
+  /// No description provided for @themeScreenBiasa.
+  ///
+  /// In ms, this message translates to:
+  /// **'Biasa'**
+  String get themeScreenBiasa;
+
+  /// No description provided for @themeScreenAzan.
+  ///
+  /// In ms, this message translates to:
+  /// **'Azan'**
+  String get themeScreenAzan;
+
+  /// No description provided for @themeScreenMasukWaktu.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masuk waktu'**
+  String get themeScreenMasukWaktu;
+
+  /// No description provided for @themeScreenIqamah.
+  ///
+  /// In ms, this message translates to:
+  /// **'Iqamah'**
+  String get themeScreenIqamah;
+
+  /// No description provided for @themeScreenSolat.
+  ///
+  /// In ms, this message translates to:
+  /// **'Solat'**
+  String get themeScreenSolat;
+
+  /// No description provided for @themeScreenJumaat.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jumaat'**
+  String get themeScreenJumaat;
+
+  /// No description provided for @themeScreenLive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Live'**
+  String get themeScreenLive;
+
+  /// No description provided for @themeScreenPoster.
+  ///
+  /// In ms, this message translates to:
+  /// **'Poster'**
+  String get themeScreenPoster;
+
+  /// No description provided for @themeScreenKuliah.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kuliah'**
+  String get themeScreenKuliah;
+
+  /// No description provided for @themeScreenProgram.
+  ///
+  /// In ms, this message translates to:
+  /// **'Program'**
+  String get themeScreenProgram;
+
+  /// No description provided for @themeScreenHadis.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hadis'**
+  String get themeScreenHadis;
+
+  /// No description provided for @themeScreenZikir.
+  ///
+  /// In ms, this message translates to:
+  /// **'Zikir'**
+  String get themeScreenZikir;
+
+  /// No description provided for @themeScreenPengumuman.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengumuman'**
+  String get themeScreenPengumuman;
+
+  /// No description provided for @themeScreenTakwim.
+  ///
+  /// In ms, this message translates to:
+  /// **'Takwim'**
+  String get themeScreenTakwim;
+
+  /// No description provided for @themeScreenTabung.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tabung'**
+  String get themeScreenTabung;
+
+  /// No description provided for @themeScreenAyat.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ayat'**
+  String get themeScreenAyat;
+
+  /// No description provided for @themeGroupPrayer.
+  ///
+  /// In ms, this message translates to:
+  /// **'Waktu solat'**
+  String get themeGroupPrayer;
+
+  /// No description provided for @themeGroupContent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kandungan'**
+  String get themeGroupContent;
+
+  /// No description provided for @themeBg.
+  ///
+  /// In ms, this message translates to:
+  /// **'Latar belakang'**
+  String get themeBg;
+
+  /// No description provided for @themeFollowTheme.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ikut tema'**
+  String get themeFollowTheme;
+
+  /// No description provided for @themeOwnPicture.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar sendiri'**
+  String get themeOwnPicture;
+
+  /// No description provided for @themeChange.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar'**
+  String get themeChange;
+
+  /// No description provided for @themeFit.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paparan gambar'**
+  String get themeFit;
+
+  /// No description provided for @themeFitFull.
+  ///
+  /// In ms, this message translates to:
+  /// **'Penuh'**
+  String get themeFitFull;
+
+  /// No description provided for @themeFitStretch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Regang'**
+  String get themeFitStretch;
+
+  /// No description provided for @themeFitMedium.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sederhana'**
+  String get themeFitMedium;
+
+  /// No description provided for @themeFitSmall.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kecil'**
+  String get themeFitSmall;
+
+  /// No description provided for @themePos.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kedudukan gambar'**
+  String get themePos;
+
+  /// No description provided for @themeLeft.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kiri'**
+  String get themeLeft;
+
+  /// No description provided for @themeCentre.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tengah'**
+  String get themeCentre;
+
+  /// No description provided for @themeRight.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kanan'**
+  String get themeRight;
+
+  /// No description provided for @themeShade.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kegelapan lapisan'**
+  String get themeShade;
+
+  /// No description provided for @themeShadeNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teks kekal jelas: warna teks auto diukur dari gambar.'**
+  String get themeShadeNote;
+
+  /// No description provided for @themeAccent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Warna utama'**
+  String get themeAccent;
+
+  /// No description provided for @themeAccentTheme.
+  ///
+  /// In ms, this message translates to:
+  /// **'(tema)'**
+  String get themeAccentTheme;
+
+  /// No description provided for @themeAccentOther.
+  ///
+  /// In ms, this message translates to:
+  /// **'Warna lain'**
+  String get themeAccentOther;
+
+  /// No description provided for @themeText.
+  ///
+  /// In ms, this message translates to:
+  /// **'Warna teks'**
+  String get themeText;
+
+  /// No description provided for @themeTextAuto.
+  ///
+  /// In ms, this message translates to:
+  /// **'Auto'**
+  String get themeTextAuto;
+
+  /// No description provided for @themeTextPick.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih warna'**
+  String get themeTextPick;
+
+  /// No description provided for @themeFont.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fon'**
+  String get themeFont;
+
+  /// No description provided for @themeSize.
+  ///
+  /// In ms, this message translates to:
+  /// **'Saiz teks'**
+  String get themeSize;
+
+  /// No description provided for @themeSizeNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'S ialah saiz sekarang. Tiada saiz lebih kecil supaya jelas dari 3 meter.'**
+  String get themeSizeNote;
+
+  /// No description provided for @themeAlign.
+  ///
+  /// In ms, this message translates to:
+  /// **'Susunan kandungan'**
+  String get themeAlign;
+
+  /// No description provided for @themeChangedBadge.
+  ///
+  /// In ms, this message translates to:
+  /// **'Diubah'**
+  String get themeChangedBadge;
+
+  /// No description provided for @themeReset.
+  ///
+  /// In ms, this message translates to:
+  /// **'Set semula'**
+  String get themeReset;
+
+  /// No description provided for @themeApplyAll.
+  ///
+  /// In ms, this message translates to:
+  /// **'Guna untuk semua skrin'**
+  String get themeApplyAll;
+
+  /// No description provided for @themeEditTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ubah suai: {title}'**
+  String themeEditTitle(String title);
+
+  /// No description provided for @themeEditScreen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin {name}'**
+  String themeEditScreen(String name);
+
+  /// No description provided for @themeLivePreview.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pratonton langsung'**
+  String get themeLivePreview;
+
+  /// No description provided for @themeApplyAllConfirm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Guna rupa skrin ini untuk semua skrin tema {title}?'**
+  String themeApplyAllConfirm(String title);
+
+  /// No description provided for @themeResetScreen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Set semula skrin ini'**
+  String get themeResetScreen;
+
+  /// No description provided for @themeResetScreenConfirm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembali kepada rupa tema bagi skrin {screen}?'**
+  String themeResetScreenConfirm(String screen);
+
+  /// No description provided for @themeResetAll.
+  ///
+  /// In ms, this message translates to:
+  /// **'Set semula semua skrin'**
+  String get themeResetAll;
+
+  /// No description provided for @themeFreshFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dapat memuatkan nilai terkini. Tiada yang disimpan. Cuba lagi.'**
+  String get themeFreshFailed;
+
+  /// No description provided for @themeResetConfirm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembali kepada rupa asal tema {title}?'**
+  String themeResetConfirm(String title);
+
+  /// No description provided for @themeDiscardTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buang perubahan yang belum disimpan?'**
+  String get themeDiscardTitle;
+
+  /// No description provided for @themeDiscard.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buang'**
+  String get themeDiscard;
+
+  /// No description provided for @themeKeepEditing.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terus sunting'**
+  String get themeKeepEditing;
+
+  /// No description provided for @themeSaved.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gaya tema disimpan'**
+  String get themeSaved;
+
+  /// No description provided for @themePickPicture.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih gambar'**
+  String get themePickPicture;
+
+  /// No description provided for @themeCustomColour.
+  ///
+  /// In ms, this message translates to:
+  /// **'Warna sendiri (#rrggbb)'**
+  String get themeCustomColour;
+
+  /// No description provided for @themeUploadTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik tema'**
+  String get themeUploadTitle;
+
+  /// No description provided for @themeUploadStep.
+  ///
+  /// In ms, this message translates to:
+  /// **'Langkah {n} daripada 3'**
+  String themeUploadStep(int n);
+
+  /// No description provided for @themeUploadPickTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih fail tema'**
+  String get themeUploadPickTitle;
+
+  /// No description provided for @themeUploadPickHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail .maxtheme, paling besar 15 MB.'**
+  String get themeUploadPickHint;
+
+  /// No description provided for @themeUploadPickButton.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih fail'**
+  String get themeUploadPickButton;
+
+  /// No description provided for @themeUploadChecksNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM di surau akan menyemak fail ini: saiz, kandungan, gaya CSS dan versi. Tiada apa dipasang sebelum anda tekan Pasang.'**
+  String get themeUploadChecksNote;
+
+  /// No description provided for @themeUploadCancel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Batal'**
+  String get themeUploadCancel;
+
+  /// No description provided for @themeUploadCheck.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semak fail'**
+  String get themeUploadCheck;
+
+  /// No description provided for @themeUploadChecking.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menyemak fail...'**
+  String get themeUploadChecking;
+
+  /// No description provided for @themeUploadValid.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema sah dan sedia dipasang'**
+  String get themeUploadValid;
+
+  /// No description provided for @themeUploadNoProblems.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada masalah ditemui.'**
+  String get themeUploadNoProblems;
+
+  /// No description provided for @themeUploadPreview.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pratonton: {screen}'**
+  String themeUploadPreview(String screen);
+
+  /// No description provided for @themeUploadName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama'**
+  String get themeUploadName;
+
+  /// No description provided for @themeUploadVersion.
+  ///
+  /// In ms, this message translates to:
+  /// **'Versi'**
+  String get themeUploadVersion;
+
+  /// No description provided for @themeUploadVersionNew.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} (tema baharu)'**
+  String themeUploadVersionNew(int n);
+
+  /// No description provided for @themeUploadVersionUpdate.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} (kemas kini daripada versi {m})'**
+  String themeUploadVersionUpdate(int n, int m);
+
+  /// No description provided for @themeUploadBase.
+  ///
+  /// In ms, this message translates to:
+  /// **'Berasaskan'**
+  String get themeUploadBase;
+
+  /// No description provided for @themeUploadContract.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kontrak'**
+  String get themeUploadContract;
+
+  /// No description provided for @themeUploadContent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kandungan'**
+  String get themeUploadContent;
+
+  /// No description provided for @themeUploadContentValue.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} fail, {size}'**
+  String themeUploadContentValue(int n, String size);
+
+  /// No description provided for @themeUploadOwnScreens.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin bergaya sendiri'**
+  String get themeUploadOwnScreens;
+
+  /// No description provided for @themeUploadInstall.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pasang'**
+  String get themeUploadInstall;
+
+  /// No description provided for @themeUploadInstallAnyway.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pasang juga'**
+  String get themeUploadInstallAnyway;
+
+  /// No description provided for @themeUploadWarnTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Boleh dipasang, dengan {n} amaran'**
+  String themeUploadWarnTitle(int n);
+
+  /// No description provided for @themeUploadClose.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tutup'**
+  String get themeUploadClose;
+
+  /// No description provided for @themeUploadInstalled.
+  ///
+  /// In ms, this message translates to:
+  /// **'{title} dipasang'**
+  String themeUploadInstalled(String title);
+
+  /// No description provided for @themeUploadInstalledNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema kini ada dalam galeri. TV masih memakai {current} sehingga anda memilih tema ini.'**
+  String themeUploadInstalledNote(String current);
+
+  /// No description provided for @themeUploadSavedNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Disimpan di MAXCOM surau dan diselaraskan ke awan.'**
+  String get themeUploadSavedNote;
+
+  /// No description provided for @themeUploadBack.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembali ke galeri'**
+  String get themeUploadBack;
+
+  /// No description provided for @themeUploadUseNow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Guna sekarang'**
+  String get themeUploadUseNow;
+
+  /// No description provided for @themeUploadTooBig.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail melebihi 15 MB.'**
+  String get themeUploadTooBig;
+
+  /// No description provided for @themeUploadWrongType.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih fail yang berakhir dengan .maxtheme.'**
+  String get themeUploadWrongType;
+
+  /// No description provided for @themeUploadUnreadable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail tidak dapat dibaca.'**
+  String get themeUploadUnreadable;
+
+  /// No description provided for @themeUploadExpired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semakan sudah tamat tempoh. Semak fail sekali lagi.'**
+  String get themeUploadExpired;
+
+  /// No description provided for @themeUploadedBadge.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dimuat naik, versi {n}'**
+  String themeUploadedBadge(int n);
+
+  /// No description provided for @themeInvalidBadge.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema tidak sah'**
+  String get themeInvalidBadge;
+
+  /// No description provided for @themeInvalidNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'TV memakai tema asas kerana tema ini menyembunyikan jam, waktu solat atau logo. Betulkan fail tema dan muat naik versi baharu.'**
+  String get themeInvalidNote;
+
+  /// No description provided for @themeNotReady.
+  ///
+  /// In ms, this message translates to:
+  /// **'Belum boleh digunakan'**
+  String get themeNotReady;
+
+  /// No description provided for @themeNotReadyNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema ini belum boleh digunakan: ada MAXCOM di surau yang perlu dikemas kini dahulu.'**
+  String get themeNotReadyNote;
+
+  /// No description provided for @themeCannotConfirm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dapat mengesahkan semua MAXCOM surau sekarang. Cuba lagi apabila talian awan pulih.'**
+  String get themeCannotConfirm;
+
+  /// No description provided for @themeDownloadTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat turun tema'**
+  String get themeDownloadTitle;
+
+  /// No description provided for @themeDownloadLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'Satu fail untuk disunting di luar MAXCOM atau dikongsi dengan surau lain.'**
+  String get themeDownloadLine;
+
+  /// No description provided for @themeFileName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama fail'**
+  String get themeFileName;
+
+  /// No description provided for @themeBake.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sertakan ubah suai saya'**
+  String get themeBake;
+
+  /// No description provided for @themeBakeNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail akan menghasilkan rupa yang sama seperti TV surau sekarang ({n} skrin diubah, {m} gambar latar).'**
+  String themeBakeNote(int n, int m);
+
+  /// No description provided for @themeDownloadButton.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat turun'**
+  String get themeDownloadButton;
+
+  /// No description provided for @themeShare.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kongsi'**
+  String get themeShare;
+
+  /// No description provided for @themeNameBad.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama tidak sah. Guna huruf kecil, nombor dan sempang (paling panjang 32 aksara).'**
+  String get themeNameBad;
+
+  /// No description provided for @themeDownloaded.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail tema disimpan'**
+  String get themeDownloaded;
+
+  /// No description provided for @themeDownloadFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail tema tidak dapat disediakan.'**
+  String get themeDownloadFailed;
+
+  /// No description provided for @themeDelete.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam tema'**
+  String get themeDelete;
+
+  /// No description provided for @themeDeleteConfirm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam tema {title}? Ubah suai anda untuk tema ini disimpan.'**
+  String themeDeleteConfirm(String title);
+
+  /// No description provided for @themeDeleteInUse.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema ini sedang digunakan. Pilih tema lain dahulu.'**
+  String get themeDeleteInUse;
+
+  /// No description provided for @themeDeleteBuiltIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema bawaan MAXCOM tidak boleh dipadam.'**
+  String get themeDeleteBuiltIn;
+
+  /// No description provided for @themeDeleted.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema dipadam'**
+  String get themeDeleted;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

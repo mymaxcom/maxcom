@@ -56,6 +56,13 @@ class DoctorReport(val lines: List<DoctorLine>, val logTail: List<String> = empt
             else -> DoctorLine(false, "Nama setempat: belum dituntut (menunggu rangkaian).")
         }
 
+        /** The theme the TV wears: [themeOk] false is an uploaded theme that hid the clock, the prayer times or the logo. */
+        fun theme(themeOk: Boolean?): DoctorLine = when (themeOk) {
+            true -> DoctorLine(true, "tema paparan sah")
+            false -> DoctorLine(false, "Tema tidak sah: TV memakai tema asas. Buka apl MAXCOM, Tetapan, Templat paparan.")
+            null -> DoctorLine(true, "tema paparan: tiada laporan")
+        }
+
         fun freeSpace(freeBytes: Long): DoctorLine =
             if (freeBytes >= MIN_FREE_BYTES) DoctorLine(true, "Ruang kosong ${freeBytes / (1024 * 1024)} MB.")
             else DoctorLine(false, "Ruang kosong tinggal ${freeBytes / (1024 * 1024)} MB (perlu 1024 MB atau lebih).")

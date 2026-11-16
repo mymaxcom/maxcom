@@ -21,19 +21,21 @@ bool get _android => debugAndroid ?? Platform.isAndroid;
 
 bool get supported => _android;
 
-Future<PickedFile?> pick(List<String> extensions, int maxBytes) async {
+Future<PickedFile?> pick(List<String> extensions, int maxBytes, [String? mustEndWith]) async {
   if (!_android) return null;
   final Map<Object?, Object?>? r;
   try {
     r = await channel.invokeMapMethod<Object?, Object?>('pick', {
       'mimeTypes': mimeTypesFor(extensions),
       'maxBytes': maxBytes,
+      'suffix': ?mustEndWith,
     });
   } on PlatformException {
     return null;
   }
   if (r == null) return null;
   final name = r['name'] is String ? r['name'] as String : 'file';
+  if (r['wrongType'] == true) return PickedFile.wrongType(name);
   if (r['tooBig'] == true) return PickedFile.tooBig(name);
   final bytes = r['bytes'];
   if (bytes is! Uint8List) return null;

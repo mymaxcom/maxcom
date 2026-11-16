@@ -97,7 +97,7 @@ describe('kiosk layout contract', () => {
 
   it('logo is sized by height with its natural aspect, at most 30 % of the width and 2x its bitmap', () => {
     expect(rule(styles, '.logo')).toMatch(/object-fit:\s*contain/);
-    for (const sel of ['.ident__logo', '.poster-strip__logo']) {
+    for (const sel of ['.ident__logo']) {
       const body = rule(styles, sel);
       // height: min(<rem>, var(--logo-cap, ...)) : the rem is the design height, --logo-cap the 2x bitmap cap.
       expect(body, sel).toMatch(/height:\s*min\(\s*[\d.]+rem\s*,\s*var\(--logo-cap/);

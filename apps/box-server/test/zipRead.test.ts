@@ -96,4 +96,10 @@ describe('writeStoredZip', () => {
     expect(() => writeStoredZip([{ name: 'a', data: text('1') }, { name: 'a', data: text('2') }])).toThrow(ZipError);
     expect(() => writeStoredZip([])).toThrow(ZipError);
   });
+  it('refuses a unix symlink entry and reads a regular unix file', () => {
+    const link = buildZip([{ name: 'l', data: text('/etc/passwd'), method: 0, unixMode: 0o120777 }]);
+    expect(() => readZipEntries(link, all)).toThrow(/link/);
+    const file = buildZip([{ name: 'f', data: text('x'), method: 0, unixMode: 0o100644 }]);
+    expect(readZipEntries(file, all).get('f')!.toString()).toBe('x');
+  });
 });

@@ -10,11 +10,12 @@ import 'preview_message.dart';
 import 'preview_tls.dart';
 
 class PlatformPreview extends StatefulWidget {
-  const PlatformPreview({super.key, required this.url, required this.token, this.poster, this.onSslError, this.pinnedLeaf});
+  const PlatformPreview({super.key, required this.url, required this.token, this.poster, this.theme, this.onSslError, this.pinnedLeaf});
 
   final Uri url;
   final String token;
   final PreviewPoster? poster;
+  final PreviewThemeRequest? theme;
 
   /// Not used on the web: the browser handles certificate trust itself.
   final SslRefused? onSslError;
@@ -51,6 +52,15 @@ class _PlatformPreviewState extends State<PlatformPreview> {
     if (widget.url.origin != origin || !isPreviewToken(widget.token)) return;
     _frame.contentWindow?.postMessage(previewMessage(widget.token).jsify(), origin.toJS);
     _postPoster();
+    _postTheme();
+  }
+
+  /// The theme request, after the token, to the same origin only.
+  void _postTheme() {
+    final t = widget.theme;
+    final origin = web.window.location.origin;
+    if (t == null || widget.url.origin != origin) return;
+    _frame.contentWindow?.postMessage(previewThemeMessage(t).jsify(), origin.toJS);
   }
 
   /// The poster, after the token, to the same origin only.
@@ -70,6 +80,8 @@ class _PlatformPreviewState extends State<PlatformPreview> {
       _postToken();
     } else if (old.poster != widget.poster) {
       _postPoster();
+    } else if (old.theme != widget.theme) {
+      _postTheme();
     }
   }
 

@@ -15,7 +15,7 @@ export function SourceFooter({ view, lang }: SourceFooterProps) {
   const text = footer ? (lang === 'en' ? footer.en : footer.ms) : '';
   if (!text) return null;
   return (
-    <div class="source-footer" data-testid="source-footer">
+    <div class="source-footer free-text" data-testid="source-footer">
       {text}
     </div>
   );

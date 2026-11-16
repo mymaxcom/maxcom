@@ -3,12 +3,15 @@ import { basename, dirname } from 'node:path';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest, FastifyServerFactory } from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { dateOf, hasOfficialSource, isFeatureKey, parseJakimCsv, patchNeedsSystemWrite, tzOf, validateFeatureSettings } from '@surau/core';
+import { KIOSK_TEMPLATE_IDS, THEME_CONTRACT, dateOf, hasOfficialSource, isFeatureKey, parseJakimCsv, patchNeedsSystemWrite, tzOf, validateFeatureSettings } from '@surau/core';
 import type { ImageRef } from '@surau/core';
 import type { KioskLive, PrayerDay } from '@surau/core';
 import { actorOf, deviceOf } from './actor.ts';
 import { isAppPath, registerAppStatic } from './appStatic.ts';
 import { registerAssetRoutes } from './assets/routes.ts';
+import { registerThemeRoutes } from './themes/routes.ts';
+import { createThemeStore } from './themes/store.ts';
+import { activeThemeHealth, themeOk } from './themes/health.ts';
 import { registerFinanceRoutes } from './finance/routes.ts';
 import { DEFAULT_SURAU_ID } from './sync/verify.ts';
 import { assetsTotalBytes } from './assets/store.ts';
@@ -69,7 +72,7 @@ import { registerSyncRoutes, syncStatus } from './sync/routes.ts';
 import { ephemeralIdentity, loadIdentity } from './setup/identity.ts';
 import { registerJoinRoutes } from './setup/joinRoutes.ts';
 import { registerStateRoutes } from './setup/stateRoutes.ts';
-import { createClaimHandler, createLinkHandler, enrolCloudOrigin, listSites, registerSiteAssetRoute } from './sync/sites.ts';
+import { createClaimHandler, createLinkHandler, enrolCloudOrigin, listSites, noteThemeSupport, registerSiteAssetRoute } from './sync/sites.ts';
 import { outboxStatus, setOutboxOn, WorkerOutboxSender } from './sync/workerOutbox.ts';
 import type { WorkerAdminConfig } from './sync/workerOutbox.ts';
 import { trimChangeLog } from './sync/trim.ts';
@@ -202,6 +205,31 @@ function addDays(date: string, delta: number): string {
   return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`;
 }
 
+/**
+ * The `bgImage` references of a themeStyle.styles patch that are new or changed compared with `stored` (the
+ * stored styles map), each with where it sits. An unchanged old reference is not listed: a picture that was
+ * removed since then must not block an unrelated save (the kiosk falls back to the next layer).
+ */
+function newStyleBgImages(styles: Record<string, unknown>, stored: unknown): { id: string; theme: string; screen: string }[] {
+  const out: { id: string; theme: string; screen: string }[] = [];
+  const old = isPlain(stored) ? stored : {};
+  const take = (v: unknown, was: unknown, theme: string, screen: string): void => {
+    if (!isPlain(v) || typeof v.bgImage !== 'string') return;
+    if (isPlain(was) && was.bgImage === v.bgImage) return;
+    out.push({ id: v.bgImage, theme, screen });
+  };
+  for (const [theme, entry] of Object.entries(styles)) {
+    if (!isPlain(entry)) continue;
+    const was = isPlain(old[theme]) ? old[theme] : {};
+    take(entry.semua, was.semua, theme, 'all screens');
+    if (isPlain(entry.skrin)) {
+      const wasSkrin = isPlain(was.skrin) ? was.skrin : {};
+      for (const [screen, v] of Object.entries(entry.skrin)) take(v, wasSkrin[screen], theme, screen);
+    }
+  }
+  return out;
+}
+
 export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance {
   // First, before any file is opened: a malformed token is a clean start error.
   const kioskToken = parseKioskToken(opts.kioskToken ?? process.env.SURAU_KIOSK_TOKEN);
@@ -308,6 +336,12 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   const resolveKiosk = opts.resolveKiosk ?? createKioskResolver(db, now);
   app.decorateRequest('auth', null);
   app.addHook('onRequest', authHook({ db, now, limiters, resolveKiosk }));
+  // The cloud learns which theme contract each linked box supports from the header its sync agent sends.
+  if (role === 'cloud') {
+    app.addHook('onRequest', async (request) => {
+      if (request.auth?.kind === 'site') noteThemeSupport(db, request.auth.boxId, request.headers['x-maxcom-themes']);
+    });
+  }
   app.decorate('surau', {
     db,
     boxId,
@@ -608,6 +642,15 @@ data: ${JSON.stringify(live)}
         throw error;
       }
     }
+    // Menu backgrounds must be pictures this box holds; a missing one is refused, not stored.
+    if (feature === 'themeStyle' && isPlain(patch) && isPlain(patch.styles)) {
+      for (const ref of newStyleBgImages(patch.styles, getSettings(db).themeStyle.styles)) {
+        const found = getAssetPath(db, dataDir, ref.id);
+        if (found === null || (found.mime !== 'image/jpeg' && found.mime !== 'image/png' && found.mime !== 'image/webp')) {
+          return reply.code(400).send({ errors: [`bgImage refers to a picture that does not exist (theme ${ref.theme}, screen ${ref.screen})`] });
+        }
+      }
+    }
     const prayerFeature = feature === 'zone' || feature === 'location' || feature === 'prayerSources' || feature === 'prayerCalc';
     const guard = prayerFeature ? prayerSettingsGuard(db, feature, patch, now()) : {};
     if (guard.errors && guard.errors.length > 0) return reply.code(400).send({ errors: guard.errors });
@@ -685,16 +728,24 @@ data: ${JSON.stringify(live)}
     // A linked box also names its cloud origin (`cloud`, the same one the enrolment payload carries), so the app can
     // reach the cloud when the box is away; absent when not linked, and never on the cloud itself.
     const cloudOrigin = role === 'box' ? enrolCloudOrigin(db) : undefined;
+    const themes = { contract: THEME_CONTRACT, builtIn: [...KIOSK_TEMPLATE_IDS] };
     const withCloud = <T extends object>(o: T): T & { cloud?: string } => (cloudOrigin === undefined ? o : { ...o, cloud: cloudOrigin });
     // the numbered local name (public: it is a certificate DNS name), null on a legacy root; not on the cloud
     const localName = role === 'box' ? boxNameOf(tlsNow()) : null;
-    if (!identityCan(request.auth, 'health:read')) return withCloud({ ok: true, version: getVersion(db), name: localName });
+    // The theme state is for the box's own machine (the setup doctor reads it on loopback) and for an admin; a caller across the network learns nothing about the theme.
+    const onThisMachine = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.ip);
+    if (!identityCan(request.auth, 'health:read')) {
+      return withCloud({ ok: true, version: getVersion(db), name: localName, themes, ...(onThisMachine ? { themeOk: themeOk(db) } : {}) });
+    }
     const count = (sql: string): number => Number(db.prepare(sql).get()?.n ?? 0);
     const prayer = prayerStatus({ db, now, autoFetch });
     return withCloud({
       ok: true,
       version: getVersion(db),
       name: localName,
+      themes,
+      themeOk: themeOk(db),
+      themeHealth: activeThemeHealth(db),
       tls: tlsNow() ? certInfo(tlsNow()!, now()) : null,
       users: count('SELECT COUNT(*) AS n FROM users WHERE active = 1'),
       devices: count('SELECT COUNT(*) AS n FROM devices WHERE revoked_at IS NULL'),
@@ -819,6 +870,8 @@ data: ${JSON.stringify(live)}
   registerPrayerRoutes(app, prayerDeps);
   registerContentRoutes(app, { db, bus, dataDir, actorOf });
   registerAssetRoutes(app, { db, dataDir, actorOf });
+  const themeStore = createThemeStore({ db, dataDir, now });
+  registerThemeRoutes(app, { store: themeStore, bus, db, dataDir, role, boxId, now, staticDir: typeof opts.staticDir === 'string' ? opts.staticDir : null, actorOf, deviceOf });
   registerFinanceRoutes(app, { db, dataDir, bus, role, surauId: DEFAULT_SURAU_ID, now, limiters, actorOf, deviceOf });
   registerSettingsTest(app, { db, fetchImpl, ...(opts.sourceTestTimeoutMs !== undefined ? { timeoutMs: opts.sourceTestTimeoutMs } : {}) });
   registerIslamicRoutes(app, {

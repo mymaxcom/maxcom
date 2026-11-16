@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { dateOf } from '@surau/core';
+import { dateOf, screenOfCard } from '@surau/core';
 import type { SlotFeature } from '@surau/core';
 import { useTilawah } from '../audio/tilawah.ts';
 import { ContentLayer } from '../content/ContentLayer.tsx';
 import { activeTickerItems, Ticker } from '../content/Ticker.tsx';
-import { ZikirOverlay } from '../content/ZikirOverlay.tsx';
+import { ZikirOverlay, zikirAt } from '../content/ZikirOverlay.tsx';
+import { ArabZikirScreen } from './content/ArabZikirScreen.tsx';
+import { arabLookFor } from './content/arabLook.ts';
+import type { ArabBase } from './content/arabLook.ts';
+import { num } from '../content/assets.ts';
+import { useArabEnv } from '../themes/arabContext.ts';
 import { useContent } from '../data/content.ts';
 import type { KioskView } from '../data/kiosk.ts';
 import { fmtGregorian, fmtHijri, prayerLabel } from '../format.ts';
-import { surauNameOf, t } from '../i18n.ts';
+import { fmtHijriAr, surauNameOf, t } from '../i18n.ts';
 import type { Lang } from '../i18n.ts';
 import { Clock } from '../ui/Clock.tsx';
 import { Countdown } from '../ui/Countdown.tsx';
@@ -16,18 +21,24 @@ import { EmergencyBand } from '../ui/EmergencyBand.tsx';
 import { nameShownOf, SurauLogo } from '../ui/Logo.tsx';
 import { PrayerBar } from '../ui/PrayerBar.tsx';
 import { QuietBoundary } from '../ui/QuietBoundary.tsx';
+import type { Shown } from './screenId.ts';
 import { SourceFooter } from '../ui/SourceFooter.tsx';
+import { ContentShell } from './ContentShell.tsx';
 
 export interface MainProps {
   view: KioskView;
   lang: Lang;
+  /** Called before paint with the card on screen, 'zikir' while the zikir overlay holds the band, else null (and on unmount). */
+  onScreen?: (shown: Shown) => void;
+  /** The preview forces a content screen: the shell shows even while its card has nothing to show. */
+  forceShell?: boolean;
 }
 
 interface RegionProps extends MainProps {
   onTicker: (has: boolean) => void;
-  onShown: (feature: SlotFeature | null) => void;
-  /** Whether the zikir overlay holds the band (Main lays the header out for an empty band only without it). */
-  onZikir: (on: boolean) => void;
+  onShown: (feature: SlotFeature | null, arab?: ArabBase | null) => void;
+  /** Whether the zikir overlay holds the band (Main lays the header out for an empty band only without it), and whether it is the Arabic-led look. */
+  onZikir: (on: boolean, arab?: boolean) => void;
 }
 
 /**
@@ -36,6 +47,7 @@ interface RegionProps extends MainProps {
  */
 function ContentRegion({ view, lang, onTicker, onShown, onZikir }: RegionProps) {
   const { settings, now } = view;
+  const env = useArabEnv();
   const c = useContent(view);
   useTilawah(view, c.content);
   // Ticker strip (Plan 2 Task 10): only when the feature is on and a text is active on the KL date; the screen
@@ -51,15 +63,24 @@ function ContentRegion({ view, lang, onTicker, onShown, onZikir }: RegionProps) 
   useLayoutEffect(() => {
     if (showZikir) onShown(null);
   }, [showZikir, onShown]);
+  // The Arabic-led zikir look: the theme turns it on (or the preview forces it) and the item on screen has Arabic.
+  const zs = settings.zikirSelepasSolat as unknown as { durationSeconds?: unknown; minutesAfterSolat?: unknown };
+  const zItem = showZikir && c.content && c.zikir ? zikirAt(c.content.zikir, now, c.zikir, num(zs.durationSeconds, 20), num(zs.minutesAfterSolat, 10))?.item : undefined;
+  const zArabic = !!zItem && zItem.textAr.trim() !== '';
+  const zikirArab = showZikir && (arabLookFor('zikir', env.looks, { arabic: zArabic, tetapanArabic: true }) || (env.forced === 'arab-zikir' && zArabic));
   useLayoutEffect(() => {
-    onZikir(showZikir);
-    return () => onZikir(false);
-  }, [showZikir, onZikir]);
+    onZikir(showZikir, zikirArab);
+    return () => onZikir(false, false);
+  }, [showZikir, zikirArab, onZikir]);
 
   return (
     <>
       {showZikir && c.content && c.zikir ? (
-        <ZikirOverlay view={view} lang={lang} content={c.content} zikir={c.zikir} />
+        zikirArab ? (
+          <ArabZikirScreen view={view} lang={lang} content={c.content} zikir={c.zikir} />
+        ) : (
+          <ZikirOverlay view={view} lang={lang} content={c.content} zikir={c.zikir} />
+        )
       ) : (
         <ContentLayer view={view} lang={lang} content={c} onShown={onShown} />
       )}
@@ -70,26 +91,46 @@ function ContentRegion({ view, lang, onTicker, onShown, onZikir }: RegionProps) 
 
 /**
  * Layout C: identity block top-left (logo beside the name when the surau has one), next prayer top-right,
- * content region, prayer bar. While a poster is on screen it takes the whole stage and only a thin strip at
- * the bottom stays: clock, next prayer countdown and the surau; everything else fades out behind it.
+ * content region, prayer bar. While a card (or the zikir overlay) with a catalog screen of its own is on screen the
+ * stage is the content shell instead (spec 4): brand, compact clock, next-prayer chip, the card over the whole
+ * main area and the compact prayer strip. The rotation layer stays mounted across the switch.
  */
-export function Main({ view, lang }: MainProps) {
+export function Main({ view, lang, onScreen, forceShell = false }: MainProps) {
   const { state, settings, now, hijri, logo, tz } = view;
   const timeFormat = settings.prayerBar.timeFormat === '24h' ? '24h' : '12h';
   const showSeconds = settings.clock.showSeconds === true;
   const next = state.next;
   const [hasTicker, setHasTicker] = useState(false);
   const [shownFeature, setShownFeature] = useState<SlotFeature | null>(null);
-  const onShown = useCallback((f: SlotFeature | null) => setShownFeature(f), []);
+  const [shownArab, setShownArab] = useState<ArabBase | null>(null);
+  const onShown = useCallback((f: SlotFeature | null, arab?: ArabBase | null) => {
+    setShownFeature(f);
+    setShownArab(arab ?? null);
+  }, []);
   const [zikirOn, setZikirOn] = useState(false);
-  const poster = shownFeature === 'posters';
+  const [zikirArab, setZikirArab] = useState(false);
+  const onZikir = useCallback((on: boolean, arab?: boolean) => {
+    setZikirOn(on);
+    setZikirArab(on && arab === true);
+  }, []);
+  const reported: Shown = zikirOn
+    ? (zikirArab ? 'arab-zikir' : 'zikir')
+    : shownFeature !== null && shownArab !== null
+      ? (`arab-${shownArab}` as Shown)
+      : shownFeature;
+  useLayoutEffect(() => {
+    onScreen?.(reported);
+  }, [reported, onScreen]);
+  useLayoutEffect(() => () => onScreen?.(null), [onScreen]);
+  // The shell takes the stage for every card that has a catalog screen, for the zikir overlay, and for a forced preview.
+  const shell = zikirOn || (shownFeature !== null && screenOfCard(shownFeature) !== null) || forceShell;
   const name = surauNameOf(settings, lang);
   // The text name is left out only when the logo stands in for it (surauInfo.showName off) and there is one.
   const showName = nameShownOf(settings, logo);
   // A live never shows here: while one is on, the app shows the live screen instead (or a prayer screen over the
   // blurred live inside a prayer window), so Main is the kiosk without a live.
   // Nothing in the band (no card, no zikir): the header takes the screen (styles.css `.is-idle`).
-  const idle = shownFeature === null && !zikirOn;
+  const idle = shownFeature === null && !zikirOn && !forceShell;
   // The header fades only on an idle <-> card switch after Main has settled, never on the mount itself (Main mounts
   // after every prayer phase, and a fading header would hide the ticking clock). A short grace covers the first
   // frames, when the band settles from empty to its first card.
@@ -108,58 +149,46 @@ export function Main({ view, lang }: MainProps) {
 
   return (
     <div
-      class={`screen screen--main${hasTicker ? ' has-ticker' : ''}${poster ? ' is-poster' : ''}${idle ? ' is-idle' : ''}${settle ? ' is-settling' : ''}${view.todaySource.emergency ? ' has-emergency' : ''}`}
-      data-poster={poster ? 'true' : 'false'}
+      class={`screen ${shell ? 'screen--shell' : 'screen--main'}${hasTicker ? ' has-ticker' : ''}${idle ? ' is-idle' : ''}${settle ? ' is-settling' : ''}${view.todaySource.emergency ? ' has-emergency' : ''}`}
       data-idle={idle ? 'true' : 'false'}
     >
-      <div class="ident" aria-hidden={poster ? 'true' : undefined}>
-        <div class={`ident__head${logo ? ' has-logo' : ''}`}>
-          <SurauLogo src={logo} class="ident__logo" />
-          {showName ? <div class="ident__name">{name}</div> : null}
+      {shell ? (
+        <ContentShell view={view} lang={lang} />
+      ) : (
+        <div class="ident">
+          <div class={`ident__head region-brand${logo ? ' has-logo' : ''}`}>
+            <SurauLogo src={logo} class="ident__logo" />
+            {showName ? <div class="ident__name free-text">{name}</div> : null}
+          </div>
+          <Clock now={now} timeFormat={timeFormat} showSeconds={showSeconds} lang={lang} tz={tz} />
+          <div class="ident__dates">
+            <span class="ident__greg free-text">{fmtGregorian(now, lang, tz)}</span>
+            {hijri ? (
+              <>
+                <span class="sep" aria-hidden="true" />
+                <span class="ident__hijri free-text">{fmtHijri(hijri, lang)}</span>
+              </>
+            ) : null}
+            {hijri ? <span class="date-ar arab free-text">{fmtHijriAr(now, hijri, tz)}</span> : null}
+          </div>
         </div>
-        <Clock now={now} timeFormat={timeFormat} showSeconds={showSeconds} lang={lang} tz={tz} />
-        <div class="ident__dates">
-          <span class="ident__greg">{fmtGregorian(now, lang, tz)}</span>
-          {hijri ? (
-            <>
-              <span class="sep" aria-hidden="true" />
-              <span class="ident__hijri">{fmtHijri(hijri, lang)}</span>
-            </>
-          ) : null}
-        </div>
-      </div>
+      )}
 
-      {next ? (
-        <div class="next glass" aria-hidden={poster ? 'true' : undefined}>
-          <span class="next__label">{t('nextIn', lang, { prayer: prayerLabel(next.name, lang) })}</span>
-          <Countdown to={next.at} now={now} />
+      {next && !shell ? (
+        <div class="next region-next glass" data-role="next">
+          <span class="next__label" data-must="">{t('nextIn', lang, { prayer: prayerLabel(next.name, lang) })}</span>
+          <Countdown to={next.at} now={now} must />
         </div>
       ) : null}
 
       {/* Rotating content: mounted only here, so every prayer phase unmounts it (and stops tilawah). */}
       <QuietBoundary>
-        <ContentRegion view={view} lang={lang} onTicker={setHasTicker} onShown={onShown} onZikir={setZikirOn} />
+        <ContentRegion view={view} lang={lang} onTicker={setHasTicker} onShown={onShown} onZikir={onZikir} />
       </QuietBoundary>
 
       <EmergencyBand view={view} lang={lang} />
-      <PrayerBar state={state} settings={settings} lang={lang} now={now} tz={tz} />
+      <PrayerBar state={state} settings={settings} lang={lang} now={now} tz={tz} compact={shell} cellCountdown={!shell} />
       <SourceFooter view={view} lang={lang} />
-
-      {poster ? (
-        <div class="poster-strip glass" data-testid="poster-strip" role="contentinfo">
-          <div class="poster-strip__surau">
-            <SurauLogo src={logo} class="poster-strip__logo" />
-            {showName ? <span class="poster-strip__name">{name}</span> : null}
-          </div>
-          <Clock now={now} timeFormat={timeFormat} showSeconds={showSeconds} lang={lang} variant="compact" tz={tz} />
-          {next ? (
-            <div class="poster-strip__next">
-              <span class="poster-strip__label">{t('nextIn', lang, { prayer: prayerLabel(next.name, lang) })}</span>
-              <Countdown to={next.at} now={now} class="poster-strip__cd" />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }

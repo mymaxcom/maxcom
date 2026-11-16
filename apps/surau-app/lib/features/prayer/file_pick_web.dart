@@ -13,7 +13,7 @@ const bool supported = true;
 /// Tests replace this to hand the pick an input they can fill.
 web.HTMLInputElement Function() inputFactory = web.HTMLInputElement.new;
 
-Future<PickedFile?> pick(List<String> extensions, int maxBytes) {
+Future<PickedFile?> pick(List<String> extensions, int maxBytes, [String? mustEndWith]) {
   final done = Completer<PickedFile?>();
   final input = inputFactory()
     ..type = 'file'
@@ -25,6 +25,10 @@ Future<PickedFile?> pick(List<String> extensions, int maxBytes) {
     final file = input.files?.item(0);
     if (file == null) {
       done.complete(null);
+      return;
+    }
+    if (mustEndWith != null && !file.name.toLowerCase().endsWith(mustEndWith.toLowerCase())) {
+      done.complete(PickedFile.wrongType(file.name));
       return;
     }
     if (file.size > maxBytes) {
