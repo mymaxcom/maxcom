@@ -1,7 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { isScreenId, isThemeName, MAX_PACKS } from '@surau/core';
+import { isStageScreenId, isThemeName, MAX_PACKS } from '@surau/core';
 import type { ProtectedEl } from '@surau/core';
 import { getSettings } from '../settingsStore.ts';
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 
 /**
  * What a display saw when it loaded an uploaded theme: did the clock, the prayer times, the countdowns, the
@@ -34,8 +35,8 @@ export function parseHealthBody(body: unknown): Omit<ThemeHealthReport, 'at'> | 
   if (Object.keys(body).some((k) => !['theme', 'version', 'screen', 'ok', 'failed'].includes(k))) return null;
   if (!isThemeName(theme)) return null;
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1 || version > 999999) return null;
-  // a catalog screen, or one of the three phases without a catalog entry
-  if (typeof screen !== 'string' || screen.length > 20 || !(isScreenId(screen) || ['syuruk', 'isyraq', 'tarawih'].includes(screen))) return null;
+  // a catalog screen, one of the three phases without a catalog entry, or a shell-only content screen (tugasan, waktu-dunia)
+  if (typeof screen !== 'string' || screen.length > 20 || !isStageScreenId(screen)) return null;
   if (typeof ok !== 'boolean') return null;
   if (!Array.isArray(failed) || failed.length > ROLES.length || !failed.every((r) => typeof r === 'string' && (ROLES as readonly string[]).includes(r)) || new Set(failed).size !== failed.length) return null;
   if (ok !== (failed.length === 0)) return null;
@@ -75,7 +76,7 @@ function readAll(db: DatabaseSync): Record<string, Stored> {
 
 /** Keeps the report when its theme is installed at that very version; returns whether it was kept. `device` says which display it came from. */
 export function recordThemeHealth(db: DatabaseSync, report: Omit<ThemeHealthReport, 'at'>, at: Date, device = 'unknown'): boolean {
-  const packs = getSettings(db).themeStyle.packs;
+  const packs = getSettings(db, LOCAL_SURAU_ID).themeStyle.packs;
   const rec = Object.prototype.hasOwnProperty.call(packs, report.theme) ? packs[report.theme] : undefined;
   if (rec === undefined || rec.version !== report.version) return false;
   const all = readAll(db);
@@ -98,7 +99,7 @@ export function recordThemeHealth(db: DatabaseSync, report: Omit<ThemeHealthRepo
  * display reported a problem in the last 24 hours (that one is returned); otherwise the latest report stands.
  */
 export function activeThemeHealth(db: DatabaseSync, now: Date = new Date()): ThemeHealthReport | null {
-  const s = getSettings(db);
+  const s = getSettings(db, LOCAL_SURAU_ID);
   const k = s.kioskTemplate;
   if (k.enabled === false) return null;
   const name = (k as { templateId?: unknown }).templateId;

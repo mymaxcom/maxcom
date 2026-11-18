@@ -17,7 +17,8 @@ import '../../box/box_address.dart';
 import '../../box/box_client.dart';
 import '../../box/locator.dart' show CloudWaking;
 import '../../l10n/generated/s.dart';
-import '../../sync/sync_providers.dart' show revokedProvider;
+import '../../sync/sync_providers.dart'
+    show localStoreProvider, revokedProvider;
 import '../common/contact_links.dart';
 import '../common/help_card.dart';
 import '../common/identity.dart';
@@ -30,7 +31,7 @@ import '../enrol/pin_policy.dart';
 import 'offline_vault.dart';
 import 'pin_pad.dart';
 import 'session.dart';
-import 'session_keeper.dart' show unlockNoticeProvider;
+import 'session_keeper.dart' show unlockNoticeProvider, wipeRevokedCopy;
 import 'unlock_flow.dart';
 
 /// The way into the app without the box or the cloud, for a phone that has
@@ -43,6 +44,7 @@ class OfflineDoor {
     required this.profile,
     required this.checkPin,
     required this.enter,
+    this.close,
     this.grace = const Duration(seconds: 3),
   });
 
@@ -54,6 +56,10 @@ class OfflineDoor {
     Future<SessionDto>? inFlight,
   })
   enter;
+
+  /// A server answered 423 (too many wrong PINs) for this person: the
+  /// offline door stays shut until an online unlock (A4).
+  final Future<void> Function()? close;
 
   /// How long the box and the cloud get before the app opens offline.
   final Duration grace;
@@ -249,6 +255,15 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
             subline: s.unlockLockedUntil(timeOfDayWords(widget.toLocal(until))),
             tone: _Tone.error,
           );
+        });
+      case PinClosed():
+        _gen++;
+        setState(() {
+          _busy = false;
+          _typed = '';
+          _stuck = _Stuck.locked;
+          _lockedUntil = null;
+          _say(s.ra5OfflineClosed, tone: _Tone.error);
         });
       case PinUnknown():
         return false;
@@ -453,6 +468,9 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
             _explain(e, s);
           case UnlockNotVerified():
             _autoError = s.unlockNotVerified;
+          case UnlockTooMany(:final retryAfterSec):
+            final secs = retryAfterSec ?? 60;
+            _autoError = s.ra5UnlockTooMany(secs <= 0 ? 1 : (secs + 59) ~/ 60);
           default:
             _autoError = e.message;
         }
@@ -590,7 +608,18 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
         _shake++;
         _wrong++;
         _say(e.message, tone: _Tone.error);
+      case UnlockTooMany():
+        // A wait, not "unreachable": nothing is sent and the offline door is
+        // not tried while it lasts.
+        final secs = e.retryAfterSec ?? 60;
+        _lockedUntil = widget.now().add(Duration(seconds: secs));
+        _stuck = _Stuck.locked;
+        _say(
+          s.ra5UnlockTooMany(secs <= 0 ? 1 : (secs + 59) ~/ 60),
+          tone: _Tone.error,
+        );
       case UnlockLocked():
+        unawaited(_closeOffline());
         final secs = e.retryAfterSec ?? 15 * 60;
         final until = widget.now().add(Duration(seconds: secs));
         _lockedUntil = until;
@@ -619,6 +648,7 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
         _shake++;
         _say(s.pinTooWeak, tone: _Tone.error);
       case UnlockRevoked():
+        if (e.deviceGone) unawaited(_wipeRevoked());
         _stuck = _Stuck.enrolAgain;
         _say(e.message, subline: s.unlockRevokedHint, tone: _Tone.error);
       case UnlockNoKey():
@@ -641,6 +671,21 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
             _say(s.biometricFailed, tone: _Tone.error);
         }
     }
+  }
+
+  Future<void> _closeOffline() async {
+    try {
+      await widget.offline?.close?.call();
+    } on Object {
+      // the door stays as it was
+    }
+  }
+
+  /// The box said `device_revoked` (K2): this phone's copy and the offline
+  /// vault are wiped now and the offline door stays shut.
+  Future<void> _wipeRevoked() async {
+    ref.read(revokedProvider.notifier).set();
+    await wipeRevokedCopy(() => ref.read(localStoreProvider.future));
   }
 
   void _retry() {

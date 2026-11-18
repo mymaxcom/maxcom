@@ -223,6 +223,7 @@ class FinHarness {
   /// record the visit.
   Widget app(
     Widget screen, {
+    Locale locale = const Locale('ms'),
     Set<String> roles = const {'admin'},
     SurauInfo? info = const SurauInfo(
       name: 'Surau D\'Waqaf',
@@ -254,7 +255,7 @@ class FinHarness {
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
         theme: SurauTheme.light(),
-        locale: const Locale('ms'),
+        locale: locale,
         localizationsDelegates: S.localizationsDelegates,
         supportedLocales: S.supportedLocales,
         routerConfig: router,

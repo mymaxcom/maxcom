@@ -15,6 +15,7 @@ import { canTravel } from '../src/sync/agent.ts';
 import { applyFeedEntry } from '../src/sync/apply.ts';
 import { readFeed, snapshot } from '../src/sync/feed.ts';
 import { issueLinkCode } from '../src/sync/sites.ts';
+import { ensureSurau } from './support/surauRow.ts';
 import { loadSyncKey } from '../src/sync/syncKey.ts';
 import { verifySiteEntry } from '../src/sync/verify.ts';
 import { loginAs } from './authHelpers.ts';
@@ -66,7 +67,7 @@ async function makePair(): Promise<Pair> {
     await cloud.close();
     rmSync(boxDir, { recursive: true, force: true });
   });
-  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau Ujian' });
+  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau Ujian', target: { surauId: ensureSurau(cloud.app.surau.db) } });
   const lines: string[] = [];
   const exit = await runCloudLink(['--data', boxDir, '--db', join(boxDir, 'box.db'), 'link', CLOUD_URL, code], { out: (l) => lines.push(l), err: (l) => lines.push(l) }, worker.fetch);
   expect(exit).toBe(0);
@@ -120,7 +121,7 @@ describe('a device enrolled at the box becomes known to the cloud', () => {
     expect(listed?.revoked).toBe(false);
     expect(Object.keys(listed!.jwk).sort()).toEqual(['crv', 'kty', 'x', 'y']);
 
-    revokeDeviceRow(p.box.surau.db, login.deviceId, 'user:test', new Date().toISOString());
+    revokeDeviceRow(p.box.surau.db, login.deviceId, 'user:test', new Date().toISOString(), undefined);
     await p.box.syncAgent!.runOnce();
     await p.cloud.app.workerOutbox!.drain();
     expect(p.worker.devices.get(login.deviceId)?.revoked).toBe(true);
@@ -167,7 +168,7 @@ describe('applying a device entry', () => {
     });
     return { db, dir };
   }
-  const ctx = (dir: string) => ({ now: NOW, origin: 'box:b1', actor: 'user:x', dataDir: dir, acceptDeviceEnrolment: true });
+  const ctx = (dir: string) => ({ surauId: 'sdm', now: NOW, origin: 'box:b1', actor: 'user:x', dataDir: dir, acceptDeviceEnrolment: true });
   let n = 0;
   const entry = (id: string, after: unknown, over: Partial<FeedEntry> = {}): FeedEntry => ({
     seq: ++n,
@@ -188,7 +189,7 @@ describe('applying a device entry', () => {
 
   it('enrols an unknown device for an active user, with the canonical key', async () => {
     const { db, dir } = fresh();
-    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test');
+    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test', 'sdm');
     const jwk = await newKey();
     const r = applyFeedEntry(db, entry('d1', enrolAfter('d1', u.id, jwk)), ctx(dir));
     expect(r).toEqual({ status: 'applied', reason: null });
@@ -203,7 +204,7 @@ describe('applying a device entry', () => {
 
   it('refuses a different key for an existing id (device_key_mismatch) and keeps the stored one', async () => {
     const { db, dir } = fresh();
-    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test');
+    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test', 'sdm');
     const a = await newKey();
     const b = await newKey();
     applyFeedEntry(db, entry('d1', enrolAfter('d1', u.id, a)), ctx(dir));
@@ -215,7 +216,7 @@ describe('applying a device entry', () => {
 
   it('a kiosk device (no key) refuses a key too', async () => {
     const { db, dir } = fresh();
-    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test');
+    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test', 'sdm');
     db.prepare("INSERT INTO devices (id, user_id, name, platform, public_jwk, enrolled_at) VALUES ('k1', ?, 'Paparan', 'kiosk', NULL, ?)").run(u.id, T0);
     const r = applyFeedEntry(db, entry('k1', enrolAfter('k1', u.id, await newKey())), ctx(dir));
     expect(r).toEqual({ status: 'refused', reason: 'device_key_mismatch' });
@@ -224,7 +225,7 @@ describe('applying a device entry', () => {
 
   it('a revocation beats a late enrolment, in either arrival order', async () => {
     const { db, dir } = fresh();
-    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test');
+    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test', 'sdm');
     const jwk = await newKey();
     // order 1: enrol, revoke, enrol again (late redelivery)
     expect(applyFeedEntry(db, entry('d1', enrolAfter('d1', u.id, jwk)), ctx(dir)).status).toBe('applied');
@@ -245,7 +246,7 @@ describe('applying a device entry', () => {
     const { db, dir } = fresh();
     const jwk = await newKey();
     expect(applyFeedEntry(db, entry('d1', enrolAfter('d1', 'nobody', jwk)), ctx(dir)).status).toBe('refused');
-    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test');
+    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test', 'sdm');
     db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(u.id);
     expect(applyFeedEntry(db, entry('d2', enrolAfter('d2', u.id, jwk)), ctx(dir)).status).toBe('refused');
     expect(deviceCount(db)).toBe(0);
@@ -288,7 +289,7 @@ describe('what may travel', () => {
     const p = await makePair();
     const admin = await loginAs(p.box, 'admin');
     const pair = beginPairing(p.box.surau.db, '10.1.1.1', new Date());
-    approvePairing(p.box.surau.db, { code: pair.code }, admin.userId, 'user:test', new Date());
+    approvePairing(p.box.surau.db, { code: pair.code }, admin.userId, 'user:test', new Date(), 'sdm');
     await p.box.syncAgent!.runOnce();
     expect(p.cloud.app.surau.db.prepare("SELECT COUNT(*) AS n FROM devices WHERE platform = 'kiosk'").get()?.n).toBe(0);
     expect(p.box.syncAgent!.status()).toMatchObject({ lastError: null, refused: 0 });
@@ -315,7 +316,7 @@ describe('keys are for linked sites only', () => {
       expect(res.body, url).not.toContain('publicJwk');
     }
     // a kiosk row has no key to give even to a site
-    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test');
+    const u = createUser(db, { name: 'Ajk', roles: ['ajk'] }, 'test', 'sdm');
     db.prepare("INSERT INTO devices (id, user_id, name, platform, public_jwk, enrolled_at) VALUES ('kk', ?, 'Paparan', 'kiosk', NULL, ?)").run(u.id, T0);
     const s = snapshot(db, { users: true, devices: true, keys: true }, { boxId: p.boxId, now: NOW });
     expect(s.devices?.find((d) => (d as { id: string }).id === 'kk')).not.toHaveProperty('publicJwk');

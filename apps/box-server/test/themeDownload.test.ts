@@ -1,4 +1,5 @@
 import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { LOCAL_SURAU_ID } from '../src/tenant.ts';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,7 +60,7 @@ const uploadedPack = (): Buffer => zip({
 describe('theme download', () => {
   it('a built-in downloads as a starting pack this box accepts', async () => {
     const { app, admin } = await setup();
-    putFeature(app.surau.db, 'surauInfo', { name: 'Surau Contoh' }, 'test');
+    putFeature(app.surau.db, 'surauInfo', { name: 'Surau Contoh' }, 'test', undefined, LOCAL_SURAU_ID);
     const r = await get(app, admin, '/api/themes/creative/pack?bake=0&as=creative-surau-contoh');
     expect(r.statusCode).toBe(200);
     expect(r.headers['content-type']).toBe(PACK_MIME);
@@ -93,7 +94,7 @@ describe('theme download', () => {
     const { app, dir, admin } = await setup();
     const a = putAsset(app.surau.db, dir, png(100, 60, 1), 'image/png', 'u');
     const b = putAsset(app.surau.db, dir, jpeg(100, 60, 1), 'image/jpeg', 'u');
-    putFeature(app.surau.db, 'themeStyle', { styles: { creative: { semua: { accent: '#111111', bgImage: a.id }, skrin: { kuliah: { shade: 40, bgImage: b.id } } } } }, 'u');
+    putFeature(app.surau.db, 'themeStyle', { styles: { creative: { semua: { accent: '#111111', bgImage: a.id }, skrin: { kuliah: { shade: 40, bgImage: b.id } } } } }, 'u', undefined, LOCAL_SURAU_ID);
     const r = await get(app, admin, '/api/themes/creative/pack?as=creative-saya');
     expect(r.statusCode).toBe(200);
     const p = readPack(r.rawPayload);
@@ -122,7 +123,7 @@ describe('theme download', () => {
     const { app, dir, admin } = await setup();
     await installPack(app, admin, uploadedPack());
     const pic = putAsset(app.surau.db, dir, jpeg(100, 60, 2), 'image/jpeg', 'u');
-    putFeature(app.surau.db, 'themeStyle', { styles: { 'hijau-siti': { semua: { shade: 50 }, skrin: { kuliah: { bgImage: pic.id, accent: '#222222' } } } } }, 'u');
+    putFeature(app.surau.db, 'themeStyle', { styles: { 'hijau-siti': { semua: { shade: 50 }, skrin: { kuliah: { bgImage: pic.id, accent: '#222222' } } } } }, 'u', undefined, LOCAL_SURAU_ID);
     const r = await get(app, admin, '/api/themes/hijau-siti/pack?bake=1');
     expect(r.statusCode).toBe(200);
     const p = readPack(r.rawPayload);
@@ -141,14 +142,14 @@ describe('theme download', () => {
     const second = await setup();
     const pic = putAsset(first.app.surau.db, first.dir, jpeg(100, 60, 3), 'image/jpeg', 'u');
     const sem = putAsset(first.app.surau.db, first.dir, png(100, 60, 3), 'image/png', 'u');
-    putFeature(first.app.surau.db, 'themeStyle', { styles: { creative: { semua: { accent: '#111111', bgImage: sem.id, scale: 'L' }, skrin: { kuliah: { shade: 40, bgImage: pic.id, align: 'tengah' } } } } }, 'u');
+    putFeature(first.app.surau.db, 'themeStyle', { styles: { creative: { semua: { accent: '#111111', bgImage: sem.id, scale: 'L' }, skrin: { kuliah: { shade: 40, bgImage: pic.id, align: 'tengah' } } } } }, 'u', undefined, LOCAL_SURAU_ID);
     const baked = await get(first.app, first.admin, '/api/themes/creative/pack?as=creative-surau');
     await installPack(second.app, second.admin, baked.rawPayload);
-    const record = getSettings(second.app.surau.db).themeStyle.packs['creative-surau']!;
-    const mine = resolveScreenStyle(getSettings(first.app.surau.db).themeStyle.styles, 'creative', 'kuliah', { semua: { shade: 35 } });
+    const record = getSettings(second.app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['creative-surau']!;
+    const mine = resolveScreenStyle(getSettings(first.app.surau.db, LOCAL_SURAU_ID).themeStyle.styles, 'creative', 'kuliah', { semua: { shade: 35 } });
     const { bgImage: _a, ...expected } = mine;
     expect(resolveScreenStyle({}, 'creative-surau', 'kuliah', record.defaults)).toEqual(expected);
-    const other = resolveScreenStyle(getSettings(first.app.surau.db).themeStyle.styles, 'creative', 'poster', { semua: { shade: 35 } });
+    const other = resolveScreenStyle(getSettings(first.app.surau.db, LOCAL_SURAU_ID).themeStyle.styles, 'creative', 'poster', { semua: { shade: 35 } });
     const { bgImage: _b, ...expectedOther } = other;
     expect(resolveScreenStyle({}, 'creative-surau', 'poster', record.defaults)).toEqual(expectedOther);
     expect(record.images).toEqual({ kuliah: 'jpg', semua: 'png' });
@@ -161,7 +162,7 @@ describe('theme download', () => {
     await installPack(app, admin, zip({ 'theme.json': json(), 'theme.css': '', 'images/hadis.png': noisePng(1600, 900, 1), 'images/zikir.png': noisePng(1600, 900, 2) }));
     const a = putAsset(app.surau.db, dir, png(100, 100, 4_300_000), 'image/png', 'u');
     const b = putAsset(app.surau.db, dir, png(100, 101, 4_300_000), 'image/png', 'u');
-    putFeature(app.surau.db, 'themeStyle', { styles: { 'hijau-siti': { semua: { bgImage: a.id }, skrin: { kuliah: { bgImage: b.id } } } } }, 'u');
+    putFeature(app.surau.db, 'themeStyle', { styles: { 'hijau-siti': { semua: { bgImage: a.id }, skrin: { kuliah: { bgImage: b.id } } } } }, 'u', undefined, LOCAL_SURAU_ID);
     const r = await get(app, admin, '/api/themes/hijau-siti/pack?bake=1');
     expect(r.statusCode).toBe(400);
     expect(r.json().errors[0]).toBe('Fail tema melebihi had selepas ubah suai disertakan. Muat turun tanpa ubah suai.');

@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import type { DatabaseSync } from 'node:sqlite';
 import type { JsonWebKey } from '../auth/crypto.ts';
 import { getSettings, putFeature } from '../settingsStore.ts';
@@ -39,11 +40,12 @@ export function storeLink(
     linkedAt: (o.now ?? new Date()).toISOString(),
   });
   db.prepare("INSERT INTO sync_state (key, value) VALUES ('linked', '1') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
+  db.prepare("INSERT INTO sync_state (key, value) VALUES ('link_history', '1') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
   db.prepare("INSERT INTO sync_state (key, value) VALUES ('cloud_url', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(o.cloudUrl);
-  db.prepare("DELETE FROM sync_state WHERE key IN ('last_error', 'last_push_seq', 'last_pull_seq')").run();
+  db.prepare("DELETE FROM sync_state WHERE key IN ('last_error', 'last_push_seq', 'last_pull_seq', 'site_role')").run();
   // the automatic link's own state (register.ts: cadence stamps, claim code)
   db.prepare("DELETE FROM sync_state WHERE key LIKE 'autolink\\_%' ESCAPE '\\'").run();
-  if (o.enable === 'always' || getSettings(db).cloudSync.enabled !== true) putFeature(db, 'cloudSync', { enabled: true }, 'local');
+  if (o.enable === 'always' || getSettings(db, LOCAL_SURAU_ID).cloudSync.enabled !== true) putFeature(db, 'cloudSync', { enabled: true }, 'local', undefined, LOCAL_SURAU_ID);
   // an automatic link's claim secret has done its job (a manual link makes it moot too)
   removeClaim(dataDir);
 }

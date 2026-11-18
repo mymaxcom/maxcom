@@ -4,6 +4,14 @@
 // of keys with the changed ones highlighted. A row of chips narrows the
 // list to one kind of thing; `Muat lagi` asks the box for more, up to
 // its cap of 1000.
+//
+// Names are those of the time (the box keeps `actor_name`), with the ID
+// (`U-0001`, `D-0001`) beside the person who acted and beside the user or
+// device a line is about. A user's deletion reads "Pengguna dipadam" and,
+// while that person is still deleted, offers "Pulihkan" (the only way back:
+// deleted people are in no list). A phone number is never shown: a line in
+// which it changed reads "Nombor telefon ditukar" and the diff leaves the
+// key out, whatever the answer holds.
 
 import 'dart:convert';
 
@@ -14,10 +22,16 @@ import '../app/providers.dart';
 import '../app/shell.dart';
 import '../app/theme.dart';
 import '../box/wire.dart';
+import '../features/common/error_text.dart';
 import '../features/common/roles.dart';
+import '../features/people/people_api.dart';
+import '../features/people/ref.dart';
+import '../features/shell/permissions.dart';
+import '../features/sync/live_only_dialog.dart';
 import '../features/common/time_words.dart';
 import '../content/kinds.dart' show contentKindByKey;
-import '../features/labels_ms.dart';
+import '../app/app_lang.dart';
+import '../features/labels.dart' hide roleLabel;
 import '../l10n/generated/s.dart';
 import 'devices_screen.dart' show devicesPath, parseDevices;
 import 'users_screen.dart' show parseUsers, usersPath;
@@ -38,6 +52,19 @@ List<AuditEntry> parseAudit(Map<String, dynamic> body) {
   return out;
 }
 
+/// Keys never shown in a diff: personal data (the phone number).
+const Set<String> auditHiddenKeys = {'phone'};
+
+/// A users line that deleted the person (`after.deleted` set, not before).
+bool isUserDeleteLine(AuditEntry e) =>
+    e.entity == 'users' && _flag(e.after, 'deleted') && !_flag(e.before, 'deleted');
+
+/// A devices line that removed the device ("Padam peranti" is a revoke).
+bool isDeviceDeleteLine(AuditEntry e) =>
+    e.entity == 'devices' && _flag(e.after, 'revoked') && !_flag(e.before, 'revoked');
+
+bool _flag(Object? side, String key) => side is Map && side[key] == true;
+
 String entityLabel(S s, String entity) => switch (entity) {
   'users' => s.auditEntityUsers,
   'devices' => s.auditEntityDevices,
@@ -56,7 +83,7 @@ String entityLabel(S s, String entity) => switch (entity) {
 
 String _contentLabel(S s, String kind) {
   final spec = contentKindByKey(kind);
-  return '${s.auditEntityContent}: ${spec?.labelMs ?? readableKey(kind)}';
+  return '${s.auditEntityContent}: ${spec?.label(appLangOfS(s)) ?? readableKey(kind)}';
 }
 
 /// A key the app has no label for, made readable: `some_key` and
@@ -74,9 +101,11 @@ String readableKey(String key) {
 /// A snapshot key in plain BM: a setting by its form label (the `enabled`
 /// switch included), a person's or device's field by its name; a key the
 /// app does not know stays as the box wrote it.
+AppLang _langOf(S s) => AppLang.fromCode(s.localeName) ?? AppLang.ms;
+
 String auditKeyLabel(S s, String entity, String key) {
   if (entity == 'settings') {
-    return key == 'enabled' ? s.auditKeyEnabled : settingLabelMs(key);
+    return key == 'enabled' ? s.auditKeyEnabled : settingLabel(key, _langOf(s));
   }
   if (entity == 'prayer_days') {
     switch (key) {
@@ -113,7 +142,7 @@ String auditValueLabel(S s, String entity, String key, Object? v) {
         : rolesSentence(s, v.map((e) => e.toString()).toList());
   }
   if (key == 'platform' && v is String) return platformLabel(s, v);
-  if (entity == 'settings' && v is String) return choiceLabelMs(key, v);
+  if (entity == 'settings' && v is String) return choiceLabel(key, v, _langOf(s));
   return _Diff.valueWords(s, v);
 }
 
@@ -135,6 +164,8 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     final text = Theme.of(context).textTheme;
     final deps = ref.watch(appDepsProvider);
     final today = deps.toLocal(deps.now());
+
+    final canRestore = canSee(ref.watch(rolesProvider), 'users:manage');
 
     // Names for the ids the log carries, when those lists are readable.
     final users = ref.watch(boxJsonProvider(usersPath)).value;
@@ -212,6 +243,9 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                           when: _when(e.at, deps.toLocal, today),
                           what: _what(s, e, names),
                           who: _who(s, e),
+                          onRestore: canRestore && e.entityDeleted && isUserDeleteLine(e) && e.entityId != null
+                              ? () => _restore(e, _what(s, e, names, nameOnly: true))
+                              : null,
                         ),
                     ],
                   ),
@@ -237,6 +271,33 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     );
   }
 
+  /// "Pulihkan" on a deletion line: confirm naming the person and the ID,
+  /// `restoreUser` (live-only), then the log and the list are read again.
+  Future<void> _restore(AuditEntry e, String name) async {
+    final s = S.of(context);
+    final id = e.entityId!;
+    final idRef = e.entityRef ?? id;
+    final ok = await confirmDialog(
+      context,
+      title: s.userRestoreTitle(name),
+      body: s.userRestoreBody(name, idRef),
+      confirm: s.userRestore,
+    );
+    if (!ok || !mounted) return;
+    try {
+      await ref.read(peopleApiProvider).restoreUser(id);
+    } catch (err) {
+      if (!mounted) return;
+      toast(context, errorText(s, err));
+      await showLiveOnlyIf(context, err);
+      return;
+    }
+    if (!mounted) return;
+    ref.invalidate(boxJsonProvider(auditPath(_limit)));
+    ref.invalidate(boxJsonProvider(usersPath));
+    toast(context, s.userRestored(name));
+  }
+
   static String _when(
     String at,
     DateTime Function(DateTime) toLocal,
@@ -247,22 +308,30 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     return whenWords(toLocal(t), today: today);
   }
 
-  /// "Tetapan: iqamah", "Pengguna: Aminah binti Yusof".
+  /// "Tetapan: iqamah", "Pengguna: Aminah binti Yusof", "Pengguna dipadam:
+  /// ...". A user or device line takes the name the line itself carries (the
+  /// name of the time) before today's. [nameOnly]: the name alone.
   static String _what(
     S s,
     AuditEntry e,
-    Map<String, Map<String, String>> names,
-  ) {
+    Map<String, Map<String, String>> names, {
+    bool nameOnly = false,
+  }) {
     final id = e.entityId;
-    final label = entityLabel(s, e.entity);
+    if (nameOnly) return _nameInside(e) ?? names[e.entity]?[id] ?? id ?? '';
+    final label = isUserDeleteLine(e)
+        ? s.auditUserDeleted
+        : (isDeviceDeleteLine(e) ? s.auditDeviceDeleted : entityLabel(s, e.entity));
     if (id == null) return label;
     if (e.entity == 'settings') {
-      return '$label: ${id == 'appLock' ? s.auditKeyAppLock : settingLabelMs(id)}';
+      return '$label: ${id == 'appLock' ? s.auditKeyAppLock : settingLabel(id, _langOf(s))}';
     }
     if (e.entity == 'islamic') {
       return '$label: ${id == 'islamic.fetch' ? s.auditActionIslamicFetch : readableKey(id)}';
     }
-    final inside = names[e.entity]?[id] ?? _nameInside(e);
+    final inside = (e.entity == 'users' || e.entity == 'devices')
+        ? (_nameInside(e) ?? names[e.entity]?[id])
+        : (names[e.entity]?[id] ?? _nameInside(e));
     // Content ids are opaque: without a name the kind label says enough.
     if (e.entity.startsWith('content:')) {
       return inside == null ? label : '$label: $inside';
@@ -300,6 +369,7 @@ class _EntryRow extends StatelessWidget {
     required this.when,
     required this.what,
     required this.who,
+    this.onRestore,
   });
 
   final AuditEntry entry;
@@ -309,13 +379,19 @@ class _EntryRow extends StatelessWidget {
   final String what;
   final String who;
 
+  /// "Pulihkan" on a deletion line of a person who is still deleted.
+  final VoidCallback? onRestore;
+
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final text = Theme.of(context).textTheme;
+    final entityRef = entry.entityRef;
+    final actorRef = entry.actorRef;
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+        padding: const EdgeInsetsDirectional.fromSTEB(20, 14, 12, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -326,7 +402,22 @@ class _EntryRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(what, style: text.titleSmall),
+                      Wrap(
+                        spacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(what, style: text.titleSmall),
+                          if (entityRef != null) RefText(entityRef, key: ValueKey('audit-entity-ref-${entry.id}')),
+                        ],
+                      ),
+                      if (entry.phoneChanged) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          s.auditPhoneChanged,
+                          key: ValueKey('audit-phone-${entry.id}'),
+                          style: text.bodyMedium,
+                        ),
+                      ],
                       const SizedBox(height: 3),
                       Wrap(
                         spacing: 10,
@@ -339,6 +430,7 @@ class _EntryRow extends StatelessWidget {
                               color: SurauColors.teal,
                             ),
                           ),
+                          if (actorRef != null) RefText(actorRef, key: ValueKey('audit-actor-ref-${entry.id}')),
                           Text(
                             when,
                             style: text.bodyMedium!.copyWith(
@@ -360,6 +452,18 @@ class _EntryRow extends StatelessWidget {
                 ),
               ],
             ),
+            if (onRestore != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  key: ValueKey('audit-restore-${entry.id}'),
+                  onPressed: onRestore,
+                  icon: const Icon(Icons.restore_rounded),
+                  label: Text(s.userRestore),
+                ),
+              ),
+            ],
             if (open) ...[
               const SizedBox(height: 12),
               _Diff(
@@ -421,6 +525,7 @@ class _Diff extends StatelessWidget {
     final keys = <String>[];
     for (final k in [...?bMap?.keys, ...?aMap?.keys]) {
       final key = k.toString();
+      if (auditHiddenKeys.contains(key)) continue;
       if (!keys.contains(key)) keys.add(key);
     }
     return _table(

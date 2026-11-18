@@ -19,6 +19,7 @@ import '../../l10n/generated/s.dart';
 import '../../screens/widgets/pieces.dart';
 import 'file_pick.dart';
 import 'location_screen.dart';
+import 'prayer_names.dart';
 import 'prayer_repository.dart';
 import 'widgets/country_picker.dart';
 import 'widgets/month_grid.dart';
@@ -383,10 +384,10 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     Text(s.impPickHelp, textAlign: TextAlign.center, style: text.bodySmall),
   ];
 
-  String _monthLabel(String ym) {
+  String _monthLabel(S s, String ym) {
     final y = ym.substring(0, 4);
     final m = int.tryParse(ym.substring(5, 7)) ?? 1;
-    return '${monthsShortMs[m - 1]} $y';
+    return '${monthShort(s, m)} $y';
   }
 
   List<Widget> _review(S s, TextTheme text, String target, String? zone) {
@@ -459,7 +460,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SizedBox(width: 78, child: Text(s.impRow(p.errors[i].row), style: text.titleSmall)),
-                      Expanded(child: Text(p.errors[i].message, style: text.bodyMedium)),
+                      Expanded(child: Text(p.errors[i].text(s), style: text.bodyMedium)),
                     ],
                   ),
                 ),
@@ -470,7 +471,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       ] else ...[
         InfoBox(
           icon: Icons.check_circle_outline_rounded,
-          child: Text(s.impClean(_total, shortDateMs(p.rangeFrom ?? ''), shortDateMs(p.rangeTo ?? ''))),
+          child: Text(s.impClean(_total, shortDate(s, p.rangeFrom ?? ''), shortDate(s, p.rangeTo ?? ''))),
         ),
         if (p.columns.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -485,7 +486,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           children: [
             for (final e in p.perMonth.entries)
               StateChip(
-                label: '${_monthLabel(e.key)}: ${e.value}',
+                label: '${_monthLabel(s, e.key)}: ${e.value}',
                 background: SurauColors.tealSoft,
                 foreground: SurauColors.teal,
               ),
@@ -493,10 +494,10 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
         ),
         const SizedBox(height: 14),
         SectionLabel(s.impFirstWeek),
-        MonthGrid(days: p.firstWeek, showStrip: false, dateLabel: _shortDay),
+        MonthGrid(days: p.firstWeek, showStrip: false, dateLabel: (d) => _shortDay(s, d)),
         const SizedBox(height: 12),
         SectionLabel(s.impLastWeek),
-        MonthGrid(days: p.lastWeek, showStrip: false, dateLabel: _shortDay),
+        MonthGrid(days: p.lastWeek, showStrip: false, dateLabel: (d) => _shortDay(s, d)),
         if (p.fileShadowed) ...[
           const SizedBox(height: 14),
           InfoBox(
@@ -584,8 +585,8 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     ];
   }
 
-  String _shortDay(ResolvedDay d) {
+  String _shortDay(S s, ResolvedDay d) {
     final t = DateTime.parse(d.date);
-    return '${t.day} ${monthsShortMs[t.month - 1]}';
+    return '${t.day} ${monthShort(s, t.month)}';
   }
 }

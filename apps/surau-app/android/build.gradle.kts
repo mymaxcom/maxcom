@@ -3,9 +3,13 @@ allprojects {
         google()
         mavenCentral()
         // RootEncoder (Apache-2.0) is published on JitPack only, not Maven
-        // Central. The filter keeps every other dependency off JitPack.
+        // Central (as is the RTSP client, group com.github.alexeyvasilyev). The filter
+        // keeps every other dependency off JitPack.
         maven("https://jitpack.io") {
-            content { includeGroup("com.github.pedroSG94.RootEncoder") }
+            content {
+                includeGroup("com.github.pedroSG94.RootEncoder")
+                includeGroup("com.github.alexeyvasilyev")
+            }
         }
     }
 }

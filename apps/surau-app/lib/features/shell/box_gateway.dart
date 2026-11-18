@@ -17,14 +17,17 @@ import 'dart:typed_data';
 
 import '../../box/box_client.dart';
 import '../../finance/finance_local.dart';
+import '../../l10n/s_lookup.dart';
 import '../../finance/finance_models.dart';
 import '../../finance/ledger.dart';
+import '../../ops/fleet/surau_header.dart';
+import '../../ops/ops_build.dart';
 import '../../store/local_store.dart';
 import '../../sync/live_only.dart';
 import '../../sync/sync_engine.dart';
 import 'read_cache.dart';
 
-export '../../sync/live_only.dart' show LiveOnly;
+export '../../sync/live_only.dart' show LiveOnly, Uncertain;
 
 /// A write attempted while the box cannot be reached (Plan 4 behaviour, kept
 /// for a gateway with no sync engine). The message equals
@@ -33,8 +36,8 @@ export '../../sync/live_only.dart' show LiveOnly;
 class OfflineWriteRefused implements Exception {
   const OfflineWriteRefused();
 
-  static const String message =
-      'MAXCOM tidak dapat dihubungi. Cuba lagi di surau.';
+  /// BM text; screens show `S.offlineWriteRefused`.
+  static String get message => sBm.offlineWriteRefused;
 
   @override
   String toString() => 'OfflineWriteRefused($message)';
@@ -68,7 +71,7 @@ abstract class ReachSink {
 
 class BoxGateway {
   BoxGateway({
-    required this.client,
+    required BoxClient client,
     required this.token,
     required this.cache,
     required this.reach,
@@ -76,11 +79,26 @@ class BoxGateway {
     required this.onSessionExpired,
     this.store,
     this.engine,
-  });
+    this.actingSurau,
+  }) : client = _forSurau(client, actingSurau),
+       _cacheEpoch = cache.epoch;
+
+  /// Ops build only: a Pentadbir MAXCOM working in this surau (its requests carry the acting-surau header). The
+  /// public build ignores the value and never builds the header.
+  static BoxClient _forSurau(BoxClient client, String? surauId) =>
+      kOpsBuild && surauId != null ? withActingSurau(client, surauId) : client;
+
+  /// The surau id this gateway acts for, ops build only; null otherwise.
+  final String? actingSurau;
 
   final BoxClient client;
   final String token;
   final ReadCache cache;
+
+  /// The cache epoch this gateway started under; once the cache is cleared (another surau chosen, sign-out) its late
+  /// answers are neither stored nor read back.
+  final int _cacheEpoch;
+  bool get _cacheCurrent => cache.epoch == _cacheEpoch;
   final ReachSink reach;
   final DateTime Function() now;
 
@@ -92,7 +110,8 @@ class BoxGateway {
   final LocalStore? store;
   final SyncEngine? engine;
 
-  bool get _offlineFirst => store != null && engine != null;
+  /// The local copy is one surau's; a Pentadbir MAXCOM acting for another surau always asks the cloud.
+  bool get _offlineFirst => store != null && engine != null && !(kOpsBuild && actingSurau != null);
 
   /// A local copy older than this, or a failed last sync, is shown as stale.
   static const Duration staleAfter = Duration(minutes: 15);
@@ -109,7 +128,7 @@ class BoxGateway {
     try {
       final body = await client.getJson(path, token: token);
       final at = now();
-      cache.put(path, body, at);
+      if (_cacheCurrent) cache.put(path, body, at);
       reach.markUp(at);
       return Read(body, at: at, stale: false);
     } on SessionExpired {
@@ -117,7 +136,7 @@ class BoxGateway {
       rethrow;
     } on BoxUnreachable {
       reach.markDown(now());
-      final cached = cache.get(path);
+      final cached = _cacheCurrent ? cache.get(path) : null;
       if (cached == null) rethrow;
       return Read(cached.body, at: cached.at, stale: true);
     }
@@ -200,12 +219,20 @@ class BoxGateway {
     return _write(() => client.uploadAsset(bytes, mime, token: token));
   }
 
+  /// True when the last [put] was signed and queued on this device (the box
+  /// has not heard it yet) instead of sent: the screen says so (K5).
+  bool lastPutQueued = false;
+
   Future<Map<String, dynamic>> put(String path, Object body) async {
+    lastPutQueued = false;
     if (_offlineFirst) {
       final queued = await _queuePut(path, body);
-      if (queued != null) return queued;
+      if (queued != null) {
+        lastPutQueued = true;
+        return queued;
+      }
     }
-    return _send(path, (c, t) => c.putJson(path, body, token: t));
+    return _send('PUT', path, (c, t) => c.putJson(path, body, token: t));
   }
 
   Future<Map<String, dynamic>> post(String path, Object body) async {
@@ -213,7 +240,7 @@ class BoxGateway {
       final queued = await _queuePost(path);
       if (queued != null) return queued;
     }
-    return _send(path, (c, t) => c.postJson(path, body, token: t));
+    return _send('POST', path, (c, t) => c.postJson(path, body, token: t));
   }
 
   /// `POST path` with raw bytes and their own content type (for example a
@@ -236,7 +263,7 @@ class BoxGateway {
         return {'id': r.id, 'bytes': r.bytes};
       }
     }
-    return _send(path, (c, t) => c.postRaw(path, bytes, contentType, token: t));
+    return _send('POST', path, (c, t) => c.postRaw(path, bytes, contentType, token: t));
   }
 
   Future<void> delete(String path) async {
@@ -251,19 +278,20 @@ class BoxGateway {
         return;
       }
     }
-    return _send(path, (c, t) => c.delete(path, token: t));
+    return _send('DELETE', path, (c, t) => c.delete(path, token: t));
   }
 
   /// A write that goes to the network, sent with a client and its token.
   Future<T> _send<T>(
+    String method,
     String path,
     Future<T> Function(BoxClient client, String token) send,
   ) async {
     final cloud = await _cloudFor(path);
     if (cloud != null) return _viaCloud(path, cloud, send);
     return _offlineFirst
-        ? _writeLive(path, send)
-        : _write(() => send(client, token));
+        ? _writeLive(method, path, send)
+        : _write(() => send(client, token), path: path);
   }
 
   /// The YouTube sign-in and catch-up routes (`/api/live/youtube/*`,
@@ -308,6 +336,7 @@ class BoxGateway {
   /// With no base it throws [LiveOnly] (nothing is queued and nothing is
   /// lost silently).
   Future<T> _writeLive<T>(
+    String method,
     String path,
     Future<T> Function(BoxClient client, String token) send,
   ) async {
@@ -318,9 +347,15 @@ class BoxGateway {
     } on SessionExpired {
       onSessionExpired();
       rethrow;
-    } on BoxUnreachable {
+    } on BoxUnreachable catch (e) {
       reach.markDown(now());
+      // Sent, then no answer in time: the box may have done it. Sending it
+      // again through the cloud could do it twice (a second user, a second
+      // pairing), so the person is told to check instead.
+      if (e.sent) throw Uncertain(path);
     }
+    // The surau's own settings never go to the cloud.
+    if (isBoxLocalOnly(method, path)) throw LiveOnly(path);
     // Only the cloud is worth a second try: the box just failed to answer.
     final SyncLink link;
     try {
@@ -338,7 +373,7 @@ class BoxGateway {
 
   /// Plan 4: refused before any request while the box is known to be away; a
   /// request that then fails to reach the box is reported the same way.
-  Future<T> _write<T>(Future<T> Function() send) async {
+  Future<T> _write<T>(Future<T> Function() send, {String path = ''}) async {
     if (reach.reach.down) throw const OfflineWriteRefused();
     try {
       final out = await send();
@@ -347,8 +382,11 @@ class BoxGateway {
     } on SessionExpired {
       onSessionExpired();
       rethrow;
-    } on BoxUnreachable {
+    } on BoxUnreachable catch (e) {
       reach.markDown(now());
+      // Sent, then no answer in time: the box may have done it. Say so, not
+      // "try again", which could do it twice.
+      if (e.sent) throw Uncertain(path);
       throw const OfflineWriteRefused();
     }
   }
@@ -363,6 +401,10 @@ class BoxGateway {
   static final RegExp _userRoles = RegExp(r'^/api/users/([^/]+)/roles$');
   static final RegExp _userDeactivate = RegExp(
     r'^/api/users/([^/]+)/deactivate$',
+  );
+  static final RegExp _userName = RegExp(r'^/api/users/([^/]+)/name$');
+  static final RegExp _userActivate = RegExp(
+    r'^/api/users/([^/]+)/activate$',
   );
   static final RegExp _assetPath = RegExp(r'^/assets/([0-9a-f]{64})$');
   static final RegExp _safeId = RegExp(r'^[A-Za-z0-9_-]{1,100}$');
@@ -465,7 +507,12 @@ class BoxGateway {
       // An AJK device holds neither: the box answers (or refuses) itself.
       if (docs.isEmpty) return null;
       return _read({
-        users ? 'users' : 'devices': [for (final d in docs) _serve(d)],
+        users ? 'users' : 'devices': [
+          for (final d in docs)
+            // A deleted person is in no list a surau reaches (soft delete:
+            // the feed copy keeps the row, flagged).
+            if (!(users && d['deleted'] == true)) _serve(d),
+        ],
       });
     }
     if (bare == '/api/surau/info') {
@@ -696,6 +743,19 @@ class BoxGateway {
       final d = await store!.getDoc(Collections.financeMonths, fm.group(1)!);
       return {'month': d == null ? body : _serve(d)};
     }
+    final un = _userName.firstMatch(path);
+    if (un != null) {
+      // A rename rides the existing `user` entry (`name` is already read by
+      // the box's feed apply); old records keep the name of their time.
+      await eng.enqueue(
+        kind: 'user.put',
+        entity: 'user',
+        entityId: un.group(1)!,
+        payload: {'name': body['name']},
+      );
+      final d = await store!.getDoc(Collections.users, un.group(1)!);
+      return d == null ? <String, dynamic>{} : _serve(d);
+    }
     final ur = _userRoles.firstMatch(path);
     if (ur != null) {
       await eng.enqueue(
@@ -712,12 +772,14 @@ class BoxGateway {
 
   Future<Map<String, dynamic>?> _queuePost(String path) async {
     final dm = _userDeactivate.firstMatch(path);
-    if (dm == null) return null;
+    final am = dm == null ? _userActivate.firstMatch(path) : null;
+    final m = dm ?? am;
+    if (m == null) return null;
     await engine!.enqueue(
       kind: 'user.put',
       entity: 'user',
-      entityId: dm.group(1)!,
-      payload: {'active': false},
+      entityId: m.group(1)!,
+      payload: {'active': dm == null},
     );
     return {'ok': true};
   }

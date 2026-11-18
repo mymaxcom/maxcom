@@ -137,7 +137,7 @@ class _AudioAssetPickerState extends ConsumerState<AudioAssetPicker> {
             const SizedBox(height: 12),
             if (picker != null)
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: OutlinedButton.icon(
                   key: const ValueKey('audio-upload'),
                   onPressed: _busy ? null : () => _upload(picker),

@@ -31,6 +31,14 @@ class UnlockLocked extends UnlockFailure {
   final int? retryAfterSec;
 }
 
+/// 429: the box (or its edge) says too many attempts. Not "unreachable": the
+/// screen shows the wait, sends nothing for it and does not open offline.
+class UnlockTooMany extends UnlockFailure {
+  const UnlockTooMany(super.message, {this.retryAfterSec});
+
+  final int? retryAfterSec;
+}
+
 /// 409 `pinRequired`: an admin reset the PIN; call `run(newPin: ...)`.
 /// The box says this only after the device signature verified.
 class UnlockPinRequired extends UnlockFailure {
@@ -57,7 +65,13 @@ class UnlockPinTooWeak extends UnlockFailure {
 /// 401 `device_revoked` or `user_inactive`: the box will not accept this
 /// device any more, so it has to be enrolled again. Nothing else is.
 class UnlockRevoked extends UnlockFailure {
-  const UnlockRevoked(super.message);
+  const UnlockRevoked(super.message, {this.code});
+
+  /// `device_revoked` (the box cancelled this phone: its copy is wiped) or
+  /// `user_inactive` (the person's account was closed).
+  final String? code;
+
+  bool get deviceGone => code == 'device_revoked';
 }
 
 /// 401 `bad_signature`: the box could not check the device's signature.
@@ -86,7 +100,7 @@ enum BiometricFailure {
 /// The biometric prompt gave no PIN; the pad is the fallback.
 class UnlockBiometricFailed extends UnlockFailure {
   const UnlockBiometricFailed([this.reason = BiometricFailure.notRecognised])
-    : super('Cap jari tidak dikenali');
+    : super('Cap jari tidak dikenali'); // lang-ok: diagnostic; the unlock screen shows S by reason
 
   final BiometricFailure reason;
 }
@@ -237,9 +251,9 @@ class UnlockFlow {
     switch (e.message) {
       case 'PIN salah':
         return _wrongPin;
-      case 'Cabaran (nonce) tidak sah, telah digunakan atau tamat':
+      case 'Cabaran (nonce) tidak sah, telah digunakan atau tamat': // lang-ok: box wire text, matched exactly
         return _badNonce;
-      case 'Tandatangan peranti tidak sah':
+      case 'Tandatangan peranti tidak sah': // lang-ok: box wire text, matched exactly
         return _badSignature;
       case 'Peranti telah dibatalkan':
         return _deviceRevoked;
@@ -252,13 +266,15 @@ class UnlockFlow {
     switch (e.status) {
       case 423:
         return UnlockLocked(e.message, retryAfterSec: e.retryAfterSec);
+      case 429:
+        return UnlockTooMany(e.message, retryAfterSec: e.retryAfterSec);
       case 409:
         // The box answers 409 on unlock only for `pin_required`, and only
         // after the device signature verified.
         return UnlockPinRequired(e.message);
       case 400 when settingNew:
         if (code == 'pin_exists' ||
-            e.message.startsWith('PIN sudah ditetapkan')) {
+            e.message.startsWith('PIN sudah ditetapkan')) { // lang-ok: box wire text, matched exactly
           return UnlockPinExists(e.message);
         }
         return UnlockPinTooWeak();
@@ -270,7 +286,7 @@ class UnlockFlow {
             return UnlockPinMissing(e.message);
           case _deviceRevoked:
           case _userInactive:
-            return UnlockRevoked(e.message);
+            return UnlockRevoked(e.message, code: code);
           case _badSignature:
             return UnlockNotVerified(e.message);
           case _badNonce:

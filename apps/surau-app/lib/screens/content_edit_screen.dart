@@ -25,6 +25,7 @@ import '../content/editors/tugasan_editor.dart';
 import '../content/editors/world_time_editor.dart';
 import '../content/editors/zikir_editor.dart';
 import '../content/kinds.dart';
+import '../features/labels.dart' show appLangOf;
 import '../features/shell/permissions.dart';
 import '../l10n/generated/s.dart';
 import 'widgets/box_read.dart';
@@ -57,7 +58,7 @@ class ContentEditScreen extends ConsumerWidget {
     final readOnly = !canSee(ref.watch(rolesProvider), 'content:write');
     final id = itemId;
     return ShellPage(
-      title: id == null ? s.contentNew(spec.labelMs) : s.contentEdit(spec.labelMs.toLowerCase()),
+      title: id == null ? s.contentNew(spec.label(appLangOf(context))) : s.contentEdit(spec.label(appLangOf(context)).toLowerCase()),
       body: SurauTheme.page(
         children: [
           BoxReadView(

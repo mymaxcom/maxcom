@@ -2,11 +2,12 @@
 // place search are live-only, under one label.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:surau_app/l10n/s_lookup.dart';
 import 'package:surau_app/sync/live_only.dart';
 
 String? labelOf(String m, String p) {
   for (final e in liveOnlyList) {
-    if (e.matches(m, p)) return e.label;
+    if (e.matches(m, p)) return e.label(sBm);
   }
   return null;
 }

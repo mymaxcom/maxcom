@@ -136,7 +136,7 @@ Future<({Located at, SessionDto session})> unlockAtLocated({
     // The default cloud (the box never named one) answers "revoked" for a
     // device it has never seen: that is no verdict on this phone.
     if (at.via == 'cloud' && usesDefaultCloud(box)) {
-      throw const BoxUnreachable('awan tidak mengenali peranti ini');
+      throw const BoxUnreachable('awan tidak mengenali peranti ini'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }
     rethrow;
   }

@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# MAXCOM Ops signing (Plan 14 Task 24)
+key-ops.properties

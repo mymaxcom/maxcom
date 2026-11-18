@@ -20,7 +20,7 @@ function pub<T extends { updatedAt?: string; updatedBy?: string }>(item: T): T {
   return rest as unknown as T;
 }
 
-const list = <K extends ContentKind>(db: DatabaseSync, kind: K) => listItems(db, kind).map(pub);
+const listIn = <K extends ContentKind>(db: DatabaseSync, kind: K, surauId: string) => listItems(db, kind, undefined, surauId).map(pub);
 
 function addDays(date: string, n: number): string {
   return klDateOf(new Date(klInstant(date, '12:00').getTime() + n * DAY_MS));
@@ -69,25 +69,26 @@ function ayatSettingsOf(settings: Settings): AyatSettings {
   return { pick, surah: num(a.surah, 2), ayatFrom: num(a.ayatFrom, 255), ayatTo: num(a.ayatTo, 255) };
 }
 
-export function buildKioskContent(db: DatabaseSync, dataDir: string, now: Date, settings: Settings): KioskContent {
+export function buildKioskContent(db: DatabaseSync, dataDir: string, now: Date, settings: Settings, surauId: string): KioskContent {
+  const list = <K extends ContentKind>(d: DatabaseSync, kind: K) => listIn(d, kind, surauId);
   const tz = tzOf(settings);
   const today = dateOf(now, tz);
   /** The kiosk loads plain `/assets/<id>`: an adjusted picture is swapped for its derived asset id. */
   const img = (slot: ImageSlotKey, ref: ImageRef | undefined): string | undefined =>
-    ref === undefined ? undefined : resolveImageId(db, dataDir, slot, ref);
+    ref === undefined ? undefined : resolveImageId(db, dataDir, slot, ref, surauId);
   const withImg = <K extends string>(key: K, id: string | undefined): { [P in K]?: string } =>
     (id === undefined ? {} : { [key]: id }) as { [P in K]?: string };
 
   const kuliahLast = addDays(today, Math.max(0, num(feat(settings, 'kuliahCard')?.daysAhead, 7)));
   const kuliah: KuliahView[] = [];
-  for (const k of listItems(db, 'kuliah')) {
+  for (const k of listItems(db, 'kuliah', undefined, surauId)) {
     if (k.date < today || k.date > kuliahLast) continue;
-    const p = getItem(db, 'penceramah', k.penceramahId);
-    if (!p) continue;
-    const kit = k.kitabId === undefined ? null : getItem(db, 'kitab', k.kitabId);
+    // A speaker deleted on the other side of a sync leaves the kuliah on the TV, without a name (never silently gone).
+    const p = getItem(db, 'penceramah', k.penceramahId, surauId);
+    const kit = k.kitabId === undefined ? null : getItem(db, 'kitab', k.kitabId, surauId);
     const view: KuliahView = {
       ...pub(k),
-      penceramah: { name: p.name, ...(p.title !== undefined ? { title: p.title } : {}), ...withImg('photoAssetId', img('penceramah', p.photoAssetId)) },
+      penceramah: p === null ? null : { name: p.name, ...(p.title !== undefined ? { title: p.title } : {}), ...withImg('photoAssetId', img('penceramah', p.photoAssetId)) },
       ...(kit ? { kitab: { title: kit.title, ...withImg('coverAssetId', img('kitab', kit.coverAssetId)) } } : {}),
     };
     kuliah.push(view);
@@ -112,9 +113,9 @@ export function buildKioskContent(db: DatabaseSync, dataDir: string, now: Date, 
 
   const tugasanLast = addDays(today, Math.max(0, num(feat(settings, 'tugasan')?.daysAhead, 14)));
   const tugasan: TugasanView[] = [];
-  for (const t of listItems(db, 'tugasan')) {
+  for (const t of listItems(db, 'tugasan', undefined, surauId)) {
     if (t.date < today || t.date > tugasanLast) continue;
-    const p = getItem(db, 'petugas', t.petugasId);
+    const p = getItem(db, 'petugas', t.petugasId, surauId);
     if (!p) continue;
     tugasan.push({
       ...pub(t),
@@ -124,7 +125,7 @@ export function buildKioskContent(db: DatabaseSync, dataDir: string, now: Date, 
   tugasan.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 
   // Hadis: today's pool by source, grade, order and the day's window (the rotation shows one per cycle).
-  const hadisPicked = hadisPool(listItems(db, 'hadis'), (feat(settings, 'hadis') ?? {}) as Partial<HadisSettings>, today);
+  const hadisPicked = hadisPool(listItems(db, 'hadis', undefined, surauId), (feat(settings, 'hadis') ?? {}) as Partial<HadisSettings>, today);
   const hadisToday = hadisPicked.map(kioskHadis);
 
   const worldTimes = list(db, 'worldTime').sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
@@ -167,6 +168,6 @@ export function buildKioskContent(db: DatabaseSync, dataDir: string, now: Date, 
       font: 'Tulisan Al-Quran: KFGQPC Uthmanic Hafs',
       audio: `Bacaan: ${reciterName ?? reciter} (EveryAyah.com)`,
     },
-    tabung: buildTabung(db, now, settings),
+    tabung: buildTabung(db, now, settings, surauId),
   };
 }

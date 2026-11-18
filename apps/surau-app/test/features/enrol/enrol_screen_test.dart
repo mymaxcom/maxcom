@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 
+import 'package:surau_app/l10n/generated/s_ms.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/app/theme.dart';
@@ -287,7 +288,7 @@ void main() {
     expect(obscured(), isTrue);
   });
 
-  testWidgets('a bad code shows the box wording and stays on the paste field', (
+  testWidgets('[CL-8] a bad pasted code shows ra5CodeInvalid in the app language and stays on the paste field', (
     tester,
   ) async {
     await pumpAtSize(
@@ -296,7 +297,7 @@ void main() {
       GoldenSize.phone,
     );
     await pasteAndContinue(tester, 'surau1:abc');
-    expect(find.text('Kod QR pendaftaran tidak sah'), findsOneWidget);
+    expect(find.text(SMs().ra5CodeInvalid), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(find.text('Perlukan bantuan?'), findsNothing);
   });

@@ -97,7 +97,7 @@ describe('Cuba sambungan: POST /api/settings/test-source', () => {
     const r = await call(app, sup.headers, { kind: 'reciter', folder: 'Alafasy_64kbps' });
     expect(r.json()).toMatchObject({ ok: true, status: 200 });
     expect(rec.seen).toEqual([{ url: 'https://everyayah.com/data/Alafasy_64kbps/001001.mp3', method: 'HEAD' }]);
-    putFeature(app.surau.db, 'dataSources', { quranAudio: { url: 'https://audio.example.my/files/' } }, 'test');
+    putFeature(app.surau.db, 'dataSources', { quranAudio: { url: 'https://audio.example.my/files/' } }, 'test', undefined, 'sdm');
     await call(app, sup.headers, { kind: 'reciter', folder: 'Husary_64kbps' });
     expect(rec.seen[1]).toEqual({ url: 'https://audio.example.my/files/Husary_64kbps/001001.mp3', method: 'HEAD' });
     for (const folder of ['../etc', 'a/b', 'ab', 'x'.repeat(65), '', 7, null]) {

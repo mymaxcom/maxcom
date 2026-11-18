@@ -94,7 +94,7 @@ describe('recovery by the recovery code', () => {
     expect(verifyRecoveryCode(app.surau.db, j.recoveryCode)).toBe(true);
     expect(j.recoveryCode).not.toBe(code);
     expect(((await app.inject({ method: 'GET', url: '/api/box/info' })).json() as BoxInfo).state).toBe('active');
-    putFeature(app.surau.db, 'appLock', { enabled: true }, 'test');
+    putFeature(app.surau.db, 'appLock', { enabled: true }, 'test', undefined, 'sdm');
     expect((await unlockWith(app, j.deviceId, dev, TEST_PIN)).status).toBe(200);
     const log = app.surau.db.prepare("SELECT ok, detail FROM auth_log WHERE event = 'recovery' ORDER BY id").all();
     expect(log).toEqual([{ ok: 1, detail: 'ok' }]);

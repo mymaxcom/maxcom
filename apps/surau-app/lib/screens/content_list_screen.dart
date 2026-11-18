@@ -18,6 +18,7 @@ import '../content/asset_picker.dart';
 import '../content/editors/content_form.dart';
 import '../content/image_ref.dart' show ImageSlot;
 import '../content/kinds.dart';
+import '../features/labels.dart' show appLangOf, appLangOfS;
 import '../features/shell/permissions.dart';
 import '../l10n/generated/s.dart';
 import 'widgets/box_read.dart';
@@ -44,8 +45,8 @@ class ContentKindsScreen extends StatelessWidget {
               for (final k in contentKinds)
                 ListTile(
                   leading: Icon(k.icon),
-                  title: Text(k.labelMsPlural),
-                  subtitle: Text(k.descriptionMs),
+                  title: Text(k.labelPlural(appLangOf(context))),
+                  subtitle: Text(k.description(s)),
                   trailing: const Icon(Icons.chevron_right_rounded, color: SurauColors.outline),
                   onTap: () => context.go(AppRoutes.contentFor(k.key)),
                 ),
@@ -74,7 +75,7 @@ class _ContentListScreenState extends ConsumerState<ContentListScreen> {
     final s = S.of(context);
     final ok = await confirmDialog(
       context,
-      title: s.contentDeleteTitle(spec.labelMs.toLowerCase()),
+      title: s.contentDeleteTitle(spec.label(appLangOf(context)).toLowerCase()),
       body: s.contentDeleteBody,
       confirm: s.actionDelete,
       destructive: true,
@@ -86,7 +87,7 @@ class _ContentListScreenState extends ConsumerState<ContentListScreen> {
       await gateway.delete('${contentPath(spec.key)}/${item['id']}');
       if (!mounted) return;
       ref.invalidate(boxJsonProvider(contentPath(spec.key)));
-      toast(context, s.contentDeleted(spec.labelMs));
+      toast(context, s.contentDeleted(spec.label(appLangOf(context))));
     } catch (e) {
       if (!mounted) return;
       toast(context, contentWriteErrorText(s, e));
@@ -129,20 +130,20 @@ class _ContentListScreenState extends ConsumerState<ContentListScreen> {
     }
 
     return ShellPage(
-      title: spec.labelMsPlural,
+      title: spec.labelPlural(appLangOf(context)),
       body: SurauTheme.page(
         children: [
-          if (spec.descriptionMs.isNotEmpty)
+          if (spec.description(s).isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
-              child: Text(spec.descriptionMs, style: text.bodyMedium!.copyWith(color: SurauColors.muted)),
+              child: Text(spec.description(s), style: text.bodyMedium!.copyWith(color: SurauColors.muted)),
             ),
           if (canWrite) ...[
             FilledButton.icon(
               key: const ValueKey('content-add'),
               onPressed: () => context.go(AppRoutes.contentNewFor(spec.key)),
               icon: const Icon(Icons.add_rounded),
-              label: Text(s.contentAdd(spec.labelMs.toLowerCase())),
+              label: Text(s.contentAdd(spec.label(appLangOf(context)).toLowerCase())),
             ),
             const SizedBox(height: 16),
           ],
@@ -166,7 +167,7 @@ class _ContentListScreenState extends ConsumerState<ContentListScreen> {
             path: contentPath(spec.key),
             builder: (context, body) {
               final items = sortItems(spec.key, parseItems(body));
-              if (items.isEmpty) return _Empty(s.contentEmpty(spec.labelMsPlural.toLowerCase()));
+              if (items.isEmpty) return _Empty(s.contentEmpty(spec.labelPlural(appLangOf(context)).toLowerCase()));
               final shown = _query.isEmpty
                   ? items
                   : [
@@ -265,14 +266,15 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
   Map<String, String> refNames,
 ) {
   String str(String k) => '${it[k] ?? ''}';
+  final lang = appLangOfS(s);
   String opt(String k) => it[k] is String && (it[k] as String).isNotEmpty ? it[k] as String : '';
   String range(String from, String to) {
     final f = opt(from);
     final t = opt(to);
     if (f.isEmpty && t.isEmpty) return '';
-    if (f.isEmpty) return '${s.contentUntil} ${dateWordsMs(t, weekday: false)}';
-    if (t.isEmpty) return dateWordsMs(f, weekday: false);
-    return s.contentShownFromTo(dateWordsMs(f, weekday: false), dateWordsMs(t, weekday: false));
+    if (f.isEmpty) return '${s.contentUntil} ${dateWords(t, lang, weekday: false)}';
+    if (t.isEmpty) return dateWords(f, lang, weekday: false);
+    return s.contentShownFromTo(dateWords(f, lang, weekday: false), dateWords(t, lang, weekday: false));
   }
 
   StateChip chip(String label, {bool danger = false, bool gold = false}) => StateChip(
@@ -295,11 +297,11 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
     case 'kitab':
       return (title: str('title'), subtitle: opt('author'), badges: const [], image: it['coverAssetId'], slot: ImageSlot.kitab);
     case 'kuliah':
-      final who = refNames[it['penceramahId']] ?? s.contentRefUnknown('Penceramah');
-      final slot = spec.field('slot').choiceLabelMs(str('slot'));
+      final who = refNames[it['penceramahId']] ?? s.contentRefDeleted(contentKindByKey('penceramah')!.label(lang));
+      final slot = spec.choiceLabel(spec.field('slot'), str('slot'), lang);
       return (
         title: str('label'),
-        subtitle: '${dateWordsMs(str('date'))}, ${timeWordsMs(str('time'))} ($slot)\n$who',
+        subtitle: '${dateWords(str('date'), lang)}, ${timeWords(str('time'), lang)} ($slot)\n$who',
         badges: [if (cancelled) chip(s.contentCancelledBadge, danger: true)],
         image: null, slot: ImageSlot.poster,
       );
@@ -308,7 +310,7 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
       return (
         title: str('title'),
         subtitle: range('from', 'to'),
-        badges: [if (p != '1') chip(spec.field('priority').choiceLabelMs(p), gold: true)],
+        badges: [if (p != '1') chip(spec.choiceLabel(spec.field('priority'), p, lang), gold: true)],
         image: it['pictureAssetId'], slot: ImageSlot.pengumuman,
       );
     case 'ticker':
@@ -316,11 +318,11 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
     case 'poster':
       // The title names the poster (the box gives every poster one since
       // migration 005); a row never reads "Susunan n".
-      final days = daysWordsMs((it['days'] as List?) ?? const []);
+      final days = daysWords((it['days'] as List?) ?? const [], lang);
       final r = range('from', 'to');
       final title = opt('title');
       return (
-        title: title.isEmpty ? spec.labelMs : title,
+        title: title.isEmpty ? spec.label(lang) : title,
         subtitle: r.isEmpty ? days : '$days\n$r',
         badges: const [],
         image: it['assetId'],
@@ -329,7 +331,7 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
     case 'programKhas':
       return (
         title: str('title'),
-        subtitle: dateTimeWordsMs(str('at')),
+        subtitle: dateTimeWords(str('at'), lang),
         badges: [if (cancelled) chip(s.contentCancelledBadge, danger: true)],
         image: it['assetId'],
         slot: ImageSlot.programKhas,
@@ -338,7 +340,7 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
       final h = opt('hijriLabel');
       return (
         title: str('title'),
-        subtitle: h.isEmpty ? dateWordsMs(str('date')) : '${dateWordsMs(str('date'))} ($h)',
+        subtitle: h.isEmpty ? dateWords(str('date'), lang) : '${dateWords(str('date'), lang)} ($h)',
         badges: const [],
         image: it['assetId'],
         slot: ImageSlot.takwim,
@@ -350,11 +352,11 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
     case 'petugas':
       return (title: str('name'), subtitle: '', badges: const [], image: it['photoAssetId'], slot: ImageSlot.petugas);
     case 'tugasan':
-      final who = refNames[it['petugasId']] ?? s.contentRefUnknown('Petugas');
+      final who = refNames[it['petugasId']] ?? s.contentRefDeleted(contentKindByKey('petugas')!.label(lang));
       final note = opt('note');
       return (
-        title: '${spec.field('role').choiceLabelMs(str('role'))}: $who',
-        subtitle: note.isEmpty ? dateWordsMs(str('date')) : '${dateWordsMs(str('date'))}\n$note',
+        title: '${spec.choiceLabel(spec.field('role'), str('role'), lang)}: $who',
+        subtitle: note.isEmpty ? dateWords(str('date'), lang) : '${dateWords(str('date'), lang)}\n$note',
         badges: const [],
         image: null, slot: ImageSlot.poster,
       );
@@ -367,11 +369,11 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
         image: null, slot: ImageSlot.poster,
       );
     case 'tilawahSlot':
-      final before = spec.field('before').choiceLabelMs(str('before'));
+      final before = spec.choiceLabel(spec.field('before'), str('before'), lang);
       return (
         title: s.contentSurah(((it['surah'] as num?) ?? 0).toInt()),
         subtitle:
-            '${s.contentMinutesBefore(((it['minutesBefore'] as num?) ?? 0).toInt(), before)}\n${daysWordsMs((it['days'] as List?) ?? const [])}',
+            '${s.contentMinutesBefore(((it['minutesBefore'] as num?) ?? 0).toInt(), before)}\n${daysWords((it['days'] as List?) ?? const [], lang)}',
         badges: [if (it['enabled'] != true) chip(s.contentOff)],
         image: null, slot: ImageSlot.poster,
       );
@@ -405,7 +407,7 @@ class _ItemRow extends StatelessWidget {
       key: ValueKey('item-$id'),
       onTap: () => context.go(AppRoutes.contentItemFor(spec.key, id)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 8, 14),
+        padding: const EdgeInsetsDirectional.fromSTEB(20, 14, 8, 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [

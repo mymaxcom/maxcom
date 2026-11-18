@@ -66,7 +66,7 @@ describe('first setup', () => {
     expect(j.boxName).toBe('MAXCOM Dewan Utama');
     expect(r.body).not.toContain(TEST_PIN);
     const db = app.surau.db;
-    expect(getSettings(db).surauInfo.name).toBe('Surau Al-Hidayah');
+    expect(getSettings(db, 'sdm').surauInfo.name).toBe('Surau Al-Hidayah');
     expect(db.prepare("SELECT value FROM meta WHERE key = 'box_name'").get()?.value).toBe('MAXCOM Dewan Utama');
     expect(db.prepare("SELECT value FROM meta WHERE key = 'surau_id'").get()?.value).toBe(j.surauId);
     expect(db.prepare('SELECT COUNT(*) AS n FROM users').get()?.n).toBe(1);
@@ -78,7 +78,7 @@ describe('first setup', () => {
     // the box is now active, the PIN unlocks, and the surau name is public
     expect(((await app.inject({ method: 'GET', url: '/api/box/info' })).json() as BoxInfo).state).toBe('active');
     // the PIN only matters while the surau's app lock is on (off by default in this code base)
-    putFeature(db, 'appLock', { enabled: true }, 'test');
+    putFeature(db, 'appLock', { enabled: true }, 'test', undefined, 'sdm');
     const un = await unlockWith(app, j.deviceId, f.__dev as never, TEST_PIN);
     expect(un.status).toBe(200);
     expect((await unlockWith(app, j.deviceId, f.__dev as never, '111222')).status).not.toBe(200);
@@ -124,7 +124,7 @@ describe('first setup', () => {
   it('after a CLI-made user exists the setup route is 409 even with a fresh nonce', async () => {
     const { app } = make();
     const nonce = await screenNonce(app);
-    createUser(app.surau.db, { name: 'Dari CLI', roles: ['admin'] }, 'cli');
+    createUser(app.surau.db, { name: 'Dari CLI', roles: ['admin'] }, 'cli', 'sdm');
     const r = await post(app, await form(nonce));
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe('already_set_up');

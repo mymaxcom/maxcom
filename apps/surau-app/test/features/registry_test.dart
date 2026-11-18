@@ -50,8 +50,8 @@ void main() {
     expect(cases['coreSourceHash'], coreSourceHash);
   });
 
-  test('features: core has 54, 10 of them locked', () {
-    expect(features.length, 54);
+  test('features: core has 55, 11 of them locked', () {
+    expect(features.length, 55);
     final locked = features.where((f) => f.locked).map((f) => f.key).toSet();
     expect(locked, {
       'prayerCalc',
@@ -64,6 +64,7 @@ void main() {
       'location',
       'prayerSources',
       'system',
+      'language',
     });
     expect(features.map((f) => f.key).toSet().length, features.length);
   });
@@ -80,7 +81,8 @@ void main() {
 
   test('every feature has a group heading and BM + EN label', () {
     for (final f in features) {
-      expect(groupLabelsMs.containsKey(f.group), isTrue, reason: f.key);
+      // The Lanjutan group heading lives in the ops labels (Plan 14 Task 25).
+      expect(groupLabelsMs.containsKey(f.group) || f.group == 'lanjutan', isTrue, reason: f.key);
       expect(f.labelMs, isNotEmpty);
       expect(f.labelEn, isNotEmpty);
     }
@@ -96,7 +98,7 @@ void main() {
   });
 
   test('permissions equal core for every role', () {
-    expect(permissions.keys.toSet(), {'superadmin', 'admin', 'treasurer', 'media', 'ajk'});
+    expect(permissions.keys.toSet(), {'superadmin', 'admin', 'treasurer', 'media', 'live', 'ajk'});
     expect(permissions['ajk'], [
       'settings:read',
       'content:read',
@@ -110,6 +112,7 @@ void main() {
     expect(roleLabelsMs['superadmin'], 'Pentadbir MAXCOM');
     expect(roleLabelsEn['superadmin'], 'MAXCOM Administrator');
     expect(roleLabelsMs['treasurer'], 'Bendahari');
+    expect(roleLabelsMs['live'], 'Siaran Langsung');
   });
 
   test('theme tables: screens, titles, hidden features, contract', () {

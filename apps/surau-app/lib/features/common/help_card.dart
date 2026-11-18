@@ -9,6 +9,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'ltr.dart';
 import '../../app/theme.dart';
 import '../../l10n/generated/s.dart';
 import 'contact_links.dart';
@@ -115,7 +116,7 @@ class HelpCard extends StatelessWidget {
               ),
               if (phone != null) ...[
                 const SizedBox(height: 2),
-                Text(
+                LtrText(
                   phone,
                   style: text.bodyLarge!.copyWith(
                     color: soft,
@@ -242,6 +243,12 @@ typedef DetailRow = ({String label, String value});
 /// the certificate fingerprint (two rows of four groups, as printed), with
 /// the instruction to compare it with the admin's printout; or, with
 /// [rows], to any labelled facts (the dashboard's technical check).
+/// Left to right for a value with no Arabic letters in it (an address, a
+/// time, a fingerprint), so an Arabic page does not reorder its parts;
+/// null (the page's direction) otherwise.
+TextDirection? ltrIfNoArabic(String value) =>
+    RegExp(r'[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]').hasMatch(value) ? null : TextDirection.ltr;
+
 class TechnicalDetails extends StatefulWidget {
   const TechnicalDetails({
     super.key,
@@ -296,7 +303,7 @@ class _TechnicalDetailsState extends State<TechnicalDetails> {
           InkWell(
             onTap: () => setState(() => _open = !_open),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
+              padding: const EdgeInsetsDirectional.fromSTEB(18, 14, 12, 14),
               child: Row(
                 children: [
                   Expanded(
@@ -330,11 +337,11 @@ class _TechnicalDetailsState extends State<TechnicalDetails> {
                         if (widget.boxAddress != null) ...[
                           Text(s.enrolBoxLabel, style: label),
                           const SizedBox(height: 2),
-                          Text(widget.boxAddress!, style: value),
+                          Text(widget.boxAddress!, style: value, textDirection: TextDirection.ltr),
                           const SizedBox(height: 14),
                           Text(s.enrolCaLabel, style: label),
                           const SizedBox(height: 2),
-                          Text(fpRows ?? s.enrolCaNone, style: value),
+                          Text(fpRows ?? s.enrolCaNone, style: value, textDirection: fpRows == null ? null : TextDirection.ltr),
                           if (fpRows != null) ...[
                             const SizedBox(height: 8),
                             Text(s.enrolCaCompare, style: text.bodySmall),
@@ -345,7 +352,7 @@ class _TechnicalDetailsState extends State<TechnicalDetails> {
                             const SizedBox(height: 14),
                           Text(widget.rows[i].label, style: label),
                           const SizedBox(height: 2),
-                          Text(widget.rows[i].value, style: value),
+                          Text(widget.rows[i].value, style: value, textDirection: ltrIfNoArabic(widget.rows[i].value)),
                         ],
                         if (widget.note != null) ...[
                           const SizedBox(height: 8),

@@ -65,7 +65,7 @@ function op(over: Partial<VerifiedOp>): VerifiedOp {
 }
 
 function ctx(dir: string, over: Partial<ApplyCtx> = {}): ApplyCtx {
-  return { now: NOW, origin: 'app', actor: 'user:u1', dataDir: dir, ...over };
+  return { surauId: 'sdm', now: NOW, origin: 'app', actor: 'user:u1', dataDir: dir, ...over };
 }
 
 // A valid 1x1 PNG.
@@ -78,7 +78,7 @@ describe('applyOp', () => {
     const o = op({});
     const r = applyOp(db, o, ctx(dir));
     expect(r).toEqual({ opId: o.opId, status: 'applied', rev: '2026-11-05T09:00:00.000Z|dev-a', reason: null, winner: null });
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ id: 'p1', name: 'Ustaz A', updatedAt: '2026-11-05T09:00:00.000Z', updatedBy: 'user:u1' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ id: 'p1', name: 'Ustaz A', updatedAt: '2026-11-05T09:00:00.000Z', updatedBy: 'user:u1' });
     expect(db.prepare("SELECT rev, edited_at, origin FROM content_items WHERE id = 'p1'").get()).toMatchObject({
       rev: '2026-11-05T09:00:00.000Z|dev-a', edited_at: '2026-11-05T09:00:00.000Z', origin: 'app',
     });
@@ -90,13 +90,13 @@ describe('applyOp', () => {
 
   it('an older op on a newer row is superseded and names the winner', () => {
     const { db, dir } = newDb();
-    const user = createUser(db, { name: 'Siti', roles: ['admin'] }, 'local');
+    const user = createUser(db, { name: 'Siti', roles: ['admin'] }, 'local', 'sdm');
     applyOp(db, op({ editedAt: '2026-11-05T09:30:00.000Z', deviceId: 'dev-b', payload: { name: 'Baru' } }), ctx(dir, { actor: `user:${user.id}` }));
     const r = applyOp(db, op({ editedAt: '2026-11-05T09:00:00.000Z', payload: { name: 'Lama' } }), ctx(dir));
     expect(r.status).toBe('superseded');
     expect(r.rev).toBe('2026-11-05T09:30:00.000Z|dev-b');
     expect(r.winner).toEqual({ actor: `user:${user.id}`, userName: 'Siti', editedAt: '2026-11-05T09:30:00.000Z' });
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'Baru' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Baru' });
   });
 
   it('a newer op replaces the row', () => {
@@ -104,7 +104,7 @@ describe('applyOp', () => {
     applyOp(db, op({}), ctx(dir));
     const r = applyOp(db, op({ editedAt: '2026-11-05T09:10:00.000Z', payload: { name: 'Kemas kini' } }), ctx(dir));
     expect(r.status).toBe('applied');
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'Kemas kini' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Kemas kini' });
   });
 
   it('the same op twice is applied then duplicate and the row is unchanged', () => {
@@ -116,16 +116,16 @@ describe('applyOp', () => {
     expect(first.status).toBe('applied');
     expect(second).toEqual({ opId: o.opId, status: 'duplicate', rev: first.rev, reason: null, winner: null });
     expect(db.prepare('SELECT COUNT(*) AS n FROM change_log').get()).toEqual(logs);
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'Ustaz A' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Ustaz A' });
   });
 
   it('a tie is won by the greater device id', () => {
     const { db, dir } = newDb();
     applyOp(db, op({ deviceId: 'dev-m', payload: { name: 'M' } }), ctx(dir));
     expect(applyOp(db, op({ deviceId: 'dev-a', payload: { name: 'A' } }), ctx(dir)).status).toBe('superseded');
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'M' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'M' });
     expect(applyOp(db, op({ deviceId: 'dev-z', payload: { name: 'Z' } }), ctx(dir)).status).toBe('applied');
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'Z' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Z' });
   });
 
   it('an editedAt later than now plus 5 minutes is clamped to now', () => {
@@ -151,29 +151,44 @@ describe('applyOp', () => {
     applyOp(db, op({}), ctx(dir));
     const del = applyOp(db, op({ kind: 'content.delete', payload: null, editedAt: '2026-11-05T09:20:00.000Z' }), ctx(dir));
     expect(del.status).toBe('applied');
-    expect(getItem(db, 'penceramah', 'p1')).toBeNull();
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toBeNull();
     const logs = db.prepare('SELECT COUNT(*) AS n FROM change_log').get();
     // an older delete of an already deleted row changes nothing; a newer one only moves the tombstone's stamp
     expect(applyOp(db, op({ kind: 'content.delete', payload: null, editedAt: '2026-11-05T09:10:00.000Z' }), ctx(dir)).status).toBe('applied');
     expect(db.prepare('SELECT COUNT(*) AS n FROM change_log').get()).toEqual(logs);
     const old = applyOp(db, op({ editedAt: '2026-11-05T09:15:00.000Z' }), ctx(dir));
     expect(old.status).toBe('superseded');
-    expect(getItem(db, 'penceramah', 'p1')).toBeNull();
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toBeNull();
     // a deliberately later put undeletes
     expect(applyOp(db, op({ editedAt: '2026-11-05T09:40:00.000Z' }), ctx(dir)).status).toBe('applied');
-    expect(getItem(db, 'penceramah', 'p1')).not.toBeNull();
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).not.toBeNull();
   });
 
   it('settings.put merges a patch; appLock is refused live_only', () => {
     const { db, dir } = newDb();
     const r = applyOp(db, op({ kind: 'settings.put', entity: 'settings', entityId: 'zone', payload: { zone: 'SGR01' } }), ctx(dir));
     expect(r.status).toBe('applied');
-    expect(getSettings(db).zone.zone).toBe('SGR01');
+    expect(getSettings(db, 'sdm').zone.zone).toBe('SGR01');
     expect(db.prepare("SELECT rev, origin FROM settings WHERE feature = 'zone'").get()).toMatchObject({ rev: '2026-11-05T09:00:00.000Z|dev-a', origin: 'app' });
     const lock = applyOp(db, op({ kind: 'settings.put', entity: 'settings', entityId: 'appLock', payload: { enabled: true } }), ctx(dir));
     expect(lock).toMatchObject({ status: 'refused', reason: 'live_only' });
     expect(db.prepare("SELECT COUNT(*) AS n FROM settings WHERE feature = 'appLock'").get()).toEqual({ n: 0 });
     expect(applyOp(db, op({ kind: 'settings.put', entity: 'settings', entityId: 'nope', payload: {} }), ctx(dir)).reason).toBe('invalid');
+  });
+
+  it('[K5] a settings op with one newer and one older field is applied and names the older field in skipped', () => {
+    const { db, dir } = newDb();
+    const put = (editedAt: string, payload: Record<string, unknown>, deviceId = 'dev-a') =>
+      applyOp(db, op({ kind: 'settings.put', entity: 'settings', entityId: 'tabungCard', editedAt, deviceId, payload }), ctx(dir));
+    expect(put('2026-11-05T09:30:00.000Z', { figure: 'month' }, 'dev-b').status).toBe('applied');
+    const r = put('2026-11-05T09:00:00.000Z', { figure: 'lastEntry', highlightSeconds: 45 });
+    expect(r.status).toBe('applied');
+    expect(r.skipped).toEqual(['figure']);
+    expect(getSettings(db, 'sdm').tabungCard).toMatchObject({ figure: 'month', highlightSeconds: 45 });
+    // nothing lost: the whole op skipped stays superseded, an all-new op has no skipped
+    const lost = put('2026-11-05T08:00:00.000Z', { figure: 'balance' });
+    expect(lost.status).toBe('superseded');
+    expect(put('2026-11-05T09:45:00.000Z', { figure: 'balance' }).skipped ?? []).toEqual([]);
   });
 
   it('asset.put stores a small image once; a 9 MB payload is too_large', () => {
@@ -191,7 +206,7 @@ describe('applyOp', () => {
 
   it('user.put creates and updates a user but never touches PIN fields', () => {
     const { db, dir } = newDb();
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
     db.prepare("UPDATE users SET pin_hash = 'H', pin_fail_count = 2, edited_at = '2026-11-01T00:00:00.000Z' WHERE id = ?").run(u.id);
     const r = applyOp(db, op({ kind: 'user.put', entity: 'user', entityId: u.id, payload: { name: 'Ali bin Abu', roles: ['admin'], active: true, pin_hash: 'EVIL', pinHash: 'EVIL' } }), ctx(dir));
     expect(r.status).toBe('applied');
@@ -205,8 +220,8 @@ describe('applyOp', () => {
 
   it('user.put with active false revokes the user devices', () => {
     const { db, dir } = newDb();
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
-    createUser(db, { name: 'Siti', roles: ['admin'] }, 'local'); // the surau keeps another active admin
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
+    createUser(db, { name: 'Siti', roles: ['admin'] }, 'local', 'sdm'); // the surau keeps another active admin
     db.prepare("UPDATE users SET edited_at = '2026-11-01T00:00:00.000Z' WHERE id = ?").run(u.id);
     db.prepare("INSERT INTO devices (id, user_id, name, platform, enrolled_at) VALUES ('d1', ?, 'T', 'android', '2026-11-01T00:00:00.000Z')").run(u.id);
     const o = op({ kind: 'user.put', entity: 'user', entityId: u.id, payload: { name: 'Ali', roles: ['admin'], active: false } });
@@ -219,7 +234,7 @@ describe('applyOp', () => {
 
   it('device.revoke revokes once; a second revoke is applied with no second revoked_at', () => {
     const { db, dir } = newDb();
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
     db.prepare("INSERT INTO devices (id, user_id, name, platform, enrolled_at) VALUES ('d1', ?, 'T', 'android', '2026-11-01T00:00:00.000Z')").run(u.id);
     const rev = (id: string, at: string) => op({ kind: 'device.revoke', entity: 'device', entityId: id, payload: null, editedAt: at });
     const first = applyOp(db, rev('d1', '2026-11-05T09:00:00.000Z'), ctx(dir));
@@ -238,8 +253,8 @@ describe('applyOp', () => {
 
   it('a local edit still works as before, with the new columns filled', () => {
     const { db } = newDb();
-    putItem(db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
-    const second = putItem(db, 'penceramah', { id: 'p1', name: 'B' }, 'user:u9');
+    putItem(db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
+    const second = putItem(db, 'penceramah', { id: 'p1', name: 'B' }, 'user:u9', undefined, 'sdm');
     expect(second.created).toBe(false);
     expect(db.prepare("SELECT rev, origin FROM content_items WHERE id = 'p1'").get()).toMatchObject({ origin: 'local' });
   });
@@ -277,7 +292,7 @@ describe('applyFeedEntry', () => {
     expect(applyFeedEntry(db, entry({ opId: X }), ctx(dir)).status).toBe('applied');
     const o = op({ opId: X, editedAt: '2026-11-05T09:59:00.000Z', payload: { name: 'Lagi' } });
     expect(applyOp(db, o, ctx(dir))).toMatchObject({ status: 'duplicate', rev: '2026-11-05T08:00:00.000Z|dev-a' });
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'Dari awan' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Dari awan' });
 
     const Y = 'Y'.repeat(26);
     const o2 = op({ opId: Y, entityId: 'p2', payload: { name: 'P2' } });
@@ -291,10 +306,10 @@ describe('applyFeedEntry', () => {
     const { db, dir } = newDb();
     applyOp(db, op({ editedAt: '2026-11-05T09:00:00.000Z', payload: { name: 'Baru' } }), ctx(dir));
     expect(applyFeedEntry(db, entry({}), ctx(dir)).status).toBe('superseded');
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'Baru' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Baru' });
     const del = applyFeedEntry(db, entry({ after: null, rev: '2026-11-05T09:30:00.000Z|dev-a', editedAt: '2026-11-05T09:30:00.000Z' }), ctx(dir));
     expect(del.status).toBe('applied');
-    expect(getItem(db, 'penceramah', 'p1')).toBeNull();
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toBeNull();
   });
 
   it('does not check references: an item may arrive before its asset', () => {
@@ -307,18 +322,18 @@ describe('applyFeedEntry', () => {
     const { db, dir } = newDb();
     const s = applyFeedEntry(db, entry({ entity: 'settings', entityId: 'zone', after: { zone: 'SGR02' } }), ctx(dir));
     expect(s.status).toBe('applied');
-    expect(getSettings(db).zone.zone).toBe('SGR02');
+    expect(getSettings(db, 'sdm').zone.zone).toBe('SGR02');
     expect(applyFeedEntry(db, entry({ entity: 'settings', entityId: 'appLock', after: { enabled: true } }), ctx(dir))).toEqual({ status: 'refused', reason: 'live_only' });
   });
 
   it('the feed of one database replays into another and they converge', () => {
     const a = newDb();
     const b = newDb();
-    putItem(a.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(a.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     applyOp(a.db, op({ entityId: 'p2', payload: { name: 'Dua' } }), ctx(a.dir));
     for (const e of readFeed(a.db, 0, 500, ALL).entries) applyFeedEntry(b.db, e, ctx(b.dir, { origin: 'box:a' }));
-    expect(getItem(b.db, 'penceramah', 'p1')).toMatchObject({ name: 'A' });
-    expect(getItem(b.db, 'penceramah', 'p2')).toMatchObject({ name: 'Dua' });
+    expect(getItem(b.db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'A' });
+    expect(getItem(b.db, 'penceramah', 'p2', 'sdm')).toMatchObject({ name: 'Dua' });
     // replaying the whole feed again changes nothing
     const before = b.db.prepare('SELECT COUNT(*) AS n FROM change_log').get();
     for (const e of readFeed(a.db, 0, 500, ALL).entries) applyFeedEntry(b.db, e, ctx(b.dir, { origin: 'box:a' }));

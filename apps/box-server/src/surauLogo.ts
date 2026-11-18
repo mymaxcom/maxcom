@@ -9,6 +9,7 @@ import type { ImageSlotKey } from '@surau/core';
 import { decodeImage, renderIcon } from './imageResize.ts';
 import type { IconKind, Rgba } from './imageResize.ts';
 import { getSettings } from './settingsStore.ts';
+import { NEUTRAL_SURAU_ID, publicSurauOf } from './reqSurau.ts';
 
 /** The app icon files the Flutter web build references, with the size and kind each one is made at. */
 export const APP_ICONS: Readonly<Record<string, { size: number; kind: IconKind }>> = {
@@ -26,10 +27,15 @@ const SHORT_NAME_MAX = 12;
  * null. `logo` is the wide picture (natural shape); `logoSquare` the square one for the icons.
  * With an adjusted logo these are the derived pictures, otherwise the uploaded file.
  */
-function currentLogo(db: DatabaseSync, dataDir: string, slot: Extract<ImageSlotKey, 'logo' | 'logoSquare'> = 'logo'): { id: string; path: string; mime: string } | null {
-  const ref = getSettings(db).surauInfo.logo;
+function currentLogo(
+  db: DatabaseSync,
+  dataDir: string,
+  surauId: string,
+  slot: Extract<ImageSlotKey, 'logo' | 'logoSquare'> = 'logo',
+): { id: string; path: string; mime: string } | null {
+  const ref = getSettings(db, surauId).surauInfo.logo;
   if (ref === '') return null;
-  const id = resolveImageId(db, dataDir, slot, ref);
+  const id = resolveImageId(db, dataDir, slot, ref, surauId);
   const found = getAssetPath(db, dataDir, id);
   if (found === null || (found.mime !== 'image/png' && found.mime !== 'image/jpeg')) return null;
   return { id, ...found };
@@ -39,13 +45,13 @@ function currentLogo(db: DatabaseSync, dataDir: string, slot: Extract<ImageSlotK
 export const logoVersion = (assetId: string): string => assetId.slice(0, 16);
 
 /** Asset id of the wide logo the kiosk should load (`/assets/<id>`), or '' when none is set. */
-export function kioskLogoAssetId(db: DatabaseSync, dataDir: string): string {
-  return currentLogo(db, dataDir)?.id ?? '';
+export function kioskLogoAssetId(db: DatabaseSync, dataDir: string, surauId: string): string {
+  return currentLogo(db, dataDir, surauId)?.id ?? '';
 }
 
 /** Public URL of the logo, or null when none is set. Used by the kiosk bundle and /api/surau/info. */
-export function surauLogoUrl(db: DatabaseSync, dataDir: string): string | null {
-  const logo = currentLogo(db, dataDir);
+export function surauLogoUrl(db: DatabaseSync, dataDir: string, surauId: string): string | null {
+  const logo = currentLogo(db, dataDir, surauId);
   return logo === null ? null : `/surau-logo?v=${logoVersion(logo.id)}`;
 }
 
@@ -63,8 +69,8 @@ export function shortNameOf(name: string): string {
 }
 
 /** Home-screen title: the stored short name when set, else the automatic short form of the name, else ''. */
-export function homeScreenName(db: DatabaseSync): string {
-  const info = getSettings(db).surauInfo;
+export function homeScreenName(db: DatabaseSync, surauId: string): string {
+  const info = getSettings(db, surauId).surauInfo;
   const stored = info.shortName.trim();
   return stored !== '' ? stored : shortNameOf(info.name);
 }
@@ -94,6 +100,7 @@ export interface SurauLogoDeps {
   dataDir: string;
   /** Built Flutter web app folder, or null when the app is not served. */
   appDir: string | null;
+  role: 'box' | 'cloud';
 }
 
 /**
@@ -103,10 +110,13 @@ export interface SurauLogoDeps {
  */
 export function registerSurauLogoRoutes(app: FastifyInstance, deps: SurauLogoDeps): void {
   const { db, dataDir, appDir } = deps;
+  const role = deps.role;
 
   app.get('/surau-logo', async (request, reply) => {
-    const logo = currentLogo(db, dataDir);
-    if (logo === null) return reply.code(404).header('Cache-Control', 'no-store').send({ errors: ['not found'] });
+    // Public: a box serves its own logo; the cloud the logo of the linked box named by `X-Maxcom-Box`, else none.
+    const target = publicSurauOf(db, request, role);
+    const logo = currentLogo(db, dataDir, target ?? NEUTRAL_SURAU_ID);
+    if (target === null || logo === null) return reply.code(404).header('Cache-Control', 'no-store').send({ errors: ['not found'] });
     const etag = etagOf('logo', logo.id);
     reply.header('ETag', etag).header('X-Content-Type-Options', 'nosniff');
     // The URL handed out carries ?v=<id>, so that exact URL never changes meaning and may be kept;
@@ -146,7 +156,7 @@ export function registerSurauLogoRoutes(app: FastifyInstance, deps: SurauLogoDep
 
   for (const [name, spec] of Object.entries(APP_ICONS)) {
     app.get(`/app/${name}`, async (request, reply) => {
-      const logo = currentLogo(db, dataDir, 'logoSquare');
+      const logo = currentLogo(db, dataDir, publicSurauOf(db, request, role) ?? NEUTRAL_SURAU_ID, 'logoSquare');
       if (logo !== null) {
         const c = cacheFor(logo.id, logo.path);
         if (c.rgba !== null) {
@@ -170,7 +180,7 @@ export function registerSurauLogoRoutes(app: FastifyInstance, deps: SurauLogoDep
       const file = join(appDir, 'index.html');
       if (!existsSync(file)) return reply.code(404).send({ errors: ['not found'] });
       reply.header('Last-Modified', statSync(file).mtime.toUTCString());
-      const body = Buffer.from(withHomeScreenName(readFileSync(file, 'utf8'), homeScreenName(db)), 'utf8');
+      const body = Buffer.from(withHomeScreenName(readFileSync(file, 'utf8'), ((sid) => (sid === null ? '' : homeScreenName(db, sid)))(publicSurauOf(db, request, role))), 'utf8');
       return sendFile(request, reply, body, etagOf('index', createHash('sha256').update(body).digest('hex')), 'text/html; charset=utf-8');
     });
   }
@@ -186,13 +196,13 @@ export function registerSurauLogoRoutes(app: FastifyInstance, deps: SurauLogoDep
     } catch {
       return reply.code(404).send({ errors: ['not found'] });
     }
-    const info = getSettings(db).surauInfo;
-    const name = info.name.trim();
+    const sid = publicSurauOf(db, request, role);
+    const name = sid === null ? '' : getSettings(db, sid).surauInfo.name.trim();
     if (name !== '') manifest.name = name;
-    const short = homeScreenName(db);
+    const short = sid === null ? '' : homeScreenName(db, sid);
     if (short !== '') manifest.short_name = short;
     const body = Buffer.from(JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-    const logo = currentLogo(db, dataDir, 'logoSquare');
+    const logo = currentLogo(db, dataDir, publicSurauOf(db, request, role) ?? NEUTRAL_SURAU_ID, 'logoSquare');
     return sendFile(
       request,
       reply,

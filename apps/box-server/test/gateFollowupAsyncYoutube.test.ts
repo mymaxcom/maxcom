@@ -46,16 +46,16 @@ function slowYoutube(): YoutubeLeg & { completed: string[]; calls: number; resol
 async function begin(yt: YoutubeLeg, via: 'box' | 'device' = 'box') {
   const h = await startLiveHarness({ live: { monitorMs: 3_600_000, youtube: yt } });
   harnesses.push(h);
-  const media = await loginAs(h.app, 'media');
+  const liveUser = await loginAs(h.app, 'live');
   const t0 = Date.now();
   const r = await h.app.inject({
     method: 'POST',
     url: '/api/live/start',
-    headers: media.headers,
+    headers: liveUser.headers,
     payload: startBody(h, { source: via === 'box' ? 'web' : 'android', outputs: { kiosk: true, youtube: true }, youtubeVia: via }),
     remoteAddress: '10.168.1.40',
   });
-  return { h, media, r, took: Date.now() - t0 };
+  return { h, liveUser, r, took: Date.now() - t0 };
 }
 
 const flush = async (): Promise<void> => {
@@ -103,10 +103,10 @@ describe('start does not wait for YouTube', () => {
 
   it('a failure sets the warning visible in /api/live/status', async () => {
     const yt = slowYoutube();
-    const { h, media } = await begin(yt);
+    const { h, liveUser } = await begin(yt);
     yt.reject(Object.assign(new Error('x'), { reason: 'cloud_unreachable' }));
     await flush();
-    const st = await h.app.inject({ method: 'GET', url: '/api/live/status', headers: media.headers, remoteAddress: '10.168.1.40' });
+    const st = await h.app.inject({ method: 'GET', url: '/api/live/status', headers: liveUser.headers, remoteAddress: '10.168.1.40' });
     expect(st.json().warnings).toContain('cloud_unreachable');
     expect(h.app.liveSessions!.relayKey()).toBeNull();
     expect(h.app.liveSessions!.current()).not.toBeNull();
@@ -163,26 +163,26 @@ describe('start does not wait for YouTube', () => {
 describe('the phone own YouTube leg gets the key after the answer', () => {
   it('starting, then ready for the owner only; never in the status', async () => {
     const yt = slowYoutube();
-    const { h, media, r } = await begin(yt, 'device');
+    const { h, liveUser, r } = await begin(yt, 'device');
     expect(r.json().youtube).toEqual({ via: 'device', ingest: null, key: null, state: 'starting' });
     const get = (headers: Record<string, string>) =>
       h.app.inject({ method: 'GET', url: '/api/live/youtube/ingest', headers, remoteAddress: '10.168.1.40' });
-    expect((await get(media.headers)).json()).toEqual({ state: 'starting', ingest: null, key: null });
+    expect((await get(liveUser.headers)).json()).toEqual({ state: 'starting', ingest: null, key: null });
     yt.resolve();
     await flush();
-    expect((await get(media.headers)).json()).toEqual({ state: 'ready', ingest: 'rtmps://a.rtmps.youtube.com:443/live2', key: KEY });
-    const other = await loginAs(h.app, 'media');
+    expect((await get(liveUser.headers)).json()).toEqual({ state: 'ready', ingest: 'rtmps://a.rtmps.youtube.com:443/live2', key: KEY });
+    const other = await loginAs(h.app, 'live');
     expect((await get(other.headers)).statusCode).toBe(403);
-    const st = await h.app.inject({ method: 'GET', url: '/api/live/status', headers: media.headers, remoteAddress: '10.168.1.40' });
+    const st = await h.app.inject({ method: 'GET', url: '/api/live/status', headers: liveUser.headers, remoteAddress: '10.168.1.40' });
     expect(st.body).not.toContain(KEY);
   });
 
   it('failed reports failed with the warning in the status', async () => {
     const yt = slowYoutube();
-    const { h, media } = await begin(yt, 'device');
+    const { h, liveUser } = await begin(yt, 'device');
     yt.reject(new Error('ENOTFOUND'));
     await flush();
-    const g = await h.app.inject({ method: 'GET', url: '/api/live/youtube/ingest', headers: media.headers, remoteAddress: '10.168.1.40' });
+    const g = await h.app.inject({ method: 'GET', url: '/api/live/youtube/ingest', headers: liveUser.headers, remoteAddress: '10.168.1.40' });
     expect(g.json()).toEqual({ state: 'failed', ingest: null, key: null });
     expect(h.app.liveSessions!.status().warnings).toContain('no_internet');
   });

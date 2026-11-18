@@ -151,6 +151,44 @@ void main() {
     );
   });
 
+  test('[A5] the detail object of the answer is kept on the BoxError; a non-object detail is dropped', () async {
+    final c = clientFor(
+      (r) async => json(409, {
+        'errors': ['x'],
+        'code': 'content_in_use',
+        'detail': {'kind': 'penceramah', 'count': 3},
+      }),
+    );
+    await expectLater(
+      c.getJson('/api/health'),
+      throwsA(
+        isA<BoxError>()
+            .having((e) => e.code, 'code', 'content_in_use')
+            .having((e) => e.detail['count'], 'count', 3),
+      ),
+    );
+    final bad = clientFor((r) async => json(409, {'errors': ['x'], 'detail': 'oops'}));
+    await expectLater(
+      bad.getJson('/api/health'),
+      throwsA(isA<BoxError>().having((e) => e.detail, 'detail', isEmpty)),
+    );
+  });
+
+  test('[K8] a timeout is BoxUnreachable that says it was sent; a refused connection says it was not', () async {
+    final slow = clientFor(
+      (r) async => throw TimeoutException('no answer'),
+    );
+    await expectLater(
+      slow.postJson('/api/users', {'a': 1}),
+      throwsA(isA<BoxUnreachable>().having((e) => e.sent, 'sent', isTrue)),
+    );
+    final refused = clientFor((r) async => throw const SocketException('refused'));
+    await expectLater(
+      refused.postJson('/api/users', {'a': 1}),
+      throwsA(isA<BoxUnreachable>().having((e) => e.sent, 'sent', isFalse)),
+    );
+  });
+
   test('generic message when the body has none', () async {
     final c = clientFor((r) async => http.Response('oops', 500));
     await expectLater(

@@ -118,7 +118,7 @@ class ThemeGalleryScreen extends ConsumerWidget {
                   if (canCustomise) ...[
                     const SizedBox(height: 12),
                     Align(
-                      alignment: Alignment.centerLeft,
+                      alignment: AlignmentDirectional.centerStart,
                       child: FilledButton.icon(
                         key: const ValueKey('theme-customise'),
                         onPressed: () => context.go(AppRoutes.themeEditorFor(active.name)),
@@ -138,7 +138,7 @@ class ThemeGalleryScreen extends ConsumerWidget {
           if (canWrite) ...[
             const SizedBox(height: 12),
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: AlignmentDirectional.centerStart,
               child: OutlinedButton.icon(
                 key: const ValueKey('theme-upload-open'),
                 onPressed: () => context.go(AppRoutes.settingsThemeUpload),
@@ -218,9 +218,9 @@ class _ThemeCard extends StatelessWidget {
                     ],
                   ),
                   if (data.active)
-                    const Positioned(
+                    const PositionedDirectional(
                       top: 6,
-                      right: 6,
+                      end: 6,
                       child: CircleAvatar(
                         radius: 12,
                         backgroundColor: SurauColors.teal,
@@ -317,7 +317,7 @@ class _ThemeSheetState extends ConsumerState<_ThemeSheet> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = e is SettingsSaveError ? e.message : writeErrorText(s, e);
+        _error = e is SettingsSaveError ? e.text(s) : writeErrorText(s, e);
       });
     }
   }

@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { randomBytes } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { defaultBoxName, validateFeatureSettings } from '@surau/core';
@@ -119,13 +120,13 @@ async function tryResume(
     const l = live();
     if (l === null || resumableNonce(db, type, nonce, now) === null) return null;
     const recoveryCode = issueRecoveryCode(db);
-    bumpVersion(db);
+    bumpVersion(db, LOCAL_SURAU_ID);
     return {
       deviceId: row.deviceId,
       userId: row.userId,
       roles: l.roles,
       pinRequired: false,
-      appLock: appLockRequiredFor(db, l.roles),
+      appLock: appLockRequiredFor(db, l.roles, LOCAL_SURAU_ID),
       recoveryCode,
     };
   });
@@ -161,7 +162,7 @@ export async function setupComplete(
   const resumed = await tryResume(db, 'setup', nonce, j.jwk, input.pin, ip, now);
   if (resumed !== null) {
     const sid = db.prepare("SELECT value FROM meta WHERE key = 'surau_id'").get()?.value;
-    return { ...resumed, surauId: typeof sid === 'string' ? sid : '', boxName: boxNameOf(db, boxId), surauName: getSettings(db).surauInfo.name };
+    return { ...resumed, surauId: typeof sid === 'string' ? sid : '', boxName: boxNameOf(db, boxId), surauName: getSettings(db, LOCAL_SURAU_ID).surauInfo.name };
   }
   // a dead nonce is refused before the slow PIN hash
   const live = peekNonce(db, 'setup', nonce, now);
@@ -182,7 +183,7 @@ export async function setupComplete(
     if (boxState(db).state !== 'setup') {
       return { refuse: bad('already_set_up', 'MAXCOM ini sudah disediakan', 409), detail: 'already_set_up' };
     }
-    const user = createUserIn(db, { name: j.adminName, roles: ['admin'] }, 'system:setup');
+    const user = createUserIn(db, { name: j.adminName, roles: ['admin'] }, 'system:setup', LOCAL_SURAU_ID);
     const device = enrolDeviceDirect(db, {
       userId: user.id,
       publicJwk: j.jwk,
@@ -191,13 +192,13 @@ export async function setupComplete(
       pinHash,
       ip,
     });
-    putFeatureIn(db, 'surauInfo', { name: surau }, 'system:setup');
+    putFeatureIn(db, 'surauInfo', { name: surau }, 'system:setup', undefined, undefined, undefined, LOCAL_SURAU_ID);
     setBoxNameIn(db, boxId, name, 'system:setup');
     const surauId = newSurauId();
-    db.prepare("INSERT INTO meta (key, value) VALUES ('surau_id', ?) ON CONFLICT(key) DO NOTHING").run(surauId);
+    db.prepare("INSERT INTO meta (key, value) VALUES ('surau_id', ?) ON CONFLICT(surau_id, key) DO NOTHING").run(surauId);
     const recoveryCode = issueRecoveryCode(db);
     recordNonceDevice(db, nonce, device.deviceId, device.userId, keyThumb(j.jwk));
-    bumpVersion(db);
+    bumpVersion(db, LOCAL_SURAU_ID);
     return { ...device, recoveryCode, surauId, boxName: name, surauName: surau };
   });
 
@@ -248,7 +249,7 @@ export async function recoveryComplete(
       setNonceOutcome(db, nonce, 'bad_code');
       return { refuse: bad('bad_code', 'Kod pemulihan salah', 401), detail: 'bad_code' };
     }
-    const user = createUserIn(db, { name: j.adminName, roles: ['admin'] }, 'system:recovery');
+    const user = createUserIn(db, { name: j.adminName, roles: ['admin'] }, 'system:recovery', LOCAL_SURAU_ID);
     const device = enrolDeviceDirect(db, {
       userId: user.id,
       publicJwk: j.jwk,
@@ -259,7 +260,7 @@ export async function recoveryComplete(
     });
     const recoveryCode = issueRecoveryCode(db);
     recordNonceDevice(db, nonce, device.deviceId, device.userId, keyThumb(j.jwk));
-    bumpVersion(db);
+    bumpVersion(db, LOCAL_SURAU_ID);
     return { ...device, recoveryCode };
   });
 
@@ -300,13 +301,13 @@ export function setupFromCli(
     if (Number(db.prepare('SELECT COUNT(*) AS n FROM users').get()?.n ?? 0) !== 0) {
       throw bad('already_set_up', 'MAXCOM ini sudah disediakan', 409);
     }
-    const user = createUserIn(db, { name: input.adminName, roles: ['admin'] }, 'local');
-    if (surau !== undefined) putFeatureIn(db, 'surauInfo', { name: surau }, 'local');
+    const user = createUserIn(db, { name: input.adminName, roles: ['admin'] }, 'local', LOCAL_SURAU_ID);
+    if (surau !== undefined) putFeatureIn(db, 'surauInfo', { name: surau }, 'local', undefined, undefined, undefined, LOCAL_SURAU_ID);
     if (name !== undefined) setBoxNameIn(db, boxId, name, 'local');
     const surauId = newSurauId();
-    db.prepare("INSERT INTO meta (key, value) VALUES ('surau_id', ?) ON CONFLICT(key) DO NOTHING").run(surauId);
+    db.prepare("INSERT INTO meta (key, value) VALUES ('surau_id', ?) ON CONFLICT(surau_id, key) DO NOTHING").run(surauId);
     const recoveryCode = issueRecoveryCode(db);
-    bumpVersion(db);
+    bumpVersion(db, LOCAL_SURAU_ID);
     return { user, recoveryCode, surauId };
   });
   writeBoxJson(dataDir, {

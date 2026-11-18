@@ -563,5 +563,26 @@
       "messageText": "surau-op\na1b2c3d4e5f60718\ndev-9f\n01JC3Y8Q20SYSTEMAAAAAAAAAA\n4478720fbb67dba4a00fb713e1c7601fde1597e29f688140620a9a4322908d7c",
       "messageHex": "73757261752d6f700a613162326333643465356636303731380a6465762d39660a30314a4333593851323053595354454d414141414141414141410a34343738373230666262363764626134613030666237313365316337363031666465313539376532396636383831343036323061396134333232393038643763"
     }
+  ],
+  "deviceFeed": [
+    {
+      "name": "device enrolment carries the home box id",
+      "after": {
+        "boxId": "4f2a9c1e77b0d3a1",
+        "enrolledAt": "2026-11-05T10:00:00.000Z",
+        "id": "dev-9k2m4v7q",
+        "name": "Vivo Y36",
+        "platform": "android",
+        "publicJwk": {
+          "crv": "P-256",
+          "kty": "EC",
+          "x": "n4xKHT5rfyxaDp1LHI96Pi1bDJ5vGk17PoxfKg2eaxw",
+          "y": "Pnscn1otjktvDDqdXnsfjEotbps_XHodjktvDCqdXns"
+        },
+        "userId": "user-3j8w5n1p"
+      },
+      "canonical": "{\"boxId\":\"4f2a9c1e77b0d3a1\",\"enrolledAt\":\"2026-11-05T10:00:00.000Z\",\"id\":\"dev-9k2m4v7q\",\"name\":\"Vivo Y36\",\"platform\":\"android\",\"publicJwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"n4xKHT5rfyxaDp1LHI96Pi1bDJ5vGk17PoxfKg2eaxw\",\"y\":\"Pnscn1otjktvDDqdXnsfjEotbps_XHodjktvDCqdXns\"},\"userId\":\"user-3j8w5n1p\"}",
+      "sha256Hex": "65281a02132f82fe18b72e7d7ca320e30bfc2ffd2624028231469f31843045c7"
+    }
   ]
 }

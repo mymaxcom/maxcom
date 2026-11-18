@@ -130,6 +130,14 @@ describe('PUT /api/settings/:feature', () => {
     expect(body.iqamahCountdown.minutes.isnin?.asar).toBe(12);
     expect(bundle.version).toBeGreaterThanOrEqual(1);
   });
+
+  it('accepts the TV language choice auto and refuses ar', async () => {
+    const app = makeApp();
+    const ok = await app.inject({ method: 'PUT', url: '/api/settings/language', payload: { lang: 'auto' } });
+    expect(ok.statusCode).toBe(200);
+    const bad = await app.inject({ method: 'PUT', url: '/api/settings/language', payload: { lang: 'ar' } });
+    expect(bad.statusCode).toBe(400);
+  });
 });
 
 describe('POST /api/prayer/import', () => {

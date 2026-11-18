@@ -6,13 +6,19 @@ import { useArabEnv } from '../../themes/arabContext.ts';
 import { Hk } from '../../ui/Hk.tsx';
 
 /**
+ * How far a short hadis may grow (the `--fit` it starts at) to fill the main area before it steps down (operator
+ * 2026-11-17, "use the whole screen"). A long one still steps down and pages exactly as before, so nothing is cut.
+ */
+export const HADIS_FIT_MAX = 1.5;
+
+/**
  * The hadis screen: Arabic over the Malay text, the source and the grade under them, centred in the whole main
  * area. The same Tetapan rules as the old card (showArabic, showMalay, grade, attribution, parts for a long hadis, one
  * part per slot); a text that does not fit shrinks through `--fit`, then takes more pages, and is never cut.
  */
 export function HadisScreen(props: CardProps) {
   const { lang } = props;
-  const slot = useHadisSlot(props);
+  const slot = useHadisSlot(props, { fitMax: HADIS_FIT_MAX });
   // The two-layer text is drawn only when the harakat colour is on (spec 6.12.2); otherwise one plain paragraph.
   const harakat = harakatOn(useArabEnv().style);
   if (!slot) return null;

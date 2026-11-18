@@ -7,6 +7,7 @@ import { buildApp } from '../src/app.ts';
 import { putItem } from '../src/content/store.ts';
 import { putFeature } from '../src/settingsStore.ts';
 import { enrolCloudOrigin, issueLinkCode } from '../src/sync/sites.ts';
+import { ensureSurau } from './support/surauRow.ts';
 import { trimChangeLog } from '../src/sync/trim.ts';
 import { generateSyncKeyPair } from '../src/sync/syncKey.ts';
 import { outboxStatus } from '../src/sync/workerOutbox.ts';
@@ -57,7 +58,7 @@ describe('Q8: the outbox survives a wrong admin token', () => {
     const r = rig();
     insertSite(db(r), { boxId: BOX });
     await drain(r);
-    putItem(db(r), 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(db(r), 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     expect(rows(r)).toHaveLength(1);
     for (const status of [401, 403]) {
       r.worker.adminStatus = status;
@@ -80,7 +81,7 @@ describe('Q8: the outbox survives a wrong admin token', () => {
     insertSite(db(r), { boxId: BOX });
     await drain(r);
     for (const status of [400, 404, 409, 422]) {
-      putItem(db(r), 'penceramah', { id: `v${status}`, name: 'A' }, 'local');
+      putItem(db(r), 'penceramah', { id: `v${status}`, name: 'A' }, 'local', undefined, 'sdm');
       r.worker.adminStatus = status;
       await drain(r);
       expect(rows(r)[0]).toMatchObject({ state: 'failed', last_error: `http_${status}` });
@@ -90,7 +91,7 @@ describe('Q8: the outbox survives a wrong admin token', () => {
 
   it('rows failed by an earlier run (including a site_put) are re-queued at start and delivered', async () => {
     const r = rig();
-    const { code } = issueLinkCode({ db: db(r), now: () => new Date(r.clock.t) }, { boxId: BOX, name: 'Surau Ujian' });
+    const { code } = issueLinkCode({ db: db(r), now: () => new Date(r.clock.t) }, { boxId: BOX, name: 'Surau Ujian', target: { surauId: ensureSurau(db(r)) } });
     r.worker.adminStatus = 400; // the old behaviour: the wrong token ended as a failed row
     const res = await r.cloud.app.inject({ method: 'POST', url: '/api/sync/link', remoteAddress: '10.9.0.1', payload: { boxId: BOX, code, publicJwk: generateSyncKeyPair().publicJwk } });
     const { wakeSecret } = res.json() as { wakeSecret: string };
@@ -147,7 +148,7 @@ describe('S5: only the linked cloud address decides the QR cloud field and the C
     const box = buildApp(join(dir, 'box.db'), { dataDir: dir });
     apps.push(box);
     const d = box.surau.db;
-    putFeature(d, 'cloudSync', { cloudUrl: 'https://evil.example/x' }, 'test');
+    putFeature(d, 'cloudSync', { cloudUrl: 'https://evil.example/x' }, 'test', undefined, 'sdm');
     d.prepare("INSERT INTO sync_state (key, value) VALUES ('linked', '1')").run();
     expect(enrolCloudOrigin(d)).toBeUndefined();
     d.prepare("INSERT INTO sync_state (key, value) VALUES ('cloud_url', 'https://cloud.real.example')").run();
@@ -162,7 +163,7 @@ describe('S5: only the linked cloud address decides the QR cloud field and the C
     writeFileSync(join(appDir, 'index.html'), '<!doctype html><title>app</title>');
     const box = buildApp(join(dir, 'box.db'), { dataDir: dir, appDir });
     apps.push(box);
-    putFeature(box.surau.db, 'cloudSync', { cloudUrl: 'https://evil.example' }, 'test');
+    putFeature(box.surau.db, 'cloudSync', { cloudUrl: 'https://evil.example' }, 'test', undefined, 'sdm');
     box.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('cloud_url', 'https://cloud.real.example')").run();
     const csp = String((await box.inject({ method: 'GET', url: '/app/' })).headers['content-security-policy']);
     expect(csp).toContain('https://cloud.real.example');

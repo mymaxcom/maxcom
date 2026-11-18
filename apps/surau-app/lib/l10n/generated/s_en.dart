@@ -58,7 +58,7 @@ class SEn extends S {
   String get navDashboard => 'Dashboard';
 
   @override
-  String get navSettings => 'Settings';
+  String get navSettings => 'Configuration';
 
   @override
   String get navContent => 'Content';
@@ -103,7 +103,7 @@ class SEn extends S {
   String get dashboardTitle => 'Dashboard';
 
   @override
-  String get settingsTitle => 'Settings';
+  String get settingsTitle => 'Configuration';
 
   @override
   String get enrolTitle => 'Enrol this device';
@@ -534,6 +534,37 @@ class SEn extends S {
   @override
   String get previewShortcutHint =>
       'See what the surau TV is showing right now.';
+
+  @override
+  String get dashAttention => 'Needs attention';
+
+  @override
+  String dashPrayerDaysLeft(int n) {
+    return 'Prayer time data runs out in $n days';
+  }
+
+  @override
+  String get dashPrayerNone => 'No prayer time data';
+
+  @override
+  String dashLockedUsers(int n) {
+    return 'Users locked out: $n';
+  }
+
+  @override
+  String get dashLockedHint => 'Unlock them in Users & devices.';
+
+  @override
+  String get dashOnTv => 'On the TV screen now';
+
+  @override
+  String get dashSeeTv => 'See the TV screen';
+
+  @override
+  String get dashSystem => 'System details';
+
+  @override
+  String get dashAppVersion => 'App version';
 
   @override
   String get comingBody =>
@@ -1207,7 +1238,18 @@ class SEn extends S {
   String get roleTreasurerHint => 'Finance and the surau funds';
 
   @override
-  String get roleMediaHint => 'Content, posters and live broadcasts';
+  String get roleMediaHint => 'Content and posters';
+
+  @override
+  String get roleLive => 'Live Broadcast';
+
+  @override
+  String get roleLiveHint =>
+      'Opens the Live menu and its settings: external camera, audio sources, screen, YouTube and recording';
+
+  @override
+  String get usersMediaNoLiveHint =>
+      'The Media role can no longer broadcast live. Give the Live Broadcast role to the users who need it.';
 
   @override
   String get roleAjkHint =>
@@ -1272,7 +1314,7 @@ class SEn extends S {
 
   @override
   String userDeactivateHint(String name) {
-    return '$name will no longer be able to unlock this app.';
+    return 'All devices and codes of $name are deleted. The name stays in the log and finance records.';
   }
 
   @override
@@ -1314,7 +1356,7 @@ class SEn extends S {
   }
 
   @override
-  String get enrolQrCodeLabel => 'Or type this code';
+  String get enrolQrCodeLabel => 'Check code';
 
   @override
   String enrolQrExpiresIn(String time) {
@@ -1344,11 +1386,11 @@ class SEn extends S {
   String get devicesPair => 'Pair a TV screen';
 
   @override
-  String get devicesRevoke => 'Revoke';
+  String get devicesRevoke => 'Delete';
 
   @override
   String devicesRevokeTitle(String name) {
-    return 'Revoke $name?';
+    return 'Delete $name?';
   }
 
   @override
@@ -1356,11 +1398,11 @@ class SEn extends S {
       'This device will no longer unlock. To use it again, enrol it with a new QR code.';
 
   @override
-  String get devicesRevoked => 'Revoked';
+  String get devicesRevoked => 'Deleted';
 
   @override
   String devicesRevokedToast(String name) {
-    return '$name revoked.';
+    return '$name deleted.';
   }
 
   @override
@@ -1493,7 +1535,7 @@ class SEn extends S {
   String get auditEntityDevices => 'Devices';
 
   @override
-  String get auditEntitySettings => 'Settings';
+  String get auditEntitySettings => 'Configuration';
 
   @override
   String get auditEntityContent => 'Content';
@@ -2496,7 +2538,7 @@ class SEn extends S {
 
   @override
   String get appLockOffHint =>
-      'Anyone holding this device can open MAXCOM. An administrator can turn the lock on in Settings.';
+      'Anyone holding this device can open MAXCOM. An administrator can turn the lock on in Configuration.';
 
   @override
   String get appLockEnrolHint =>
@@ -2580,6 +2622,30 @@ class SEn extends S {
   String syncConflicts(int n) {
     return 'Conflicts: $n';
   }
+
+  @override
+  String get linkCloudConnected => 'MAXCOM cloud: connected';
+
+  @override
+  String get linkCloudConnecting => 'MAXCOM cloud: connecting';
+
+  @override
+  String get linkCloudSyncing => 'MAXCOM cloud: sending changes';
+
+  @override
+  String get linkCloudDisconnected => 'MAXCOM cloud: not connected';
+
+  @override
+  String get linkBoxConnected => 'MAXCOM at the surau: connected';
+
+  @override
+  String get linkBoxConnecting => 'MAXCOM at the surau: connecting';
+
+  @override
+  String get linkBoxSyncing => 'MAXCOM at the surau: sending changes';
+
+  @override
+  String get linkBoxDisconnected => 'MAXCOM at the surau: cannot be reached';
 
   @override
   String get syncNow => 'Sync now';
@@ -2680,7 +2746,7 @@ class SEn extends S {
   String get conflictDeleted => 'You deleted this item';
 
   @override
-  String get conflictEntitySettings => 'Settings';
+  String get conflictEntitySettings => 'Configuration';
 
   @override
   String get conflictEntityUser => 'User';
@@ -2776,7 +2842,7 @@ class SEn extends S {
 
   @override
   String get devicesEnrolViaCloud =>
-      'You are connected through the cloud. The QR code is made by the cloud and can be scanned from home.';
+      'You are outside the surau network. A QR code can only be made on the surau Wi-Fi.';
 
   @override
   String get navUpload => 'YouTube upload';
@@ -3129,6 +3195,26 @@ class SEn extends S {
   String get settingsSearchHint => 'Search settings, for example: azan';
 
   @override
+  String settingsWhyGroup(String name) {
+    return 'Group: $name';
+  }
+
+  @override
+  String settingsWhyField(String name) {
+    return 'Field: $name';
+  }
+
+  @override
+  String settingsWhyChoice(String name) {
+    return 'Choice: $name';
+  }
+
+  @override
+  String settingsWhyKeyword(String name) {
+    return 'Keyword: $name';
+  }
+
+  @override
   String settingsSearchFound(int n) {
     return '$n settings match. Matching groups open by themselves.';
   }
@@ -3274,7 +3360,7 @@ class SEn extends S {
 
   @override
   String get setupConfirmHint =>
-      'Make sure the surau name is right. You can change it in Tetapan later.';
+      'Make sure the surau name is right. You can change it in Configuration later.';
 
   @override
   String get setupFingerprintHint =>
@@ -3501,7 +3587,7 @@ class SEn extends S {
 
   @override
   String get devicesBoxRowHint =>
-      'The server and screen at the surau. It cannot be cancelled.';
+      'The main screen at the surau. It is always there and cannot be deleted.';
 
   @override
   String get devicesAwayBanner =>
@@ -3746,7 +3832,7 @@ class SEn extends S {
 
   @override
   String get hadisListHelp =>
-      'This order is the order on the TV when the source is Both. The source and turnover are in Settings, Hadith. The switch hides a hadith from the TV but keeps it saved; Remove deletes it from the MAXCOM list.';
+      'This order is the order on the TV when the source is Both. The source and turnover are in Configuration, Hadith. The switch hides a hadith from the TV but keeps it saved; Remove deletes it from the MAXCOM list.';
 
   @override
   String hadisNearFull(int n, int max) {
@@ -3985,7 +4071,7 @@ class SEn extends S {
 
   @override
   String get hadisArabicHidden =>
-      'The Arabic text is hidden in this preview. TV options are in Settings, Hadith.';
+      'The Arabic text is hidden in this preview. TV options are in Configuration, Hadith.';
 
   @override
   String get hadisDetails => 'Details';
@@ -5838,11 +5924,11 @@ class SEn extends S {
 
   @override
   String get themeSizeNote =>
-      'A scale on top of the base size; the base size of hadith and verses is chosen in Tetapan. S is today\'s size, there is no smaller size, so it stays clear from 3 metres.';
+      'A scale on top of the base size; the base size of hadith and verses is chosen in Configuration. S is today\'s size, there is no smaller size, so it stays clear from 3 metres.';
 
   @override
   String get themeBgNote =>
-      'Follow the theme: the background pictures from Tetapan are used (or the picture of an uploaded theme).';
+      'Follow the theme: the background pictures from Configuration are used (or the picture of an uploaded theme).';
 
   @override
   String get themeAlign => 'Content alignment';
@@ -6121,4 +6207,2000 @@ class SEn extends S {
 
   @override
   String get themeDeleted => 'Theme deleted';
+
+  @override
+  String get valRequired => 'Required';
+
+  @override
+  String valTooLong(int max) {
+    return 'Too long (at most $max characters)';
+  }
+
+  @override
+  String get valNoSpaces => 'Must not contain spaces or control characters';
+
+  @override
+  String get valWebAddress => 'Must be a valid web address';
+
+  @override
+  String get valStartHttps => 'Must start with https://';
+
+  @override
+  String get valNoUserInfo => 'Must not contain a user name or password';
+
+  @override
+  String get valNoFragment => 'Must not contain a # part';
+
+  @override
+  String get valPublicAddress =>
+      'Must be a public internet address (not local or private)';
+
+  @override
+  String valRectShape(String shape) {
+    return 'Must be an object $shape';
+  }
+
+  @override
+  String get valUnknownField => 'Unknown field';
+
+  @override
+  String get valRectNumbers => 'x, y, w and h must be numbers';
+
+  @override
+  String get valCropInside => 'The crop box must lie inside the picture';
+
+  @override
+  String get valImageIdBad => 'Invalid picture id';
+
+  @override
+  String get valSquareLogoOnly => 'The square box is for the logo only';
+
+  @override
+  String get valBgChoice => 'The background must be keep, remove or card';
+
+  @override
+  String get valRotateChoice => 'Rotation must be 0, 90, 180 or 270';
+
+  @override
+  String get valBool => 'Must be on or off';
+
+  @override
+  String valOneOf(String list) {
+    return 'Must be one of: $list';
+  }
+
+  @override
+  String valWholeNumber(int min, int max) {
+    return 'Must be a whole number from $min to $max';
+  }
+
+  @override
+  String get valMustText => 'Must be text';
+
+  @override
+  String valMustWhat(String what) {
+    return 'Must be $what';
+  }
+
+  @override
+  String get valWhatPlain => 'plain text';
+
+  @override
+  String get valWhatPlainNoHtml => 'plain text without HTML characters';
+
+  @override
+  String get valWhatPhone => 'a phone number like 012-345 6789';
+
+  @override
+  String get valWhatEmail => 'an email address like name@example.my';
+
+  @override
+  String get valWhatHttps => 'an https:// address';
+
+  @override
+  String get valWhatValid => 'valid';
+
+  @override
+  String valDecimal(int min, int max) {
+    return 'Must be a number from $min to $max with at most 4 decimal places, or empty';
+  }
+
+  @override
+  String get valColourHex =>
+      'Write # followed by 6 characters, for example #F6E7B8';
+
+  @override
+  String get valAudioFile => 'Must be a valid audio file';
+
+  @override
+  String get valTimeValid => 'Must be a valid time';
+
+  @override
+  String get valTextOrEmpty => 'Must be text or empty';
+
+  @override
+  String get valTextList => 'Must be a list of text';
+
+  @override
+  String valItemMax(int max) {
+    return 'An item may have at most $max characters';
+  }
+
+  @override
+  String get valSourceOrder => 'Must list official, calc and file exactly once';
+
+  @override
+  String valMaxImages(int max) {
+    return 'At most $max pictures';
+  }
+
+  @override
+  String get valImageNames =>
+      'Pictures must be an existing name (a-z, 0-9, -) or /uploads/<file name>';
+
+  @override
+  String get valUnsupported => 'This setting is not supported';
+
+  @override
+  String get valMustObject => 'Must be an object';
+
+  @override
+  String get valUnknownSetting => 'Unknown setting';
+
+  @override
+  String valSurahAyat(String name, int ayat) {
+    return '$name has $ayat verses';
+  }
+
+  @override
+  String get valAyatOrder => 'Verse from must come before or equal Verse to';
+
+  @override
+  String get valAyatMax => 'At most 5 verses per display';
+
+  @override
+  String get valUnknownFeature => 'Unknown feature';
+
+  @override
+  String get valSettingsObject => 'Settings must be an object';
+
+  @override
+  String valAlwaysOn(String name) {
+    return '$name is always on and cannot be switched off';
+  }
+
+  @override
+  String get valFromBeforeTo => 'The start date must be before the end date';
+
+  @override
+  String get valDate => 'Must be a valid date';
+
+  @override
+  String get valTimeHm => 'Must be a valid time (HH:MM)';
+
+  @override
+  String get valDateTime => 'Must be a valid date and time';
+
+  @override
+  String get valPickDays => 'Choose at least one day';
+
+  @override
+  String get valPickTz => 'Choose a time zone from the list';
+
+  @override
+  String get valUnknownKind => 'Unknown content kind';
+
+  @override
+  String get valItemObject => 'The item must be an object';
+
+  @override
+  String get valImageBad => 'Invalid picture';
+
+  @override
+  String get valFitBad => 'Invalid picture display';
+
+  @override
+  String get valChoiceBad => 'Invalid choice';
+
+  @override
+  String get valColourLike => 'The colour must look like #12AB34';
+
+  @override
+  String get valFontBad => 'Invalid font';
+
+  @override
+  String get valSizeChoice => 'The size must be S, M, L or XL';
+
+  @override
+  String get valValueUnknown => 'Unknown value';
+
+  @override
+  String get kindHintSeries => 'Series code for a lecture series (optional)';
+
+  @override
+  String get kindHintPhone => 'For committee members only, not shown on the TV';
+
+  @override
+  String get kindDescPengumuman =>
+      'Notices to the congregation for a set period.';
+
+  @override
+  String get kindDescHadis => 'Chosen hadith for the hadith card on the TV.';
+
+  @override
+  String get errorRequestFailed => 'The request failed';
+
+  @override
+  String get errorFeatureNotFound => 'Feature not found';
+
+  @override
+  String get tvLangNeedsUpdate => 'Update MAX Kiosk Server to use this choice';
+
+  @override
+  String get prayerErrNotFound => 'Not found';
+
+  @override
+  String get prayerErrRateLimited => 'Too many searches. Try again in a moment';
+
+  @override
+  String get prayerErrOffline =>
+      'Searching for a place needs MAXCOM to be online';
+
+  @override
+  String get prayerErrUpstream =>
+      'The prayer time source is not answering. Try again later';
+
+  @override
+  String get prayerErrZonesUpstream =>
+      'The zone list cannot be downloaded now. Try again later';
+
+  @override
+  String get prayerErrConflict => 'This action can no longer be done';
+
+  @override
+  String get prayerErrTooLarge =>
+      'The file is too large. Choose a smaller file';
+
+  @override
+  String get prayerErrBadType => 'This file type is not supported';
+
+  @override
+  String get prayerErrUnavailable => 'The service is not available right now';
+
+  @override
+  String get prayerErrInvalidData => 'Invalid data';
+
+  @override
+  String get liveSignInFailed => 'YouTube sign-in did not work. Try again.';
+
+  @override
+  String get liveStartFailed => 'The broadcast could not be started';
+
+  @override
+  String get liveOtherDevice => 'another device';
+
+  @override
+  String get liveRateText =>
+      'Too many attempts to start a broadcast. Try again in a moment.';
+
+  @override
+  String get liveWarnYoutubeNotSignedIn =>
+      'YouTube is not signed in on the box. The broadcast to the surau screen is running.';
+
+  @override
+  String get liveWarnYoutubeOff =>
+      'YouTube was switched off by the administrator';
+
+  @override
+  String get liveWarnYoutubeQuota => 'Today\'s YouTube quota is used up.';
+
+  @override
+  String get liveWarnYoutubeReauth => 'YouTube sign-in needs to be renewed.';
+
+  @override
+  String get liveWarnYoutubeForbidden => 'YouTube refused the request.';
+
+  @override
+  String get liveWarnCloudUnreachable => 'YouTube: the cloud cannot be reached';
+
+  @override
+  String liveCamUnreachable(String name) {
+    return '$name, cannot be reached';
+  }
+
+  @override
+  String liveCamReady(String name) {
+    return '$name, ready';
+  }
+
+  @override
+  String liveExtBoxPullNote(String camera) {
+    return 'On the iPad, the MAXCOM box pulls the picture and audio from $camera and sends a preview to this iPad. The broadcast combined at the box reaches the surau screen and YouTube 1 to 2 seconds late.';
+  }
+
+  @override
+  String get liveExtControllerOnly =>
+      'Camera audio only. This iPad controls the broadcast and shows the preview; it sends no sound.';
+
+  @override
+  String get liveExtScreenLock =>
+      'Put the iPad near the speaker and keep the screen on. Locking the screen stops the microphone.';
+
+  @override
+  String get liveExtRecordingFallback =>
+      'No recording is made when the iPad controls the external camera. A copy of the broadcast is on YouTube.';
+
+  @override
+  String get liveExtSourceName => 'iPad microphone';
+
+  @override
+  String liveExtMicLostCamera(String source) {
+    return '$source was cut off. The broadcast continues with the camera audio.';
+  }
+
+  @override
+  String liveExtMicLostSilent(String source) {
+    return '$source was cut off. The broadcast continues without sound.';
+  }
+
+  @override
+  String get liveExtMicLostHint =>
+      'The microphone reconnects automatically and is aligned before it is mixed in again. Keep the iPad screen on.';
+
+  @override
+  String get liveExtMicRefused =>
+      'The iPad microphone could not be opened. The broadcast continues with the camera audio.';
+
+  @override
+  String get liveExtChipRealign => 'Aligned again when back';
+
+  @override
+  String get liveExtChipOnStart => 'Aligned when the broadcast starts';
+
+  @override
+  String get liveExtChipAligned => 'Aligned';
+
+  @override
+  String get liveExtChipNotAligned => 'Not aligned yet';
+
+  @override
+  String get liveExtChipManual => 'Audio time offset';
+
+  @override
+  String get liveExtChipAligning => 'Aligning';
+
+  @override
+  String liveExtAlignFailedCamera(String source) {
+    return 'Automatic alignment has not worked yet, so $source is not mixed in, to keep voices from sounding doubled. Make sure there is sound in the surau and the camera can hear it.';
+  }
+
+  @override
+  String get liveExtAlignFailedSilent =>
+      'Automatic alignment has not worked yet. The sound may not match the picture.';
+
+  @override
+  String liveExtUseMicOnly(String source) {
+    return 'Use $source only';
+  }
+
+  @override
+  String liveExtCameraNoAudioMic(String source) {
+    return 'This camera has no audio. $source is used alone. Set \'Audio time offset\' with \'Clap test\'.';
+  }
+
+  @override
+  String get liveExtCameraNoAudioAlone =>
+      'This camera has no audio. Press \'Add audio\' to choose a microphone, or the broadcast has no sound.';
+
+  @override
+  String get liveExtAllMuted =>
+      'All audio sources are muted. The broadcast has no sound.';
+
+  @override
+  String get liveExtPreviewRetry => 'The preview was cut off. Reconnecting...';
+
+  @override
+  String get liveOnlyEnrol => 'Register a new device';
+
+  @override
+  String get liveOnlyRevoke => 'Delete a device';
+
+  @override
+  String get liveOnlyRevokeWhy =>
+      'The administrator must see the device deleted';
+
+  @override
+  String get liveOnlyAddUser => 'Add a user';
+
+  @override
+  String get liveOnlyResetPin => 'Reset the PIN';
+
+  @override
+  String get liveOnlyAppLock => 'App lock';
+
+  @override
+  String get liveOnlyPairDisplay => 'Approve a display pairing';
+
+  @override
+  String get liveOnlyYoutubeSign => 'YouTube sign-in and sign-out';
+
+  @override
+  String get liveOnlyLive => 'Live broadcast';
+
+  @override
+  String get liveOnlyPrayerOps =>
+      'Importing, correcting and searching prayer times';
+
+  @override
+  String get liveOnlyPrayerData => 'Prayer time data';
+
+  @override
+  String get liveOnlyIslamic => 'Islamic content';
+
+  @override
+  String get liveOnlyAnalyse => 'Picture analysis';
+
+  @override
+  String get liveOnlyUploadRecording => 'Upload a recording to YouTube';
+
+  @override
+  String get liveOnlySyncNow => 'Sync now';
+
+  @override
+  String get liveOnlyChangePin => 'Change the PIN';
+
+  @override
+  String get liveOnlyReportPdf => 'Download the report PDF';
+
+  @override
+  String get liveOnlyCountPhoto => 'View the count sheet photo';
+
+  @override
+  String get liveOnlyReportShared => 'Record the report sharing';
+
+  @override
+  String get liveOnlyFinanceAudit => 'Finance audit history';
+
+  @override
+  String get hadisGradeNoteSahih => 'The highest grade';
+
+  @override
+  String get hadisGradeNoteHasan => 'Accepted as evidence';
+
+  @override
+  String get hadisGradeNoteHasanLi =>
+      'Hasan through the support of other narrations';
+
+  @override
+  String get hadisGradeNoteDhaif => 'Weak; not shown';
+
+  @override
+  String get hadisGradeNoteMaudhu => 'Never shown';
+
+  @override
+  String get valWhatThemeName =>
+      'a theme name (a-z, 0-9, hyphen, at most 32 characters)';
+
+  @override
+  String get valWhatReciter => 'a reciter folder name';
+
+  @override
+  String get valWhatCountry => 'a two-letter country code like MY';
+
+  @override
+  String get valWhatTimezone => 'a time zone like Asia/Kuala_Lumpur';
+
+  @override
+  String get valWhatZone => 'a zone code like SGR01';
+
+  @override
+  String get valWhatImageOrEmpty => 'a picture id or empty';
+
+  @override
+  String get valWhatFundOrEmpty => 'a fund id or empty';
+
+  @override
+  String get valWhatDateOrEmpty => 'a date YYYY-MM-DD or empty';
+
+  @override
+  String get kindDescPenceramah => 'Ustaz and ustazah who give the lectures.';
+
+  @override
+  String get kindDescKitab => 'Books read in the lectures.';
+
+  @override
+  String get kindDescKuliah => 'The lecture schedule shown on the TV.';
+
+  @override
+  String get kindDescTicker =>
+      'Short lines scrolling at the bottom of the screen.';
+
+  @override
+  String get kindDescPoster => 'Full-screen pictures rotating on the TV.';
+
+  @override
+  String get kindDescProgramKhas => 'Upcoming events and programmes.';
+
+  @override
+  String get kindDescTakwim => 'Important dates in the surau calendar.';
+
+  @override
+  String get kindDescWorldTime => 'Clocks of other cities shown on the TV.';
+
+  @override
+  String get kindDescPetugas => 'Imam, bilal and committee members on duty.';
+
+  @override
+  String get kindDescTugasan => 'Who is on duty on which day.';
+
+  @override
+  String get kindDescZikir => 'Zikir after prayer, in reading order.';
+
+  @override
+  String get kindDescTilawahSlot =>
+      'Quran recitation played before prayer time.';
+
+  @override
+  String get hadisGradeNoteSahihLi =>
+      'Sahih through the support of other narrations';
+
+  @override
+  String get trustRootMissing => 'The root certificate is missing. Enrol again';
+
+  @override
+  String get trustRootInvalid => 'The root certificate is not valid';
+
+  @override
+  String get trustRootMismatch => 'The root certificate does not match';
+
+  @override
+  String get trustCloudFailed =>
+      'The secure connection to the MAXCOM cloud failed.';
+
+  @override
+  String get trustBadQr => 'The enrolment QR code is not valid';
+
+  @override
+  String get trustRootFetch =>
+      'The root certificate could not be fetched from the box';
+
+  @override
+  String get trustNoHttps => 'This MAXCOM has no HTTPS certificate yet';
+
+  @override
+  String get imageNotReadable =>
+      'This file is not a picture that can be read. Choose a JPEG, PNG or WebP file.';
+
+  @override
+  String get errcWrongPin => 'Wrong PIN';
+
+  @override
+  String errcLocked(int minutes) {
+    return 'PIN locked. Try again in $minutes minutes.';
+  }
+
+  @override
+  String get errcUnlockFailed => 'Unlock did not succeed. Try again.';
+
+  @override
+  String get errcPinPolicy => 'The PIN must be 6 digits and not easy to guess';
+
+  @override
+  String get errcPinExists => 'A PIN is already set for this user';
+
+  @override
+  String get errcPinRequired => 'A PIN is required';
+
+  @override
+  String get errcPinMissing => 'No PIN has been set yet';
+
+  @override
+  String get errcAppLockOff => 'The app lock is not on';
+
+  @override
+  String get errcSuspended => 'This surau is suspended for now';
+
+  @override
+  String get errcBadEnrolCode =>
+      'The enrolment code is not valid or has already been used';
+
+  @override
+  String get errcOpsAppRequired => 'Use the MAXCOM Ops app for this account';
+
+  @override
+  String get errcOpsCliOnly =>
+      'This registration is done through the MAXCOM cloud only';
+
+  @override
+  String get errcNotOpsUser => 'This user has no MAXCOM Ops role';
+
+  @override
+  String get errcOpsDeviceLimit =>
+      'This user has reached the MAXCOM Ops registration limit';
+
+  @override
+  String get errcNotOpsDevice => 'This device is not for MAXCOM Ops';
+
+  @override
+  String get errcBadRequest => 'The request is not valid';
+
+  @override
+  String get errcBadName => 'The name is not valid';
+
+  @override
+  String get errcBadRoles => 'The roles are not valid';
+
+  @override
+  String get errcBadTtl => 'The code validity period is not valid';
+
+  @override
+  String get errcBadDevice => 'The device is not valid';
+
+  @override
+  String get errcBadChoice => 'The choice is not valid';
+
+  @override
+  String get errcUserNotFound => 'User not found';
+
+  @override
+  String get errcDeviceNotFound => 'Device not found';
+
+  @override
+  String get errcNotFound => 'Not found';
+
+  @override
+  String get errcPairGone =>
+      'This screen pairing has ended or has already been used';
+
+  @override
+  String get errcBadPairCode => 'The pairing code is not correct';
+
+  @override
+  String get errcKuliahNotFound => 'Lecture not found';
+
+  @override
+  String get errcUploadNotFound => 'Upload not found';
+
+  @override
+  String get errcLastAdmin => 'There must be at least one active administrator';
+
+  @override
+  String get errcLastSuperadmin =>
+      'There must be at least one active MAXCOM administrator';
+
+  @override
+  String get errcLastAdminDevice =>
+      'Register another administrator\'s device first';
+
+  @override
+  String get errcRefMismatch =>
+      'The user ID does not match. Open the user page again and retry';
+
+  @override
+  String get errcOwnAccount => 'You cannot delete your own account';
+
+  @override
+  String get errcPhoneRequired => 'A phone number is required';
+
+  @override
+  String get errcBadPhone => 'The phone number is not valid';
+
+  @override
+  String get errcPhoneTaken =>
+      'This phone number is already used by another user';
+
+  @override
+  String get errcSuperadminCliOnly =>
+      'This role can only be managed through the MAXCOM CLI';
+
+  @override
+  String get errcSuperadminCloudOnly =>
+      'Manage MAXCOM administrators through the MAXCOM cloud';
+
+  @override
+  String get errcSuperadminExists => 'A MAXCOM administrator already exists';
+
+  @override
+  String get errcBoxOnly =>
+      'A device code must be made at the surau. Use the Surau Administrator\'s phone on the surau Wi-Fi.';
+
+  @override
+  String get errcNotEmpty => 'This surau still has data and cannot be deleted';
+
+  @override
+  String get errcModuleOff => 'This module is not turned on';
+
+  @override
+  String get errcLiveBusy =>
+      'A live broadcast is running. Try again when it ends.';
+
+  @override
+  String get errcBadAddress => 'The camera address is not valid';
+
+  @override
+  String get errcUnknownVideo =>
+      'That video is not one of this surau\'s broadcasts';
+
+  @override
+  String get ra4StopNotYet => 'The broadcast has not stopped yet. Try again.';
+
+  @override
+  String get ra4StopRetry => 'Try again';
+
+  @override
+  String get ra4EndedByBox => 'The broadcast was ended by the box.';
+
+  @override
+  String get ra4StillLive =>
+      'The broadcast is still running. Open Live to stop it.';
+
+  @override
+  String get ra4CameraName => 'External camera';
+
+  @override
+  String get ra4CameraStoppedByIpad =>
+      'The camera was stopped by the iPad. Open this screen again.';
+
+  @override
+  String get ra4CamNotRtsp => 'The address must start with rtsp://';
+
+  @override
+  String get ra4CamNotIpv4 =>
+      'Use the camera\'s IPv4 address on the surau network (like 10.168.1.20), not a name.';
+
+  @override
+  String get ra4CamNotPrivate =>
+      'The address must be on a private network (10.x.x.x, 172.16 to 172.31 or 10.168.x.x).';
+
+  @override
+  String get ra4CamIsBox =>
+      'This is the MAXCOM box\'s own address. Enter the camera\'s address.';
+
+  @override
+  String get ra4CamBadPort => 'The port must be a number from 1 to 65535.';
+
+  @override
+  String get ra4CamBadLogin =>
+      'The login in the address holds a character that must be percent-encoded (write @ as %40).';
+
+  @override
+  String get ra4CamBadPath =>
+      'The address path holds a character that is not allowed (a space, a quote or #).';
+
+  @override
+  String get ra4CamTooLong =>
+      'The address is too long (at most 400 characters).';
+
+  @override
+  String get errcUnusable => 'This audio input cannot be used';
+
+  @override
+  String get errcCameraError => 'The camera could not be processed';
+
+  @override
+  String get errcCameraNotConfigured => 'No camera has been set up yet';
+
+  @override
+  String get errcUnavailable =>
+      'The service is not available right now. Try again later.';
+
+  @override
+  String get errcBadClaim => 'The MAXCOM registration is not valid';
+
+  @override
+  String get errcWorkerUnreachable =>
+      'MAXCOM cannot check the registration right now. Try again.';
+
+  @override
+  String get errcClaimPending => 'Pending MAXCOM approval';
+
+  @override
+  String get errcBoxRevoked => 'This MAXCOM has been revoked by the cloud';
+
+  @override
+  String get errcYoutubeQuota =>
+      'The daily YouTube limit has been reached. Try again tomorrow.';
+
+  @override
+  String get errcYoutubeReauthorise => 'The YouTube sign-in must be done again';
+
+  @override
+  String get errcYoutubeNotConfigured => 'YouTube has not been set up';
+
+  @override
+  String get errcYoutubeForbidden => 'YouTube refused this action';
+
+  @override
+  String get errcYoutubeNotFound => 'The YouTube video was not found';
+
+  @override
+  String get errcYoutubeNetwork => 'Cannot reach YouTube. Try again.';
+
+  @override
+  String get errcCatchupOff =>
+      'Uploading recordings to YouTube is not turned on';
+
+  @override
+  String get errcVideoMismatch => 'The video does not match this upload';
+
+  @override
+  String get errcUploadExpired => 'This upload has expired';
+
+  @override
+  String get errcTooManyUploads => 'Too many uploads are running';
+
+  @override
+  String get errcUnknownLiveVideo => 'That live broadcast is not known';
+
+  @override
+  String get errcThemeGone => 'The check has expired. Check the file again.';
+
+  @override
+  String get errcThemeInUse =>
+      'This theme is in use. Choose another theme first.';
+
+  @override
+  String get errcThemeBuiltIn => 'A built-in MAXCOM theme cannot be deleted';
+
+  @override
+  String errcContentInUse(int count) {
+    return 'Still used by $count upcoming lectures';
+  }
+
+  @override
+  String get errcAssetMissing => 'That picture is no longer there';
+
+  @override
+  String get errcHadisFull => 'The hadith limit has been reached';
+
+  @override
+  String get errcEntryExists => 'This record already exists';
+
+  @override
+  String get errcUncertain =>
+      'Check whether that action has already taken place';
+
+  @override
+  String get liveOnlyThemeCheck => 'Check a theme file';
+
+  @override
+  String get liveOnlyThemeInstall => 'Install a theme';
+
+  @override
+  String get liveOnlyThemeDelete => 'Delete a theme';
+
+  @override
+  String get liveOnlyRecoveryCode => 'Make a recovery code';
+
+  @override
+  String get liveOnlyLeave => 'Leave the surau';
+
+  @override
+  String get liveOnlyLogout => 'Sign out';
+
+  @override
+  String get errcSurauNotFound => 'Surau not found';
+
+  @override
+  String get errcSurauRequired => 'No surau selected';
+
+  @override
+  String get errcNotRegistered =>
+      'This MAXCOM has not registered, or its registration has expired';
+
+  @override
+  String get errcCodeMismatch =>
+      'The claim code does not match this registration';
+
+  @override
+  String get errcNoWorker =>
+      'The MAXCOM service is not set up on this cloud yet';
+
+  @override
+  String get errcWorker =>
+      'The MAXCOM service cannot be reached or refused the request';
+
+  @override
+  String get errcNotLinked => 'This MAXCOM has already been revoked';
+
+  @override
+  String get errcBadBoxName => 'The MAXCOM name must be 1 to 60 characters';
+
+  @override
+  String get errcNotSupport => 'This user is not a MAXCOM Support user';
+
+  @override
+  String get errcEsolatUnreachable =>
+      'e-Solat cannot be reached right now. Try again.';
+
+  @override
+  String get errcAlreadyLinked =>
+      'This MAXCOM is already linked or approved. Use Revoke, not Reject.';
+
+  @override
+  String errcEsolatNoRecord(int year, String zone) {
+    return 'e-Solat has not published the $year prayer times for zone $zone yet. Try again later or import a CSV file.';
+  }
+
+  @override
+  String errcCsvYearMismatch(int year, String from, String to) {
+    return 'This file is not for the year $year ($from to $to)';
+  }
+
+  @override
+  String get errcNoOfficialSource =>
+      'This country has no official source. Use a file or calculation.';
+
+  @override
+  String errcUndoBlocked(String date, String by) {
+    return 'This import cannot be undone because the day $date was replaced or corrected on $by';
+  }
+
+  @override
+  String get ra2Month1 => 'January';
+
+  @override
+  String get ra2Month2 => 'February';
+
+  @override
+  String get ra2Month3 => 'March';
+
+  @override
+  String get ra2Month4 => 'April';
+
+  @override
+  String get ra2Month5 => 'May';
+
+  @override
+  String get ra2Month6 => 'June';
+
+  @override
+  String get ra2Month7 => 'July';
+
+  @override
+  String get ra2Month8 => 'August';
+
+  @override
+  String get ra2Month9 => 'September';
+
+  @override
+  String get ra2Month10 => 'October';
+
+  @override
+  String get ra2Month11 => 'November';
+
+  @override
+  String get ra2Month12 => 'December';
+
+  @override
+  String get ra2MonthShort1 => 'Jan';
+
+  @override
+  String get ra2MonthShort2 => 'Feb';
+
+  @override
+  String get ra2MonthShort3 => 'Mar';
+
+  @override
+  String get ra2MonthShort4 => 'Apr';
+
+  @override
+  String get ra2MonthShort5 => 'May';
+
+  @override
+  String get ra2MonthShort6 => 'Jun';
+
+  @override
+  String get ra2MonthShort7 => 'Jul';
+
+  @override
+  String get ra2MonthShort8 => 'Aug';
+
+  @override
+  String get ra2MonthShort9 => 'Sep';
+
+  @override
+  String get ra2MonthShort10 => 'Oct';
+
+  @override
+  String get ra2MonthShort11 => 'Nov';
+
+  @override
+  String get ra2MonthShort12 => 'Dec';
+
+  @override
+  String get ra2Weekday1 => 'Monday';
+
+  @override
+  String get ra2Weekday2 => 'Tuesday';
+
+  @override
+  String get ra2Weekday3 => 'Wednesday';
+
+  @override
+  String get ra2Weekday4 => 'Thursday';
+
+  @override
+  String get ra2Weekday5 => 'Friday';
+
+  @override
+  String get ra2Weekday6 => 'Saturday';
+
+  @override
+  String get ra2Weekday7 => 'Sunday';
+
+  @override
+  String get ra2WeekdayShort1 => 'Mon';
+
+  @override
+  String get ra2WeekdayShort2 => 'Tue';
+
+  @override
+  String get ra2WeekdayShort3 => 'Wed';
+
+  @override
+  String get ra2WeekdayShort4 => 'Thu';
+
+  @override
+  String get ra2WeekdayShort5 => 'Fri';
+
+  @override
+  String get ra2WeekdayShort6 => 'Sat';
+
+  @override
+  String get ra2WeekdayShort7 => 'Sun';
+
+  @override
+  String get ra2PrayerImsak => 'Imsak';
+
+  @override
+  String get ra2PrayerSubuh => 'Fajr';
+
+  @override
+  String get ra2PrayerSyuruk => 'Sunrise';
+
+  @override
+  String get ra2PrayerZohor => 'Dhuhr';
+
+  @override
+  String get ra2PrayerAsar => 'Asr';
+
+  @override
+  String get ra2PrayerMaghrib => 'Maghrib';
+
+  @override
+  String get ra2PrayerIsyak => 'Isha';
+
+  @override
+  String get ra2PrayerDhuha => 'Duha';
+
+  @override
+  String get ra2MethodMwl => 'Muslim World League';
+
+  @override
+  String get ra2MethodEgyptian => 'Egypt';
+
+  @override
+  String get ra2MethodKarachi => 'Karachi';
+
+  @override
+  String get ra2MethodUmmAlQura => 'Umm al-Qura';
+
+  @override
+  String get ra2MethodDubai => 'Dubai';
+
+  @override
+  String get ra2MethodQatar => 'Qatar';
+
+  @override
+  String get ra2MethodKuwait => 'Kuwait';
+
+  @override
+  String get ra2MethodMoonsighting => 'Moonsighting Committee';
+
+  @override
+  String get ra2MethodSingapore => 'Singapore';
+
+  @override
+  String get ra2MethodTehran => 'Tehran';
+
+  @override
+  String get ra2MethodTurkey => 'Turkey (Diyanet)';
+
+  @override
+  String get ra2MethodNorthAmerica => 'North America (ISNA)';
+
+  @override
+  String get ra2MethodJakim => 'JAKIM 18/18';
+
+  @override
+  String get ra2MethodKemenag => 'Kemenag Indonesia 20/18';
+
+  @override
+  String get ra2MethodUoif => 'UOIF France 12/12';
+
+  @override
+  String get ra2MethodMorocco => 'Morocco 19/17';
+
+  @override
+  String get ra2MethodAlgeria => 'Algeria 18/17';
+
+  @override
+  String get ra2MethodRussia => 'Russia 16/15';
+
+  @override
+  String get ra2WarnNoDataToday => 'There is no prayer time data for today';
+
+  @override
+  String get ra2WarnNotLocated =>
+      'The surau location is not set; prayer times cannot be calculated';
+
+  @override
+  String get ra2WarnEmergencyToday => 'Today uses a temporary calculation';
+
+  @override
+  String get ra2WarnZoneNoDataFetch =>
+      'There is no data for this zone; MAXCOM will download it';
+
+  @override
+  String get ra2WarnZoneNoDataManual =>
+      'There is no data for this zone; upload data or turn on automatic download';
+
+  @override
+  String get ra2FieldDate => 'Date';
+
+  @override
+  String ra2RowMissingColumn(String field) {
+    return 'Column $field is missing';
+  }
+
+  @override
+  String ra2RowMasjidOnly(String field) {
+    return 'Column $field is for mosques only';
+  }
+
+  @override
+  String ra2RowEmpty(String field) {
+    return '$field is empty';
+  }
+
+  @override
+  String ra2RowInvalid(String field) {
+    return '$field is not valid';
+  }
+
+  @override
+  String ra2RowOutOfRange(String field) {
+    return '$field is out of range';
+  }
+
+  @override
+  String get ra2RowDuplicate => 'Repeated date';
+
+  @override
+  String get ra2RowBeforeMidnight => 'The derived Imsak falls before midnight';
+
+  @override
+  String get ra2RowOrder => 'The times are not in order';
+
+  @override
+  String get ra2RowNoRows => 'The file has no prayer time rows';
+
+  @override
+  String get ra2RowTooMany => 'The file has too many rows';
+
+  @override
+  String get ra2RowGap => 'A date is missing before this row';
+
+  @override
+  String get ra2CsvRecorded =>
+      'Recorded in Import records; it can be undone there.';
+
+  @override
+  String get ra2NoOfficialCard =>
+      'This country has no official source. Upload a file or use calculation.';
+
+  @override
+  String valRange(int min, int max) {
+    return '$min to $max';
+  }
+
+  @override
+  String contentRefDeleted(String what) {
+    return '$what deleted';
+  }
+
+  @override
+  String contentInUseDates(String dates) {
+    return 'Dates: $dates';
+  }
+
+  @override
+  String get errcAlreadyVoided => 'This entry has already been cancelled';
+
+  @override
+  String get errcOpeningExists => 'This tabung already has an opening balance';
+
+  @override
+  String get errcOpeningFundFixed =>
+      'An opening balance cannot be moved to another tabung';
+
+  @override
+  String get ra3MonthNames =>
+      'January|February|March|April|May|June|July|August|September|October|November|December';
+
+  @override
+  String ra3LateEntries(int n) {
+    return '$n entries arrived after this month was closed';
+  }
+
+  @override
+  String get ra3AskAdminClose => 'Ask an administrator to close this month';
+
+  @override
+  String get ra3ClosedMonthToday =>
+      'The month of this lecture is closed. The payment is dated today.';
+
+  @override
+  String get ra3DateClosedNote => 'A closed month cannot be chosen.';
+
+  @override
+  String get ra3LateEntriesShow => 'View entries';
+
+  @override
+  String get ra5CodeUnknown => 'The code is not recognised';
+
+  @override
+  String get ra5CodeUnknownBody =>
+      'Check the code you typed, or ask the Pentadbir for a new one.';
+
+  @override
+  String get ra5CodeInvalid =>
+      'This is not a MAXCOM enrolment code. Scan the QR again or paste the whole text.';
+
+  @override
+  String ra5UnlockTooMany(int minutes) {
+    return 'Too many attempts. Try again in $minutes minutes';
+  }
+
+  @override
+  String get ra5OfflineClosed =>
+      'Offline unlock is closed. Connect to MAXCOM to unlock.';
+
+  @override
+  String get ra5RoleSupport => 'MAXCOM Support';
+
+  @override
+  String get ra5ListSeparator => ', ';
+
+  @override
+  String get ra5SealCheckFailed =>
+      'The PIN cannot be checked right now. Connect to MAXCOM and try again.';
+
+  @override
+  String get ra5LeaveHint =>
+      'Leaving the surau is the only way to remove this device. The last Pentadbir must first enrol another Pentadbir device.';
+
+  @override
+  String get ra6SyncErrorChip => 'Sync error';
+
+  @override
+  String get ra6SyncErrorShort => 'Error';
+
+  @override
+  String get ra6RefusedMonthClosed => 'Refused: the month is already closed';
+
+  @override
+  String get ra6RefusedFundArchived => 'Refused: the fund is archived';
+
+  @override
+  String get ra6RefusedAlreadyVoided => 'Refused: the entry is already voided';
+
+  @override
+  String get ra6RefusedOpeningExists =>
+      'Refused: an opening balance already exists';
+
+  @override
+  String get ra6RefusedBlobMissing => 'The picture is no longer on this device';
+
+  @override
+  String get ra6RefusedUserInactive => 'Refused: the user is not active';
+
+  @override
+  String get ra6RefusedLastAdmin =>
+      'Refused: there must be at least one Pentadbir';
+
+  @override
+  String get ra6Rejected => 'Rejected';
+
+  @override
+  String get ra6CopyDetails => 'Copy details';
+
+  @override
+  String get ra6DetailsCopied => 'Details copied';
+
+  @override
+  String ra6ConflictPartial(String names) {
+    return 'Some settings were not saved because a newer change exists: $names';
+  }
+
+  @override
+  String get ra6ConflictEntityFinance => 'Finance entry';
+
+  @override
+  String get ra6SettingsSavedQueued => 'Saved on this device, waiting to sync';
+
+  @override
+  String get ra6AppLockNeedsBox => 'Needs a connection to MAXCOM';
+
+  @override
+  String ra6RangeTo(String min, String max) {
+    return '$min to $max';
+  }
+
+  @override
+  String ra6FeatureNeeds(String name) {
+    return 'Turn on $name first';
+  }
+
+  @override
+  String get ra6TplLabel => 'Lecture label';
+
+  @override
+  String get ra6TplSpeaker => 'Speaker';
+
+  @override
+  String get ra6TplTopic => 'Topic';
+
+  @override
+  String get ra6TplBook => 'Book';
+
+  @override
+  String get ra6TplSurau => 'Surau name';
+
+  @override
+  String get ra6TplDate => 'Date';
+
+  @override
+  String get ra6TplTime => 'Time';
+
+  @override
+  String get ra6LiveBadge => 'LIVE';
+
+  @override
+  String get ra6LinkCloudError => 'MAXCOM cloud: sync error';
+
+  @override
+  String get ra6LinkBoxError => 'MAXCOM at the surau: error';
+
+  @override
+  String get liveNoticeShare => 'Share the live link';
+
+  @override
+  String get liveNoticeTitle => 'Live stream notice';
+
+  @override
+  String get liveNoticeEditHint => 'Check and edit the text before sharing.';
+
+  @override
+  String get liveNoticeToOne => 'Send to one person';
+
+  @override
+  String get liveNoticeReset => 'Restore original text';
+
+  @override
+  String get liveNoticePickTitle => 'Send to whom?';
+
+  @override
+  String get liveNoticePickSearch => 'Search by name';
+
+  @override
+  String get liveNoticePickEmpty => 'No user found.';
+
+  @override
+  String get liveNoticeStarted =>
+      'The live has started. Share the link with the AJK and the congregation.';
+
+  @override
+  String get liveNoticeShareGo => 'Share';
+
+  @override
+  String get liveNoticeCopied => 'Text copied. Paste it in WhatsApp.';
+
+  @override
+  String get liveNoticeShareFailed => 'The text could not be shared.';
+
+  @override
+  String waOpensTo(String number) {
+    return 'WhatsApp opens straight to $number';
+  }
+
+  @override
+  String get liveNoticeOpenGo => 'Open WhatsApp';
+
+  @override
+  String get liveNoticeWhatsAppFailed => 'WhatsApp could not be opened.';
+
+  @override
+  String get peopleNeedsUpdate =>
+      'Update MAX Kiosk Server to use this function';
+
+  @override
+  String get peopleFlagsBoxOnly =>
+      'Active status shows when you are on the surau Wi-Fi.';
+
+  @override
+  String get peopleNeedsAction => 'Needs action';
+
+  @override
+  String get peopleNoAdminPhone =>
+      'No Administrator has an active phone. Enrol an Administrator phone.';
+
+  @override
+  String get peopleActiveToday => 'active today';
+
+  @override
+  String get peopleActiveYesterday => 'active yesterday';
+
+  @override
+  String peopleActiveDaysAgo(int n) {
+    return 'active $n days ago';
+  }
+
+  @override
+  String peopleUnusedDays(int n) {
+    return 'unused for $n days';
+  }
+
+  @override
+  String get peopleInactiveBadge => 'Inactive';
+
+  @override
+  String usersAllActive(int n) {
+    return 'All users active ($n)';
+  }
+
+  @override
+  String usersDeviceCount(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n devices',
+      one: '1 device',
+      zero: 'No devices yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String usersNoDeviceYet(int n) {
+    return 'Added $n days ago, no phone enrolled yet';
+  }
+
+  @override
+  String get usersQrButton => 'QR code';
+
+  @override
+  String get usersUnlock => 'Unlock';
+
+  @override
+  String usersUnlocked(String name) {
+    return 'The PIN of $name is unlocked. The PIN is unchanged.';
+  }
+
+  @override
+  String usersLockedUntil(String time) {
+    return 'PIN locked until $time. The lock ends by itself, or unlock it now.';
+  }
+
+  @override
+  String usersSuggestDeactivate(String name) {
+    return '$name has not used the app for over 90 days. Deactivate?';
+  }
+
+  @override
+  String usersDeactivatedFold(int n) {
+    return 'Deactivated ($n)';
+  }
+
+  @override
+  String get usersDeactivatedHint =>
+      'Cannot unlock. The name stays in old records.';
+
+  @override
+  String usersDeactivatedOn(String date) {
+    return 'Deactivated $date';
+  }
+
+  @override
+  String usersAutoDeleteIn(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'Deleted automatically in $n days',
+      one: 'Deleted automatically in 1 day',
+      zero: 'Deleted automatically today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get usersActivate => 'Reactivate';
+
+  @override
+  String usersActivated(String name) {
+    return '$name is active again. Enrol a phone with a new QR code.';
+  }
+
+  @override
+  String get usersRecoveryFold => 'Recovery code';
+
+  @override
+  String get usersRecoveryHint => 'To get back in if every admin phone is lost';
+
+  @override
+  String get usersRolesFold => 'What each role can do';
+
+  @override
+  String get usersHintDismiss => 'Close';
+
+  @override
+  String get userRename => 'Rename';
+
+  @override
+  String get userRenameTitle => 'Rename';
+
+  @override
+  String get userRenameBody =>
+      'The new name is used from now on in the app and lists.';
+
+  @override
+  String get userRenameHistory =>
+      'Old records do not change. The change log and finance keep showing the name used at the time.';
+
+  @override
+  String get userRenameSave => 'Save name';
+
+  @override
+  String userRenamed(String name) {
+    return 'Name changed to $name.';
+  }
+
+  @override
+  String userNameTaken(String name) {
+    return 'A user named $name already exists. Save anyway?';
+  }
+
+  @override
+  String get nameInvalid => 'The name must be 1 to 80 characters';
+
+  @override
+  String userDevicesOf(String name, int n) {
+    return 'Devices of $name ($n)';
+  }
+
+  @override
+  String userAddedBy(String date, String name) {
+    return 'Added $date by $name';
+  }
+
+  @override
+  String get deviceEdit => 'Edit';
+
+  @override
+  String get deviceNameLabel => 'Device name';
+
+  @override
+  String get deviceNameHint =>
+      'Example: Phone of Ustaz Ahmad, treasurer desk iPad';
+
+  @override
+  String get deviceRenameHistory =>
+      'Old change log lines keep the old name of this device.';
+
+  @override
+  String get deviceRenamed => 'Device name saved.';
+
+  @override
+  String deviceOwnedBy(String name, String platform, String date) {
+    return 'Belongs to $name. $platform, enrolled $date';
+  }
+
+  @override
+  String get deviceRemoveThis => 'Delete this device';
+
+  @override
+  String get deviceRemoveHint =>
+      'This device can no longer open the app. To use it again, enrol it with a new QR code.';
+
+  @override
+  String devicesUnusedCard(int n) {
+    return '$n devices unused for over 60 days';
+  }
+
+  @override
+  String get devicesUnusedHint =>
+      'Old records stay. The owner can enrol again with a new QR code.';
+
+  @override
+  String get devicesRemoveAll => 'Delete all';
+
+  @override
+  String devicesRemoveAllConfirm(int n) {
+    return 'Delete $n unused devices?';
+  }
+
+  @override
+  String devicesRemovedSome(int n, int m) {
+    return '$n deleted, $m skipped';
+  }
+
+  @override
+  String get devicesSkipOwn => 'this device itself';
+
+  @override
+  String get devicesSkipInUse => 'used recently';
+
+  @override
+  String get devicesSkipLastAdmin => 'the last admin phone';
+
+  @override
+  String get devicesLastAdmin => 'Enrol another admin device first';
+
+  @override
+  String devicesOpenCodes(int n) {
+    return 'Unused codes ($n)';
+  }
+
+  @override
+  String devicesCodeExpiresIn(String device, int n) {
+    return '$device, expires in $n minutes';
+  }
+
+  @override
+  String get devicesEndCode => 'End the code';
+
+  @override
+  String get devicesCodeEnded => 'Code ended.';
+
+  @override
+  String get devicesRemovedNote =>
+      'A deleted device leaves the list at once. Its entries stay in the Change log.';
+
+  @override
+  String get tvBoxTitle => 'MAXCOM at the surau';
+
+  @override
+  String tvExtraScreens(int n) {
+    return 'Extra screens ($n)';
+  }
+
+  @override
+  String tvPairedSeen(String date, String ago) {
+    return 'Paired $date, seen $ago';
+  }
+
+  @override
+  String tvNotSeenDays(int n) {
+    return 'Not seen for $n days';
+  }
+
+  @override
+  String get tvPairNew => 'Pair a new screen';
+
+  @override
+  String get tvNoneWaiting => 'No screen is waiting.';
+
+  @override
+  String get tvOn => 'On';
+
+  @override
+  String get devicesSkipTv => 'a TV screen';
+
+  @override
+  String get devicesSkipGone => 'already gone';
+
+  @override
+  String tvPaired(String date) {
+    return 'Paired $date';
+  }
+
+  @override
+  String get tvSeenNow => 'just now';
+
+  @override
+  String tvSeenMinutes(int n) {
+    return '$n minutes ago';
+  }
+
+  @override
+  String tvSeenHours(int n) {
+    return '$n hours ago';
+  }
+
+  @override
+  String tvSeenDays(int n) {
+    return '$n days ago';
+  }
+
+  @override
+  String addStep(int n) {
+    return 'Step $n of 3';
+  }
+
+  @override
+  String get addWhatRole => 'What will they do?';
+
+  @override
+  String get addNameHint =>
+      'A name the other committee members know. It can be changed later.';
+
+  @override
+  String get addRoleAjk => 'View only: prayer times, content, finance';
+
+  @override
+  String get addRoleBendahari => 'Records donations and expenses';
+
+  @override
+  String get addRoleMedia => 'Announcements and posters on the TV screen';
+
+  @override
+  String get addRoleLive => 'Live broadcasts and recordings';
+
+  @override
+  String get addRoleAdmin => 'Everything, including users and devices';
+
+  @override
+  String addDeviceSummary(String device, int n) {
+    return '$device, code valid for $n minutes';
+  }
+
+  @override
+  String get addChangeDevice => 'Change the device name or the duration';
+
+  @override
+  String addDefaultDevice(String name) {
+    return 'Phone of $name';
+  }
+
+  @override
+  String get addSaveAndQr => 'Save and make a QR code';
+
+  @override
+  String addSavedNoQr(String name) {
+    return '$name saved. Make the QR code when you are on the surau Wi-Fi.';
+  }
+
+  @override
+  String addScanTitle(String name) {
+    return '$name scans this code with the MAXCOM app';
+  }
+
+  @override
+  String get addShare => 'Share';
+
+  @override
+  String addShareConfirmTitle(String name) {
+    return 'Send to $name only';
+  }
+
+  @override
+  String addShareConfirmBody(String name) {
+    return 'Not to a group. Anyone who holds this code on the surau Wi-Fi can sign in as $name until the code is used.';
+  }
+
+  @override
+  String addShareText(String name, String surau, int n) {
+    return 'MAXCOM invitation for $name at $surau. Valid for $n minutes and single use. On the surau Wi-Fi, open the MAXCOM app, choose \"Enter the code manually\" and paste the text below. Do not share it with anyone else.';
+  }
+
+  @override
+  String get addShareAdminInPerson =>
+      'A code for an admin must be scanned in front of you while the app lock is off.';
+
+  @override
+  String get addShareUnavailable =>
+      'Sharing is not available on this MAXCOM. Show the QR code.';
+
+  @override
+  String get addLockOffHint =>
+      'The app lock is off. Turn it on in Configuration for more security.';
+
+  @override
+  String addWaiting(String name) {
+    return 'Waiting for $name to enrol';
+  }
+
+  @override
+  String get addEndCode => 'End this code';
+
+  @override
+  String addDoneTitle(String name) {
+    return '$name is in';
+  }
+
+  @override
+  String addDoneBody(String roles) {
+    return 'They can use the app as $roles from now on.';
+  }
+
+  @override
+  String addDoneDevice(String platform, String time) {
+    return '$platform, enrolled $time';
+  }
+
+  @override
+  String addNotTheirs(String name) {
+    return 'Not the phone of $name? Delete this device';
+  }
+
+  @override
+  String addReuseWarning(int n) {
+    return 'This code was tried again $n times after that.';
+  }
+
+  @override
+  String get addAnother => 'Add another user';
+
+  @override
+  String get addBackToList => 'Back to the list';
+
+  @override
+  String get thisDeviceRename => 'Rename this device';
+
+  @override
+  String get liveOnlyRename => 'Rename a device';
+
+  @override
+  String get liveOnlyUnlock => 'Unlock a PIN';
+
+  @override
+  String get liveOnlyCodes => 'Manage enrolment codes';
+
+  @override
+  String get liveOnlyActivity => 'See active status';
+
+  @override
+  String get liveOnlyDeleteUser => 'Delete a user';
+
+  @override
+  String get liveOnlyRestoreUser => 'Restore a user';
+
+  @override
+  String get liveOnlyPhone => 'Change a phone number';
+
+  @override
+  String get idLabel => 'ID';
+
+  @override
+  String get idPending => 'No ID yet';
+
+  @override
+  String get searchNameOrId => 'Search name or ID';
+
+  @override
+  String get userDelete => 'Delete user';
+
+  @override
+  String userDeleteTitle(String name) {
+    return 'Delete $name?';
+  }
+
+  @override
+  String userDeleteBody(String name, String ref) {
+    return '$name ($ref) can no longer sign in and disappears from every list. All of their devices are deleted. The change log and finance records keep this name and ID.';
+  }
+
+  @override
+  String userDeleted(String name) {
+    return '$name deleted.';
+  }
+
+  @override
+  String get userDeleteSelf => 'You cannot delete your own account';
+
+  @override
+  String get userDeleteLastAdmin => 'There must be at least one active admin';
+
+  @override
+  String get userRestore => 'Restore';
+
+  @override
+  String userRestored(String name) {
+    return '$name restored as deactivated. Reactivate and enrol a phone with a new QR code.';
+  }
+
+  @override
+  String get auditUserDeleted => 'User deleted';
+
+  @override
+  String get auditDeviceDeleted => 'Device deleted';
+
+  @override
+  String get auditPhoneChanged => 'Phone number changed';
+
+  @override
+  String get autoCleanNote =>
+      'Devices unused for 180 days and users deactivated for 365 days are deleted automatically. History stays.';
+
+  @override
+  String autoCleanSoon(int n) {
+    return 'Deleted automatically in $n days';
+  }
+
+  @override
+  String get phoneLabel => 'Phone number';
+
+  @override
+  String get phoneHint => 'Example: 012-000 0000';
+
+  @override
+  String get phoneRequired => 'A phone number is required';
+
+  @override
+  String get phoneInvalid =>
+      'The phone number is not valid. For a number outside Malaysia, start with + and the country code.';
+
+  @override
+  String phoneTaken(String ref) {
+    return 'This number is already used by another user ($ref).';
+  }
+
+  @override
+  String get phoneNeeded => 'Phone number needed';
+
+  @override
+  String get phoneFill => 'Fill in the number';
+
+  @override
+  String get phoneDuplicate => 'Same phone number as another user';
+
+  @override
+  String get phoneSaved => 'Phone number saved.';
+
+  @override
+  String get phoneEdit => 'Change number';
+
+  @override
+  String get phonePrivate =>
+      'Only an admin and the person themselves can see this number.';
+
+  @override
+  String waTo(String name) {
+    return 'WhatsApp to $name';
+  }
+
+  @override
+  String get waUnavailable => 'WhatsApp could not be opened. Use Share.';
+
+  @override
+  String get waUnavailablePage => 'WhatsApp is not available on this phone.';
+
+  @override
+  String get shareContinue => 'Continue';
+
+  @override
+  String userRestoreTitle(String name) {
+    return 'Restore $name?';
+  }
+
+  @override
+  String userRestoreBody(String name, String ref) {
+    return '$name ($ref) comes back to the list as deactivated, with no devices. Reactivate and enrol a phone with a new QR code.';
+  }
+
+  @override
+  String get phoneSave => 'Save';
+
+  @override
+  String get userDeleteHint =>
+      'This person leaves the list and can no longer sign in. History stays. They can be restored from the Change log.';
+
+  @override
+  String get a6Other => 'Other';
+
+  @override
+  String needsBoth(String first, String second) {
+    return '$first and $second';
+  }
 }

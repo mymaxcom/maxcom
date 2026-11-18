@@ -4,10 +4,12 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show Locale;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/features/registry.g.dart';
 import 'package:surau_app/features/validate.dart';
+import 'package:surau_app/l10n/generated/s.dart';
 
 String _read(String relative) {
   final file = File(relative);
@@ -20,6 +22,17 @@ String _read(String relative) {
 void main() {
   final fixture = jsonDecode(_read('test/fixtures/settings-cases.json')) as Map;
   final cases = (fixture['cases'] as List).cast<Map<String, dynamic>>();
+
+  test('a refusal reads in the language it is asked in, BM by default', () {
+    final patch = {'enabled': 'yes'};
+    final bm = validateFeatureSettings('clock', patch);
+    expect(bm.errors.single.message, 'Mesti hidup atau mati');
+    final en = validateFeatureSettings('clock', patch, s: lookupS(const Locale('en')));
+    expect(en.errors.single.message, 'Must be on or off');
+    final ar = validateFeatureSettings('clock', patch, s: lookupS(const Locale('ar')));
+    expect(ar.errors.single.message, isNot(bm.errors.single.message));
+    expect(sourceUrlError('http://x.my', lookupS(const Locale('en'))), 'Must start with https://');
+  });
 
   test('the fixture covers every feature, valid and invalid', () {
     expect(cases.length, greaterThan(1000));

@@ -47,7 +47,7 @@ describe('PUT /api/settings/zone', () => {
   it('refuses a code that is not on the JAKIM list and accepts a listed one with data', async () => {
     const { app } = makeApp();
     const admin = await loginAs(app, 'admin');
-    importDays(app.surau.db, 'SGR01', official, 'tester');
+    importDays(app.surau.db, 'SGR01', official, 'tester', undefined, undefined, 'sdm');
     const bad = await app.inject({ method: 'PUT', url: '/api/settings/zone', headers: admin.headers, payload: { zone: 'XXX99' } });
     expect(bad.statusCode).toBe(400);
     expect(bad.json().errors[0]).toBe('Zon tidak dikenali; kemas kini senarai zon');
@@ -83,12 +83,12 @@ describe('PUT /api/settings/location', () => {
     const admin = await loginAs(app, 'admin');
     const r = await app.inject({ method: 'PUT', url: '/api/settings/location', headers: admin.headers, payload: { country: 'KE', timezone: 'Africa/Nairobi' } });
     expect(r.statusCode).toBe(200);
-    expect(getSettings(app.surau.db).prayerSources.sourceOrder).toEqual(['file', 'calc', 'official']);
+    expect(getSettings(app.surau.db, 'sdm').prayerSources.sourceOrder).toEqual(['file', 'calc', 'official']);
     const row = app.surau.db.prepare("SELECT actor FROM change_log WHERE entity = 'settings' AND entity_id = 'prayerSources' ORDER BY id DESC").get();
     expect(row!.actor).toBe('system:prayer-sources');
     // and back
     await app.inject({ method: 'PUT', url: '/api/settings/location', headers: admin.headers, payload: { country: 'MY', timezone: 'Asia/Kuala_Lumpur' } });
-    expect(getSettings(app.surau.db).prayerSources.sourceOrder).toEqual(['official', 'calc', 'file']);
+    expect(getSettings(app.surau.db, 'sdm').prayerSources.sourceOrder).toEqual(['official', 'calc', 'file']);
   });
 
   it('leaves an order the admin chose alone', async () => {
@@ -96,7 +96,7 @@ describe('PUT /api/settings/location', () => {
     const admin = await loginAs(app, 'admin');
     await app.inject({ method: 'PUT', url: '/api/settings/prayerSources', headers: admin.headers, payload: { sourceOrder: ['calc', 'official', 'file'] } });
     await app.inject({ method: 'PUT', url: '/api/settings/location', headers: admin.headers, payload: { country: 'KE', timezone: 'Africa/Nairobi' } });
-    expect(getSettings(app.surau.db).prayerSources.sourceOrder).toEqual(['calc', 'official', 'file']);
+    expect(getSettings(app.surau.db, 'sdm').prayerSources.sourceOrder).toEqual(['calc', 'official', 'file']);
   });
 
   it('refuses a time zone the runtime does not know, and keeps coordinates to 4 places', async () => {
@@ -108,7 +108,7 @@ describe('PUT /api/settings/location', () => {
     expect(five.statusCode).toBe(400);
     const ok = await app.inject({ method: 'PUT', url: '/api/settings/location', headers: admin.headers, payload: { latitude: 3.2486, longitude: 101.6556, city: 'Shah Alam' } });
     expect(ok.statusCode).toBe(200);
-    expect(getSettings(app.surau.db).location).toMatchObject({ latitude: 3.2486, longitude: 101.6556, city: 'Shah Alam' });
+    expect(getSettings(app.surau.db, 'sdm').location).toMatchObject({ latitude: 3.2486, longitude: 101.6556, city: 'Shah Alam' });
   });
 });
 
@@ -117,7 +117,7 @@ describe('zone and location routes', () => {
     const { app } = makeApp();
     const ajk = await loginAs(app, 'ajk');
     const admin = await loginAs(app, 'admin');
-    importDays(app.surau.db, 'SGR01', official, 'tester');
+    importDays(app.surau.db, 'SGR01', official, 'tester', undefined, undefined, 'sdm');
     let r = (await app.inject({ method: 'GET', url: '/api/prayer/zones', headers: ajk.headers })).json();
     expect(r.zones.length).toBeGreaterThanOrEqual(50);
     expect(r.zones.find((z: { code: string }) => z.code === 'SGR01')).toMatchObject({ state: 'Selangor', removed: false, years: [2026] });

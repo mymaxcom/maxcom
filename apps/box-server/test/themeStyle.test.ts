@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { LOCAL_SURAU_ID } from '../src/tenant.ts';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -165,28 +166,28 @@ describe('themeStyle over sync', () => {
   it('a settings.put for themeStyle is applied, and templateId "hijau-siti" is accepted', () => {
     const dir = mkdtempSync(join(tmpdir(), 'surau-theme-')); tempDirs.push(dir);
     const db = openDb(join(dir, 't.db')); dbs.push(db);
-    const ctx = { now: new Date('2026-11-05T10:00:00.000Z'), origin: 'app' as const, actor: 'user:u1', dataDir: dir };
+    const ctx = { now: new Date('2026-11-05T10:00:00.000Z'), origin: 'app' as const, actor: 'user:u1', dataDir: dir, surauId: LOCAL_SURAU_ID };
     const a = applyOp(db, op({ payload: { styles: { creative: { semua: { shade: 20 }, skrin: {} } } } }), ctx);
     expect(a.status).toBe('applied');
-    expect(getSettings(db).themeStyle.styles).toEqual({ creative: { semua: { shade: 20 }, skrin: {} } });
+    expect(getSettings(db, LOCAL_SURAU_ID).themeStyle.styles).toEqual({ creative: { semua: { shade: 20 }, skrin: {} } });
     const b = applyOp(db, op({ entityId: 'kioskTemplate', payload: { templateId: 'hijau-siti' } }), ctx);
     expect(b.status).toBe('applied');
-    expect(getSettings(db).kioskTemplate.templateId).toBe('hijau-siti');
+    expect(getSettings(db, LOCAL_SURAU_ID).kioskTemplate.templateId).toBe('hijau-siti');
   });
   it('edits to two different themes from two devices both survive, in either order', () => {
     const dir = mkdtempSync(join(tmpdir(), 'surau-theme-')); tempDirs.push(dir);
     const db = openDb(join(dir, 't.db')); dbs.push(db);
-    const ctx = { now: new Date('2026-11-05T10:00:00.000Z'), origin: 'app' as const, actor: 'user:u1', dataDir: dir };
+    const ctx = { now: new Date('2026-11-05T10:00:00.000Z'), origin: 'app' as const, actor: 'user:u1', dataDir: dir, surauId: LOCAL_SURAU_ID };
     const newer = op({ deviceId: 'dev-a', editedAt: '2026-11-05T09:00:00.000Z', payload: { styles: { creative: { semua: { shade: 20 }, skrin: {} } } } });
     const older = op({ deviceId: 'dev-b', editedAt: '2026-11-05T08:00:00.000Z', payload: { styles: { minimal: { semua: { shade: 5 }, skrin: {} } } } });
     expect(applyOp(db, newer, ctx).status).toBe('applied');
     expect(applyOp(db, older, ctx).status).toBe('applied');
-    expect(getSettings(db).themeStyle.styles).toEqual({
+    expect(getSettings(db, LOCAL_SURAU_ID).themeStyle.styles).toEqual({
       creative: { semua: { shade: 20 }, skrin: {} },
       minimal: { semua: { shade: 5 }, skrin: {} },
     });
     // The stamps are per theme.
-    expect(Object.keys(readFieldStamps(db, 'themeStyle')).sort()).toEqual(['styles.creative', 'styles.minimal']);
+    expect(Object.keys(readFieldStamps(db, 'themeStyle', LOCAL_SURAU_ID)).sort()).toEqual(['styles.creative', 'styles.minimal']);
   });
   it('a row stored as one whole map (before per-theme fields) keeps working and its stamp covers the themes', () => {
     const dir = mkdtempSync(join(tmpdir(), 'surau-theme-')); tempDirs.push(dir);
@@ -194,10 +195,10 @@ describe('themeStyle over sync', () => {
     const json = JSON.stringify({ styles: { creative: { semua: { shade: 20 }, skrin: {} } }, packs: {} });
     db.prepare('INSERT INTO settings (feature, json, updated_at, updated_by, rev, edited_at, origin, field_stamps) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run('themeStyle', json, '2026-11-05T07:00:00.000Z', 'x', 'r1', '2026-11-05T07:00:00.000Z', 'local', JSON.stringify({ styles: { editedAt: '2026-11-05T07:00:00.000Z', deviceId: 'dev-a' } }));
-    expect(getSettings(db).themeStyle.styles.creative!.semua).toEqual({ shade: 20 });
-    expect(readFieldStamps(db, 'themeStyle')['styles.creative']).toEqual({ editedAt: '2026-11-05T07:00:00.000Z', deviceId: 'dev-a' });
-    const ctx = { now: new Date('2026-11-05T10:00:00.000Z'), origin: 'app' as const, actor: 'user:u1', dataDir: dir };
+    expect(getSettings(db, LOCAL_SURAU_ID).themeStyle.styles.creative!.semua).toEqual({ shade: 20 });
+    expect(readFieldStamps(db, 'themeStyle', LOCAL_SURAU_ID)['styles.creative']).toEqual({ editedAt: '2026-11-05T07:00:00.000Z', deviceId: 'dev-a' });
+    const ctx = { now: new Date('2026-11-05T10:00:00.000Z'), origin: 'app' as const, actor: 'user:u1', dataDir: dir, surauId: LOCAL_SURAU_ID };
     expect(applyOp(db, op({ editedAt: '2026-11-05T09:00:00.000Z', payload: { styles: { minimal: { semua: { shade: 5 }, skrin: {} } } } }), ctx).status).toBe('applied');
-    expect(Object.keys(getSettings(db).themeStyle.styles).sort()).toEqual(['creative', 'minimal']);
+    expect(Object.keys(getSettings(db, LOCAL_SURAU_ID).themeStyle.styles).sort()).toEqual(['creative', 'minimal']);
   });
 });

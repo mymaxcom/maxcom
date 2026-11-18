@@ -82,10 +82,10 @@ function validDay(raw: unknown): PrayerDay {
 }
 
 /** Whether the entry is new, a repeat of what this side holds, or older than it. */
-function verdict(db: DatabaseSync, entity: string, id: string, rev: string, editedAt: string): 'new' | 'duplicate' | 'superseded' {
+function verdict(db: DatabaseSync, surauId: string, entity: string, id: string, rev: string, editedAt: string): 'new' | 'duplicate' | 'superseded' {
   const row = db
-    .prepare('SELECT rev, edited_at FROM change_log WHERE entity = ? AND entity_id = ? AND rev IS NOT NULL ORDER BY id DESC LIMIT 1')
-    .get(entity, id);
+    .prepare('SELECT rev, edited_at FROM change_log WHERE surau_id = ? AND entity = ? AND entity_id = ? AND rev IS NOT NULL ORDER BY id DESC LIMIT 1')
+    .get(surauId, entity, id);
   if (!row) return 'new';
   if (row.rev === rev) return 'duplicate';
   const at = typeof row.edited_at === 'string' ? row.edited_at : '';
@@ -98,8 +98,8 @@ interface Stamp { id: string; createdAt: string }
 const newer = (a: Stamp, b: Stamp): boolean => a.createdAt > b.createdAt || (a.createdAt === b.createdAt && a.id > b.id);
 
 /** The (created_at, id) stamp of a held import; an import this side does not hold sorts before every other. */
-function stampOf(db: DatabaseSync, id: string): Stamp {
-  const r = db.prepare('SELECT created_at FROM prayer_imports WHERE id = ?').get(id);
+function stampOf(db: DatabaseSync, surauId: string, id: string): Stamp {
+  const r = db.prepare('SELECT created_at FROM prayer_imports WHERE surau_id = ? AND id = ?').get(surauId, id);
   return { id, createdAt: r && typeof r.created_at === 'string' ? r.created_at : '' };
 }
 
@@ -111,34 +111,34 @@ function stampOf(db: DatabaseSync, id: string): Stamp {
  * and the owner it replaced.
  */
 function placeFileDay(
-  db: DatabaseSync, imp: Stamp, row: { day: PrayerDay; prevImportId: string | null; prevJson: string | null },
+  db: DatabaseSync, surauId: string, imp: Stamp, row: { day: PrayerDay; prevImportId: string | null; prevJson: string | null },
 ): void {
   const date = row.day.date;
   const json = JSON.stringify(row.day);
-  const owner = db.prepare('SELECT import_id, json, prev_import_id, prev_json FROM prayer_file_days WHERE date = ?').get(date);
+  const owner = db.prepare('SELECT import_id, json, prev_import_id, prev_json FROM prayer_file_days WHERE surau_id = ? AND date = ?').get(surauId, date);
   if (owner && String(owner.import_id) !== imp.id) {
     const ownerId = String(owner.import_id);
-    if (newer(stampOf(db, ownerId), imp)) {
-      const prev = typeof owner.prev_import_id === 'string' && typeof owner.prev_json === 'string' ? stampOf(db, owner.prev_import_id) : null;
+    if (newer(stampOf(db, surauId, ownerId), imp)) {
+      const prev = typeof owner.prev_import_id === 'string' && typeof owner.prev_json === 'string' ? stampOf(db, surauId, owner.prev_import_id) : null;
       if (prev === null || newer(imp, prev)) {
-        db.prepare('UPDATE prayer_file_days SET prev_import_id = ?, prev_json = ? WHERE date = ?').run(imp.id, json, date);
+        db.prepare('UPDATE prayer_file_days SET prev_import_id = ?, prev_json = ? WHERE surau_id = ? AND date = ?').run(imp.id, json, surauId, date);
       }
       return;
     }
-    const own = stampOf(db, ownerId);
-    const ownPrev = row.prevImportId !== null && row.prevJson !== null ? stampOf(db, row.prevImportId) : null;
+    const own = stampOf(db, surauId, ownerId);
+    const ownPrev = row.prevImportId !== null && row.prevJson !== null ? stampOf(db, surauId, row.prevImportId) : null;
     if (ownPrev === null || newer(own, ownPrev)) {
       row = { day: row.day, prevImportId: ownerId, prevJson: String(owner.json) };
     }
   }
   db.prepare(
-    `INSERT INTO prayer_file_days (date, import_id, json, prev_import_id, prev_json) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(date) DO UPDATE SET import_id = excluded.import_id, json = excluded.json,
+    `INSERT INTO prayer_file_days (surau_id, date, import_id, json, prev_import_id, prev_json) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(surau_id, date) DO UPDATE SET import_id = excluded.import_id, json = excluded.json,
        prev_import_id = excluded.prev_import_id, prev_json = excluded.prev_json`,
-  ).run(date, imp.id, json, row.prevImportId, row.prevJson);
+  ).run(surauId, date, imp.id, json, row.prevImportId, row.prevJson);
 }
 
-export function applyPrayerEntry(db: DatabaseSync, e: FeedEntry, meta: ChangeMeta, now: Date): PrayerApplyResult {
+export function applyPrayerEntry(db: DatabaseSync, e: FeedEntry, meta: ChangeMeta, now: Date, surauId: string): PrayerApplyResult {
   const refuse = (): PrayerApplyResult => {
     logSyncRefusal(db, now, { deviceId: e.deviceId }, `prayer_bad_payload:${e.entity}`);
     return { status: 'refused', reason: 'invalid' };
@@ -157,9 +157,9 @@ export function applyPrayerEntry(db: DatabaseSync, e: FeedEntry, meta: ChangeMet
         if (!d.date.startsWith(`${a.year}-`) || seen.has(d.date)) return refuse();
         seen.add(d.date);
       }
-      const v = verdict(db, 'prayer:official', e.entityId, rev, editedAt);
+      const v = verdict(db, surauId, 'prayer:official', e.entityId, rev, editedAt);
       if (v !== 'new') return { status: v, reason: null };
-      importDaysIn(db, a.zone, days, e.actor, e.deviceId ?? undefined, { meta });
+      importDaysIn(db, a.zone, days, e.actor, e.deviceId ?? undefined, { meta }, surauId);
       return { status: 'applied', reason: null };
     }
 
@@ -168,17 +168,17 @@ export function applyPrayerEntry(db: DatabaseSync, e: FeedEntry, meta: ChangeMet
       if (!m || !isRealDate(m[1]) || !isPrayerName(m[2])) return refuse();
       const date = m[1]!;
       const prayer = m[2]!;
-      const v = verdict(db, 'prayer:correction', e.entityId, rev, editedAt);
+      const v = verdict(db, surauId, 'prayer:correction', e.entityId, rev, editedAt);
       if (v !== 'new') return { status: v, reason: null };
       if (e.after === null) {
-        removeCorrectionIn(db, date, prayer, e.actor, e.deviceId ?? undefined, now, { meta });
+        removeCorrectionIn(db, date, prayer, e.actor, e.deviceId ?? undefined, now, { meta }, surauId);
         return { status: 'applied', reason: null };
       }
       const a = e.after;
       if (!plain(a) || a.date !== date || a.prayer !== prayer) return refuse();
       if (a.officialAtCorrection !== undefined && a.officialAtCorrection !== null && !(typeof a.officialAtCorrection === 'string' && TIME.test(a.officialAtCorrection))) return refuse();
       putCorrectionIn(db, { date, prayer, time: a.time as string, reason: a.reason as string }, e.actor, e.deviceId ?? undefined, now, null,
-        { meta, officialAtCorrection: (a.officialAtCorrection as string | null | undefined) ?? null });
+        { meta, officialAtCorrection: (a.officialAtCorrection as string | null | undefined) ?? null }, surauId);
       return { status: 'applied', reason: null };
     }
 
@@ -210,25 +210,25 @@ export function applyPrayerEntry(db: DatabaseSync, e: FeedEntry, meta: ChangeMet
         }
         if (new Set(rows.map((x) => x.day.date)).size !== rows.length) return refuse();
       }
-      const v = verdict(db, 'prayer:import', e.entityId, rev, editedAt);
+      const v = verdict(db, surauId, 'prayer:import', e.entityId, rev, editedAt);
       if (v !== 'new') return { status: v, reason: null };
       db.prepare(
-        `INSERT INTO prayer_imports (id, kind, file_name, sha256, rows, date_from, date_to, overlap, inserted, replaced, skipped, actor, device_id, created_at, undone_at, undone_by, rev, edited_at, origin, arrived_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET undone_at = excluded.undone_at, undone_by = excluded.undone_by, rev = excluded.rev,
+        `INSERT INTO prayer_imports (surau_id, id, kind, file_name, sha256, rows, date_from, date_to, overlap, inserted, replaced, skipped, actor, device_id, created_at, undone_at, undone_by, rev, edited_at, origin, arrived_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(surau_id, id) DO UPDATE SET undone_at = excluded.undone_at, undone_by = excluded.undone_by, rev = excluded.rev,
            edited_at = excluded.edited_at, origin = excluded.origin`,
-      ).run(...([r.id, r.kind, r.fileName, r.sha256, r.rows, r.dateFrom, r.dateTo, r.overlap, r.inserted, r.replaced, r.skipped, r.actor,
+      ).run(...([surauId, r.id, r.kind, r.fileName, r.sha256, r.rows, r.dateFrom, r.dateTo, r.overlap, r.inserted, r.replaced, r.skipped, r.actor,
         e.deviceId ?? null, r.createdAt, r.undoneAt, r.undoneBy, rev, editedAt, meta.origin ?? 'cloud', now.toISOString()] as Array<string | number | null>));
       if (undone) {
-        restoreRows(db, e.entityId);
+        restoreRows(db, e.entityId, surauId);
       } else {
-        for (const row of rows) placeFileDay(db, { id: e.entityId, createdAt: r.createdAt as string }, row);
+        for (const row of rows) placeFileDay(db, surauId, { id: e.entityId, createdAt: r.createdAt as string }, row);
       }
       db.prepare(
-        `INSERT INTO change_log (at, actor, entity, entity_id, before_json, after_json, device_id, edited_at, rev, origin, synced_at)
-         VALUES (?, ?, 'prayer:import', ?, NULL, ?, ?, ?, ?, ?, ?)`,
-      ).run(editedAt, e.actor, e.entityId, JSON.stringify(e.after), e.deviceId ?? null, editedAt, rev, meta.origin ?? 'cloud', meta.syncedAt ?? null);
-      bumpVersion(db);
+        `INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json, device_id, edited_at, rev, origin, synced_at)
+         VALUES (?, ?, ?, 'prayer:import', ?, NULL, ?, ?, ?, ?, ?, ?)`,
+      ).run(surauId, editedAt, e.actor, e.entityId, JSON.stringify(e.after), e.deviceId ?? null, editedAt, rev, meta.origin ?? 'cloud', meta.syncedAt ?? null);
+      bumpVersion(db, surauId);
       return { status: 'applied', reason: null };
     }
   } catch (error) {

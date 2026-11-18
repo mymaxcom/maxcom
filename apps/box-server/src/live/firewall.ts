@@ -3,9 +3,9 @@ import { existsSync } from 'node:fs';
 import { win32 } from 'node:path';
 
 /**
- * The live media ports (UDP 8189 WebRTC, UDP 8890 SRT) must be open on every Windows network profile,
+ * The live media ports (UDP 8189 WebRTC, UDP 8890 SRT, UDP 8000-8001 RTP for the camera's UDP transport) must be open on every Windows network profile,
  * from the local subnet only: Windows marks a Wi-Fi "Public" without asking, and a Private-only rule
- * then drops the phone's packets silently. This module only READS the two rules (netsh needs no admin
+ * then drops the phone's packets silently. This module only READS the rules (netsh needs no admin
  * for that), says whether they are right, and, when the box itself runs elevated, repairs them once
  * through scripts/ensure-live-firewall.ps1. It never asks for elevation.
  */
@@ -13,14 +13,18 @@ import { win32 } from 'node:path';
 export type FirewallState = 'ok' | 'missing' | 'wrong' | 'unknown';
 
 export interface LiveRuleSpec {
-  key: 'webrtc' | 'srt';
+  key: 'webrtc' | 'srt' | 'rtp';
   name: string;
   port: number;
+  /** The rule's LocalPort text when it is a range (netsh prints it as given); default String(port). */
+  localPort?: string;
 }
 
 export const LIVE_RULES: readonly LiveRuleSpec[] = [
   { key: 'webrtc', name: 'MAXCOM Live WebRTC', port: 8189 },
   { key: 'srt', name: 'MAXCOM Live SRT', port: 8890 },
+  // the external camera's RTP and RTCP over UDP transport (plan 4.2): MediaMTX's default RTP pair, local subnet only
+  { key: 'rtp', name: 'MAXCOM Live RTP', port: 8000, localPort: '8000-8001' },
 ];
 
 export function ruleName(key: LiveRuleSpec['key']): string {
@@ -94,7 +98,7 @@ export function parseRules(text: string): FirewallRule[] {
 }
 
 /** Whether the rule blocks found for one port are exactly the wanted rule. */
-export function evaluateRules(rules: FirewallRule[], port: number): FirewallState {
+export function evaluateRules(rules: FirewallRule[], port: number | string): FirewallState {
   if (rules.length === 0) return 'missing';
   // a block without the fields we read (another Windows language prints other labels) cannot be judged
   if (rules.some((r) => r.enabled === '' || r.profiles === '' || r.localPort === '' || r.action === '')) return 'unknown';
@@ -208,7 +212,7 @@ export class LiveFirewall {
         }
         const rules = parseRules(r.stdout);
         // output we cannot read (another Windows language prints other labels) is not "missing"
-        states.push(rules.length === 0 && r.stdout.replace(/Ok\./i, '').trim() !== '' ? 'unknown' : evaluateRules(rules, rule.port));
+        states.push(rules.length === 0 && r.stdout.replace(/Ok\./i, '').trim() !== '' ? 'unknown' : evaluateRules(rules, rule.localPort ?? rule.port));
       } catch {
         return 'unknown';
       }
@@ -257,7 +261,7 @@ export class LiveFirewall {
       this.loggedState = state;
       const script = this.ensureScript ?? 'scripts\\ensure-live-firewall.ps1';
       this.log(
-        `live: the media firewall rules (MAXCOM Live WebRTC UDP 8189, MAXCOM Live SRT UDP 8890) are ${state}. The phone's video will not arrive. In an administrator PowerShell run: powershell -ExecutionPolicy Bypass -File "${script}" (or run scripts\\install-live-tools.ps1 again: it also installs the boot task and the admin-only repair copy)`,
+        `live: the media firewall rules (MAXCOM Live WebRTC UDP 8189, MAXCOM Live SRT UDP 8890, MAXCOM Live RTP UDP 8000-8001) are ${state}. The phone's video will not arrive. In an administrator PowerShell run: powershell -ExecutionPolicy Bypass -File "${script}" (or run scripts\\install-live-tools.ps1 again: it also installs the boot task and the admin-only repair copy)`,
       );
     }
     return state;

@@ -49,6 +49,27 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
   String? _error;
   FinanceEntry? _saved;
 
+  /// Months (`YYYY-MM`) that are closed in the local copy: nothing may be
+  /// dated into them, the box would refuse it after "saved".
+  Set<String> _closed = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClosed();
+  }
+
+  Future<void> _loadClosed() async {
+    final repo = ref.read(financeRepositoryProvider);
+    if (repo == null) return;
+    final months = await repo.months();
+    if (!mounted) return;
+    setState(() => _closed = {
+      for (final m in months)
+        if (m.closed) m.ym,
+    });
+  }
+
   @override
   void dispose() {
     _amount.dispose();
@@ -68,6 +89,7 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
       _suggestedSen = null;
     });
     if (repo == null) return;
+    await _loadClosed();
     final last = await repo.lastPayment(k.penceramahId);
     if (!mounted) return;
     setState(() {
@@ -102,9 +124,19 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
     final t = DateTime.parse('${_today}T00:00:00Z');
     final prev = finYmd(DateTime.utc(t.year, t.month - 1, 1)).substring(0, 7);
     return k.date.substring(0, 7).compareTo(prev) >= 0 &&
-            k.date.compareTo(_today) <= 0
+            k.date.compareTo(_today) <= 0 &&
+            !_closed.contains(k.date.substring(0, 7))
         ? k.date
         : _today;
+  }
+
+  /// The kuliah's own month is closed, so the payment is dated today.
+  bool get _kuliahMonthClosed {
+    final k = _kuliah;
+    return _speaker &&
+        k != null &&
+        _entryDate() != k.date &&
+        _closed.contains(k.date.substring(0, 7));
   }
 
   bool _canReview(String? fundId, String? perihalId) {
@@ -175,6 +207,7 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
       _error = null;
     });
     try {
+      await _loadClosed();
       final funds = await repo.funds();
       final out = await repo.perihal('out');
       final perihalId = _speaker
@@ -331,6 +364,15 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
                                   tone: FinTone.gold,
                                 ),
                               ),
+                            if (_kuliahMonthClosed)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: FinInfoBox(
+                                  key: const Key('fin-closed-month-note'),
+                                  text: s.ra3ClosedMonthToday,
+                                  tone: FinTone.gold,
+                                ),
+                              ),
                             if (k.paid)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
@@ -369,6 +411,7 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
                       child: TextField(
                         key: const Key('fin-payee'),
                         controller: _payee,
+                        inputFormatters: finTextFormatters(80),
                         onChanged: (_) => setState(() {}),
                       ),
                     ),
@@ -383,6 +426,8 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
                             initialDate: DateTime.parse(_date ?? today),
                             firstDate: DateTime(t.year, t.month - 1, 1),
                             lastDate: DateTime(t.year, t.month, t.day),
+                            selectableDayPredicate: (d) =>
+                                !_closed.contains(finYmd(d).substring(0, 7)),
                           );
                           if (picked != null) {
                             setState(() => _date = finYmd(picked));
@@ -437,6 +482,7 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
                             child: TextField(
                               key: const Key('fin-reference'),
                               controller: _reference,
+                              inputFormatters: finTextFormatters(60),
                               decoration: InputDecoration(
                                 hintText: s.finReference,
                               ),
@@ -470,8 +516,8 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
                                     .where((f) => f.id == fundId)
                                     .map((f) => f.name)
                                     .first,
-                                formatRm(balance),
-                                formatRm(after),
+                                finLtr(s, formatRm(balance)),
+                                finLtr(s, formatRm(after)),
                               ),
                               key: const Key('fin-balance-after'),
                               style: text.bodySmall!.copyWith(
@@ -503,7 +549,11 @@ class _BayaranScreenState extends ConsumerState<BayaranScreen> {
                     child: TextField(
                       key: const Key('fin-note'),
                       controller: _note,
+                      inputFormatters: finTextFormatters(200),
                       maxLength: 200,
+                      // Wraps over up to three lines, but Enter types nothing.
+                      keyboardType: TextInputType.text,
+                      textInputAction: TextInputAction.done,
                       minLines: 2,
                       maxLines: 3,
                     ),

@@ -139,8 +139,14 @@ function checkDenominations(v: unknown, amountSen: number, errors: string[]): De
 
 export type ShapeResult<T> = { ok: true; value: T } | { ok: false; errors: string[] };
 
-/** Shape and arithmetic of an entry body. `todayKl` is the server's KL date. */
-export function validateEntryShape(v: unknown, ctx: { todayKl: string }): ShapeResult<EntryInput> {
+/**
+ * Shape and arithmetic of an entry body. `todayKl` is the server's KL date (nothing may be dated after it).
+ * `windowKl` is the day the old end of the date window is judged from (the edit day of an offline entry; default
+ * `todayKl`). `startedOn` is the finance module's start date: an opening balance dated on it is always inside the window.
+ */
+export function validateEntryShape(
+  v: unknown, ctx: { todayKl: string; windowKl?: string; startedOn?: string },
+): ShapeResult<EntryInput> {
   const errors: string[] = [];
   if (!isObj(v)) return { ok: false, errors: ['body must be an object'] };
   for (const k of Object.keys(v)) if (!ENTRY_KEYS.has(k)) errors.push(`${k} is not a known field`);
@@ -155,7 +161,10 @@ export function validateEntryShape(v: unknown, ctx: { todayKl: string }): ShapeR
   else {
     entryDate = v.entryDate;
     if (entryDate > ctx.todayKl) errors.push('entryDate cannot be in the future');
-    else if (entryDate < previousMonthStart(ctx.todayKl)) errors.push('entryDate cannot be before the previous month');
+    else if (entryDate < previousMonthStart(ctx.windowKl ?? ctx.todayKl)
+      && !(v.kind === 'opening' && ctx.startedOn !== undefined && ctx.startedOn !== '' && entryDate === ctx.startedOn)) {
+      errors.push('entryDate cannot be before the previous month');
+    }
   }
 
   const fundId = idField(v.fundId, 'fundId', errors, true);
@@ -190,7 +199,8 @@ export function validateEntryShape(v: unknown, ctx: { todayKl: string }): ShapeR
     else method = v.method as Method;
     if (method === 'tunai') {
       if (!absent(v.reference)) errors.push('a cash entry has no reference');
-      counters = checkCounters(v.counters, errors);
+      // a collection needs two counters; a payment needs none (two are accepted if the person named them)
+      if (kind === 'in' || !absent(v.counters)) counters = checkCounters(v.counters, errors);
     } else if (method) {
       if (!absent(v.counters)) errors.push('only a cash entry has counters');
       if (typeof v.reference !== 'string' || v.reference.trim().length < 3 || v.reference.length > 60 || !PLAIN.test(v.reference)) {

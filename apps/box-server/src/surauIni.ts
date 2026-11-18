@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from './tenant.ts';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -203,7 +204,7 @@ export function applySurauIni(db: DatabaseSync, dataDir: string, log: IniLogger 
 
       if (Object.keys(infoPatch).length > 0) {
         try {
-          putFeature(db, 'surauInfo', infoPatch, SURAU_INI_ACTOR);
+          putFeature(db, 'surauInfo', infoPatch, SURAU_INI_ACTOR, undefined, LOCAL_SURAU_ID);
           result.applied.push(...Object.keys(infoPatch));
         } catch (error) {
           log.warn(`${SURAU_INI_FILE}: the surau details could not be saved (${messageOf(error)})`);
@@ -221,7 +222,7 @@ export function applySurauIni(db: DatabaseSync, dataDir: string, log: IniLogger 
         if (!check.ok) refuse(ZONE_KEY, check.errors);
         else {
           try {
-            putFeature(db, 'zone', { zone }, SURAU_INI_ACTOR);
+            putFeature(db, 'zone', { zone }, SURAU_INI_ACTOR, undefined, LOCAL_SURAU_ID);
             result.applied.push(ZONE_KEY);
           } catch (error) {
             log.warn(`${SURAU_INI_FILE}: the zone could not be saved (${messageOf(error)})`);
@@ -241,7 +242,7 @@ export function applySurauIni(db: DatabaseSync, dataDir: string, log: IniLogger 
         if (enabled === undefined) refuse(APP_LOCK_KEY, ['use on or off']);
         else {
           try {
-            putFeature(db, 'appLock', { enabled }, SURAU_INI_ACTOR);
+            putFeature(db, 'appLock', { enabled }, SURAU_INI_ACTOR, undefined, LOCAL_SURAU_ID);
             result.applied.push(APP_LOCK_KEY);
           } catch (error) {
             log.warn(`${SURAU_INI_FILE}: the app lock could not be saved (${messageOf(error)})`);

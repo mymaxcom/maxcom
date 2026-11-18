@@ -88,7 +88,7 @@ class _SettingsOrderScreenState extends ConsumerState<SettingsOrderScreen> {
       // Cards already written stay written; Simpan sends only what is left.
       setState(() {
         _busy = false;
-        _error = e is SettingsSaveError ? e.message : writeErrorText(s, e);
+        _error = e is SettingsSaveError ? e.text(s) : writeErrorText(s, e);
       });
     }
   }
@@ -139,7 +139,7 @@ class _SettingsOrderScreenState extends ConsumerState<SettingsOrderScreen> {
                     children: [
                       if (i > 0) const Divider(),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 8, 6, 8),
+                        padding: const EdgeInsetsDirectional.fromSTEB(4, 8, 6, 8),
                         child: Row(
                           children: [
                             ReorderableDragStartListener(

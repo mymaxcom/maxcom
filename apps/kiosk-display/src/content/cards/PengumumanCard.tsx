@@ -7,11 +7,18 @@ import type { CardProps } from '../ContentLayer.tsx';
 import { pageAt, splitForPages, useFit } from '../paging.ts';
 
 /**
- * How large a short notice may grow (the `--fit` it starts at) to fill the card before it steps down. Kept at a level
- * where a short notice at the default text size about fills the card, so Ubah suai "Saiz teks" still makes it larger or
- * smaller (a higher cap would let every size grow to the same box-filling size; scripts/setting-matrix.mjs checks this).
+ * How large a short notice WITH a picture may grow (the `--fit` it starts at) to fill its half of the card before it
+ * steps down. Kept at a level where a short notice at the default text size about fills it, so Ubah suai "Saiz teks"
+ * still makes it larger or smaller.
  */
 export const PENGUMUMAN_FIT_MAX = 1.5;
+/**
+ * The same for a notice without a picture (operator 2026-11-17, "use the whole screen"): the text has the whole main
+ * area to itself, so a short notice grows further, up to 2.6, before it steps down. At this cap a short text-only
+ * notice set to S and one set to XL may both grow to the same box-filling size (operator accepted 2026-11-17); a
+ * longer one is bounded by the box first, so "Saiz teks" still tells them apart. A long one shrinks and pages as before.
+ */
+export const PENGUMUMAN_TEXT_FIT_MAX = 2.6;
 
 /**
  * The optional picture of a notice ("pengumuman bergambar", 2026.11.11): `KioskPengumuman.pictureAssetId`, served at
@@ -36,7 +43,7 @@ export function PengumumanCard({ view, lang, content, itemId, startedAt, duratio
   const [broken, setBroken] = useState(false);
   const pictureId = broken ? null : pengumumanPicture(p);
   const picture = assetSrc(pictureId);
-  const { ref, fit, pages } = useFit<HTMLDivElement>(`${itemId ?? ''}|${p?.title ?? ''}|${p?.body ?? ''}|${picture ?? ''}`, { paged: true, max: PENGUMUMAN_FIT_MAX });
+  const { ref, fit, pages } = useFit<HTMLDivElement>(`${itemId ?? ''}|${p?.title ?? ''}|${p?.body ?? ''}|${picture ?? ''}`, { paged: true, max: picture ? PENGUMUMAN_FIT_MAX : PENGUMUMAN_TEXT_FIT_MAX });
   // The picture's shape picks its share of the card: a tall picture takes a narrower column than a wide one.
   const [tall, setTall] = useState(false);
   // No item (removed or expired under the rotation): tell the content layer, so the band reads as empty and Main goes idle.
@@ -59,7 +66,7 @@ export function PengumumanCard({ view, lang, content, itemId, startedAt, duratio
   // Text only: the round 2 card as it was (tag, page, text). With a picture: the picture, then the same text in a column.
   return (
     <article
-      class={`card glass card--pengumuman${p.priority === 1 ? ' is-priority' : ''}${picture ? ` has-picture${tall ? ' is-tall' : ''}` : ''}`}
+      class={`card glass card--pengumuman${p.priority === 3 ? ' is-priority' : ''}${picture ? ` has-picture${tall ? ' is-tall' : ''}` : ''}`}
       data-card="pengumuman"
       data-item={p.id}
     >

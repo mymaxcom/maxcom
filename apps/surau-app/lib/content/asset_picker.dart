@@ -125,11 +125,11 @@ class _ImageFieldState extends ConsumerState<ImageField> {
       ref.invalidate(bgRemovedProvider(meta.id));
       setState(() => _stage = _Stage.idle);
       await _adjust(ImageRef(meta.id), prepared.bytes, fresh: true);
-    } on ImagePrepError catch (e) {
+    } on ImagePrepError {
       if (!mounted) return;
       setState(() {
         _stage = _Stage.idle;
-        _error = e.message;
+        _error = S.of(context).imageNotReadable;
       });
     } catch (e) {
       if (!mounted) return;
@@ -468,11 +468,11 @@ class _BackgroundPickerState extends ConsumerState<BackgroundPicker> {
       setState(() => _stage = _Stage.idle);
       _toggle(id, true);
       toast(context, s.settingsBackgroundUploaded);
-    } on ImagePrepError catch (e) {
+    } on ImagePrepError {
       if (!mounted) return;
       setState(() {
         _stage = _Stage.idle;
-        _error = e.message;
+        _error = S.of(context).imageNotReadable;
       });
     } catch (e) {
       if (!mounted) return;
@@ -544,7 +544,7 @@ class _BackgroundPickerState extends ConsumerState<BackgroundPicker> {
                   secondary: _Swatch(index: i),
                   title: Text(s.settingsBuiltInImage(i + 1)),
                   subtitle: Text(builtInBackgrounds[i]),
-                  contentPadding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
+                  contentPadding: const EdgeInsetsDirectional.fromSTEB(16, 6, 12, 6),
                 ),
               ],
             ],
@@ -757,9 +757,9 @@ class _BackgroundTile extends ConsumerWidget {
                 ),
               ),
               if (picked)
-                Positioned(
+                PositionedDirectional(
                   top: 8,
-                  left: 8,
+                  start: 8,
                   child: Container(
                     key: ValueKey('background-order-$id'),
                     width: 28,
@@ -819,8 +819,8 @@ class _Swatch extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(SurauTheme.radiusChip),
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
           colors: colours,
         ),
       ),

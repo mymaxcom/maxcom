@@ -109,7 +109,7 @@ describe('crypto: PIN hashing', () => {
     const app = buildApp(join(dir, 'p.db'), { dataDir: dir });
     await app.ready();
     const { db } = app.surau;
-    const u = createUser(db, { name: 'Pepper', roles: ['admin'] }, 'test');
+    const u = createUser(db, { name: 'Pepper', roles: ['admin'] }, 'test', 'sdm');
     await setPin(db, u.id, '280419', 'test');
     const stored = String(db.prepare('SELECT pin_hash FROM users WHERE id = ?').get(u.id)?.pin_hash);
     expect(stored.startsWith('scrypt2$')).toBe(true);
@@ -372,7 +372,7 @@ describe('migrations: auth schema', () => {
           "INSERT INTO schema_migrations (name, applied_at) VALUES ('002-content', '2026-11-03T00:00:00.000Z');" +
           'CREATE TABLE content_items (id TEXT PRIMARY KEY, updated_at TEXT);',
       );
-      expect(runMigrations(db)).toEqual(['003-auth', '004-kiosk-cookies', '005-poster-titles', '006-asset-derivatives', '007-asset-derivative-failures', '008-sync', '009-worker-outbox', '010-gate-fixes', '011-upload-replace', '012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair', '019-site-theme-support']);
+      expect(runMigrations(db)).toEqual(['003-auth', '004-kiosk-cookies', '005-poster-titles', '006-asset-derivatives', '007-asset-derivative-failures', '008-sync', '009-worker-outbox', '010-gate-fixes', '011-upload-replace', '012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair', '019-multi-surau', '020-site-theme-support', '021-camera-secret', '022-people-relook']);
       expect(runMigrations(db)).toEqual([]);
       expect(tableNames(db)).toContain('content_items');
     } finally {
@@ -414,16 +414,16 @@ describe('migrations: auth schema', () => {
 describe('actor helper', () => {
   it('names the user or falls back to local', () => {
     expect(actorOf({})).toBe('local');
-    expect(actorOf({ auth: { kind: 'user', userId: 'u1', deviceId: 'd1', roles: ['admin'], sessionId: 's1' } })).toBe('user:u1');
+    expect(actorOf({ auth: { kind: 'user', userId: 'u1', deviceId: 'd1', roles: ['admin'], sessionId: 's1', ops: false } })).toBe('user:u1');
   });
 });
 
 describe('users', () => {
   it('creates a user and lists it without pin_hash', () => {
     const db = freshDb();
-    const created = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local');
+    const created = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local', 'sdm');
     expect(created.id).toMatch(/^[0-9a-f-]{36}$/);
-    const users = listUsers(db);
+    const users = listUsers(db, 'sdm');
     expect(users).toHaveLength(1);
     expect(users[0]).toMatchObject({
       id: created.id,
@@ -439,34 +439,34 @@ describe('users', () => {
 
   it('validates roles and names', () => {
     const db = freshDb();
-    expect(thrown(() => createUser(db, { name: '', roles: ['admin'] }, 'local')).status).toBe(400);
-    expect(thrown(() => createUser(db, { name: 'X', roles: [] }, 'local')).status).toBe(400);
+    expect(thrown(() => createUser(db, { name: '', roles: ['admin'] }, 'local', 'sdm')).status).toBe(400);
+    expect(thrown(() => createUser(db, { name: 'X', roles: [] }, 'local', 'sdm')).status).toBe(400);
     expect(
-      thrown(() => createUser(db, { name: 'X', roles: ['root' as never] }, 'local')).status,
+      thrown(() => createUser(db, { name: 'X', roles: ['root' as never] }, 'local', 'sdm')).status,
     ).toBe(400);
-    expect(listUsers(db)).toHaveLength(0);
+    expect(listUsers(db, 'sdm')).toHaveLength(0);
     db.close();
   });
 
   it('sets roles and deactivates', () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Aminah', roles: ['ajk'] }, 'local');
+    const u = createUser(db, { name: 'Aminah', roles: ['ajk'] }, 'local', 'sdm');
     setRoles(db, u.id, ['treasurer', 'media'], 'local');
-    expect(listUsers(db)[0]!.roles).toEqual(['treasurer', 'media']);
+    expect(listUsers(db, 'sdm')[0]!.roles).toEqual(['treasurer', 'media']);
     deactivateUser(db, u.id, 'local');
-    expect(listUsers(db)[0]!.active).toBe(false);
+    expect(listUsers(db, 'sdm')[0]!.active).toBe(false);
     expect(thrown(() => setRoles(db, 'nope', ['admin'], 'local')).status).toBe(404);
     db.close();
   });
 
   it('sets a PIN with the policy and resets a lockout', async () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Aminah', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Aminah', roles: ['admin'] }, 'local', 'sdm');
     const weak = await thrownAsync(() => setPin(db, u.id, '123456', 'local'));
     expect(weak.status).toBe(400);
     expect(weak.message).toMatch(/PIN/);
     await setPin(db, u.id, '280419', 'local');
-    expect(listUsers(db)[0]!.pinRequired).toBe(false);
+    expect(listUsers(db, 'sdm')[0]!.pinRequired).toBe(false);
     expect(getAuthUser(db, u.id)!.pinHash).toMatch(/^scrypt2[$]/);
     db.prepare('UPDATE users SET pin_fail_count = 5, pin_locked_until = ?, lock_round = 2 WHERE id = ?').run(
       new Date(Date.now() + 600_000).toISOString(),
@@ -482,7 +482,7 @@ describe('users', () => {
 describe('enrolment and devices', () => {
   it('caps live enrolment codes at three per user', () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local', 'sdm');
     for (let i = 0; i < 3; i++) beginEnrolment(db, { userId: u.id, deviceName: `iPad ${i}` }, 'local');
     const fourth = thrown(() => beginEnrolment(db, { userId: u.id, deviceName: 'iPad 4' }, 'local'));
     expect(fourth.status).toBe(429);
@@ -491,8 +491,8 @@ describe('enrolment and devices', () => {
 
   it('completes an enrolment once with a canonical P-256 key', () => {
     const db = freshDb();
-    putFeature(db, 'appLock', { enabled: true }, 'test');
-    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local');
+    putFeature(db, 'appLock', { enabled: true }, 'test', undefined, 'sdm');
+    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local', 'sdm');
     const { code, expiresAt } = beginEnrolment(db, { userId: u.id, deviceName: 'Telefon' }, 'local');
     expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     expect(new Date(expiresAt).getTime()).toBeGreaterThan(Date.now());
@@ -503,7 +503,7 @@ describe('enrolment and devices', () => {
       '10.168.0.10',
     );
     expect(result).toMatchObject({ userId: u.id, roles: ['admin'], pinRequired: true });
-    const devices = listDevices(db);
+    const devices = listDevices(db, undefined, undefined, 'sdm');
     expect(devices).toHaveLength(1);
     expect(devices[0]).toMatchObject({ id: result.deviceId, name: 'Telefon Aminah', platform: 'android' });
     const stored = JSON.parse(String(db.prepare('SELECT public_jwk FROM devices WHERE id = ?').get(result.deviceId)!.public_jwk)) as JsonWebKey;
@@ -514,19 +514,20 @@ describe('enrolment and devices', () => {
       completeEnrolment(db, { code, publicJwk: p256Jwk(), platform: 'android' }, '10.168.0.10'),
     );
     expect(replay.status).toBe(401);
-    expect(replay.message).toMatch(/tamat|tidak sah/);
+    expect(replay.code).toBe('enrol_code_used');
+    expect(replay.message).toMatch(/sudah digunakan/);
     db.close();
   });
 
   it('rejects an RSA key and sets the PIN only when the user has none', async () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local', 'sdm');
     const { code } = beginEnrolment(db, { userId: u.id, deviceName: 'Telefon' }, 'local');
     const rsa = thrown(() =>
       completeEnrolment(db, { code, publicJwk: rsaJwk(), platform: 'android' }, '10.0.0.2'),
     );
     expect(rsa.status).toBe(400);
-    expect(listDevices(db)).toHaveLength(0);
+    expect(listDevices(db, undefined, undefined, 'sdm')).toHaveLength(0);
 
     const ok = completeEnrolment(
       db,
@@ -551,7 +552,7 @@ describe('enrolment and devices', () => {
 
   it('revokes a device and hides it from the default list', () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local', 'sdm');
     const { code } = beginEnrolment(db, { userId: u.id, deviceName: 'Telefon' }, 'local');
     const { deviceId } = completeEnrolment(
       db,
@@ -564,8 +565,8 @@ describe('enrolment and devices', () => {
     ).run(deviceId, u.id);
 
     revokeDevice(db, deviceId, 'local');
-    expect(listDevices(db)).toHaveLength(0);
-    const all = listDevices(db, undefined, { includeRevoked: true });
+    expect(listDevices(db, undefined, undefined, 'sdm')).toHaveLength(0);
+    const all = listDevices(db, undefined, { includeRevoked: true }, 'sdm');
     expect(all).toHaveLength(1);
     expect(all[0]!.revokedAt).toMatch(/^\d{4}-/);
     expect(db.prepare('SELECT revoked_at FROM sessions WHERE id = ?').get('s1')!.revoked_at).not.toBeNull();
@@ -574,7 +575,7 @@ describe('enrolment and devices', () => {
 
   it('deactivating a user revokes its devices and sessions', () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local', 'sdm');
     const { code } = beginEnrolment(db, { userId: u.id, deviceName: 'Telefon' }, 'local');
     const { deviceId } = completeEnrolment(
       db,
@@ -584,13 +585,13 @@ describe('enrolment and devices', () => {
     deactivateUser(db, u.id, 'local');
     const device = db.prepare('SELECT revoked_at FROM devices WHERE id = ?').get(deviceId)!;
     expect(device.revoked_at).not.toBeNull();
-    expect(listUsers(db)[0]!.active).toBe(false);
+    expect(listUsers(db, 'sdm')[0]!.active).toBe(false);
     db.close();
   });
 
   it('never logs PIN hashes, enrolment codes or private key material', async () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local', 'sdm');
     const { code } = beginEnrolment(db, { userId: u.id, deviceName: 'Telefon' }, 'local');
     const { deviceId } = completeEnrolment(
       db,
@@ -626,8 +627,8 @@ const HOUR = 3_600_000;
 async function sessionFixture() {
   const db = freshDb();
   // These tests cover the PIN path, which only exists while the app lock is on (it is off by default).
-  putFeature(db, 'appLock', { enabled: true }, 'test');
-  const user = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local');
+  putFeature(db, 'appLock', { enabled: true }, 'test', undefined, 'sdm');
+  const user = createUser(db, { name: 'Ustaz Ahmad', roles: ['admin'] }, 'local', 'sdm');
   await setPin(db, user.id, '482915', 'local');
   const kp = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const jwk = kp.publicKey.export({ format: 'jwk' }) as JsonWebKey;
@@ -983,7 +984,7 @@ describe('sessions: new PIN at next unlock after a reset', () => {
     expect(resolveSession(db, r.token, at(T0, 2 * MIN))).not.toBeNull();
     expect(resolveSession(db, first.token, at(T0, 2 * MIN))).toBeNull();
     expect(pinHashOf(db, user.id)).toMatch(/^scrypt2[$]/);
-    expect(listUsers(db)[0]!.pinRequired).toBe(false);
+    expect(listUsers(db, 'sdm')[0]!.pinRequired).toBe(false);
     // The new PIN works the ordinary way; the old one does not.
     await attempt(NEW, at(T0, 3 * MIN));
     expect((await rejection(attempt('482915', at(T0, 4 * MIN)))).status).toBe(401);
@@ -1067,7 +1068,7 @@ describe('W13 S3/Q8: enrolment checks the code before any PIN hashing, and logs 
 
   it('the request-path enrolment hashes asynchronously (never the sync hash) and sets the PIN', async () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local', 'sdm');
     const { code } = beginEnrolment(db, { userId: u.id, deviceName: 'T' }, 'local');
     hashCalls.async = 0;
     hashCalls.sync = 0;
@@ -1080,7 +1081,7 @@ describe('W13 S3/Q8: enrolment checks the code before any PIN hashing, and logs 
 
   it('a PIN for a user who already has one is refused before hashing', async () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local', 'sdm');
     await setPin(db, u.id, '280419', 'local');
     const { code } = beginEnrolment(db, { userId: u.id, deviceName: 'T' }, 'local');
     hashCalls.async = 0;
@@ -1093,7 +1094,7 @@ describe('W13 S3/Q8: enrolment checks the code before any PIN hashing, and logs 
   it('Q8: failed enrolments leave auth_log rows (not rolled back with the refusal)', () => {
     const db = freshDb();
     thrown(() => completeEnrolment(db, { code: 'AAAA-BBBB-CCCC', publicJwk: p256Jwk(), platform: 'android' }, '10.0.0.9'));
-    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local', 'sdm');
     const { code } = beginEnrolment(db, { userId: u.id, deviceName: 'T' }, 'local');
     completeEnrolment(db, { code, publicJwk: p256Jwk(), platform: 'android' }, '10.0.0.9');
     thrown(() => completeEnrolment(db, { code, publicJwk: p256Jwk(), platform: 'android' }, '10.0.0.10')); // replay
@@ -1107,7 +1108,7 @@ describe('W13 S3/Q8: enrolment checks the code before any PIN hashing, and logs 
 
   it('a refusal found inside the transaction (code claimed in between) is logged too', async () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local', 'sdm');
     const { code } = beginEnrolment(db, { userId: u.id, deviceName: 'T' }, 'local');
     const input = { code, publicJwk: p256Jwk(), platform: 'android', pin: '280419' };
     // Two parallel redemptions of one code: exactly one wins, the loser leaves a failed-enrol row.
@@ -1140,7 +1141,7 @@ describe('W13 Q9: a stuck PIN count gets a real lock', () => {
 describe('W13 S12: purgeExpired trims old rows', () => {
   it('drops auth_log older than 180 days, dead kiosk cookies and orphan kiosk devices', () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ustaz', roles: ['admin'] }, 'local', 'sdm');
     const mk = (id: string, revoked: string | null) =>
       db.prepare("INSERT INTO devices (id, user_id, name, platform, enrolled_at, revoked_at) VALUES (?, ?, 'TV', 'kiosk', ?, ?)").run(id, u.id, T0.toISOString(), revoked);
     mk('live', null);
@@ -1215,7 +1216,7 @@ describe("W13 M2: admin PIN reset lists the user's devices and can revoke chosen
     });
     expect(r.statusCode).toBe(400);
     expect(getAuthUser(app.surau.db, target.userId)!.pinHash).not.toBeNull();
-    expect(listDevices(app.surau.db, admin.userId)).toHaveLength(1);
+    expect(listDevices(app.surau.db, admin.userId, undefined, 'sdm')).toHaveLength(1);
     const bad = await app.inject({ method: 'PUT', url: `/api/users/${target.userId}/pin`, headers: admin.headers, payload: { revokeDeviceIds: 'x' } });
     expect(bad.statusCode).toBe(400);
     await app.close();

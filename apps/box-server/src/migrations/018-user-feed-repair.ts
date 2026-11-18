@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import type { DatabaseSync } from 'node:sqlite';
 import { getUserRow, logChange } from '../auth/users.ts';
 import { bumpVersion } from '../settingsStore.ts';
@@ -40,8 +41,8 @@ function up(db: DatabaseSync): void {
     logChange(db, 'system:repair', 'users', id, after ?? undefined, snap, {
       ...(editedAt !== undefined ? { editedAt } : {}),
       ...(rev !== undefined ? { rev } : {}),
-    });
+    }, LOCAL_SURAU_ID);
     repaired++;
   }
-  if (repaired > 0) bumpVersion(db);
+  if (repaired > 0) bumpVersion(db, LOCAL_SURAU_ID);
 }

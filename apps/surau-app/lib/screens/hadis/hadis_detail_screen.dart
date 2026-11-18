@@ -338,7 +338,7 @@ class _HadisDetailPanelState extends ConsumerState<HadisDetailPanel> {
       HadisSection(
         s.hadisArabicText,
         trailing: Align(
-          alignment: Alignment.centerRight,
+          alignment: AlignmentDirectional.centerEnd,
           child: Switch(
             key: const ValueKey('hadis-show-arabic'),
             value: _showArabic,
@@ -353,7 +353,7 @@ class _HadisDetailPanelState extends ConsumerState<HadisDetailPanel> {
             child: Text(
               d.textAr,
               textDirection: TextDirection.rtl,
-              textAlign: TextAlign.right,
+              textAlign: TextAlign.start,
               style: const TextStyle(
                 fontFamily: 'NotoNaskhArabic',
                 // `{` and `}` around a verse are not in the Arabic font
@@ -544,13 +544,13 @@ class _HadisDetailPanelState extends ConsumerState<HadisDetailPanel> {
         Expanded(
           child: ListView(
             padding: widget.embedded
-                ? const EdgeInsets.fromLTRB(0, 16, 20, 16)
+                ? const EdgeInsetsDirectional.fromSTEB(0, 16, 20, 16)
                 : const EdgeInsets.fromLTRB(20, 16, 20, 16),
             children: children,
           ),
         ),
         Container(
-          padding: EdgeInsets.fromLTRB(widget.embedded ? 0 : 20, 12, 20, 16),
+          padding: EdgeInsetsDirectional.fromSTEB(widget.embedded ? 0 : 20, 12, 20, 16),
           decoration: const BoxDecoration(
             color: SurauColors.paper,
             border: Border(top: BorderSide(color: SurauColors.line)),

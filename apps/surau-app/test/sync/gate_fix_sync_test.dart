@@ -296,13 +296,18 @@ void main() {
     await store.setMeta('seq@box', '5');
     // The box merged my `enabled` with someone else's `colour`.
     server.seq = 6;
-    server.snapshot = {
-      ...server.snapshot,
-      'seq': 6,
-      'settings': {
-        'clock': {'enabled': false, 'colour': 'red'},
+    // The changes feed carries the merged row (K14: no snapshot for one setting).
+    server.entries = [
+      {
+        'seq': 6,
+        'entity': 'settings',
+        'entityId': 'clock',
+        'rev': '2026-11-05T10:00:01.000Z|dev-2',
+        'editedAt': '2026-11-05T10:00:01.000Z',
+        'opId': null,
+        'after': {'enabled': false, 'colour': 'red'},
       },
-    };
+    ];
     await engine.enqueue(
       kind: 'settings.put',
       entity: 'settings',
@@ -315,6 +320,7 @@ void main() {
     expect(d['colour'], 'red', reason: 'the other device\'s field survives');
     expect(d.containsKey('pending'), isFalse);
     expect(await engine.outbox.count, 0);
+    expect(server.snapshotCalls, 0);
   });
 
   test('Q14: a notice from the store (outbox set aside) becomes a conflict', () async {

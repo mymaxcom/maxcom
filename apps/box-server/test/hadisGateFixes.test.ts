@@ -46,11 +46,11 @@ const get = (c: Ctx, url: string, as: Login = c.admin) => c.app.inject({ method:
 const add = (c: Ctx, id: string) => post(c, '/api/hadis/add', { provider: 'hadeethenc', id });
 const client = (fake: FakeHadeethEnc) => createHadeethEnc(fake.fetch, BASE);
 const check = (c: Ctx, opts: Parameters<typeof checkProviderUpdates>[4] = {}) =>
-  checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0, ...opts });
+  checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0, ...opts }, 'sdm');
 const pool = (c: Ctx): string[] => {
-  const s = getSettings(c.app.surau.db);
+  const s = getSettings(c.app.surau.db, 'sdm');
   const card = { ...s, hadis: { ...s.hadis, changeEvery: 'card' as const } };
-  return (buildKioskContent(c.app.surau.db, c.dir, AT, card).hadisToday ?? []).map((h) => h.id);
+  return (buildKioskContent(c.app.surau.db, c.dir, AT, card, 'sdm').hadisToday ?? []).map((h) => h.id);
 };
 const pendingRows = (c: Ctx): number => Number(c.app.surau.db.prepare('SELECT COUNT(*) AS n FROM hadis_source_updates').get()?.n);
 
@@ -61,7 +61,7 @@ describe('group 1: a downgraded grade leaves the TV at once', () => {
     expect(pool(c)).toEqual(['hadeethenc-66512']);
     c.fake.one.set('66512', { ...fixture('one-66512'), grade: 'ضعيف' });
     await check(c);
-    const item = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')!;
+    const item = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')!;
     expect(item.shown).toBe(true);
     expect(item.ext?.blocked).toBe(true);
     expect(item.grade).toBe('sahih');
@@ -74,7 +74,7 @@ describe('group 1: a downgraded grade leaves the TV at once', () => {
     await add(c, '66512');
     c.fake.one.set('66512', { ...fixture('one-66512'), grade: 'ضعيف جدا' });
     await check(c);
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')?.ext?.blocked).toBe(true);
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')?.ext?.blocked).toBe(true);
     expect(pool(c)).toEqual([]);
   });
 
@@ -83,7 +83,7 @@ describe('group 1: a downgraded grade leaves the TV at once', () => {
     await add(c, '66512');
     c.fake.one.set('66512', { ...fixture('one-66512'), hadeeth: `${String(fixture('one-66512').hadeeth)} Tambahan.` });
     await check(c);
-    const item = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')!;
+    const item = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')!;
     expect(item.ext?.blocked).toBeUndefined();
     expect(pool(c)).toEqual(['hadeethenc-66512']);
     expect((await get(c, '/api/hadis/updates')).json().updates).toHaveLength(1);
@@ -97,7 +97,7 @@ describe('group 1: a downgraded grade leaves the TV at once', () => {
     expect(pool(c)).toEqual([]);
     c.fake.one.set('66512', fixture('one-66512'));
     await check(c);
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')?.ext?.blocked).toBeUndefined();
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')?.ext?.blocked).toBeUndefined();
     expect(pool(c)).toEqual(['hadeethenc-66512']);
     expect((await get(c, '/api/hadis/updates')).json().updates).toEqual([]);
   });
@@ -109,7 +109,7 @@ describe('group 1: a downgraded grade leaves the TV at once', () => {
     await check(c);
     c.fake.one.set('66512', { ...fixture('one-66512'), grade: 'حسن', hadeeth: `${String(fixture('one-66512').hadeeth)} Lain.` });
     await check(c);
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')?.ext?.blocked).toBeUndefined();
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')?.ext?.blocked).toBeUndefined();
     expect(pool(c)).toEqual(['hadeethenc-66512']);
   });
 
@@ -121,7 +121,7 @@ describe('group 1: a downgraded grade leaves the TV at once', () => {
     const acc = await post(c, '/api/hadis/hadeethenc-66512/accept-update', {});
     expect(acc.statusCode).toBe(200);
     expect(acc.json().gradeBlocked).toBe(true);
-    const item = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')!;
+    const item = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')!;
     expect(item.ext?.blocked).toBeUndefined();
     expect(item).toMatchObject({ shown: false, grade: 'dhaif' });
     expect(pool(c)).toEqual([]);
@@ -163,6 +163,6 @@ describe('group 1: a downgraded grade leaves the TV at once', () => {
     expect(acc.json().code).toBe('too_long');
     expect(acc.json().errors[0]).toMatch(/terlalu panjang/);
     expect(pendingRows(c)).toBe(0);
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')).not.toBeNull();
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')).not.toBeNull();
   });
 });

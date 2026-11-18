@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/router.dart';
 import 'package:surau_app/features/live/fake_publisher.dart';
 import 'package:surau_app/features/live/live_screen.dart' show livePublisherProvider;
@@ -11,6 +12,7 @@ import 'package:surau_app/features/prayer/location_screen.dart';
 import 'package:surau_app/features/prayer/prayer_repository.dart';
 import 'package:surau_app/features/prayer/sources_screen.dart';
 import 'package:surau_app/features/prayer/zone_screen.dart';
+import 'package:surau_app/l10n/s_lookup.dart';
 import 'package:surau_app/screens/settings_list_screen.dart';
 
 import '../features/shell/harness.dart';
@@ -67,6 +69,35 @@ void main() {
     await tapRevealed(tester, find.byKey(const ValueKey('zon-save')));
     expect(t.h.box.bodyOf('/api/settings/zone'), {'zone': 'SGR02'});
     expect(find.text('Tiada data untuk zon ini; MAXCOM akan memuat turun'), findsOneWidget);
+  });
+
+  testWidgets('[P5] the zone save warning is worded from its code in the language of the app', (tester) async {
+    final ar = sFor(AppLang.ar);
+    final t = await pumpPrayer(
+      tester,
+      _screen,
+      location: AppRoutes.settingsZone,
+      locale: const Locale('ar'),
+      setup: (h) {
+        h.handlers['PUT /api/settings/zone'] = (_) async => jsonResponse(200, {
+          ...h.settings,
+          'warnings': ['Tiada data untuk zon ini; muat naik data atau hidupkan muat turun automatik'],
+          'warningCodes': [
+            {'code': 'zone_no_data', 'detail': {'willFetch': false}},
+          ],
+        });
+      },
+    );
+    await tester.tap(find.byKey(const ValueKey('zon-picker')));
+    await settle(tester);
+    await tester.enterText(find.byKey(const ValueKey('picker-search')), 'Sabak');
+    await settle(tester);
+    await tester.tap(find.text('SGR02'));
+    await settle(tester);
+    await tapRevealed(tester, find.byKey(const ValueKey('zon-save')));
+    expect(t.h.box.bodyOf('/api/settings/zone'), {'zone': 'SGR02'});
+    expect(find.text(ar.ra2WarnZoneNoDataManual), findsOneWidget);
+    expect(find.textContaining('Tiada data'), findsNothing);
   });
 
   testWidgets('a removed zone shows the warning banner', (tester) async {

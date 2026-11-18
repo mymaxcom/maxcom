@@ -37,7 +37,7 @@ async function rig(on = true): Promise<Rig> {
   const treasurer = await loginAs(app, 'treasurer');
   const ajk = await loginAs(app, 'ajk');
   const media = await loginAs(app, 'media');
-  if (on) putFeature(db, 'finance', { enabled: true }, 'test');
+  if (on) putFeature(db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
   const funds = (await app.inject({ method: 'GET', url: '/api/finance/funds', headers: treasurer.headers })).json().funds as { id: string }[];
   const per = (await app.inject({ method: 'GET', url: '/api/finance/perihal', headers: treasurer.headers })).json().perihal as { id: string; direction: string; label: string }[];
   return {
@@ -179,7 +179,7 @@ describe('finance routes: seeding', () => {
     const { db } = app.surau;
     const ajk = await loginAs(app, 'ajk');
     const treasurer = await loginAs(app, 'treasurer');
-    putFeature(db, 'finance', { enabled: true }, 'test');
+    putFeature(db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
     const funds = () => Number(db.prepare('SELECT COUNT(*) AS n FROM finance_funds').get()!.n);
     const log = () => Number(db.prepare('SELECT COUNT(*) AS n FROM change_log').get()!.n);
     const before = log();

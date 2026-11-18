@@ -11,6 +11,7 @@ import { putFeature } from '../src/settingsStore.ts';
 import { runCloudLink } from '../src/cli/cloudLink.ts';
 import { applyFeedEntry } from '../src/sync/apply.ts';
 import { issueLinkCode } from '../src/sync/sites.ts';
+import { ensureSurau } from './support/surauRow.ts';
 import { loadSyncKey } from '../src/sync/syncKey.ts';
 import { loginAs } from './authHelpers.ts';
 import { buildCloud, CLOUD_URL } from './support/fakeCloud.ts';
@@ -56,7 +57,7 @@ async function makePair(limits?: { small?: number; page?: number; snapshot?: num
   hook.fetch = worker.fetch;
   const pair: Pair = { box, boxDir, boxId, cloud, worker, hook };
   pairs.push(pair);
-  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau Ujian' });
+  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau Ujian', target: { surauId: ensureSurau(cloud.app.surau.db) } });
   const exit = await runCloudLink(['--data', boxDir, '--db', join(boxDir, 'box.db'), 'link', CLOUD_URL, code], { out: () => undefined, err: () => undefined }, worker.fetch);
   expect(exit).toBe(0);
   worker.setSecret(boxId, loadSyncKey(boxDir)!.wakeSecret);
@@ -82,7 +83,7 @@ describe('Q3: a refused push is recorded, not silent', () => {
     const p = await makePair();
     await agentOf(p).runOnce(); // push the link's own settings change
     const before = Number(state(p, 'last_push_seq'));
-    logChange(p.box.surau.db, 'local', 'content:penceramah', 'bad1', undefined, { name: 5 }); // a row the cloud cannot accept
+    logChange(p.box.surau.db, 'local', 'content:penceramah', 'bad1', undefined, { name: 5 }, undefined, 'sdm'); // a row the cloud cannot accept
     await agentOf(p).runOnce();
     expect(Number(state(p, 'last_push_seq'))).toBeGreaterThan(before);
     const st = agentOf(p).status();
@@ -100,7 +101,7 @@ describe('Q3: a refused push is recorded, not silent', () => {
 
   it('a benign live_only refusal does not set lastError', async () => {
     const p = await makePair();
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     const real = p.hook.fetch;
     p.hook.fetch = (async (i: Parameters<typeof fetch>[0], n?: RequestInit) => {
       if (urlOf(i).endsWith('/api/sync/ops')) return jsonRes(200, { applied: 0, duplicate: 0, superseded: 0, refused: 1, reasons: ['live_only'], seq: 1 });
@@ -112,7 +113,7 @@ describe('Q3: a refused push is recorded, not silent', () => {
 
   it('a refusal count with no reasons (older cloud) is not benign', async () => {
     const p = await makePair();
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     const real = p.hook.fetch;
     p.hook.fetch = (async (i: Parameters<typeof fetch>[0], n?: RequestInit) => {
       if (urlOf(i).endsWith('/api/sync/ops')) return jsonRes(200, { applied: 0, duplicate: 0, superseded: 0, refused: 2, seq: 1 });
@@ -124,8 +125,8 @@ describe('Q3: a refused push is recorded, not silent', () => {
 
   it('never pushes the app lock setting', async () => {
     const p = await makePair();
-    putFeature(p.box.surau.db, 'appLock', { enabled: true }, 'local');
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putFeature(p.box.surau.db, 'appLock', { enabled: true }, 'local', undefined, 'sdm');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     const sent: string[] = [];
     const real = p.hook.fetch;
     p.hook.fetch = (async (i: Parameters<typeof fetch>[0], n?: RequestInit) => {
@@ -136,7 +137,7 @@ describe('Q3: a refused push is recorded, not silent', () => {
     expect(sent.length).toBeGreaterThan(0);
     expect(sent.join('')).not.toContain('"entityId":"appLock"');
     expect(agentOf(p).status()).toMatchObject({ lastError: null, refused: 0 });
-    expect(getItem(p.cloud.app.surau.db, 'penceramah', 'p1')).toMatchObject({ name: 'A' });
+    expect(getItem(p.cloud.app.surau.db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'A' });
   });
 });
 
@@ -179,13 +180,13 @@ describe('Q7: the tick chain survives a disable', () => {
     a.start();
     await vi.advanceTimersByTimeAsync(10_000);
     // the dirty check is now in flight; the operator switches sync off, then the answer arrives
-    putFeature(p.box.surau.db, 'cloudSync', { enabled: false }, 'local');
+    putFeature(p.box.surau.db, 'cloudSync', { enabled: false }, 'local', undefined, 'sdm');
     gated = false;
     release();
     await vi.advanceTimersByTimeAsync(1_000);
     expect(a.nextDelayMs).not.toBeNull(); // the chain was re-armed, not dropped
     const checks = p.worker.dirtyChecks;
-    putFeature(p.box.surau.db, 'cloudSync', { enabled: true }, 'local');
+    putFeature(p.box.surau.db, 'cloudSync', { enabled: true }, 'local', undefined, 'sdm');
     await vi.advanceTimersByTimeAsync(130_000);
     expect(p.worker.dirtyChecks).toBeGreaterThan(checks);
     a.stop();
@@ -207,17 +208,17 @@ describe('S2: what the cloud sends is checked and capped', () => {
       return real(i, n);
     }) as typeof fetch;
     await agentOf(p).runOnce();
-    expect(getItem(p.box.surau.db, 'penceramah', 'g1')).toMatchObject({ name: 'Ustaz Baik' });
+    expect(getItem(p.box.surau.db, 'penceramah', 'g1', 'sdm')).toMatchObject({ name: 'Ustaz Baik' });
     expect(p.box.surau.db.prepare("SELECT COUNT(*) AS n FROM users WHERE name = 'Jahat'").get()?.n).toBe(0);
     expect(agentOf(p).status()).toMatchObject({ refused: 3, lastRefusal: 'pull_bad_shape', lastError: 'refused' });
   });
 
   it('an oversized changes page is refused (bad_answer) and nothing from it is applied', async () => {
     const p = await makePair({ page: 2_000 });
-    for (let i = 0; i < 30; i++) putItem(p.cloud.app.surau.db, 'penceramah', { id: `c${i}`, name: `Ustaz nombor ${i}` }, 'local');
+    for (let i = 0; i < 30; i++) putItem(p.cloud.app.surau.db, 'penceramah', { id: `c${i}`, name: `Ustaz nombor ${i}` }, 'local', undefined, 'sdm');
     await agentOf(p).runOnce();
     expect(agentOf(p).status().lastError).toBe('bad_answer');
-    expect(getItem(p.box.surau.db, 'penceramah', 'c0')).toBeNull();
+    expect(getItem(p.box.surau.db, 'penceramah', 'c0', 'sdm')).toBeNull();
   });
 
   it('a streamed answer with no content-length is cut at the cap', async () => {
@@ -238,11 +239,11 @@ describe('S2: what the cloud sends is checked and capped', () => {
 
   it('an oversized snapshot is refused', async () => {
     const p = await makePair({ snapshot: 1_000 });
-    for (let i = 0; i < 20; i++) putItem(p.cloud.app.surau.db, 'penceramah', { id: `s${i}`, name: `Ustaz nombor ${i}` }, 'local');
+    for (let i = 0; i < 20; i++) putItem(p.cloud.app.surau.db, 'penceramah', { id: `s${i}`, name: `Ustaz nombor ${i}` }, 'local', undefined, 'sdm');
     p.cloud.app.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('log_floor', '100000')").run();
     await agentOf(p).runOnce();
     expect(agentOf(p).status().lastError).toBe('bad_answer');
-    expect(getItem(p.box.surau.db, 'penceramah', 's0')).toBeNull();
+    expect(getItem(p.box.surau.db, 'penceramah', 's0', 'sdm')).toBeNull();
   });
 });
 
@@ -258,7 +259,7 @@ describe('Q6: a 410 snapshot mirrors the cloud', () => {
 
   it('a cloud settings edit newer than the box lands after a 410 (it was stamped at the epoch before)', async () => {
     const p = await makePair();
-    const ctx = (db: FastifyInstance) => ({ now: new Date(), origin: 'local', actor: 'user:x', dataDir: db === p.box ? p.boxDir : p.cloud.dir });
+    const ctx = (db: FastifyInstance) => ({ surauId: 'sdm', now: new Date(), origin: 'local', actor: 'user:x', dataDir: db === p.box ? p.boxDir : p.cloud.dir });
     applyFeedEntry(p.box.surau.db, entry({ entity: 'settings', entityId: 'ticker', after: { speed: 'slow' }, editedAt: T1, rev: `${T1}|dev-a` }), ctx(p.box));
     await markPushed(p);
     applyFeedEntry(p.cloud.app.surau.db, entry({ entity: 'settings', entityId: 'ticker', after: { speed: 'fast' }, editedAt: T2, rev: `${T2}|dev-b` }), ctx(p.cloud.app));
@@ -271,7 +272,7 @@ describe('Q6: a 410 snapshot mirrors the cloud', () => {
 
   it('a snapshot without any stamps (older cloud) still lets the cloud win: settings and users take the snapshot time', async () => {
     const p = await makePair();
-    const ctx = (dir: string) => ({ now: new Date(), origin: 'local', actor: 'user:x', dataDir: dir });
+    const ctx = (dir: string) => ({ surauId: 'sdm', now: new Date(), origin: 'local', actor: 'user:x', dataDir: dir });
     applyFeedEntry(p.box.surau.db, entry({ entity: 'settings', entityId: 'ticker', after: { speed: 'slow' }, editedAt: T1, rev: `${T1}|dev-a` }), ctx(p.boxDir));
     applyFeedEntry(p.box.surau.db, entry({ entity: 'user', entityId: 'u-old', after: { name: 'Lama', roles: ['ajk'], active: true }, editedAt: T1, rev: `${T1}|dev-a` }), ctx(p.boxDir));
     await markPushed(p);
@@ -298,7 +299,7 @@ describe('Q6: a 410 snapshot mirrors the cloud', () => {
     const row = p.box.surau.db.prepare("SELECT * FROM users LIMIT 1").get() as Record<string, unknown> | undefined;
     // use a fresh user known to both sides
     const mk = (db: FastifyInstance, name: string, at: string): void =>
-      void applyFeedEntry(db.surau.db, entry({ entity: 'user', entityId: 'u-shared', after: { name, roles: ['ajk'], active: true }, editedAt: at, rev: `${at}|dev-a` }), {
+      void applyFeedEntry(db.surau.db, entry({ entity: 'user', entityId: 'u-shared', after: { name, roles: ['ajk'], active: true }, editedAt: at, rev: `${at}|dev-a` }), { surauId: 'sdm',
         now: new Date(), origin: 'local', actor: 'user:x', dataDir: db === p.box ? p.boxDir : p.cloud.dir,
       });
     void row;
@@ -312,27 +313,27 @@ describe('Q6: a 410 snapshot mirrors the cloud', () => {
 
   it('an item the cloud no longer has is removed on the box, unless the box edited it after the snapshot', async () => {
     const p = await makePair();
-    putItem(p.box.surau.db, 'penceramah', { id: 'gone', name: 'Dibuang di awan' }, 'local', { editedAt: T1 });
-    putItem(p.box.surau.db, 'penceramah', { id: 'newer', name: 'Baharu di kotak' }, 'local', { editedAt: '2099-01-01T00:00:00.000Z' });
+    putItem(p.box.surau.db, 'penceramah', { id: 'gone', name: 'Dibuang di awan' }, 'local', { editedAt: T1 }, 'sdm');
+    putItem(p.box.surau.db, 'penceramah', { id: 'newer', name: 'Baharu di kotak' }, 'local', { editedAt: '2099-01-01T00:00:00.000Z' }, 'sdm');
     await markPushed(p); // both marked pushed, though the cloud lacks them
     p.cloud.app.surau.db.prepare("DELETE FROM content_items WHERE id IN ('gone', 'newer')").run();
     floor(p);
     await agentOf(p).runOnce();
     expect(agentOf(p).status().lastError).toBeNull();
-    expect(getItem(p.box.surau.db, 'penceramah', 'gone')).toBeNull();
-    expect(getItem(p.box.surau.db, 'penceramah', 'newer')).toMatchObject({ name: 'Baharu di kotak' });
+    expect(getItem(p.box.surau.db, 'penceramah', 'gone', 'sdm')).toBeNull();
+    expect(getItem(p.box.surau.db, 'penceramah', 'newer', 'sdm')).toMatchObject({ name: 'Baharu di kotak' });
   });
 
   it('a tombstone on the cloud deletes an older live box item', async () => {
     const p = await makePair();
-    putItem(p.box.surau.db, 'penceramah', { id: 't1', name: 'Hidup di kotak' }, 'local', { editedAt: T1 });
+    putItem(p.box.surau.db, 'penceramah', { id: 't1', name: 'Hidup di kotak' }, 'local', { editedAt: T1 }, 'sdm');
     await agentOf(p).runOnce();
-    applyFeedEntry(p.cloud.app.surau.db, entry({ entity: 'content:penceramah', entityId: 't1', after: null, editedAt: T2, rev: `${T2}|dev-b` }), {
+    applyFeedEntry(p.cloud.app.surau.db, entry({ entity: 'content:penceramah', entityId: 't1', after: null, editedAt: T2, rev: `${T2}|dev-b` }), { surauId: 'sdm',
       now: new Date(), origin: 'local', actor: 'user:x', dataDir: p.cloud.dir,
     });
     floor(p);
     await agentOf(p).runOnce();
-    expect(getItem(p.box.surau.db, 'penceramah', 't1')).toBeNull();
+    expect(getItem(p.box.surau.db, 'penceramah', 't1', 'sdm')).toBeNull();
   });
 
   it('pending box changes are pushed before the snapshot; if that push fails the snapshot is not applied', async () => {
@@ -347,7 +348,7 @@ describe('Q6: a 410 snapshot mirrors the cloud', () => {
       const u = urlOf(i);
       if (u.includes('/api/sync/changes') && !injected) {
         injected = true; // a local edit made after the cycle's push, before the pull answers 410
-        putItem(p.box.surau.db, 'penceramah', { id: 'late', name: 'Lewat' }, 'local');
+        putItem(p.box.surau.db, 'penceramah', { id: 'late', name: 'Lewat' }, 'local', undefined, 'sdm');
         failOps = true;
       }
       if (u.endsWith('/api/sync/ops') && failOps) return new Response('boom', { status: 502 });
@@ -357,11 +358,11 @@ describe('Q6: a 410 snapshot mirrors the cloud', () => {
     await agentOf(p).runOnce();
     expect(agentOf(p).status().lastError).toBe('http_5xx');
     expect(snapshots).toBe(0);
-    expect(getItem(p.box.surau.db, 'penceramah', 'late')).toMatchObject({ name: 'Lewat' });
+    expect(getItem(p.box.surau.db, 'penceramah', 'late', 'sdm')).toMatchObject({ name: 'Lewat' });
     // the push works again: the late edit reaches the cloud and survives the mirror
     failOps = false;
     await agentOf(p).runOnce();
-    expect(getItem(p.cloud.app.surau.db, 'penceramah', 'late')).toMatchObject({ name: 'Lewat' });
-    expect(getItem(p.box.surau.db, 'penceramah', 'late')).toMatchObject({ name: 'Lewat' });
+    expect(getItem(p.cloud.app.surau.db, 'penceramah', 'late', 'sdm')).toMatchObject({ name: 'Lewat' });
+    expect(getItem(p.box.surau.db, 'penceramah', 'late', 'sdm')).toMatchObject({ name: 'Lewat' });
   });
 });

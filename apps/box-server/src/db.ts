@@ -27,6 +27,10 @@ const { DatabaseSync: DatabaseSyncCtor } = createRequire(import.meta.url)(
 
 const SCHEMA_VERSION = '1';
 
+/**
+ * The shapes before migration 019 on purpose: released migrations (005) upsert on these keys, so a fresh database
+ * is built as an old one and 019 rebuilds the keys (surau_id in the key) on fresh and upgraded databases alike.
+ */
 const TABLES = `
   CREATE TABLE IF NOT EXISTS prayer_days (
     surau_id TEXT NOT NULL DEFAULT 'sdm',

@@ -147,7 +147,7 @@ class PickerButton extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 56),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 10, 12, 10),
             child: Row(
               children: [
                 Expanded(

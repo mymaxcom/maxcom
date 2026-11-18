@@ -387,7 +387,7 @@ describe('auth routes', () => {
     const app = makeApp();
     const admin = await loginAsAdmin(app);
     const h = admin.headers;
-    const created = await app.inject({ method: 'POST', url: '/api/users', headers: h, payload: { name: 'Hasan', roles: ['media'] } });
+    const created = await app.inject({ method: 'POST', url: '/api/users', headers: h, payload: { name: 'Hasan', roles: ['media'], phone: '012-000 0001' } });
     expect(created.statusCode).toBe(201);
     const id = created.json().id as string;
     const list = await app.inject({ method: 'GET', url: '/api/users', headers: h });
@@ -410,7 +410,7 @@ describe('auth routes', () => {
 
   it('admin PIN reset clears the PIN and kills that user\'s sessions; self PIN change checks the current PIN', async () => {
     const app = makeApp();
-    putFeature(app.surau.db, 'appLock', { enabled: true }, 'test');
+    putFeature(app.surau.db, 'appLock', { enabled: true }, 'test', undefined, 'sdm');
     const admin = await loginAsAdmin(app);
     const ajk = await loginAs(app, 'ajk');
     const bad = await app.inject({ method: 'PUT', url: '/api/auth/pin', headers: ajk.headers, payload: { currentPin: '111222', newPin: '739518' } });
@@ -433,7 +433,7 @@ describe('auth routes', () => {
 
   it('PIN change is rate limited per user', async () => {
     const app = makeApp();
-    putFeature(app.surau.db, 'appLock', { enabled: true }, 'test');
+    putFeature(app.surau.db, 'appLock', { enabled: true }, 'test', undefined, 'sdm');
     const a = await loginAs(app, 'ajk');
     const codes: number[] = [];
     for (let i = 0; i < 6; i++) {
@@ -613,5 +613,122 @@ describe('W13 S2: ambiguous raw paths are refused before classification', () => 
   it('classification of the normalised path is unchanged for clean URLs', () => {
     expect(classifyRequest('GET', '/api/settings')).toMatchObject({ kind: 'rule', permission: 'settings:read' });
     expect(classifyRequest('GET', '/api//settings/')).toMatchObject({ kind: 'rule', permission: 'settings:read' });
+  });
+});
+
+describe('Plan 14 T3: every route row declares its tenant', () => {
+  it("each row has tenant 'required' | 'none' (default deny: a row without it is a mistake)", () => {
+    for (const rule of ROUTE_PERMISSIONS) {
+      expect(['required', 'none'], `${rule.method} ${rule.sample}`).toContain((rule as { tenant?: string }).tenant);
+    }
+  });
+
+  it("public rows are 'none'; surau data routes are 'required'", () => {
+    const tenantOfRule = (method: string, sample: string): string | undefined => {
+      const r = ROUTE_PERMISSIONS.find((x) => x.method === method && x.pattern.test(sample));
+      return (r as { tenant?: string } | undefined)?.tenant;
+    };
+    for (const rule of ROUTE_PERMISSIONS) {
+      if (rule.permission === 'public') expect((rule as { tenant?: string }).tenant, `${rule.method} ${rule.sample}`).toBe('none');
+    }
+    for (const [m, p] of [
+      ['GET', '/api/settings'],
+      ['PUT', '/api/settings/clock'],
+      ['GET', '/api/content/announcements'],
+      ['GET', '/api/finance/entries'],
+      ['GET', '/api/users'],
+      ['GET', '/api/devices'],
+      ['GET', '/api/prayer/days'],
+    ] as const) {
+      expect(tenantOfRule(m, p), `${m} ${p}`).toBe('required');
+    }
+  });
+});
+
+describe('Plan 14 T10: the fleet rows', () => {
+  const SID = 'abcdefghijkl';
+  const BID = '0123456789abcdef';
+  /** method, concrete path, permission, a body a handler refuses without writing (the hook decides first). */
+  const FLEET: readonly (readonly ['GET' | 'POST' | 'PUT' | 'DELETE', string, 'fleet:read' | 'fleet:manage'])[] = [
+    ['GET', '/api/suraus', 'fleet:read'],
+    ['GET', `/api/suraus/${SID}`, 'fleet:read'],
+    ['GET', '/api/fleet/pending', 'fleet:read'],
+    ['POST', `/api/fleet/pending/${BID}/approve`, 'fleet:manage'],
+    ['POST', `/api/fleet/pending/${BID}/reject`, 'fleet:manage'],
+    ['POST', `/api/suraus/${SID}/suspend`, 'fleet:manage'],
+    ['POST', `/api/suraus/${SID}/unsuspend`, 'fleet:manage'],
+    ['POST', `/api/fleet/boxes/${BID}/revoke`, 'fleet:manage'],
+    ['POST', `/api/fleet/boxes/${BID}/unrevoke`, 'fleet:manage'],
+    ['PUT', `/api/suraus/${SID}/storage-limit`, 'fleet:manage'],
+    ['DELETE', `/api/fleet/suraus/${SID}`, 'fleet:manage'],
+  ];
+  const fleetRules = () => ROUTE_PERMISSIONS.filter((r) => /^\/api\/(suraus|fleet)(\/|$)/.test(r.sample));
+
+  it('the table has exactly the ten fleet rows, with the permission each should need', () => {
+    expect(fleetRules().length).toBe(FLEET.length);
+    for (const [method, path, permission] of FLEET) {
+      expect(classifyRequest(method, path), `${method} ${path}`).toEqual({ kind: 'rule', permission });
+      const rules = ROUTE_PERMISSIONS.filter((r) => r.method === method && r.pattern.test(path));
+      expect(rules.length, `${method} ${path}: one row`).toBe(1);
+    }
+    // nothing else of those methods slips in around them
+    expect(classifyRequest('DELETE', `/api/suraus/${SID}`)).not.toEqual(expect.objectContaining({ kind: 'rule' }));
+    expect(classifyRequest('POST', '/api/suraus')).not.toEqual(expect.objectContaining({ kind: 'rule' }));
+    expect(classifyRequest('PUT', '/api/fleet/pending')).not.toEqual(expect.objectContaining({ kind: 'rule' }));
+  });
+
+  it("every row under /api/suraus and /api/fleet declares tenant 'none' and ops: true, and no ops-role permission appears in the table", () => {
+    for (const rule of fleetRules()) {
+      expect((rule as { tenant?: string }).tenant, `${rule.method} ${rule.sample}`).toBe('none');
+      expect((rule as { ops?: boolean }).ops, `${rule.method} ${rule.sample}`).toBe(true);
+      expect(['fleet:read', 'fleet:manage'], `${rule.method} ${rule.sample}`).toContain(rule.permission);
+    }
+    // no fleet row hands out or manages the ops roles
+    expect(fleetRules().some((r) => String(r.permission).startsWith('superadmin'))).toBe(false);
+    // and ops is declared on those rows only among the public/surau-data rows seen so far
+    for (const rule of ROUTE_PERMISSIONS) {
+      if (rule.permission === 'public' || (rule as { tenant?: string }).tenant === 'required') {
+        expect((rule as { ops?: boolean }).ops ?? false, `${rule.method} ${rule.sample}`).toBe(false);
+      }
+    }
+  });
+
+  it('on a cloud: ops-device superadmin and support pass the hook as core says; every surau role is 403; anonymous 401; no call writes anything', { timeout: 120_000 }, async () => {
+    const app = makeApp({ role: 'cloud', dataDir: tempDir(), boxId: '0c10ad000000000d' });
+    const sa = await loginAs(app, ['superadmin', 'admin']);
+    const sp = await loginAs(app, 'support');
+    const surau = await Promise.all((['admin', 'treasurer', 'media', 'ajk'] as Role[]).map((r) => loginAs(app, r)));
+    const writes = (): string => JSON.stringify([app.surau.db.prepare('SELECT * FROM suraus ORDER BY id').all(), app.surau.db.prepare('SELECT * FROM sites').all(), app.surau.db.prepare('SELECT * FROM site_approvals').all()]);
+    const before = writes();
+    for (const [method, path, permission] of FLEET) {
+      const label = `${method} ${path}`;
+      const payload = method === 'GET' ? undefined : {};
+      const none = await app.inject({ method, url: path, remoteAddress: LAN, ...(payload ? { payload } : {}) });
+      expect(none.statusCode, `${label} anonymous`).toBe(401);
+      const a = await app.inject({ method, url: path, headers: sa.headers, ...(payload ? { payload } : {}) });
+      expect([401, 403], `${label} ops superadmin (${a.body})`).not.toContain(a.statusCode);
+      expect(a.statusCode, label).toBeLessThan(500);
+      const s = await app.inject({ method, url: path, headers: sp.headers, ...(payload ? { payload } : {}) });
+      if (permission === 'fleet:read') expect([401, 403], `${label} ops support (${s.body})`).not.toContain(s.statusCode);
+      else expect(s.statusCode, `${label} ops support`).toBe(403);
+      for (const who of surau) {
+        const r = await app.inject({ method, url: path, headers: who.headers, ...(payload ? { payload } : {}) });
+        expect(r.statusCode, `${label} as ${who.roles.join('+')}`).toBe(403);
+      }
+    }
+    expect(writes()).toBe(before);
+  });
+
+  it('a signed-in caller on a box (role box) is not refused by the hook for an allowed role: the fleet paths are the handler\'s 404, never a 403 from an ops check', async () => {
+    const app = makeApp();
+    const sa = await loginAs(app, ['superadmin', 'admin']);
+    const ajk = await loginAs(app, 'ajk');
+    for (const [method, path] of FLEET) {
+      const payload = method === 'GET' ? undefined : {};
+      const a = await app.inject({ method, url: path, headers: sa.headers, ...(payload ? { payload } : {}) });
+      expect(a.statusCode, `${method} ${path} (${a.body})`).toBe(404);
+      const b = await app.inject({ method, url: path, headers: ajk.headers, ...(payload ? { payload } : {}) });
+      expect(b.statusCode, `${method} ${path} as ajk`).toBe(403);
+    }
   });
 });

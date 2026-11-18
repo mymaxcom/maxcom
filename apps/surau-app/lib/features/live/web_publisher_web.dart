@@ -23,9 +23,16 @@ import 'dart:js_interop_unsafe';
 import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as web;
 
+import '../../l10n/generated/s.dart';
+import '../../l10n/s_lookup.dart';
+import '../shell/live_camera_gateway.dart'
+    show AudioSourceMix, LiveAudioMix;
 import 'android_publisher.dart' show PublisherException;
 import 'publisher.dart';
 import 'recordings_store.dart';
+import 'web_external_live.dart';
+
+export 'web_external_live.dart';
 
 // ---- seams ----
 
@@ -87,6 +94,41 @@ abstract class PeerLink {
 }
 
 typedef PeerFactory = PeerLink Function();
+
+/// The receiving side (WHEP) of the box's combined stream: the preview, and
+/// the source of the recording in an external-camera live (plan 4.6, 5).
+abstract class ReceiverLink {
+  /// A receive-only offer for one video and one audio track, with ICE
+  /// gathering complete (2 s cap). Returns the local SDP.
+  Future<String> createOffer();
+  Future<void> applyAnswer(String sdp);
+
+  /// `new`, `connecting`, `connected`, `disconnected`, `failed`, `closed`.
+  Stream<String> get connectionStates;
+
+  /// The browser `MediaStream` the received tracks are added to (null for a
+  /// fake). It exists from the start; tracks arrive once connected.
+  JSObject? get stream;
+  void close();
+}
+
+typedef ReceiverFactory = ReceiverLink Function();
+
+/// Sends the mix of a running box-combined live to the box
+/// (`BoxGatewayLiveCamera.changeLiveAudio`: `POST /api/live/audio`).
+typedef AudioChanger = Future<void> Function(LiveAudioMix mix);
+
+/// The same call with the optional additions of the box's audio route:
+/// [video] (`phone` = the iPad's own camera, `external` = back to the
+/// camera; a mid-live switch) and [avOffsetMs] (the hand-set offset of the
+/// iPad microphone, 0 to 2000 ms in steps of 50). A tear-off of
+/// `BoxGatewayLiveCamera.changeLiveAudio` fits it.
+typedef AudioChangeSender =
+    Future<void> Function(LiveAudioMix mix, {String? video, int? avOffsetMs});
+
+/// Stores the fallback "Imbangan masa audio" of an added source (`deviceMic`
+/// or `boxInput`, 0 to 2000 ms) in the camera settings.
+typedef OffsetSaver = Future<void> Function(String id, int ms);
 
 /// One MediaRecorder run: its data arrives in chunks and the whole run is
 /// one self-contained file.
@@ -151,9 +193,20 @@ class WebPublisher implements LivePublisher {
     RecordingsStore? store,
     Future<int?> Function()? freeBytes,
     PageEnv? page,
+    ReceiverFactory? receiverFactory,
+    this.audioChanger,
+    this.audioSender,
+    this.offsetSaver,
+    S Function()? lang,
+    bool Function()? canRecordReceived,
+    this.recordWatchdog = const Duration(seconds: 12),
   }) : _origin = box ?? Uri.base,
+       _lang = lang,
        _getUserMedia = getUserMedia ?? browserGetUserMedia,
        _portraitProvider = portraitProvider ?? _windowIsPortrait,
+       _receiverFactory = receiverFactory ?? (() => RtcReceiverLink()),
+       _canRecordReceived =
+           canRecordReceived ?? (() => pickRecorderMime() != null),
        _peerFactory = peerFactory ?? (() => RtcPeerLink()),
        _recorderFactory = recorderFactory ?? browserRecorder,
        _store = store ?? openRecordingsStore(),
@@ -166,9 +219,31 @@ class WebPublisher implements LivePublisher {
   /// The WHIP path on the box (the only one the publisher posts to).
   static const String whipPath = '/api/live/whip';
 
-  /// Shown when the iPad ended the camera while live.
-  static const String cameraStoppedMessage =
-      'Kamera dihentikan oleh iPad. Buka semula skrin ini.';
+  /// The WHEP path of the starting device's preview (box task B2, plan 4.6:
+  /// "new proxy route for the starting device"). The other path the
+  /// publisher talks to.
+  static const String whepPath = '/api/live/preview/whep';
+
+  /// How long a received-stream recorder may stay silent before the browser
+  /// is judged unable to record it (T0 item 7 is unproven on iPad Safari).
+  final Duration recordWatchdog;
+
+  /// `POST /api/live/audio`; the caller passes the gateway's method.
+  final AudioChanger? audioChanger;
+
+  /// `POST /api/live/audio` with `video` and `avOffsetMs` too. Without it
+  /// the switch of the camera and the offset during a live cannot reach the
+  /// box ([audioChanger] sends the mix only).
+  final AudioChangeSender? audioSender;
+
+  /// Saves the fallback offset of an added source in the camera settings.
+  final OffsetSaver? offsetSaver;
+
+  /// The app language now; BM when the caller gives none.
+  final S Function()? _lang;
+  S get _s => _lang?.call() ?? sBm;
+  final ReceiverFactory _receiverFactory;
+  final bool Function() _canRecordReceived;
 
   /// The session token for the Authorization header.
   final Future<String?> Function()? tokenProvider;
@@ -230,6 +305,26 @@ class WebPublisher implements LivePublisher {
   String? _recError;
   bool _recStopped = false;
 
+  // External camera (plan 4.6): the box pulls the camera and combines it;
+  // the iPad controls, previews (WHEP) and records what it receives.
+  bool _extMode = false;
+  bool _audioOnly = false; // the capture is the microphone alone
+  LiveAudioMix? _mix;
+  ExternalLiveState _ext = ExternalLiveState.idle;
+  final _extController = StreamController<ExternalLiveState>.broadcast();
+  ReceiverLink? _recv;
+  StreamSubscription<String>? _recvSub;
+  String? _recvLocation;
+  ReceivedCapture? _recvCapture;
+  Timer? _recvRetry;
+  Timer? _recvDisconnect;
+  int _recvAttempt = 0;
+  Timer? _micRetry;
+  Timer? _recWatch;
+  Future<void> _mixChain = Future.value();
+  int _mixSeq = 0;
+  List<String> _boxWarnings = const [];
+
   /// The id the session's recorded files are filed under in the store.
   String? get sessionId => _sessionId;
 
@@ -249,6 +344,10 @@ class WebPublisher implements LivePublisher {
     _state = s;
     if (!_controller.isClosed) _controller.add(s);
   }
+
+  /// The external-camera side of the session (idle outside one).
+  Stream<ExternalLiveState> get external => _extController.stream;
+  ExternalLiveState get externalState => _ext;
 
   void _setKiosk(OutputState? o) => _emit(
     _state.copyWith(
@@ -288,6 +387,9 @@ class WebPublisher implements LivePublisher {
 
   @override
   Future<void> prepare(PublisherConfig c) async {
+    _extMode = false;
+    _audioOnly = false;
+    _setExt(ExternalLiveState.idle);
     _recordingOn = c.recording;
     _front = c.frontCamera;
     _emit(
@@ -312,9 +414,23 @@ class WebPublisher implements LivePublisher {
   }
 
   Future<void> _acquire() async {
-    final cap = await _getUserMedia(constraintsFor(front: _front));
+    final cap = await _getUserMedia(
+      _extMode && _audioOnly
+          ? micConstraints()
+          : constraintsFor(front: _front),
+    );
     _swapCapture(cap);
   }
+
+  /// The iPad microphone alone (an added source of the box's mix): raw, for
+  /// a PA, like the camera capture's audio.
+  static Map<String, Object?> micConstraints() => {
+    'audio': {
+      'echoCancellation': false,
+      'noiseSuppression': false,
+      'autoGainControl': false,
+    },
+  };
 
   void _swapCapture(CaptureStream cap) {
     final old = _capture;
@@ -328,10 +444,25 @@ class WebPublisher implements LivePublisher {
 
   void _attachPreview() {
     final v = _video;
-    final n = _capture?.native;
+    // An external-camera live shows the box's combined stream, never the
+    // microphone capture; otherwise the capture itself.
+    final n = _extMode ? _recv?.stream : _capture?.native;
     if (v == null) return;
+    if (_extMode) v.muted = !_ext.previewSound;
     v.srcObject = n as web.MediaStream?;
-    if (n != null) unawaited(v.play().toDart.catchError((Object _) => null));
+    if (n != null) {
+      unawaited(
+        v.play().toDart.catchError((Object _) {
+          // Safari refuses sound without a gesture: play muted instead.
+          if (_extMode && !v.muted) {
+            v.muted = true;
+            _setExt(_ext.copyWith(previewSound: false));
+            unawaited(v.play().toDart.catchError((Object _) => null));
+          }
+          return null;
+        }),
+      );
+    }
   }
 
   @override
@@ -361,7 +492,9 @@ class WebPublisher implements LivePublisher {
 
   @override
   Future<void> start(PublisherTargets t) async {
-    if (_capture == null) throw const PublisherException('not_prepared');
+    if (!_extMode && _capture == null) {
+      throw const PublisherException('not_prepared');
+    }
     if (_live) return;
     final path = _whipTarget(t.ingestUrl);
     _live = true;
@@ -392,6 +525,10 @@ class WebPublisher implements LivePublisher {
       ),
     );
     unawaited(_requestWake());
+    if (_extMode) {
+      await _startExternal(epoch);
+      return;
+    }
     await _startRecording(epoch);
     _tick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick(epoch));
     _emit(_state.copyWith(phase: PublisherPhase.live));
@@ -438,8 +575,8 @@ class WebPublisher implements LivePublisher {
         capture,
         maxBitrateBps: maxBitrateKbps * 1000,
       );
-      _h264Missing = !offer.h264First;
-      if (!_active(epoch)) {
+      if (!_audioOnly) _h264Missing = !offer.h264First;
+      if (!_active(epoch) || _staleLeg(capture)) {
         peer.close();
         return;
       }
@@ -452,7 +589,7 @@ class WebPublisher implements LivePublisher {
         }, body: offer.sdp),
       ).timeout(const Duration(seconds: 10));
       final location = _safeLocation(reply.location);
-      if (!_active(epoch)) {
+      if (!_active(epoch) || _staleLeg(capture)) {
         peer.close();
         if (location != null) unawaited(_deleteWhip(location));
         return;
@@ -468,10 +605,15 @@ class WebPublisher implements LivePublisher {
         failed.close();
         if (identical(_peer, failed)) _peer = null;
       }
-      if (!_active(epoch)) return;
+      if (!_active(epoch) || _staleLeg(capture)) return;
       _scheduleRetry(epoch, _codeOf(e));
     }
   }
+
+  /// An external-camera live drops and swaps its capture (the microphone
+  /// leaves, the iPad camera comes): a connect started for an older capture
+  /// must not go on.
+  bool _staleLeg(CaptureStream c) => _extMode && !identical(c, _capture);
 
   static String _codeOf(Object e) {
     if (e is _WhipRefused) {
@@ -490,6 +632,10 @@ class WebPublisher implements LivePublisher {
         _attempt = 0;
         _disconnectTimer?.cancel();
         _setKiosk(OutputState.up);
+        if (_extMode) {
+          _setExt(_ext.copyWith(mic: ExternalMic.ok));
+          _refreshNotice();
+        }
       case 'disconnected':
         _disconnectTimer?.cancel();
         _disconnectTimer = Timer(
@@ -545,12 +691,13 @@ class WebPublisher implements LivePublisher {
   }
 
   /// A same-origin `/api/live/whip/<id>` path, or null.
-  String? _safeLocation(String? loc) {
+  String? _safeLocation(String? loc, {String base = whipPath}) {
     if (loc == null || loc.isEmpty) return null;
     final u = Uri.tryParse(loc);
     if (u == null) return null;
     if (u.hasAuthority && !_sameOrigin(u)) return null;
-    if (!RegExp(r'^/api/live/whip/[A-Za-z0-9._~-]{1,128}$').hasMatch(u.path)) {
+    if (!RegExp('^${RegExp.escape(base)}/[A-Za-z0-9._~-]{1,128}\$')
+        .hasMatch(u.path)) {
       return null;
     }
     return u.path;
@@ -629,7 +776,7 @@ class WebPublisher implements LivePublisher {
   static const int _stopBytes = 300 * 1000 * 1000;
 
   void _beginSegment() {
-    final cap = _capture;
+    final cap = _extMode ? _recvCapture : _capture;
     final sid = _sessionId;
     if (cap == null || sid == null || _recStopped) return;
     final index = _segIndex;
@@ -654,6 +801,10 @@ class WebPublisher implements LivePublisher {
   void _onChunk(String sid, int index, String mime, Object chunk, int size) {
     _recBytes += size;
     _publishRecording();
+    if (_extMode && _ext.recording != ExternalRecording.running) {
+      _setExt(_ext.copyWith(recording: ExternalRecording.running));
+      _refreshNotice();
+    }
     _storeQueue = _storeQueue.then((_) async {
       try {
         await _store.appendPart(
@@ -750,11 +901,20 @@ class WebPublisher implements LivePublisher {
     }
     _warn(Warning.screenLockRisk, false);
     unawaited(_requestWake());
+    if (_extMode) {
+      _attachPreview();
+      if (_ext.mic == ExternalMic.lost) unawaited(_reacquireExt(_epoch));
+      return;
+    }
     if (_capture?.hasEnded ?? false) unawaited(_reacquire(_epoch));
   }
 
   void _onCaptureEnded(CaptureStream cap) {
     if (!identical(cap, _capture) || !_live) return;
+    if (_extMode) {
+      _onExtCaptureEnded(cap);
+      return;
+    }
     final epoch = _epoch;
     _retryTimer?.cancel();
     _disconnectTimer?.cancel();
@@ -767,7 +927,7 @@ class WebPublisher implements LivePublisher {
     if (loc != null) unawaited(_deleteWhip(loc));
     _warn(Warning.screenLockRisk, true);
     _setKiosk(
-      const OutputState(OutputPhase.down, message: cameraStoppedMessage),
+      OutputState(OutputPhase.down, message: _s.ra4CameraStoppedByIpad),
     );
     // What was recorded so far is filed; a new segment starts with the
     // camera that comes back.
@@ -805,6 +965,9 @@ class WebPublisher implements LivePublisher {
   /// The browser files its segments by session id; no names to report.
   @override
   Future<List<String>> sessionRecordings() async => const [];
+
+  @override
+  String? get recordingSessionId => _sessionId;
 
   @override
   Future<void> switchCamera() async {
@@ -857,8 +1020,11 @@ class WebPublisher implements LivePublisher {
     _disconnectTimer?.cancel();
     _tick?.cancel();
     _segmentTimer?.cancel();
+    _micRetry?.cancel();
+    _recWatch?.cancel();
     // The last segment is finalised before anything else can fail.
     await _endSegment();
+    if (_extMode) await _closeReceiver();
     final loc = _location;
     _location = null;
     final peer = _peer;
@@ -871,6 +1037,7 @@ class WebPublisher implements LivePublisher {
     } catch (_) {}
     _wake = null;
     _capture?.stop();
+    if (_extMode) _setExt(ExternalLiveState.idle);
     _emit(
       _state.copyWith(
         phase: PublisherPhase.stopped,
@@ -890,16 +1057,601 @@ class WebPublisher implements LivePublisher {
     await _endedSub?.cancel();
     await _visSub?.cancel();
     await _peerSub?.cancel();
+    await _closeReceiver();
+    _micRetry?.cancel();
+    _recWatch?.cancel();
     _page.dispose();
+    await _extController.close();
     await _controller.close();
+  }
+
+  // ---- external camera (plan 4.6 and 5, task C4) ----
+  //
+  // The box pulls the camera and combines its sound with the iPad
+  // microphone. This device: sends the microphone alone by WHIP when it is
+  // in the mix (nothing at all otherwise), plays the box's combined stream
+  // by WHEP, records that received stream, and changes the mix through
+  // `POST /api/live/audio`. Volumes and the alignment state are the box's
+  // (`applyBoxStatus`).
+
+  /// What an external-camera live starts with: the camera at full volume, no
+  /// other source (plan 4.4).
+  static LiveAudioMix defaultExternalMix() => const LiveAudioMix(
+    camera: AudioSourceMix(enabled: true, volume: 100),
+    deviceMic: AudioSourceMix(enabled: false, volume: 100),
+    boxInput: AudioSourceMix(enabled: false, volume: 100),
+  );
+
+  LiveAudioMix get _mixNow => _mix ?? defaultExternalMix();
+
+  /// The mix this device last sent (or will start with).
+  LiveAudioMix get externalMix => _mixNow;
+
+  void _setExt(ExternalLiveState s) {
+    _ext = s;
+    if (!_extController.isClosed) _extController.add(s);
+  }
+
+  void _refreshNotice() {
+    if (!_extMode) return;
+    final m = _mixNow;
+    final n = externalNoticeFor(
+      mix: m,
+      mic: _ext.mic,
+      sources: _ext.sources,
+      warnings: _boxWarnings,
+      cameraHasAudio: _ext.cameraHasAudio,
+      micInMix: m.deviceMic.enabled,
+      recording: _ext.recording,
+      recordingAsked: _recordingOn,
+      lang: _s,
+    );
+    _setExt(
+      n == null
+          ? _ext.copyWith(clearNotice: true, canUseMicOnly: false)
+          : _ext.copyWith(
+              notice: n.message,
+              noticeHint: n.hint,
+              canUseMicOnly: n.micOnlyAction,
+            ),
+    );
+  }
+
+  /// Prepares a live whose picture the box pulls from the external camera.
+  /// No camera is opened here; the microphone only when it is in [mix], at
+  /// start (on the person's tap).
+  Future<void> prepareExternal(
+    PublisherConfig c, {
+    LiveAudioMix? mix,
+    bool cameraHasAudio = true,
+    int fallbackOffsetMs = 0,
+  }) async {
+    _extMode = true;
+    _audioOnly = true;
+    _front = false;
+    _recordingOn = c.recording;
+    _offsetSent = clampExternalOffset(fallbackOffsetMs);
+    final m = mix ?? defaultExternalMix();
+    _mix = m;
+    _boxWarnings = const [];
+    _setExt(
+      ExternalLiveState(
+        active: true,
+        // With the iPad microphone near the speaker the preview starts
+        // muted (it would feed back); the person can turn it on with
+        // headphones.
+        previewSound: !m.deviceMic.enabled,
+        cameraHasAudio: cameraHasAudio,
+        fallbackOffsetMs: clampExternalOffset(fallbackOffsetMs),
+      ),
+    );
+    _emit(
+      _state.copyWith(
+        phase: PublisherPhase.ready,
+        portrait: c.portrait ?? _portraitProvider(),
+        recording: RecordingState(on: _recordingOn),
+      ),
+    );
+    _refreshNotice();
+  }
+
+  Future<void> _startExternal(int epoch) async {
+    final m = _mixNow;
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick(epoch));
+    // Controller only: nothing is sent, so there is nothing to connect.
+    _setKiosk(m.deviceMic.enabled ? OutputState.connecting : OutputState.up);
+    _emit(_state.copyWith(phase: PublisherPhase.live));
+    unawaited(_connectPreview(epoch));
+    if (m.deviceMic.enabled) await _startMic(epoch);
+  }
+
+  // The microphone leg ---------------------------------------------------
+
+  Future<void> _startMic(int epoch) async {
+    if (!_active(epoch)) return;
+    _setExt(_ext.copyWith(mic: ExternalMic.starting));
+    final CaptureStream cap;
+    try {
+      cap = await _getUserMedia(micConstraints());
+    } catch (_) {
+      if (!_active(epoch)) return;
+      await _micRefused();
+      return;
+    }
+    if (!_active(epoch) || _ext.video != ExternalVideo.external) {
+      cap.stop();
+      return;
+    }
+    _audioOnly = true;
+    _swapCapture(cap);
+    await _connectOnce(epoch);
+  }
+
+  /// Permission refused (or no microphone): the live goes on with the
+  /// camera audio, and the box is told the microphone is not in the mix.
+  Future<void> _micRefused() async {
+    final m = _mixNow;
+    final next = LiveAudioMix(
+      camera: m.camera,
+      deviceMic: AudioSourceMix(enabled: false, volume: m.deviceMic.volume),
+      boxInput: m.boxInput,
+    );
+    _mix = next;
+    _setKiosk(OutputState.up);
+    _setExt(
+      _ext.copyWith(
+        mic: ExternalMic.off,
+        notice: externalMicRefusedMessage(_s),
+        canUseMicOnly: false,
+      ),
+    );
+    try {
+      await _audioCall?.call(next);
+    } catch (_) {
+      // The next status poll shows what the box really holds.
+    }
+  }
+
+  /// Ends the leg that sends from this device (microphone or camera) and
+  /// releases the capture.
+  Future<void> _dropLeg() async {
+    _retryTimer?.cancel();
+    _disconnectTimer?.cancel();
+    _micRetry?.cancel();
+    final loc = _location;
+    _location = null;
+    final peer = _peer;
+    _peer = null;
+    await _peerSub?.cancel();
+    peer?.close();
+    if (loc != null) await _deleteWhip(loc);
+    await _endedSub?.cancel();
+    _endedSub = null;
+    _capture?.stop();
+    _capture = null;
+    _attempt = 0;
+  }
+
+  Future<void> _stopMic() async {
+    await _dropLeg();
+    _setExt(_ext.copyWith(mic: ExternalMic.off));
+    _setKiosk(OutputState.up);
+    _refreshNotice();
+  }
+
+  /// The browser ended the microphone (or the iPad camera): Safari hidden,
+  /// screen locked. The live goes on without it (plan 4.6); it comes back
+  /// by itself when the person returns.
+  void _onExtCaptureEnded(CaptureStream cap) {
+    _retryTimer?.cancel();
+    _disconnectTimer?.cancel();
+    final loc = _location;
+    _location = null;
+    final peer = _peer;
+    _peer = null;
+    _peerSub?.cancel();
+    peer?.close();
+    if (loc != null) unawaited(_deleteWhip(loc));
+    _warn(Warning.screenLockRisk, true);
+    _setKiosk(const OutputState(OutputPhase.down, message: 'microphone_lost'));
+    _setExt(_ext.copyWith(mic: ExternalMic.lost));
+    _refreshNotice();
+    _micRetry?.cancel();
+    final epoch = _epoch;
+    _micRetry = Timer.periodic(const Duration(seconds: 5), (t) {
+      if (!_active(epoch) || _ext.mic != ExternalMic.lost) {
+        t.cancel();
+        return;
+      }
+      if (_page.visible) unawaited(_reacquireExt(epoch));
+    });
+    if (_page.visible) unawaited(_reacquireExt(epoch));
+  }
+
+  Future<void> _reacquireExt(int epoch) async {
+    if (!_active(epoch) || _ext.mic != ExternalMic.lost) return;
+    try {
+      await _acquire();
+    } catch (_) {
+      return; // stays lost; the timer tries again
+    }
+    if (!_active(epoch)) return;
+    _micRetry?.cancel();
+    _warn(Warning.screenLockRisk, false);
+    _attempt = 0;
+    _setExt(_ext.copyWith(mic: ExternalMic.starting));
+    await _connectOnce(epoch);
+  }
+
+  // The preview and the recording of the received stream -------------------
+
+  Future<void> _connectPreview(int epoch) async {
+    if (!_active(epoch) || !_extMode) return;
+    _setExt(
+      _ext.copyWith(
+        preview: _recvAttempt == 0
+            ? ExternalPreview.connecting
+            : ExternalPreview.retrying,
+      ),
+    );
+    ReceiverLink? r;
+    try {
+      r = _receiverFactory();
+      _recv = r;
+      _recvCapture = ReceivedCapture(r.stream);
+      unawaited(_recvSub?.cancel());
+      final link = r;
+      _recvSub = r.connectionStates.listen((s) => _onRecvState(epoch, link, s));
+      _attachPreview();
+      final offer = await r.createOffer();
+      if (!_active(epoch) || !identical(_recv, r)) {
+        r.close();
+        return;
+      }
+      final token = await tokenProvider?.call();
+      final reply = await _fetch(
+        WhipRequest('POST', whepPath, {
+          'Content-Type': 'application/sdp',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
+        }, body: offer),
+      ).timeout(const Duration(seconds: 10));
+      final location = _safeLocation(reply.location, base: whepPath);
+      if (!_active(epoch) || !identical(_recv, r)) {
+        r.close();
+        if (location != null) unawaited(_deleteWhip(location));
+        return;
+      }
+      if (reply.status != 201 && reply.status != 200) {
+        throw _WhipRefused(reply.status);
+      }
+      _recvLocation = location;
+      await r.applyAnswer(reply.body);
+    } catch (_) {
+      final failed = r;
+      if (failed != null) {
+        failed.close();
+        if (identical(_recv, failed)) _recv = null;
+      }
+      if (_active(epoch)) _scheduleRecvRetry(epoch);
+    }
+  }
+
+  void _onRecvState(int epoch, ReceiverLink r, String s) {
+    if (!_active(epoch) || !identical(r, _recv)) return;
+    switch (s) {
+      case 'connected':
+        _recvAttempt = 0;
+        _recvDisconnect?.cancel();
+        _setExt(_ext.copyWith(preview: ExternalPreview.playing));
+        unawaited(_onReceivedUp(epoch));
+      case 'disconnected':
+        _recvDisconnect?.cancel();
+        _recvDisconnect = Timer(
+          const Duration(seconds: 3),
+          () => _recoverRecv(epoch, r),
+        );
+      case 'failed':
+        _recvDisconnect?.cancel();
+        _recoverRecv(epoch, r);
+    }
+  }
+
+  void _recoverRecv(int epoch, ReceiverLink r) {
+    if (!_active(epoch) || !identical(r, _recv)) return;
+    final loc = _recvLocation;
+    _recvLocation = null;
+    _recv = null;
+    _recvSub?.cancel();
+    r.close();
+    if (loc != null) unawaited(_deleteWhip(loc));
+    _scheduleRecvRetry(epoch);
+  }
+
+  /// 2, 4, 8, 16, 30 ... seconds while live (the box restarts its combiner
+  /// when a source is added or removed, so a short break is normal).
+  void _scheduleRecvRetry(int epoch) {
+    _recvRetry?.cancel();
+    final delay = _recvAttempt >= 4 ? 30 : (2 << _recvAttempt);
+    _recvAttempt++;
+    _setExt(_ext.copyWith(preview: ExternalPreview.retrying));
+    _recvRetry = Timer(Duration(seconds: delay), () {
+      _recvRetry = null;
+      unawaited(_connectPreview(epoch));
+    });
+  }
+
+  Future<void> _closeReceiver() async {
+    _recvRetry?.cancel();
+    _recvDisconnect?.cancel();
+    final r = _recv;
+    _recv = null;
+    _recvCapture = null;
+    final loc = _recvLocation;
+    _recvLocation = null;
+    await _recvSub?.cancel();
+    _recvSub = null;
+    r?.close();
+    if (loc != null) await _deleteWhip(loc);
+    _recvAttempt = 0;
+  }
+
+  /// The combined stream arrived: start recording it, or, after a
+  /// reconnect, file the segment of the old stream and start a new one.
+  Future<void> _onReceivedUp(int epoch) async {
+    if (!_recordingOn || _recStopped || !_active(epoch)) return;
+    if (_segmentTimer == null) {
+      if (!_canRecordReceived()) {
+        _recordingUnavailable('no_recorder');
+        return;
+      }
+      await _startRecording(epoch);
+    } else {
+      await _endSegment();
+      _segIndex++;
+      if (!_active(epoch)) return;
+      _beginSegment();
+    }
+    if (_recorder == null) {
+      if (!_recStopped) {
+        _recordingUnavailable(_recError ?? 'recorder_unavailable');
+      }
+      return;
+    }
+    _armRecordWatch(epoch);
+  }
+
+  /// T0 item 7 is unproven: Safari may accept a received stream and then
+  /// deliver no data. No data within [recordWatchdog] means "cannot record".
+  void _armRecordWatch(int epoch) {
+    _recWatch?.cancel();
+    final base = _recBytes;
+    _recWatch = Timer(recordWatchdog, () async {
+      if (!_active(epoch) || _recBytes > base || _recorder == null) return;
+      _segmentTimer?.cancel();
+      await _endSegment();
+      _recordingUnavailable('no_data');
+    });
+  }
+
+  void _recordingUnavailable(String code) {
+    _recStopped = true;
+    _recError = code;
+    _publishRecording();
+    _setExt(_ext.copyWith(recording: ExternalRecording.unavailable));
+    _refreshNotice();
+  }
+
+  /// The box's own view (the decoded `GET /api/live/status` body): the
+  /// volumes, the health and the alignment state of every source, and the
+  /// standing warnings. The caller passes it on each poll.
+  void applyBoxStatus(Map<String, dynamic> status) {
+    if (!_extMode) return;
+    _boxWarnings = parseExternalWarnings(status);
+    _setExt(_ext.copyWith(sources: parseExternalAudio(status)));
+    _refreshNotice();
+  }
+
+  /// Changes the mix. Before the live it is only remembered; during it the
+  /// whole mix goes to the box (`POST /api/live/audio`, the starting device
+  /// only). Adding the iPad microphone starts its WHIP after the box has
+  /// accepted the change (it provisions the ingest); removing it stops the
+  /// WHIP after. Throws what the call throws; the mix is then unchanged.
+  Future<void> setExternalMix(LiveAudioMix mix) async {
+    if (!_extMode) throw const PublisherException('not_external');
+    final prev = _mixNow;
+    final micAdded = !prev.deviceMic.enabled && mix.deviceMic.enabled;
+    final micRemoved = prev.deviceMic.enabled && !mix.deviceMic.enabled;
+    if (!_live) {
+      _mix = mix;
+      _setExt(_ext.copyWith(previewSound: !mix.deviceMic.enabled));
+      _refreshNotice();
+      return;
+    }
+    final changer = _audioCall;
+    if (changer == null) throw const PublisherException('no_audio_channel');
+    await _sendMix(changer, mix, structural: micAdded || micRemoved);
+    _mix = mix;
+    final epoch = _epoch;
+    if (_ext.video == ExternalVideo.external) {
+      if (micAdded) {
+        _setExt(_ext.copyWith(previewSound: false));
+        _attachPreview();
+        await _startMic(epoch);
+      } else if (micRemoved) {
+        await _stopMic();
+      }
+    }
+    _refreshNotice();
+  }
+
+  /// The call that reaches the box: the sender when there is one, else the
+  /// plain mix changer (which cannot carry [video] or [avOffsetMs]).
+  AudioChangeSender? get _audioCall {
+    final sender = audioSender;
+    if (sender != null) return sender;
+    final changer = audioChanger;
+    if (changer == null) return null;
+    return (mix, {video, avOffsetMs}) {
+      if (video != null || avOffsetMs != null) {
+        throw const PublisherException('no_audio_channel');
+      }
+      return changer(mix);
+    };
+  }
+
+  /// The offset the box last accepted (what the camera settings held at
+  /// the start, until a change was sent).
+  int _offsetSent = 0;
+
+  /// Every send carries the whole mix and goes after the one before; a
+  /// volume change that a newer request already replaced is skipped (a
+  /// slider dragged fast sends only its latest value). The hand-set offset
+  /// rides along whenever it differs from what the box holds.
+  Future<void> _sendMix(
+    AudioChangeSender changer,
+    LiveAudioMix mix, {
+    required bool structural,
+    String? video,
+  }) {
+    final seq = ++_mixSeq;
+    final run = _mixChain.then((_) async {
+      if (!structural && seq != _mixSeq) return;
+      final offset = _ext.fallbackOffsetMs;
+      final send = offset != _offsetSent;
+      await changer(mix, video: video, avOffsetMs: send ? offset : null);
+      if (send) _offsetSent = offset;
+    });
+    _mixChain = run.then((_) {}, onError: (Object _) {});
+    return run;
+  }
+
+  /// "Guna Mikrofon iPad sahaja": the camera volume goes to 0 so the
+  /// microphone plays at once (plan 4.3a).
+  Future<void> useMicOnly() {
+    final m = _mixNow;
+    return setExternalMix(
+      LiveAudioMix(
+        camera: AudioSourceMix(enabled: m.camera.enabled, volume: 0),
+        deviceMic: m.deviceMic,
+        boxInput: m.boxInput,
+      ),
+    );
+  }
+
+  /// The preview's sound on or off (headphones: on, with the iPad
+  /// microphone in the mix).
+  void setPreviewSound(bool on) {
+    _setExt(_ext.copyWith(previewSound: on));
+    _attachPreview();
+  }
+
+  /// "Imbangan masa audio" for a camera with no audio: the value being tried
+  /// against the preview (0 to 2000 ms, steps of 50). Held here until
+  /// [saveFallbackOffset].
+  void setFallbackOffset(int ms) {
+    _setExt(_ext.copyWith(fallbackOffsetMs: clampExternalOffset(ms)));
+    // During a live the box applies it at once (its delay = headroom + offset).
+    final changer = _audioCall;
+    if (_extMode && _live && _ext.video == ExternalVideo.external) {
+      if (changer != null && _ext.fallbackOffsetMs != _offsetSent) {
+        unawaited(
+          _sendMix(changer, _mixNow, structural: false).catchError((Object _) {
+            // Held here; the next change of the mix sends it again.
+          }),
+        );
+      }
+    }
+  }
+
+  /// Stores the tried value in the camera settings ("Simpan").
+  Future<void> saveFallbackOffset() async {
+    final saver = offsetSaver;
+    if (saver == null) throw const PublisherException('no_offset_saver');
+    await saver('deviceMic', _ext.fallbackOffsetMs);
+  }
+
+  /// "Tukar ke kamera iPad": the iPad sends its own camera and microphone to
+  /// the box (WHIP) and the box combines that as the unit; the preview and
+  /// the recording follow the box's stream, which restarts for a few
+  /// seconds. False when the camera could not be opened (nothing changed).
+  Future<bool> switchToIpadCamera() async {
+    if (!_extMode || !_live || _ext.video == ExternalVideo.ipadCamera) {
+      return false;
+    }
+    final epoch = _epoch;
+    final CaptureStream cam;
+    try {
+      cam = await _getUserMedia(constraintsFor(front: _front));
+    } catch (_) {
+      return false;
+    }
+    if (!_active(epoch)) {
+      cam.stop();
+      return false;
+    }
+    // The box moves the picture to this device's stream first (it also
+    // allows the publisher on its new path), then this device sends.
+    final changer = _audioCall;
+    if (changer == null) {
+      cam.stop();
+      return false;
+    }
+    try {
+      await _sendMix(changer, _mixNow, structural: true, video: 'phone');
+    } catch (_) {
+      cam.stop();
+      return false;
+    }
+    if (!_active(epoch)) {
+      cam.stop();
+      return false;
+    }
+    await _dropLeg();
+    _audioOnly = false;
+    _setExt(
+      _ext.copyWith(video: ExternalVideo.ipadCamera, mic: ExternalMic.starting),
+    );
+    _setKiosk(OutputState.connecting);
+    _swapCapture(cam);
+    await _connectOnce(epoch);
+    return true;
+  }
+
+  /// Back to the external camera: the iPad sends only its microphone again
+  /// when that is in the mix, else nothing.
+  Future<bool> switchToExternalCamera() async {
+    if (!_extMode || !_live || _ext.video == ExternalVideo.external) {
+      return false;
+    }
+    final epoch = _epoch;
+    final changer = _audioCall;
+    if (changer == null) return false;
+    try {
+      await _sendMix(changer, _mixNow, structural: true, video: 'external');
+    } catch (_) {
+      return false;
+    }
+    if (!_active(epoch)) return false;
+    await _dropLeg();
+    _audioOnly = true;
+    _setExt(_ext.copyWith(video: ExternalVideo.external, mic: ExternalMic.off));
+    if (_mixNow.deviceMic.enabled) {
+      await _startMic(epoch);
+    } else {
+      _setKiosk(OutputState.up);
+    }
+    _refreshNotice();
+    return true;
   }
 
   // ---- default fetch ----
 
   Future<WhipReply> _browserFetch(WhipRequest r) async {
-    if (r.path != whipPath && !r.path.startsWith('$whipPath/')) {
-      throw const PublisherException('bad_target');
-    }
+    final ok = [whipPath, whepPath].any(
+      (b) => r.path == b || r.path.startsWith('$b/'),
+    );
+    if (!ok) throw const PublisherException('bad_target');
     final url = Uri(
       scheme: _origin.scheme,
       host: _origin.host,
@@ -1077,7 +1829,9 @@ class CroppedCapture implements CaptureStream {
 
 class BrowserCapture implements CaptureStream {
   BrowserCapture(this.stream) {
-    for (final t in stream.getVideoTracks().toDart) {
+    // The picture decides; a microphone-only capture (external camera live)
+    // is decided by its audio track.
+    for (final t in _primary) {
       t.addEventListener(
         'ended',
         ((web.Event _) {
@@ -1086,6 +1840,11 @@ class BrowserCapture implements CaptureStream {
         }).toJS,
       );
     }
+  }
+
+  List<web.MediaStreamTrack> get _primary {
+    final v = stream.getVideoTracks().toDart;
+    return v.isNotEmpty ? v : stream.getAudioTracks().toDart;
   }
 
   final web.MediaStream stream;
@@ -1100,8 +1859,7 @@ class BrowserCapture implements CaptureStream {
 
   @override
   bool get hasEnded =>
-      _hasEnded ||
-      stream.getVideoTracks().toDart.every((t) => t.readyState == 'ended');
+      _hasEnded || _primary.every((t) => t.readyState == 'ended');
 
   @override
   void setAudioEnabled(bool enabled) {
@@ -1115,6 +1873,107 @@ class BrowserCapture implements CaptureStream {
     for (final t in stream.getTracks().toDart) {
       t.stop();
     }
+  }
+}
+
+/// The box's combined stream, received by WHEP, as the source the recorder
+/// is fed from (an external-camera live records what it receives).
+class ReceivedCapture implements CaptureStream {
+  ReceivedCapture(this.stream);
+
+  final JSObject? stream;
+
+  @override
+  JSObject? get native => stream;
+
+  @override
+  Stream<void> get ended => const Stream<void>.empty();
+
+  @override
+  bool get hasEnded => false;
+
+  @override
+  void setAudioEnabled(bool enabled) {}
+
+  /// The receiver owns the tracks; nothing to stop here.
+  @override
+  void stop() {}
+}
+
+/// WHEP receive-only link to the box: one video and one audio track, no ICE
+/// servers (flat surau network), full gathering before the offer is read.
+class RtcReceiverLink implements ReceiverLink {
+  RtcReceiverLink({this.gatherCap = const Duration(seconds: 2)});
+
+  final Duration gatherCap;
+  web.RTCPeerConnection? _pc;
+  final web.MediaStream _stream = web.MediaStream();
+  final _states = StreamController<String>.broadcast();
+
+  @override
+  Stream<String> get connectionStates => _states.stream;
+
+  @override
+  JSObject? get stream => _stream;
+
+  @override
+  Future<String> createOffer() async {
+    final pc = web.RTCPeerConnection(
+      web.RTCConfiguration(iceServers: <web.RTCIceServer>[].toJS),
+    );
+    _pc = pc;
+    pc.onconnectionstatechange = ((web.Event _) {
+      if (!_states.isClosed) _states.add(pc.connectionState);
+    }).toJS;
+    pc.ontrack = ((web.RTCTrackEvent e) {
+      _stream.addTrack(e.track);
+    }).toJS;
+    for (final kind in const ['video', 'audio']) {
+      pc.addTransceiver(
+        kind.toJS,
+        web.RTCRtpTransceiverInit(direction: 'recvonly'),
+      );
+    }
+    final offer = await pc.createOffer().toDart;
+    if (offer == null) throw StateError('no offer');
+    await pc
+        .setLocalDescription(
+          web.RTCLocalSessionDescriptionInit(type: 'offer', sdp: offer.sdp),
+        )
+        .toDart;
+    final done = Completer<void>();
+    pc.onicegatheringstatechange = ((web.Event _) {
+      if (pc.iceGatheringState == 'complete' && !done.isCompleted) {
+        done.complete();
+      }
+    }).toJS;
+    if (pc.iceGatheringState != 'complete') {
+      await done.future.timeout(gatherCap, onTimeout: () {});
+    }
+    final sdp = pc.localDescription?.sdp;
+    if (sdp == null || sdp.isEmpty) throw StateError('no sdp');
+    return sdp;
+  }
+
+  @override
+  Future<void> applyAnswer(String sdp) async {
+    await _pc!
+        .setRemoteDescription(
+          web.RTCSessionDescriptionInit(type: 'answer', sdp: sdp),
+        )
+        .toDart;
+  }
+
+  @override
+  void close() {
+    final pc = _pc;
+    _pc = null;
+    if (pc != null) {
+      pc.onconnectionstatechange = null;
+      pc.ontrack = null;
+      pc.close();
+    }
+    if (!_states.isClosed) _states.close();
   }
 }
 

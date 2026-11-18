@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { LOCAL_SURAU_ID } from '../src/tenant.ts';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -45,7 +46,7 @@ describe('Q6/S11: the folder and the address carry the bundle format', () => {
     const { db, dir, make } = setup();
     const z = pack();
     const meta = putAsset(db, dir, z, PACK_MIME, 'sync');
-    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': record(meta.id, z.length) } }, 'sync');
+    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': record(meta.id, z.length) } }, 'sync', undefined, LOCAL_SURAU_ID);
     // what an older box left: <16 hex>/bundle.css with the output of the old scoper
     const legacy = join(dir, 'themes', 'hijau-siti', meta.id.slice(0, 16));
     mkdirSync(join(legacy, 'images'), { recursive: true });
@@ -63,7 +64,7 @@ describe('Q6/S11: the folder and the address carry the bundle format', () => {
     // allowed by the old validator: `top` is no longer an allowed property
     const z = zip({ 'theme.json': json(), 'theme.css': '.region-next{top:136px}' });
     const meta = putAsset(db, dir, z, PACK_MIME, 'sync');
-    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': record(meta.id, z.length) } }, 'sync');
+    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': record(meta.id, z.length) } }, 'sync', undefined, LOCAL_SURAU_ID);
     const store = make();
     expect(await store.ensureExtracted('hijau-siti')).toBeNull();
     expect((await store.problemOf('hijau-siti'))!.code).toBe('css_property');
@@ -77,7 +78,7 @@ describe('S7: extraction is asynchronous, shared and remembered', () => {
     for (let i = 0; i < 6; i++) files[`images/${['kuliah', 'poster', 'azan', 'iqamah', 'solat', 'semua'][i]}.png`] = png(300, 200, i);
     const z = zip({ 'theme.json': json(), 'theme.css': '.a{color:red}', ...files });
     const meta = putAsset(db, dir, z, PACK_MIME, 'sync');
-    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { ...record(meta.id, z.length), images: { kuliah: 'png', poster: 'png', azan: 'png', iqamah: 'png', solat: 'png', semua: 'png' } } } }, 'sync');
+    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { ...record(meta.id, z.length), images: { kuliah: 'png', poster: 'png', azan: 'png', iqamah: 'png', solat: 'png', semua: 'png' } } } }, 'sync', undefined, LOCAL_SURAU_ID);
     const store = make();
     const p1 = store.ensureExtracted('hijau-siti');
     const p2 = store.ensureExtracted('hijau-siti');
@@ -94,7 +95,7 @@ describe('S7: extraction is asynchronous, shared and remembered', () => {
     const { db, dir, make } = setup();
     const z = zip({ 'theme.json': json(), 'theme.css': '@import "https://x.example/a.css";' });
     const meta = putAsset(db, dir, z, PACK_MIME, 'sync');
-    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': record(meta.id, z.length) } }, 'sync');
+    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': record(meta.id, z.length) } }, 'sync', undefined, LOCAL_SURAU_ID);
     let runs = 0;
     const store = make({ onValidate: () => { runs++; } });
     for (let i = 0; i < 5; i++) expect(await store.ensureExtracted('hijau-siti')).toBeNull();
@@ -145,6 +146,6 @@ describe('S8 keeps its place: the installed theme file is unchanged', () => {
     const s = await store.stage(z);
     await store.install(s.stagedId!, 'u1');
     expect(existsSync(join(dir, 'themes', 'hijau-siti', hashOf(sha(z)), 'bundle.css'))).toBe(true);
-    expect(getSettings(db).themeStyle.packs['hijau-siti']!.assetId).toBe(sha(z));
+    expect(getSettings(db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']!.assetId).toBe(sha(z));
   });
 });

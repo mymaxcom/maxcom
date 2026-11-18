@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   can,
+  effectiveRoles,
   isRole,
   KIOSK_PERMISSIONS,
+  OPS_ROLES,
   PERMISSIONS,
   ROLES,
   ROLE_LABELS_MS,
@@ -22,6 +24,7 @@ const ALL_PERMISSIONS: readonly Permission[] = [
   'islamic:fetch',
   'kiosk:read',
   'live:control',
+  'live:settings',
   'finance:read',
   'finance:write',
   'users:manage',
@@ -31,11 +34,18 @@ const ALL_PERMISSIONS: readonly Permission[] = [
   'system:read',
   'system:write',
   'superadmin:manage',
+  'fleet:read',
+  'fleet:manage',
+  'surau:create',
+  'surau:suspend',
+  'audit:read_all',
 ];
+
+const CLOUD_ONLY: readonly Permission[] = ['fleet:read', 'fleet:manage', 'surau:create', 'surau:suspend', 'audit:read_all'];
 
 describe('roles', () => {
   it('declares the roles in a stable order', () => {
-    expect([...ROLES]).toEqual(['superadmin', 'admin', 'treasurer', 'media', 'ajk']);
+    expect([...ROLES]).toEqual(['superadmin', 'admin', 'treasurer', 'media', 'live', 'ajk', 'support']);
   });
 
   it('labels every role in BM Malaysia', () => {
@@ -43,7 +53,14 @@ describe('roles', () => {
     expect(ROLE_LABELS_MS.treasurer).toBe('Bendahari');
     expect(ROLE_LABELS_MS.media).toBe('Media');
     expect(ROLE_LABELS_MS.ajk).toBe('AJK');
+    expect(ROLE_LABELS_MS.support).toBe('Sokongan MAXCOM');
     expect(ROLES.every((r: Role) => ROLE_LABELS_MS[r])).toBe(true);
+  });
+
+  it('adds the Siaran Langsung role and labels it in both languages', () => {
+    expect(isRole('live')).toBe(true);
+    expect(ROLE_LABELS_MS.live).toBe('Siaran Langsung');
+    expect(ROLE_LABELS_EN.live).toBe('Live Broadcast');
   });
 
   it('rejects names that are not roles', () => {
@@ -55,8 +72,10 @@ describe('roles', () => {
 });
 
 describe('permission matrix', () => {
-  it('gives admin every permission except the three system ones', () => {
-    expect([...PERMISSIONS.admin]).toEqual(ALL_PERMISSIONS.filter((p) => !p.startsWith('system:') && p !== 'superadmin:manage'));
+  it('gives admin every permission except the system, superadmin and cloud-only ones', () => {
+    expect([...PERMISSIONS.admin]).toEqual(
+      ALL_PERMISSIONS.filter((p) => !p.startsWith('system:') && p !== 'superadmin:manage' && !CLOUD_ONLY.includes(p)),
+    );
   });
 
   it('gives superadmin every permission: a superset of admin plus the three system ones', () => {
@@ -93,16 +112,46 @@ describe('permission matrix', () => {
     ]);
   });
 
-  it('gives media content and live control', () => {
+  it('keeps every surau role out of the cloud-only permissions', () => {
+    for (const role of ['admin', 'treasurer', 'media', 'live', 'ajk'] as const) {
+      for (const p of CLOUD_ONLY) expect(PERMISSIONS[role]).not.toContain(p);
+    }
+  });
+
+  it('gives media content work but no live access: Media lost live control and live settings, with no migration', () => {
     expect([...PERMISSIONS.media]).toEqual([
       'settings:read',
       'content:read',
       'content:write',
       'assets:write',
       'kiosk:read',
-      'live:control',
       'health:read',
     ]);
+    expect(can(['media'], 'live:control')).toBe(false);
+    expect(can(['media'], 'live:settings')).toBe(false);
+  });
+
+  it('gives the live role the Siaran Langsung menu and its settings, and nothing else', () => {
+    expect([...PERMISSIONS.live]).toEqual([
+      'settings:read',
+      'kiosk:read',
+      'health:read',
+      'live:control',
+      'live:settings',
+    ]);
+    expect(can(['live'], 'settings:write')).toBe(false);
+    expect(can(['live'], 'content:write')).toBe(false);
+    expect(can(['live'], 'users:manage')).toBe(false);
+  });
+
+  it('holds live:settings for exactly live, admin and superadmin', () => {
+    const holders = ROLES.filter((r) => can([r], 'live:settings'));
+    expect([...holders].sort()).toEqual(['admin', 'live', 'superadmin']);
+  });
+
+  it('lets a user with Media and Siaran Langsung do both jobs', () => {
+    expect(can(['media', 'live'], 'live:control')).toBe(true);
+    expect(can(['media', 'live'], 'content:write')).toBe(true);
   });
 
   it('gives ajk read-only access including finance', () => {
@@ -167,5 +216,59 @@ describe('kiosk identity', () => {
   it('types a kiosk identity that no user role can produce', () => {
     const identity: KioskIdentity = { kind: 'kiosk' };
     expect(identity.kind).toBe('kiosk');
+  });
+});
+
+describe('support role', () => {
+  it('holds only fleet:read', () => {
+    expect([...PERMISSIONS.support]).toEqual(['fleet:read']);
+    expect(can(['support'], 'fleet:read')).toBe(true);
+    expect(can(['support'], 'content:read')).toBe(false);
+    expect(can(['support'], 'system:write')).toBe(false);
+    expect(can(['support'], 'users:manage')).toBe(false);
+  });
+
+  it('labels the support role Sokongan MAXCOM / MAXCOM Support', () => {
+    expect(ROLE_LABELS_MS.support).toBe('Sokongan MAXCOM');
+    expect(ROLE_LABELS_EN.support).toBe('MAXCOM Support');
+  });
+
+  it('never grants a permission outside the declared union', () => {
+    for (const p of PERMISSIONS.support) expect(CLOUD_ONLY).toContain(p);
+  });
+});
+
+describe('OPS_ROLES and effectiveRoles', () => {
+  it('declares the ops roles', () => {
+    expect([...OPS_ROLES]).toEqual(['superadmin', 'support']);
+  });
+
+  it('drops the ops roles on a public device', () => {
+    expect(effectiveRoles(['superadmin', 'admin'], false)).toEqual(['admin']);
+    expect(effectiveRoles(['superadmin'], false)).toEqual([]);
+    expect(effectiveRoles(['support'], false)).toEqual([]);
+    expect(effectiveRoles(['superadmin', 'support', 'ajk'], false)).toEqual(['ajk']);
+  });
+
+  it('keeps every role on an ops device', () => {
+    expect(effectiveRoles(['superadmin', 'admin'], true)).toEqual(['superadmin', 'admin']);
+    expect(effectiveRoles(['support'], true)).toEqual(['support']);
+    expect(effectiveRoles([], true)).toEqual([]);
+  });
+
+  it('leaves a surau role list unchanged either way', () => {
+    const roles: Role[] = ['admin', 'treasurer', 'ajk'];
+    expect(effectiveRoles(roles, false)).toEqual(roles);
+    expect(effectiveRoles(roles, true)).toEqual(roles);
+  });
+
+  it('keeps the original order', () => {
+    expect(effectiveRoles(['ajk', 'superadmin', 'admin'], false)).toEqual(['ajk', 'admin']);
+  });
+
+  it('is pure: the input list is not mutated', () => {
+    const roles: Role[] = ['superadmin', 'admin'];
+    effectiveRoles(roles, false);
+    expect(roles).toEqual(['superadmin', 'admin']);
   });
 });

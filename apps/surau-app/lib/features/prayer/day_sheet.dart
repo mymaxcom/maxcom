@@ -10,7 +10,8 @@ import '../../l10n/generated/s.dart';
 import '../../screens/widgets/pieces.dart';
 import 'location_screen.dart';
 import 'prayer_repository.dart';
-import 'sources_screen.dart' show prayerKeys, prayerNamesMs;
+import 'prayer_names.dart';
+import 'sources_screen.dart' show prayerKeys;
 import 'widgets/country_picker.dart' show InfoBox, InfoTone;
 
 /// True when the day was changed.
@@ -24,8 +25,6 @@ Future<bool> showDaySheet(BuildContext context, ResolvedDay day) async {
   );
   return changed ?? false;
 }
-
-const List<String> _weekdaysMs = ['Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu', 'Ahad'];
 
 final RegExp _timeRe = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
 
@@ -137,7 +136,7 @@ class _DaySheetState extends ConsumerState<DaySheet> {
 
   String _overrideLabel(S s, String key) {
     if (key == 'jumaat_khutbah') return s.pdOverrideKhutbah;
-    if (key.startsWith('iqamah_')) return s.pdOverrideIqamah(prayerNamesMs[key.substring(7)] ?? key.substring(7));
+    if (key.startsWith('iqamah_')) return s.pdOverrideIqamah(prayerName(s, key.substring(7)));
     return key;
   }
 
@@ -160,7 +159,7 @@ class _DaySheetState extends ConsumerState<DaySheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${_weekdaysMs[date.weekday - 1]}, ${date.day} ${monthsLongMs[date.month - 1]} ${date.year}',
+            '${weekdayLong(s, date.weekday)}, ${date.day} ${monthLong(s, date.month)} ${date.year}',
             style: text.titleLarge,
           ),
           const SizedBox(height: 6),
@@ -183,7 +182,7 @@ class _DaySheetState extends ConsumerState<DaySheet> {
           const Divider(),
           for (final p in prayerKeys)
             row(
-              Text(prayerNamesMs[p]!, style: num.copyWith(fontWeight: FontWeight.w600)),
+              Text(prayerName(s, p), style: num.copyWith(fontWeight: FontWeight.w600)),
               Text(
                 d.times[p] ?? '-',
                 style: num.copyWith(
@@ -193,7 +192,7 @@ class _DaySheetState extends ConsumerState<DaySheet> {
               ),
               Text(_calc?.times[p] ?? '-', style: num.copyWith(color: SurauColors.muted)),
             ),
-          if (d.dhuha != null) row(Text('Dhuha', style: num.copyWith(fontWeight: FontWeight.w600)), Text(d.dhuha!, style: num), const SizedBox.shrink()),
+          if (d.dhuha != null) row(Text(prayerName(s, 'dhuha'), style: num.copyWith(fontWeight: FontWeight.w600)), Text(d.dhuha!, style: num), const SizedBox.shrink()),
           if (d.imsakDerived) Text(s.pdImsakDerived, style: text.bodySmall),
           for (final e in (d.overrides ?? const <String, String>{}).entries)
             Text('${_overrideLabel(s, e.key)}: ${e.value}', style: text.bodySmall),
@@ -207,7 +206,7 @@ class _DaySheetState extends ConsumerState<DaySheet> {
               for (final p in prayerKeys)
                 ChoiceChip(
                   key: ValueKey('pd-cor-prayer-$p'),
-                  label: Text(prayerNamesMs[p]!),
+                  label: Text(prayerName(s, p)),
                   selected: p == _prayer,
                   onSelected: (_) => _choose(p),
                 ),

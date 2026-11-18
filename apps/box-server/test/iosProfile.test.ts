@@ -32,7 +32,7 @@ beforeAll(async () => {
     tls: { ipSan: ['10.168.1.20'], dnsSan: ['box.surau.local'] } as never,
   });
   await app.ready();
-  putFeature(app.surau.db, 'surauInfo', { name: 'Surau Al-Hidayah Taman Indah' }, 'test');
+  putFeature(app.surau.db, 'surauInfo', { name: 'Surau Al-Hidayah Taman Indah' }, 'test', undefined, 'sdm');
 });
 
 afterAll(async () => {
@@ -196,7 +196,7 @@ describe('the root certificate name iOS lists', () => {
       writeFileSync(join(d, 'data', 'pki', 'root-ca.cer'), REAL);
       const a = buildApp(join(d, 't.db'), { dataDir: join(d, 'data'), appDir, boxId: 'box123abc', httpsPort: 8443, allowedHosts: ['10.168.1.20'], tls: { ipSan: ['10.168.1.20'], dnsSan: [] } as never });
       await a.ready();
-      putFeature(a.surau.db, 'surauInfo', { name: 'Surau Al-Hidayah Taman Indah' }, 'test');
+      putFeature(a.surau.db, 'surauInfo', { name: 'Surau Al-Hidayah Taman Indah' }, 'test', undefined, 'sdm');
       const xml = (await a.inject({ method: 'GET', url: '/app/ios.mobileconfig', remoteAddress: '10.168.1.5', headers: { host: '10.168.1.20:8443' } })).body;
       expect(xml).toContain(`<key>PayloadDisplayName</key>
 			<string>${cn()}</string>`);

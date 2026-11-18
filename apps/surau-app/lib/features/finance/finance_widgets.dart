@@ -14,11 +14,28 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../app/shell.dart';
 import '../../app/theme.dart';
+import '../../finance/entry_check.dart' show financeForbiddenChars;
 import '../../finance/finance_models.dart';
 import '../../finance/finance_repository.dart';
 import '../../finance/ledger.dart';
 import '../../l10n/generated/s.dart';
 import '../../store/local_store.dart';
+import '../common/ltr.dart' show ltr;
+import '../people/people_words.dart' show isolate;
+import '../people/ref.dart' show RefText, refOf;
+
+/// What a single-line finance text field lets through: no `<`, `>` and no
+/// control character (a line break included), and at most [max] characters
+/// (note 200, payee 80, reference 60), the box's own limits.
+List<TextInputFormatter> finTextFormatters(int max) => [
+  FilteringTextInputFormatter.deny(financeForbiddenChars),
+  LengthLimitingTextInputFormatter(max),
+];
+
+/// [text] as an isolated left-to-right value in an Arabic screen (a leading
+/// minus stays first); unchanged in the other languages.
+String finLtr(S s, String text) =>
+    s.localeName.startsWith('ar') ? ltr(text) : text;
 
 // ---- providers ----
 
@@ -98,6 +115,44 @@ final financeNameProvider = FutureProvider.autoDispose
       final name = doc?['name'];
       return name is String && name.isNotEmpty ? name : null;
     });
+
+/// The ID (`U-0001`, `D-0001`) of a person or a device from the local copy
+/// (`ref`, else `no` + `noSrc`), or null: never invented.
+final financeRefProvider = FutureProvider.autoDispose
+    .family<String?, ({String collection, String id})>((ref, key) async {
+      final repo = ref.watch(financeRepositoryProvider);
+      if (repo == null || key.id.isEmpty) return null;
+      final doc = await repo.store.getDoc(key.collection, key.id);
+      if (doc == null) return null;
+      final no = doc['no'];
+      return refOf(
+        ref: doc['ref'] is String ? doc['ref'] as String : null,
+        kind: key.collection == Collections.devices ? 'device' : 'user',
+        no: no is num ? no.toInt() : null,
+        noSrc: doc['noSrc'] is String ? doc['noSrc'] as String : null,
+      );
+    });
+
+/// A name with its ID after it (when there is one), wrapping under it on a
+/// narrow row; the ID stays left to right in Arabic.
+class FinNameWithRef extends StatelessWidget {
+  const FinNameWithRef({super.key, required this.name, this.idRef, this.style});
+
+  final String name;
+  final String? idRef;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = idRef;
+    if (r == null || r.isEmpty) return Text(name, style: style);
+    return Wrap(
+      spacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [Text(isolate(name), style: style), RefText(r)],
+    );
+  }
+}
 
 /// The active people a collection may be counted by, from the local copy.
 final financeCounterCandidatesProvider =
@@ -459,6 +514,7 @@ class FinHero extends StatelessWidget {
                           ),
                           Text(
                             amount,
+                            key: Key('fin-hero-io-$i'),
                             style: text.titleSmall!.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
@@ -521,12 +577,12 @@ class FinEntryTile extends StatelessWidget {
       ),
     };
     final amount = switch (e.kind) {
-      'in' || 'opening' => finSigned(e.amountSen),
-      'out' => formatRm(-e.amountSen),
+      'in' || 'opening' => finLtr(s, finSigned(e.amountSen)),
+      'out' => finLtr(s, formatRm(-e.amountSen)),
       _ => switch (e.correctionKind) {
         'void' => s.finVoided,
         'fund' => s.finCorKindFund,
-        _ => formatRm(e.amountSen),
+        _ => finLtr(s, formatRm(e.amountSen)),
       },
     };
     final sub = [
@@ -772,7 +828,7 @@ class FinMoneyField extends StatelessWidget {
                 )
               : sen != null
               ? Text(
-                  formatRm(sen),
+                  finLtr(S.of(context), formatRm(sen)),
                   key: const Key('fin-amount-parsed'),
                   style: text.bodyMedium!.copyWith(
                     color: SurauColors.teal,
@@ -826,20 +882,25 @@ class FinKeyValues extends StatelessWidget {
   }
 }
 
-/// A person's name from their id (a counter or `createdBy`); the unknown
-/// text when the local copy has no such user.
+/// A person's name from their id (a counter or `createdBy`) with their ID
+/// after it. [snapshot] (the entry's `names`, the name of the time) wins over
+/// the local copy, so a rename never rewrites an old entry and a deleted
+/// person whose local doc is gone still shows; the unknown text only when
+/// neither knows the person. [snapshotRef] likewise for the ID.
 class FinUserName extends ConsumerWidget {
-  const FinUserName(this.id, {super.key, this.style});
+  const FinUserName(this.id, {super.key, this.style, this.snapshot, this.snapshotRef});
 
   final String id;
   final TextStyle? style;
+  final String? snapshot;
+  final String? snapshotRef;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final name = ref
-        .watch(financeNameProvider((collection: Collections.users, id: id)))
-        .value;
-    return Text(name ?? S.of(context).finUnknownUser, style: style);
+    final key = (collection: Collections.users, id: id);
+    final name = snapshot ?? ref.watch(financeNameProvider(key)).value;
+    final idRef = snapshotRef ?? ref.watch(financeRefProvider(key)).value;
+    return FinNameWithRef(name: name ?? S.of(context).finUnknownUser, idRef: idRef, style: style);
   }
 }
 

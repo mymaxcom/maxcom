@@ -83,7 +83,7 @@ describe('enrolment payload', () => {
       method: 'PUT', url: '/api/settings/surauInfo', headers: admin.headers,
       payload: { helpName: 'Encik Ahmad', helpEmail: 'ahmad@example.my' },
     });
-    const u = createUser(app.surau.db, { name: 'Puan Aminah', roles: ['treasurer', 'ajk'] }, 'test');
+    const u = createUser(app.surau.db, { name: 'Puan Aminah', roles: ['treasurer', 'ajk'] }, 'test', 'sdm');
     const r = await app.inject({ method: 'POST', url: '/api/enrol/begin', headers: admin.headers, payload: { userId: u.id } });
     expect(r.statusCode).toBe(200);
     const body = decode(String(r.json().payload));
@@ -100,7 +100,7 @@ describe('enrolment payload', () => {
   it('tells the app whether a PIN exists (pinSet) and nothing else about the PIN', async () => {
     const app = makeApp();
     const admin = await loginAsAdmin(app);
-    const u = createUser(app.surau.db, { name: 'Puan Aminah', roles: ['ajk'] }, 'test');
+    const u = createUser(app.surau.db, { name: 'Puan Aminah', roles: ['ajk'] }, 'test', 'sdm');
     const before = await app.inject({ method: 'POST', url: '/api/enrol/begin', headers: admin.headers, payload: { userId: u.id } });
     expect(decode(String(before.json().payload)).pinSet).toBe(false);
     await setPin(app.surau.db, u.id, '483920', 'test');
@@ -157,7 +157,7 @@ describe('a person may hold several roles', () => {
   it('PUT roles: empty is 400, duplicates collapse, order is normalised, create uses the same rule', async () => {
     const app = makeApp();
     const admin = await loginAsAdmin(app);
-    const u = createUser(app.surau.db, { name: 'Orang', roles: ['ajk'] }, 'test');
+    const u = createUser(app.surau.db, { name: 'Orang', roles: ['ajk'] }, 'test', 'sdm');
     const put = (roles: unknown) =>
       app.inject({ method: 'PUT', url: `/api/users/${u.id}/roles`, headers: admin.headers, payload: { roles } });
     const empty = await put([]);
@@ -169,9 +169,9 @@ describe('a person may hold several roles', () => {
     expect(ok.statusCode).toBe(200);
     expect(ok.json().roles).toEqual(['admin', 'treasurer', 'ajk']);
 
-    const created = await app.inject({ method: 'POST', url: '/api/users', headers: admin.headers, payload: { name: 'Baru', roles: [] } });
+    const created = await app.inject({ method: 'POST', url: '/api/users', headers: admin.headers, payload: { name: 'Baru', roles: [], phone: '012-000 0004' } });
     expect(created.statusCode).toBe(400);
-    const c2 = await app.inject({ method: 'POST', url: '/api/users', headers: admin.headers, payload: { name: 'Baru', roles: ['ajk', 'media', 'ajk'] } });
+    const c2 = await app.inject({ method: 'POST', url: '/api/users', headers: admin.headers, payload: { name: 'Baru', roles: ['ajk', 'media', 'ajk'], phone: '012-000 0005' } });
     expect(c2.statusCode).toBe(201);
     expect(c2.json().roles).toEqual(['media', 'ajk']);
   });
@@ -181,7 +181,7 @@ describe('a person may hold several roles', () => {
     const l = await loginAs(app, ['admin', 'media']);
     const r = await app.inject({ method: 'PUT', url: `/api/users/${l.userId}/roles`, headers: l.headers, payload: { roles: ['media'] } });
     expect(r.statusCode).toBe(409);
-    expect(listUsers(app.surau.db).find((x) => x.id === l.userId)!.roles).toEqual(['admin', 'media']);
+    expect(listUsers(app.surau.db, 'sdm').find((x) => x.id === l.userId)!.roles).toEqual(['admin', 'media']);
     // with a second admin the change is allowed
     await loginAs(app, 'admin');
     const r2 = await app.inject({ method: 'PUT', url: `/api/users/${l.userId}/roles`, headers: l.headers, payload: { roles: ['media'] } });

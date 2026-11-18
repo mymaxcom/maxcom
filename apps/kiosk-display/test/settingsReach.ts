@@ -65,7 +65,7 @@ export const REACH: Record<string, Record<string, Reach>> = {
     enabled: by(`${K}ui/Background.tsx`),
     override: { none: 'hidden', why: 'the accent has one control, Ubah suai Warna aksen (FieldMeta hidden); a stored value is ignored' },
   },
-  language: { enabled: by(`${K}app.tsx`), lang: by(`${K}app.tsx`) },
+  language: { enabled: by(`${C}features/tvLanguage.ts`), lang: by(`${C}features/tvLanguage.ts`) },
   orientation: {
     enabled: { none: 'hidden', why: 'the feature is hidden from Tetapan as planned (HIDDEN_FEATURES); nothing on the TV reads it yet' },
     mode: { none: 'hidden', why: 'the feature is hidden from Tetapan as planned (HIDDEN_FEATURES); nothing on the TV reads it yet' },
@@ -124,13 +124,23 @@ export const REACH: Record<string, Record<string, Reach>> = {
     enabled: by(`${A}features/live/live_screen.dart`), segmentMinutes: by(`${A}features/live/live_controller.dart`),
     keepOnDevice: by(`${A}upload/recording_cleanup.dart`),
   },
+  // The external camera: the box reads the transport and the audio offsets when it starts a session, the app reads the
+  // switch and the name on the live screen and the camera card (guard 2026-11-18, K16).
+  liveCamera: {
+    enabled: by(`${A}features/live/live_source.dart`),
+    name: by(`${A}features/live/live_source.dart`),
+    transport: by(`${B}live/cameraRoutes.ts`, `${A}features/live/live_source.dart`),
+    avOffsetMs: by(`${B}live/sessions.ts`, `${A}features/live/live_controller.dart`),
+  },
+
   finance: {
     enabled: by(`${B}finance/routes.ts`), penceramahFundId: by(`${B}finance/store.ts`),
     bigAmountSen: by(`${A}features/finance/finance_widgets.dart`), startedOn: by(`${B}finance/store.ts`),
   },
   tabungCard: {
     enabled: by(ROT), durationSeconds: by(ROT), order: by(ROT), figure: by(`${B}finance/tabung.ts`), highlightSeconds: by(`${B}finance/tabung.ts`),
-    showTarget: by(`${B}finance/tabung.ts`), qrAssetId: by(`${B}finance/tabung.ts`), manualTitle: by(`${B}finance/tabung.ts`),
+    showTarget: by(`${B}finance/tabung.ts`), qrAssetId: by(`${B}finance/tabung.ts`), featured: by(`${C}content/tabungPages.ts`),
+    manualTitle: by(`${B}finance/tabung.ts`),
     row1Label: { by: [`${B}finance/tabung.ts`], needle: /row\$\{n\}Label/ }, row1Sen: { by: [`${B}finance/tabung.ts`], needle: /row\$\{n\}Sen/ },
     row2Label: { by: [`${B}finance/tabung.ts`], needle: /row\$\{n\}Label/ }, row2Sen: { by: [`${B}finance/tabung.ts`], needle: /row\$\{n\}Sen/ },
     row3Label: { by: [`${B}finance/tabung.ts`], needle: /row\$\{n\}Label/ }, row3Sen: { by: [`${B}finance/tabung.ts`], needle: /row\$\{n\}Sen/ },

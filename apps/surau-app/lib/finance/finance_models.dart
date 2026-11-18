@@ -135,6 +135,59 @@ class Perihal {
   };
 }
 
+/// The names (and IDs) used when an entry was made, as the server stored them
+/// once (`names` on the entry, migration 022): a later rename or delete never
+/// rewrites them. `counters` and `counterRefs` are keyed by user id. Filled by
+/// the server only: never part of a signed `finance.append` payload (not in
+/// [financeEntryInputKeys]).
+class EntryNames {
+  const EntryNames({
+    this.createdBy,
+    this.device,
+    this.counters = const {},
+    this.createdByRef,
+    this.deviceRef,
+    this.counterRefs = const {},
+  });
+
+  final String? createdBy;
+  final String? device;
+  final Map<String, String> counters;
+  final String? createdByRef;
+  final String? deviceRef;
+  final Map<String, String> counterRefs;
+
+  /// Lenient: null for anything that is not an object; strings only.
+  static EntryNames? fromJson(Object? v) {
+    if (v is! Map) return null;
+    Map<String, String> strings(Object? m) => m is Map
+        ? {
+            for (final e in m.entries)
+              if (e.key is String && e.value is String && (e.value as String).isNotEmpty)
+                e.key as String: e.value as String,
+          }
+        : const {};
+    String? str(Object? x) => x is String && x.isNotEmpty ? x : null;
+    return EntryNames(
+      createdBy: str(v['createdBy']),
+      device: str(v['device']),
+      counters: strings(v['counters']),
+      createdByRef: str(v['createdByRef']),
+      deviceRef: str(v['deviceRef']),
+      counterRefs: strings(v['counterRefs']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'createdBy': createdBy,
+    'device': device,
+    'counters': counters,
+    'createdByRef': createdByRef,
+    'deviceRef': deviceRef,
+    'counterRefs': counterRefs,
+  };
+}
+
 /// One ledger row. `kind` is `in`, `out`, `opening` or `adjust`.
 class FinanceEntry {
   const FinanceEntry({
@@ -164,6 +217,7 @@ class FinanceEntry {
     this.editedAt = '',
     String? receivedAt,
     this.cloudReceivedAt,
+    this.names,
     this.pending = false,
   }) : receivedAt = receivedAt ?? editedAt;
 
@@ -193,6 +247,10 @@ class FinanceEntry {
   final String editedAt;
   final String receivedAt;
   final String? cloudReceivedAt;
+
+  /// The names of the time (server-filled; null on an older box or while
+  /// the entry waits in the outbox).
+  final EntryNames? names;
 
   /// The op that made this row still waits in the outbox (local only, never
   /// part of [toJson]).
@@ -243,6 +301,7 @@ class FinanceEntry {
       editedAt: editedAt,
       receivedAt: _str(j['receivedAt']) ?? editedAt,
       cloudReceivedAt: _str(j['cloudReceivedAt']),
+      names: EntryNames.fromJson(j['names']),
       pending: j['pending'] == true,
     );
   }
@@ -276,6 +335,7 @@ class FinanceEntry {
     'editedAt': editedAt,
     'receivedAt': receivedAt,
     'cloudReceivedAt': cloudReceivedAt,
+    'names': names?.toJson(),
   };
 
   FinanceEntry copyWith({
@@ -310,6 +370,7 @@ class FinanceEntry {
     editedAt: editedAt,
     receivedAt: receivedAt,
     cloudReceivedAt: cloudReceivedAt,
+    names: names,
     pending: pending ?? this.pending,
   );
 }
@@ -344,6 +405,7 @@ class MonthState {
     this.closedBy,
     this.report,
     this.pending = false,
+    this.lateEntries = const [],
   });
 
   final String ym;
@@ -357,6 +419,9 @@ class MonthState {
   final MonthReport? report;
   final bool pending;
 
+  /// Ids of entries that reached this copy after the month was closed.
+  final List<String> lateEntries;
+
   bool get closed => status == 'closed';
 
   factory MonthState.fromJson(Map<String, dynamic> j) {
@@ -368,6 +433,7 @@ class MonthState {
       closedBy: _str(j['closedBy']),
       report: r is Map<String, dynamic> ? MonthReport.fromJson(r) : null,
       pending: j['pending'] == true,
+      lateEntries: _ids(j['lateEntries']),
     );
   }
 
@@ -377,8 +443,16 @@ class MonthState {
     'closedAt': closedAt,
     'closedBy': closedBy,
     'report': report?.toJson(),
+    if (lateEntries.isNotEmpty) 'lateEntries': lateEntries,
   };
 }
+
+/// A list of ids; anything else in it is dropped.
+List<String> _ids(Object? v) => [
+  if (v is List)
+    for (final x in v)
+      if (x is String && x.isNotEmpty) x,
+];
 
 class PhotoMeta {
   const PhotoMeta({
@@ -650,6 +724,7 @@ class MonthReport {
     required this.outByPerihal,
     required this.corrections,
     required this.totals,
+    this.lateEntries = const [],
   });
 
   final String ym;
@@ -661,6 +736,24 @@ class MonthReport {
   final List<ReportGroup<ReportOutRow>> outByPerihal;
   final List<ReportCorrection> corrections;
   final ReportTotals totals;
+
+  /// Ids of entries that reached this side after the month was closed; never
+  /// part of the frozen figures.
+  final List<String> lateEntries;
+
+  /// The same report naming [late] as the entries that came after the close.
+  MonthReport withLateEntries(List<String> late) => MonthReport(
+    ym: ym,
+    status: status,
+    generatedAt: generatedAt,
+    syncedUntil: syncedUntil,
+    funds: funds,
+    inByPerihal: inByPerihal,
+    outByPerihal: outByPerihal,
+    corrections: corrections,
+    totals: totals,
+    lateEntries: late,
+  );
 
   factory MonthReport.fromJson(Map<String, dynamic> j) {
     List<Map<String, dynamic>> maps(Object? v) => [
@@ -687,6 +780,7 @@ class MonthReport {
       totals: ReportTotals.fromJson(
         (j['totals'] as Map?)?.cast<String, dynamic>() ?? const {},
       ),
+      lateEntries: _ids(j['lateEntries']),
     );
   }
 
@@ -700,6 +794,7 @@ class MonthReport {
     'outByPerihal': [for (final g in outByPerihal) g.toJson()],
     'corrections': [for (final c in corrections) c.toJson()],
     'totals': totals.toJson(),
+    if (lateEntries.isNotEmpty) 'lateEntries': lateEntries,
   };
 }
 

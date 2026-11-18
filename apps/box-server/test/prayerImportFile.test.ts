@@ -116,12 +116,12 @@ describe('dry run, apply, overlap and undo', () => {
     db.prepare('SELECT COUNT(*) AS n FROM change_log').get(), db.prepare("SELECT value FROM meta WHERE key = 'settings_version'").get() ?? null,
   ]));
   const imp = (db: DatabaseSync, s: Settings, d: ReturnType<typeof days>, overlap: 'replace' | 'keep' | 'fillEmpty', at: Date, name = 'f.csv') =>
-    applyImport(db, s, { kind: 'csv', fileName: name, sha256: 'a'.repeat(64), days: d, overlap }, 'user:t', undefined, at);
+    applyImport(db, s, { kind: 'csv', fileName: name, sha256: 'a'.repeat(64), days: d, overlap }, 'user:t', undefined, at, 'sdm');
 
   it('a dry run writes nothing', () => {
     const db = newDb();
     const before = checksum(db);
-    const r = dryRun(db, ke(), days(dec), 'replace');
+    const r = dryRun(db, ke(), days(dec), 'replace', 'sdm');
     expect(checksum(db)).toBe(before);
     expect(r.range).toEqual({ from: '2026-12-01', to: '2026-12-31' });
     expect(r.perMonth).toEqual({ '2026-12': 31 });
@@ -136,11 +136,11 @@ describe('dry run, apply, overlap and undo', () => {
     expect(fileRows(db)).toBe(31);
     expect(db.prepare('SELECT DISTINCT surau_id FROM prayer_file_days').all()).toEqual([{ surau_id: 'sdm' }]);
     expect(db.prepare('SELECT DISTINCT surau_id FROM prayer_imports').all()).toEqual([{ surau_id: 'sdm' }]);
-    expect(listImports(db)[0]).toMatchObject({ id: r.id, rows: 31, dateFrom: '2026-12-01', dateTo: '2026-12-31', overlap: 'replace', actor: 'user:t', undoneAt: null });
+    expect(listImports(db, 'sdm')[0]).toMatchObject({ id: r.id, rows: 31, dateFrom: '2026-12-01', dateTo: '2026-12-31', overlap: 'replace', actor: 'user:t', undoneAt: null });
     const log = db.prepare("SELECT entity_id, after_json FROM change_log WHERE entity = 'prayer:import'").get()!;
     expect(log.entity_id).toBe(r.id);
     expect((JSON.parse(String(log.after_json)) as { days: unknown[] }).days).toHaveLength(31);
-    expect(resolveDay(db, ke(), '2026-12-10')!.source).toBe('file');
+    expect(resolveDay(db, ke(), '2026-12-10', 'sdm')!.source).toBe('file');
   });
 
   it('the three overlap choices count and write as previewed', () => {
@@ -148,7 +148,7 @@ describe('dry run, apply, overlap and undo', () => {
     const s = ke();
     imp(db, s, days(dec), 'replace', T0);
     const second = days(range('2026-12-20', 20)); // 20 Dec .. 8 Jan, 12 overlap
-    const p = dryRun(db, s, second, 'replace');
+    const p = dryRun(db, s, second, 'replace', 'sdm');
     expect(p.byChoice.replace).toEqual({ inserted: 8, replaced: 12, skipped: 0 });
     expect(p.byChoice.keep).toEqual({ inserted: 8, replaced: 0, skipped: 12 });
     expect(p.byChoice.fillEmpty).toEqual({ inserted: 8, replaced: 0, skipped: 12 });
@@ -162,10 +162,10 @@ describe('dry run, apply, overlap and undo', () => {
 
   it('fill empty adds only days with no official and no file row (December only when November is official)', () => {
     const db = newDb();
-    importDays(db, 'SGR01', official.filter((d) => d.date >= '2026-11-01' && d.date <= '2026-11-30'), 'tester');
+    importDays(db, 'SGR01', official.filter((d) => d.date >= '2026-11-01' && d.date <= '2026-11-30'), 'tester', undefined, undefined, 'sdm');
     const my = resolveSettings({ location: { latitude: 3.07, longitude: 101.52 } });
     const both = days([...nov, ...dec]);
-    const p = dryRun(db, my, both, 'fillEmpty');
+    const p = dryRun(db, my, both, 'fillEmpty', 'sdm');
     expect(p.overlaps.official).toBe(30);
     expect(p.wouldWrite).toEqual({ inserted: 31, replaced: 0, skipped: 30 });
     imp(db, my, both, 'fillEmpty', T0);
@@ -177,36 +177,36 @@ describe('dry run, apply, overlap and undo', () => {
     const db = newDb();
     imp(db, ke(), days(dec), 'replace', T0);
     expect(() => imp(db, ke(), days(dec), 'keep', T1)).toThrow(/Tiada hari baharu/);
-    expect(listImports(db)).toHaveLength(1);
+    expect(listImports(db, 'sdm')).toHaveLength(1);
   });
 
   it('undo takes the days back; restores what a later import replaced; blocks when a later import owns days', () => {
     const db = newDb();
     const s = ke();
     const a = imp(db, s, days(dec), 'replace', T0);
-    const aDay = resolveDay(db, s, '2026-12-25')!.times;
+    const aDay = resolveDay(db, s, '2026-12-25', 'sdm')!.times;
     const changed = parse(csvOf(range('2026-12-10', 22), Object.fromEntries(range('2026-12-10', 22).map((d) => [d, { zohor: '12:30', asar: '15:45' }])))).days;
     const b = imp(db, s, changed, 'replace', T1);
-    expect(resolveDay(db, s, '2026-12-25')!.times.zohor).toBe('12:30');
-    const blocked = undoImport(db, a.id, 'user:t', undefined, T2);
-    expect(blocked).toEqual({ ok: false, reason: 'Hari 2026-12-10 hingga 2026-12-31 telah diganti oleh import 2026-11-20' });
+    expect(resolveDay(db, s, '2026-12-25', 'sdm')!.times.zohor).toBe('12:30');
+    const blocked = undoImport(db, a.id, 'user:t', undefined, T2, 'sdm');
+    expect(blocked).toMatchObject({ ok: false, reason: 'Hari 2026-12-10 hingga 2026-12-31 telah diganti oleh import 2026-11-20' });
     expect(fileRows(db)).toBe(31);
-    expect(undoImport(db, b.id, 'user:t', undefined, T2)).toEqual({ ok: true, restored: 22 });
-    expect(resolveDay(db, s, '2026-12-25')!.times).toEqual(aDay);
+    expect(undoImport(db, b.id, 'user:t', undefined, T2, 'sdm')).toEqual({ ok: true, restored: 22 });
+    expect(resolveDay(db, s, '2026-12-25', 'sdm')!.times).toEqual(aDay);
     expect(fileRows(db)).toBe(31);
-    expect(undoImport(db, a.id, 'user:t', undefined, T2)).toEqual({ ok: true, restored: 31 });
+    expect(undoImport(db, a.id, 'user:t', undefined, T2, 'sdm')).toEqual({ ok: true, restored: 31 });
     expect(fileRows(db)).toBe(0);
-    expect(resolveDay(db, s, '2026-12-25')!.source).toBe('calc');
-    expect(listImports(db).every((r) => r.undoneAt !== null)).toBe(true);
-    expect(undoImport(db, a.id, 'user:t', undefined, T2)).toMatchObject({ ok: false });
-    expect(undoImport(db, 'X'.repeat(26), 'user:t', undefined, T2)).toMatchObject({ ok: false, reason: 'Import tidak dijumpai' });
+    expect(resolveDay(db, s, '2026-12-25', 'sdm')!.source).toBe('calc');
+    expect(listImports(db, 'sdm').every((r) => r.undoneAt !== null)).toBe(true);
+    expect(undoImport(db, a.id, 'user:t', undefined, T2, 'sdm')).toMatchObject({ ok: false });
+    expect(undoImport(db, 'X'.repeat(26), 'user:t', undefined, T2, 'sdm')).toMatchObject({ ok: false, reason: 'Import tidak dijumpai' });
   });
 
   it('a correction made after the import blocks the undo', () => {
     const db = newDb();
     const a = imp(db, ke(), days(dec), 'replace', T0);
-    putCorrection(db, { date: '2026-12-05', prayer: 'asar', time: '15:40', reason: 'Ikut masjid' }, 'user:t', undefined, T1);
-    const r = undoImport(db, a.id, 'user:t', undefined, T2);
+    putCorrection(db, { date: '2026-12-05', prayer: 'asar', time: '15:40', reason: 'Ikut masjid' }, 'user:t', undefined, T1, undefined, undefined, 'sdm');
+    const r = undoImport(db, a.id, 'user:t', undefined, T2, 'sdm');
     expect(r.ok).toBe(false);
     expect((r as { reason: string }).reason).toMatch(/^Pembetulan dibuat pada 2026-11-20 untuk hari 2026-12-05/);
   });

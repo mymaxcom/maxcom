@@ -5,6 +5,7 @@ import type { PrayerDay } from '../prayer/types.ts';
 import { buildDayIntervals, firstAzanPlan } from '../kiosk/state.ts';
 import type { PhaseInterval, SolatName } from '../kiosk/state.ts';
 import { hadisPlan } from './hadisDisplay.ts';
+import { TABUNG_SHOWING_MAX_PAGES, tabungFeatured, tabungPageCount, tabungPages } from './tabungPages.ts';
 import type { KioskContent, KioskHadis, TilawahSlot } from './types.ts';
 
 export type SlotFeature =
@@ -15,7 +16,10 @@ export interface Slot {
   feature: SlotFeature;
   itemId: string | null;
   durationSeconds: number;
-  /** Part of a long hadis (0-based); absent for every other slot. */
+  /**
+   * Part of a long hadis (0-based). On a tabung screen of more pages than one showing turns through: the showing number
+   * (cycles since midnight), so each showing continues where the last stopped. Absent for every other slot.
+   */
   page?: number;
 }
 
@@ -119,10 +123,11 @@ export function buildCycle(content: KioskContent, settings: Settings, now: Date)
   const f = feat(settings, 'hadis');
   const rawDur = num(f?.durationSeconds, DEFAULT_SECONDS);
   const d = rawDur > 0 ? rawDur : DEFAULT_SECONDS;
-  const expand = (item: KioskHadis | undefined): Slot[] => {
+  // `showing` numbers the cycles since midnight: a windowed tabung slot (page set) carries it.
+  const expand = (item: KioskHadis | undefined, showing: number): Slot[] => {
     const out: Slot[] = [];
     for (const l of layout) {
-      if (l !== HADIS_MARK) out.push(l);
+      if (l !== HADIS_MARK) out.push(l.feature === 'tabungCard' && l.page !== undefined ? { ...l, page: showing } : l);
       else if (item) {
         const p = hadisPartCount(item, settings);
         for (let k = 0; k < p; k++) out.push({ feature: 'hadis', itemId: item.id, durationSeconds: d, ...(p > 1 ? { page: k } : {}) });
@@ -131,14 +136,15 @@ export function buildCycle(content: KioskContent, settings: Settings, now: Date)
     return out;
   };
   const n = pool.length;
-  if (n === 0) return { slots: expand(undefined), cycleStartSec: 0 };
-
   const others = layout.reduce<number>((a, l) => (l === HADIS_MARK ? a : a + l.durationSeconds), 0);
-  const lens = pool.map((item) => others + d * hadisPartCount(item, settings));
-  const period = lens.reduce((a, b) => a + b, 0);
   const tz = tzOf(settings);
   const midnight = instantOf(dateOf(now, tz), '00:00', tz).getTime();
   const sec = Math.floor((now.getTime() - midnight) / SEC);
+  // No hadis: the cycle is the same every time and starts at midnight (currentSlot with cycleStartSec 0).
+  if (n === 0) return { slots: expand(undefined, others > 0 ? Math.max(0, Math.floor(sec / others)) : 0), cycleStartSec: 0 };
+
+  const lens = pool.map((item) => others + d * hadisPartCount(item, settings));
+  const period = lens.reduce((a, b) => a + b, 0);
   const pos = ((sec % period) + period) % period;
   let start = 0;
   let j = 0;
@@ -146,7 +152,7 @@ export function buildCycle(content: KioskContent, settings: Settings, now: Date)
     if (pos < start + lens[j]!) break;
     start += lens[j]!;
   }
-  return { slots: expand(pool[j]), cycleStartSec: sec - (pos - start) };
+  return { slots: expand(pool[j], Math.floor(sec / period) * n + j), cycleStartSec: sec - (pos - start) };
 }
 
 function buildLayout(content: KioskContent, settings: Settings, now: Date): Layout[] {
@@ -173,7 +179,8 @@ function buildLayout(content: KioskContent, settings: Settings, now: Date): Layo
         const max = Math.max(0, Math.floor(num(f.maxItems, 5)));
         const visible = content.pengumuman
           .filter((p) => p.from <= today && today <= p.to)
-          .sort((a, b) => a.priority - b.priority || (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
+          // Segera (3) first, then Penting (2), then Biasa (1): the cut at `maxItems` drops the ordinary ones.
+          .sort((a, b) => b.priority - a.priority || (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
         return many(visible.slice(0, max).map((p) => p.id));
       }
       case 'posters': {
@@ -202,8 +209,16 @@ function buildLayout(content: KioskContent, settings: Settings, now: Date): Layo
       }
       case 'ayatCard':
         return content.ayat.today ? [one(null)] : [];
-      case 'tabungCard':
-        return content.tabung && content.tabung.rows.length > 0 ? [one(null)] : [];
+      // durationSeconds is the time of one page: a screen of several pages (more than 4 funds, or the featured fund's
+      // tiles, plus the summary page) takes that many times it. One page is the card's time as before.
+      // At most TABUNG_SHOWING_MAX_PAGES pages a showing; a screen with more carries `page` (the showing number, set by
+      // buildCycle), and the card shows the next run of pages each time (tabungWindowPage).
+      case 'tabungCard': {
+        const pages = tabungPageCount(content.tabung, settings);
+        if (pages === 0) return [];
+        const windowed = tabungPages(content.tabung, tabungFeatured(settings)).length > TABUNG_SHOWING_MAX_PAGES;
+        return [{ feature, itemId: null, durationSeconds: durationSeconds * pages, ...(windowed ? { page: 0 } : {}) }];
+      }
     }
   };
 

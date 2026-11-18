@@ -22,7 +22,7 @@ async function box(): Promise<LiveHarness> {
   closers.push(h.close);
   const keys = generateSyncKeyPair();
   saveSyncKey(h.dataDir, { ...keys, cloudUrl: 'https://cloud.test', siteToken: 'tok-1', wakeSecret: 'wake-secret-1', linkedAt: '2026-11-05T00:00:00.000Z' });
-  putFeature(h.app.surau.db, 'cloudSync', { enabled: true }, 'test');
+  putFeature(h.app.surau.db, 'cloudSync', { enabled: true }, 'test', undefined, 'sdm');
   return h;
 }
 
@@ -187,7 +187,7 @@ describe('follow-up 5: a complete that failed at stop survives a restart', () =>
     down.stop();
     const rows = pendingRows(h);
     expect(rows).toHaveLength(1);
-    expect(Object.keys(rows[0]!).sort()).toEqual(['attempts', 'broadcast_id', 'created_at']);
+    expect(Object.keys(rows[0]!).sort()).toEqual(['attempts', 'broadcast_id', 'created_at', 'surau_id']);
     expect(rows[0]).toMatchObject({ broadcast_id: 'bc-77' });
     expect(JSON.stringify(rows)).not.toContain('tok-1');
 
@@ -273,7 +273,7 @@ describe('follow-up 5: a complete that failed at stop survives a restart', () =>
   it('gate 2: cloudSync switched off after a live does not strand a stored complete (the box is still linked)', async () => {
     const h = await box();
     const db = h.app.surau.db;
-    putFeature(db, 'cloudSync', { enabled: false }, 'test');
+    putFeature(db, 'cloudSync', { enabled: false }, 'test', undefined, 'sdm');
     db.prepare("INSERT INTO youtube_pending_complete (broadcast_id, attempts, created_at) VALUES ('bc-9', 0, '2026-11-05T00:00:00.000Z')").run();
     const asked: string[] = [];
     const leg = new RemoteYoutubeLeg({

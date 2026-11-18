@@ -122,9 +122,11 @@ class _State {
 }
 
 _State _step(_State s, FinanceEntry c) {
-  if (c.correctionKind == 'amount') return _State(s.fund, c.amountSen, false);
+  if (c.correctionKind == 'amount') {
+    return _State(s.fund, c.amountSen, s.voided);
+  }
   if (c.correctionKind == 'fund' && (c.toFundId ?? '').isNotEmpty) {
-    return _State(c.toFundId!, s.amount, false);
+    return _State(c.toFundId!, s.amount, s.voided);
   }
   if (c.correctionKind == 'void') return _State(s.fund, s.amount, true);
   return s;

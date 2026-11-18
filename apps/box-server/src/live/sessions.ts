@@ -1,12 +1,36 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { randomInt } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import { cleanYoutubeText, youtubeMetaFor } from '@surau/core';
-import type { KioskLive, LiveOutputs, LiveSource, LiveStartRequest, LiveStatus, YoutubeMeta, YoutubeVia } from '@surau/core';
+import type { Readable } from 'node:stream';
+import { audioPlanOf, cleanYoutubeText, normaliseAudioMix, youtubeMetaFor } from '@surau/core';
+import type {
+  AddedAudioId,
+  AlignState,
+  AudioCaps,
+  AudioPlan,
+  KioskLive,
+  LiveAudioMix,
+  LiveAudioSourceStatus,
+  LiveOutputs,
+  LiveSource,
+  LiveStartRequest,
+  LiveStatus,
+  LiveVideoSource,
+  YoutubeMeta,
+  YoutubeVia,
+} from '@surau/core';
 import { randomToken } from '../auth/crypto.ts';
 import { getItem } from '../content/store.ts';
 import { getSettings } from '../settingsStore.ts';
+import { Aligner, DEFAULT_INITIAL_DELAY_MS } from './align.ts';
+import type { AlignerOptions } from './align.ts';
+import { cameraPullUrl, cameraSecrets } from './camera.ts';
+import type { CameraRecord, CameraTestResult } from './camera.ts';
 import type { FirewallState } from './firewall.ts';
 import type { LiveRuntime, MediamtxPath } from './mediamtx.ts';
+import { LevelMeter } from './levels.ts';
+import { MONITOR_RATE, Mixer } from './mixer.ts';
+import type { MixerOptions, MixerStartConfig, MixerStatus, MixUnit, VolumeTarget } from './mixer.ts';
 import { KIOSK_AUDIO_PATH, Relay } from './relay.ts';
 import type { RelayOptions } from './relay.ts';
 
@@ -35,6 +59,11 @@ export const LIVE_MSG = {
   forbidden: 'Siaran ini dimulakan oleh peranti lain',
   rate: 'Terlalu banyak cubaan mula siaran. Cuba lagi sebentar lagi.',
   ytSignoutBusy: 'Siaran sedang berjalan. Hentikan siaran sebelum log keluar YouTube.',
+  cameraOff: 'Kamera luaran dimatikan di Tetapan',
+  cameraTestBusy: 'Ujian sambungan kamera sedang berjalan. Cuba lagi sebentar lagi.',
+  cameraNotSet: 'Kamera luaran belum disediakan',
+  cameraH265: 'Kamera H.265 hanya boleh disiarkan dari telefon Android. Untuk iPad, tukar kamera kepada H.264.',
+  audioUnsupported: 'Sumber audio ini tidak boleh ditukar semasa siaran berjalan',
 } as const;
 
 /** Start limiter: rolling hour. */
@@ -83,7 +112,76 @@ export interface LiveSessionsDeps {
   relayOptions?: Partial<RelayOptions>;
   /** Pause between tries to set the publisher user and passphrase again after a MediaMTX respawn (default 500). */
   reprovisionMs?: number;
+  /** The saved external camera (B1); also set later with `attachCamera`. Only the box reads the full address. */
+  camera?: CameraSource | null;
+  /** The box's capture device for "Mic-in pada kotak" (M1); null or absent: not available. */
+  boxInput?: () => { deviceName: string; device?: number } | null;
+  /** Test hooks: replace the combiner and the aligner. */
+  mixerFactory?: (o: MixerOptions) => MixerLike;
+  alignerFactory?: (o: AlignerOptions) => AlignerLike;
+  /** Test hook: extra options of every combiner (an ffmpeg stand-in, say). */
+  mixOptions?: Partial<MixerOptions>;
+  /** Combiner timings (plan 4.6); the defaults are the plan's. */
+  combiner?: Partial<CombinerTimings>;
 }
+
+/** The slice of CameraStore the sessions use. */
+export interface CameraSource {
+  get(): CameraRecord | null;
+  readonly lastTest: CameraTestResult | null;
+}
+
+/** The slice of Mixer the sessions use (a fake satisfies it too). */
+export interface MixerLike {
+  readonly monitor: Readable;
+  start(cfg: MixerStartConfig): void;
+  setDelay(id: AddedAudioId, ms: number): Promise<void>;
+  setVolume(id: VolumeTarget, pct: number): Promise<void>;
+  stop(): Promise<void>;
+  status(): MixerStatus;
+}
+
+/** The slice of Aligner the sessions use. */
+export interface AlignerLike {
+  start(): void;
+  stop(): void;
+  state(id: AddedAudioId): AlignState;
+  delayMs(id: AddedAudioId): number;
+  residualMs(id: AddedAudioId): number | undefined;
+  setManual(id: AddedAudioId): void;
+  reset(id: AddedAudioId): void;
+}
+
+export interface CombinerTimings {
+  /** Fixed delay of the unit input (picture and sound), so every added source is the earlier signal (plan 4.3a). */
+  headroomMs: number;
+  /** An added microphone gone this long leaves the graph (the picture must never stall behind it). */
+  micLostMs: number;
+  /** An added microphone must have been steady this long before it is added back. */
+  micSteadyMs: number;
+  /** After the picture arrives the combiner waits this long for the added microphone, then starts without it. */
+  micWaitMs: number;
+  /** The fade-in of an added source after its first lock (0: at once). */
+  fadeMs: number;
+  fadeSteps: number;
+  /** With Automatik, a camera that gave no picture this long is pulled with the other transport. */
+  transportSwitchMs: number;
+}
+
+const COMBINER_DEFAULTS: CombinerTimings = {
+  headroomMs: 2000,
+  micLostMs: 5000,
+  micSteadyMs: 3000,
+  micWaitMs: 8000,
+  fadeMs: 500,
+  fadeSteps: 5,
+  transportSwitchMs: 15_000,
+};
+
+/** MediaMTX paths of the box path (plan 4.6). */
+const CAM_PATH = 'surau-cam';
+const MIC_PATH = 'surau-mic';
+const IN_PATH = 'surau-in';
 
 /** The credentials never leave this object except in the start answer to the owning device and in the proxies. */
 interface Session {
@@ -126,12 +224,75 @@ interface Session {
   ingestMs: number;
   /** MediaMTX has not had the publisher path ready for `noVideoMs`: the app shows `no_video_from_device`. */
   noVideo: boolean;
+  /** The picture source and the audio mix as normalised at the start (and changed by `POST /api/live/audio`). */
+  video: LiveVideoSource;
+  mix: LiveAudioMix;
+  plan: AudioPlan;
+  /** The start request carried an audio mix (or the box mixes): the status reports it. */
+  reportAudio: boolean;
+  /** The box pulls the camera into `surau-cam` (iPad or web with Kamera luaran). */
+  pulled: boolean;
+  /** A combiner runs on the box (box-pulled camera, or Mic-in added to a device's own stream). */
+  combined: boolean;
+  unit: MixUnit | null;
+  /** Where the starting device publishes: `surau`, or `surau-mic` / `surau-in` when the box combines. */
+  publishPath: string;
+  mixUser: string;
+  mixPass: string;
+  cameraHasAudio: boolean;
+  /** The camera pull is being tried with this transport; `camAuto` lets the box switch to the other. */
+  camTransport: 'tcp' | 'udp';
+  camAuto: boolean;
+  camPatchedAtMs: number;
+  /** The unit (camera or ingest) and the iPad microphone as the last poll saw them. */
+  unitReady: boolean;
+  unitEverReady: boolean;
+  /** An ingest unit (a device's own stream) whose tracks were seen and hold no sound: the in-graph silent reference is used. */
+  ingestNoAudio: boolean;
+  /** The combiner state last logged. */
+  mixLogged: string;
+  /** The box capture device (Mic-in) as it was when the session started or Mic-in was chosen; the combiner never re-reads the live list. */
+  boxDevice: { deviceName: string; device?: number } | null;
+  unitReadySinceMs: number | null;
+  unitLastReadyAtMs: number;
+  micReady: boolean;
+  micEverReady: boolean;
+  micReadySinceMs: number | null;
+  micLostSinceMs: number | null;
+  /** No picture from the camera for `noVideoMs` (box-pulled sessions; the device watchdog `noVideo` is not used there). */
+  noCamera: boolean;
+  /** The last status poll of the starting device (a box-pulled live can outlive its controller). */
+  lastPollAtMs: number;
+  /** The running combiner and aligner (null while the unit is absent). */
+  mixer: MixerLike | null;
+  aligner: AlignerLike | null;
+  /** The added sources in the running graph, and the graph's signature (unit, unit audio, sources). */
+  graphAdded: Set<AddedAudioId>;
+  graphSig: string;
+  /** The volume last sent to the graph per added source, and the unit's. */
+  applied: Map<AddedAudioId, number>;
+  appliedUnit: number;
+  alignStates: Map<AddedAudioId, AlignState>;
+  fades: Map<AddedAudioId, NodeJS.Timeout[]>;
+  /** Serialises combiner starts and stops (two ffmpeg must never publish to `surau` at once). */
+  combinerOp: Promise<void>;
+  /** WHEP preview sessions of the starting device. */
+  previewIds: Set<string>;
+  /** The iPad's own camera is the unit (a mid-live switch of a box-pulled live); the camera pull keeps running. */
+  ownCamera: boolean;
+  /** Offset (ms) of the added microphone sent in a mix change while a camera without sound is mixed by hand; null = the saved setting. */
+  offsetMs: number | null;
+  /** Levels of the running combiner's sources (dBFS), measured on its monitor. */
+  meter: LevelMeter | null;
+  meterOff: (() => void) | null;
 }
 
 export interface StartResult {
   session: NonNullable<LiveStatus['session']>;
   ingest: {
     whip: string;
+    /** The MediaMTX path the device publishes to: `surau`, or `surau-mic` / `surau-in` when the box combines. */
+    path?: string;
     srt: { host: string; port: number; streamId: string; passphrase: string } | null;
   };
   /** `state: 'starting'` (additive): the broadcast is still being created; the box relay starts by itself when it is ready. */
@@ -165,15 +326,31 @@ export function parseStartRequest(body: unknown): LiveStartRequest {
     throw new LiveError(400, 'bad_request', LIVE_MSG.badRequest);
   };
   if (!isRecord(body)) return bad();
-  const { kuliahId, source, outputs, youtubeVia } = body;
+  const { kuliahId, source, outputs, youtubeVia, video, audio } = body;
   if (kuliahId !== null && (typeof kuliahId !== 'string' || kuliahId === '' || kuliahId.length > 100)) return bad();
   if (source !== 'android' && source !== 'web') return bad();
   if (!isRecord(outputs) || outputs.kiosk !== true || typeof outputs.youtube !== 'boolean') return bad();
   if (youtubeVia !== 'device' && youtubeVia !== 'box') return bad();
   // a browser cannot push RTMPS itself: its YouTube leg is always the box relay
   if (source === 'web' && outputs.youtube && youtubeVia !== 'box') return bad();
-  return { kuliahId: kuliahId as string | null, source, outputs: { kiosk: true, youtube: outputs.youtube }, youtubeVia };
+  // the picture source and the audio mix (plan 4.2); both optional so an older app still starts a live
+  if (video !== undefined && video !== 'phone' && video !== 'external') return bad();
+  if (audio !== undefined && !isRecord(audio)) return bad();
+  return {
+    kuliahId: kuliahId as string | null,
+    source,
+    outputs: { kiosk: true, youtube: outputs.youtube },
+    youtubeVia,
+    ...(video !== undefined ? { video } : {}),
+    ...(audio !== undefined ? { audio: audio as unknown as LiveAudioMix } : {}),
+  };
 }
+
+/** MediaMTX track names of a picture (the rest are sound). */
+const VIDEO_TRACK = /^(H264|H265|H\.264|H\.265|AV1|VP8|VP9|MPEG-4 Video|MPEG-1\/2 Video|M-JPEG|Motion JPEG)$/i;
+const isVideoTrack = (t: string): boolean => VIDEO_TRACK.test(t);
+const isH264 = (t: string): boolean => /^H\.?264$/i.test(t);
+const isH265 = (t: string): boolean => /^H\.?265$/i.test(t);
 
 export class LiveSessions {
   private session: Session | null = null;
@@ -191,6 +368,9 @@ export class LiveSessions {
   private starts: Array<{ at: number; deviceId: string }> = [];
 
   private readonly d: LiveSessionsDeps;
+  private camera: CameraSource | null;
+  private cameraBusy: (() => boolean) | null = null;
+  private readonly timing: CombinerTimings;
 
   /** How long without a picture before `no_video_from_device`: read fresh each check, so a settings change applies at once. */
   private noVideoMs(): number {
@@ -201,6 +381,8 @@ export class LiveSessions {
 
   constructor(deps: LiveSessionsDeps) {
     this.d = deps;
+    this.camera = deps.camera ?? null;
+    this.timing = { ...COMBINER_DEFAULTS, ...(deps.combiner ?? {}) };
     this.monitorMs = deps.monitorMs ?? 2000;
     this.idleMs = deps.idleTimeoutMs ?? 600_000;
     // MediaMTX keeps the publisher user and the SRT passphrase in memory only: a respawn loses them
@@ -209,8 +391,44 @@ export class LiveSessions {
 
   /** Sets the session's publisher user and SRT passphrase in MediaMTX. */
   private async provision(s: Session, api: NonNullable<LiveRuntime['api']>): Promise<void> {
-    await api.authUserAdd({ user: s.pubUser, pass: s.pubPass, permissions: [{ action: 'publish', path: PATH }] });
-    await api.pathsPatch(PATH, { srtPublishPassphrase: s.passphrase ?? '' });
+    await api.authUserAdd({ user: s.pubUser, pass: s.pubPass, permissions: [{ action: 'publish', path: s.publishPath }] });
+    await api.pathsPatch(s.publishPath, { srtPublishPassphrase: s.passphrase ?? '' });
+    if (s.combined) {
+      // the combiner's own ffmpeg: reads the unit and the added microphone, publishes the mix; loopback only
+      await api.authUserAdd({
+        user: s.mixUser,
+        pass: s.mixPass,
+        permissions: [
+          { action: 'read', path: CAM_PATH },
+          { action: 'read', path: MIC_PATH },
+          { action: 'read', path: IN_PATH },
+          { action: 'publish', path: PATH },
+        ],
+        ips: ['127.0.0.1', '::1'],
+      });
+    }
+    if (s.pulled) await this.patchCamera(s, api, s.camTransport);
+  }
+
+  /** Points `surau-cam` at the camera (the address reaches MediaMTX only as a JSON string through its API). */
+  private async patchCamera(s: Session, api: NonNullable<LiveRuntime['api']>, transport: 'tcp' | 'udp'): Promise<void> {
+    const record = this.camera?.get() ?? null;
+    if (record === null) return;
+    const url = cameraPullUrl(record);
+    this.d.runtime?.secrets.add(...cameraSecrets({ ...record, url }));
+    await api.pathsPatch(CAM_PATH, { source: url, sourceOnDemand: false, rtspTransport: transport });
+    s.camTransport = transport;
+    s.camPatchedAtMs = this.d.now().getTime();
+  }
+
+  /** Gives the sessions the saved camera (the store is made after them in app.ts). */
+  /** The camera test uses the one test path of MediaMTX: a live with the external camera waits until it is done. */
+  attachCameraBusy(busy: (() => boolean) | null): void {
+    this.cameraBusy = busy;
+  }
+
+  attachCamera(camera: CameraSource | null): void {
+    this.camera = camera;
   }
 
   /**
@@ -253,14 +471,19 @@ export class LiveSessions {
 
   /** The state the kiosk shows. Computed on every call from the cached ingest state and the live settings. */
   kioskLive(): KioskLive {
-    const settings = getSettings(this.d.db).liveOnKiosk;
+    const settings = getSettings(this.d.db, LOCAL_SURAU_ID).liveOnKiosk;
     const s = this.session;
     const audio = settings.audio === true;
     const volume = typeof settings.volume === 'number' ? settings.volume : 50;
     const path = this.kioskPath();
-    if (s === null || !s.ready || settings.enabled !== true) {
+    if (s === null || settings.enabled !== true) {
       return { live: false, since: null, kuliah: s?.kuliah ?? null, audio, volume, path };
     }
+    // a box-pulled camera that was showing and is lost: the kiosk keeps the last picture with the waiting card
+    if (!s.ready && s.pulled && s.unitEverReady && s.everReadyAtMs !== null) {
+      return { live: true, since: s.readySince ?? new Date(s.everReadyAtMs).toISOString(), kuliah: s.kuliah, audio, volume, waiting: true, path };
+    }
+    if (!s.ready) return { live: false, since: null, kuliah: s.kuliah, audio, volume, path };
     return { live: true, since: s.readySince, kuliah: s.kuliah, audio, volume, path };
   }
 
@@ -282,8 +505,20 @@ export class LiveSessions {
   private warnings(): string[] {
     const out: string[] = [];
     if (isBlocked(this.d.firewall?.state() ?? 'unknown')) out.push(MEDIA_PORTS_BLOCKED);
-    if (this.session?.noVideo === true) out.push(NO_VIDEO_FROM_DEVICE);
-    if (this.session?.ytWarning != null) out.push(this.session.ytWarning);
+    const s = this.session;
+    if (s?.pulled === true && !s.ownCamera) {
+      if (s.noCamera) out.push('no_video_from_camera');
+    } else if (s?.noVideo === true) out.push(NO_VIDEO_FROM_DEVICE);
+    if (s?.ytWarning != null) out.push(s.ytWarning);
+    if (s !== null && s.reportAudio) {
+      const sources = this.audioStatus(s);
+      if (sources.some((x) => x.id !== 'camera' && x.state === 'lost')) out.push('audio_source_lost');
+      if (sources.some((x) => x.align?.state === 'searching')) out.push('audio_align_searching');
+      if (sources.some((x) => x.align?.state === 'failed')) out.push('audio_align_failed');
+      if (s.mixer?.status().state === 'failed') out.push('audio_mix_failed');
+      if (s.plan.notes.includes('audio_all_muted')) out.push('audio_all_muted');
+      if (s.plan.notes.includes('camera_no_audio')) out.push('camera_no_audio');
+    }
     return out;
   }
 
@@ -301,6 +536,8 @@ export class LiveSessions {
         tools: { mediamtx: rt?.tools.mediamtx != null, ffmpeg: rt?.tools.ffmpeg != null },
       },
       warnings: this.warnings(),
+      ...(s !== null ? { video: s.video } : {}),
+      ...(s !== null && s.reportAudio ? { audio: { sources: this.audioStatus(s) } } : {}),
       ingest: {
         ready: s?.ready === true,
         protocol: s?.ready !== true ? null : s.ingestSource?.type === 'webRTCSession' ? 'whip' : s.ingestSource?.type === 'srtConn' ? 'srt' : null,
@@ -336,12 +573,26 @@ export class LiveSessions {
   }
 
   /** Credentials for the WHIP proxy; null unless this device owns the open session. Throws the right refusal otherwise. */
-  publisherFor(deviceId: string): { sessionId: string; authorization: string; whipIds: Set<string> } {
+  publisherFor(deviceId: string): { sessionId: string; authorization: string; whipIds: Set<string>; path: string } {
     const s = this.session;
     if (s === null) throw new LiveError(409, 'no_session', LIVE_MSG.noSession);
     if (s.deviceId !== deviceId) throw new LiveError(403, 'not_owner', LIVE_MSG.forbidden);
     if (s.source !== 'web') throw new LiveError(409, 'wrong_source', LIVE_MSG.wrongSource);
-    return { sessionId: s.id, authorization: `Basic ${Buffer.from(`${s.pubUser}:${s.pubPass}`).toString('base64')}`, whipIds: s.whipIds };
+    return { sessionId: s.id, authorization: `Basic ${Buffer.from(`${s.pubUser}:${s.pubPass}`).toString('base64')}`, whipIds: s.whipIds, path: s.publishPath };
+  }
+
+  /** The starting device's preview of the combined stream (WHEP of `surau`); throws the right refusal for anyone else. */
+  previewFor(deviceId: string): { sessionId: string; path: string; ids: Set<string> } {
+    const s = this.session;
+    if (s === null) throw new LiveError(409, 'no_session', LIVE_MSG.noSession);
+    if (s.deviceId !== deviceId) throw new LiveError(403, 'not_owner', LIVE_MSG.forbidden);
+    return { sessionId: s.id, path: PATH, ids: s.previewIds };
+  }
+
+  /** The starting device polled the status: a box-pulled live without this for 10 minutes ends by itself. */
+  heartbeat(deviceId: string): void {
+    const s = this.session;
+    if (s !== null && s.deviceId === deviceId) s.lastPollAtMs = this.d.now().getTime();
   }
 
   /** The stream key held for the box relay (Task 5); null when the leg is not via the box. */
@@ -414,7 +665,7 @@ export class LiveSessions {
   private syncAudioLeg(): void {
     const s = this.session;
     if (s === null) return;
-    const settings = getSettings(this.d.db).liveOnKiosk;
+    const settings = getSettings(this.d.db, LOCAL_SURAU_ID).liveOnKiosk;
     const want = settings.enabled === true && settings.audio === true;
     if (!want) {
       const leg = s.audioLeg;
@@ -468,6 +719,7 @@ export class LiveSessions {
       // the same device asking again gets its own session back (a reconnect after an app restart)
       // (a reconnect is not counted by the start limiter)
       this.refreshFirewall();
+      existing.lastPollAtMs = this.d.now().getTime();
       return (this.starting ?? Promise.resolve(null)).then(() => this.answer(existing, lanHost, isBlocked(this.d.firewall?.state() ?? 'unknown') ? [MEDIA_PORTS_BLOCKED] : []));
     }
     if (!this.startAllowed(deviceId)) return Promise.reject(new LiveError(429, 'live_rate', LIVE_MSG.rate));
@@ -488,9 +740,10 @@ export class LiveSessions {
 
   private async doStart(req: LiveStartRequest, actor: string, deviceId: string, lanHost: string): Promise<StartResult> {
     const rt = this.d.runtime;
-    const settings = getSettings(this.d.db);
+    const settings = getSettings(this.d.db, LOCAL_SURAU_ID);
     if (settings.liveOnKiosk.enabled !== true) throw new LiveError(409, 'live_off', LIVE_MSG.liveOff);
-    const needsFfmpeg = req.outputs.youtube && req.youtubeVia === 'box';
+    const mixing = this.planFor(req, settings.liveCamera);
+    const needsFfmpeg = (req.outputs.youtube && req.youtubeVia === 'box') || mixing.combined;
     if (rt === null || rt.tools.mediamtx === null || (needsFfmpeg && rt.tools.ffmpeg === null)) {
       throw new LiveError(503, 'tools_missing', LIVE_MSG.toolsMissing);
     }
@@ -501,13 +754,13 @@ export class LiveSessions {
     let meta: YoutubeMeta | null = null;
     const surauName = settings.surauInfo.name.trim();
     if (req.kuliahId !== null) {
-      const k = getItem(this.d.db, 'kuliah', req.kuliahId);
+      const k = getItem(this.d.db, 'kuliah', req.kuliahId, LOCAL_SURAU_ID);
       if (k === null) throw new LiveError(404, 'kuliah_not_found', LIVE_MSG.noKuliah);
       if (k.status !== 'aktif') throw new LiveError(409, 'kuliah_batal', LIVE_MSG.kuliahBatal);
-      const p = getItem(this.d.db, 'penceramah', k.penceramahId);
+      const p = getItem(this.d.db, 'penceramah', k.penceramahId, LOCAL_SURAU_ID);
       kuliah = { label: k.label, penceramah: p?.name ?? '', topic: k.topic !== undefined && k.topic !== '' ? k.topic : null };
       if (p !== null) {
-        const kitab = k.kitabId !== undefined ? getItem(this.d.db, 'kitab', k.kitabId) : null;
+        const kitab = k.kitabId !== undefined ? getItem(this.d.db, 'kitab', k.kitabId, LOCAL_SURAU_ID) : null;
         meta = youtubeMetaFor({ kuliah: k, penceramah: p, kitab, surauName, settings: settings.liveYoutube, now: this.d.now() });
       }
     }
@@ -527,6 +780,9 @@ export class LiveSessions {
       kuliah,
       pubUser: `pub-${id}`,
       pubPass: randomAlnum(32),
+      // MediaMTX user-name and password rules: alphanumeric only, so the ffmpeg address needs no escaping
+      mixUser: `mix-${id}`,
+      mixPass: randomAlnum(32),
       passphrase: req.source === 'android' ? randomAlnum(24) : null,
       broadcastId: null,
       watchUrl: null,
@@ -547,12 +803,51 @@ export class LiveSessions {
       lastBytesAtMs: nowMs,
       ingestMs: 0,
       noVideo: false,
+      video: mixing.video,
+      mix: mixing.mix,
+      plan: mixing.plan,
+      reportAudio: req.audio !== undefined || mixing.combined,
+      pulled: mixing.pulled,
+      combined: mixing.combined,
+      unit: mixing.unit,
+      publishPath: mixing.publishPath,
+      cameraHasAudio: mixing.cameraHasAudio,
+      camTransport: mixing.transport,
+      camAuto: mixing.auto,
+      camPatchedAtMs: nowMs,
+      unitReady: false,
+      unitEverReady: false,
+      ingestNoAudio: false,
+      mixLogged: 'off',
+      boxDevice: mixing.boxDevice,
+      unitReadySinceMs: null,
+      unitLastReadyAtMs: nowMs,
+      micReady: false,
+      micEverReady: false,
+      micReadySinceMs: null,
+      micLostSinceMs: null,
+      noCamera: false,
+      lastPollAtMs: nowMs,
+      mixer: null,
+      aligner: null,
+      graphAdded: new Set(),
+      graphSig: '',
+      applied: new Map(),
+      appliedUnit: -1,
+      alignStates: new Map(),
+      fades: new Map(),
+      combinerOp: Promise.resolve(),
+      previewIds: new Set(),
+      ownCamera: false,
+      offsetMs: null,
+      meter: null,
+      meterOff: null,
     };
     // claim the box before any await: a second start now sees the session and is refused
     this.session = session;
     this.starts.push({ at: nowMs, deviceId });
     // MediaMTX logs the SRT stream id: its log is scrubbed of these for good
-    this.d.runtime?.secrets.add(session.pubPass, session.passphrase);
+    this.d.runtime?.secrets.add(session.pubPass, session.passphrase, session.mixPass);
     try {
       // an earlier session's clean-up must finish first: it clears the shared passphrase and its own user
       await this.cleanup;
@@ -587,9 +882,12 @@ export class LiveSessions {
         outputs: session.outputs,
         youtubeVia: session.youtubeVia,
         broadcastId: session.broadcastId,
+        video: session.video,
+        audio: session.mix,
       });
       // the no-picture window starts now, when the phone is about to get its ingest URL, not when the session was claimed
       session.lastReadyAtMs = this.d.now().getTime();
+      session.unitLastReadyAtMs = session.lastReadyAtMs;
       this.startMonitor();
       this.publishKiosk();
       const answer = this.answer(session, lanHost, warnings);
@@ -640,10 +938,11 @@ export class LiveSessions {
       session: { id: s.id, kuliahId: s.kuliahId, source: s.source, outputs: s.outputs, youtubeVia: s.youtubeVia, startedAt: s.startedAt, startedBy: s.startedBy },
       ingest: {
         whip: '/api/live/whip',
+        path: s.publishPath,
         srt:
           s.passphrase === null
             ? null
-            : { host: lanHost, port: 8890, streamId: `publish:${PATH}:${s.pubUser}:${s.pubPass}`, passphrase: s.passphrase },
+            : { host: lanHost, port: 8890, streamId: `publish:${s.publishPath}:${s.pubUser}:${s.pubPass}`, passphrase: s.passphrase },
       },
       youtube: s.ytPending
         ? { via: s.youtubeVia, ingest: null, key: null, state: 'starting' }
@@ -665,7 +964,7 @@ export class LiveSessions {
    * caller at once; with `background` the slow clean-up (ffmpeg, MediaMTX users, YouTube) runs after this
    * returns (the HTTP stop answers promptly) and a new start waits for it.
    */
-  async stop(id: string | undefined, actor: string, reason = 'stopped', opts: { background?: boolean } = {}): Promise<{ stopped: boolean }> {
+  async stop(id: string | undefined, actor: string, reason = 'stopped', opts: { background?: boolean; emergency?: boolean } = {}): Promise<{ stopped: boolean }> {
     const s = this.session;
     if (s === null || (id !== undefined && id !== s.id)) return { stopped: false };
     // a session still being created is waited for so its credentials are not orphaned
@@ -684,6 +983,8 @@ export class LiveSessions {
       reason,
       ingestSeconds: Math.round(s.ingestMs / 1000),
     });
+    // the Pentadbir's override of a live another device started: both actors are on record (plan 4.1, 6)
+    if (opts.emergency === true) this.audit('live', 'emergency-stop', actor, null, { sessionId: s.id, startedBy: s.startedBy, stoppedBy: actor });
     // the kiosk goes dark at once; the box clean-up follows
     this.publishKiosk();
     const job = this.teardown(s);
@@ -698,6 +999,9 @@ export class LiveSessions {
     const legs = [s.relay, s.audioLeg];
     s.audioLeg = null;
     await Promise.all(legs.map((leg) => leg?.stop().catch(() => undefined)));
+    // the combiner too: its ffmpeg reads with the per-session user that is removed next
+    await s.combinerOp.catch(() => undefined);
+    await this.destroyCombiner(s).catch(() => undefined);
     await this.release(s);
     if (s.broadcastId !== null) {
       try {
@@ -712,20 +1016,32 @@ export class LiveSessions {
   private async release(s: Session): Promise<void> {
     const api = this.d.runtime?.api;
     if (!api) return;
-    try {
-      const p = await api.pathGet(PATH);
-      if (p.source !== null) await api.kickPublisher(p.source);
-    } catch {
-      /* MediaMTX may already be gone */
+    for (const path of new Set([s.publishPath, ...(s.pulled ? [MIC_PATH, IN_PATH] : []), ...(s.combined ? [PATH] : [])])) {
+      try {
+        const p = await api.pathGet(path);
+        if (p.source !== null) await api.kickPublisher(p.source);
+      } catch {
+        /* MediaMTX may already be gone */
+      }
     }
-    try {
-      await api.authUserRemove(s.pubUser);
-    } catch {
-      console.warn('live: could not remove the publisher user (reason: mediamtx_unreachable)');
+    if (s.pulled) {
+      try {
+        // the camera address leaves MediaMTX's memory with the session
+        await api.pathsPatch(CAM_PATH, { source: 'publisher' });
+      } catch {
+        console.warn('live: the camera path could not be put back (reason: mediamtx_unreachable)');
+      }
+    }
+    for (const user of s.combined ? [s.pubUser, s.mixUser] : [s.pubUser]) {
+      try {
+        await api.authUserRemove(user);
+      } catch {
+        console.warn('live: could not remove a session user (reason: mediamtx_unreachable)');
+      }
     }
     if (s.passphrase !== null) {
       try {
-        await api.pathsPatch(PATH, { srtPublishPassphrase: '' });
+        await api.pathsPatch(s.publishPath, { srtPublishPassphrase: '' });
       } catch {
         /* the user is gone, so the passphrase alone opens nothing */
       }
@@ -794,6 +1110,21 @@ export class LiveSessions {
       s.ready = ready;
       // the watchdog: no picture for noVideoMs since the start (or since it vanished); cleared when it returns
       s.noVideo = !ready && nowMs - s.lastReadyAtMs >= this.noVideoMs();
+      if (s.combined) {
+        await this.pollInputs(s, nowMs);
+        this.logMixState(s);
+        if (this.session !== s) return;
+        if (s.pulled) s.noCamera = !s.ownCamera && !s.unitReady && nowMs - s.unitLastReadyAtMs >= this.noVideoMs();
+      }
+      // the camera has been gone (or never came) for 10 minutes; a controller that stopped polling for 10 minutes
+      if (s.pulled && !s.unitReady && nowMs - s.unitLastReadyAtMs >= this.idleMs) {
+        await this.stop(s.id, 'system', 'camera_lost');
+        return;
+      }
+      if (s.pulled && nowMs - s.lastPollAtMs >= this.idleMs) {
+        await this.stop(s.id, 'system', 'controller_lost');
+        return;
+      }
       if (!ready && nowMs - s.lastReadyAtMs >= this.idleMs) {
         await this.stop(s.id, 'system', 'timeout');
         return;
@@ -816,6 +1147,453 @@ export class LiveSessions {
     } catch {
       /* a broken listener never breaks live */
     }
+  }
+
+  /* ------------------------------------------------------------------ video source, audio mix, combiner (plan 4.5, 4.6) */
+
+  /** What the start request means: the picture source, the normalised mix and where the box combines. Throws the refusals. */
+  private planFor(
+    req: LiveStartRequest,
+    cam: { enabled: boolean; transport: 'auto' | 'tcp' | 'udp' },
+  ): {
+    video: LiveVideoSource;
+    mix: LiveAudioMix;
+    plan: AudioPlan;
+    pulled: boolean;
+    combined: boolean;
+    boxDevice: { deviceName: string; device?: number } | null;
+    unit: MixUnit | null;
+    publishPath: string;
+    cameraHasAudio: boolean;
+    transport: 'tcp' | 'udp';
+    auto: boolean;
+  } {
+    const video: LiveVideoSource = req.video ?? 'phone';
+    let cameraHasAudio = false;
+    const test = this.camera?.lastTest ?? null;
+    if (video === 'external') {
+      if (cam.enabled !== true) throw new LiveError(409, 'camera_off', LIVE_MSG.cameraOff);
+      if ((this.camera?.get() ?? null) === null) throw new LiveError(409, 'camera_not_set', LIVE_MSG.cameraNotSet);
+      if (this.cameraBusy?.() === true) throw new LiveError(409, 'camera_test_busy', LIVE_MSG.cameraTestBusy);
+      // the box can only decode H.264 (plan 3.3); the phone path decodes H.265 itself
+      if (req.source === 'web' && test !== null && (test.code === 'codec' || (test.codecs.some(isH265) && !test.codecs.some(isH264)))) {
+        throw new LiveError(409, 'camera_h265', LIVE_MSG.cameraH265);
+      }
+      cameraHasAudio = test?.hasAudio ?? true;
+    }
+    const boxDevice = this.d.boxInput?.() ?? null;
+    const caps = this.capsFor(req.source, cameraHasAudio, boxDevice);
+    const mix = normaliseAudioMix(video, req.audio, caps);
+    const plan = audioPlanOf(video, mix, caps);
+    const pulled = video === 'external' && req.source === 'web';
+    const combined = pulled || plan.added.includes('boxInput');
+    return {
+      video,
+      mix,
+      plan,
+      pulled,
+      combined,
+      boxDevice,
+      unit: pulled ? 'camera' : combined ? 'ingest' : null,
+      publishPath: pulled ? MIC_PATH : combined ? IN_PATH : PATH,
+      cameraHasAudio,
+      transport: cam.transport === 'udp' ? 'udp' : cam.transport === 'tcp' ? 'tcp' : (test?.transport ?? 'tcp'),
+      auto: cam.transport === 'auto',
+    };
+  }
+
+  private capsFor(runner: LiveSource, cameraHasAudio: boolean, boxDevice: Session['boxDevice']): AudioCaps {
+    return { cameraHasAudio, deviceMic: true, boxInput: boxDevice !== null, runner };
+  }
+
+  /** The camera showed or lost its audio track: the mix and the plan follow. */
+  private replan(s: Session): void {
+    const caps = this.capsFor(s.source, s.cameraHasAudio, s.boxDevice);
+    s.mix = normaliseAudioMix(s.video, s.mix, caps);
+    s.plan = audioPlanOf(s.video, s.mix, caps);
+  }
+
+  /** How the unit enters the graph. An ingest unit (a device's own stream) always carries sound: the box mutes it for "Mic-in only". */
+  private unitCfg(s: Session): { unit: MixUnit; unitHasAudio: boolean; unitVolume: number } {
+    if (s.unit === 'camera') {
+      const has = s.plan.reference === 'camera';
+      return { unit: 'camera', unitHasAudio: has, unitVolume: has ? s.mix.camera.volume : 0 };
+    }
+    // a track the stream carries is always consumed (volume 0 when nothing phone-side is audible); the silent source only when it has none
+    const phoneSide = this.phoneSide(s);
+    return { unit: 'ingest', unitHasAudio: !s.ingestNoAudio, unitVolume: !s.ingestNoAudio && phoneSide.some((m) => m.enabled && m.volume > 0) ? 100 : 0 };
+  }
+
+  /** The sources the phone mixes into its own stream (the box never reads `surau-mic` for an ingest unit). */
+  private phoneSide(s: Session): LiveAudioMix[keyof LiveAudioMix][] {
+    return s.video === 'external' ? [s.mix.camera, s.mix.deviceMic] : [s.mix.deviceMic];
+  }
+
+  /** An ingest unit that carries no reference sound: nothing phone-side is on, or its tracks hold no audio. */
+  private ingestSilent(s: Session): boolean {
+    return s.unit === 'ingest' && (s.ingestNoAudio || !this.phoneSide(s).some((m) => m.enabled));
+  }
+
+  private alignMode(s: Session, added: AddedAudioId[]): 'auto' | 'manual' | 'none' {
+    if (added.length === 0) return 'none';
+    if (s.unit === 'ingest') return this.ingestSilent(s) ? 'manual' : 'auto';
+    return s.plan.align === 'manual' ? 'manual' : 'auto';
+  }
+
+  /** One line per change of the combiner's state (never an address, a login or the error text of ffmpeg). */
+  private logMixState(s: Session): void {
+    const st = s.mixer?.status().state ?? 'off';
+    if (st === s.mixLogged) return;
+    s.mixLogged = st;
+    if (st === 'failed' || st === 'retrying') console.warn(`live: the combiner is ${st}`);
+  }
+
+  /** Reads the unit and the added microphone from MediaMTX, then lets the combiner follow. */
+  private async pollInputs(s: Session, nowMs: number): Promise<void> {
+    const api = this.d.runtime?.api;
+    if (!api || s.unit === null) return;
+    let unit: MediamtxPath;
+    let mic: MediamtxPath | null = null;
+    try {
+      unit = await api.pathGet(s.unit === 'camera' ? CAM_PATH : IN_PATH);
+      if (s.pulled && s.unit === 'camera' && s.plan.added.includes('deviceMic')) mic = await api.pathGet(MIC_PATH);
+    } catch {
+      return; // MediaMTX did not answer: keep what is known
+    }
+    if (this.session !== s) return;
+    s.unitReady = unit.ready;
+    if (unit.ready) {
+      s.unitEverReady = true;
+      s.unitLastReadyAtMs = nowMs;
+      s.unitReadySinceMs ??= nowMs;
+    } else {
+      s.unitReadySinceMs = null;
+    }
+    // the tracks of the pulled camera say whether it has sound (the last test only guesses)
+    if (s.pulled && s.unit === 'camera' && unit.ready && unit.tracks.length > 0) {
+      const has = unit.tracks.some((t) => !isVideoTrack(t));
+      if (has !== s.cameraHasAudio) {
+        s.cameraHasAudio = has;
+        this.replan(s);
+      }
+    }
+    // the tracks of a device's own stream: a picture without sound uses the silent reference (a tracks list that is still empty says nothing)
+    if (s.unit === 'ingest' && unit.ready && unit.tracks.length > 0) s.ingestNoAudio = !unit.tracks.some((t) => !isVideoTrack(t));
+    if (mic !== null) {
+      s.micReady = mic.ready;
+      if (mic.ready) {
+        s.micEverReady = true;
+        s.micReadySinceMs ??= nowMs;
+        s.micLostSinceMs = null;
+      } else {
+        s.micReadySinceMs = null;
+        s.micLostSinceMs ??= nowMs;
+      }
+    }
+    // Automatik: TCP first, then UDP when no picture comes (and back again; a camera that never answered keeps being tried)
+    if (s.pulled && s.unit === 'camera' && !unit.ready && s.camAuto && nowMs - s.camPatchedAtMs >= this.timing.transportSwitchMs) {
+      try {
+        await this.patchCamera(s, api, s.camTransport === 'tcp' ? 'udp' : 'tcp');
+      } catch {
+        /* the next poll tries again */
+      }
+    }
+    await this.reconcile(s, nowMs);
+  }
+
+  /** Brings the combiner in line with the unit, the microphone and the plan. Serialised: two ffmpeg never publish together. */
+  private reconcile(s: Session, nowMs: number): Promise<void> {
+    const run = s.combinerOp.then(
+      () => this.reconcileNow(s, nowMs),
+      () => this.reconcileNow(s, nowMs),
+    );
+    s.combinerOp = run.catch(() => undefined);
+    return run;
+  }
+
+  private async reconcileNow(s: Session, nowMs: number): Promise<void> {
+    if (this.session !== s || !s.combined) return;
+    if (!s.unitReady) {
+      // the camera is gone: the combiner waits (its ffmpeg would only retry against a path that is not there)
+      if (s.mixer !== null) await this.destroyCombiner(s);
+      return;
+    }
+    const wantMic = s.pulled && s.unit === 'camera' && s.plan.added.includes('deviceMic');
+    let micIn = s.graphAdded.has('deviceMic');
+    if (s.mixer === null) {
+      // the first start waits a little for the iPad microphone, then goes on without it
+      if (wantMic && !s.micReady && s.unitReadySinceMs !== null && nowMs - s.unitReadySinceMs < this.timing.micWaitMs) return;
+      micIn = wantMic && s.micReady;
+    } else if (!wantMic) {
+      micIn = false;
+    } else if (micIn && !s.micReady && s.micLostSinceMs !== null && nowMs - s.micLostSinceMs >= this.timing.micLostMs) {
+      micIn = false; // a stalled input must never stall the picture
+    } else if (!micIn && s.micReady && s.micReadySinceMs !== null && nowMs - s.micReadySinceMs >= this.timing.micSteadyMs) {
+      micIn = true; // steady again: added back, held out until the next lock
+    }
+    // the added microphone is read from `surau-mic` only when the box pulls the camera; an ingest unit's phone mic is phone-side
+    // Mic-in needs the device captured at the start: without it the input is left out (a status warning says so), never a throw
+    const added = s.plan.added.filter((id) => (id !== 'deviceMic' || (s.pulled && s.unit === 'camera' && micIn)) && (id !== 'boxInput' || s.boxDevice !== null));
+    const cfg = this.unitCfg(s);
+    const sig = `${cfg.unit}|${cfg.unitHasAudio ? 1 : 0}|${added.join(',')}|${this.alignMode(s, added)}`;
+    if (s.mixer !== null && sig === s.graphSig) return;
+    await this.destroyCombiner(s);
+    if (this.session !== s || !s.unitReady) return;
+    this.buildCombiner(s, cfg, added, sig);
+  }
+
+  private buildCombiner(s: Session, cfg: { unit: MixUnit; unitHasAudio: boolean; unitVolume: number }, added: AddedAudioId[], sig: string): void {
+    const rt = this.d.runtime;
+    const ffmpegPath = this.d.mixOptions?.ffmpegPath ?? rt?.tools.ffmpeg ?? null;
+    if (ffmpegPath === null) return;
+    const mode = this.alignMode(s, added);
+    const headroom = this.timing.headroomMs;
+    const win = process.platform === 'win32';
+    const input = added.includes('boxInput') ? s.boxDevice : null;
+    const mixer = (this.d.mixerFactory ?? ((o: MixerOptions) => new Mixer(o)))({
+      ffmpegPath,
+      platform: win ? 'windows' : 'android',
+      headroomMs: headroom,
+      rtspUser: s.mixUser,
+      rtspPass: s.mixPass,
+      ...(win ? { zmqPortFn: () => randomInt(20000, 40000) } : {}),
+      ...(input !== null ? { deviceName: input.deviceName, ...(input.device !== undefined ? { device: input.device } : {}) } : {}),
+      // the camera can be gone for minutes: keep retrying with short pauses, never give up
+      backoffMaxMs: 5000,
+      maxFailures: 1_000_000,
+      ...(this.d.mixOptions ?? {}),
+    });
+    s.mixer = mixer;
+    s.graphAdded = new Set(added);
+    s.graphSig = sig;
+    s.applied = new Map();
+    s.alignStates = new Map();
+    s.appliedUnit = cfg.unitVolume;
+    const audible = cfg.unitHasAudio && cfg.unitVolume > 0;
+    const initial = (id: AddedAudioId): number => (mode === 'manual' ? headroom + this.settingsOffset(id, s) : DEFAULT_INITIAL_DELAY_MS);
+    // an added source starts held out of the mix (volume 0 in the graph) while the reference is audible, until it locks
+    for (const id of added) {
+      const held = audible && mode !== 'manual';
+      s.applied.set(id, held ? 0 : s.mix[id].volume);
+      s.alignStates.set(id, mode === 'manual' ? 'manual' : 'searching');
+    }
+    let aligner: AlignerLike | null = null;
+    if (added.length > 0) {
+      aligner = (this.d.alignerFactory ?? ((o: AlignerOptions) => new Aligner(o)))({
+        monitor: mixer.monitor,
+        added,
+        sampleRate: MONITOR_RATE,
+        maxLagMs: headroom + 2000,
+        initialDelayMs: DEFAULT_INITIAL_DELAY_MS,
+        apply: (id, ms) => void mixer.setDelay(id, ms),
+        onState: (id, st) => this.onAlignState(s, mixer, id, st),
+      });
+    }
+    s.aligner = aligner;
+    mixer.start({
+      unit: cfg.unit,
+      unitHasAudio: cfg.unitHasAudio,
+      unitVolume: cfg.unitVolume,
+      added: added.map((id) => ({ id, initialDelayMs: initial(id), volume: s.mix[id].volume })),
+    });
+    aligner?.start();
+    const meter = new LevelMeter([cfg.unit === 'camera' ? 'camera' : 'deviceMic', ...added], MONITOR_RATE, () => this.d.now().getTime());
+    const onData = (chunk: Buffer): void => meter.feed(chunk);
+    const onRestart = (): void => meter.reset();
+    mixer.monitor.on('data', onData);
+    mixer.monitor.on('restart', onRestart);
+    s.meter = meter;
+    s.meterOff = (): void => {
+      mixer.monitor.off('data', onData);
+      mixer.monitor.off('restart', onRestart);
+    };
+    if (mode === 'manual') for (const id of added) aligner?.setManual(id);
+  }
+
+  /** The fixed fallback offset of an added source (a unit with no audio track), 0 to 2000 ms. */
+  private settingsOffset(id: AddedAudioId, s?: Session): number {
+    if (id === 'deviceMic' && s?.offsetMs != null) return s.offsetMs;
+    const v = getSettings(this.d.db, LOCAL_SURAU_ID).liveCamera?.avOffsetMs?.[id];
+    return typeof v === 'number' && Number.isFinite(v) ? Math.min(2000, Math.max(0, Math.round(v))) : 0;
+  }
+
+  private async destroyCombiner(s: Session): Promise<void> {
+    for (const timers of s.fades.values()) for (const t of timers) clearTimeout(t);
+    s.fades.clear();
+    const mixer = s.mixer;
+    const aligner = s.aligner;
+    s.mixer = null;
+    s.aligner = null;
+    s.graphAdded = new Set();
+    s.graphSig = '';
+    s.meterOff?.();
+    s.meter = null;
+    s.meterOff = null;
+    aligner?.stop();
+    await mixer?.stop().catch(() => undefined);
+  }
+
+  /** An alignment state changed: a lock lets the source in (a fade), a new search holds it out again while the reference plays. */
+  private onAlignState(s: Session, mixer: MixerLike, id: AddedAudioId, st: AlignState): void {
+    if (s.mixer !== mixer) return; // a combiner that was replaced
+    s.alignStates.set(id, st);
+    this.syncVolumes(s, true);
+  }
+
+  /**
+   * The volume every added source should have now. Held out (0) while the reference is audible and the source is not
+   * aligned; otherwise the user's volume. Rising from 0 after a lock is a short fade, anything else is at once.
+   */
+  private syncVolumes(s: Session, fade: boolean): void {
+    const mixer = s.mixer;
+    if (mixer === null) return;
+    const cfg = this.unitCfg(s);
+    if (cfg.unitVolume !== s.appliedUnit) {
+      s.appliedUnit = cfg.unitVolume;
+      void mixer.setVolume('unit', cfg.unitVolume);
+    }
+    const audible = cfg.unitHasAudio && cfg.unitVolume > 0;
+    for (const id of s.graphAdded) {
+      const st = s.alignStates.get(id) ?? 'searching';
+      const held = audible && st !== 'locked' && st !== 'holding' && st !== 'manual';
+      const target = held ? 0 : s.mix[id].volume;
+      const prev = s.applied.get(id) ?? 0;
+      if (target === prev) continue;
+      for (const t of s.fades.get(id) ?? []) clearTimeout(t);
+      s.fades.delete(id);
+      s.applied.set(id, target);
+      const { fadeMs, fadeSteps } = this.timing;
+      if (fade && prev === 0 && target > 0 && fadeMs > 0 && fadeSteps > 1) {
+        const timers: NodeJS.Timeout[] = [];
+        for (let k = 1; k <= fadeSteps; k++) {
+          const step = k === fadeSteps ? target : Math.round((target * k) / fadeSteps);
+          const t = setTimeout(
+            () => {
+              if (s.mixer === mixer) void mixer.setVolume(id, step);
+            },
+            Math.round((fadeMs * (k - 1)) / (fadeSteps - 1)),
+          );
+          t.unref();
+          timers.push(t);
+        }
+        s.fades.set(id, timers);
+      } else {
+        void mixer.setVolume(id, target);
+      }
+    }
+  }
+
+  /**
+   * `POST /api/live/audio`: the starting device changes the mix. A volume is a run-time command; a different set of sources restarts the combiner.
+   * Optional `video` (box-pulled live only): `phone` makes the iPad's own camera the unit, `external` goes back to the camera.
+   * Optional `avOffsetMs`: the hand-set offset of the added microphone (a camera without sound).
+   */
+  async changeAudio(deviceId: string, body: unknown): Promise<LiveStatus> {
+    const s = this.session;
+    if (s === null) throw new LiveError(409, 'no_session', LIVE_MSG.noSession);
+    if (s.deviceId !== deviceId) throw new LiveError(403, 'not_owner', LIVE_MSG.forbidden);
+    const audio = isRecord(body) ? body.audio : undefined;
+    if (!isRecord(audio)) throw new LiveError(400, 'bad_request', LIVE_MSG.badRequest);
+    const askedVideo = isRecord(body) ? body.video : undefined;
+    if (askedVideo !== undefined && askedVideo !== 'phone' && askedVideo !== 'external') throw new LiveError(400, 'bad_request', LIVE_MSG.badRequest);
+    const askedOffset = isRecord(body) ? body.avOffsetMs : undefined;
+    if (askedOffset !== undefined && (typeof askedOffset !== 'number' || !Number.isInteger(askedOffset) || askedOffset < 0 || askedOffset > 2000 || askedOffset % 50 !== 0)) {
+      throw new LiveError(400, 'bad_request', LIVE_MSG.badRequest);
+    }
+    const switching = askedVideo !== undefined && askedVideo !== s.video;
+    // only a live that the box pulls can switch between the camera and the iPad's own camera
+    if (switching && !s.pulled) throw new LiveError(409, 'audio_unsupported', LIVE_MSG.audioUnsupported);
+    const video: LiveVideoSource = switching ? askedVideo : s.video;
+    const boxDevice = this.d.boxInput?.() ?? null;
+    const caps = this.capsFor(s.source, s.cameraHasAudio, boxDevice);
+    const mix = normaliseAudioMix(video, audio, caps);
+    const plan = audioPlanOf(video, mix, caps);
+    if (!s.combined) {
+      // a phone mixes for itself; the box only needs Mic-in to stay as it was at the start
+      if (plan.added.includes('boxInput') !== s.plan.added.includes('boxInput')) throw new LiveError(409, 'audio_unsupported', LIVE_MSG.audioUnsupported);
+      s.mix = mix;
+      s.plan = plan;
+      s.reportAudio = true;
+      return this.status();
+    }
+    if (plan.added.includes('boxInput') && boxDevice !== null) s.boxDevice = boxDevice;
+    if (switching) await this.switchVideo(s, video);
+    if (askedOffset !== undefined) s.offsetMs = askedOffset;
+    s.mix = mix;
+    s.plan = plan;
+    s.reportAudio = true;
+    if (switching) await this.pollInputs(s, this.d.now().getTime());
+    else await this.reconcile(s, this.d.now().getTime());
+    if (askedOffset !== undefined && !switching) this.applyOffset(s);
+    this.syncVolumes(s, false);
+    return this.status();
+  }
+
+  /** The unit moves between the pulled camera (`surau-cam`, iPad mic on `surau-mic`) and the iPad's own stream (`surau-in`). */
+  private async switchVideo(s: Session, video: LiveVideoSource): Promise<void> {
+    const api = this.d.runtime?.api;
+    const old = s.publishPath;
+    s.video = video;
+    s.ownCamera = video === 'phone';
+    s.unit = s.ownCamera ? 'ingest' : 'camera';
+    s.publishPath = s.ownCamera ? IN_PATH : MIC_PATH;
+    s.unitReady = false;
+    // the iPad's own camera has not shown yet: no camera waiting card, no camera warning for it
+    if (s.ownCamera) s.unitEverReady = false;
+    s.unitReadySinceMs = null;
+    s.unitLastReadyAtMs = this.d.now().getTime();
+    s.micReady = false;
+    s.micEverReady = false;
+    s.micReadySinceMs = null;
+    s.micLostSinceMs = null;
+    if (!api) return;
+    try {
+      // the publisher may now publish to the new path only; the old connection is dropped (the device ends its own leg too)
+      await api.authUserAdd({ user: s.pubUser, pass: s.pubPass, permissions: [{ action: 'publish', path: s.publishPath }] });
+      const p = await api.pathGet(old);
+      if (p.source !== null) await api.kickPublisher(p.source);
+    } catch {
+      /* the next poll and the device's own retry carry on */
+    }
+  }
+
+  /** A new hand-set offset reaches the running combiner as the added microphone's delay (headroom + offset). */
+  private applyOffset(s: Session): void {
+    const mixer = s.mixer;
+    if (mixer === null || !s.graphAdded.has('deviceMic') || this.alignMode(s, [...s.graphAdded]) !== 'manual') return;
+    void mixer.setDelay('deviceMic', this.timing.headroomMs + this.settingsOffset('deviceMic', s));
+  }
+
+  /** Per-source health of the mix as the box knows it (plan 4.7). Never holds a camera address or login. */
+  private audioStatus(s: Session): LiveAudioSourceStatus[] {
+    const out: LiveAudioSourceStatus[] = [];
+    for (const id of ['camera', 'deviceMic', 'boxInput'] as const) {
+      const m = s.mix[id];
+      if (!m.enabled) continue;
+      const added = id !== 'camera' && s.plan.added.includes(id);
+      let state: LiveAudioSourceStatus['state'] = m.volume === 0 ? 'silent' : 'ok';
+      if (id === 'boxInput' && added && s.combined && s.boxDevice === null) state = 'lost';
+      if (s.pulled && id === 'camera' && !s.unitReady && s.unitEverReady) state = 'lost';
+      if (s.pulled && id === 'deviceMic' && added && !s.graphAdded.has('deviceMic') && s.graphSig !== '') {
+        // out of the graph: lost once it has been heard, or once the combiner started without waiting for it any longer
+        const waited = s.unitReadySinceMs !== null && this.d.now().getTime() - s.unitReadySinceMs >= this.timing.micWaitMs;
+        if (s.micEverReady || waited) state = 'lost';
+      }
+      const row: LiveAudioSourceStatus = { id, enabled: true, volume: m.volume, state };
+      const ch = s.meter?.channelOf(id) ?? -1;
+      const level = ch >= 0 ? s.meter?.level(ch) : undefined;
+      if (level !== undefined) row.level = level;
+      if (added && s.combined) {
+        const mode = this.alignMode(s, s.plan.added);
+        const inGraph = s.graphAdded.has(id);
+        const delayMs = mode === 'manual' ? this.timing.headroomMs + this.settingsOffset(id, s) : (s.aligner?.delayMs(id) ?? DEFAULT_INITIAL_DELAY_MS);
+        const alignState: AlignState = mode === 'manual' ? 'manual' : inGraph ? (s.aligner?.state(id) ?? 'searching') : 'searching';
+        const residual = inGraph ? s.aligner?.residualMs(id) : undefined;
+        row.align = { state: alignState, delayMs, ...(residual !== undefined ? { residualMs: residual } : {}) };
+      }
+      out.push(row);
+    }
+    return out;
   }
 
   /* ------------------------------------------------------------------ audit */

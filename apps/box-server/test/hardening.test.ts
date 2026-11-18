@@ -83,7 +83,7 @@ describe('PUT /api/settings/zone guard', () => {
     // Plan 13: a listed zone with no data yet is accepted (with a warning) and fetched after saving
     const nodata = await app.inject({ method: 'PUT', url: '/api/settings/zone', payload: { zone: 'JHR01' } });
     expect(nodata.statusCode).toBe(200);
-    expect(nodata.json().warnings).toEqual(['Tiada data untuk zon ini; MAXCOM akan memuat turun']);
+    expect(nodata.json().warnings).toEqual(['Tiada data untuk zon ini; muat naik data atau hidupkan muat turun automatik']);
     const ok = await app.inject({ method: 'PUT', url: '/api/settings/zone', payload: { zone: 'SGR01' } });
     expect(ok.statusCode).toBe(200);
   });
@@ -290,7 +290,7 @@ describe('W13 Q6: a write by another process is announced to event-stream client
     // a second connection to the same file stands in for a CLI process
     const other = new DatabaseSync(dbFile);
     other.exec('PRAGMA busy_timeout = 2000');
-    other.prepare("INSERT INTO meta (key, value) VALUES ('version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(before + 5));
+    other.prepare("INSERT INTO meta (key, value) VALUES ('version', ?) ON CONFLICT(surau_id, key) DO UPDATE SET value = excluded.value").run(String(before + 5));
     other.close();
     expect(await streamHas(reader, state, (t) => t.includes(`"version":${before + 5}`))).toBe(true);
     // announced once, not repeated on every poll

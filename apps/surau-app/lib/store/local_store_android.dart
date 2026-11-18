@@ -51,7 +51,7 @@ class ChannelLocalSealer implements LocalSealer {
       'box': boxId,
       'bytes': plain,
     });
-    if (r == null) throw StateError('Simpanan peranti tidak tersedia');
+    if (r == null) throw StateError('Simpanan peranti tidak tersedia'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     return r;
   }
 
@@ -61,7 +61,7 @@ class ChannelLocalSealer implements LocalSealer {
       'box': boxId,
       'bytes': sealed,
     });
-    if (r == null) throw StateError('Simpanan peranti tidak tersedia');
+    if (r == null) throw StateError('Simpanan peranti tidak tersedia'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     return r;
   }
 

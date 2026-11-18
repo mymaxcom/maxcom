@@ -51,6 +51,14 @@ Future<void> tapText(WidgetTester t, String text) async {
   await settle(t);
 }
 
+/// Kod pemulihan baharu sits inside the folded "Kod pemulihan" (plan PP A5).
+Future<void> openRecoveryFold(WidgetTester t) async {
+  final fold = find.byKey(const ValueKey('users-recovery-fold'));
+  await reveal(t, fold);
+  await t.tap(fold);
+  await settle(t);
+}
+
 Future<void> tapKey(WidgetTester t, String key) async {
   final f = find.byKey(ValueKey(key));
   await t.ensureVisible(f);
@@ -177,15 +185,15 @@ void main() {
   });
 
   group('the device list and pairing', () {
-    testWidgets('the box itself heads the list, with its id and no Batalkan', (tester) async {
-      await open(tester, '/devices', before: (h) => h.handlers['GET /api/box/info'] = (r) async => boxInfo());
-      final row = find.byKey(const ValueKey('devices-box-row'));
+    testWidgets('the box itself heads Skrin TV, with its id and no Padam', (tester) async {
+      await open(tester, '/pairing', before: (h) => h.handlers['GET /api/box/info'] = (r) async => boxInfo());
+      final row = find.byKey(const ValueKey('tv-box-row'));
       expect(row, findsOneWidget);
       expect(find.text('MAXCOM Dewan Utama'), findsOneWidget);
       expect(find.textContaining('0123 4567 89AB CDEF'), findsOneWidget);
-      expect(find.descendant(of: row, matching: find.text('Batalkan')), findsNothing);
+      expect(find.descendant(of: row, matching: find.text('Padam')), findsNothing);
       // the first card on the page
-      expect(tester.getTopLeft(row).dy, lessThan(tester.getTopLeft(find.text('Ustaz Ali')).dy));
+      expect(tester.getTopLeft(row).dy, lessThan(tester.getTopLeft(find.text('Skrin utama')).dy));
     });
 
     testWidgets('away from the surau: the banner on the list, and the pairing page needs the surau network', (tester) async {
@@ -253,6 +261,7 @@ void main() {
       expect(find.textContaining('belum ada kod pemulihan'), findsOneWidget);
       h.handlers['POST /api/recovery/code'] = (r) async => jsonResponse(200, {'recoveryCode': 'WXYZ-2345-6789-ABCD'});
       h.handlers['GET /api/recovery/status'] = (r) async => jsonResponse(200, {'recoveryCodeSet': true});
+      await openRecoveryFold(tester);
       await tapKey(tester, 'users-rotate-recovery');
       await tapText(tester, 'Jana kod baharu');
       expect(find.text('WXYZ-2345-6789-ABCD'), findsOneWidget);
@@ -281,6 +290,7 @@ void main() {
     testWidgets('a Pentadbir confirms, then sees the new code once', (tester) async {
       final h = await open(tester, '/users');
       h.handlers['POST /api/recovery/code'] = (r) async => jsonResponse(200, {'recoveryCode': 'WXYZ-2345-6789-ABCD'});
+      await openRecoveryFold(tester);
       await tapKey(tester, 'users-rotate-recovery');
       expect(find.text('Kod lama tamat serta-merta. Kod baharu ditunjukkan sekali sahaja.'), findsOneWidget);
       await tapText(tester, 'Jana kod baharu');
@@ -295,6 +305,7 @@ void main() {
     testWidgets('429 says too many tries', (tester) async {
       final h = await open(tester, '/users');
       h.handlers['POST /api/recovery/code'] = (r) async => jsonResponse(429, {'errors': ['x']});
+      await openRecoveryFold(tester);
       await tapKey(tester, 'users-rotate-recovery');
       await tapText(tester, 'Jana kod baharu');
       expect(find.text('Terlalu banyak percubaan. Tunggu sebentar dan cuba lagi.'), findsOneWidget);

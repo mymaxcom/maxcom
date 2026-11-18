@@ -36,7 +36,7 @@ class ImagePrepError implements Exception {
   final String message;
 
   static const String notAnImage =
-      'Fail ini bukan gambar yang boleh dibaca. Pilih fail JPEG, PNG atau WebP.';
+      'Fail ini bukan gambar yang boleh dibaca. Pilih fail JPEG, PNG atau WebP.'; // lang-ok: identifier; screens show S text
 
   @override
   String toString() => 'ImagePrepError($message)';

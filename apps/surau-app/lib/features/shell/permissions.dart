@@ -21,6 +21,15 @@ bool can(Iterable<String> roles, String permission) {
 /// The plan's name for [can], used by the menu and the route guards.
 bool canSee(Set<String> roles, String permission) => can(roles, permission);
 
+/// Core's `LIVE_SETTINGS_FEATURES`: the features a Siaran Langsung user
+/// (`live:settings`) may change without `settings:write`.
+const Set<String> liveSettingsFeatures = {'liveOnKiosk', 'liveYoutube', 'recording', 'liveCamera'};
+
+/// Core's `canWriteSettingsFeatures` for one feature: `settings:write`, or
+/// `live:settings` and a live feature.
+bool canWriteSettingsFeature(Set<String> roles, String feature) =>
+    canSee(roles, 'settings:write') || (canSee(roles, 'live:settings') && liveSettingsFeatures.contains(feature));
+
 /// `defaultEnabled` from the registry for the features that hide a menu
 /// entry when off (spec 5.4). Used until the box's settings have loaded.
 const Map<String, bool> featureDefaultEnabled = {

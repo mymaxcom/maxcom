@@ -137,4 +137,30 @@ class LiveLogicTest {
         g.resume()
         assertTrue(g.allows())
     }
+
+    // ---- K2: the engine's source wiring must never leak the camera address ----
+
+    private val engineFiles = listOf("LiveEngine.kt", "LiveChannel.kt", "LiveService.kt", "ClapTest.kt", "LiveSourceLogic.kt")
+        .map { java.io.File("src/main/kotlin/my/maxcom/app/live/$it") }
+
+    @Test
+    fun noLogLineOfTheEngineOrChannelMentionsTheCameraAddress() {
+        val offenders = engineFiles.flatMap { f ->
+            f.readLines().withIndex().filter { (_, line) ->
+                val logs = line.contains("Log.") || line.contains("Diag.log") || line.contains("Diag.error")
+                logs && (line.contains(".url") || line.contains("extCam") || line.contains("camera?.url") || line.contains("\$url"))
+            }.map { "${f.name}:${it.index + 1}" }
+        }
+        assertTrue("a log line names the camera address: $offenders", offenders.isEmpty())
+    }
+
+    @Test
+    fun theChannelAnswersEveryNewCallWithReasonCodesOnly() {
+        val src = java.io.File("src/main/kotlin/my/maxcom/app/live/LiveChannel.kt").readText()
+        for (m in listOf("setSource", "setMix", "setAvOffset", "clapCapture", "clapReplay", "clapOffset", "clapStop")) {
+            assertTrue("channel handles $m", src.contains("\"$m\""))
+        }
+        // the address is read in one place and handed on; it is never put into a reply
+        assertFalse(src.contains("result.success(mapOf(\"url\""))
+    }
 }

@@ -51,7 +51,7 @@ function op(over: Partial<VerifiedOp>): VerifiedOp {
     payload: { name: 'Ustaz A' }, sig: 'x', userName: 'Ali', ...over,
   };
 }
-const ctx = (dir: string, over: Partial<ApplyCtx> = {}): ApplyCtx => ({ now: NOW, origin: 'app', actor: 'user:u1', dataDir: dir, ...over });
+const ctx = (dir: string, over: Partial<ApplyCtx> = {}): ApplyCtx => ({ surauId: 'sdm', now: NOW, origin: 'app', actor: 'user:u1', dataDir: dir, ...over });
 const put = (editedAt: string, name: string, deviceId = 'dev-a'): VerifiedOp => op({ editedAt, deviceId, payload: { name } });
 const del = (editedAt: string, deviceId = 'dev-a'): VerifiedOp => op({ kind: 'content.delete', payload: null, editedAt, deviceId });
 
@@ -81,7 +81,7 @@ describe('M1/Q4: put and delete compete by edit time, in either order', () => {
         applyOp(y.db, { ...b, opId: 'Y'.repeat(26) }, ctx(y.dir));
         applyOp(y.db, { ...a, opId: 'X'.repeat(26) }, ctx(y.dir));
         expect(row(x.db), `${na} then ${nb}`).toEqual(row(y.db));
-        expect(getItem(x.db, 'penceramah', 'p1'), `${na} then ${nb}`).toEqual(getItem(y.db, 'penceramah', 'p1'));
+        expect(getItem(x.db, 'penceramah', 'p1', 'sdm'), `${na} then ${nb}`).toEqual(getItem(y.db, 'penceramah', 'p1', 'sdm'));
       }
     }
   });
@@ -91,16 +91,16 @@ describe('M1/Q4: put and delete compete by edit time, in either order', () => {
     applyOp(db, put(T3, 'Baru'), ctx(dir));
     const r = applyOp(db, del(T1), ctx(dir));
     expect(r.status).toBe('superseded');
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'Baru' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Baru' });
   });
 
   it('a newer delete wins over a put; a put newer than the delete undeletes', () => {
     const { db, dir } = newDb();
     applyOp(db, put(T1, 'A'), ctx(dir));
     expect(applyOp(db, del(T2), ctx(dir)).status).toBe('applied');
-    expect(getItem(db, 'penceramah', 'p1')).toBeNull();
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toBeNull();
     expect(applyOp(db, put(T3, 'C'), ctx(dir)).status).toBe('applied');
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'C' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'C' });
   });
 
   it('a newer delete moves an older tombstone; an older put then stays out, as in the other order', () => {
@@ -113,7 +113,7 @@ describe('M1/Q4: put and delete compete by edit time, in either order', () => {
     applyOp(b.db, put(T2, 'B'), ctx(b.dir));
     applyOp(b.db, del(T3), ctx(b.dir));
     expect(row(a.db)).toEqual(row(b.db));
-    expect(getItem(b.db, 'penceramah', 'p1')).toBeNull();
+    expect(getItem(b.db, 'penceramah', 'p1', 'sdm')).toBeNull();
   });
 
   it('feed entries agree with ops: a delete entry older than the live row loses', () => {
@@ -121,7 +121,7 @@ describe('M1/Q4: put and delete compete by edit time, in either order', () => {
     applyOp(db, put(T3, 'Baru'), ctx(dir));
     const r = applyFeedEntry(db, entry({ after: null, editedAt: T1, rev: `${T1}|dev-a` }), ctx(dir));
     expect(r.status).toBe('superseded');
-    expect(getItem(db, 'penceramah', 'p1')).toMatchObject({ name: 'Baru' });
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Baru' });
   });
 });
 
@@ -131,14 +131,14 @@ describe('Q10: a delete of an entity never seen still leaves a tombstone', () =>
     expect(applyOp(db, del(T2), ctx(dir)).status).toBe('applied');
     expect(db.prepare("SELECT deleted_at, rev, edited_at FROM content_items WHERE id = 'p1'").get()).toEqual({ deleted_at: T2, rev: `${T2}|dev-a`, edited_at: T2 });
     expect(applyOp(db, put(T1, 'Lama'), ctx(dir)).status).toBe('superseded');
-    expect(getItem(db, 'penceramah', 'p1')).toBeNull();
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toBeNull();
   });
 
   it('device op: put first, then the delete (the other order) ends the same', () => {
     const { db, dir } = newDb();
     applyOp(db, put(T1, 'Lama'), ctx(dir));
     applyOp(db, del(T2), ctx(dir));
-    expect(getItem(db, 'penceramah', 'p1')).toBeNull();
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toBeNull();
     expect(row(db)).toMatchObject({ deleted_at: T2 });
   });
 
@@ -146,7 +146,7 @@ describe('Q10: a delete of an entity never seen still leaves a tombstone', () =>
     const { db, dir } = newDb();
     expect(applyFeedEntry(db, entry({ after: null, editedAt: T2, rev: `${T2}|dev-a` }), ctx(dir)).status).toBe('applied');
     expect(applyFeedEntry(db, entry({ editedAt: T1, rev: `${T1}|dev-a` }), ctx(dir)).status).toBe('superseded');
-    expect(getItem(db, 'penceramah', 'p1')).toBeNull();
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toBeNull();
     expect(readFeed(db, 0, 500, ALL).entries.some((e) => e.entityId === 'p1' && e.after === null)).toBe(true);
     expect(snapshot(db, ALL, { boxId: 'box1', now: NOW }).content.penceramah).toContainEqual({ id: 'p1', deletedAt: T2 });
   });
@@ -155,7 +155,7 @@ describe('Q10: a delete of an entity never seen still leaves a tombstone', () =>
 describe('Q2: a replay answers what the first answer was', () => {
   it('a superseded op replayed is superseded again with the same winner', () => {
     const { db, dir } = newDb();
-    const user = createUser(db, { name: 'Siti', roles: ['admin'] }, 'local');
+    const user = createUser(db, { name: 'Siti', roles: ['admin'] }, 'local', 'sdm');
     applyOp(db, put(T3, 'Baru', 'dev-b'), ctx(dir, { actor: `user:${user.id}` }));
     const lost = put(T1, 'Lama');
     const first = applyOp(db, lost, ctx(dir));
@@ -179,7 +179,7 @@ describe('Q2: a replay answers what the first answer was', () => {
     const lost = op({ kind: 'settings.put', entity: 'settings', entityId: 'cloudSync', editedAt: T1, payload: { dirtyCheckSeconds: 100 } });
     expect(applyOp(db, lost, ctx(dir)).status).toBe('superseded');
     expect(applyOp(db, lost, ctx(dir)).status).toBe('superseded');
-    expect(getSettings(db).cloudSync.dirtyCheckSeconds).toBe(300);
+    expect(getSettings(db, 'sdm').cloudSync.dirtyCheckSeconds).toBe(300);
   });
 });
 
@@ -189,7 +189,7 @@ describe('Q9/S3: feed times are held to the device-op rule', () => {
     for (const bad of ['zzzz', '9999', 'Nov 5 2026', '2026-11-05']) {
       expect(applyFeedEntry(db, entry({ editedAt: bad, rev: `${bad}|dev-a` }), ctx(dir))).toEqual({ status: 'refused', reason: 'invalid' });
     }
-    expect(getItem(db, 'penceramah', 'p1')).toBeNull();
+    expect(getItem(db, 'penceramah', 'p1', 'sdm')).toBeNull();
   });
 
   it('a "zzzz" entry can no longer pin a row against every real edit', () => {
@@ -237,7 +237,7 @@ describe('Q5: settings merge per field', () => {
       const a = sop(T1, { dirtyCheckSeconds: 100 });
       const b = sop(T2, { cloudUrl: 'https://awan.example.my' }, 'dev-b');
       for (const o of order === 0 ? [a, b] : [b, a]) expect(applyOp(db, o, ctx(dir)).status).toBe('applied');
-      expect(getSettings(db).cloudSync).toMatchObject({ dirtyCheckSeconds: 100, cloudUrl: 'https://awan.example.my' });
+      expect(getSettings(db, 'sdm').cloudSync).toMatchObject({ dirtyCheckSeconds: 100, cloudUrl: 'https://awan.example.my' });
     }
   });
 
@@ -245,7 +245,7 @@ describe('Q5: settings merge per field', () => {
     const { db, dir } = newDb();
     applyOp(db, sop(T3, { cloudUrl: 'https://baru.example.my' }), ctx(dir));
     expect(applyOp(db, sop(T1, { dirtyCheckSeconds: 200 }, 'dev-b'), ctx(dir)).status).toBe('applied');
-    expect(getSettings(db).cloudSync).toMatchObject({ dirtyCheckSeconds: 200, cloudUrl: 'https://baru.example.my' });
+    expect(getSettings(db, 'sdm').cloudSync).toMatchObject({ dirtyCheckSeconds: 200, cloudUrl: 'https://baru.example.my' });
   });
 
   it('edits to the same field: the newer wins in either order; the loser is superseded with a winner', () => {
@@ -254,7 +254,7 @@ describe('Q5: settings merge per field', () => {
       const older = sop(T1, { dirtyCheckSeconds: 100 });
       const newer = sop(T2, { dirtyCheckSeconds: 500 }, 'dev-b');
       const results = (order === 0 ? [older, newer] : [newer, older]).map((o) => applyOp(db, o, ctx(dir)));
-      expect(getSettings(db).cloudSync.dirtyCheckSeconds).toBe(500);
+      expect(getSettings(db, 'sdm').cloudSync.dirtyCheckSeconds).toBe(500);
       const lost = results[order === 0 ? 0 : 1]!;
       if (order === 1) {
         expect(lost.status).toBe('superseded');
@@ -269,7 +269,7 @@ describe('Q5: settings merge per field', () => {
       const a = sop(T1, { dirtyCheckSeconds: 100 }, 'dev-a');
       const z = sop(T1, { dirtyCheckSeconds: 900 }, 'dev-z');
       for (const o of order === 0 ? [a, z] : [z, a]) applyOp(db, o, ctx(dir));
-      expect(getSettings(db).cloudSync.dirtyCheckSeconds).toBe(900);
+      expect(getSettings(db, 'sdm').cloudSync.dirtyCheckSeconds).toBe(900);
     }
   });
 
@@ -278,14 +278,14 @@ describe('Q5: settings merge per field', () => {
     applyOp(db, sop(T3, { dirtyCheckSeconds: 700 }, 'dev-b'), ctx(dir));
     const r = applyOp(db, sop(T2, { dirtyCheckSeconds: 100, cloudUrl: 'https://x.example.my' }), ctx(dir));
     expect(r.status).toBe('applied');
-    expect(getSettings(db).cloudSync).toMatchObject({ dirtyCheckSeconds: 700, cloudUrl: 'https://x.example.my' });
+    expect(getSettings(db, 'sdm').cloudSync).toMatchObject({ dirtyCheckSeconds: 700, cloudUrl: 'https://x.example.my' });
   });
 
   it('a local write (the settings page) always lands and then beats the stamps it replaced', () => {
     const { db, dir } = newDb();
     applyOp(db, sop('2026-11-05T10:04:00.000Z', { dirtyCheckSeconds: 100 }, 'dev-b'), ctx(dir));
-    putFeature(db, 'cloudSync', { dirtyCheckSeconds: 250 }, 'user:u1');
-    expect(getSettings(db).cloudSync.dirtyCheckSeconds).toBe(250);
+    putFeature(db, 'cloudSync', { dirtyCheckSeconds: 250 }, 'user:u1', undefined, 'sdm');
+    expect(getSettings(db, 'sdm').cloudSync.dirtyCheckSeconds).toBe(250);
     const feed = readFeed(db, 0, 500, ALL).entries.filter((e) => e.entity === 'settings');
     const last = feed[feed.length - 1]!;
     expect(Date.parse(last.stamps!.dirtyCheckSeconds!.editedAt)).toBeGreaterThan(Date.parse('2026-11-05T10:04:00.000Z'));
@@ -302,7 +302,7 @@ describe('Q5: settings merge per field', () => {
     for (const e of fromBox) applyFeedEntry(cloud.db, e, ctx(cloud.dir, { origin: 'cloud' }));
     for (const e of fromCloud) applyFeedEntry(box.db, e, ctx(box.dir, { origin: 'cloud' }));
     for (const s of [box.db, cloud.db]) {
-      expect(getSettings(s).cloudSync).toMatchObject({ dirtyCheckSeconds: 100, cloudUrl: 'https://awan.example.my' });
+      expect(getSettings(s, 'sdm').cloudSync).toMatchObject({ dirtyCheckSeconds: 100, cloudUrl: 'https://awan.example.my' });
     }
   });
 
@@ -314,7 +314,7 @@ describe('Q5: settings merge per field', () => {
       stamps: { dirtyCheckSeconds: { editedAt: T1, deviceId: 'dev-a' } },
     });
     expect(applyFeedEntry(db, e, ctx(dir)).status).toBe('superseded');
-    expect(getSettings(db).cloudSync.dirtyCheckSeconds).toBe(700);
+    expect(getSettings(db, 'sdm').cloudSync.dirtyCheckSeconds).toBe(700);
   });
 
   it('migration 010 stamps existing settings rows from the row edit stamp', () => {
@@ -338,7 +338,7 @@ describe('S4: the last active admin cannot be removed by a synced edit', () => {
 
   it('a device op that demotes or deactivates the only active admin is refused last_admin and changes nothing', () => {
     const { db, dir } = newDb();
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
     db.prepare("UPDATE users SET edited_at = ? WHERE id = ?").run(T1, u.id);
     expect(applyOp(db, userOp(u.id, { name: 'Ali', roles: ['ajk'], active: true }), ctx(dir))).toMatchObject({ status: 'refused', reason: 'last_admin' });
     expect(applyOp(db, userOp(u.id, { name: 'Ali', roles: ['admin'], active: false }), ctx(dir))).toMatchObject({ status: 'refused', reason: 'last_admin' });
@@ -349,15 +349,15 @@ describe('S4: the last active admin cannot be removed by a synced edit', () => {
 
   it('it is allowed while another active admin remains', () => {
     const { db, dir } = newDb();
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
-    createUser(db, { name: 'Siti', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
+    createUser(db, { name: 'Siti', roles: ['admin'] }, 'local', 'sdm');
     db.prepare("UPDATE users SET edited_at = ?").run(T1);
     expect(applyOp(db, userOp(u.id, { name: 'Ali', roles: ['ajk'], active: true }), ctx(dir)).status).toBe('applied');
   });
 
   it('a replicated user entry is held to the same guard, refused and recorded', () => {
     const { db, dir } = newDb();
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
     db.prepare("UPDATE users SET edited_at = ?").run(T1);
     const e = entry({ entity: 'user', entityId: u.id, after: { name: 'Ali', roles: ['admin'], active: false }, editedAt: T3, rev: `${T3}|cloud`, deviceId: null, origin: 'cloud', actor: 'cloud' });
     expect(applyFeedEntry(db, e, ctx(dir, { origin: 'cloud' }))).toEqual({ status: 'refused', reason: 'last_admin' });
@@ -367,8 +367,8 @@ describe('S4: the last active admin cannot be removed by a synced edit', () => {
 
   it('a non-admin or an inactive admin may be changed freely', () => {
     const { db, dir } = newDb();
-    createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
-    const n = createUser(db, { name: 'Ahmad', roles: ['ajk'] }, 'local');
+    createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
+    const n = createUser(db, { name: 'Ahmad', roles: ['ajk'] }, 'local', 'sdm');
     db.prepare("UPDATE users SET edited_at = ?").run(T1);
     expect(applyOp(db, userOp(n.id, { name: 'Ahmad', roles: ['ajk'], active: false }), ctx(dir)).status).toBe('applied');
   });
@@ -377,7 +377,7 @@ describe('S4: the last active admin cannot be removed by a synced edit', () => {
 describe('Q6: the snapshot', () => {
   it('carries real edit stamps for settings and users, and tombstones for 180 days', () => {
     const { db, dir } = newDb();
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
     db.prepare('UPDATE users SET edited_at = ?, rev = ? WHERE id = ?').run(T1, `${T1}|dev-a`, u.id);
     applyOp(db, op({ kind: 'settings.put', entity: 'settings', entityId: 'cloudSync', editedAt: T2, payload: { dirtyCheckSeconds: 100 } }), ctx(dir));
     applyOp(db, del(T1), ctx(dir));

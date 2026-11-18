@@ -34,6 +34,11 @@ export function LiveScreen({ view, live, lang, onAir }: LiveScreenProps) {
   return (
     <div class="screen screen--live" data-screen="live" data-playing={onAir ? 'true' : 'false'}>
       <div class="live-screen__frame region-main" data-testid="live-frame">
+        {live.waiting === true ? (
+          <div class="live-screen__lost" data-testid="live-lost" role="status">
+            {t('liveResuming', lang)}
+          </div>
+        ) : null}
         {onAir ? null : (
           <div class="live-screen__waiting" data-testid="live-waiting">
             <span class="live-screen__waiting-tag">

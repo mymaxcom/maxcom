@@ -23,6 +23,8 @@ import java.io.IOException
 object ShareArgs {
     const val MAX_NAME = 100
     const val MAX_BYTES = 20 * 1024 * 1024
+    const val MAX_TEXT = 4096
+    const val MAX_SUBJECT = 200
 
     val MIMES = setOf(
         "application/pdf",
@@ -49,6 +51,12 @@ object ShareArgs {
 
     fun mimeOk(mime: String?): Boolean = mime != null && mime in MIMES
 
+    /** A text to share: 1 to 4,096 characters (counted as Dart counts them, in UTF-16 units). */
+    fun textOk(text: String?): Boolean = text != null && text.isNotEmpty() && text.length <= MAX_TEXT
+
+    /** An optional subject: absent, or at most 200 characters. */
+    fun subjectOk(subject: String?): Boolean = subject == null || subject.length <= MAX_SUBJECT
+
     /** `whatsapp`, `email` or `other`, from the package the person chose (null when unknown). */
     fun classOf(pkg: String?): String = when {
         pkg == null -> "other"
@@ -71,11 +79,9 @@ class ShareChannel private constructor(private val activity: Activity) : MethodC
 
     companion object {
         const val CHANNEL = "my.maxcom/share"
-        const val AUTHORITY = "my.maxcom.app.files"
         private const val DIR = "finance"
         private const val STALE_MS = 60L * 60L * 1000L
         private const val CHOOSER_TIMEOUT_MS = 90_000L
-        private const val ACTION_CHOSEN = "my.maxcom.app.SHARE_CHOSEN"
 
         @Volatile
         private var current: ShareChannel? = null
@@ -97,6 +103,20 @@ class ShareChannel private constructor(private val activity: Activity) : MethodC
     private val timeout = Runnable { finishShare("other", false) }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        if (call.method == "shareText") {
+            val text = call.argument<String>("text")
+            val subject = call.argument<String>("subject")
+            if (!ShareArgs.textOk(text) || !ShareArgs.subjectOk(subject)) {
+                result.error("bad_args", "bad arguments", null)
+                return
+            }
+            try {
+                shareText(text!!, subject, result)
+            } catch (_: Exception) {
+                result.error("failed", "failed", null)
+            }
+            return
+        }
         if (call.method != "save" && call.method != "share") {
             result.notImplemented()
             return
@@ -153,7 +173,7 @@ class ShareChannel private constructor(private val activity: Activity) : MethodC
         // Belt and braces after nameOk: the file must sit directly in the share folder.
         if (file.canonicalFile.parentFile != dir.canonicalFile) throw IOException()
         file.writeBytes(bytes)
-        val uri = FileProvider.getUriForFile(activity, AUTHORITY, file)
+        val uri = FileProvider.getUriForFile(activity, activity.packageName + ".files", file)
 
         val send = Intent(Intent.ACTION_SEND).apply {
             type = mime
@@ -161,12 +181,26 @@ class ShareChannel private constructor(private val activity: Activity) : MethodC
             clipData = ClipData.newRawUri("", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+        openChooser(send, result)
+    }
+
+    /** A plain text through ACTION_SEND; the text is never logged. Answers like [share]. */
+    private fun shareText(text: String, subject: String?, result: MethodChannel.Result) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            if (subject != null) putExtra(Intent.EXTRA_SUBJECT, subject)
+        }
+        openChooser(send, result)
+    }
+
+    private fun openChooser(send: Intent, result: MethodChannel.Result) {
         // An earlier chooser still open is answered as not reported.
         finishShare("other", false)
         val chosen = PendingIntent.getBroadcast(
             activity,
             0,
-            Intent(activity, ShareChosenReceiver::class.java).setAction(ACTION_CHOSEN),
+            Intent(activity, ShareChosenReceiver::class.java).setAction(activity.packageName + ".SHARE_CHOSEN"),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
         pending = result

@@ -332,11 +332,11 @@ describe('group 2: one flag between the weekly check and a manual refresh', () =
     putProviderItem(db, {
       id: 'hadeethenc-66512', textMs: 'x', source: 'Riwayat Muslim', grade: 'sahih', shown: true,
       ext: { provider: 'hadeethenc', id: '66512', attributionAr: 'رواه مسلم', gradeAr: 'صحيح', categories: [], fetchedAt: NOW.toISOString(), digest: 'e'.repeat(64) },
-    }, 'test');
+    }, 'test', 'sdm');
     let release!: () => void;
     fake.hold = new Promise<void>((r) => { release = r; });
     vi.useFakeTimers();
-    const stop = startHadisTimers({ db, role: 'box', client: { ...client, probe: async () => true }, job, now: () => NOW, firstMs: 100, everyMs: 100_000, check: { pauseMs: 0 } })!;
+    const stop = startHadisTimers({ db, surauIds: () => ['sdm'], client: { ...client, probe: async () => true }, job, now: () => NOW, firstMs: 100, everyMs: 100_000, check: { pauseMs: 0 } })!;
     await vi.advanceTimersByTimeAsync(200);
     expect(job.start()).toBe('busy');
     release();
@@ -354,7 +354,7 @@ describe('group 2: the weekly check', () => {
       putProviderItem(db, {
         id: `hadeethenc-${id}`, textMs: 'x', source: 'Riwayat Muslim', grade: 'sahih', shown: true,
         ext: { provider: 'hadeethenc', id, attributionAr: 'رواه مسلم', gradeAr, categories: [], fetchedAt: NOW.toISOString(), digest: 'e'.repeat(64) },
-      }, 'test');
+      }, 'test', 'sdm');
       out.push(id);
     }
     return out;
@@ -364,7 +364,7 @@ describe('group 2: the weekly check', () => {
     const db = newDb();
     const { client, fake } = setup();
     for (const id of saved(db, 12)) fake.one.set(id, 503);
-    const res = await checkProviderUpdates(db, client, () => NOW, undefined, { pauseMs: 0 });
+    const res = await checkProviderUpdates(db, client, () => NOW, undefined, { pauseMs: 0 }, 'sdm');
     expect(res).toMatchObject({ checked: 0, aborted: true });
     expect(stateGet(db, 'hadeethenc.lastUpdateCheck')).toBeNull();
   });
@@ -375,7 +375,7 @@ describe('group 2: the weekly check', () => {
     const list = saved(db, 3);
     fake.one.set(list[0]!, 404);
     for (const id of list.slice(1)) fake.one.set(id, { ...fixture('one-66512'), id });
-    const res = await checkProviderUpdates(db, client, () => NOW, undefined, { pauseMs: 0 });
+    const res = await checkProviderUpdates(db, client, () => NOW, undefined, { pauseMs: 0 }, 'sdm');
     expect(res.aborted).toBeUndefined();
     expect(res.checked).toBe(2);
     expect(stateGet(db, 'hadeethenc.lastUpdateCheck')).toBe(NOW.toISOString());
@@ -387,7 +387,7 @@ describe('group 2: the weekly check', () => {
     const list = saved(db, 14);
     for (const id of list.slice(0, 12)) fake.one.set(id, 404);
     for (const id of list.slice(12)) fake.one.set(id, { ...fixture('one-66512'), id });
-    const res = await checkProviderUpdates(db, client, () => NOW, undefined, { pauseMs: 0 });
+    const res = await checkProviderUpdates(db, client, () => NOW, undefined, { pauseMs: 0 }, 'sdm');
     expect(res.checked).toBe(2);
     expect(stateGet(db, 'hadeethenc.lastUpdateCheck')).toBe(NOW.toISOString());
   });
@@ -399,7 +399,7 @@ describe('group 2: the weekly check', () => {
     vi.useFakeTimers();
     const probeClient = { ...client, probe: async () => true };
     const stop = startHadisTimers({
-      db, role: 'box', client: probeClient, job: mkJob(db, client), now: () => NOW,
+      db, surauIds: () => ['sdm'], client: probeClient, job: mkJob(db, client), now: () => NOW,
       firstMs: 100, everyMs: 1_000_000, retryMs: 5_000, check: { pauseMs: 0 },
     })!;
     stateSet(db, 'hadeethenc.lastFullRefresh', NOW.toISOString());
@@ -419,8 +419,8 @@ describe('group 2: the weekly check', () => {
     const logs: string[] = [];
     const job = mkJob(db, client, (a, d) => logs.push(`${a}:${d}`));
     const opts = { pauseMs: 0, noteUnknown: job.noteUnknown };
-    await checkProviderUpdates(db, client, () => NOW, undefined, opts);
-    await checkProviderUpdates(db, client, () => NOW, undefined, opts);
+    await checkProviderUpdates(db, client, () => NOW, undefined, opts, 'sdm');
+    await checkProviderUpdates(db, client, () => NOW, undefined, opts, 'sdm');
     expect(logs.sort()).toEqual(['hadis.attributionUnknown:رواه فلان', 'hadis.gradeUnknown:ضعيف جدا']);
   });
 
@@ -429,7 +429,7 @@ describe('group 2: the weekly check', () => {
     const { client, fake } = setup();
     for (const id of saved(db, 3)) fake.one.set(id, { ...fixture('one-66512'), id, grade: 'ضعيف جدا' });
     const logs: string[] = [];
-    await checkProviderUpdates(db, client, () => NOW, (a, d) => logs.push(`${a}:${d}`), { pauseMs: 0 });
+    await checkProviderUpdates(db, client, () => NOW, (a, d) => logs.push(`${a}:${d}`), { pauseMs: 0 }, 'sdm');
     expect(logs.filter((l) => l.startsWith('hadis.gradeUnknown'))).toHaveLength(1);
   });
 });

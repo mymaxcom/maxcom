@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/features/live/android_publisher.dart'
     show PublisherException;
 import 'package:surau_app/features/live/publisher.dart';
+import 'package:surau_app/features/shell/live_camera_gateway.dart'
+    show AudioSourceMix, LiveAudioMix;
 import 'package:surau_app/features/live/recordings_store.dart';
 import 'package:surau_app/features/live/web_publisher_web.dart';
 import 'package:web/web.dart' as web;
@@ -71,8 +73,12 @@ class FakePeer implements PeerLink {
 }
 
 class FakeRecorder implements SegmentRecorder {
-  FakeRecorder(this.id);
+  FakeRecorder(this.id, {this.silent = false});
   final int id;
+
+  /// Delivers no chunk (a browser that accepts a received stream and then
+  /// records nothing).
+  final bool silent;
   bool started = false;
   bool stopped = false;
   void Function(Object, int)? _chunk;
@@ -87,7 +93,7 @@ class FakeRecorder implements SegmentRecorder {
   ) {
     started = true;
     _chunk = onChunk;
-    onChunk('chunk-$id-a', 10);
+    if (!silent) onChunk('chunk-$id-a', 10);
   }
 
   @override
@@ -129,9 +135,45 @@ class _Wake implements WakeHandle {
   Future<void> release() async => page.wakeReleases++;
 }
 
+class FakeReceiver implements ReceiverLink {
+  final statesC = StreamController<String>.broadcast();
+  bool closed = false;
+  String? answer;
+
+  @override
+  Future<String> createOffer() async => 'v=0 whep offer';
+  @override
+  Future<void> applyAnswer(String sdp) async => answer = sdp;
+  @override
+  Stream<String> get connectionStates => statesC.stream;
+  @override
+  JSObject? get stream => null;
+  @override
+  void close() => closed = true;
+
+  void emit(String s) => statesC.add(s);
+}
+
+LiveAudioMix mixOf({
+  int camera = 100,
+  bool mic = false,
+  int micVolume = 100,
+  bool cameraOn = true,
+}) => LiveAudioMix(
+  camera: AudioSourceMix(enabled: cameraOn, volume: camera),
+  deviceMic: AudioSourceMix(enabled: mic, volume: micVolume),
+  boxInput: const AudioSourceMix(enabled: false, volume: 100),
+);
+
 class Rig {
-  Rig({int segmentMinutes = 15, int? free, Uri? box, bool portrait = false})
-    : store = MemoryRecordingsStore() {
+  Rig({
+    int segmentMinutes = 15,
+    int? free,
+    Uri? box,
+    bool portrait = false,
+    bool canRecordReceived = true,
+    Duration recordWatchdog = const Duration(seconds: 12),
+  }) : store = MemoryRecordingsStore() {
     page = FakePage();
     publisher = WebPublisher(
       tokenProvider: () async => 'tok-123',
@@ -141,6 +183,7 @@ class Rig {
       portraitProvider: () => portrait,
       getUserMedia: (c) async {
         constraints.add(c);
+        if (failMedia) throw StateError('denied');
         final cap = FakeCapture();
         captures.add(cap);
         return cap;
@@ -151,13 +194,16 @@ class Rig {
         return p;
       },
       recorderFactory: (s) {
-        final r = FakeRecorder(recorders.length);
+        final r = FakeRecorder(recorders.length, silent: silentRecorder);
         recorders.add(r);
         return r;
       },
       fetch: (r) async {
         requests.add(r);
         final h = postHandler;
+        if (r.method == 'POST' && r.path == WebPublisher.whepPath) {
+          return WhipReply(201, 'v=0 whep answer', location: whepLocation);
+        }
         if (r.method == 'POST') {
           if (h != null) return h(r);
           return WhipReply(201, 'v=0 answer', location: location);
@@ -167,8 +213,32 @@ class Rig {
       store: store,
       freeBytes: () async => free ?? 10 * 1000 * 1000 * 1000,
       page: page,
+      receiverFactory: () {
+        final r = FakeReceiver();
+        receivers.add(r);
+        return r;
+      },
+      audioSender: (m, {video, avOffsetMs}) async {
+        if (audioError != null) throw audioError!;
+        audioCalls.add(m);
+        audioVideos.add(video);
+        audioOffsets.add(avOffsetMs);
+      },
+      offsetSaver: (id, ms) async => savedOffsets.add((id, ms)),
+      canRecordReceived: () => canRecordReceived,
+      recordWatchdog: recordWatchdog,
     );
   }
+
+  final receivers = <FakeReceiver>[];
+  final audioCalls = <LiveAudioMix>[];
+  final audioVideos = <String?>[];
+  final audioOffsets = <int?>[];
+  final savedOffsets = <(String, int)>[];
+  Object? audioError;
+  bool failMedia = false;
+  bool silentRecorder = false;
+  String? whepLocation = '/api/live/preview/whep/prev-1';
 
   final MemoryRecordingsStore store;
   late final FakePage page;
@@ -196,6 +266,17 @@ class Rig {
     await publisher.prepare(const PublisherConfig());
     await publisher.start(targets);
   }
+
+  /// An external-camera live; [mic] puts the iPad microphone in the mix.
+  Future<void> goLiveExternal({LiveAudioMix? mix}) async {
+    await publisher.prepareExternal(const PublisherConfig(), mix: mix);
+    await publisher.start(targets);
+  }
+
+  List<WhipRequest> get whipPosts =>
+      posts.where((r) => r.path == WebPublisher.whipPath).toList();
+  List<WhipRequest> get whepPosts =>
+      posts.where((r) => r.path == WebPublisher.whepPath).toList();
 }
 
 void main() {
@@ -594,6 +675,421 @@ void main() {
         rig.publisher.start(Rig.targets),
         throwsA(isA<PublisherException>()),
       );
+    });
+  });
+
+  group('external camera (the box pulls it)', () {
+    testWidgets('controller only: nothing is captured or published, the '
+        'preview is a WHEP receive, the wake lock is held', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal();
+      await t.pump();
+      expect(rig.constraints, isEmpty);
+      expect(rig.captures, isEmpty);
+      expect(rig.whipPosts, isEmpty);
+      expect(rig.peers, isEmpty);
+      final p = rig.whepPosts.single;
+      expect(p.headers['Content-Type'], 'application/sdp');
+      expect(p.headers['Authorization'], 'Bearer tok-123');
+      expect(p.body, 'v=0 whep offer');
+      expect(rig.receivers.single.answer, 'v=0 whep answer');
+      expect(rig.page.wakeRequests, 1);
+      expect(rig.publisher.current.phase, PublisherPhase.live);
+      expect(rig.publisher.current.outputs.kiosk!.phase, OutputPhase.up);
+      expect(rig.publisher.externalState.mic, ExternalMic.off);
+      expect(rig.publisher.externalState.previewSound, isTrue);
+
+      rig.receivers.single.emit('connected');
+      await t.pump();
+      expect(rig.publisher.externalState.preview, ExternalPreview.playing);
+
+      await rig.publisher.stop();
+      expect(rig.receivers.single.closed, isTrue);
+      expect(rig.deletes.single.path, '/api/live/preview/whep/prev-1');
+      expect(rig.publisher.externalState.active, isFalse);
+    });
+
+    testWidgets('the iPad microphone alone is published by WHIP: audio-only '
+        'capture, no camera prompt, preview starts muted', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal(mix: mixOf(mic: true));
+      await t.pump();
+      final c = rig.constraints.single;
+      expect(c.containsKey('video'), isFalse);
+      expect((c['audio']! as Map)['echoCancellation'], false);
+      expect(rig.whipPosts, hasLength(1));
+      expect(rig.whepPosts, hasLength(1));
+      expect(rig.publisher.externalState.previewSound, isFalse);
+      expect(rig.publisher.current.outputs.kiosk!.phase, OutputPhase.connecting);
+      rig.peers.single.emit('connected');
+      await t.pump();
+      expect(rig.publisher.externalState.mic, ExternalMic.ok);
+      expect(rig.publisher.current.outputs.kiosk!.phase, OutputPhase.up);
+      expect(rig.publisher.h264Missing, isFalse);
+      await rig.publisher.stop();
+      expect(rig.captures.single.stopped, isTrue);
+    });
+
+    testWidgets('a WHEP Location off the WHEP path is never used', (t) async {
+      final rig = Rig()..whepLocation = '/api/live/whip/x';
+      await rig.goLiveExternal();
+      await rig.publisher.stop();
+      expect(rig.deletes, isEmpty);
+    });
+
+    testWidgets('a lost preview reconnects with backoff and a new recorder '
+        'segment follows the new stream', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal();
+      rig.receivers[0].emit('connected');
+      await t.pump();
+      expect(rig.recorders, hasLength(1));
+
+      rig.receivers[0].emit('failed');
+      await t.pump();
+      expect(rig.receivers[0].closed, isTrue);
+      expect(rig.publisher.externalState.preview, ExternalPreview.retrying);
+      expect(rig.deletes.single.path, '/api/live/preview/whep/prev-1');
+
+      await t.pump(const Duration(seconds: 2));
+      expect(rig.receivers, hasLength(2));
+      expect(rig.whepPosts, hasLength(2));
+      rig.receivers[1].emit('connected');
+      await t.pump();
+      expect(rig.recorders, hasLength(2));
+      expect(rig.recorders[0].stopped, isTrue);
+      final sid = rig.publisher.sessionId!;
+      expect(
+        (await rig.store.forSession(sid)).map((e) => e.index),
+        [0],
+      );
+      await rig.publisher.stop();
+      expect(
+        (await rig.store.forSession(sid)).map((e) => e.index),
+        [0, 1],
+      );
+    });
+
+    testWidgets('the received stream is recorded into the existing store',
+        (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal();
+      rig.receivers.single.emit('connected');
+      await t.pump();
+      expect(rig.recorders.single.started, isTrue);
+      expect(rig.publisher.externalState.recording, ExternalRecording.running);
+      expect(rig.publisher.current.recording.on, isTrue);
+      await rig.publisher.stop();
+      final segs =
+          await rig.store.forSession(rig.publisher.sessionId!);
+      expect(segs.single.bytes, 15);
+    });
+
+    testWidgets('a browser that cannot record a received stream: nothing is '
+        'recorded and the plan message is shown', (t) async {
+      final rig = Rig(canRecordReceived: false);
+      await rig.goLiveExternal();
+      rig.receivers.single.emit('connected');
+      await t.pump();
+      expect(rig.recorders, isEmpty);
+      final e = rig.publisher.externalState;
+      expect(e.recording, ExternalRecording.unavailable);
+      expect(
+        e.notice,
+        'Rakaman tidak dibuat apabila iPad mengawal Kamera luaran. Salinan '
+        'siaran ada di YouTube.',
+      );
+      await rig.publisher.stop();
+    });
+
+    testWidgets('a recorder that delivers no data is judged unable to '
+        'record the received stream', (t) async {
+      final rig = Rig(recordWatchdog: const Duration(seconds: 3))
+        ..silentRecorder = true;
+      await rig.goLiveExternal();
+      rig.receivers.single.emit('connected');
+      await t.pump();
+      expect(rig.publisher.externalState.recording, ExternalRecording.off);
+      await t.pump(const Duration(seconds: 3));
+      expect(rig.recorders.single.stopped, isTrue);
+      expect(
+        rig.publisher.externalState.recording,
+        ExternalRecording.unavailable,
+      );
+      expect(rig.publisher.externalState.notice, externalRecordingFallback());
+      await rig.publisher.stop();
+    });
+
+    testWidgets('a volume change goes to the box as the whole mix; a fast '
+        'run sends only the latest', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal();
+      final a = rig.publisher.setExternalMix(mixOf(camera: 80));
+      final b = rig.publisher.setExternalMix(mixOf(camera: 60));
+      final c = rig.publisher.setExternalMix(mixOf(camera: 40));
+      await Future.wait([a, b, c]);
+      expect(rig.audioCalls, hasLength(1));
+      expect(rig.audioCalls.single.camera.volume, 40);
+      expect(rig.whipPosts, isEmpty);
+    });
+
+    testWidgets('a change the box refuses throws and leaves the mix '
+        'alone', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal();
+      rig.audioError = StateError('refused');
+      await expectLater(
+        rig.publisher.setExternalMix(mixOf(mic: true)),
+        throwsStateError,
+      );
+      expect(rig.publisher.externalMix.deviceMic.enabled, isFalse);
+      expect(rig.constraints, isEmpty);
+      await rig.publisher.stop();
+    });
+
+    testWidgets('adding the iPad microphone: the box is told first, then '
+        'the microphone is published; removing it stops the WHIP',
+        (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal();
+      await rig.publisher.setExternalMix(mixOf(mic: true));
+      await t.pump();
+      expect(rig.audioCalls.single.deviceMic.enabled, isTrue);
+      expect(rig.constraints.single.containsKey('video'), isFalse);
+      expect(rig.whipPosts, hasLength(1));
+      expect(rig.publisher.externalState.previewSound, isFalse);
+      rig.peers.single.emit('connected');
+      await t.pump();
+      expect(rig.publisher.externalState.mic, ExternalMic.ok);
+
+      await rig.publisher.setExternalMix(mixOf());
+      expect(rig.audioCalls, hasLength(2));
+      expect(rig.peers.single.closed, isTrue);
+      expect(rig.captures.single.stopped, isTrue);
+      expect(
+        rig.deletes.where((r) => r.path == '/api/live/whip/sess-1'),
+        hasLength(1),
+      );
+      expect(rig.publisher.externalState.mic, ExternalMic.off);
+      await rig.publisher.stop();
+    });
+
+    testWidgets('microphone permission refused: the live goes on with the '
+        'camera audio and the box is told', (t) async {
+      final rig = Rig()..failMedia = true;
+      await rig.goLiveExternal(mix: mixOf(mic: true));
+      await t.pump();
+      expect(rig.whipPosts, isEmpty);
+      expect(rig.audioCalls.single.deviceMic.enabled, isFalse);
+      expect(rig.publisher.externalMix.deviceMic.enabled, isFalse);
+      expect(rig.publisher.externalState.notice, externalMicRefusedMessage());
+      expect(rig.publisher.current.phase, PublisherPhase.live);
+      await rig.publisher.stop();
+    });
+
+    testWidgets('microphone lost (Safari hidden): the live goes on with the '
+        'camera audio, the microphone comes back when the page does',
+        (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal(mix: mixOf(camera: 40, mic: true));
+      rig.peers[0].emit('connected');
+      await t.pump();
+
+      rig.page.isVisible = false;
+      rig.captures[0].end();
+      await t.pump();
+      var e = rig.publisher.externalState;
+      expect(e.mic, ExternalMic.lost);
+      expect(
+        e.notice,
+        'Mikrofon iPad terputus. Siaran diteruskan dengan audio kamera.',
+      );
+      expect(e.noticeHint, externalMicLostHint());
+      expect(rig.peers[0].closed, isTrue);
+      expect(rig.publisher.current.phase, PublisherPhase.live);
+      expect(rig.publisher.current.warnings, contains(Warning.screenLockRisk));
+      // The preview and its recording are not touched by the loss.
+      expect(rig.receivers.single.closed, isFalse);
+
+      rig.page.setVisible(true);
+      await t.pump();
+      expect(rig.captures, hasLength(2));
+      expect(rig.whipPosts, hasLength(2));
+      rig.peers[1].emit('connected');
+      await t.pump();
+      e = rig.publisher.externalState;
+      expect(e.mic, ExternalMic.ok);
+      expect(e.notice, isNull);
+      await rig.publisher.stop();
+    });
+
+    testWidgets('microphone lost with the camera at volume 0: no sound '
+        'message', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal(mix: mixOf(camera: 0, mic: true));
+      rig.page.isVisible = false;
+      rig.captures[0].end();
+      await t.pump();
+      expect(
+        rig.publisher.externalState.notice,
+        'Mikrofon iPad terputus. Siaran diteruskan tanpa bunyi.',
+      );
+      await rig.publisher.stop();
+    });
+
+    testWidgets('the box status feeds the alignment rows; "failed" with the '
+        'camera audible offers the microphone alone', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal(mix: mixOf(camera: 40, mic: true));
+      rig.publisher.applyBoxStatus({
+        'warnings': ['audio_align_failed'],
+        'audio': {
+          'sources': [
+            {'id': 'camera', 'enabled': true, 'volume': 40, 'state': 'ok'},
+            {
+              'id': 'deviceMic',
+              'enabled': true,
+              'volume': 100,
+              'state': 'ok',
+              'align': {'state': 'failed', 'delayMs': 600},
+            },
+          ],
+        },
+      });
+      var e = rig.publisher.externalState;
+      expect(e.source('camera')!.volume, 40);
+      expect(e.source('deviceMic')!.alignState, 'failed');
+      expect(e.canUseMicOnly, isTrue);
+      expect(e.notice, startsWith('Penyelarasan automatik belum berjaya, jadi'));
+
+      await rig.publisher.useMicOnly();
+      expect(rig.audioCalls.last.camera.volume, 0);
+      expect(rig.audioCalls.last.deviceMic.enabled, isTrue);
+      e = rig.publisher.externalState;
+      expect(e.canUseMicOnly, isFalse);
+      expect(
+        e.notice,
+        'Penyelarasan automatik belum berjaya. Bunyi mungkin tidak selari '
+        'dengan gambar.',
+      );
+      await rig.publisher.stop();
+    });
+
+    testWidgets('a box that reports the microphone lost shows the message '
+        'even before this device notices', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal(mix: mixOf(mic: true));
+      rig.publisher.applyBoxStatus({
+        'audio': {
+          'sources': [
+            {'id': 'deviceMic', 'enabled': true, 'volume': 100, 'state': 'lost'},
+          ],
+        },
+      });
+      expect(rig.publisher.externalState.notice, contains('terputus'));
+      await rig.publisher.stop();
+    });
+
+    testWidgets('switch to the iPad camera: camera and microphone go to the '
+        'box, the microphone-only leg ends; back restores it', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal(mix: mixOf(mic: true));
+      rig.peers[0].emit('connected');
+      await t.pump();
+
+      expect(await rig.publisher.switchToIpadCamera(), isTrue);
+      // the box is asked first (it authorises the new path), then the leg is made
+      expect(rig.audioVideos.last, 'phone');
+      expect((rig.constraints[1]['video']! as Map)['width'], 1280);
+      expect(rig.captures[0].stopped, isTrue);
+      expect(rig.peers[0].closed, isTrue);
+      expect(rig.whipPosts, hasLength(2));
+      expect(rig.publisher.externalState.video, ExternalVideo.ipadCamera);
+      rig.peers[1].emit('connected');
+      await t.pump();
+      expect(rig.publisher.externalState.mic, ExternalMic.ok);
+      // The recording keeps following the box's stream.
+      expect(rig.recorders.length, lessThanOrEqualTo(1));
+
+      expect(await rig.publisher.switchToExternalCamera(), isTrue);
+      expect(rig.audioVideos.last, 'external');
+      expect(rig.captures[1].stopped, isTrue);
+      expect(rig.constraints[2].containsKey('video'), isFalse);
+      expect(rig.whipPosts, hasLength(3));
+      expect(rig.publisher.externalState.video, ExternalVideo.external);
+      await rig.publisher.stop();
+    });
+
+    testWidgets('switch to the iPad camera when the camera cannot be opened: '
+        'nothing changes', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal(mix: mixOf(mic: true));
+      rig.failMedia = true;
+      expect(await rig.publisher.switchToIpadCamera(), isFalse);
+      expect(rig.captures[0].stopped, isFalse);
+      expect(rig.publisher.externalState.video, ExternalVideo.external);
+      await rig.publisher.stop();
+    });
+
+    testWidgets('the box refusing the switch to the iPad camera: the camera '
+        'just opened is released and nothing changes', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal(mix: mixOf(mic: true));
+      rig.audioError = const PublisherException('audio_unsupported');
+      expect(await rig.publisher.switchToIpadCamera(), isFalse);
+      expect(rig.captures[0].stopped, isFalse);
+      expect(rig.publisher.externalState.video, ExternalVideo.external);
+      await rig.publisher.stop();
+    });
+
+    testWidgets('during a live a tried offset goes to the box with the mix, '
+        'once per value', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal(mix: mixOf(mic: true));
+      final before = rig.audioOffsets.length;
+      rig.publisher.setFallbackOffset(350);
+      await t.pump();
+      expect(rig.audioOffsets.length, before + 1);
+      expect(rig.audioOffsets.last, 350);
+      rig.publisher.setFallbackOffset(350);
+      await t.pump();
+      expect(rig.audioOffsets.length, before + 1); // unchanged value: not sent again
+      await rig.publisher.stop();
+    });
+
+    testWidgets('the fallback offset is tried against the preview, clamped '
+        'to 0..2000 in steps of 50, and saved on request', (t) async {
+      final rig = Rig();
+      await rig.publisher.prepareExternal(
+        const PublisherConfig(),
+        cameraHasAudio: false,
+        fallbackOffsetMs: 400,
+      );
+      expect(rig.publisher.externalState.fallbackOffsetMs, 400);
+      rig.publisher.setFallbackOffset(1234);
+      expect(rig.publisher.externalState.fallbackOffsetMs, 1250);
+      rig.publisher.setFallbackOffset(9999);
+      expect(rig.publisher.externalState.fallbackOffsetMs, 2000);
+      rig.publisher.setFallbackOffset(-5);
+      expect(rig.publisher.externalState.fallbackOffsetMs, 0);
+      rig.publisher.setFallbackOffset(700);
+      await rig.publisher.saveFallbackOffset();
+      expect(rig.savedOffsets.single, ('deviceMic', 700));
+      expect(
+        rig.publisher.externalState.notice,
+        "Kamera ini tiada audio. Tekan 'Tambah audio' untuk memilih "
+        'mikrofon, atau siaran tiada bunyi.',
+      );
+    });
+
+    testWidgets('the ordinary camera live is untouched: its start still '
+        'needs prepare, and records its own capture', (t) async {
+      final rig = Rig();
+      await rig.goLive();
+      expect(rig.publisher.externalState.active, isFalse);
+      expect(rig.whepPosts, isEmpty);
+      expect(rig.recorders, hasLength(1));
+      await rig.publisher.stop();
     });
   });
 

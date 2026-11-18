@@ -1,8 +1,10 @@
+import { refLookup } from '../auth/ids.ts';
 /**
  * /api/finance/*. Every answer is `Cache-Control: no-store`. A finance value never appears in a URL (ids only) and
  * never in a log. Reads need finance:read; writes, photos, the PDF and the audit view need finance:write; lookups
  * and month states are the Pentadbir's (settings:write) and the handler also requires finance:write.
  */
+import { reqSurau } from '../reqSurau.ts';
 import { createReadStream } from 'node:fs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DatabaseSync } from 'node:sqlite';
@@ -10,7 +12,7 @@ import { balances, klDateOf, monthIn, monthOut } from '@surau/core';
 import type { FinanceEntry, Fund } from '@surau/core';
 import { identityCan, tooMany } from '../auth/authz.ts';
 import type { Limiters } from '../auth/authz.ts';
-import { logChange, tx } from '../auth/users.ts';
+import { logChange, notStarChangeSql, tx } from '../auth/users.ts';
 import type { ChangeBus } from '../events.ts';
 import { getSettings, getVersion } from '../settingsStore.ts';
 import {
@@ -27,13 +29,12 @@ export interface FinanceRouteDeps {
   dataDir: string;
   bus: ChangeBus;
   role: 'box' | 'cloud';
-  surauId: string;
   now: () => Date;
   limiters: Limiters;
   actorOf: (request: FastifyRequest) => string;
   deviceOf: (request: FastifyRequest) => string | undefined;
   /** Builds the frozen report JSON when a month is closed; the default is the report module's. */
-  freeze?: (db: DatabaseSync, ym: string, now: Date) => string;
+  freeze?: (db: DatabaseSync, ym: string, now: Date, surauId: string) => string;
 }
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,100}$/;
@@ -57,9 +58,9 @@ function stripPhoto<T extends { photoId: string | null }>(e: T, canPhoto: boolea
 export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDeps): void {
   const { db, dataDir, bus } = deps;
 
-  const emit = (): void => bus.emit(getVersion(db));
+  const emit = (request: FastifyRequest): void => bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
   const writer = (request: FastifyRequest): boolean => identityCan(request.auth, 'finance:write');
-  const appendCtx = () => ({ now: deps.now(), role: deps.role, surauId: deps.surauId });
+  const appendCtx = (request: FastifyRequest) => ({ now: deps.now(), role: deps.role, surauId: reqSurau(request) });
   const metaOf = (request: FastifyRequest) => {
     const deviceId = deps.deviceOf(request);
     return deviceId === undefined ? undefined : { deviceId };
@@ -73,36 +74,36 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
       const url = request.url;
       if (!url.startsWith('/api/finance/')) return undefined;
       // Module off (decision 25): data is kept and finance:write holders keep working; others see nothing.
-      if (getSettings(db).finance.enabled !== true && !writer(request)) {
+      if (getSettings(db, reqSurau(request)).finance.enabled !== true && !writer(request)) {
         return reply.code(404).send({ errors: ['module_off'], code: 'module_off' });
       }
       // The Pentadbir MAXCOM sees every surau's money by right; the Pentadbir Surau must be able to see that they did.
-      noteFinanceView(db, request.auth, request.routeOptions.url ?? 'finance', deps.now(), deps.actorOf(request), deps.deviceOf(request));
+      noteFinanceView(db, request.auth, request.routeOptions.url ?? 'finance', deps.now(), deps.actorOf(request), deps.deviceOf(request), reqSurau(request));
       return undefined;
     });
 
     // The module is switched on in Tetapan; the starting lists are written the first time a box is asked.
     const seedIfNeeded = (request: FastifyRequest): void => {
       // only a box, only with the module on, and only on behalf of someone who may write: a reader never causes a write
-      if (deps.role !== 'box' || getSettings(db).finance.enabled !== true || !writer(request)) return;
-      if (financeCounts(db).funds > 0) return;
-      ensureSeeded(db, deps.actorOf(request), deps.now());
-      emit();
+      if (deps.role !== 'box' || getSettings(db, reqSurau(request)).finance.enabled !== true || !writer(request)) return;
+      if (financeCounts(db, reqSurau(request)).funds > 0) return;
+      ensureSeeded(db, deps.actorOf(request), deps.now(), reqSurau(request));
+      emit(request);
     };
 
     scope.get('/api/finance/summary', async (request) => {
       seedIfNeeded(request);
-      const entries = allEntries(db);
-      const funds = listFunds(db);
+      const entries = allEntries(db, reqSurau(request));
+      const funds = listFunds(db, undefined, reqSurau(request));
       const bal = balances(entries, funds);
       const now = deps.now();
       const ym = klDateOf(now).slice(0, 7);
-      const fin = getSettings(db).finance as unknown as { startedOn: string };
+      const fin = getSettings(db, reqSurau(request)).finance as unknown as { startedOn: string };
       const since = (request.query as { since?: unknown }).since;
       const adjusts = entries.filter((e) => e.kind === 'adjust');
       return {
         funds: funds.map((f): Fund & { balanceSen: number } => ({ ...f, balanceSen: bal[f.id] ?? 0 })),
-        month: { ym, status: monthStatus(db, ym), inSen: monthIn(entries, ym), outSen: monthOut(entries, ym) },
+        month: { ym, status: monthStatus(db, ym, reqSurau(request)), inSen: monthIn(entries, ym), outSen: monthOut(entries, ym) },
         counts: {
           entries: entries.length,
           corrections: adjusts.length,
@@ -120,13 +121,13 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
       if (q.since !== undefined) { if (typeof q.since !== 'string' || !ISO_RE.test(q.since)) return reply.code(400).send({ errors: ['since must be a time'] }); opts.sinceEditedAt = q.since; }
       if (q.limit !== undefined) { const n = Number(q.limit); if (!Number.isInteger(n) || n < 1) return reply.code(400).send({ errors: ['limit is not valid'] }); opts.limit = n; }
       const can = writer(request);
-      return { entries: listEntries(db, opts).map((e) => stripPhoto(e, can)) };
+      return { entries: listEntries(db, opts, reqSurau(request)).map((e) => stripPhoto(e, can)) };
     });
 
     scope.get('/api/finance/entries/:id', async (request, reply) => {
       const { id } = request.params as { id: string };
       if (!SAFE_ID.test(id)) return reply.code(404).send({ errors: ['not found'] });
-      const got = getEntry(db, id);
+      const got = getEntry(db, id, reqSurau(request));
       if (got === null) return reply.code(404).send({ errors: ['not found'] });
       const can = writer(request);
       return {
@@ -143,8 +144,8 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
       if (!isPlain(body)) return reply.code(400).send({ errors: ['body must be a JSON object'] });
       if (body.id !== undefined && body.id !== id) return reply.code(400).send({ errors: ['id in the body must match the path'] });
       try {
-        const entry: FinanceEntry = tx(db, () => appendEntryIn(db, { ...body, id }, deps.actorOf(request), appendCtx(), metaOf(request)));
-        emit();
+        const entry: FinanceEntry = tx(db, () => appendEntryIn(db, { ...body, id }, deps.actorOf(request), appendCtx(request), metaOf(request)));
+        emit(request);
         return { entry };
       } catch (error) {
         return failure(reply, error);
@@ -154,15 +155,15 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
     scope.get('/api/finance/funds', async (request) => {
       seedIfNeeded(request);
       const all = (request.query as { all?: unknown }).all === '1';
-      return { funds: listFunds(db, { includeArchived: all }) };
+      return { funds: listFunds(db, { includeArchived: all }, reqSurau(request)) };
     });
 
     scope.put('/api/finance/funds/:id', async (request, reply) => {
       const { id } = request.params as { id: string };
       if (!writer(request)) return reply.code(403).send({ errors: ['forbidden'] });
       try {
-        const fund = tx(db, () => putFundIn(db, id, request.body, deps.actorOf(request), metaOf(request)));
-        emit();
+        const fund = tx(db, () => putFundIn(db, id, request.body, deps.actorOf(request), metaOf(request), reqSurau(request)));
+        emit(request);
         return { fund };
       } catch (error) {
         return failure(reply, error);
@@ -172,34 +173,34 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
     scope.get('/api/finance/perihal', async (request) => {
       seedIfNeeded(request);
       const all = (request.query as { all?: unknown }).all === '1';
-      return { perihal: listPerihal(db, { includeArchived: all }) };
+      return { perihal: listPerihal(db, { includeArchived: all }, reqSurau(request)) };
     });
 
     scope.put('/api/finance/perihal/:id', async (request, reply) => {
       const { id } = request.params as { id: string };
       if (!writer(request)) return reply.code(403).send({ errors: ['forbidden'] });
       try {
-        const perihal = tx(db, () => putPerihalIn(db, id, request.body, deps.actorOf(request), metaOf(request)));
-        emit();
+        const perihal = tx(db, () => putPerihalIn(db, id, request.body, deps.actorOf(request), metaOf(request), undefined, reqSurau(request)));
+        emit(request);
         return { perihal };
       } catch (error) {
         return failure(reply, error);
       }
     });
 
-    scope.get('/api/finance/months', async () => ({ months: listMonths(db) }));
+    scope.get('/api/finance/months', async (request) => ({ months: listMonths(db, reqSurau(request)) }));
 
     scope.put('/api/finance/months/:ym', async (request, reply) => {
       const { ym } = request.params as { ym: string };
       if (!writer(request)) return reply.code(403).send({ errors: ['forbidden'] });
       try {
         const now = deps.now();
-        const freeze = deps.freeze ?? ((d: DatabaseSync, m: string, n: Date) => freezeReport(d, m, n, deps.role));
+        const freeze = deps.freeze ?? ((d: DatabaseSync, m: string, n: Date, sid: string) => freezeReport(d, m, n, deps.role, sid));
         const month = tx(db, () =>
           putMonthIn(db, ym, request.body, deps.actorOf(request), {
-            now, role: deps.role, surauId: deps.surauId, ...(freeze ? { freeze: (m: string) => freeze(db, m, now) } : {}),
+            now, role: deps.role, surauId: reqSurau(request), ...(freeze ? { freeze: (m: string) => freeze(db, m, now, reqSurau(request)) } : {}),
           }, metaOf(request)));
-        emit();
+        emit(request);
         return { month };
       } catch (error) {
         return failure(reply, error);
@@ -223,8 +224,8 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
         return reply.code(400).send({ errors: ['photo must be a JPEG image'] });
       }
       try {
-        const saved = tx(db, () => putPhoto(db, dataDir, body, entryId, deps.actorOf(request), deps.now(), metaOf(request)));
-        const row = db.prepare('SELECT width, height FROM finance_photos WHERE id = ?').get(saved.id);
+        const saved = tx(db, () => putPhoto(db, dataDir, body, entryId, deps.actorOf(request), deps.now(), metaOf(request), reqSurau(request)));
+        const row = db.prepare('SELECT width, height FROM finance_photos WHERE surau_id = ? AND id = ?').get(reqSurau(request), saved.id);
         return reply.code(200).send({ id: saved.id, bytes: saved.bytes, width: row?.width ?? null, height: row?.height ?? null });
       } catch (error) {
         return failure(reply, error);
@@ -234,7 +235,7 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
     scope.get('/api/finance/photos/:id', async (request, reply) => {
       const { id } = request.params as { id: string };
       if (!PHOTO_ID_RE.test(id)) return reply.code(404).send({ errors: ['not found'] });
-      const found = photoPath(db, dataDir, id);
+      const found = photoPath(db, dataDir, id, reqSurau(request));
       if (found === null) return reply.code(404).send({ errors: ['not found'] });
       return reply
         .header('Content-Type', found.mime)
@@ -255,15 +256,18 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
       // No `since`: the newest rows, newest first (what the screen shows). With `since` (a change id, 0 for the start): the rows AFTER it,
       // oldest first up to the limit, and `next` is the cursor for the following page (null when this page is the last).
       const forward = q.since !== undefined;
+      // Only the request's surau (Plan 14 section 3.1); a surau session never sees a Pentadbir MAXCOM row (decision 22).
+      const surauId = reqSurau(request);
+      const ops = request.auth != null && request.auth.kind === 'user' && request.auth.ops === true;
       const changes = db.prepare(
         `SELECT c.id, c.at, c.actor, c.entity, c.entity_id, c.after_json, c.device_id, c.origin, c.edited_at, c.synced_at,
-                u.name AS user_name, f.cloud_received_at AS cloud_received_at
+                COALESCE(c.actor_name, u.name) AS user_name, f.cloud_received_at AS cloud_received_at
            FROM change_log c
            LEFT JOIN users u ON c.actor = 'user:' || u.id
-           LEFT JOIN finance_entries f ON c.entity = 'finance:entry' AND f.id = c.entity_id
-          WHERE c.entity LIKE 'finance:%' AND c.id > ?
+           LEFT JOIN finance_entries f ON c.entity = 'finance:entry' AND f.id = c.entity_id AND f.surau_id = c.surau_id
+          WHERE c.surau_id = ? AND c.entity LIKE 'finance:%' AND c.id > ?${ops ? '' : ' AND ' + notStarChangeSql('c')}
           ORDER BY c.id ${forward ? 'ASC' : 'DESC'} LIMIT ?`,
-      ).all(sinceRaw, limit);
+      ).all(surauId, sinceRaw, limit);
       const fullPage = forward && changes.length === limit;
       const lastChangeId = changes.length > 0 ? Number(changes[changes.length - 1]!.id) : null;
       // Refused ops are in another table: with `since` they are bounded by the time of that change row (and, on a full
@@ -278,16 +282,19 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
         `SELECT a.id, a.at, a.user_id, a.device_id, a.detail, u.name AS user_name
            FROM auth_log a LEFT JOIN users u ON a.user_id = u.id
           WHERE a.event = 'sync_refused' AND a.detail LIKE 'apply_finance_%'
+            AND a.device_id IN (SELECT d.id FROM devices d WHERE d.surau_id = ?${ops ? '' : " AND d.user_id NOT IN (SELECT id FROM users WHERE surau_id = '*')"})
             ${lowAt !== null ? 'AND a.at >= ?' : ''} ${highAt !== null ? 'AND a.at <= ?' : ''}
           ORDER BY a.id ${forward ? 'ASC' : 'DESC'} LIMIT ?`,
-      ).all(...(lowAt !== null ? [lowAt] : []), ...(highAt !== null ? [highAt] : []), limit);
+      ).all(surauId, ...(lowAt !== null ? [lowAt] : []), ...(highAt !== null ? [highAt] : []), limit);
       const parse = (v: unknown): unknown => {
         if (typeof v !== 'string') return null;
         try { return JSON.parse(v) as unknown; } catch { return null; }
       };
+      const uref = refLookup(db, 'user', ops);
       const rows = [
         ...changes.map((r) => ({
           id: `c${Number(r.id)}`, at: String(r.at), actor: String(r.actor), userName: typeof r.user_name === 'string' ? r.user_name : null,
+          userRef: String(r.actor).startsWith('user:') ? uref(String(r.actor).slice(5)) : null,
           deviceId: typeof r.device_id === 'string' ? r.device_id : null, entity: String(r.entity),
           entityId: typeof r.entity_id === 'string' ? r.entity_id : null,
           editedAt: typeof r.edited_at === 'string' ? r.edited_at : String(r.at),
@@ -297,7 +304,8 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: FinanceRouteDe
         })),
         ...refused.map((r) => ({
           id: `r${Number(r.id)}`, at: String(r.at), actor: typeof r.user_id === 'string' ? `user:${r.user_id}` : 'unknown',
-          userName: typeof r.user_name === 'string' ? r.user_name : null, deviceId: typeof r.device_id === 'string' ? r.device_id : null,
+          userName: typeof r.user_name === 'string' ? r.user_name : null, userRef: typeof r.user_id === 'string' ? uref(r.user_id) : null,
+          deviceId: typeof r.device_id === 'string' ? r.device_id : null,
           entity: 'finance:refused', entityId: null, editedAt: String(r.at), syncedAt: null, cloudReceivedAt: null, origin: 'refused',
           after: null as unknown, refused: { detail: String(r.detail) },
         })),

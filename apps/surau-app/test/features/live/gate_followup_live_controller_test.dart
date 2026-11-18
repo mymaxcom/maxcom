@@ -155,6 +155,7 @@ void main() {
     expect(e.state.warnings, {'cloud_unreachable'});
     // the banner is the one place that says it
     expect(e.state.notice, isNull);
+    e.container.dispose(); // the live's heartbeat ends with its controller
   });
 
   testWidgets('cloud_unreachable comes and goes with the polls while live, '

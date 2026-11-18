@@ -247,6 +247,11 @@ describe('fetchEveryAyahSurah', () => {
 describe('islamic routes', () => {
   async function build(fetchImpl: typeof fetch = completeFetch(), cacheMaxMb = 300) {
     const app = Fastify();
+    // the authorisation hook of the real app gives every tenant route its surau; this bare app plays that part
+    app.decorateRequest('tenant', null);
+    app.addHook('onRequest', async (request) => {
+      request.tenant = { surauId: 'sdm' };
+    });
     const logs: string[] = [];
     registerIslamicRoutes(app, {
       dataDir: dir,

@@ -16,43 +16,12 @@ import '../settings_form.dart' show copyJson;
 import '../settings_repository.dart';
 import '../shell/permissions.dart';
 import 'location_screen.dart';
+import 'prayer_names.dart';
 import 'prayer_repository.dart';
 import 'widgets/country_picker.dart';
 import 'widgets/order_list.dart';
 
 const List<String> prayerKeys = ['imsak', 'subuh', 'syuruk', 'zohor', 'asar', 'maghrib', 'isyak'];
-
-const Map<String, String> prayerNamesMs = {
-  'imsak': 'Imsak',
-  'subuh': 'Subuh',
-  'syuruk': 'Syuruk',
-  'zohor': 'Zohor',
-  'asar': 'Asar',
-  'maghrib': 'Maghrib',
-  'isyak': 'Isyak',
-};
-
-/// `METHODS` of packages/core/src/prayer/methods.ts, in its order.
-const Map<String, String> methodLabelsMs = {
-  'mwl': 'Liga Dunia Islam',
-  'egyptian': 'Mesir',
-  'karachi': 'Karachi',
-  'ummAlQura': 'Umm al-Qura',
-  'dubai': 'Dubai',
-  'qatar': 'Qatar',
-  'kuwait': 'Kuwait',
-  'moonsighting': 'Jawatankuasa Moonsighting',
-  'singapore': 'Singapura',
-  'tehran': 'Tehran',
-  'turkey': 'Turki (Diyanet)',
-  'northAmerica': 'Amerika Utara (ISNA)',
-  'jakim': 'JAKIM 18/18',
-  'kemenag': 'Kemenag Indonesia 20/18',
-  'uoif': 'UOIF Perancis 12/12',
-  'morocco': 'Maghribi 19/17',
-  'algeria': 'Algeria 18/17',
-  'russia': 'Rusia 16/15',
-};
 
 /// The difference above which a day is flagged (`CROSS_CHECK_MINUTES`).
 const int crossCheckMinutes = 2;
@@ -233,9 +202,9 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
   }
 
   String _methodLabel(S s, String key) {
-    if (key != 'auto') return methodLabelsMs[key] ?? key;
+    if (key != 'auto') return methodLabel(s, key);
     final def = _countryInfo?.method;
-    return def == null ? s.srcMethodAuto : s.srcMethodAutoNamed(methodLabelsMs[def] ?? def);
+    return def == null ? s.srcMethodAuto : s.srcMethodAutoNamed(methodLabel(s, def));
   }
 
   String _madhabName(S s, String? key) => key == 'hanafi' ? s.srcMadhabHanafi : s.srcMadhabShafi;
@@ -248,7 +217,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
       current: _method,
       items: [
         PickerItem(value: 'auto', title: _methodLabel(s, 'auto')),
-        for (final e in methodLabelsMs.entries) PickerItem(value: e.key, title: e.value),
+        for (final id in methodIds) PickerItem(value: id, title: methodLabel(s, id)),
       ],
     );
     if (picked != null && mounted) setState(() => _method = picked);
@@ -320,7 +289,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
             ? s.srcOfficialNone
             : officialYear.fetchedAt == null
             ? s.srcOfficialStored('${officialYear.year}')
-            : s.srcOfficialFetched('${officialYear.year}', shortDateMs(officialYear.fetchedAt!)),
+            : s.srcOfficialFetched('${officialYear.year}', shortDate(s, officialYear.fetchedAt!)),
       ),
       'calc' => OrderEntry(
         id: id,
@@ -401,7 +370,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
               ),
               for (final p in prayerKeys)
                 _stepperRow(
-                  label: prayerNamesMs[p]!,
+                  label: prayerName(s, p),
                   id: 'src-adj-$p',
                   value: _adjust[p]!,
                   min: -30,
@@ -476,11 +445,11 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
     final m = int.parse(today.substring(5, 7));
     final d = int.parse(today.substring(8, 10));
     return [
-      SectionLabel(s.srcPreviewTitle('$d ${monthsLongMs[m - 1]} $y')),
+      SectionLabel(s.srcPreviewTitle('$d ${monthLong(s, m)} $y')),
       Card(child: _previewTable(s, text, first)),
       const SizedBox(height: 20),
       SectionLabel(s.srcCrossTitle),
-      Card(child: _crossBlock(s, text, days, '${monthsLongMs[m - 1]} $y')),
+      Card(child: _crossBlock(s, text, days, '${monthLong(s, m)} $y')),
       if (_error != null) ...[const SizedBox(height: 12), ErrorLine(_error!)],
       if (!widget.readOnly) ...[
         const SizedBox(height: 16),
@@ -511,7 +480,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
     final num = text.bodyMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
     Widget cell(Widget c, {bool end = false}) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
-      child: Align(alignment: end ? Alignment.centerRight : Alignment.centerLeft, child: c),
+      child: Align(alignment: end ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart, child: c),
     );
     Widget row(List<Widget> cells, {Key? key}) => Padding(
       key: key,
@@ -536,7 +505,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
           cell(Text(s.srcPreviewDiff, style: head), end: true),
         ]),
         const Divider(),
-        for (final p in prayerKeys) _previewRow(p, first, calc, row, cell, num),
+        for (final p in prayerKeys) _previewRow(s, p, first, calc, row, cell, num),
         const Divider(),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -547,6 +516,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
   }
 
   Widget _previewRow(
+    S s,
     String p,
     ResolvedDay? first,
     ResolvedDay? calc,
@@ -559,7 +529,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
     final diff = a != null && b != null ? _toMinutes(a) - _toMinutes(b) : null;
     final over = diff != null && diff.abs() > crossCheckMinutes;
     return row(key: ValueKey('src-preview-$p'), [
-      cell(Text(prayerNamesMs[p]!, style: num.copyWith(fontWeight: FontWeight.w600))),
+      cell(Text(prayerName(s, p), style: num.copyWith(fontWeight: FontWeight.w600))),
       cell(Text(a ?? '-', style: num.copyWith(fontWeight: FontWeight.w700))),
       cell(Text(b ?? '-', style: num)),
       cell(
@@ -583,7 +553,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
     final cross = days?.crossCheck;
     final write = !widget.readOnly;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 10, 12, 16),
+      padding: const EdgeInsetsDirectional.fromSTEB(18, 10, 12, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -633,7 +603,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
               children: [
                 for (final p in prayerKeys)
                   StateChip(
-                    label: '${prayerNamesMs[p]} ${cross.maxDiff[p] ?? 0}',
+                    label: '${prayerName(s, p)} ${cross.maxDiff[p] ?? 0}',
                     background: (cross.maxDiff[p] ?? 0) > crossCheckMinutes ? SurauColors.goldSoft : SurauColors.paperDeep,
                     foreground: (cross.maxDiff[p] ?? 0) > crossCheckMinutes ? SurauColors.ink : SurauColors.muted,
                   ),
@@ -650,7 +620,7 @@ class _SourcesFormState extends ConsumerState<_SourcesForm> {
               )
             else if (write) ...[
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: OutlinedButton.icon(
                   key: const ValueKey('src-suggest'),
                   onPressed: _useSuggestion,

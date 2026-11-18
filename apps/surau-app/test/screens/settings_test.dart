@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/features/registry.g.dart';
 import 'package:surau_app/features/settings_repository.dart';
@@ -18,6 +19,7 @@ import 'package:surau_app/features/settings_repository.dart';
 import '../features/fakes.dart';
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
+import 'package:surau_app/ops/ops_build.dart';
 
 Future<ShellHarness> openSettings(
   WidgetTester tester, [
@@ -28,6 +30,12 @@ Future<ShellHarness> openSettings(
   h.router.go(path);
   await settle(tester);
   return h;
+}
+
+/// Unfolds the Solat group (every group is folded when the app starts).
+Future<void> openSolat(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('settings-group-solat')));
+  await settle(tester);
 }
 
 Finder cell(String day, String prayer) => find.byKey(ValueKey('setting-minutes.$day.$prayer'));
@@ -51,11 +59,48 @@ String screenText(WidgetTester tester) => tester
 bool saveEnabled(WidgetTester tester) => tester.widget<FilledButton>(save).enabled;
 
 void main() {
+  testWidgets('the list, a feature page and a feature help follow the app language (ms, en, ar)', (tester) async {
+    final h = await openSettings(tester);
+    expect(find.text('Solat'), findsOneWidget);
+
+    await h.container.read(appLangProvider.notifier).set(AppLang.en);
+    await settle(tester);
+    expect(find.text('Prayer'), findsOneWidget);
+    expect(find.text('Solat'), findsNothing);
+
+    await h.container.read(appLangProvider.notifier).set(AppLang.ar);
+    await settle(tester);
+    expect(find.text('الصلاة'), findsOneWidget);
+    expect(find.text('Prayer'), findsNothing);
+    await openSolat(tester);
+    final row = find.byKey(const ValueKey('settings-row-prayerBar'));
+    await reveal(tester, row);
+    expect(find.descendant(of: row, matching: find.text('شريط مواقيت الصلاة')), findsOneWidget);
+    expect(find.descendant(of: row, matching: find.text('مواقيت صلاة اليوم في أسفل شاشة التلفاز.')), findsOneWidget);
+
+    // A feature page: its title, the day names of its grid and the typed text stay.
+    h.router.go('/settings/iqamahCountdown');
+    await settle(tester);
+    expect(find.text('العد التنازلي للإقامة'), findsWidgets);
+    expect(find.text('الأحد'), findsWidgets);
+    expect(find.text('Ahad'), findsNothing);
+
+    // A feature that has its own help sentence under the switch.
+    h.router.go('/settings/appLock');
+    await settle(tester);
+    expect(find.byKey(const ValueKey('feature-help-appLock')), findsOneWidget);
+    expect(find.textContaining('رمز PIN'), findsWidgets);
+
+    await h.container.read(appLangProvider.notifier).set(AppLang.ms);
+    await settle(tester);
+    expect(find.textContaining('Bila dimatikan (lalai)'), findsOneWidget);
+  });
+
   testWidgets('the list: groups with counts, every feature behind its group, locked and off marked', (tester) async {
     final h = await openSettings(tester);
     expect(h.location, '/settings');
     expect(find.text('Solat'), findsOneWidget);
-    expect(find.text('Sentiasa hidup'), findsWidgets);
+    expect(find.text('Sentiasa hidup'), findsNothing, reason: 'every group folded at start');
     expect(find.textContaining('Kotak'), findsNothing);
     await expectGoldens(tester, h.app, 'settings_list');
 
@@ -63,7 +108,7 @@ void main() {
     await pumpAtSize(tester, h.app, GoldenSize.ipadMiniLandscape);
     // A group whose features are all hidden is not drawn (e.g. jemaah while jemaahPage and calendarFeed are planned).
     bool hasVisible(String g) => features.any((f) => f.group == g && !hiddenFeatures.contains(f.key));
-    for (final g in ['skrin', 'kandungan', 'quran', 'audio', 'live', 'kewangan', 'jemaah', 'awan', 'keselamatan'].where(hasVisible)) {
+    for (final g in ['solat', 'skrin', 'kandungan', 'quran', 'audio', 'live', 'kewangan', 'jemaah', 'awan', 'keselamatan'].where(hasVisible)) {
       final head = find.byKey(ValueKey('settings-group-$g'));
       await reveal(tester, head);
       await tester.tap(head);
@@ -79,8 +124,8 @@ void main() {
       if (find.descendant(of: row, matching: find.text('Mati')).evaluate().isNotEmpty) off.add(f.key);
       if (find.descendant(of: row, matching: find.text('Sentiasa hidup')).evaluate().isNotEmpty) locked++;
     }
-    expect(locked, 8, reason: 'prayerBar, clock, prayerSequenceSafety, zone, location, prayerSources, prayerCalc, surauInfo; the Lanjutan features are hidden from an admin');
-    expect(off, unorderedEquals(['firstAzanSubuh', 'tilawah', 'appLock', 'finance', 'tabungCard']), reason: 'the features with no settings are switches now; Kewangan and Kad tabung are off until switched on');
+    expect(locked, 9, reason: 'prayerBar, clock, prayerSequenceSafety, zone, location, prayerSources, prayerCalc, surauInfo, language; the Lanjutan features are hidden from an admin');
+    expect(off, unorderedEquals(['firstAzanSubuh', 'tilawah', 'appLock', 'finance', 'tabungCard', 'liveCamera']), reason: 'the features with no settings are switches now; Kewangan and Kad tabung are off until switched on');
 
     await reveal(tester, find.text('Kiraan detik iqamah'));
     await tester.tap(find.text('Kiraan detik iqamah'));
@@ -92,6 +137,7 @@ void main() {
     'the two data pages are reached from the Solat group: Data waktu solat (prayer:import) and Al-Quran & audio tilawah',
     (tester) async {
       final h = await openSettings(tester);
+      await openSolat(tester);
       await reveal(tester, find.byKey(const ValueKey('settings-prayer-data')));
       expect(find.text('Data waktu solat'), findsOneWidget);
       expect(find.text('212 hari lagi'), findsOneWidget, reason: 'the health figure as the hint');
@@ -112,6 +158,7 @@ void main() {
 
       // An AJK may look at the Quran page but never imports prayer data.
       final ajk = await openSettings(tester, '/settings', const ['ajk']);
+      await openSolat(tester);
       await reveal(tester, find.byKey(const ValueKey('settings-islamic')));
       expect(find.byKey(const ValueKey('settings-prayer-data')), findsNothing);
       expect(find.text('Data waktu solat'), findsNothing);
@@ -250,6 +297,30 @@ void main() {
     await tester.tap(save);
     await settle(tester);
     expect(jsonDecode(h.box.byPath('/api/settings/appLock')!.body), {'enabled': true});
+  });
+
+  testWidgets('[K1] the lock is on at the box: the page shows on and switching it off sends enabled false', (tester) async {
+    final h = await pumpShell(tester, roles: const ['admin'], features: const {'appLock': true});
+    h.router.go('/settings/appLock');
+    await settle(tester);
+    expect(tester.widget<Switch>(featureSwitch).value, isTrue);
+    expect(find.text('Hidup'), findsWidgets);
+    await tester.tap(featureSwitch);
+    await settle(tester);
+    expect(tester.widget<Switch>(featureSwitch).value, isFalse);
+    await tester.tap(save);
+    await settle(tester);
+    expect(jsonDecode(h.box.byPath('/api/settings/appLock')!.body), {'enabled': false});
+  });
+
+  testWidgets('[K1] the box away: the page says it needs MAXCOM and the switch cannot be changed', (tester) async {
+    final h = await pumpShell(tester, roles: const ['admin'], features: const {'appLock': true});
+    (h.settings['appLock']! as Map<String, Object?>)['_live'] = false;
+    h.container.invalidate(settingsProvider);
+    h.router.go('/settings/appLock');
+    await settle(tester);
+    expect(find.text('Perlukan sambungan ke MAXCOM'), findsOneWidget);
+    expect(tester.widget<Switch>(featureSwitch).onChanged, isNull);
   });
 
   testWidgets('Kunci aplikasi: an AJK reads the switch and the help, edits nothing', (tester) async {
@@ -731,7 +802,7 @@ void main() {
     await tester.tap(save);
     await settle(tester);
     expect(find.text('Tetapan disimpan'), findsOneWidget, reason: screenText(tester));
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets(
     'surau info: the logo is a picture field with the square hint; an upload sends its id, Buang sends empty, the box refusals read in BM',

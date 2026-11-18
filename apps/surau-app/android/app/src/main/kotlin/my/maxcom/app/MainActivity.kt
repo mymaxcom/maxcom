@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 import my.maxcom.app.live.Diag
 import my.maxcom.app.live.LiveChannel
 
@@ -26,6 +27,11 @@ class MainActivity : FlutterFragmentActivity() {
         my.maxcom.app.upload.UploadChannel.register(flutterEngine, this)
         FilePickChannel.register(flutterEngine, this)
         ShareChannel.register(flutterEngine, this)
+        // Plan 14 Task 24: the Dart start-up check compares kOpsBuild with this.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "my.maxcom/build")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "packageName") result.success(packageName) else result.notImplemented()
+            }
         DiscoveryChannel.register(flutterEngine, this)
     }
 

@@ -4,6 +4,7 @@
 // keeps the lock), and no token is ever kept.
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -89,7 +90,7 @@ void main() {
     expect(a, isNot(b));
   });
 
-  test('five wrong PINs lock for five minutes, across a restart; then the '
+  test('[A4] five wrong PINs lock for 15 minutes, across a restart; then the '
       'right PIN works again', () async {
     final store = MemoryLocalStore();
     await vaultOn(store).savePin('280419');
@@ -100,11 +101,11 @@ void main() {
     }
     final fifth = await vaultOn(store).checkPin('000000');
     expect(fifth, isA<PinLocked>());
-    expect((fifth as PinLocked).until, clock.add(const Duration(minutes: 5)));
+    expect((fifth as PinLocked).until, clock.add(const Duration(minutes: 15)));
 
     // A new run (a fresh vault on the same store): still locked, even for
     // the right PIN.
-    clock = clock.add(const Duration(minutes: 4, seconds: 59));
+    clock = clock.add(const Duration(minutes: 14, seconds: 59));
     expect(await vaultOn(store).checkPin('280419'), isA<PinLocked>());
 
     clock = clock.add(const Duration(seconds: 2));
@@ -148,5 +149,81 @@ void main() {
     await store.wipe();
     expect(await v.profile(), isNull);
     expect(await v.checkPin('280419'), isA<PinUnknown>());
+  });
+
+  Future<PinCheck> fiveWrong(LocalStore store) async {
+    PinCheck r = const PinUnknown();
+    for (var i = 0; i < 5; i++) {
+      r = await vaultOn(store).checkPin('000000');
+    }
+    return r;
+  }
+
+  test('[A4] the next round locks 30 minutes, then 60, and the third round '
+      'closes the offline door until an online unlock', () async {
+    final store = MemoryLocalStore();
+    await vaultOn(store).savePin('280419');
+    final first = await fiveWrong(store) as PinLocked;
+    expect(first.until, clock.add(const Duration(minutes: 15)));
+    clock = clock.add(const Duration(minutes: 15, seconds: 1));
+    final second = await fiveWrong(store) as PinLocked;
+    expect(second.until, clock.add(const Duration(minutes: 30)));
+    clock = clock.add(const Duration(minutes: 30, seconds: 1));
+    expect(await fiveWrong(store), isA<PinClosed>());
+    // Time does not reopen it, a restart does not, and the right PIN is refused.
+    clock = clock.add(const Duration(days: 3));
+    expect(await vaultOn(store).checkPin('280419'), isA<PinClosed>());
+    // An online unlock (the verifier is saved again) opens it, count from zero.
+    await vaultOn(store).savePin('280419');
+    expect(await vaultOn(store).checkPin('280419'), isA<PinOk>());
+    expect(((await vaultOn(store).checkPin('000000')) as PinWrong).left, 4);
+  });
+
+  test('[A4] the lock never exceeds 24 hours', () {
+    expect(OfflineVault.lockForRound(1), const Duration(minutes: 15));
+    expect(OfflineVault.lockForRound(2), const Duration(minutes: 30));
+    expect(OfflineVault.lockForRound(8), const Duration(hours: 24));
+    expect(OfflineVault.lockForRound(30), const Duration(hours: 24));
+  });
+
+  test('[A4] a server 423 closes the offline door until an online unlock',
+      () async {
+    final store = MemoryLocalStore();
+    await vaultOn(store).savePin('280419');
+    await vaultOn(store).closeOffline();
+    expect(await vaultOn(store).checkPin('280419'), isA<PinClosed>());
+    await vaultOn(store).savePin('280419');
+    expect(await vaultOn(store).checkPin('280419'), isA<PinOk>());
+  });
+
+  test('[A4] no fixed five-minute lock remains in the vault', () {
+    final src = File('lib/features/unlock/offline_vault.dart').readAsStringSync();
+    expect(src.contains('lockFor = Duration(minutes: 5)'), isFalse);
+  });
+
+  test('[A2] replacing the PIN makes the old one wrong and the new one right',
+      () async {
+    final store = MemoryLocalStore();
+    await vaultOn(store).savePin('280419');
+    await vaultOn(store).savePin('246813');
+    expect(await vaultOn(store).checkPin('280419'), isA<PinWrong>());
+    expect(await vaultOn(store).checkPin('246813'), isA<PinOk>());
+  });
+
+  test('[K2] a revoked wipe empties the vault and keeps it closed after '
+      'a restart', () async {
+    final store = MemoryLocalStore();
+    final v = vaultOn(store);
+    await v.saveProfile(
+      OfflineProfile(userId: 'u1', name: 'A', roles: const [], at: clock),
+    );
+    await v.savePin('280419');
+    await wipeForRevocation(store);
+    expect(await vaultOn(store).profile(), isNull);
+    expect(await vaultOn(store).checkPin('280419'), isA<PinClosed>());
+    expect(await vaultOn(store).isRevoked(), isTrue);
+    // A new enrolment wipes the flag with the rest.
+    await store.wipe();
+    expect(await vaultOn(store).isRevoked(), isFalse);
   });
 }

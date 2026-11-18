@@ -4,10 +4,15 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:surau_app/box/box_client.dart';
+import 'package:surau_app/features/settings_repository.dart' show loadSettings;
+import 'package:surau_app/l10n/generated/s_ar.dart';
+import 'package:surau_app/l10n/generated/s_en.dart';
+import 'package:surau_app/l10n/generated/s_ms.dart';
 import 'package:surau_app/features/shell/box_gateway.dart';
 import 'package:surau_app/features/shell/read_cache.dart';
 import 'package:surau_app/store/local_store.dart';
 import 'package:surau_app/sync/canonical.dart';
+import 'package:surau_app/sync/live_only.dart';
 import 'package:surau_app/sync/sync_engine.dart';
 
 import '../features/fakes.dart';
@@ -96,6 +101,38 @@ void main() {
       expect(r.value, {
         'clock': {'enabled': true},
       });
+    });
+
+    test('[K5] a settings save is queued here and says so; a live-only one is not', () async {
+      await gw.put('/api/settings/clock', {'showSeconds': true});
+      expect(gw.lastPutQueued, isTrue);
+    });
+
+    test('[K1] the local copy has no appLock: the page reads it live from the box', () async {
+      box = FakeBox((r) async => jsonResponse(200, {
+            'clock': {'enabled': true},
+            'appLock': {'enabled': true},
+          }));
+      gw = BoxGateway(
+        client: box.client(Uri.parse('https://127.0.0.1:8443')),
+        token: 'tok-1',
+        cache: ReadCache(),
+        reach: reach,
+        now: now,
+        onSessionExpired: () {},
+        store: store,
+        engine: engine,
+      );
+      final r = await loadSettings(gw, enrolledAppLock: false);
+      expect((r.value['appLock'] as Map)['enabled'], isTrue, reason: 'the box says on, the enrolment record said off');
+      expect((r.value['appLock'] as Map)['_live'], isNot(false));
+    });
+
+    test('[K1] the box away: the enrolled box value, marked not live', () async {
+      boxAway = true;
+      final r = await loadSettings(gw, enrolledAppLock: true);
+      expect((r.value['appLock'] as Map)['enabled'], isTrue);
+      expect((r.value['appLock'] as Map)['_live'], isFalse);
     });
 
     test('one item, users, surau info', () async {
@@ -195,6 +232,44 @@ void main() {
       expect(ops[1].payload, {'active': false});
     });
 
+    test('[PP-A1] a rename queues a user.put {name} and the local copy has the new name at once', () async {
+      boxAway = true;
+      final out = await gw.put('/api/users/u1/name', {'name': 'Ali Baru'});
+      expect(gw.lastPutQueued, isTrue);
+      expect(out['name'], 'Ali Baru');
+      final ops = await engine.outbox.pending();
+      expect(ops.map((o) => o.kind), ['user.put']);
+      expect(ops.single.payload, {'name': 'Ali Baru'});
+      expect(ops.single.entityId, 'u1');
+      expect(box.seen, isEmpty);
+      final list = await gw.get('/api/users');
+      expect((list.value['users'] as List).single['name'], 'Ali Baru');
+    });
+
+    test('[PP-A1] "Aktifkan semula" queues a user.put {active: true}', () async {
+      boxAway = true;
+      final out = await gw.post('/api/users/u1/activate', const {});
+      expect(out['ok'], isTrue);
+      final ops = await engine.outbox.pending();
+      expect(ops.map((o) => o.kind), ['user.put']);
+      expect(ops.single.payload, {'active': true});
+      expect(box.seen, isEmpty);
+      expect((await store.getDoc('users', 'u1'))!['active'], isTrue);
+    });
+
+    test('[PP-A1] a deleted person in the local copy is not served; the others are', () async {
+      await store.putDoc('users', 'u2', {
+        'id': 'u2',
+        'name': 'Puan Aminah',
+        'active': false,
+        'deleted': true,
+        'ref': 'U-0002',
+      });
+      await store.putDoc('users', 'u3', {'id': 'u3', 'name': 'Kak Siti', 'active': true, 'deleted': false});
+      final list = await gw.get('/api/users');
+      expect([for (final u in list.value['users'] as List) u['id']], ['u1', 'u3']);
+    });
+
     test('an image upload queues and answers with the sha256 id', () async {
       boxAway = true;
       final bytes = Uint8List.fromList([9, 8, 7, 6]);
@@ -230,6 +305,70 @@ void main() {
         gw.post('/api/live/start', const {}),
         throwsA(isA<LiveOnly>()),
       );
+    });
+
+    test('[PP-A1] the people routes are live-only: no base, no queue, LiveOnly', () async {
+      boxAway = true;
+      final writes = <(String, String)>[
+        ('PUT', '/api/devices/d1/name'),
+        ('PUT', '/api/auth/device/name'),
+        ('POST', '/api/users/u1/unlock'),
+        ('POST', '/api/enrol/cancel'),
+        ('POST', '/api/devices/revoke-inactive'),
+        ('POST', '/api/users/u1/delete'),
+        ('POST', '/api/users/u1/restore'),
+        ('PUT', '/api/users/u1/phone'),
+      ];
+      for (final w in writes) {
+        expect(isLiveOnly(w.$1, w.$2), isTrue, reason: '${w.$1} ${w.$2}');
+        await expectLater(
+          w.$1 == 'PUT' ? gw.put(w.$2, {'name': 'x'}) : gw.post(w.$2, const {}),
+          throwsA(isA<LiveOnly>().having((e) => e.path, 'path', w.$2)),
+          reason: '${w.$1} ${w.$2}',
+        );
+      }
+      for (final r in ['/api/people/activity', '/api/enrol/open', '/api/enrol/recent']) {
+        expect(isLiveOnly('GET', r), isTrue, reason: r);
+        await expectLater(gw.getFresh(r), throwsA(isA<LiveOnly>()), reason: r);
+      }
+      expect(engine.view.pendingOut, 0, reason: 'nothing queued');
+    });
+
+    test('[PP-A1] rename and activate are NOT live-only (they queue)', () {
+      expect(isLiveOnly('PUT', '/api/users/u1/name'), isFalse);
+      expect(isLiveOnly('POST', '/api/users/u1/activate'), isFalse);
+    });
+
+    test('[PP-A1] every live-only entry has its words in all three languages', () {
+      final ms = SMs();
+      final en = SEn();
+      final ar = SAr();
+      for (final e in liveOnlyList) {
+        expect(e.label(ms), isNotEmpty);
+        expect(e.label(en), isNotEmpty);
+        expect(e.label(ar), isNotEmpty);
+      }
+      final people = [
+        for (final w in <(String, String)>[
+          ('PUT', '/api/devices/d1/name'),
+          ('POST', '/api/users/u1/delete'),
+          ('POST', '/api/users/u1/restore'),
+          ('PUT', '/api/users/u1/phone'),
+          ('GET', '/api/people/activity'),
+          ('POST', '/api/users/u1/unlock'),
+          ('GET', '/api/enrol/open'),
+        ])
+          liveOnlyList.firstWhere((e) => e.matches(w.$1, w.$2)).label(ms),
+      ];
+      expect(people, [
+        'Tukar nama peranti',
+        'Padam pengguna',
+        'Pulihkan pengguna',
+        'Tukar nombor telefon',
+        'Lihat status aktif',
+        'Buka kunci PIN',
+        'Urus kod pendaftaran',
+      ]);
     });
 
     test('with the box up a live-only call goes straight through', () async {
@@ -356,6 +495,49 @@ void main() {
       );
       expect(cloud.seen, isEmpty);
     });
+
+    test('[K4] the app lock is the surau\'s own: with the box away it is LiveOnly and the cloud is never asked', () async {
+      await expectLater(
+        away.put('/api/settings/appLock', {'enabled': false}),
+        throwsA(isA<LiveOnly>().having((e) => e.path, 'path', '/api/settings/appLock')),
+      );
+      expect(cloud.seen, isEmpty);
+      expect(transport.connects, 0, reason: 'the cloud is not even connected to');
+    });
+
+    test('[K4] boxLocalOnly lists the app lock write and nothing that may go to the cloud', () {
+      expect(isBoxLocalOnly('PUT', '/api/settings/appLock'), isTrue);
+      expect(isBoxLocalOnly('PUT', '/api/settings/appLock?x=1'), isTrue);
+      expect(isBoxLocalOnly('GET', '/api/settings/appLock'), isFalse);
+      expect(isBoxLocalOnly('POST', '/api/enrol/begin'), isFalse);
+      expect(isBoxLocalOnly('PUT', '/api/settings/clock'), isFalse);
+    });
+
+    test('[K8] a POST that was sent and timed out is not re-sent through the cloud: Uncertain', () async {
+      final slow = FakeBox((r) async => throw TimeoutException('no answer'));
+      final gw2 = BoxGateway(
+        client: slow.client(Uri.parse('https://127.0.0.1:8443')),
+        token: 'tok-1',
+        cache: ReadCache(),
+        reach: reach,
+        now: now,
+        onSessionExpired: () {},
+        store: store,
+        engine: away.engine,
+      );
+      await expectLater(
+        gw2.post('/api/users', {'name': 'Aminah'}),
+        throwsA(isA<Uncertain>().having((e) => e.path, 'path', '/api/users')),
+      );
+      expect(slow.seen, hasLength(1), reason: 'sent once, never retried');
+      expect(cloud.seen, isEmpty, reason: 'not sent again through the cloud');
+    });
+
+    test('[K8] a connection failure before sending still falls back to the cloud', () async {
+      final out = await away.post('/api/users', {'name': 'Aminah'});
+      expect(out['ok'], true);
+      expect(cloud.byPath('/api/users')?.method, 'POST');
+    });
   });
 }
 
@@ -364,9 +546,11 @@ class _CloudTransport implements SyncTransport {
 
   final FakeBox cloud;
   bool down = false;
+  int connects = 0;
 
   @override
   Future<SyncLink> connect() async {
+    connects++;
     if (down) throw const BoxUnreachable('away');
     final base = Uri.parse('https://203.0.113.10');
     return SyncLink(

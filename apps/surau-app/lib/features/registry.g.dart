@@ -13,6 +13,7 @@ class FeatureDef {
     required this.defaultEnabled,
     required this.labelMs,
     required this.labelEn,
+    required this.labelAr,
     required this.defaults,
   });
 
@@ -22,6 +23,7 @@ class FeatureDef {
   final bool defaultEnabled;
   final String labelMs;
   final String labelEn;
+  final String labelAr;
 
   /// Default values of every setting (JSON shapes: bool, int, String, null,
   /// List, Map). Does not include enabled.
@@ -29,7 +31,7 @@ class FeatureDef {
 }
 
 /// sha256 of core registry.ts, settings.ts and permissions.ts (CRLF as LF).
-const String coreSourceHash = 'fabbd536eb51ed940201d4de9b340be7c08cb1e510e56ad9272a9fcf52811641';
+const String coreSourceHash = '5c850d2b9b41dc4a23994a3541debd2d18063db4a656df40a8423010b56072b5';
 
 const List<FeatureDef> features = [
   FeatureDef(
@@ -39,6 +41,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Bar waktu solat',
     labelEn: 'Prayer times bar',
+    labelAr: 'شريط مواقيت الصلاة',
     defaults: <String, Object?>{'showImsak': true, 'showSyuruk': true, 'timeFormat': '12h'},
   ),
   FeatureDef(
@@ -48,6 +51,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Jam',
     labelEn: 'Clock',
+    labelAr: 'الساعة',
     defaults: <String, Object?>{'showSeconds': false},
   ),
   FeatureDef(
@@ -57,6 +61,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Perlindungan urutan solat',
     labelEn: 'Prayer sequence safety',
+    labelAr: 'حماية ترتيب الصلوات',
     defaults: <String, Object?>{},
   ),
   FeatureDef(
@@ -66,6 +71,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Zon waktu solat',
     labelEn: 'Prayer time zone',
+    labelAr: 'منطقة مواقيت الصلاة',
     defaults: <String, Object?>{'zone': 'SGR01', 'autoFetch': true},
   ),
   FeatureDef(
@@ -75,6 +81,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Lokasi surau',
     labelEn: 'Surau location',
+    labelAr: 'موقع المصلى',
     defaults: <String, Object?>{'country': 'MY', 'timezone': 'Asia/Kuala_Lumpur', 'latitude': null, 'longitude': null, 'city': ''},
   ),
   FeatureDef(
@@ -84,6 +91,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Kiraan setempat',
     labelEn: 'Local calculation',
+    labelAr: 'الحساب المحلي',
     defaults: <String, Object?>{'method': 'auto', 'madhab': 'auto', 'highLatitude': 'auto', 'adjustMinutes': {'imsak': 0, 'subuh': 0, 'syuruk': 0, 'zohor': 0, 'asar': 0, 'maghrib': 0, 'isyak': 0}, 'imsakMinutes': 10},
   ),
   FeatureDef(
@@ -93,6 +101,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Sumber waktu solat',
     labelEn: 'Prayer time sources',
+    labelAr: 'مصادر مواقيت الصلاة',
     defaults: <String, Object?>{'sourceOrder': ['official', 'calc', 'file'], 'crossCheck': true},
   ),
   FeatureDef(
@@ -102,6 +111,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Kiraan detik azan',
     labelEn: 'Azan countdown',
+    labelAr: 'العد التنازلي للأذان',
     defaults: <String, Object?>{'minutesBefore': {'subuh': 10, 'zohor': 10, 'asar': 10, 'maghrib': 10, 'isyak': 10}, 'fullScreen': true, 'beep': true},
   ),
   FeatureDef(
@@ -111,6 +121,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Skrin masuk waktu',
     labelEn: 'Prayer time entered screen',
+    labelAr: 'شاشة دخول الوقت',
     defaults: <String, Object?>{'screenSeconds': 60, 'beep': true},
   ),
   FeatureDef(
@@ -120,6 +131,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Kiraan detik iqamah',
     labelEn: 'Iqamah countdown',
+    labelAr: 'العد التنازلي للإقامة',
     defaults: <String, Object?>{'minutes': {'ahad': {'subuh': 12, 'zohor': 10, 'asar': 10, 'maghrib': 10, 'isyak': 10}, 'isnin': {'subuh': 12, 'zohor': 10, 'asar': 10, 'maghrib': 10, 'isyak': 10}, 'selasa': {'subuh': 12, 'zohor': 10, 'asar': 10, 'maghrib': 10, 'isyak': 10}, 'rabu': {'subuh': 12, 'zohor': 10, 'asar': 10, 'maghrib': 10, 'isyak': 10}, 'khamis': {'subuh': 12, 'zohor': 10, 'asar': 10, 'maghrib': 10, 'isyak': 10}, 'jumaat': {'subuh': 12, 'zohor': 10, 'asar': 10, 'maghrib': 10, 'isyak': 10}, 'sabtu': {'subuh': 12, 'zohor': 10, 'asar': 10, 'maghrib': 10, 'isyak': 10}}, 'endWarningSeconds': 30, 'beep': true},
   ),
   FeatureDef(
@@ -129,7 +141,8 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Skrin sedang solat',
     labelEn: 'Prayer in progress screen',
-    defaults: <String, Object?>{'minutes': {'ahad': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'isnin': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'selasa': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'rabu': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'khamis': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'jumaat': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'sabtu': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}}, 'message': 'Sila senyapkan telefon bimbit'},
+    labelAr: 'شاشة الصلاة الجارية',
+    defaults: <String, Object?>{'minutes': {'ahad': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'isnin': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'selasa': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'rabu': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'khamis': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'jumaat': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}, 'sabtu': {'subuh': 15, 'zohor': 15, 'asar': 15, 'maghrib': 15, 'isyak': 15}}, 'message': ''},
   ),
   FeatureDef(
     key: 'jumaat',
@@ -138,6 +151,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Solat Jumaat',
     labelEn: 'Friday prayer',
+    labelAr: 'صلاة الجمعة',
     defaults: <String, Object?>{'khutbahMinutes': 20, 'iqamahMinutes': 7, 'solatMinutes': 15},
   ),
   FeatureDef(
@@ -147,6 +161,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Solat tarawih',
     labelEn: 'Tarawih prayer',
+    labelAr: 'صلاة التراويح',
     defaults: <String, Object?>{'hijriMonth': 9, 'gapMinutes': 10, 'minutes': 45},
   ),
   FeatureDef(
@@ -156,6 +171,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Amaran syuruk',
     labelEn: 'Sunrise warning',
+    labelAr: 'تنبيه الشروق',
     defaults: <String, Object?>{'minutesBefore': 5, 'beep': false},
   ),
   FeatureDef(
@@ -165,6 +181,7 @@ const List<FeatureDef> features = [
     defaultEnabled: false,
     labelMs: 'Bunyi imsak',
     labelEn: 'Imsak beep',
+    labelAr: 'صوت الإمساك',
     defaults: <String, Object?>{},
   ),
   FeatureDef(
@@ -174,6 +191,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Waktu isyraq',
     labelEn: 'Isyraq time',
+    labelAr: 'وقت الإشراق',
     defaults: <String, Object?>{'minutesAfterSyuruk': 15, 'durationMinutes': 5},
   ),
   FeatureDef(
@@ -183,6 +201,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Sumber data internet',
     labelEn: 'Internet data sources',
+    labelAr: 'مصادر بيانات الإنترنت',
     defaults: <String, Object?>{'esolat': {'name': 'e-Solat JAKIM', 'url': 'https://www.e-solat.gov.my/index.php?r=esolatApi/takwimsolat'}, 'esolatZones': {'name': 'e-Solat JAKIM (senarai zon)', 'url': 'https://www.e-solat.gov.my/index.php?siteId=24&pageId=24'}, 'nominatim': {'name': 'OpenStreetMap Nominatim', 'url': 'https://nominatim.openstreetmap.org/search'}, 'quranText': {'name': 'QuranEnc', 'url': 'https://quranenc.com/api/v1'}, 'quranAudio': {'name': 'EveryAyah', 'url': 'https://everyayah.com/data'}, 'hadeethenc': {'name': 'HadeethEnc', 'url': 'https://hadeethenc.com/api/v1'}},
   ),
   FeatureDef(
@@ -192,6 +211,7 @@ const List<FeatureDef> features = [
     defaultEnabled: false,
     labelMs: 'Azan pertama Subuh',
     labelEn: 'First Subuh azan',
+    labelAr: 'الأذان الأول للفجر',
     defaults: <String, Object?>{'minutesBefore': 10, 'audioFile': null},
   ),
   FeatureDef(
@@ -201,6 +221,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Maklumat surau',
     labelEn: 'Surau details',
+    labelAr: 'بيانات المصلى',
     defaults: <String, Object?>{'name': 'Surau', 'shortName': '', 'kind': 'surau', 'shortAddress': '', 'helpName': '', 'helpPhone': '', 'helpEmail': '', 'logo': '', 'showName': true},
   ),
   FeatureDef(
@@ -210,6 +231,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Tarikh Hijrah',
     labelEn: 'Hijri date',
+    labelAr: 'التاريخ الهجري',
     defaults: <String, Object?>{'adjustDays': 0, 'switchAt': 'maghrib'},
   ),
   FeatureDef(
@@ -219,6 +241,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Latar belakang',
     labelEn: 'Backgrounds',
+    labelAr: 'الخلفيات',
     defaults: <String, Object?>{'images': ['default-1', 'default-2'], 'rotate': 'daily'},
   ),
   FeatureDef(
@@ -228,16 +251,18 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Warna teks automatik',
     labelEn: 'Automatic text tone',
+    labelAr: 'لون النص التلقائي',
     defaults: <String, Object?>{'override': null},
   ),
   FeatureDef(
     key: 'language',
     group: 'skrin',
-    locked: false,
+    locked: true,
     defaultEnabled: true,
-    labelMs: 'Bahasa',
-    labelEn: 'Language',
-    defaults: <String, Object?>{'lang': 'ms'},
+    labelMs: 'Bahasa skrin TV',
+    labelEn: 'TV screen language',
+    labelAr: 'لغة شاشة التلفاز',
+    defaults: <String, Object?>{'lang': 'auto'},
   ),
   FeatureDef(
     key: 'orientation',
@@ -246,6 +271,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Orientasi skrin',
     labelEn: 'Screen orientation',
+    labelAr: 'اتجاه الشاشة',
     defaults: <String, Object?>{'mode': 'landscape'},
   ),
   FeatureDef(
@@ -255,6 +281,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Templat paparan',
     labelEn: 'Display template',
+    labelAr: 'قالب العرض',
     defaults: <String, Object?>{'templateId': 'default'},
   ),
   FeatureDef(
@@ -264,6 +291,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Gaya tema',
     labelEn: 'Theme style',
+    labelAr: 'نمط القالب',
     defaults: <String, Object?>{'styles': {}, 'packs': {}},
   ),
   FeatureDef(
@@ -273,6 +301,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Kad kuliah',
     labelEn: 'Lecture card',
+    labelAr: 'بطاقة الدروس',
     defaults: <String, Object?>{'durationSeconds': 15, 'order': 1, 'daysAhead': 7},
   ),
   FeatureDef(
@@ -282,6 +311,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Gambar penceramah',
     labelEn: 'Speaker photo',
+    labelAr: 'صورة المحاضر',
     defaults: <String, Object?>{'shape': 'round'},
   ),
   FeatureDef(
@@ -291,6 +321,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Kulit kitab',
     labelEn: 'Book cover',
+    labelAr: 'غلاف الكتاب',
     defaults: <String, Object?>{},
   ),
   FeatureDef(
@@ -300,6 +331,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Pengumuman',
     labelEn: 'Announcements',
+    labelAr: 'الإعلانات',
     defaults: <String, Object?>{'durationSeconds': 15, 'order': 2, 'daysAhead': 7, 'maxItems': 5},
   ),
   FeatureDef(
@@ -309,6 +341,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Teks bergerak',
     labelEn: 'Ticker',
+    labelAr: 'النص المتحرك',
     defaults: <String, Object?>{'speed': 'normal'},
   ),
   FeatureDef(
@@ -318,6 +351,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Poster',
     labelEn: 'Posters',
+    labelAr: 'الملصقات',
     defaults: <String, Object?>{'durationSeconds': 15, 'order': 3},
   ),
   FeatureDef(
@@ -327,6 +361,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Program khas',
     labelEn: 'Special programmes',
+    labelAr: 'البرامج الخاصة',
     defaults: <String, Object?>{'durationSeconds': 15, 'order': 4, 'daysAhead': 7, 'hideAfterMinutes': 5},
   ),
   FeatureDef(
@@ -336,6 +371,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Takwim',
     labelEn: 'Calendar',
+    labelAr: 'التقويم',
     defaults: <String, Object?>{'durationSeconds': 15, 'order': 5, 'count': 3},
   ),
   FeatureDef(
@@ -345,6 +381,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Hadis',
     labelEn: 'Hadith',
+    labelAr: 'الحديث',
     defaults: <String, Object?>{'durationSeconds': 20, 'order': 6, 'source': 'both', 'mix': 'list', 'changeEvery': 'day', 'perDay': 3, 'showArabic': true, 'showMalay': true, 'showAttribution': true, 'showGrade': true, 'fontSize': 'auto', 'allowedGrades': {'sahih': true, 'hasan': true, 'sahih_lighairihi': false, 'hasan_lighairihi': false}},
   ),
   FeatureDef(
@@ -354,6 +391,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Waktu dunia',
     labelEn: 'World times',
+    labelAr: 'توقيت العالم',
     defaults: <String, Object?>{'durationSeconds': 15, 'order': 7},
   ),
   FeatureDef(
@@ -363,6 +401,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Tugasan',
     labelEn: 'Duty roster',
+    labelAr: 'جدول المناوبات',
     defaults: <String, Object?>{'durationSeconds': 15, 'order': 8, 'daysAhead': 14},
   ),
   FeatureDef(
@@ -372,6 +411,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Kad ayat',
     labelEn: 'Verse card',
+    labelAr: 'بطاقة الآية',
     defaults: <String, Object?>{'durationSeconds': 20, 'order': 9, 'pick': 'daily', 'surah': 2, 'ayatFrom': 255, 'ayatTo': 255, 'showTranslation': true, 'textSize': 'm'},
   ),
   FeatureDef(
@@ -381,6 +421,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Zikir selepas solat',
     labelEn: 'Post-prayer zikir',
+    labelAr: 'أذكار بعد الصلاة',
     defaults: <String, Object?>{'durationSeconds': 20, 'minutesAfterSolat': 10},
   ),
   FeatureDef(
@@ -390,6 +431,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Pembaca Al-Quran',
     labelEn: 'Quran reader',
+    labelAr: 'قارئ القرآن',
     defaults: <String, Object?>{},
   ),
   FeatureDef(
@@ -399,6 +441,7 @@ const List<FeatureDef> features = [
     defaultEnabled: false,
     labelMs: 'Tilawah',
     labelEn: 'Recitation',
+    labelAr: 'التلاوة',
     defaults: <String, Object?>{'reciter': 'Husary_64kbps', 'volume': 60, 'cacheMaxMb': 300},
   ),
   FeatureDef(
@@ -408,6 +451,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Bunyi amaran',
     labelEn: 'Beeps',
+    labelAr: 'أصوات التنبيه',
     defaults: <String, Object?>{'volume': 70},
   ),
   FeatureDef(
@@ -417,6 +461,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Siaran langsung di skrin',
     labelEn: 'Live on kiosk',
+    labelAr: 'البث المباشر على الشاشة',
     defaults: <String, Object?>{'audio': false, 'volume': 50, 'showStrip': true, 'fit': 'cover'},
   ),
   FeatureDef(
@@ -426,6 +471,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Siaran langsung YouTube',
     labelEn: 'Live on YouTube',
+    labelAr: 'البث المباشر على YouTube',
     defaults: <String, Object?>{'privacy': 'unlisted', 'relayFrom': 'box', 'relayVideo': 'copy', 'titleTemplate': '{label}: {penceramah}', 'descriptionTemplate': '{topic}\nKitab: {kitab}\n{surau}, {date}', 'maxBitrateKbps': 2500},
   ),
   FeatureDef(
@@ -435,7 +481,18 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Rakaman',
     labelEn: 'Recording',
+    labelAr: 'التسجيل',
     defaults: <String, Object?>{'segmentMinutes': 15, 'keepOnDevice': true},
+  ),
+  FeatureDef(
+    key: 'liveCamera',
+    group: 'live',
+    locked: false,
+    defaultEnabled: false,
+    labelMs: 'Kamera luaran',
+    labelEn: 'External camera',
+    labelAr: 'الكاميرا الخارجية',
+    defaults: <String, Object?>{'name': 'Kamera luaran', 'transport': 'auto', 'avOffsetMs': {'deviceMic': 0, 'boxInput': 0}},
   ),
   FeatureDef(
     key: 'finance',
@@ -444,6 +501,7 @@ const List<FeatureDef> features = [
     defaultEnabled: false,
     labelMs: 'Kewangan',
     labelEn: 'Finance',
+    labelAr: 'المالية',
     defaults: <String, Object?>{'penceramahFundId': '', 'bigAmountSen': 2000000, 'startedOn': ''},
   ),
   FeatureDef(
@@ -453,7 +511,8 @@ const List<FeatureDef> features = [
     defaultEnabled: false,
     labelMs: 'Kad tabung',
     labelEn: 'Donation fund card',
-    defaults: <String, Object?>{'durationSeconds': 15, 'order': 10, 'figure': 'balance', 'highlightSeconds': 20, 'showTarget': true, 'qrAssetId': '', 'manualTitle': 'Tabung Surau', 'row1Label': '', 'row1Sen': 0, 'row2Label': '', 'row2Sen': 0, 'row3Label': '', 'row3Sen': 0},
+    labelAr: 'بطاقة صندوق التبرعات',
+    defaults: <String, Object?>{'durationSeconds': 15, 'order': 10, 'figure': 'balance', 'highlightSeconds': 20, 'showTarget': true, 'qrAssetId': '', 'featured': false, 'manualTitle': '', 'row1Label': '', 'row1Sen': 0, 'row2Label': '', 'row2Sen': 0, 'row3Label': '', 'row3Sen': 0},
   ),
   FeatureDef(
     key: 'calendarFeed',
@@ -462,6 +521,7 @@ const List<FeatureDef> features = [
     defaultEnabled: false,
     labelMs: 'Suapan kalendar',
     labelEn: 'Calendar feed',
+    labelAr: 'خلاصة التقويم',
     defaults: <String, Object?>{},
   ),
   FeatureDef(
@@ -471,6 +531,7 @@ const List<FeatureDef> features = [
     defaultEnabled: false,
     labelMs: 'Laman jemaah',
     labelEn: 'Congregation page',
+    labelAr: 'صفحة المصلّين',
     defaults: <String, Object?>{},
   ),
   FeatureDef(
@@ -480,6 +541,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Penyelarasan awan',
     labelEn: 'Cloud sync',
+    labelAr: 'المزامنة مع السحابة',
     defaults: <String, Object?>{'dirtyCheckSeconds': 120, 'cloudUrl': ''},
   ),
   FeatureDef(
@@ -489,6 +551,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Muat naik susulan YouTube',
     labelEn: 'YouTube catch-up upload',
+    labelAr: 'الرفع اللاحق إلى YouTube',
     defaults: <String, Object?>{'wifiOnly': true, 'joinSegments': true, 'replaceGappyLive': 'ask'},
   ),
   FeatureDef(
@@ -498,6 +561,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Pembersihan rakaman',
     labelEn: 'Recording clean-up',
+    labelAr: 'تنظيف التسجيلات',
     defaults: <String, Object?>{'keepDays': 1},
   ),
   FeatureDef(
@@ -507,6 +571,7 @@ const List<FeatureDef> features = [
     defaultEnabled: false,
     labelMs: 'Kunci aplikasi',
     labelEn: 'App lock',
+    labelAr: 'قفل التطبيق',
     defaults: <String, Object?>{},
   ),
   FeatureDef(
@@ -516,6 +581,7 @@ const List<FeatureDef> features = [
     defaultEnabled: true,
     labelMs: 'Sistem',
     labelEn: 'System',
+    labelAr: 'النظام',
     defaults: <String, Object?>{'noVideoSeconds': 12, 'cloudWakeSeconds': 20, 'syncHistoryDays': 180, 'suspendedAt': null},
   ),
 ];
@@ -532,6 +598,7 @@ const Map<String, List<String>> permissions = {
     'islamic:fetch',
     'kiosk:read',
     'live:control',
+    'live:settings',
     'finance:read',
     'finance:write',
     'users:manage',
@@ -552,6 +619,7 @@ const Map<String, List<String>> permissions = {
     'islamic:fetch',
     'kiosk:read',
     'live:control',
+    'live:settings',
     'finance:read',
     'finance:write',
     'users:manage',
@@ -573,8 +641,14 @@ const Map<String, List<String>> permissions = {
     'content:write',
     'assets:write',
     'kiosk:read',
-    'live:control',
     'health:read',
+  ],
+  'live': [
+    'settings:read',
+    'kiosk:read',
+    'health:read',
+    'live:control',
+    'live:settings',
   ],
   'ajk': [
     'settings:read',
@@ -591,14 +665,15 @@ const Map<String, String> roleLabelsEn = {
   'admin': 'Administrator',
   'treasurer': 'Treasurer',
   'media': 'Media',
+  'live': 'Live Broadcast',
   'ajk': 'Committee',
 };
 
 /// FIELD_META from core: feature key -> leaf path -> metadata (ui, step, min, max, choices, ...).
-const Map<String, Map<String, Map<String, Object?>>> fieldMetaTable = {'liveYoutube': {'relayFrom': {'ui': 'segment', 'choices': ['box', 'phone'], 'disabledChoices': ['phone'], 'hidden': true}, 'relayVideo': {'ui': 'segment', 'choices': ['copy', 'reencode'], 'scope': 'system'}, 'maxBitrateKbps': {'ui': 'slider', 'min': 500, 'max': 6000, 'step': 500, 'unit': 'kbps', 'scope': 'system'}, 'titleTemplate': {'ui': 'template', 'maxLen': 100}, 'descriptionTemplate': {'ui': 'template', 'maxLen': 500}}, 'tilawah': {'reciter': {'ui': 'reciter', 'testable': true}, 'volume': {'ui': 'slider', 'min': 0, 'max': 100, 'step': 5, 'unit': '%'}, 'cacheMaxMb': {'ui': 'chips', 'choices': [100, 300, 500, 1000], 'unit': 'MB', 'scope': 'system'}}, 'firstAzanSubuh': {'minutesBefore': {'ui': 'chips', 'choices': [5, 10, 15, 20, 30], 'unit': 'minit'}, 'audioFile': {'ui': 'audioAsset'}}, 'autoTone': {'override': {'ui': 'colour', 'hidden': true}}, 'kioskTemplate': {'templateId': {'ui': 'theme'}}, 'solatScreen': {'message': {'ui': 'presetText', 'maxLen': 100, 'presets': ['Sila senyapkan telefon bimbit', 'Solat sedang berlangsung', 'Sila luruskan dan rapatkan saf', 'Sila tutup telefon bimbit anda']}}, 'tarawih': {'hijriMonth': {'ui': 'hijriMonth'}, 'gapMinutes': {'ui': 'chips', 'choices': [5, 10, 15, 20], 'unit': 'minit'}, 'minutes': {'ui': 'slider', 'min': 0, 'max': 120, 'step': 5, 'unit': 'minit'}}, 'ayatCard': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'pick': {'ui': 'segment', 'choices': ['daily', 'random', 'manual']}, 'surah': {'ui': 'surah'}, 'ayatFrom': {'ui': 'ayatRange'}, 'ayatTo': {'ui': 'ayatRange'}, 'textSize': {'ui': 'segment', 'choices': ['s', 'm', 'l']}}, 'kuliahCard': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'tabungCard': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'figure': {'ui': 'segment', 'choices': ['balance', 'month', 'lastEntry']}, 'highlightSeconds': {'ui': 'slider', 'min': 0, 'max': 120, 'step': 5, 'unit': 'saat'}, 'qrAssetId': {'ui': 'text'}}, 'pengumuman': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'daysAhead': {'hidden': true}}, 'posters': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'programKhas': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'daysAhead': {'hidden': true}}, 'takwim': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'count': {'ui': 'chips', 'choices': [1, 2, 3]}}, 'hadis': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'worldTimes': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'tugasan': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'zikirSelepasSolat': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'zone': {'zone': {'ui': 'zone'}}, 'recording': {'segmentMinutes': {'ui': 'chips', 'choices': [5, 10, 15, 30, 60], 'unit': 'minit'}, 'keepOnDevice': {'disabledWhen': {'feature': 'recordingCleanup', 'field': 'enabled', 'equals': false, 'noteMs': 'Tiada rakaman dipadam selagi Pembersihan rakaman dimatikan.', 'noteEn': 'No recording is deleted while Recording clean-up is off.'}}}, 'surauInfo': {'helpPhone': {'ui': 'phone'}, 'helpEmail': {'ui': 'email'}}, 'dataSources': {'esolat.url': {'ui': 'url', 'testable': true, 'scope': 'system'}, 'esolatZones.url': {'ui': 'url', 'scope': 'system'}, 'nominatim.url': {'ui': 'url', 'scope': 'system'}, 'quranText.url': {'ui': 'url', 'testable': true, 'scope': 'system'}, 'quranAudio.url': {'ui': 'url', 'testable': true, 'scope': 'system'}}, 'cloudSync': {'dirtyCheckSeconds': {'ui': 'chips', 'choices': [60, 120, 300, 600, 900], 'unit': 'saat', 'scope': 'system'}, 'cloudUrl': {'ui': 'url', 'readOnly': true, 'scope': 'system'}}, 'system': {'noVideoSeconds': {'ui': 'slider', 'min': 5, 'max': 60, 'step': 1, 'unit': 'saat'}, 'cloudWakeSeconds': {'ui': 'slider', 'min': 10, 'max': 60, 'step': 5, 'unit': 'saat'}, 'syncHistoryDays': {'ui': 'chips', 'choices': [180, 365], 'unit': 'hari'}}, 'recordingCleanup': {'keepDays': {'ui': 'chips', 'choices': [0, 1, 3, 7, 30], 'unit': 'hari', 'disabledWhen': {'feature': 'recording', 'field': 'keepOnDevice', 'equals': false, 'noteMs': 'Tidak digunakan: rakaman di peranti dipadam sebaik YouTube mengesahkannya.', 'noteEn': 'Not used: the recording on the device is deleted as soon as YouTube confirms it.'}}}, 'youtubeCatchUp': {'replaceGappyLive': {'ui': 'segment', 'choices': ['ask', 'never', 'always']}}, 'beeps': {'volume': {'ui': 'slider', 'min': 0, 'max': 100, 'step': 5, 'unit': '%'}}, 'liveOnKiosk': {'volume': {'ui': 'slider', 'min': 0, 'max': 100, 'step': 5, 'unit': '%'}}};
+const Map<String, Map<String, Map<String, Object?>>> fieldMetaTable = {'liveYoutube': {'relayFrom': {'ui': 'segment', 'choices': ['box', 'phone'], 'disabledChoices': ['phone'], 'hidden': true}, 'relayVideo': {'ui': 'segment', 'choices': ['copy', 'reencode'], 'scope': 'system'}, 'maxBitrateKbps': {'ui': 'slider', 'min': 500, 'max': 6000, 'step': 500, 'unit': 'kbps', 'scope': 'system'}, 'titleTemplate': {'ui': 'template', 'maxLen': 100}, 'descriptionTemplate': {'ui': 'template', 'maxLen': 500}}, 'tilawah': {'reciter': {'ui': 'reciter', 'testable': true}, 'volume': {'ui': 'slider', 'min': 0, 'max': 100, 'step': 5, 'unit': '%'}, 'cacheMaxMb': {'ui': 'chips', 'choices': [100, 300, 500, 1000], 'unit': 'MB', 'scope': 'system'}}, 'firstAzanSubuh': {'minutesBefore': {'ui': 'chips', 'choices': [5, 10, 15, 20, 30], 'unit': 'minit'}, 'audioFile': {'ui': 'audioAsset'}}, 'autoTone': {'override': {'ui': 'colour', 'hidden': true}}, 'themeStyle': {'enabled': {'hidden': true}}, 'kioskTemplate': {'templateId': {'ui': 'theme'}}, 'solatScreen': {'message': {'ui': 'presetText', 'maxLen': 100, 'presets': ['Sila senyapkan telefon bimbit', 'Solat sedang berlangsung', 'Sila luruskan dan rapatkan saf', 'Sila tutup telefon bimbit anda'], 'presetsEn': ['Please silence your phones', 'Prayer is in progress', 'Please straighten and close the rows', 'Please switch off your phones']}}, 'tarawih': {'hijriMonth': {'ui': 'hijriMonth'}, 'gapMinutes': {'ui': 'chips', 'choices': [5, 10, 15, 20], 'unit': 'minit'}, 'minutes': {'ui': 'slider', 'min': 0, 'max': 120, 'step': 5, 'unit': 'minit'}}, 'ayatCard': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'pick': {'ui': 'segment', 'choices': ['daily', 'random', 'manual']}, 'surah': {'ui': 'surah'}, 'ayatFrom': {'ui': 'ayatRange'}, 'ayatTo': {'ui': 'ayatRange'}, 'textSize': {'ui': 'segment', 'choices': ['s', 'm', 'l']}}, 'kuliahCard': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'tabungCard': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'figure': {'ui': 'segment', 'choices': ['balance', 'month', 'lastEntry']}, 'highlightSeconds': {'ui': 'slider', 'min': 0, 'max': 120, 'step': 5, 'unit': 'saat', 'disabledWhen': {'feature': 'finance', 'field': 'enabled', 'equals': false, 'noteMs': 'Tidak digunakan: tiada Kewangan, kad hanya memaparkan baris yang ditaip.', 'noteEn': 'Not used: without Finance the card shows only the typed rows.', 'noteAr': 'غير مستخدم: بدون المالية تعرض البطاقة الصفوف المكتوبة فقط.'}}, 'showTarget': {'disabledWhen': {'feature': 'finance', 'field': 'enabled', 'equals': false, 'noteMs': 'Tidak digunakan: tiada Kewangan, kad hanya memaparkan baris yang ditaip.', 'noteEn': 'Not used: without Finance the card shows only the typed rows.', 'noteAr': 'غير مستخدم: بدون المالية تعرض البطاقة الصفوف المكتوبة فقط.'}}, 'qrAssetId': {'ui': 'text'}, 'featured': {'ui': 'switch'}, 'manualTitle': {'disabledWhen': {'feature': 'finance', 'field': 'enabled', 'equals': true, 'noteMs': 'Tidak digunakan: kad tabung memaparkan baki daripada Kewangan.', 'noteEn': 'Not used: the card shows the balances from Finance.', 'noteAr': 'غير مستخدم: تعرض البطاقة الأرصدة من المالية.'}}, 'row1Label': {'disabledWhen': {'feature': 'finance', 'field': 'enabled', 'equals': true, 'noteMs': 'Tidak digunakan: kad tabung memaparkan baki daripada Kewangan.', 'noteEn': 'Not used: the card shows the balances from Finance.', 'noteAr': 'غير مستخدم: تعرض البطاقة الأرصدة من المالية.'}}, 'row1Sen': {'disabledWhen': {'feature': 'finance', 'field': 'enabled', 'equals': true, 'noteMs': 'Tidak digunakan: kad tabung memaparkan baki daripada Kewangan.', 'noteEn': 'Not used: the card shows the balances from Finance.', 'noteAr': 'غير مستخدم: تعرض البطاقة الأرصدة من المالية.'}}, 'row2Label': {'disabledWhen': {'feature': 'finance', 'field': 'enabled', 'equals': true, 'noteMs': 'Tidak digunakan: kad tabung memaparkan baki daripada Kewangan.', 'noteEn': 'Not used: the card shows the balances from Finance.', 'noteAr': 'غير مستخدم: تعرض البطاقة الأرصدة من المالية.'}}, 'row2Sen': {'disabledWhen': {'feature': 'finance', 'field': 'enabled', 'equals': true, 'noteMs': 'Tidak digunakan: kad tabung memaparkan baki daripada Kewangan.', 'noteEn': 'Not used: the card shows the balances from Finance.', 'noteAr': 'غير مستخدم: تعرض البطاقة الأرصدة من المالية.'}}, 'row3Label': {'disabledWhen': {'feature': 'finance', 'field': 'enabled', 'equals': true, 'noteMs': 'Tidak digunakan: kad tabung memaparkan baki daripada Kewangan.', 'noteEn': 'Not used: the card shows the balances from Finance.', 'noteAr': 'غير مستخدم: تعرض البطاقة الأرصدة من المالية.'}}, 'row3Sen': {'disabledWhen': {'feature': 'finance', 'field': 'enabled', 'equals': true, 'noteMs': 'Tidak digunakan: kad tabung memaparkan baki daripada Kewangan.', 'noteEn': 'Not used: the card shows the balances from Finance.', 'noteAr': 'غير مستخدم: تعرض البطاقة الأرصدة من المالية.'}}}, 'pengumuman': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'daysAhead': {'hidden': true}}, 'posters': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'programKhas': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'daysAhead': {'hidden': true}}, 'takwim': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}, 'count': {'ui': 'chips', 'choices': [1, 2, 3]}}, 'hadis': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'worldTimes': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'tugasan': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'zikirSelepasSolat': {'durationSeconds': {'ui': 'slider', 'min': 5, 'max': 600, 'step': 5, 'unit': 'saat'}}, 'zone': {'zone': {'ui': 'zone'}}, 'recording': {'segmentMinutes': {'ui': 'chips', 'choices': [5, 10, 15, 30, 60], 'unit': 'minit'}, 'keepOnDevice': {'disabledWhen': {'feature': 'recordingCleanup', 'field': 'enabled', 'equals': false, 'noteMs': 'Tiada rakaman dipadam selagi Pembersihan rakaman dimatikan.', 'noteEn': 'No recording is deleted while Recording clean-up is off.', 'noteAr': 'لا يُحذف أي تسجيل ما دام تنظيف التسجيلات متوقفًا.'}}}, 'surauInfo': {'helpPhone': {'ui': 'phone'}, 'helpEmail': {'ui': 'email'}}, 'dataSources': {'esolat.url': {'ui': 'url', 'testable': true, 'scope': 'system'}, 'esolatZones.url': {'ui': 'url', 'scope': 'system'}, 'nominatim.url': {'ui': 'url', 'scope': 'system'}, 'quranText.url': {'ui': 'url', 'testable': true, 'scope': 'system'}, 'quranAudio.url': {'ui': 'url', 'testable': true, 'scope': 'system'}}, 'cloudSync': {'dirtyCheckSeconds': {'ui': 'chips', 'choices': [60, 120, 300, 600, 900], 'unit': 'saat', 'scope': 'system'}, 'cloudUrl': {'ui': 'url', 'readOnly': true, 'scope': 'system'}}, 'system': {'noVideoSeconds': {'ui': 'slider', 'min': 5, 'max': 60, 'step': 1, 'unit': 'saat'}, 'cloudWakeSeconds': {'ui': 'slider', 'min': 10, 'max': 60, 'step': 5, 'unit': 'saat'}, 'syncHistoryDays': {'ui': 'chips', 'choices': [180, 365], 'unit': 'hari'}, 'suspendedAt': {'hidden': true}}, 'recordingCleanup': {'keepDays': {'ui': 'chips', 'choices': [0, 1, 3, 7, 30], 'unit': 'hari', 'disabledWhen': {'feature': 'recording', 'field': 'keepOnDevice', 'equals': false, 'noteMs': 'Tidak digunakan: rakaman di peranti dipadam sebaik YouTube mengesahkannya.', 'noteEn': 'Not used: the recording on the device is deleted as soon as YouTube confirms it.', 'noteAr': 'غير مستخدم: يُحذف التسجيل على الجهاز فور تأكيد YouTube له.'}}}, 'youtubeCatchUp': {'replaceGappyLive': {'ui': 'segment', 'choices': ['ask', 'never', 'always']}}, 'beeps': {'volume': {'ui': 'slider', 'min': 0, 'max': 100, 'step': 5, 'unit': '%'}}, 'liveOnKiosk': {'volume': {'ui': 'slider', 'min': 0, 'max': 100, 'step': 5, 'unit': '%'}}, 'liveCamera': {'transport': {'ui': 'segment', 'choices': ['auto', 'tcp', 'udp']}, 'avOffsetMs.deviceMic': {'ui': 'stepper', 'min': 0, 'max': 2000, 'step': 50}, 'avOffsetMs.boxInput': {'ui': 'stepper', 'min': 0, 'max': 2000, 'step': 50}}};
 
-/// FEATURE_DESC from core: feature key -> {ms, en, keywords}.
-const Map<String, Map<String, Object?>> featureDescTable = {'prayerBar': {'ms': 'Waktu solat sehari di bahagian bawah skrin TV.', 'en': 'The day\'s prayer times along the bottom of the TV screen.', 'keywords': []}, 'clock': {'ms': 'Jam besar di penjuru skrin TV.', 'en': 'A large clock in the corner of the TV screen.', 'keywords': []}, 'prayerSequenceSafety': {'ms': 'Skrin azan, iqamah dan solat sentiasa ikut urutan yang betul.', 'en': 'The azan, iqamah and prayer screens always follow the right order.', 'keywords': []}, 'zone': {'ms': 'Zon JAKIM untuk waktu solat: SGR01 Gombak, Petaling dan sekitarnya.', 'en': 'The JAKIM zone for prayer times, for example SGR01 Gombak and Petaling.', 'keywords': ['jakim', 'e-solat', 'lokasi']}, 'location': {'ms': 'Negara, zon waktu dan koordinat surau; waktu solat di luar Malaysia dikira daripadanya.', 'en': 'The country, time zone and coordinates of the surau; prayer times outside Malaysia are calculated from them.', 'keywords': ['lokasi', 'negara', 'koordinat', 'latitud']}, 'prayerCalc': {'ms': 'Kaedah kiraan waktu solat dari koordinat surau, dan laras minit bagi setiap waktu. Kiraan setempat sentiasa menjadi sandaran bila jadual rasmi atau fail surau tiada.', 'en': 'The method that calculates prayer times from the surau coordinates, and a minute adjustment for each prayer. Local calculation is always the fallback when the official table or the surau file has no time.', 'keywords': ['kiraan', 'kaedah', 'mazhab', 'imsak']}, 'prayerSources': {'ms': 'Susunan sumber waktu solat: rasmi, kiraan setempat dan fail surau.', 'en': 'The order of the prayer time sources: official, local calculation and the surau file.', 'keywords': ['sumber', 'jadual', 'fail']}, 'azanCountdown': {'ms': 'Kiraan detik di skrin sebelum masuk waktu.', 'en': 'A countdown on screen before the prayer time enters.', 'keywords': ['azan']}, 'masukWaktu': {'ms': 'Skrin "Telah masuk waktu" ketika azan berkumandang.', 'en': 'The "Prayer time has entered" screen while the azan is called.', 'keywords': ['azan']}, 'iqamahCountdown': {'ms': 'Kiraan detik dari azan hingga iqamah, ikut hari dan waktu.', 'en': 'A countdown from azan to iqamah, by day and prayer.', 'keywords': ['iqamah']}, 'solatScreen': {'ms': 'Skrin tenang dengan mesej semasa solat berjemaah. Mesej yang sama juga dipaparkan di skrin tarawih.', 'en': 'A calm screen with a message during congregational prayer. The same message also shows on the tarawih screen.', 'keywords': ['telefon bimbit']}, 'jumaat': {'ms': 'Tempoh khutbah, iqamah dan solat Jumaat.', 'en': 'Timings for the Friday sermon, iqamah and prayer.', 'keywords': ['khutbah']}, 'tarawih': {'ms': 'Jadual tarawih pada bulan yang dipilih.', 'en': 'The tarawih schedule in the chosen month.', 'keywords': ['ramadan']}, 'syurukWarning': {'ms': 'Amaran sebelum syuruk, tanda waktu Subuh hampir tamat.', 'en': 'A warning before sunrise, when Subuh time is about to end.', 'keywords': ['syuruk']}, 'imsakBeep': {'ms': 'Bunyi pendek pada waktu imsak. Bunyi ini ikut suis dan kuat Bunyi amaran; jika bunyi kiraan detik azan jatuh pada minit yang sama, hanya satu bunyi berbunyi.', 'en': 'A short beep at imsak time. It follows the Warning beeps switch and volume; when the azan countdown beep falls on the same minute, only one beep plays.', 'keywords': ['puasa']}, 'isyraq': {'ms': 'Peringatan solat sunat isyraq selepas syuruk.', 'en': 'A reminder of the isyraq prayer after sunrise.', 'keywords': ['syuruk']}, 'dataSources': {'ms': 'Alamat e-Solat, QuranEnc, EveryAyah, Nominatim dan HadeethEnc.', 'en': 'The addresses of e-Solat, QuranEnc, EveryAyah, Nominatim and HadeethEnc.', 'keywords': ['jakim', 'url']}, 'firstAzanSubuh': {'ms': 'Azan awal sebelum Subuh, dimainkan dari fail audio. Dimainkan sekali sehari dan tidak diulang selepas skrin dimuat semula. Tilawah sebelum Subuh tamat apabila azan awal bermula.', 'en': 'An early azan before Subuh, played from an audio file. It plays once a day and does not replay after a reload. A recitation before Subuh ends when it starts.', 'keywords': ['azan']}, 'surauInfo': {'ms': 'Nama, logo dan orang untuk dihubungi.', 'en': 'The name, logo and contact person.', 'keywords': ['logo', 'nama']}, 'hijriDate': {'ms': 'Tarikh Hijrah dan bila ia bertukar.', 'en': 'The Hijri date and when it changes.', 'keywords': ['hijrah']}, 'backgrounds': {'ms': 'Gambar latar skrin TV dan kekerapan bertukar, untuk semua tema. Gambar asal MAXCOM hanya untuk tema Default. Di Ubah suai, Ikut tema bermaksud gambar di sini (atau gambar tema yang dimuat naik) digunakan; gambar sendiri bagi sesuatu skrin menggantikannya.', 'en': 'The TV background pictures and how often they change, for every theme. The MAXCOM built-in pictures are for the Default theme only. In Ubah suai, Follow the theme means the pictures here (or the picture of an uploaded theme) are used; an own picture for a screen replaces them.', 'keywords': ['gambar']}, 'autoTone': {'ms': 'Warna teks dan aksen ikut gambar latar, untuk tema Default. Warna teks atau aksen yang dipilih di Ubah suai mengatasinya.', 'en': 'Text and accent colours follow the background picture, for the Default theme. A text or accent colour chosen in Ubah suai overrides it.', 'keywords': ['warna']}, 'language': {'ms': 'Bahasa paparan skrin TV.', 'en': 'The display language of the TV screen.', 'keywords': ['bahasa']}, 'orientation': {'ms': 'Skrin TV mendatar atau menegak.', 'en': 'The TV screen landscape or portrait.', 'keywords': ['mendatar', 'menegak']}, 'kioskTemplate': {'ms': 'Tema menukar seluruh rupa skrin TV. Setiap skrin boleh diubah suai.', 'en': 'The theme changes the whole look of the TV screen. Every screen can be customised.', 'keywords': ['templat', 'tema', 'rupa', 'warna']}, 'themeStyle': {'ms': 'Ubah suai rupa setiap skrin bagi tema.', 'en': 'Customise the look of each screen of a theme.', 'keywords': ['tema', 'ubah suai']}, 'kuliahCard': {'ms': 'Kuliah akan datang di skrin TV.', 'en': 'Upcoming lectures on the TV screen.', 'keywords': ['kuliah']}, 'penceramahPhoto': {'ms': 'Bentuk gambar penceramah pada kad kuliah.', 'en': 'The shape of the speaker photo on the lecture card.', 'keywords': ['penceramah']}, 'kitabCover': {'ms': 'Papar kulit kitab pada kad kuliah.', 'en': 'Show the book cover on the lecture card.', 'keywords': ['kitab']}, 'pengumuman': {'ms': 'Pengumuman surau di skrin TV.', 'en': 'Surau announcements on the TV screen.', 'keywords': []}, 'ticker': {'ms': 'Teks bergerak di bahagian bawah skrin.', 'en': 'Scrolling text along the bottom of the screen.', 'keywords': []}, 'posters': {'ms': 'Poster bergilir di skrin TV.', 'en': 'Posters shown in turn on the TV screen.', 'keywords': []}, 'programKhas': {'ms': 'Program khas yang akan datang.', 'en': 'Upcoming special programmes.', 'keywords': []}, 'takwim': {'ms': 'Tarikh penting Islam yang akan datang.', 'en': 'Upcoming important Islamic dates.', 'keywords': ['kalendar']}, 'hadis': {'ms': 'Hadis bergilir di skrin TV, rawak atau pilih sendiri. Bilangan hadis sehari menentukan set harian.', 'en': 'Hadith shown in turn on the TV screen, random or chosen by you. The number per day sets the daily set.', 'keywords': []}, 'worldTimes': {'ms': 'Waktu di Makkah, Madinah dan bandar lain.', 'en': 'The time in Makkah, Madinah and other cities.', 'keywords': ['makkah']}, 'tugasan': {'ms': 'Jadual bertugas imam, bilal dan AJK.', 'en': 'The duty roster for imam, bilal and committee.', 'keywords': ['imam', 'bilal']}, 'ayatCard': {'ms': 'Ayat Al-Quran pilihan dengan terjemahan.', 'en': 'A chosen Quran verse with translation.', 'keywords': ['quran']}, 'zikirSelepasSolat': {'ms': 'Zikir di skrin selepas setiap solat.', 'en': 'Zikir on screen after each prayer.', 'keywords': []}, 'quranReader': {'ms': 'Baca mushaf penuh di aplikasi dan skrin TV.', 'en': 'Read the full mushaf in the app and on the TV screen.', 'keywords': ['mushaf']}, 'tilawah': {'ms': 'Bacaan Al-Quran oleh qari pilihan.', 'en': 'Quran recitation by a chosen reciter.', 'keywords': ['qari']}, 'beeps': {'ms': 'Suis dan kuat bunyi amaran sebelum azan dan iqamah, bunyi imsak dan bunyi syuruk. Jika suis dimatikan atau kuat ialah 0, bunyi imsak, bunyi syuruk dan azan pertama Subuh turut senyap. Azan pertama berhenti apabila kiraan detik azan Subuh bermula, atau pada waktu Subuh.', 'en': 'The switch and volume of the warning beeps before azan and iqamah, the imsak beep and the syuruk beep. With the switch off or the volume at 0, the imsak beep, the syuruk beep and the first Subuh azan are silent too. The first azan stops when the Subuh azan countdown starts, or at Subuh.', 'keywords': ['azan', 'iqamah']}, 'liveOnKiosk': {'ms': 'Kuliah yang sedang disiarkan, terus di skrin TV. Jika dimatikan, siaran langsung tidak dapat dimulakan langsung, termasuk siaran ke YouTube sahaja.', 'en': 'The lecture being broadcast, shown directly on the TV screen. When off, no live broadcast can start, including one to YouTube only.', 'keywords': ['siaran']}, 'liveYoutube': {'ms': 'Siarkan kuliah ke saluran YouTube surau sendiri.', 'en': 'Broadcast the lecture to the surau\'s own YouTube channel.', 'keywords': ['youtube']}, 'recording': {'ms': 'Rakam kuliah ke fail di peranti. Jika Simpan rakaman di peranti dimatikan, salinan di peranti dipadam sebaik YouTube mengesahkannya.', 'en': 'Record the lecture to files on the device. When Keep the recording on the device is off, the copy on the device is deleted as soon as YouTube confirms it.', 'keywords': ['rakaman']}, 'finance': {'ms': 'Rekod kutipan dan perbelanjaan surau.', 'en': 'Record the surau\'s collections and spending.', 'keywords': ['derma']}, 'tabungCard': {'ms': 'Baki tabung surau di skrin TV.', 'en': 'The surau fund balance on the TV screen.', 'keywords': ['derma']}, 'calendarFeed': {'ms': 'Jadual kuliah dalam kalendar telefon jemaah.', 'en': 'The lecture schedule in the congregation\'s phone calendars.', 'keywords': ['kalendar']}, 'jemaahPage': {'ms': 'Laman web ringkas untuk jemaah. Dirancang, belum tersedia.', 'en': 'A simple web page for the congregation. Planned, not available yet.', 'keywords': []}, 'cloudSync': {'ms': 'Alamat awan MAXCOM dan selang semak perubahan.', 'en': 'The MAXCOM cloud address and how often changes are checked.', 'keywords': ['awan']}, 'youtubeCatchUp': {'ms': 'Muat naik rakaman bila siaran langsung terputus.', 'en': 'Upload the recording when a live broadcast was cut.', 'keywords': ['youtube']}, 'recordingCleanup': {'ms': 'Padam rakaman di peranti selepas YouTube mengesahkannya.', 'en': 'Delete recordings on the device once YouTube has confirmed them.', 'keywords': ['rakaman']}, 'appLock': {'ms': 'PIN atau cap jari setiap kali MAXCOM dibuka.', 'en': 'A PIN or fingerprint every time MAXCOM is opened.', 'keywords': ['pin', 'cap jari']}, 'system': {'ms': 'Amaran tiada video, tunggu awan bangun, sejarah penyelarasan.', 'en': 'The no-video warning, how long to wait for the cloud, and sync history.', 'keywords': []}};
+/// FEATURE_DESC from core: feature key -> {ms, en, ar, keywords}.
+const Map<String, Map<String, Object?>> featureDescTable = {'prayerBar': {'ms': 'Waktu solat sehari di bahagian bawah skrin TV.', 'en': 'The day\'s prayer times along the bottom of the TV screen.', 'keywords': [], 'ar': 'مواقيت صلاة اليوم في أسفل شاشة التلفاز.'}, 'clock': {'ms': 'Jam besar di penjuru skrin TV.', 'en': 'A large clock in the corner of the TV screen.', 'keywords': [], 'ar': 'ساعة كبيرة في زاوية شاشة التلفاز.'}, 'prayerSequenceSafety': {'ms': 'Skrin azan, iqamah dan solat sentiasa ikut urutan yang betul.', 'en': 'The azan, iqamah and prayer screens always follow the right order.', 'keywords': [], 'ar': 'شاشات الأذان والإقامة والصلاة تتبع دائمًا الترتيب الصحيح.'}, 'zone': {'ms': 'Zon JAKIM untuk waktu solat: SGR01 Gombak, Petaling dan sekitarnya.', 'en': 'The JAKIM zone for prayer times, for example SGR01 Gombak and Petaling.', 'keywords': ['jakim', 'e-solat', 'lokasi'], 'ar': 'منطقة JAKIM لمواقيت الصلاة، مثل SGR01 غومباك وبيتالينغ وما حولهما.'}, 'location': {'ms': 'Negara, zon waktu dan koordinat surau; waktu solat di luar Malaysia dikira daripadanya.', 'en': 'The country, time zone and coordinates of the surau; prayer times outside Malaysia are calculated from them.', 'keywords': ['lokasi', 'negara', 'koordinat', 'latitud'], 'ar': 'الدولة والمنطقة الزمنية وإحداثيات المصلى؛ تُحسب منها مواقيت الصلاة خارج ماليزيا.'}, 'prayerCalc': {'ms': 'Kaedah kiraan waktu solat dari koordinat surau, dan laras minit bagi setiap waktu. Kiraan setempat sentiasa menjadi sandaran bila jadual rasmi atau fail surau tiada.', 'en': 'The method that calculates prayer times from the surau coordinates, and a minute adjustment for each prayer. Local calculation is always the fallback when the official table or the surau file has no time.', 'keywords': ['kiraan', 'kaedah', 'mazhab', 'imsak'], 'ar': 'طريقة حساب مواقيت الصلاة من إحداثيات المصلى، وتعديل بالدقائق لكل صلاة. الحساب المحلي هو البديل دائمًا عند غياب الجدول الرسمي أو ملف المصلى.'}, 'prayerSources': {'ms': 'Susunan sumber waktu solat: rasmi, kiraan setempat dan fail surau.', 'en': 'The order of the prayer time sources: official, local calculation and the surau file.', 'keywords': ['sumber', 'jadual', 'fail'], 'ar': 'ترتيب مصادر مواقيت الصلاة: الرسمي والحساب المحلي وملف المصلى.'}, 'azanCountdown': {'ms': 'Kiraan detik di skrin sebelum masuk waktu.', 'en': 'A countdown on screen before the prayer time enters.', 'keywords': ['azan'], 'ar': 'عدّ تنازلي على الشاشة قبل دخول وقت الصلاة.'}, 'masukWaktu': {'ms': 'Skrin "Telah masuk waktu" ketika azan berkumandang.', 'en': 'The "Prayer time has entered" screen while the azan is called.', 'keywords': ['azan'], 'ar': 'شاشة "دخل وقت الصلاة" أثناء رفع الأذان.'}, 'iqamahCountdown': {'ms': 'Kiraan detik dari azan hingga iqamah, ikut hari dan waktu.', 'en': 'A countdown from azan to iqamah, by day and prayer.', 'keywords': ['iqamah'], 'ar': 'عدّ تنازلي من الأذان إلى الإقامة، حسب اليوم والصلاة.'}, 'solatScreen': {'ms': 'Skrin tenang dengan mesej semasa solat berjemaah. Mesej yang sama juga dipaparkan di skrin tarawih.', 'en': 'A calm screen with a message during congregational prayer. The same message also shows on the tarawih screen.', 'keywords': ['telefon bimbit'], 'ar': 'شاشة هادئة مع رسالة أثناء صلاة الجماعة. تظهر الرسالة نفسها في شاشة التراويح أيضًا.'}, 'jumaat': {'ms': 'Tempoh khutbah, iqamah dan solat Jumaat.', 'en': 'Timings for the Friday sermon, iqamah and prayer.', 'keywords': ['khutbah'], 'ar': 'مدة الخطبة والإقامة وصلاة الجمعة.'}, 'tarawih': {'ms': 'Jadual tarawih pada bulan yang dipilih.', 'en': 'The tarawih schedule in the chosen month.', 'keywords': ['ramadan'], 'ar': 'جدول التراويح في الشهر المحدد.'}, 'syurukWarning': {'ms': 'Amaran sebelum syuruk, tanda waktu Subuh hampir tamat.', 'en': 'A warning before sunrise, when Subuh time is about to end.', 'keywords': ['syuruk'], 'ar': 'تنبيه قبل الشروق، علامة اقتراب انتهاء وقت الفجر.'}, 'imsakBeep': {'ms': 'Bunyi pendek pada waktu imsak. Bunyi ini ikut suis dan kuat Bunyi amaran; jika bunyi kiraan detik azan jatuh pada minit yang sama, hanya satu bunyi berbunyi.', 'en': 'A short beep at imsak time. It follows the Warning beeps switch and volume; when the azan countdown beep falls on the same minute, only one beep plays.', 'keywords': ['puasa'], 'ar': 'صوت قصير عند وقت الإمساك. يتبع هذا الصوت مفتاح أصوات التنبيه ومستواها؛ وإذا وقع صوت العد التنازلي للأذان في الدقيقة نفسها فيُسمع صوت واحد فقط.'}, 'isyraq': {'ms': 'Peringatan solat sunat isyraq selepas syuruk.', 'en': 'A reminder of the isyraq prayer after sunrise.', 'keywords': ['syuruk'], 'ar': 'تذكير بصلاة الإشراق بعد الشروق.'}, 'dataSources': {'ms': 'Alamat e-Solat, QuranEnc, EveryAyah, Nominatim dan HadeethEnc.', 'en': 'The addresses of e-Solat, QuranEnc, EveryAyah, Nominatim and HadeethEnc.', 'keywords': ['jakim', 'url'], 'ar': 'عناوين e-Solat وQuranEnc وEveryAyah وNominatim وHadeethEnc.'}, 'firstAzanSubuh': {'ms': 'Azan awal sebelum Subuh, dimainkan dari fail audio. Dimainkan sekali sehari dan tidak diulang selepas skrin dimuat semula. Tilawah sebelum Subuh tamat apabila azan awal bermula.', 'en': 'An early azan before Subuh, played from an audio file. It plays once a day and does not replay after a reload. A recitation before Subuh ends when it starts.', 'keywords': ['azan'], 'ar': 'أذان مبكر قبل الفجر يُشغَّل من ملف صوتي. يُشغَّل مرة واحدة في اليوم ولا يُعاد بعد إعادة تحميل الشاشة. وتنتهي التلاوة قبل الفجر عند بدئه.'}, 'surauInfo': {'ms': 'Nama, logo dan orang untuk dihubungi.', 'en': 'The name, logo and contact person.', 'keywords': ['logo', 'nama'], 'ar': 'الاسم والشعار وجهة الاتصال.'}, 'hijriDate': {'ms': 'Tarikh Hijrah dan bila ia bertukar.', 'en': 'The Hijri date and when it changes.', 'keywords': ['hijrah'], 'ar': 'التاريخ الهجري ووقت تغيّره.'}, 'backgrounds': {'ms': 'Gambar latar skrin TV dan kekerapan bertukar, untuk semua tema. Gambar asal MAXCOM hanya untuk tema Default. Di Ubah suai, Ikut tema bermaksud gambar di sini (atau gambar tema yang dimuat naik) digunakan; gambar sendiri bagi sesuatu skrin menggantikannya.', 'en': 'The TV background pictures and how often they change, for every theme. The MAXCOM built-in pictures are for the Default theme only. In Ubah suai, Follow the theme means the pictures here (or the picture of an uploaded theme) are used; an own picture for a screen replaces them.', 'keywords': ['gambar'], 'ar': 'صور خلفية شاشة التلفاز وسرعة تغيّرها، لجميع القوالب. صور MAXCOM المدمجة للقالب Default فقط. في التخصيص، "حسب القالب" تعني استخدام الصور هنا (أو صورة القالب المرفوع)؛ وصورة خاصة بشاشة معينة تحلّ محلها.'}, 'autoTone': {'ms': 'Warna teks dan aksen ikut gambar latar, untuk tema Default. Warna teks atau aksen yang dipilih di Ubah suai mengatasinya.', 'en': 'Text and accent colours follow the background picture, for the Default theme. A text or accent colour chosen in Ubah suai overrides it.', 'keywords': ['warna'], 'ar': 'لون النص واللون المميّز يتبعان صورة الخلفية، للقالب Default. أما لون النص أو اللون المميّز المختار في التخصيص فيتغلب عليهما.'}, 'language': {'ms': 'Bahasa paparan skrin TV, bukan bahasa aplikasi di telefon. Ikut lokasi: BM di Malaysia, Inggeris di negara lain. Surau di luar negara: tetapkan Lokasi surau.', 'en': 'The display language of the TV screen, not the language of the app on the phone. Follow location: BM in Malaysia, English in other countries. A surau abroad: set Surau location.', 'keywords': ['bahasa'], 'ar': 'لغة عرض شاشة التلفاز، وليست لغة التطبيق على الهاتف. حسب الموقع: البهاسا الملايو في ماليزيا والإنجليزية في الدول الأخرى. مصلى خارج ماليزيا: اضبط موقع المصلى.'}, 'orientation': {'ms': 'Skrin TV mendatar atau menegak.', 'en': 'The TV screen landscape or portrait.', 'keywords': ['mendatar', 'menegak'], 'ar': 'شاشة التلفاز أفقية أو عمودية.'}, 'kioskTemplate': {'ms': 'Tema menukar seluruh rupa skrin TV. Setiap skrin boleh diubah suai.', 'en': 'The theme changes the whole look of the TV screen. Every screen can be customised.', 'keywords': ['templat', 'tema', 'rupa', 'warna'], 'ar': 'القالب يغيّر مظهر شاشة التلفاز كله. ويمكن تخصيص كل شاشة.'}, 'themeStyle': {'ms': 'Ubah suai rupa setiap skrin bagi tema.', 'en': 'Customise the look of each screen of a theme.', 'keywords': ['tema', 'ubah suai'], 'ar': 'خصّص مظهر كل شاشة في القالب.'}, 'kuliahCard': {'ms': 'Kuliah akan datang di skrin TV.', 'en': 'Upcoming lectures on the TV screen.', 'keywords': ['kuliah'], 'ar': 'الدروس القادمة على شاشة التلفاز.'}, 'penceramahPhoto': {'ms': 'Bentuk gambar penceramah pada kad kuliah.', 'en': 'The shape of the speaker photo on the lecture card.', 'keywords': ['penceramah'], 'ar': 'شكل صورة المحاضر في بطاقة الدرس.'}, 'kitabCover': {'ms': 'Papar kulit kitab pada kad kuliah.', 'en': 'Show the book cover on the lecture card.', 'keywords': ['kitab'], 'ar': 'عرض غلاف الكتاب في بطاقة الدرس.'}, 'pengumuman': {'ms': 'Pengumuman surau di skrin TV.', 'en': 'Surau announcements on the TV screen.', 'keywords': [], 'ar': 'إعلانات المصلى على شاشة التلفاز.'}, 'ticker': {'ms': 'Teks bergerak di bahagian bawah skrin.', 'en': 'Scrolling text along the bottom of the screen.', 'keywords': [], 'ar': 'نص متحرك في أسفل الشاشة.'}, 'posters': {'ms': 'Poster bergilir di skrin TV.', 'en': 'Posters shown in turn on the TV screen.', 'keywords': [], 'ar': 'ملصقات تُعرض بالتناوب على شاشة التلفاز.'}, 'programKhas': {'ms': 'Program khas yang akan datang.', 'en': 'Upcoming special programmes.', 'keywords': [], 'ar': 'البرامج الخاصة القادمة.'}, 'takwim': {'ms': 'Tarikh penting Islam yang akan datang.', 'en': 'Upcoming important Islamic dates.', 'keywords': ['kalendar'], 'ar': 'التواريخ الإسلامية المهمة القادمة.'}, 'hadis': {'ms': 'Hadis bergilir di skrin TV, rawak atau pilih sendiri. Bilangan hadis sehari menentukan set harian.', 'en': 'Hadith shown in turn on the TV screen, random or chosen by you. The number per day sets the daily set.', 'keywords': [], 'ar': 'أحاديث تُعرض بالتناوب على شاشة التلفاز، عشوائيًا أو باختيارك. وعدد الأحاديث في اليوم يحدد المجموعة اليومية.'}, 'worldTimes': {'ms': 'Waktu di Makkah, Madinah dan bandar lain.', 'en': 'The time in Makkah, Madinah and other cities.', 'keywords': ['makkah'], 'ar': 'الوقت في مكة المكرمة والمدينة المنورة ومدن أخرى.'}, 'tugasan': {'ms': 'Jadual bertugas imam, bilal dan AJK.', 'en': 'The duty roster for imam, bilal and committee.', 'keywords': ['imam', 'bilal'], 'ar': 'جدول مناوبة الإمام والمؤذن وأعضاء اللجنة.'}, 'ayatCard': {'ms': 'Ayat Al-Quran pilihan dengan terjemahan.', 'en': 'A chosen Quran verse with translation.', 'keywords': ['quran'], 'ar': 'آية قرآنية مختارة مع ترجمتها.'}, 'zikirSelepasSolat': {'ms': 'Zikir di skrin selepas setiap solat.', 'en': 'Zikir on screen after each prayer.', 'keywords': [], 'ar': 'أذكار على الشاشة بعد كل صلاة.'}, 'quranReader': {'ms': 'Baca mushaf penuh di aplikasi dan skrin TV.', 'en': 'Read the full mushaf in the app and on the TV screen.', 'keywords': ['mushaf'], 'ar': 'قراءة المصحف كاملًا في التطبيق وعلى شاشة التلفاز.'}, 'tilawah': {'ms': 'Bacaan Al-Quran oleh qari pilihan.', 'en': 'Quran recitation by a chosen reciter.', 'keywords': ['qari'], 'ar': 'تلاوة القرآن بصوت قارئ مختار.'}, 'beeps': {'ms': 'Suis dan kuat bunyi amaran sebelum azan dan iqamah, bunyi imsak dan bunyi syuruk. Jika suis dimatikan atau kuat ialah 0, bunyi imsak, bunyi syuruk dan azan pertama Subuh turut senyap. Azan pertama berhenti apabila kiraan detik azan Subuh bermula, atau pada waktu Subuh.', 'en': 'The switch and volume of the warning beeps before azan and iqamah, the imsak beep and the syuruk beep. With the switch off or the volume at 0, the imsak beep, the syuruk beep and the first Subuh azan are silent too. The first azan stops when the Subuh azan countdown starts, or at Subuh.', 'keywords': ['azan', 'iqamah'], 'ar': 'مفتاح ومستوى أصوات التنبيه قبل الأذان والإقامة، وصوت الإمساك وصوت الشروق. إذا أُوقف المفتاح أو كان المستوى 0، يسكت أيضًا صوت الإمساك وصوت الشروق وأذان الفجر الأول. ويتوقف الأذان الأول عندما يبدأ العد التنازلي لأذان الفجر، أو عند الفجر.'}, 'liveOnKiosk': {'ms': 'Kuliah yang sedang disiarkan, terus di skrin TV. Jika dimatikan, siaran langsung tidak dapat dimulakan langsung, termasuk siaran ke YouTube sahaja.', 'en': 'The lecture being broadcast, shown directly on the TV screen. When off, no live broadcast can start, including one to YouTube only.', 'keywords': ['siaran'], 'ar': 'الدرس المبثوث حاليًا، يظهر مباشرة على شاشة التلفاز. إذا أُوقف، لا يمكن بدء أي بث مباشر، بما في ذلك البث إلى YouTube فقط.'}, 'liveYoutube': {'ms': 'Siarkan kuliah ke saluran YouTube surau sendiri.', 'en': 'Broadcast the lecture to the surau\'s own YouTube channel.', 'keywords': ['youtube'], 'ar': 'بث الدرس إلى قناة YouTube الخاصة بالمصلى.'}, 'recording': {'ms': 'Rakam kuliah ke fail di peranti. Jika Simpan rakaman di peranti dimatikan, salinan di peranti dipadam sebaik YouTube mengesahkannya.', 'en': 'Record the lecture to files on the device. When Keep the recording on the device is off, the copy on the device is deleted as soon as YouTube confirms it.', 'keywords': ['rakaman'], 'ar': 'تسجيل الدرس في ملفات على الجهاز. إذا أُوقف خيار "حفظ التسجيل على الجهاز"، تُحذف النسخة الموجودة على الجهاز فور تأكيد YouTube لها.'}, 'liveCamera': {'ms': 'Kamera luaran (RTSP) untuk siaran langsung: gambar dan audionya sendiri, dengan sumber audio lain boleh ditambah.', 'en': 'An external (RTSP) camera for the live broadcast: its picture and its own audio, with other audio sources that can be added.', 'keywords': ['rtsp', 'cctv', 'kamera', 'ip'], 'ar': 'كاميرا خارجية (RTSP) للبث المباشر: صورتها وصوتها الخاص، مع إمكانية إضافة مصادر صوت أخرى.'}, 'finance': {'ms': 'Rekod kutipan dan perbelanjaan surau.', 'en': 'Record the surau\'s collections and spending.', 'keywords': ['derma'], 'ar': 'سجل تحصيلات المصلى ومصروفاته.'}, 'tabungCard': {'ms': 'Baki tabung surau di skrin TV, paling banyak 4 tabung sehalaman. Tempoh paparan ialah masa setiap halaman. Tonjolkan tabung pertama memaparkan tabung pertama dalam susunan anda dengan besar.', 'en': 'The surau fund balances on the TV screen, at most 4 funds a page. The display time is the time of each page. Feature the first fund shows the first fund in your order large.', 'keywords': ['derma'], 'ar': 'أرصدة صناديق تبرعات المصلى على شاشة التلفاز، بحد أقصى 4 صناديق في الصفحة. مدة العرض هي وقت كل صفحة. "إبراز الصندوق الأول" يعرض الصندوق الأول في ترتيبك بحجم كبير.'}, 'calendarFeed': {'ms': 'Jadual kuliah dalam kalendar telefon jemaah.', 'en': 'The lecture schedule in the congregation\'s phone calendars.', 'keywords': ['kalendar'], 'ar': 'جدول الدروس في تقويمات هواتف المصلّين.'}, 'jemaahPage': {'ms': 'Laman web ringkas untuk jemaah. Dirancang, belum tersedia.', 'en': 'A simple web page for the congregation. Planned, not available yet.', 'keywords': [], 'ar': 'صفحة ويب بسيطة للمصلّين. مخططة، وغير متاحة بعد.'}, 'cloudSync': {'ms': 'Alamat awan MAXCOM dan selang semak perubahan.', 'en': 'The MAXCOM cloud address and how often changes are checked.', 'keywords': ['awan'], 'ar': 'عنوان سحابة MAXCOM وكل كم يُفحص التغيير.'}, 'youtubeCatchUp': {'ms': 'Muat naik rakaman bila siaran langsung terputus.', 'en': 'Upload the recording when a live broadcast was cut.', 'keywords': ['youtube'], 'ar': 'رفع التسجيل عندما ينقطع البث المباشر.'}, 'recordingCleanup': {'ms': 'Padam rakaman di peranti selepas YouTube mengesahkannya.', 'en': 'Delete recordings on the device once YouTube has confirmed them.', 'keywords': ['rakaman'], 'ar': 'حذف التسجيلات من الجهاز بعد تأكيد YouTube لها.'}, 'appLock': {'ms': 'PIN atau cap jari setiap kali MAXCOM dibuka.', 'en': 'A PIN or fingerprint every time MAXCOM is opened.', 'keywords': ['pin', 'cap jari'], 'ar': 'رمز PIN أو بصمة الإصبع في كل مرة يُفتح فيها MAXCOM.'}, 'system': {'ms': 'Amaran tiada video, tunggu awan bangun, sejarah penyelarasan.', 'en': 'The no-video warning, how long to wait for the cloud, and sync history.', 'keywords': [], 'ar': 'تنبيه غياب الفيديو، ومدة انتظار السحابة، وسجل المزامنة.'}};
 
 /// SURAHS from core: [number, name, verse count].
 const List<List<Object>> surahs = [[1, 'Al-Fatihah', 7], [2, 'Al-Baqarah', 286], [3, 'Ali \'Imran', 200], [4, 'An-Nisa\'', 176], [5, 'Al-Ma\'idah', 120], [6, 'Al-An\'am', 165], [7, 'Al-A\'raf', 206], [8, 'Al-Anfal', 75], [9, 'At-Taubah', 129], [10, 'Yunus', 109], [11, 'Hud', 123], [12, 'Yusuf', 111], [13, 'Ar-Ra\'d', 43], [14, 'Ibrahim', 52], [15, 'Al-Hijr', 99], [16, 'An-Nahl', 128], [17, 'Al-Isra\'', 111], [18, 'Al-Kahf', 110], [19, 'Maryam', 98], [20, 'Ta Ha', 135], [21, 'Al-Anbiya\'', 112], [22, 'Al-Hajj', 78], [23, 'Al-Mu\'minun', 118], [24, 'An-Nur', 64], [25, 'Al-Furqan', 77], [26, 'Asy-Syu\'ara\'', 227], [27, 'An-Naml', 93], [28, 'Al-Qasas', 88], [29, 'Al-\'Ankabut', 69], [30, 'Ar-Rum', 60], [31, 'Luqman', 34], [32, 'As-Sajdah', 30], [33, 'Al-Ahzab', 73], [34, 'Saba\'', 54], [35, 'Fatir', 45], [36, 'Ya Sin', 83], [37, 'As-Saffat', 182], [38, 'Sad', 88], [39, 'Az-Zumar', 75], [40, 'Ghafir', 85], [41, 'Fussilat', 54], [42, 'Asy-Syura', 53], [43, 'Az-Zukhruf', 89], [44, 'Ad-Dukhan', 59], [45, 'Al-Jasiyah', 37], [46, 'Al-Ahqaf', 35], [47, 'Muhammad', 38], [48, 'Al-Fath', 29], [49, 'Al-Hujurat', 18], [50, 'Qaf', 45], [51, 'Az-Zariyat', 60], [52, 'At-Tur', 49], [53, 'An-Najm', 62], [54, 'Al-Qamar', 55], [55, 'Ar-Rahman', 78], [56, 'Al-Waqi\'ah', 96], [57, 'Al-Hadid', 29], [58, 'Al-Mujadalah', 22], [59, 'Al-Hasyr', 24], [60, 'Al-Mumtahanah', 13], [61, 'As-Saff', 14], [62, 'Al-Jumu\'ah', 11], [63, 'Al-Munafiqun', 11], [64, 'At-Taghabun', 18], [65, 'At-Talaq', 12], [66, 'At-Tahrim', 12], [67, 'Al-Mulk', 30], [68, 'Al-Qalam', 52], [69, 'Al-Haqqah', 52], [70, 'Al-Ma\'arij', 44], [71, 'Nuh', 28], [72, 'Al-Jinn', 28], [73, 'Al-Muzzammil', 20], [74, 'Al-Muddassir', 56], [75, 'Al-Qiyamah', 40], [76, 'Al-Insan', 31], [77, 'Al-Mursalat', 50], [78, 'An-Naba\'', 40], [79, 'An-Nazi\'at', 46], [80, '\'Abasa', 42], [81, 'At-Takwir', 29], [82, 'Al-Infitar', 19], [83, 'Al-Mutaffifin', 36], [84, 'Al-Insyiqaq', 25], [85, 'Al-Buruj', 22], [86, 'At-Tariq', 17], [87, 'Al-A\'la', 19], [88, 'Al-Ghasyiyah', 26], [89, 'Al-Fajr', 30], [90, 'Al-Balad', 20], [91, 'Asy-Syams', 15], [92, 'Al-Lail', 21], [93, 'Ad-Duha', 11], [94, 'Asy-Syarh', 8], [95, 'At-Tin', 8], [96, 'Al-\'Alaq', 19], [97, 'Al-Qadr', 5], [98, 'Al-Bayyinah', 8], [99, 'Az-Zalzalah', 8], [100, 'Al-\'Adiyat', 11], [101, 'Al-Qari\'ah', 11], [102, 'At-Takasur', 8], [103, 'Al-\'Asr', 3], [104, 'Al-Humazah', 9], [105, 'Al-Fil', 5], [106, 'Quraisy', 4], [107, 'Al-Ma\'un', 7], [108, 'Al-Kausar', 3], [109, 'Al-Kafirun', 6], [110, 'An-Nasr', 3], [111, 'Al-Masad', 5], [112, 'Al-Ikhlas', 4], [113, 'Al-Falaq', 5], [114, 'An-Nas', 6]];
@@ -610,7 +685,6 @@ const List<String> hijriMonthsEn = ['Muharram', 'Safar', 'Rabi al-Awwal', 'Rabi 
 /// RECITERS from core: [folder, name, style].
 const List<List<String>> reciters = [['Husary_64kbps', 'Mahmoud Khalil Al-Husary', 'Murattal, lalai'], ['Alafasy_64kbps', 'Mishary Rashid Alafasy', 'Murattal'], ['Abdul_Basit_Murattal_64kbps', 'Abdul Basit Abdus Samad', 'Murattal'], ['Ghamadi_40kbps', 'Saad Al-Ghamdi', 'Murattal'], ['Minshawy_Murattal_128kbps', 'Mohamed Siddiq Al-Minshawi', 'Murattal'], ['other', 'Lain-lain', 'Taip nama folder EveryAyah']];
 
-const List<String> systemFeatures = ['dataSources', 'cloudSync', 'system'];
 const List<String> orderedFeatures = ['kuliahCard', 'pengumuman', 'posters', 'programKhas', 'takwim', 'hadis', 'worldTimes', 'tugasan', 'ayatCard', 'tabungCard'];
 
 /// Theme contract tables from core (theme/catalog.ts, theme/style.ts, features/meta.ts).
@@ -620,12 +694,11 @@ const Map<String, String> screenGroups = {'biasa': 'prayer', 'azan': 'prayer', '
 const List<String> builtInThemeIds = ['default', 'colourful', 'creative', 'oldschool', 'minimal', 'arabic'];
 const Map<String, String> themeTitles = {'default': 'Default', 'colourful': 'Colourful', 'creative': 'Creative', 'oldschool': 'Old School', 'minimal': 'Minimal', 'arabic': 'Arabic Art'};
 const List<String> hiddenFeatures = ['themeStyle', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage'];
+/// FEATURE_REQUIRES from core: feature key -> the feature that must be on for it to do anything.
+const Map<String, Map<String, String>> featureRequires = {'liveYoutube': {'requires': 'liveOnKiosk'}};
 const Map<String, double> scaleFactor = {'S': 1, 'M': 1.1, 'L': 1.2, 'XL': 1.3};
 const List<String> accentSwatches = ['#2fd1b0', '#f9b544', '#ff7a98', '#f0c97a', '#7fdc9a', '#5aa7ff', '#ffffff'];
 const int themeStyleMaxBytes = 32768;
-
-/// LANJUTAN_ROWS from core.
-const List<Map<String, Object?>> lanjutanRows = [{'feature': 'liveYoutube', 'fields': ['relayVideo', 'maxBitrateKbps'], 'labelMs': 'Penyiaran YouTube', 'labelEn': 'YouTube relay'}, {'feature': 'tilawah', 'fields': ['cacheMaxMb'], 'labelMs': 'Ruang simpanan tilawah', 'labelEn': 'Recitation storage'}];
 
 /// ROLE_LABELS_MS from core.
 const Map<String, String> roleLabelsMs = {
@@ -633,5 +706,6 @@ const Map<String, String> roleLabelsMs = {
   'admin': 'Pentadbir',
   'treasurer': 'Bendahari',
   'media': 'Media',
+  'live': 'Siaran Langsung',
   'ajk': 'AJK',
 };

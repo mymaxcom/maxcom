@@ -7,10 +7,12 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/box/box_client.dart';
 import 'package:surau_app/features/prayer/prayer_repository.dart';
 import 'package:surau_app/features/shell/box_gateway.dart';
 import 'package:surau_app/features/shell/read_cache.dart';
+import 'package:surau_app/l10n/s_lookup.dart';
 
 import 'fakes.dart';
 
@@ -504,6 +506,32 @@ void main() {
       final e = await failWith(502, {'errors': ['bad gateway']}, (r) => r.refreshZones());
       expect(e.kind, PrayerFailure.upstream);
       expect(e.message, contains('zon'));
+    });
+
+    test('[P5] a coded refusal reads in the language of the app, an unknown code keeps the box sentence', () async {
+      final undo = await failWith(
+        409,
+        {'ok': false, 'errors': ['x'], 'code': 'undo_blocked', 'detail': {'by': '2026-11-10', 'date': '2026-11-02'}},
+        (r) => r.undoImport('i1'),
+      );
+      expect(undo.kind, PrayerFailure.conflict);
+      expect(undo.text(sFor(AppLang.en)), sFor(AppLang.en).errcUndoBlocked('2026-11-02', '2026-11-10'));
+      expect(undo.text(sFor(AppLang.ar)), sFor(AppLang.ar).errcUndoBlocked('2026-11-02', '2026-11-10'));
+
+      final row = await failWith(
+        400,
+        {'errors': ['baris 4: x'], 'code': 'import_row_invalid', 'detail': {'row': 4, 'field': 'subuh', 'reason': 'empty'}},
+        (r) => r.status(),
+      );
+      final ar = sFor(AppLang.ar);
+      expect(row.text(ar), '${ar.impRow(4)}: ${ar.ra2RowEmpty(ar.ra2PrayerSubuh)}');
+
+      final unknown = await failWith(
+        409,
+        {'errors': ['Sebab baharu'], 'code': 'a_new_code_from_a_newer_box'},
+        (r) => r.status(),
+      );
+      expect(unknown.text(sFor(AppLang.en)), 'Sebab baharu');
     });
 
     test('403 and 404 use the fixed wording', () async {

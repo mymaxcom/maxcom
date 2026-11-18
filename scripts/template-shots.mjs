@@ -7,8 +7,9 @@
 // a string "@asset:<key>" inside it becomes the id of that fixture picture (IMAGES in ui-preview/fixtures/content.mjs).
 //
 // States: normal (kuliah card, ticker, source footer), iqamah (countdown), emergency (calculated-times band),
-// solat (the dimmed calm screen), poster (poster takeover strip), azan, masuk-waktu, jumaat, tiada-data, hadis, ayat,
-// pengumuman, pengumuman-pic, pengumuman-pic-tall, pengumuman-pic-missing, takwim, tabung, program, logo, logo-poster, logo-iqamah, arab-ayat, arab-hadis, arab-zikir, live, live-nologo (the live screen's waiting panel
+// solat (the dimmed calm screen), poster (full-height poster screen), poster-light (pale poster), poster-wide (16:9 picture, 1600x900), azan, masuk-waktu, jumaat, tiada-data, hadis, ayat,
+// pengumuman, pengumuman-pic, pengumuman-pic-tall, pengumuman-pic-missing, takwim, tabung, tabung-1, tabung-3, tabung-6, tabung-15,
+// tabung-15-summary, tabung-hot, tabung-over, tabung-noqr, tabung-manual, tabung-featured, tabung-40-summary1..3, tabung-month-neg, program, logo, logo-poster, logo-iqamah, arab-ayat, arab-hadis, arab-zikir, live, live-nologo (the live screen's waiting panel
 // through the preview mechanism). Files: <outDir>/<template>-<state>.png.
 // Env SHOT_SIZE=<w>x<h>@<dsf> (default 1920x1080@1). Reduced motion is emulated so two runs are pixel-equal, and every
 // state declares the data-phase it expects (the run fails when the stage differs).
@@ -79,6 +80,8 @@ const STATES = {
   emergency: { now: `${DAY}T15:52:00+08:00`, content: 'islamic', card: 'pengumuman', emergency: true, wait: '[data-testid="emergency-band"]', expectPhase: 'normal' },
   solat: { now: `${DAY}T16:35:00+08:00`, expectPhase: 'solat' },
   poster: { now: `${DAY}T15:52:00+08:00`, content: 'default', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
+  'poster-light': { now: `${DAY}T15:52:00+08:00`, content: 'poster-light', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
+  'poster-wide': { now: `${DAY}T15:52:00+08:00`, content: 'poster-wide', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
   azan: { now: at(DAY, row.asar, -60), expectPhase: 'azanCountdown' },
   'masuk-waktu': { now: at(DAY, row.asar, 5), expectPhase: 'masukWaktu' },
   jumaat: { now: at(friday, rowOf(friday).times.zohor, 120), expectPhase: 'khutbah' },
@@ -95,7 +98,30 @@ const STATES = {
   // The picture is missing on the box (404): the text-only notice and its ticker.
   'pengumuman-pic-missing': { ...card('pengumuman'), content: 'islamic-pic-missing' },
   takwim: card('takwim'),
+  // The duty roster and the world clocks on the content shell (operator 2026-11-17); -long: 3 duty days, a long name, 6 cities.
+  tugasan: card('tugasan'),
+  'waktu-dunia': card('worldTimes'),
+  'tugasan-long': { ...card('tugasan'), content: 'islamic-long' },
+  'waktu-dunia-long': { ...card('worldTimes'), content: 'islamic-long' },
   tabung: { ...card('tabungCard'), needs: 'tabung' },
+  // The tabung screen (mockup tabung-r1). `?card=` with no slot start pages by the KL clock (15 s a page): 15:52:30 is
+  // page 1 of a 3- or 5-page screen, 15:53:30 the 5th (the summary of 15 funds). `settings` merge over the stored ones.
+  'tabung-1': { ...card('tabungCard'), content: 'tabung-1' },
+  'tabung-3': { ...card('tabungCard'), content: 'tabung-3' },
+  'tabung-6': { ...card('tabungCard'), now: `${DAY}T15:52:30+08:00`, content: 'tabung-6' },
+  'tabung-15': { ...card('tabungCard'), now: `${DAY}T15:52:30+08:00`, content: 'tabung-15' },
+  'tabung-15-summary': { ...card('tabungCard'), now: `${DAY}T15:53:30+08:00`, content: 'tabung-15' },
+  'tabung-hot': { ...card('tabungCard'), content: 'tabung-hot' },
+  'tabung-over': { ...card('tabungCard'), content: 'tabung-over' },
+  'tabung-noqr': { ...card('tabungCard'), content: 'tabung-noqr' },
+  'tabung-manual': { ...card('tabungCard'), content: 'tabung-manual' },
+  'tabung-featured': { ...card('tabungCard'), now: `${DAY}T15:52:30+08:00`, content: 'tabung-6', settings: { tabungCard: { featured: true } } },
+  // 40 funds = 13 pages by the KL clock (15 s each): 15:54:45, 15:55:00 and 15:55:15 are the three summary pages.
+  'tabung-40-summary1': { ...card('tabungCard'), now: `${DAY}T15:54:45+08:00`, content: 'tabung-40' },
+  'tabung-40-summary2': { ...card('tabungCard'), now: `${DAY}T15:55:00+08:00`, content: 'tabung-40' },
+  'tabung-40-summary3': { ...card('tabungCard'), now: `${DAY}T15:55:15+08:00`, content: 'tabung-40' },
+  // 5 funds = 3 pages: 15:53:00 is the summary.
+  'tabung-month-neg': { ...card('tabungCard'), now: `${DAY}T15:53:00+08:00`, content: 'tabung-month-neg' },
   program: card('programKhas'),
   logo: { now: `${DAY}T15:52:00+08:00`, content: 'islamic', card: 'kuliahCard', wait: '[data-layer="content"] [data-card]', logo: true, expectPhase: 'normal' },
   'logo-poster': { now: `${DAY}T15:52:00+08:00`, content: 'default', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', logo: true, expectPhase: 'normal' },
@@ -179,7 +205,7 @@ try {
         surauInfo: { name: 'Surau Al-Hidayah' },
         kioskTemplate: { templateId: template },
       };
-      for (const [feature, value] of Object.entries(extraSettings)) {
+      for (const [feature, value] of Object.entries({ ...extraSettings, ...(st.settings ?? {}) })) {
         stored[feature] = { ...(stored[feature] ?? {}), ...(value && typeof value === 'object' ? value : {}) };
       }
       const settings = core.resolveSettings(stored);

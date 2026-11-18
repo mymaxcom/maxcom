@@ -2,8 +2,15 @@
 /// about extra fields and strict about the fields the app relies on.
 library;
 
+import '../features/people/ref.dart' show refOf;
+
 List<String> _strings(Object? v) =>
     v is List ? v.map((e) => e.toString()).toList(growable: false) : const [];
+
+/// An ISO instant as a [DateTime], or null when absent or unreadable.
+DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
+
+int _int(Object? v, [int fallback = 0]) => v is num ? v.toInt() : fallback;
 
 class UserDto {
   const UserDto({
@@ -13,6 +20,13 @@ class UserDto {
     required this.active,
     required this.pinRequired,
     this.pinLockedUntil,
+    this.createdAt,
+    this.ref,
+    this.phone,
+    this.deleted = false,
+    this.deletedAt,
+    this.deletedBy,
+    this.deactivatedAt,
   });
 
   factory UserDto.fromJson(Map<String, dynamic> j) => UserDto(
@@ -22,6 +36,18 @@ class UserDto {
         active: j['active'] == true,
         pinRequired: j['pinRequired'] == true,
         pinLockedUntil: j['pinLockedUntil'] as String?,
+        createdAt: _date(j['createdAt']),
+        ref: refOf(
+          ref: j['ref'] is String ? j['ref'] as String : null,
+          kind: 'user',
+          no: j['no'] is num ? (j['no'] as num).toInt() : null,
+          noSrc: j['noSrc'] is String ? j['noSrc'] as String : null,
+        ),
+        phone: j['phone'] is String ? j['phone'] as String : null,
+        deleted: j['deleted'] == true,
+        deletedAt: _date(j['deletedAt']),
+        deletedBy: j['deletedBy'] is String ? j['deletedBy'] as String : null,
+        deactivatedAt: _date(j['deactivatedAt']),
       );
 
   final String id;
@@ -30,6 +56,26 @@ class UserDto {
   final bool active;
   final bool pinRequired;
   final String? pinLockedUntil;
+
+  /// When the person was added.
+  final DateTime? createdAt;
+
+  /// The ID (`U-0001`) as the server stored it; null while it has none.
+  final String? ref;
+
+  /// E.164. Personal data: only a Pentadbir's list and the person's own
+  /// answers carry it; never shown in a list row, never logged.
+  final String? phone;
+
+  /// Soft deleted (seen from the feed copy or an ops view; a surau's list
+  /// never serves such a person).
+  final bool deleted;
+  final DateTime? deletedAt;
+  final String? deletedBy;
+
+  /// When the person was deactivated (server instant); null while active or
+  /// from an older box.
+  final DateTime? deactivatedAt;
 }
 
 class DeviceDto {
@@ -39,6 +85,8 @@ class DeviceDto {
     required this.name,
     required this.platform,
     required this.revoked,
+    this.enrolledAt,
+    this.ref,
   });
 
   factory DeviceDto.fromJson(Map<String, dynamic> j) => DeviceDto(
@@ -47,6 +95,13 @@ class DeviceDto {
         name: j['name'] as String,
         platform: j['platform'] as String,
         revoked: j['revoked'] == true,
+        enrolledAt: _date(j['enrolledAt']),
+        ref: refOf(
+          ref: j['ref'] is String ? j['ref'] as String : null,
+          kind: 'device',
+          no: j['no'] is num ? (j['no'] as num).toInt() : null,
+          noSrc: j['noSrc'] is String ? j['noSrc'] as String : null,
+        ),
       );
 
   final String id;
@@ -54,6 +109,334 @@ class DeviceDto {
   final String name;
   final String platform;
   final bool revoked;
+
+  /// When the device was enrolled.
+  final DateTime? enrolledAt;
+
+  /// The ID (`D-0001`); null while it has none.
+  final String? ref;
+}
+
+// ---- GET /api/people/activity (server task S6) ----
+
+/// One phone, tablet, computer or TV screen in the activity answer. The day
+/// count and the flag are the server's, computed from the server's clock.
+class DeviceActivityDto {
+  const DeviceActivityDto({
+    required this.id,
+    required this.userId,
+    required this.kind,
+    required this.idleDays,
+    required this.inactive,
+    this.ref,
+    this.enrolledAt,
+    this.lastSeenAt,
+  });
+
+  factory DeviceActivityDto.fromJson(Map<String, dynamic> j) => DeviceActivityDto(
+        id: j['id'] as String,
+        userId: j['userId'] as String,
+        kind: j['kind'] == 'tv' ? 'tv' : 'device',
+        idleDays: _int(j['idleDays']),
+        inactive: j['inactive'] == true,
+        ref: j['ref'] is String ? j['ref'] as String : null,
+        enrolledAt: _date(j['enrolledAt']),
+        lastSeenAt: _date(j['lastSeenAt']),
+      );
+
+  final String id;
+  final String? ref;
+  final String userId;
+
+  /// `device` (phone, tablet, computer) or `tv` (a paired TV screen).
+  final String kind;
+  final DateTime? enrolledAt;
+  final DateTime? lastSeenAt;
+
+  /// Whole days unused, by the server's clock.
+  final int idleDays;
+
+  /// "Tidak aktif": 60 days for a device, 30 for a TV screen.
+  final bool inactive;
+
+  bool get isTv => kind == 'tv';
+}
+
+/// One active person in the activity answer.
+class UserActivityDto {
+  const UserActivityDto({
+    required this.id,
+    required this.deviceCount,
+    required this.locked,
+    required this.needs,
+    required this.suggestDeactivate,
+    this.ref,
+    this.createdAt,
+    this.createdByName,
+    this.createdByRef,
+    this.lastActiveAt,
+    this.pinLockedUntil,
+  });
+
+  factory UserActivityDto.fromJson(Map<String, dynamic> j) => UserActivityDto(
+        id: j['id'] as String,
+        deviceCount: _int(j['deviceCount']),
+        locked: j['locked'] == true,
+        needs: _strings(j['needs']),
+        suggestDeactivate: j['suggestDeactivate'] == true,
+        ref: j['ref'] is String ? j['ref'] as String : null,
+        createdAt: _date(j['createdAt']),
+        createdByName: j['createdByName'] is String ? j['createdByName'] as String : null,
+        createdByRef: j['createdByRef'] is String ? j['createdByRef'] as String : null,
+        lastActiveAt: _date(j['lastActiveAt']),
+        pinLockedUntil: _date(j['pinLockedUntil']),
+      );
+
+  final String id;
+  final String? ref;
+  final DateTime? createdAt;
+  final String? createdByName;
+
+  /// The adder's ID (`U-0001`) as the server stored it; null for the system.
+  final String? createdByRef;
+  final int deviceCount;
+
+  /// The latest `lastSeenAt` of the person's phones; null when none was seen.
+  final DateTime? lastActiveAt;
+  final bool locked;
+  final DateTime? pinLockedUntil;
+
+  /// What needs doing, from the server: `locked`, `no_device`, `phone`,
+  /// `phone_duplicate`.
+  final List<String> needs;
+
+  /// Every phone unused for 90 days: "Nyahaktifkan?" (a suggestion only).
+  final bool suggestDeactivate;
+
+  bool get needsLocked => needs.contains('locked');
+  bool get needsNoDevice => needs.contains('no_device');
+  bool get needsPhone => needs.contains('phone');
+  bool get needsPhoneDuplicate => needs.contains('phone_duplicate');
+}
+
+class PeopleActivityDto {
+  const PeopleActivityDto({
+    required this.now,
+    required this.authorityIsBox,
+    required this.devices,
+    required this.users,
+    this.deviceDays = 60,
+    this.tvDays = 30,
+    this.noDeviceDays = 3,
+    this.userDays = 90,
+    this.deactivatedDays = 365,
+    this.noAdminPhone = false,
+  });
+
+  factory PeopleActivityDto.fromJson(Map<String, dynamic> j) {
+    final limits = j['limits'] is Map ? Map<String, dynamic>.from(j['limits'] as Map) : const <String, dynamic>{};
+    final now = _date(j['now']);
+    if (now == null) throw const FormatException('now');
+    return PeopleActivityDto(
+      now: now,
+      authorityIsBox: j['authority'] == 'box',
+      noAdminPhone: j['noAdminPhone'] == true,
+      deviceDays: _int(limits['deviceDays'], 60),
+      tvDays: _int(limits['tvDays'], 30),
+      noDeviceDays: _int(limits['noDeviceDays'], 3),
+      userDays: _int(limits['userDays'], 90),
+      deactivatedDays: _int(limits['deactivatedDays'], 365),
+      devices: [
+        for (final d in (j['devices'] as List? ?? const []))
+          if (d is Map<String, dynamic>) DeviceActivityDto.fromJson(d),
+      ],
+      users: [
+        for (final u in (j['users'] as List? ?? const []))
+          if (u is Map<String, dynamic>) UserActivityDto.fromJson(u),
+      ],
+    );
+  }
+
+  /// The SERVER's time of the answer. Every day count on screen comes from
+  /// here or from the server's own `idleDays`, never from the phone's clock.
+  final DateTime now;
+
+  /// True when the box itself answered; false from the cloud, which cannot
+  /// see unlocks made on the surau Wi-Fi (the screens then show no flags).
+  final bool authorityIsBox;
+
+  /// True when no active Pentadbir of the surau has a phone that is still
+  /// enrolled (the box flags it; shown under "Perlu tindakan").
+  final bool noAdminPhone;
+  final int deviceDays;
+  final int tvDays;
+  final int noDeviceDays;
+  final int userDays;
+
+  /// Days a person stays deactivated before the box deletes them by itself.
+  final int deactivatedDays;
+  final List<DeviceActivityDto> devices;
+  final List<UserActivityDto> users;
+
+  DeviceActivityDto? deviceOf(String id) {
+    for (final d in devices) {
+      if (d.id == id) return d;
+    }
+    return null;
+  }
+
+  UserActivityDto? userOf(String id) {
+    for (final u in users) {
+      if (u.id == id) return u;
+    }
+    return null;
+  }
+
+  /// Whole days from [u]'s last use to the server's [now]; null when never seen.
+  int? lastActiveDays(UserActivityDto u) {
+    final at = u.lastActiveAt;
+    if (at == null) return null;
+    final days = now.difference(at).inDays;
+    return days < 0 ? 0 : days;
+  }
+}
+
+// ---- enrolment codes (server tasks S2 and S5) ----
+
+/// One code that is still open (`GET /api/enrol/open`).
+class OpenCodeDto {
+  const OpenCodeDto({
+    required this.id,
+    required this.userId,
+    required this.userName,
+    required this.deviceName,
+    required this.expiresAt,
+    required this.createdByName,
+    this.userRef,
+  });
+
+  factory OpenCodeDto.fromJson(Map<String, dynamic> j) => OpenCodeDto(
+        id: _int(j['id']),
+        userId: j['userId'] as String,
+        userRef: j['userRef'] is String ? j['userRef'] as String : null,
+        userName: j['userName'] is String ? j['userName'] as String : '',
+        deviceName: j['deviceName'] is String ? j['deviceName'] as String : '',
+        expiresAt: _date(j['expiresAt']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        createdByName: j['createdByName'] is String ? j['createdByName'] as String : '',
+      );
+
+  final int id;
+  final String userId;
+  final String? userRef;
+  final String userName;
+  final String deviceName;
+  final DateTime expiresAt;
+  final String createdByName;
+}
+
+/// The device that used a code.
+class EnrolledDeviceDto {
+  const EnrolledDeviceDto({
+    required this.id,
+    required this.name,
+    required this.platform,
+    this.enrolledAt,
+    this.ref,
+  });
+
+  factory EnrolledDeviceDto.fromJson(Map<String, dynamic> j) => EnrolledDeviceDto(
+        id: j['id'] as String,
+        name: j['name'] is String ? j['name'] as String : '',
+        platform: j['platform'] is String ? j['platform'] as String : '',
+        enrolledAt: _date(j['enrolledAt']),
+        ref: j['ref'] is String ? j['ref'] as String : null,
+      );
+
+  final String id;
+  final String name;
+  final String platform;
+  final DateTime? enrolledAt;
+  final String? ref;
+}
+
+/// One of the caller's own codes of the last 24 hours (`GET /api/enrol/recent`).
+class RecentCodeDto {
+  const RecentCodeDto({
+    required this.id,
+    required this.userId,
+    required this.userName,
+    required this.deviceName,
+    required this.expiresAt,
+    required this.reuseAttempts,
+    this.userRef,
+    this.usedAt,
+    this.cancelledAt,
+    this.device,
+  });
+
+  factory RecentCodeDto.fromJson(Map<String, dynamic> j) => RecentCodeDto(
+        id: _int(j['id']),
+        userId: j['userId'] as String,
+        userRef: j['userRef'] is String ? j['userRef'] as String : null,
+        userName: j['userName'] is String ? j['userName'] as String : '',
+        deviceName: j['deviceName'] is String ? j['deviceName'] as String : '',
+        expiresAt: _date(j['expiresAt']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        usedAt: _date(j['usedAt']),
+        cancelledAt: _date(j['cancelledAt']),
+        reuseAttempts: _int(j['reuseAttempts']),
+        device: j['device'] is Map<String, dynamic>
+            ? EnrolledDeviceDto.fromJson(j['device'] as Map<String, dynamic>)
+            : null,
+      );
+
+  final int id;
+  final String userId;
+  final String? userRef;
+  final String userName;
+  final String deviceName;
+  final DateTime expiresAt;
+
+  /// Set once the code was used; the device that used it is [device].
+  final DateTime? usedAt;
+  final DateTime? cancelledAt;
+
+  /// How many later attempts met this used code (another phone tried it).
+  final int reuseAttempts;
+  final EnrolledDeviceDto? device;
+}
+
+/// `POST /api/enrol/begin`'s answer.
+class InvitationDto {
+  const InvitationDto({
+    required this.id,
+    required this.code,
+    required this.expiresAt,
+    required this.payload,
+    this.sharePayload,
+  });
+
+  factory InvitationDto.fromJson(Map<String, dynamic> j) => InvitationDto(
+        id: _int(j['id']),
+        code: j['code'] as String,
+        expiresAt: DateTime.parse(j['expiresAt'] as String),
+        payload: j['payload'] as String,
+        sharePayload: j['sharePayload'] is String ? j['sharePayload'] as String : null,
+      );
+
+  final int id;
+
+  /// The 12-character code (`ABCD-EFGH-2345`): a check value, never the whole
+  /// invitation.
+  final String code;
+  final DateTime expiresAt;
+
+  /// The text the QR carries and the manual field accepts (`surau1:...`).
+  final String payload;
+
+  /// The reduced text to hand over in a message (no LAN address, roles,
+  /// inviter, help or cloud address); null when the box has no numbered local
+  /// name: the app then offers no "Kongsi".
+  final String? sharePayload;
 }
 
 class SessionUser {
@@ -290,6 +673,10 @@ class AuditEntry {
     this.entityId,
     this.before,
     this.after,
+    this.actorRef,
+    this.entityRef,
+    this.entityDeleted = false,
+    this.phoneChanged = false,
   });
 
   factory AuditEntry.fromJson(Map<String, dynamic> j) => AuditEntry(
@@ -302,6 +689,10 @@ class AuditEntry {
         entityId: j['entityId'] as String?,
         before: j['before'],
         after: j['after'],
+        actorRef: j['actorRef'] is String ? j['actorRef'] as String : null,
+        entityRef: j['entityRef'] is String ? j['entityRef'] as String : null,
+        entityDeleted: j['entityDeleted'] == true,
+        phoneChanged: j['phoneChanged'] == true,
       );
 
   final int id;
@@ -313,6 +704,20 @@ class AuditEntry {
   final String? entityId;
   final Object? before;
   final Object? after;
+
+  /// The ID (`U-0001`) of the person who acted; null for the system, a device
+  /// or a person with no ID yet.
+  final String? actorRef;
+
+  /// The ID of the user or device the line is about.
+  final String? entityRef;
+
+  /// The user the line is about is deleted now ("Pulihkan" is offered).
+  final bool entityDeleted;
+
+  /// A user line in which the phone number changed (the number itself is
+  /// never in an audit answer).
+  final bool phoneChanged;
 }
 
 class AssetMeta {
@@ -589,6 +994,8 @@ class LiveStatusDto {
     this.watchUrl,
     this.youtubeError,
     this.warnings = const [],
+    this.video,
+    this.audio = const [],
   });
 
   factory LiveStatusDto.fromJson(Map<String, dynamic> j) {
@@ -606,8 +1013,19 @@ class LiveStatusDto {
       watchUrl: _str(yt['watchUrl']),
       youtubeError: _str(yt['lastError']),
       warnings: _strings(j['warnings']),
+      video: _str(j['video']),
+      audio: [
+        for (final a in (_map(j['audio'])['sources'] is List ? _map(j['audio'])['sources'] as List : const []))
+          if (a is Map && a['id'] is String) LiveAudioSourceDto.fromJson(a.cast<String, dynamic>()),
+      ],
     );
   }
+
+  /// The picture source of the running live (`phone` or `external`); null while the box does not say.
+  final String? video;
+
+  /// Per-source health of the audio mix (plan 4.7); empty while the box does not report it.
+  final List<LiveAudioSourceDto> audio;
 
   final String? sessionId;
   final String? startedBy;
@@ -631,6 +1049,55 @@ class LiveStatusDto {
 
   /// YouTube is receiving the picture now.
   bool get youtubeReceiving => youtubeHealth != null && youtubeState == 'live';
+}
+
+/// One entry of `LiveStatus.audio.sources` (core `LiveAudioSourceStatus`).
+class LiveAudioSourceDto {
+  const LiveAudioSourceDto({
+    required this.id,
+    required this.enabled,
+    required this.volume,
+    required this.state,
+    this.alignState,
+    this.delayMs,
+    this.residualMs,
+    this.level,
+  });
+
+  factory LiveAudioSourceDto.fromJson(Map<String, dynamic> j) {
+    final align = _map(j['align']);
+    final vol = j['volume'];
+    final lvl = j['level'];
+    return LiveAudioSourceDto(
+      id: j['id'] as String,
+      enabled: j['enabled'] == true,
+      volume: vol is num ? vol.round().clamp(0, 100) : 0,
+      state: _str(j['state']) ?? 'ok',
+      alignState: _str(align['state']),
+      delayMs: align['delayMs'] is num ? (align['delayMs'] as num).round() : null,
+      residualMs: align['residualMs'] is num ? (align['residualMs'] as num).round() : null,
+      level: lvl is num ? lvl.toDouble() : null,
+    );
+  }
+
+  /// `camera`, `deviceMic` or `boxInput`.
+  final String id;
+  final bool enabled;
+  final int volume;
+
+  /// `ok`, `silent` or `lost`.
+  final String state;
+
+  /// `searching`, `locked`, `holding`, `failed` or `manual`; null on the reference.
+  final String? alignState;
+  final int? delayMs;
+  final int? residualMs;
+
+  /// dBFS, -90 to 0, while the box combiner runs.
+  final double? level;
+
+  /// The meter, 0.0 to 1.0, from [level] (null when the box sends none).
+  double? get meter => level == null ? null : ((level! + 60) / 60).clamp(0.0, 1.0);
 }
 
 /// `GET /api/kiosk/live`.

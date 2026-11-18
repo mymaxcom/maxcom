@@ -197,7 +197,7 @@ void main() {
       expect(entered.pin, '280419');
     });
 
-    testWidgets('PIN mode: five wrong PINs lock offline unlock for 5 minutes',
+    testWidgets('[A4] PIN mode: five wrong PINs lock offline unlock for 15 minutes',
         (t) async {
       await vaultWithPin('280419');
       await t.pumpWidget(screen(plainFlow(away), offline: door()));
@@ -208,10 +208,20 @@ void main() {
       }
       await typeDigits(t, '111111');
       expect(find.text('PIN dikunci sementara'), findsOneWidget);
-      // 14:30 UTC + 5 min, in Malaysian time.
-      expect(find.text('Cuba lagi pada 10:35 malam'), findsOneWidget);
+      // 14:30 UTC + 15 min, in Malaysian time.
+      expect(find.text('Cuba lagi pada 10:45 malam'), findsOneWidget);
       // Locked: even the right PIN is not taken.
       await typeDigits(t, '280419');
+      expect(entered.calls, 0);
+    });
+
+    testWidgets('[A4] a closed offline door says so and opens nothing', (t) async {
+      await vaultWithPin('280419');
+      await vault.closeOffline();
+      await t.pumpWidget(screen(plainFlow(away), offline: door()));
+      await frames(t);
+      await typeDigits(t, '280419');
+      expect(find.text('Kunci luar talian ditutup. Sambung ke MAXCOM untuk membuka.'), findsOneWidget);
       expect(entered.calls, 0);
     });
 

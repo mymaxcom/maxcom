@@ -50,22 +50,10 @@ Map<String, dynamic> featureValues(Map<String, dynamic>? settings, String key) {
 
 /// The text of a failed write or search, in the person's language.
 String prayerErrorText(S s, Object e) => switch (e) {
-  PrayerError(:final message) => message,
-  SettingsSaveError(:final message) => message,
+  PrayerError() => e.text(s),
+  SettingsSaveError() => e.text(s),
   _ => writeErrorText(s, e),
 };
-
-const List<String> monthsShortMs = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep', 'Okt', 'Nov', 'Dis'];
-
-const List<String> monthsLongMs = [
-  'Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember',
-];
-
-/// `2026-11-06` as `6 Nov 2026`.
-String shortDateMs(String iso) {
-  final d = DateTime.tryParse(iso);
-  return d == null ? iso : '${d.day} ${monthsShortMs[d.month - 1]} ${d.year}';
-}
 
 /// [t] (UTC or local) as `yyyy-mm-dd` of its own fields.
 String isoDate(DateTime t) =>
@@ -192,7 +180,7 @@ class _LocationFormState extends ConsumerState<_LocationForm> {
     final repo = ref.read(prayerRepositoryProvider);
     if (repo == null) return;
     try {
-      final countries = await repo.countries(lang: S.of(context).localeName == 'en' ? 'en' : 'ms');
+      final countries = await repo.countries(lang: S.of(context).localeName);
       if (mounted) setState(() => _countries = countries);
     } catch (e) {
       if (mounted) setState(() => _loadError = prayerErrorText(S.of(context), e));
@@ -547,7 +535,7 @@ class _LocationFormState extends ConsumerState<_LocationForm> {
               InkWell(
                 onTap: () => _useHit(i),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
+                  padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 16, 12),
                   child: Row(
                     children: [
                       Icon(

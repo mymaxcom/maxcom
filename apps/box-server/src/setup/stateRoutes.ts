@@ -1,3 +1,5 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
+import { reqSurau } from '../reqSurau.ts';
 import { networkInterfaces } from 'node:os';
 import { isIP } from 'node:net';
 import type { DatabaseSync } from 'node:sqlite';
@@ -59,6 +61,17 @@ export function boxOrigin(tls: TlsMaterial | null, httpsPort: number): string {
   if (host === undefined) return '';
   // the default HTTPS port is not written: `https://host:443` is not the origin a phone or the QR check expects
   return `https://${isIP(host) === 6 ? `[${host}]` : host}${httpsPort === 443 ? '' : `:${httpsPort}`}`;
+}
+
+/**
+ * The cloud's only state route: a public, secret-free `GET /api/box/info`. MAXCOM Ops reads `boxId` (the cloud's own
+ * id, the one an ops device's signatures are verified against) before it enrols. No keys, names, QR or surau data.
+ */
+export function registerCloudInfoRoute(app: FastifyInstance, deps: { boxId: string; now: () => Date }): void {
+  app.get('/api/box/info', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { boxId: deps.boxId, role: 'cloud', serverTime: deps.now().toISOString(), version: boxVersion() };
+  });
 }
 
 export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps): void {
@@ -127,7 +140,7 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
     const i = info();
     const view: BoxStateView = {
       ...i,
-      surauName: hasSurauInfo() ? surauPublicInfo(db).name : null,
+      surauName: hasSurauInfo() ? surauPublicInfo(db, undefined, reqSurau(request)).name : null,
       appDownloadUrl: APP_DOWNLOAD_URL,
     };
     if (isLoopbackKiosk(request) && i.state === 'setup') view.qr = liveQr('setup');
@@ -168,12 +181,12 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
     return view;
   });
 
-  app.get('/api/kiosk/cloud', async (_request, reply) => {
+  app.get('/api/kiosk/cloud', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return {
       linked: linked(),
       lastOkAt: stateValue(db, 'last_pull'),
-      cloudSyncEnabled: getSettings(db).cloudSync.enabled === true,
+      cloudSyncEnabled: getSettings(db, reqSurau(request)).cloudSync.enabled === true,
     };
   });
 
@@ -194,7 +207,7 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
   const syncBoxJson = (): void => {
     if (!deps.realDataDir) return;
     try {
-      const next = { boxName: boxName(db, boxId), surauName: hasSurauInfo() ? surauPublicInfo(db).name : null };
+      const next = { boxName: boxName(db, boxId), surauName: hasSurauInfo() ? surauPublicInfo(db, undefined, LOCAL_SURAU_ID).name : null };
       const text = JSON.stringify(next);
       if (text === lastJson) return;
       const cur = readBoxJson(dataDir);

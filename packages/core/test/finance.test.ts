@@ -135,6 +135,34 @@ describe('validateEntryShape', () => {
   });
 });
 
+describe('[F1] cash payments need no counters', () => {
+  const ok = (v: unknown) => validateEntryShape(v, { todayKl: TODAY });
+  const cashOut = { id: 'p1', kind: 'out', entryDate: '2026-11-06', fundId: 'f1', perihalId: 'out-u', amountSen: 5000, method: 'tunai' };
+  it('[F1] an out + tunai payment with no counters is valid, and a collection without counters is not', () => {
+    expect(ok(cashOut).ok).toBe(true);
+    expect(ok({ ...cashIn, counters: undefined }).ok).toBe(false);
+  });
+  it('[F1] a cash payment may still carry two counters, but not one or a repeated person', () => {
+    expect(ok({ ...cashOut, counters: [{ userId: 'u1' }, { name: 'Tuan Haji Ali' }] }).ok).toBe(true);
+    expect(ok({ ...cashOut, counters: [{ userId: 'u1' }] }).ok).toBe(false);
+    expect(ok({ ...cashOut, counters: [{ userId: 'u1' }, { userId: 'u1' }] }).ok).toBe(false);
+  });
+});
+
+describe('[F5] the date window follows the edit date', () => {
+  it('[F5] an entry for 5 Oct is inside the window when judged on 30 Nov, outside when judged on 10 Dec', () => {
+    const e = { ...cashIn, entryDate: '2026-10-05' };
+    expect(validateEntryShape(e, { todayKl: '2026-12-01', windowKl: '2026-11-30' }).ok).toBe(true);
+    expect(validateEntryShape(e, { todayKl: '2026-12-10', windowKl: '2026-12-10' }).ok).toBe(false);
+  });
+  it('[F5] an opening dated on startedOn is inside the window whatever the age; other kinds are not', () => {
+    const o = { id: 'o1', kind: 'opening', entryDate: '2026-08-10', fundId: 'f1', amountSen: 100 };
+    expect(validateEntryShape(o, { todayKl: TODAY }).ok).toBe(false);
+    expect(validateEntryShape(o, { todayKl: TODAY, startedOn: '2026-08-10' }).ok).toBe(true);
+    expect(validateEntryShape({ ...cashIn, entryDate: '2026-08-10' }, { todayKl: TODAY, startedOn: '2026-08-10' }).ok).toBe(false);
+  });
+});
+
 describe('lookup and month shapes', () => {
   it('validates a fund and a perihal body, refuses unknown keys and a client-set system', () => {
     expect(validateLookup('fund', { name: 'Tabung Jumaat', public: true, targetSen: 5000000 }).ok).toBe(true);
@@ -260,5 +288,24 @@ describe('finance settings and the tabung card slot', () => {
   it('gives none when tabungCard is switched off', () => {
     const off = resolveSettings({ tabungCard: { enabled: false } });
     expect(buildRotation(content(view), off, now)).toEqual([]);
+  });
+});
+
+describe('[F6] a voided entry stays voided', () => {
+  it('[F6] a tabung move after a void does not bring the money back', () => {
+    const e = full({ id: 'e1', kind: 'in', amountSen: 5000, fundId: 'f1', editedAt: '2026-11-01T00:00:00.000Z' });
+    const v = full({ id: 'c1', kind: 'adjust', correctsId: 'e1', correctionKind: 'void', amountSen: 0, editedAt: '2026-11-02T00:00:00.000Z' });
+    const m = full({ id: 'c2', kind: 'adjust', correctsId: 'e1', correctionKind: 'fund', toFundId: 'f2', amountSen: 0, editedAt: '2026-11-03T00:00:00.000Z' });
+    const eff = effective([e, v, m])[0]!;
+    expect(eff.voided).toBe(true);
+    expect(balances([e, v, m], [{ id: 'f1' }, { id: 'f2' }])).toEqual({ f1: 0, f2: 0 });
+  });
+
+  it('[F6b] an amount correction after a void does not bring the money back', () => {
+    const e = full({ id: 'e1', kind: 'in', amountSen: 5000, fundId: 'f1', editedAt: '2026-11-01T00:00:00.000Z' });
+    const v = full({ id: 'c1', kind: 'adjust', correctsId: 'e1', correctionKind: 'void', amountSen: 0, editedAt: '2026-11-02T00:00:00.000Z' });
+    const a = full({ id: 'c2', kind: 'adjust', correctsId: 'e1', correctionKind: 'amount', amountSen: 7000, editedAt: '2026-11-03T00:00:00.000Z' });
+    expect(effective([e, v, a])[0]!.voided).toBe(true);
+    expect(balances([e, v, a], [{ id: 'f1' }])).toEqual({ f1: 0 });
   });
 });

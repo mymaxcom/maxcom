@@ -32,6 +32,7 @@ import '../store/local_store_stub.dart'
     if (dart.library.js_interop) '../store/local_store_web.dart'
     as store_web;
 import '../upload/upload_runner.dart';
+import 'app_lang.dart';
 
 class AppDeps {
   const AppDeps({
@@ -46,6 +47,7 @@ class AppDeps {
     required this.cameraAvailable,
     required this.initialBox,
     this.initialSurau,
+    this.appLangStore,
     this.cacheStore,
     this.boxLeaf,
     this.probeClient,
@@ -88,6 +90,11 @@ class AppDeps {
   /// right without a loading screen.
   final EnrolledBox? initialBox;
   final SurauInfo? initialSurau;
+
+  /// This phone's app language. Null (tests) gives a fresh in-memory store
+  /// that answers BM per ProviderScope, so every
+  /// golden stays BM; the real app passes the prefs store.
+  final AppLangStore? appLangStore;
 
   /// Android: the leaf certificate the enrolled box presents, got over the
   /// pinned connection (the preview WebView compares against it). Null in
@@ -166,6 +173,7 @@ class AppDeps {
       cameraAvailable: cameraLikelyAvailable(),
       initialBox: await session.load(),
       initialSurau: await surauStore.load(),
+      appLangStore: PrefsAppLangStore(prefs),
       cacheStore: PrefsReadCacheStore(prefs),
       localStoreBuilder: () => localStoreFor(platform),
       uploadRunnerBuilder: () => uploadRunnerFor(platform),

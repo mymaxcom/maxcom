@@ -12,7 +12,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../box/box_address.dart';
-import '../features/shell/superadmin_badge.dart';
+import '../ops/fleet/acting_banner.dart';
+import '../ops/fleet/surau_switcher.dart';
+import '../ops/ops_build.dart';
+import '../ops/superadmin_badge.dart';
 import '../features/common/help_card.dart';
 import '../features/common/roles.dart';
 import '../features/common/surau_logo.dart';
@@ -20,7 +23,7 @@ import '../features/common/time_words.dart';
 import '../features/live/live_fold.dart';
 import '../features/shell/menu.dart';
 import '../features/unlock/session_keeper.dart';
-import '../features/sync/sync_status_chip.dart';
+import '../features/shell/connection_icons.dart';
 import '../features/upload/cleanup_providers.dart' show recordingCleanupProvider;
 import '../features/upload/upload_widgets.dart' show catchUpActiveCountProvider;
 import '../l10n/generated/s.dart';
@@ -91,6 +94,8 @@ class _AppShellState extends ConsumerState<AppShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // Back after more than 2 h: the remembered PIN is dropped, not renewed (A3).
+      ref.read(pinMemoryProvider).touch();
       _startPolling();
       ref.read(healthProvider.notifier).refresh();
       ref.read(syncCoordinatorProvider).onForeground();
@@ -129,6 +134,7 @@ class _AppShellState extends ConsumerState<AppShell>
     final items = menuFor(
       ref.watch(rolesProvider),
       ref.watch(featureFlagsProvider),
+      ops: kOpsBuild && ref.watch(isCloudGatewayProvider),
     );
     // Catch-up uploads still running: the badge on the upload entry.
     final uploadsActive = ref.watch(catchUpActiveCountProvider);
@@ -137,9 +143,17 @@ class _AppShellState extends ConsumerState<AppShell>
     // is as large as the screen allows.
     final hideNav =
         ref.watch(liveFoldedProvider) && widget.location.startsWith('/live');
-    if (hideNav) return widget.child;
+    // Ops build: the gold band "Anda melihat sebagai MAXCOM" sits over every screen while a surau is chosen.
+    final page = kOpsBuild ? ActingFrame(child: widget.child) : widget.child;
+    // A touch is "use" for the remembered PIN's 2 h idle limit (A3).
+    Widget touched(Widget w) => Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => ref.read(pinMemoryProvider).touch(),
+      child: w,
+    );
+    if (hideNav) return touched(page);
 
-    return LayoutBuilder(
+    return touched(LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= AppShell.wideBreakpoint;
         if (wide) {
@@ -152,13 +166,13 @@ class _AppShellState extends ConsumerState<AppShell>
                 extended: constraints.maxWidth >= 1000,
                 uploadsActive: uploadsActive,
               ),
-              Expanded(child: widget.child),
+              Expanded(child: page),
             ],
           );
         }
         return Column(
           children: [
-            Expanded(child: widget.child),
+            Expanded(child: page),
             _GlassBar(
               items: items,
               location: widget.location,
@@ -167,7 +181,7 @@ class _AppShellState extends ConsumerState<AppShell>
           ],
         );
       },
-    );
+    ));
   }
 }
 
@@ -207,14 +221,17 @@ class _GlassRail extends ConsumerWidget {
       style: nameStyle,
     );
 
+    final rtl = Directionality.of(context) == TextDirection.rtl;
     return Container(
       width: extended ? 256 : 112,
       decoration: const BoxDecoration(
         color: SurauColors.glass,
-        border: Border(right: BorderSide(color: SurauColors.goldHairline)),
+        border: BorderDirectional(end: BorderSide(color: SurauColors.goldHairline)),
       ),
+      // The rail sits at the start edge; its inner (end) edge takes no inset.
       child: SafeArea(
-        right: false,
+        left: !rtl, // dir-ok: chosen from the text direction
+        right: rtl, // dir-ok: chosen from the text direction
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -269,7 +286,7 @@ class _GlassRail extends ConsumerWidget {
                 ),
               ),
             ),
-            SuperadminBadge(wide: true, compact: !extended),
+            if (kOpsBuild) SuperadminBadge(wide: true, compact: !extended),
             const Divider(color: SurauColors.goldHairline, height: 1),
             Material(
               color: Colors.transparent,
@@ -782,13 +799,16 @@ class OfflineBanner extends ConsumerWidget {
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: SurauColors.line)),
         ),
-        padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+        padding: const EdgeInsetsDirectional.fromSTEB(18, 8, 8, 8),
         child: Row(
           children: [
-            const Icon(
-              Icons.cloud_off_rounded,
+            // The box's own glyph: this banner is about the box, never the
+            // cloud.
+            const LinkGlyph(
+              kind: LinkKind.box,
+              state: LinkState.disconnected,
               size: 22,
-              color: SurauColors.muted,
+              onDark: false,
             ),
             const SizedBox(width: 12),
             Expanded(child: Text(message, style: text.bodyMedium)),
@@ -826,19 +846,17 @@ class ShellPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // The sync chip sits last, top right, on every page (hidden while no
-      // sync engine runs).
+      // The MAXCOM cloud and box icons sit last, top right, on every page;
+      // a long title gives way first (it ends in dots).
       appBar: AppBar(
-        title: Text(title),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           ...actions,
-          const SuperadminBadge(),
-          // A long title on a phone keeps its room: the chip shows its
-          // icon only there.
-          SyncStatusChip(
-            iconOnly:
-                title.length > 14 &&
-                MediaQuery.sizeOf(context).width < SyncStatusChip.compactBelow,
+          if (kOpsBuild) const SurauSwitcherButton(),
+          if (kOpsBuild) const SuperadminBadge(),
+          const Padding(
+            padding: EdgeInsetsDirectional.only(start: 4, end: 12),
+            child: ConnectionIcons(),
           ),
         ],
       ),

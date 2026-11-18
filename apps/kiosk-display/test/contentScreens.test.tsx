@@ -93,7 +93,7 @@ describe('content screen bodies', () => {
   it('kuliah without a photo has no .kul-photo; without a topic no .kul-topic', () => {
     const c = fixture();
     delete c.kuliah[0]!.topic;
-    delete c.kuliah[0]!.penceramah.photoAssetId;
+    delete c.kuliah[0]!.penceramah!.photoAssetId;
     const r = renderBody(c, 'kuliahCard');
     expect(r.container.querySelector('.kul-photo')).toBeNull();
     expect(r.container.querySelector('.kul-topic')).toBeNull();
@@ -128,7 +128,7 @@ describe('content screen bodies', () => {
 
   it('a 60-character speaker name and a 600-character hadis carry the fit variable', () => {
     const c = fixture();
-    c.kuliah[0]!.penceramah.name = 'Ustaz Dr Muhammad Abdul Rahman bin Haji Ahmad Zakaria al-Hafiz';
+    c.kuliah[0]!.penceramah!.name = 'Ustaz Dr Muhammad Abdul Rahman bin Haji Ahmad Zakaria al-Hafiz';
     const k = renderBody(c, 'kuliahCard');
     expect(k.container.querySelector('.kuliah')!.getAttribute('style')).toContain('--fit');
     cleanup();

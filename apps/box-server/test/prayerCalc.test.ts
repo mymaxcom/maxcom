@@ -1,8 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { hijriOf, parseJakimCsv, resolveSettings } from '@surau/core';
+import { checkPrayerDay, hijriOf, klInstant, parseJakimCsv, resolveSettings } from '@surau/core';
 import type { PrayerName } from '@surau/core';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach } from 'vitest';
+import type { FastifyInstance } from 'fastify';
+import { buildApp } from '../src/app.ts';
+import { parseCsvRows, parseTemplateRows } from '../src/prayer/importFile.ts';
+import { putFeature } from '../src/settingsStore.ts';
+import { loginAs } from './authHelpers.ts';
 import { calcLabelMs, computeDay, effectiveMadhab, effectiveMethod, located } from '../src/prayer/calc.ts';
 
 const csv = readFileSync(fileURLToPath(new URL('../../../packages/core/test/fixtures/SGR01-2026.csv', import.meta.url)), 'utf8');
@@ -97,5 +106,63 @@ describe('computeDay', () => {
       const r = computeDay(d, north);
       if (r !== null) expect(r.times.subuh < r.times.isyak || r.times.subuh >= '00:00').toBe(true);
     }
+  });
+});
+
+describe('[P2] Isyak after midnight', () => {
+  const day = (times: Record<PrayerName, string>) => ({ date: '2026-06-10', hijri: { y: 1447, m: 12, d: 25 }, times });
+  const summer = { imsak: '03:19', subuh: '03:29', syuruk: '04:13', zohor: '13:39', asar: '18:20', maghrib: '23:04', isyak: '00:14' } as Record<PrayerName, string>;
+  const bergen = resolveSettings({
+    location: { country: 'NO', timezone: 'Europe/Oslo', latitude: 60.39, longitude: 5.32, city: 'Bergen' },
+    prayerCalc: { adjustMinutes: { isyak: 26 } },
+  });
+
+  it('[P2] a day with Isyak 00:14 (or Maghrib and Isyak past midnight) is in order; Zohor before Subuh, a second wrap and a late wrap are not', () => {
+    expect(checkPrayerDay(day(summer))).toBeNull();
+    expect(checkPrayerDay(day({ ...summer, maghrib: '00:05', isyak: '00:50' }))).toBeNull();
+    expect(checkPrayerDay(day({ ...summer, zohor: '02:00' }))).not.toBeNull();
+    expect(checkPrayerDay(day({ ...summer, asar: '03:00', maghrib: '04:00', isyak: '05:00' }))).not.toBeNull();
+    expect(checkPrayerDay(day({ ...summer, isyak: '14:00' }))).not.toBeNull();
+    expect(checkPrayerDay(day({ ...summer, isyak: '03:00' }))).not.toBeNull();
+    expect(checkPrayerDay(day({ ...summer, maghrib: '00:30', isyak: '23:50' }))).not.toBeNull();
+  });
+
+  it('[P2] a calculated summer day at 60.39 N with Isyak 00:14 is kept', () => {
+    const c = computeDay('2026-06-10', bergen);
+    expect(c).not.toBeNull();
+    expect(c!.times.isyak).toBe('00:14');
+  });
+
+  it('[P2] a file row with Isyak 00:14 is accepted and a row with Zohor before Subuh is refused', () => {
+    const head = 'tarikh,imsak,subuh,syuruk,dhuha,zohor,asar,maghrib,isyak,nota';
+    const ok = parseCsvRows(`${head}
+2026-06-10,03:19,03:29,04:13,,13:39,18:20,23:04,00:14,`);
+    const r = parseTemplateRows(ok.rows, { kind: 'surau', imsakMinutes: 10 }, ok.numbers);
+    expect(r.errors).toEqual([]);
+    expect(r.days[0]!.times.isyak).toBe('00:14');
+    const bad = parseCsvRows(`${head}
+2026-06-10,03:19,03:29,04:13,,02:00,18:20,23:04,00:14,`);
+    expect(parseTemplateRows(bad.rows, { kind: 'surau', imsakMinutes: 10 }, bad.numbers).errors).not.toEqual([]);
+  });
+
+  const dirs: string[] = [];
+  const apps: FastifyInstance[] = [];
+  afterEach(async () => {
+    for (const a of apps.splice(0)) await a.close().catch(() => undefined);
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  it('[P2] a correction to Isyak 00:14 is accepted', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'surau-p2-'));
+    dirs.push(d);
+    const app = buildApp(join(d, 't.db'), { now: () => klInstant('2026-06-01', '12:00') });
+    apps.push(app);
+    putFeature(app.surau.db, 'location', { country: 'NO', timezone: 'Europe/Oslo', latitude: 60.39, longitude: 5.32, city: 'Bergen' }, 'tester', undefined, 'sdm');
+    putFeature(app.surau.db, 'prayerSources', { sourceOrder: ['calc', 'file', 'official'] }, 'tester', undefined, 'sdm');
+    const admin = await loginAs(app, 'admin');
+    const ok = await app.inject({ method: 'PUT', url: '/api/prayer/corrections/2026-06-10/isyak', headers: admin.headers, payload: { time: '00:14', reason: 'Ikut jadual masjid setempat' } });
+    expect(ok.statusCode).toBe(200);
+    const bad = await app.inject({ method: 'PUT', url: '/api/prayer/corrections/2026-06-10/zohor', headers: admin.headers, payload: { time: '02:00', reason: 'Ikut jadual masjid setempat' } });
+    expect(bad.statusCode).toBe(400);
   });
 });

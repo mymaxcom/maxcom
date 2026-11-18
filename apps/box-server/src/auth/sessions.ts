@@ -2,10 +2,10 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Role } from '@surau/core';
 import { hashPin, isValidPin, pinPepperOf, randomToken, sha256hex, verifyP256, verifyPin } from './crypto.ts';
 import { appLockRequiredFor } from './appLock.ts';
-import { getDeviceWithKey } from './devices.ts';
+import { expectedBoxId, getDeviceWithKey } from './devices.ts';
 import { revokeOrphanKioskDevices } from './pairing.ts';
-import { bumpVersion } from '../settingsStore.ts';
-import { AuthError, MSG, getAuthUser, getUserRow, logChange, tx } from './users.ts';
+import { effectiveRolesFor } from './opsDevice.ts';
+import { AuthError, MSG, bumpFor, deviceSurau, announceSurau, getAuthUser, getUserRow, logChange, serverRoleOf, tx, userSurau } from './users.ts';
 
 export const CHALLENGE_TTL_MS = 60_000;
 export const MAX_LIVE_NONCES = 5;
@@ -22,8 +22,11 @@ export interface AuthContext {
   kind: 'user';
   userId: string;
   deviceId: string;
+  /** The roles this session acts with: on the cloud, the user's roles minus the ops roles unless `ops`. */
   roles: Role[];
   sessionId: string;
+  /** The session's device is an ops device (`devices.ops = 1`, Plan 14 section 3.4). Never from a request. */
+  ops: boolean;
 }
 
 /** A linked site (a box talking to the cloud), authenticated by its site key. */
@@ -159,15 +162,18 @@ export async function unlock(
       : { changes: 0 };
   if (Number(claimed.changes) !== 1) return fail(db, now, ip, who, 'bad_nonce', 401, NONCE_MSG);
 
-  // 3. Signature over the nonce, device and box (the nonce stays used on failure).
-  const message = Buffer.from(`surau-unlock\n${boxId}\n${device.id}\n${nonce}`, 'utf8');
+  // 3. Signature over the nonce, device and the device's own home box (the nonce stays used on failure). On the
+  // cloud a home box that is not a site of the device's surau opens nothing, whatever was signed (Plan 14 Task 7).
+  const homeBox = expectedBoxId(db, device, { boxId, role: serverRoleOf(db) });
+  if (homeBox === null) return fail(db, now, ip, who, 'box_mismatch', 401, SIG_MSG);
+  const message = Buffer.from(`surau-unlock\n${homeBox}\n${device.id}\n${nonce}`, 'utf8');
   const sig = /^[A-Za-z0-9_-]{86}$/.test(sigText) ? Buffer.from(sigText, 'base64url') : Buffer.alloc(0);
   if (!verifyP256(device.publicJwk, message, sig)) return fail(db, now, ip, who, 'bad_signature', 401, SIG_MSG);
 
   // 3a. App lock off: the device key is the single factor. The nonce, signature, device and user
   // checks above and below are exactly the ones used with the lock on; only the PIN step is gone.
   // PIN state (hash, counter, lockout) is neither read nor changed, `pin` and `newPin` are ignored.
-  if (!appLockRequiredFor(db, getUserRow(db, device.userId)?.roles ?? [])) {
+  if (!appLockRequiredFor(db, getUserRow(db, device.userId)?.roles ?? [], announceSurau(deviceSurau(db, device.id)))) {
     type Open =
       | { state: 'ok'; token: string; expiresAt: string; roles: Role[] }
       | { state: 'user_gone' }
@@ -185,7 +191,7 @@ export async function unlock(
       ).run(randomToken(12), sha256hex(token), device.id, user.id, nowIso, expiresAt, nowIso);
       db.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').run(nowIso, device.id);
       authLog(db, now, 'unlock', true, { ...who, ip, detail: 'no_pin' });
-      return { state: 'ok', token, expiresAt, roles: user.roles };
+      return { state: 'ok', token, expiresAt, roles: effectiveRolesFor(db, user, device.id, { role: serverRoleOf(db) }) };
     });
     if (opened.state === 'user_gone') return fail(db, now, ip, who, 'user_inactive', 401, MSG.deviceRevoked);
     if (opened.state === 'device_gone') return fail(db, now, ip, who, 'device_revoked', 401, MSG.deviceRevoked);
@@ -290,8 +296,8 @@ export async function unlock(
           return { state: 'pin_exists' };
         }
         const snap = { id: user.id, name: user.name, roles: user.roles, active: user.active };
-        logChange(db, `user:${user.id}`, 'users', user.id, { ...snap, hasPin: false }, { ...snap, hasPin: true, pinChanged: true });
-        bumpVersion(db);
+        logChange(db, `user:${user.id}`, 'users', user.id, { ...snap, hasPin: false }, { ...snap, hasPin: true, pinChanged: true }, undefined, userSurau(db, user.id));
+        bumpFor(db, userSurau(db, user.id));
       } else {
         db.prepare(
           'UPDATE users SET pin_fail_count = 0, pin_locked_until = NULL, lock_round = 0 WHERE id = ?',
@@ -305,7 +311,7 @@ export async function unlock(
       ).run(randomToken(12), sha256hex(token), device.id, user.id, nowIso, expiresAt, nowIso);
       db.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').run(nowIso, device.id);
       authLog(db, now, 'unlock', true, { ...who, ip });
-      return { state: 'ok', token, expiresAt, roles: user.roles };
+      return { state: 'ok', token, expiresAt, roles: effectiveRolesFor(db, user, device.id, { role: serverRoleOf(db) }) };
     }
     // Wrong PIN. The attempt was already counted in step 4; lock at the limit.
     if (user.pinFailCount >= PIN_MAX_FAILS) {
@@ -342,7 +348,7 @@ export function resolveSession(db: DatabaseSync, token: string, now: Date, touch
   const row = db
     .prepare(
       `SELECT s.id, s.user_id, s.device_id, s.created_at, s.expires_at, s.last_used_at, s.revoked_at,
-              d.revoked_at AS device_revoked_at
+              d.revoked_at AS device_revoked_at, d.ops AS device_ops
          FROM sessions s JOIN devices d ON d.id = s.device_id
         WHERE s.token_hash = ?`,
     )
@@ -367,12 +373,14 @@ export function resolveSession(db: DatabaseSync, token: string, now: Date, touch
       nowIso,
     );
   }
+  const ops = Number(row.device_ops) === 1;
   return {
     kind: 'user',
     userId: user.id,
     deviceId: String(row.device_id),
-    roles: user.roles,
+    roles: effectiveRolesFor(db, user, String(row.device_id), { role: serverRoleOf(db) }),
     sessionId: String(row.id),
+    ops,
   };
 }
 
@@ -441,7 +449,8 @@ export function purgeExpired(db: DatabaseSync, now: Date): void {
     db.prepare(
       'DELETE FROM sessions WHERE expires_at <= ? OR revoked_at IS NOT NULL OR last_used_at <= ?',
     ).run(nowIso, idleCut);
-    // A used or expired code stays a day: the issuer's list of recent codes (GET /api/enrol/recent) reads it.
+    // A used, ended (cancelled_at, which also sets used_at) or expired code stays a day: the issuer's list of recent
+    // codes (GET /api/enrol/recent) reads it, and the device that used it is named there.
     db.prepare('DELETE FROM enrolments WHERE COALESCE(used_at, expires_at) <= ?').run(
       new Date(now.getTime() - 24 * 3_600_000).toISOString(),
     );

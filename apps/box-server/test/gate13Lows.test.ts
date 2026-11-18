@@ -41,9 +41,9 @@ describe('gate 13 item 9: emergency only when official comes before calc', () =>
   const my = (order: string[]): Settings => resolveSettings({ location: { latitude: 3.07, longitude: 101.52 }, zone: { zone: 'SGR01' }, prayerSources: { sourceOrder: order } } as never);
   it('a calculated day is an emergency under official-first, and not when the surau put calc above official', () => {
     const db = newDb();
-    expect(resolveDay(db, my(['official', 'calc', 'file']), '2026-12-01')).toMatchObject({ source: 'calc', emergency: true });
-    expect(resolveDay(db, my(['calc', 'official', 'file']), '2026-12-01')).toMatchObject({ source: 'calc', emergency: false });
-    expect(resolveDay(db, my(['file', 'calc', 'official']), '2026-12-01')).toMatchObject({ source: 'calc', emergency: false });
+    expect(resolveDay(db, my(['official', 'calc', 'file']), '2026-12-01', 'sdm')).toMatchObject({ source: 'calc', emergency: true });
+    expect(resolveDay(db, my(['calc', 'official', 'file']), '2026-12-01', 'sdm')).toMatchObject({ source: 'calc', emergency: false });
+    expect(resolveDay(db, my(['file', 'calc', 'official']), '2026-12-01', 'sdm')).toMatchObject({ source: 'calc', emergency: false });
   });
 });
 
@@ -72,28 +72,28 @@ describe('gate 13 item 9: undo is judged by local arrival', () => {
   };
   const ke = (): Settings => resolveSettings({ location: { country: 'KE', timezone: 'Africa/Nairobi', latitude: -1.29, longitude: 36.82 }, prayerSources: { sourceOrder: ['file', 'calc', 'official'] } } as never);
   const meta = (at: string): never => ({ editedAt: at, rev: `${at}|cloud`, origin: 'cloud' }) as never;
-  const imp = (db: DatabaseSync, at: string) => applyImport(db, ke(), { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: days(['2026-12-01', '2026-12-02']), overlap: 'replace' }, 'user:t', undefined, T(at));
+  const imp = (db: DatabaseSync, at: string) => applyImport(db, ke(), { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: days(['2026-12-01', '2026-12-02']), overlap: 'replace' }, 'user:t', undefined, T(at), 'sdm');
 
   it('a correction made elsewhere BEFORE the import but arriving AFTER it blocks the undo', () => {
     const db = newDb();
     const a = imp(db, '2026-11-10T01:00:00Z');
-    putCorrection(db, { date: '2026-12-01', prayer: 'asar', time: '15:40', reason: 'Dari awan' }, 'system:sync', undefined, T('2026-11-12T01:00:00Z'), null, { meta: meta('2026-11-01T00:00:00.000Z') });
-    const r = undoImport(db, a.id, 'user:t', undefined, T('2026-11-13T01:00:00Z'));
+    putCorrection(db, { date: '2026-12-01', prayer: 'asar', time: '15:40', reason: 'Dari awan' }, 'system:sync', undefined, T('2026-11-12T01:00:00Z'), null, { meta: meta('2026-11-01T00:00:00.000Z') }, 'sdm');
+    const r = undoImport(db, a.id, 'user:t', undefined, T('2026-11-13T01:00:00Z'), 'sdm');
     expect(r.ok).toBe(false);
   });
 
   it('a correction that arrived before the import was here does not block the undo (success path)', () => {
     const db = newDb();
-    putCorrection(db, { date: '2026-12-01', prayer: 'asar', time: '15:40', reason: 'Dari awan' }, 'system:sync', undefined, T('2026-11-09T01:00:00Z'), null, { meta: meta('2026-11-20T00:00:00.000Z') });
+    putCorrection(db, { date: '2026-12-01', prayer: 'asar', time: '15:40', reason: 'Dari awan' }, 'system:sync', undefined, T('2026-11-09T01:00:00Z'), null, { meta: meta('2026-11-20T00:00:00.000Z') }, 'sdm');
     const a = imp(db, '2026-11-10T01:00:00Z');
-    expect(undoImport(db, a.id, 'user:t', undefined, T('2026-11-13T01:00:00Z'))).toMatchObject({ ok: true });
+    expect(undoImport(db, a.id, 'user:t', undefined, T('2026-11-13T01:00:00Z'), 'sdm')).toMatchObject({ ok: true });
   });
 
   it('a local correction after the import still blocks it, as before', () => {
     const db = newDb();
     const a = imp(db, '2026-11-10T01:00:00Z');
-    putCorrection(db, { date: '2026-12-02', prayer: 'asar', time: '15:40', reason: 'Tempatan' }, 'user:t', undefined, T('2026-11-11T01:00:00Z'));
-    expect(undoImport(db, a.id, 'user:t', undefined, T('2026-11-13T01:00:00Z')).ok).toBe(false);
+    putCorrection(db, { date: '2026-12-02', prayer: 'asar', time: '15:40', reason: 'Tempatan' }, 'user:t', undefined, T('2026-11-11T01:00:00Z'), undefined, undefined, 'sdm');
+    expect(undoImport(db, a.id, 'user:t', undefined, T('2026-11-13T01:00:00Z'), 'sdm').ok).toBe(false);
   });
 });
 
@@ -140,7 +140,7 @@ describe('gate 13 item 9: the kiosk bundle carries a footer per day', () => {
     try {
       const { parseJakimCsv } = await import('@surau/core');
       const { importDays } = await import('../src/prayerStore.ts');
-      importDays(app.surau.db, 'SGR01', parseJakimCsv(readFileSync(fileURLToPath(new URL('../../../packages/core/test/fixtures/SGR01-2026.csv', import.meta.url)), 'utf8')), 'tester');
+      importDays(app.surau.db, 'SGR01', parseJakimCsv(readFileSync(fileURLToPath(new URL('../../../packages/core/test/fixtures/SGR01-2026.csv', import.meta.url)), 'utf8')), 'tester', undefined, undefined, 'sdm');
       const res = await app.inject({ method: 'GET', url: '/api/kiosk/bundle' });
       expect(res.statusCode).toBe(200);
       const days = res.json().days as Array<{ date: string; source: string; footerMs: string; footerEn: string }>;

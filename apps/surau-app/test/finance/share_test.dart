@@ -245,4 +245,83 @@ void main() {
       );
     });
   });
+  group('[PP-A2] share a text and open WhatsApp', () {
+    test('[PP-A2] a text over 4,096 characters is refused and never reaches the platform', () async {
+      handler(null);
+      await expectLater(shareText('x' * (shareTextMaxLength + 1)), throwsA(isA<ShareArgsError>()));
+      await expectLater(shareText(''), throwsA(isA<ShareArgsError>()));
+      expect(shareTextMaxLength, 4096);
+      expect(calls, isEmpty);
+    });
+
+    test('[PP-A2] the Android half sends the text through the channel method shareText', () async {
+      handler((c) async => {'via': 'whatsapp', 'completed': true});
+      final r = await shareText('Ikuti kuliah', subject: 'Makluman');
+      expect(r.via, 'whatsapp');
+      expect(r.completed, isTrue);
+      expect(r.unavailable, isFalse);
+      expect(calls.single.method, 'shareText');
+      final a = calls.single.arguments as Map;
+      expect(a['text'], 'Ikuti kuliah');
+      expect(a['subject'], 'Makluman');
+      await shareText('x' * shareTextMaxLength);
+      expect(calls.length, 2);
+    });
+
+    test('[PP-A2] a failed text share is ShareFailed with no text in it', () async {
+      handler((c) async => throw PlatformException(code: 'failed', message: 'secret text'));
+      await expectLater(
+        shareText('secret text'),
+        throwsA(isA<ShareFailed>().having((e) => e.toString(), 'text', isNot(contains('secret')))),
+      );
+    });
+
+    test('[PP-A2] the stub answers unavailable so the caller can copy to the clipboard', () async {
+      final r = await stub.shareText('Ikuti kuliah');
+      expect(r.unavailable, isTrue);
+      expect(r.completed, isFalse);
+    });
+
+    test('[PP-A2] a URI that is not https://wa.me/<8 to 15 digits>?text=... is refused', () async {
+      final seen = <Uri>[];
+      Future<bool> open(Uri u) async {
+        seen.add(u);
+        return true;
+      }
+
+      for (final bad in [
+        'https://example.com/60120000003?text=a',
+        'https://evil.wa.me/60120000003?text=a',
+        'https://wa.me.evil.com/60120000003?text=a',
+        'http://wa.me/60120000003?text=a',
+        'https://wa.me/60120000003/extra?text=a',
+        'https://wa.me/abc?text=a',
+        'https://wa.me/+60120000003?text=a',
+        'https://wa.me/1234567?text=a',
+        'https://wa.me/1234567890123456?text=a',
+        'https://wa.me/60120000003?text=a&x=1',
+        'https://wa.me/60120000003?other=a',
+        'https://wa.me/60120000003?text=a#frag',
+        'https://user@wa.me/60120000003?text=a',
+        'https://wa.me:444/60120000003?text=a',
+        'https://wa.me/?text=a',
+        'tel:+60120000003',
+      ]) {
+        await expectLater(openWhatsApp(Uri.parse(bad), open: open), throwsA(isA<ShareArgsError>()), reason: bad);
+      }
+      expect(seen, isEmpty);
+    });
+
+    test('[PP-A2] the launcher receives the exact wa.me URI; false when nothing can open it', () async {
+      final seen = <Uri>[];
+      final uri = Uri.parse('https://wa.me/60120000003?text=Ikuti%20kuliah');
+      expect(await openWhatsApp(uri, open: (u) async {
+        seen.add(u);
+        return true;
+      }), isTrue);
+      expect(seen.single, uri);
+      expect(await openWhatsApp(uri, open: (u) async => false), isFalse);
+      expect(await openWhatsApp(Uri.parse('https://wa.me/60120000003'), open: (u) async => true), isTrue);
+    });
+  });
 }

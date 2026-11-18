@@ -32,7 +32,7 @@ describe('first-boot logo whose pre-render fails', () => {
     applySurauIni(db, d, { info: () => undefined, warn: (m) => warns.push(m) });
     expect(warns.some((w) => /pre-rendered/.test(w))).toBe(true);
     try {
-      expect(getSettings(db).surauInfo.logo).toMatch(/^[0-9a-f]{64}$/);
+      expect(getSettings(db, 'sdm').surauInfo.logo).toMatch(/^[0-9a-f]{64}$/);
     } finally {
       db.close();
     }

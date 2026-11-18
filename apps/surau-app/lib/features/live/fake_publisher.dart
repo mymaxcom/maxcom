@@ -9,9 +9,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../shell/live_camera_gateway.dart' show LiveAudioMix;
 import 'publisher.dart';
 
-class FakePublisher implements LivePublisher {
+class FakePublisher implements LivePublisher, LiveSourceControl {
   FakePublisher({PublisherState initial = PublisherState.initial})
     : _state = initial;
 
@@ -24,8 +25,18 @@ class FakePublisher implements LivePublisher {
   int stops = 0;
   int switches = 0;
 
+  /// The source calls of [LiveSourceControl], in order (a test reads them).
+  final List<VideoSourceKind> sourceSwitches = [];
+  final List<LiveAudioMix> mixes = [];
+  final List<int> avOffsets = [];
+  final List<String> clapCalls = [];
+
   /// What [sessionRecordings] answers (a test sets it; Android names).
   List<String> recordedNames = const [];
+
+  /// What [recordingSessionId] answers (a test sets it; the web's own id).
+  @override
+  String? recordingSessionId;
 
   /// When true, [prepare] and [start] keep the given state (a test or
   /// golden set it with [emit]).
@@ -105,6 +116,43 @@ class FakePublisher implements LivePublisher {
 
   @override
   Widget preview(BuildContext context) => const FakeCameraPicture();
+
+  @override
+  Future<void> setVideoSource(
+    VideoSourceKind kind, {
+    ExternalCameraSource? camera,
+    LiveAudioMix? mix,
+    int avOffsetMs = 0,
+  }) async {
+    sourceSwitches.add(kind);
+    if (mix != null) mixes.add(mix);
+    emit(
+      _state.copyWith(
+        video: kind,
+        clearExternal: kind == VideoSourceKind.phone,
+      ),
+    );
+  }
+
+  @override
+  Future<void> setAudioMix(LiveAudioMix mix) async => mixes.add(mix);
+
+  @override
+  Future<void> setAvOffset(int ms) async => avOffsets.add(ms);
+
+  @override
+  Future<void> clapCapture() async => clapCalls.add('capture');
+
+  @override
+  Future<void> clapReplay(int offsetMs) async =>
+      clapCalls.add('replay:$offsetMs');
+
+  @override
+  Future<void> clapOffset(int offsetMs) async =>
+      clapCalls.add('offset:$offsetMs');
+
+  @override
+  Future<void> clapStop() async => clapCalls.add('stop');
 
   Future<void> dispose() => _controller.close();
 }

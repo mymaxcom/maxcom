@@ -5,7 +5,7 @@
 // vectors core records in `test/fixtures/hadis-cases.json` against this file.
 
 /// `source` of an own-list hadis the importer could not attribute.
-const String unstatedSource = 'Tidak dinyatakan';
+const String unstatedSource = 'Tidak dinyatakan'; // lang-ok: stored value on the box, screens show a tag from S
 
 /// Live hadis the box keeps, both sources together.
 const int maxSaved = 500;
@@ -15,40 +15,36 @@ const int nearFullAt = 450;
 
 /// The six grades HadeethEnc uses, in the order of the settings list.
 class HadisGradeRow {
-  const HadisGradeRow(this.ar, this.key, this.ms, this.note, this.allowed);
+  const HadisGradeRow(this.ar, this.key, this.ms, this.allowed);
 
   final String ar;
   final String key;
   final String ms;
-  final String note;
 
   /// False for the two grades that can never be shown on the TV.
   final bool allowed;
 }
 
 const List<HadisGradeRow> hadisGrades = [
-  HadisGradeRow('صحيح', 'sahih', 'Sahih', 'Darjat tertinggi', true),
-  HadisGradeRow('حسن', 'hasan', 'Hasan', 'Diterima sebagai hujah', true),
+  HadisGradeRow('صحيح', 'sahih', 'Sahih', true),
+  HadisGradeRow('حسن', 'hasan', 'Hasan', true),
   HadisGradeRow(
     'صحيح لغيره',
     'sahih_lighairihi',
     'Sahih li ghairihi',
-    'Sahih kerana sokongan riwayat lain',
     true,
   ),
   HadisGradeRow(
     'حسن لغيره',
     'hasan_lighairihi',
     'Hasan li ghairihi',
-    'Hasan kerana sokongan riwayat lain',
     true,
   ),
-  HadisGradeRow('ضعيف', 'dhaif', 'Dhaif', 'Lemah; tidak dipaparkan', false),
+  HadisGradeRow('ضعيف', 'dhaif', 'Dhaif', false),
   HadisGradeRow(
     'موضوع',
     'maudhu',
     'Palsu (maudhu)',
-    'Tidak sekali-kali dipaparkan',
     false,
   ),
 ];

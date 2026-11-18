@@ -103,17 +103,17 @@ class HadisTvPreview extends ConsumerWidget {
                 fit: StackFit.expand,
                 children: [
                   ..._backdrop(c.maxWidth, c.maxHeight),
-                  Positioned(left: 3 * u, top: 2.6 * u, child: _clock(s(context), u, surau)),
-                  Positioned(right: 3 * u, top: 2.8 * u, child: _countdown(s(context), u)),
+                  Positioned(left: 3 * u, top: 2.6 * u, child: _clock(s(context), u, surau)), // dir-ok: fixed picture of the TV screen, not app layout
+                  Positioned(right: 3 * u, top: 2.8 * u, child: _countdown(s(context), u)), // dir-ok: fixed picture of the TV screen, not app layout
                   Positioned(
-                    left: 3 * u,
-                    right: 3 * u,
+                    left: 3 * u, // dir-ok: fixed picture of the TV screen, not app layout
+                    right: 3 * u, // dir-ok: fixed picture of the TV screen, not app layout
                     bottom: 16.4 * u,
                     child: _card(context, u),
                   ),
                   Positioned(
-                    left: 3 * u,
-                    right: 3 * u,
+                    left: 3 * u, // dir-ok: fixed picture of the TV screen, not app layout
+                    right: 3 * u, // dir-ok: fixed picture of the TV screen, not app layout
                     bottom: 2.6 * u,
                     height: 12 * u,
                     child: _prayerBar(s(context), u),
@@ -159,7 +159,7 @@ class HadisTvPreview extends ConsumerWidget {
       ),
     ),
     Positioned(
-      left: 0.62 * w,
+      left: 0.62 * w, // dir-ok: fixed picture of the TV screen, not app layout
       top: 0.44 * h,
       width: 0.16 * w,
       height: 0.22 * h,
@@ -172,7 +172,7 @@ class HadisTvPreview extends ConsumerWidget {
     ),
     for (final left in const [0.58, 0.795])
       Positioned(
-        left: left * w,
+        left: left * w, // dir-ok: fixed picture of the TV screen, not app layout
         top: 0.28 * h,
         width: 0.016 * w,
         height: 0.36 * h,
@@ -361,7 +361,7 @@ class HadisTvPreview extends ConsumerWidget {
                   Container(
                     width: i == 0 ? 1.8 * u : 0.7 * u,
                     height: 0.7 * u,
-                    margin: EdgeInsets.only(left: 0.5 * u),
+                    margin: EdgeInsets.only(left: 0.5 * u), // dir-ok: fixed picture of the TV screen, not app layout
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(u),
                       color: i == 0 ? SurauColors.gold : Colors.white.withValues(alpha: 0.35),
@@ -376,7 +376,7 @@ class HadisTvPreview extends ConsumerWidget {
               _flat(data.textAr!),
               key: const ValueKey('hadis-tv-ar'),
               textDirection: TextDirection.rtl,
-              textAlign: TextAlign.right,
+              textAlign: TextAlign.right, // dir-ok: fixed picture of the TV screen, not app layout
               maxLines: sizes.arLines,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -434,7 +434,7 @@ class HadisTvPreview extends ConsumerWidget {
               ),
               if (data.credit)
                 Padding(
-                  padding: EdgeInsets.only(left: 1.4 * u),
+                  padding: EdgeInsets.only(left: 1.4 * u), // dir-ok: fixed picture of the TV screen, not app layout
                   child: Text(
                     s.hadisTvCredit,
                     style: TextStyle(

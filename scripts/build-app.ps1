@@ -9,6 +9,13 @@
         Copies the arm64-v8a APK to dist/android/MAX-Admin-Client-<version>-arm64-v8a.apk with a .sha256 beside it.
   -Debug  with -Apk: flutter build apk --debug --target-platform android-arm64 (no key.properties);
         copies app-debug.apk to MAX-Admin-Client-<version>-arm64-v8a-debug.apk the same way.
+  -Ops  with -Apk: the private MAXCOM Ops build (Plan 14 section 3.4): --dart-define=MAXCOM_OPS=true, package my.maxcom.app.ops,
+        signed ONLY with android\key-ops.properties (never key.properties). The APK is MOVED to
+        ~\maxcom-work\secret\ops-builds\<version>\MAXCOM-Ops-<version>-arm64-v8a.apk (+ .sha256) and build\app\outputs is deleted,
+        so no ops file stays where the public step reads. Refuses -Web, -Debug, and an output folder inside the repo, under dist\, on a
+        Drive path, or outside ~\maxcom-work\secret (-OpsOutDir may pick another folder under it). Nothing is published.
+  Public -Apk: the APK and its package id are checked by scripts\check-public-apk.mjs BEFORE the copy to dist\android; a marker hit
+        or a .ops package id stops the build. -Web scans build\web the same way before it is copied.
   Version: versions.json key admin-client-android (bump with node scripts\set-version.mjs admin-client-android <YYYY.MM.N>).
   The build first runs set-version.mjs --check --key admin-client-android and stops when pubspec.yaml disagrees; the version is
   passed to the app as --dart-define=MAXCOM_VERSION=<version> (shown as "MAX Admin Client <versi>" in the Lagi tab).
@@ -16,12 +23,18 @@
 param(
   [switch]$Web,
   [switch]$Apk,
-  [switch]$Debug
+  [switch]$Debug,
+  [switch]$Ops,
+  [string]$OpsOutDir = ''
 )
 $ErrorActionPreference = 'Stop'
 function Fail($m) { Write-Host "GAGAL: $m"; exit 1 }
 
 if (-not ($Web -or $Apk)) { Fail 'Pilih -Web dan/atau -Apk.' }
+if ($Ops -and $Web) { Fail '-Ops tidak boleh bersama -Web: binaan web sentiasa awam.' }
+if ($Ops -and -not $Apk) { Fail '-Ops memerlukan -Apk.' }
+if ($Ops -and $Debug) { Fail '-Ops tidak boleh bersama -Debug.' }
+if ($OpsOutDir -ne '' -and -not $Ops) { Fail '-OpsOutDir hanya dengan -Ops.' }
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $appDir = Join-Path $root 'apps\surau-app'
@@ -47,6 +60,21 @@ $svOut = @(& $nodeCmd.Source (Join-Path $PSScriptRoot 'set-version.mjs') --check
 if ($LASTEXITCODE -ne 0) { Fail "versi tidak sepadan dengan versions.json:`n$($svOut -join "`n")" }
 $defineVersion = "--dart-define=MAXCOM_VERSION=$appVersion"
 
+function Test-Under([string]$child, [string]$parent) {
+  $c = [System.IO.Path]::GetFullPath($child).TrimEnd('\') + '\'
+  $p = [System.IO.Path]::GetFullPath($parent).TrimEnd('\') + '\'
+  return $c.StartsWith($p, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+# Plan 14 Task 24: the binary scan (also the gate before any copy to MAXCOM-Installers).
+$checkScript = Join-Path $PSScriptRoot 'check-public-apk.mjs'
+function Invoke-Check([string[]]$checkArgs) {
+  $o = @(& $nodeCmd.Source $checkScript @checkArgs)
+  $code = $LASTEXITCODE
+  foreach ($l in $o) { Write-Host $l }
+  return $code
+}
+
 function Test-Listening([int]$port) {
   $c = New-Object System.Net.Sockets.TcpClient
   try {
@@ -68,6 +96,7 @@ if ($Web) {
 
   $built = Join-Path $appDir 'build\web'
   if (-not (Test-Path (Join-Path $built 'index.html'))) { Fail "build\web\index.html tiada selepas binaan." }
+  if ((Invoke-Check @($built)) -ne 0) { Fail 'binaan web awam mengandungi bahan ops. Tidak disalin.' }
   # outDir is a fixed path inside this repo (public/app); it holds build output only.
   if ((Split-Path $outDir -Leaf) -ne 'app') { Fail 'laluan keluaran tidak dijangka.' }
   if (Test-Path $outDir) { Remove-Item -LiteralPath $outDir -Recurse -Force }
@@ -119,6 +148,24 @@ if ($Web) {
 }
 
 if ($Apk) {
+  $outputsDir = Join-Path $appDir 'build\app\outputs'
+  if ($Ops) {
+    $secretBase = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'maxcom-work\secret'
+    if ($OpsOutDir -eq '') { $opsOut = Join-Path $secretBase "ops-builds\$appVersion" } else { $opsOut = $OpsOutDir }
+    $opsOut = [System.IO.Path]::GetFullPath($opsOut)
+    if (Test-Under $opsOut $root) { Fail "folder keluaran ops berada dalam repo: $opsOut" }
+    if (Test-Under $opsOut (Join-Path $root 'dist')) { Fail "folder keluaran ops berada di bawah dist: $opsOut" }
+    if ($opsOut -match '(?i)google ?drive|my drive|onedrive|dropbox' -or $opsOut -match '(?i)^g:') { Fail "folder keluaran ops berada pada laluan Drive: $opsOut" }
+    if (-not (Test-Under $opsOut $secretBase)) { Fail "folder keluaran ops mesti di bawah $secretBase" }
+    $opsKey = Join-Path $appDir 'android\key-ops.properties'
+    if (-not (Test-Path $opsKey)) {
+      Fail 'key-ops.properties tiada. Salin android\key-ops.properties.example ke android\key-ops.properties dan isi (keystore ops di luar repo, di maxcom-work\secret\ops-keystore). Binaan ops tidak sekali-kali memakai kunci awam.'
+    }
+  }
+  # An earlier build's APK (public or ops) must never be what this run picks up.
+  if (Test-Path $outputsDir) { Remove-Item -LiteralPath $outputsDir -Recurse -Force }
+  $extraDefine = @()
+  if ($Ops) { $extraDefine = @('--dart-define=MAXCOM_OPS=true') }
   Push-Location $appDir
   try {
     if ($Debug) {
@@ -126,17 +173,42 @@ if ($Apk) {
       if ($LASTEXITCODE -ne 0) { Fail 'flutter build apk --debug gagal.' }
     } else {
       $keyFile = Join-Path $appDir 'android\key.properties'
-      if (-not (Test-Path $keyFile)) {
+      if (-not $Ops -and -not (Test-Path $keyFile)) {
         Fail 'key.properties tiada. Salin android\key.properties.example ke android\key.properties dan isi (keystore di luar repo).'
       }
-      & $flutter build apk --release --split-per-abi $defineVersion
-      if ($LASTEXITCODE -ne 0) { Fail 'flutter build apk gagal.' }
+      & $flutter build apk --release --split-per-abi $defineVersion @extraDefine
+      if ($LASTEXITCODE -ne 0) {
+        if ($Ops -and (Test-Path $outputsDir)) { Remove-Item -LiteralPath $outputsDir -Recurse -Force }
+        Fail 'flutter build apk gagal.'
+      }
     }
   } finally { Pop-Location }
   if ($Debug) { $apkPath = Join-Path $appDir 'build\app\outputs\flutter-apk\app-debug.apk'; $suffix = '-debug' }
   else { $apkPath = Join-Path $appDir 'build\app\outputs\flutter-apk\app-arm64-v8a-release.apk'; $suffix = '' }
   if (-not (Test-Path $apkPath)) { Fail "APK tiada: $apkPath" }
   $apkVersion = $appVersion
+
+  # The package id of what came out must be the variant that was asked for.
+  $kind = ((@(& $nodeCmd.Source $checkScript --kind $apkPath)) -join '').Trim()
+  if ($Ops) {
+    if ($kind -ne 'ops') {
+      Remove-Item -LiteralPath $outputsDir -Recurse -Force -ErrorAction SilentlyContinue
+      Fail "id pakej APK ialah '$kind', bukan my.maxcom.app.ops."
+    }
+    New-Item -ItemType Directory -Path $opsOut -Force | Out-Null
+    $opsName = "MAXCOM-Ops-$apkVersion-arm64-v8a.apk"
+    $opsDest = Join-Path $opsOut $opsName
+    Move-Item -LiteralPath $apkPath -Destination $opsDest -Force
+    Remove-Item -LiteralPath $outputsDir -Recurse -Force
+    $opsHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $opsDest).Hash.ToLower()
+    [System.IO.File]::WriteAllText("$opsDest.sha256", "$opsHash  $opsName`n", (New-Object System.Text.ASCIIEncoding))
+    Write-Host "APK ops (peribadi, jangan terbitkan): $opsDest"
+    Write-Host ('Saiz: {0:N1} MB' -f ((Get-Item $opsDest).Length / 1MB))
+    Write-Host "sha256: $opsHash"
+    exit 0
+  }
+  if ($kind -ne 'public') { Fail "id pakej APK ialah '$kind', bukan my.maxcom.app. Tidak disalin ke dist." }
+  if ((Invoke-Check @($apkPath)) -ne 0) { Fail 'APK awam mengandungi bahan ops. Tidak disalin ke dist.' }
   $distDir = Join-Path $root 'dist\android'
   New-Item -ItemType Directory -Path $distDir -Force | Out-Null
   $apkName = "MAX-Admin-Client-$apkVersion-arm64-v8a$suffix.apk"

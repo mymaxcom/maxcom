@@ -119,11 +119,16 @@ class EntryHistoryBody extends ConsumerWidget {
         s.finHistBy,
         FinUserName(
           x.createdBy,
+          snapshot: x.names?.createdBy,
+          snapshotRef: x.names?.createdByRef,
           style: text.bodyMedium!.copyWith(fontWeight: FontWeight.w600),
         ),
       ),
       if ((x.deviceId ?? '').isNotEmpty)
-        (s.finHistDevice, _DeviceName(x.deviceId!)),
+        (
+          s.finHistDevice,
+          _DeviceName(x.deviceId!, snapshot: x.names?.device, snapshotRef: x.names?.deviceRef),
+        ),
       (
         s.finHistEntered,
         Text(
@@ -168,6 +173,8 @@ class EntryHistoryBody extends ConsumerWidget {
                 c.userId != null
                     ? FinUserName(
                         c.userId!,
+                        snapshot: e.names?.counters[c.userId!],
+                        snapshotRef: e.names?.counterRefs[c.userId!],
                         style: text.bodyMedium!.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -316,20 +323,23 @@ class EntryHistoryBody extends ConsumerWidget {
   }
 }
 
+/// The device's name of the time ([snapshot]) else today's, with its ID.
 class _DeviceName extends ConsumerWidget {
-  const _DeviceName(this.id);
+  const _DeviceName(this.id, {this.snapshot, this.snapshotRef});
 
   final String id;
+  final String? snapshot;
+  final String? snapshotRef;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final name = ref
-        .watch(financeNameProvider((collection: Collections.devices, id: id)))
-        .value;
-    return Text(
-      name ?? id,
-      style: Theme.of(context).textTheme.bodyMedium!
-          .copyWith(fontWeight: FontWeight.w600),
+    final key = (collection: Collections.devices, id: id);
+    final name = snapshot ?? ref.watch(financeNameProvider(key)).value;
+    final idRef = snapshotRef ?? ref.watch(financeRefProvider(key)).value;
+    return FinNameWithRef(
+      name: name ?? id,
+      idRef: idRef,
+      style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w600),
     );
   }
 }

@@ -178,7 +178,7 @@ class PosterPreviewDialog extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Align(
-                alignment: Alignment.centerRight,
+                alignment: AlignmentDirectional.centerEnd,
                 child: TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: Text(s.actionClose),

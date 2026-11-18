@@ -74,9 +74,40 @@ class LiveChannel private constructor(
             "switchCamera" -> { engine.switchCamera(); result.success(null) }
             "setPortrait" -> { engine.reframe(); result.success(null) }
             "setMuted" -> { engine.setMuted(call.arguments == true); result.success(null) }
+            // The external camera and the audio mix (plan rev 4). The camera address (it may hold the login) arrives
+            // in `source.url`, goes to the engine and is not stored, logged or echoed back.
+            "setSource" -> {
+                val err = engine.setSource(specOf(call))
+                if (err != null) result.error(err, null, null) else result.success(null)
+            }
+            "setMix" -> {
+                val kind = VideoKind.parse((call.argument<Map<String, Any?>>("source"))?.get("kind") as? String)
+                val err = engine.setAudioMix(AudioMixCfg.fromMap(call.argument<Map<String, Any?>>("mix"), kind))
+                if (err != null) result.error(err, null, null) else result.success(null)
+            }
+            "setAvOffset" -> {
+                engine.setAvOffsetMs((call.arguments as? Number)?.toInt() ?: 0)
+                result.success(null)
+            }
+            "clapCapture" -> {
+                val err = engine.clapCapture()
+                if (err != null) result.error(err, null, null) else result.success(null)
+            }
+            "clapReplay" -> {
+                val err = engine.clapReplay((call.arguments as? Number)?.toInt() ?: 0)
+                if (err != null) result.error(err, null, null) else result.success(null)
+            }
+            "clapOffset" -> { engine.clapOffset((call.arguments as? Number)?.toInt() ?: 0); result.success(null) }
+            "clapStop" -> { engine.clapStop(); result.success(null) }
             else -> result.notImplemented()
         }
     }
+
+    private fun specOf(call: MethodCall): SourceSpec = SourceLogic.specFrom(
+        call.argument<Map<String, Any?>>("source"),
+        call.argument<Map<String, Any?>>("mix"),
+        call.argument<Number>("avOffsetMs"),
+    )
 
     private fun hasPermissions() =
         listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO).all {
@@ -88,8 +119,9 @@ class LiveChannel private constructor(
         val width = call.argument<Int>("width") ?: 1280
         val height = call.argument<Int>("height") ?: 720
         val fps = call.argument<Int>("fps") ?: 30
+        val spec = specOf(call)
         val go = {
-            val err = engine.prepare(front, width, height, fps)
+            val err = engine.prepare(front, width, height, fps, spec)
             if (err != null) {
                 result.error(err, null, null)
             } else {

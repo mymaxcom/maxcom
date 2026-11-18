@@ -1,0 +1,9 @@
+# MAXCOM Ops build signing (Plan 14 Task 24, decision 12). Copy to android/key-ops.properties (git-ignored).
+# This is a SEPARATE key from key.properties; the ops build never uses the public key or the debug key.
+# Placeholders only: the ops keystore is made by the operator, once, outside the repo, under
+# ~/maxcom-work/secret/ops-keystore, and backed up with the other secrets:
+#   keytool -genkeypair -keyalg RSA -keysize 4096 -validity 10000 -alias maxcom-ops -keystore maxcom-ops.jks
+storeFile=C:/path/outside/the/repo/maxcom-ops.jks
+storePassword=CHANGE-ME
+keyPassword=CHANGE-ME
+keyAlias=maxcom-ops

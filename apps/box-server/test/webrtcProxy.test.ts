@@ -19,24 +19,24 @@ const sdp = (h: LiveHarness, url: string, headers: Record<string, string>, paylo
   h.app.inject({ method: 'POST', url, headers: { 'content-type': 'application/sdp', ...headers }, payload, remoteAddress });
 
 async function startWeb(h: LiveHarness) {
-  const media = await loginAs(h.app, 'media');
+  const liveUser = await loginAs(h.app, 'live');
   const r = await h.app.inject({
     method: 'POST',
     url: '/api/live/start',
-    headers: media.headers,
+    headers: liveUser.headers,
     payload: startBody(h, { source: 'web', youtubeVia: 'box' }),
     remoteAddress: LAN,
   });
   expect(r.statusCode).toBe(200);
-  return { media, id: r.json().session.id as string };
+  return { liveUser, id: r.json().session.id as string };
 }
 
 describe('WHIP proxy', () => {
   it('forwards the offer with the per-session publisher credential only and rewrites Location', async () => {
     const h = await make();
-    const { media, id } = await startWeb(h);
+    const { liveUser, id } = await startWeb(h);
     const r = await sdp(h, '/api/live/whip', {
-      ...media.headers,
+      ...liveUser.headers,
       cookie: 'session=stolen',
       'x-forwarded-for': '9.9.9.9',
       'x-custom': 'leak',
@@ -55,7 +55,7 @@ describe('WHIP proxy', () => {
     expect(user).toBe(`pub-${id}`);
     const pub = (h.fake.global.authInternalUsers as Array<{ user: string; pass: string }>).find((u) => u.user === `pub-${id}`);
     expect(pass).toBe(pub?.pass);
-    expect(q.authorization).not.toContain(media.token);
+    expect(q.authorization).not.toContain(liveUser.token);
     expect(q.cookie).toBeUndefined();
     expect(q.contentType).toBe('application/sdp');
     expect(q.body).toBe(SDP);
@@ -63,13 +63,13 @@ describe('WHIP proxy', () => {
 
   it('DELETE forwards only for a whip id this session created', async () => {
     const h = await make();
-    const { media } = await startWeb(h);
-    await sdp(h, '/api/live/whip', media.headers);
-    const del = await h.app.inject({ method: 'DELETE', url: '/api/live/whip/fake-session-1', headers: media.headers, remoteAddress: LAN });
+    const { liveUser } = await startWeb(h);
+    await sdp(h, '/api/live/whip', liveUser.headers);
+    const del = await h.app.inject({ method: 'DELETE', url: '/api/live/whip/fake-session-1', headers: liveUser.headers, remoteAddress: LAN });
     expect(del.statusCode).toBe(204);
     expect(h.fake.requests.some((q) => q.method === 'DELETE' && q.url === '/surau/whip/fake-session-1')).toBe(true);
     const before = h.fake.requests.length;
-    const other = await h.app.inject({ method: 'DELETE', url: '/api/live/whip/someone-elses-id', headers: media.headers, remoteAddress: LAN });
+    const other = await h.app.inject({ method: 'DELETE', url: '/api/live/whip/someone-elses-id', headers: liveUser.headers, remoteAddress: LAN });
     expect(other.statusCode).toBe(404);
     expect(h.fake.requests.length).toBe(before);
   });
@@ -77,7 +77,7 @@ describe('WHIP proxy', () => {
   it('403 when the live session belongs to another device', async () => {
     const h = await make();
     await startWeb(h);
-    const intruder = await loginAs(h.app, 'media');
+    const intruder = await loginAs(h.app, 'live');
     const admin = await loginAs(h.app, 'admin');
     for (const who of [intruder, admin]) {
       const r = await sdp(h, '/api/live/whip', who.headers);
@@ -88,46 +88,46 @@ describe('WHIP proxy', () => {
 
   it('409 wrong_source for an android session; 409 no_session without a session', async () => {
     const h = await make();
-    const media = await loginAs(h.app, 'media');
-    expect((await sdp(h, '/api/live/whip', media.headers)).json()).toMatchObject({ code: 'no_session' });
-    await h.app.inject({ method: 'POST', url: '/api/live/start', headers: media.headers, payload: startBody(h), remoteAddress: LAN });
-    const r = await sdp(h, '/api/live/whip', media.headers);
+    const liveUser = await loginAs(h.app, 'live');
+    expect((await sdp(h, '/api/live/whip', liveUser.headers)).json()).toMatchObject({ code: 'no_session' });
+    await h.app.inject({ method: 'POST', url: '/api/live/start', headers: liveUser.headers, payload: startBody(h), remoteAddress: LAN });
+    const r = await sdp(h, '/api/live/whip', liveUser.headers);
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe('wrong_source');
   });
 
   it('refuses non-SDP, empty and oversized bodies', async () => {
     const h = await make();
-    const { media } = await startWeb(h);
-    const json = await h.app.inject({ method: 'POST', url: '/api/live/whip', headers: media.headers, payload: {}, remoteAddress: LAN });
+    const { liveUser } = await startWeb(h);
+    const json = await h.app.inject({ method: 'POST', url: '/api/live/whip', headers: liveUser.headers, payload: {}, remoteAddress: LAN });
     expect(json.statusCode).toBe(415);
-    expect((await sdp(h, '/api/live/whip', media.headers, '')).statusCode).toBe(400);
-    expect((await sdp(h, '/api/live/whip', media.headers, 'hello')).statusCode).toBe(400);
-    const edge = await sdp(h, '/api/live/whip', media.headers, 'v=0\r\n' + 'a'.repeat(64 * 1024 - 5));
+    expect((await sdp(h, '/api/live/whip', liveUser.headers, '')).statusCode).toBe(400);
+    expect((await sdp(h, '/api/live/whip', liveUser.headers, 'hello')).statusCode).toBe(400);
+    const edge = await sdp(h, '/api/live/whip', liveUser.headers, 'v=0\r\n' + 'a'.repeat(64 * 1024 - 5));
     expect(edge.statusCode).toBe(201);
-    const big = await sdp(h, '/api/live/whip', media.headers, 'v=0\r\n' + 'a'.repeat(64 * 1024));
+    const big = await sdp(h, '/api/live/whip', liveUser.headers, 'v=0\r\n' + 'a'.repeat(64 * 1024));
     expect(big.statusCode).toBe(413);
   });
 
   it('maps MediaMTX 401 to 503 mediamtx_auth and a dead MediaMTX to 503 mediamtx_down', async () => {
     const h = await make();
-    const { media } = await startWeb(h);
+    const { liveUser } = await startWeb(h);
     h.fake.webOverride = { status: 401 };
-    const r = await sdp(h, '/api/live/whip', media.headers);
+    const r = await sdp(h, '/api/live/whip', liveUser.headers);
     expect(r.statusCode).toBe(503);
     expect(r.json().code).toBe('mediamtx_auth');
     h.fake.webOverride = null;
     h.fake.setWebDown(true);
-    const down = await sdp(h, '/api/live/whip', media.headers);
+    const down = await sdp(h, '/api/live/whip', liveUser.headers);
     expect(down.statusCode).toBe(503);
     expect(down.json().code).toBe('mediamtx_down');
   });
 
   it('does not leak the credential or upstream detail in an error', async () => {
     const h = await make();
-    const { media } = await startWeb(h);
+    const { liveUser } = await startWeb(h);
     h.fake.webOverride = { status: 500 };
-    const r = await sdp(h, '/api/live/whip', media.headers);
+    const r = await sdp(h, '/api/live/whip', liveUser.headers);
     expect(r.statusCode).toBe(502);
     expect(r.body).not.toMatch(/Basic |pub-|127\.0\.0\.1/);
   });

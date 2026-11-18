@@ -21,7 +21,7 @@ vi.mock('../src/data/content.ts', async (importOriginal) => {
 
 import { App } from '../src/app.tsx';
 import { Main } from '../src/screens/Main.tsx';
-import { PENGUMUMAN_FIT_MAX, PengumumanCard } from '../src/content/cards/PengumumanCard.tsx';
+import { PENGUMUMAN_TEXT_FIT_MAX, PengumumanCard } from '../src/content/cards/PengumumanCard.tsx';
 import { paginateAyat } from '../src/content/cards/AyatCard.tsx';
 import { cityTime } from '../src/content/cards/WorldTimesCard.tsx';
 
@@ -151,7 +151,7 @@ describe('KuliahCard', () => {
 
   it('never emits an image for an asset id that is not a sha256 hex', () => {
     const c = fixture();
-    c.kuliah[0]!.penceramah.photoAssetId = 'https://evil.example/x.png';
+    c.kuliah[0]!.penceramah!.photoAssetId = 'https://evil.example/x.png';
     c.kuliah[0]!.kitab!.coverAssetId = '../../etc/passwd';
     const r = show(c, 'kuliahCard');
     expect(section(r).querySelector('img')).toBeNull();
@@ -176,8 +176,10 @@ describe('PengumumanCard', () => {
     expect(onRendered).toHaveBeenLastCalledWith(false);
   });
 
-  it('renders header, title and body; priority 1 is marked', () => {
-    const r = show(fixture(), 'pengumuman');
+  it('[C1] renders header, title and body; priority 3 (Segera) is marked', () => {
+    const c = fixture();
+    c.pengumuman[0]!.priority = 3;
+    const r = show(c, 'pengumuman');
     const card = section(r).querySelector('[data-card="pengumuman"]')!;
     expect(card.getAttribute('data-item')).toBe('a1');
     expect(r.getByText('Pengumuman')).toBeTruthy();
@@ -193,7 +195,7 @@ describe('PengumumanCard', () => {
     expect(card.querySelector('.pengumuman__pic, .pengumuman__main')).toBeNull();
     expect([...card.children].map((e) => e.className)).toEqual(['card__tag', 'pengumuman__text']);
     // jsdom measures nothing, so the fit stays where it starts: above 1 (a short notice grows to fill the card).
-    expect(card.querySelector('.pengumuman__text')!.getAttribute('style')!.replace(/\s/g, '')).toBe(`--fit:${PENGUMUMAN_FIT_MAX};`);
+    expect(card.querySelector('.pengumuman__text')!.getAttribute('style')!.replace(/\s/g, '')).toBe(`--fit:${PENGUMUMAN_TEXT_FIT_MAX};`);
   });
 
   it('a notice with its picture shows it beside the same text', () => {
@@ -204,6 +206,11 @@ describe('PengumumanCard', () => {
     expect(card.classList.contains('has-picture')).toBe(true);
     expect(card.querySelector(`.pengumuman__pic img[src="/assets/${PROGRAM}"]`)).toBeTruthy();
     expect(card.querySelector('.pengumuman__main .pengumuman__title')!.textContent).toBe('Gotong-royong perdana');
+  });
+
+  it('[C1] an old row saved with priority 1 (Biasa) is no longer highlighted', () => {
+    const r = show(fixture(), 'pengumuman'); // the fixture's notice is priority 1
+    expect(section(r).querySelector('[data-card="pengumuman"]')!.classList.contains('is-priority')).toBe(false);
   });
 
   it('priority 2 is not marked', () => {

@@ -618,6 +618,100 @@
 .tugasan__days.cols-3 .tugasan__name { font-size: 1.3rem; }
 .tugasan__days.cols-3 .tugasan__photo { width: 2.8rem; height: 2.8rem; font-size: 1.2rem; }
 
+/* ---- The whole main area (operator 2026-11-17, "use the whole screen; larger text") ----------------------------
+   Tugasan, world times, takwim and a text-only notice on the content shell: the card is the whole band between the
+   top row and the strip, and its words are set for reading from about 10 m (names and body 2.1rem, 40 px at 1920, or
+   more; labels 1.5rem, 29 px, or more). The cards render on the content shell only, so these sizes are theirs. */
+.stage[data-kind='content'] :is(.card--tugasan, .card--wt, .card--takwim, .card--pengumuman) .card__tag { font-size: 1.5rem; }
+
+/* Tugasan: today (or the next duty day) and the one after it as two columns across the full width, four role slots
+   each so the rows of the two columns line up, a large photo or initial beside the role and the name. */
+.stage[data-kind='content'] .card--tugasan { gap: 0.8rem; padding: 1.7rem 2.6rem 1.6rem; }
+.stage[data-kind='content'] .card--tugasan .tugasan__days { gap: 2.6rem; }
+.stage[data-kind='content'] .card--tugasan .tugasan__day { gap: 0.9rem; min-height: 0; }
+.stage[data-kind='content'] .card--tugasan .tugasan__day + .tugasan__day { padding-left: 2.6rem; }
+.stage[data-kind='content'] .card--tugasan .tugasan__date { font-size: 2.3rem; line-height: 1.2; }
+.stage[data-kind='content'] .card--tugasan .tugasan__rows {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  align-items: center;
+}
+.stage[data-kind='content'] .card--tugasan .tugasan__row { gap: 1.5rem; }
+.stage[data-kind='content'] .card--tugasan .tugasan__photo { width: 5.6rem; height: 5.6rem; font-size: 2.5rem; border-width: 0.2rem; }
+.stage[data-kind='content'] .card--tugasan .tugasan__text { line-height: 1.12; }
+.stage[data-kind='content'] .card--tugasan .tugasan__role { font-size: 1.5rem; letter-spacing: 0.14em; }
+.stage[data-kind='content'] .card--tugasan .tugasan__name { font-size: 2.7rem; line-height: 1.22; margin-top: 0.1rem; }
+/* A long name takes two lines a step smaller (never cut with an ellipsis). */
+.stage[data-kind='content'] .card--tugasan .tugasan__name.is-long {
+  font-size: 2.1rem;
+  line-height: 1.18;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+/* World times: the tiles fill the card (one row up to three cities, two rows beyond), the time very large. */
+.stage[data-kind='content'] .card--wt { gap: 1rem; padding: 1.7rem 2.6rem 1.8rem; }
+.stage[data-kind='content'] .card--wt .wt__grid { gap: 1.4rem 1.6rem; align-content: stretch; grid-auto-rows: minmax(0, 1fr); }
+.stage[data-kind='content'] .card--wt .wt__tile { padding: 0.6rem 1.2rem; border-radius: var(--radius-md, 1.2rem); min-height: 0; }
+/* (the city, the time and the offset keep their own height: a squeezed city line would slide under the time) */
+.stage[data-kind='content'] .card--wt .wt__tile > * { flex-shrink: 0; }
+.stage[data-kind='content'] .card--wt .wt__city { font-size: 2.2rem; letter-spacing: 0.1em; line-height: 1.2; }
+.stage[data-kind='content'] .card--wt .wt__clock { gap: 0.8rem; margin-top: 0.4rem; }
+.stage[data-kind='content'] .card--wt .wt__time { font-size: 10rem; }
+.stage[data-kind='content'] .card--wt .wt__grid.cols-3 .wt__time { font-size: 8rem; }
+.stage[data-kind='content'] .card--wt .wt__grid.is-two-rows .wt__time { font-size: 6.2rem; }
+.stage[data-kind='content'] .card--wt .wt__grid.cols-3.is-two-rows .wt__time { font-size: 6rem; }
+.stage[data-kind='content'] .card--wt .wt__period { font-size: 2.1rem; }
+.stage[data-kind='content'] .card--wt .wt__offset { margin-top: 0.6rem; font-size: 2rem; line-height: 1.2; }
+/* Four cities (two rows of two): each tile is wide and short, so the city and its offset share the tile's top line (city
+   left, offset right) and the time takes the rest of the height, larger than a stacked tile could give it. */
+.stage[data-kind='content'] .card--wt .wt__grid.cols-2.is-two-rows .wt__tile {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-content: center;
+  align-items: baseline;
+  column-gap: 1.6rem;
+  padding: 0.6rem 2rem;
+}
+.stage[data-kind='content'] .card--wt .wt__grid.cols-2.is-two-rows .wt__city { order: 1; max-width: calc(100% - 9rem); }
+.stage[data-kind='content'] .card--wt .wt__grid.cols-2.is-two-rows .wt__offset { order: 2; margin-top: 0; white-space: nowrap; }
+.stage[data-kind='content'] .card--wt .wt__grid.cols-2.is-two-rows .wt__clock { order: 3; flex-basis: 100%; justify-content: center; margin-top: 0.3rem; }
+.stage[data-kind='content'] .card--wt .wt__grid.cols-2.is-two-rows .wt__time { font-size: 8.4rem; }
+
+/* Takwim: the list across the whole width, the rows sharing the height (one to three events). */
+.stage[data-kind='content'] .card--takwim { gap: 1rem; padding: 1.5rem 2.6rem 1.4rem; }
+.stage[data-kind='content'] .card--takwim .takwim__list { justify-content: center; gap: 1rem; }
+.stage[data-kind='content'] .card--takwim .takwim__row { flex: 1 1 0; max-height: 15rem; min-height: 0; gap: 2.4rem; }
+.stage[data-kind='content'] .card--takwim .takwim__days { align-self: stretch; width: 19rem; min-height: 0; border-radius: 1.2rem; }
+.stage[data-kind='content'] .card--takwim .takwim__n { font-size: calc(5.6rem * var(--scale, 1)); }
+.stage[data-kind='content'] .card--takwim .takwim__n--word { font-size: calc(3.1rem * var(--scale, 1)); }
+.stage[data-kind='content'] .card--takwim .takwim__days small { font-size: 1.5rem; }
+.stage[data-kind='content'] .card--takwim .takwim__text { gap: 0.3rem; }
+/* (three rows share the height: the text size (Ubah suai) grows them up to 1.1, so the third row never runs under the strip) */
+.stage[data-kind='content'] .card--takwim .takwim__title { font-size: calc(4.6rem * min(var(--scale, 1), 1.1)); line-height: 1.2; }
+.stage[data-kind='content'] .card--takwim .takwim__date { font-size: calc(2.4rem * min(var(--scale, 1), 1.1)); }
+.stage[data-kind='content'] .card--takwim .takwim__list:not(.n-3) .takwim__title { font-size: calc(4.6rem * var(--scale, 1)); }
+.stage[data-kind='content'] .card--takwim .takwim__list:not(.n-3) .takwim__date { font-size: calc(2.4rem * var(--scale, 1)); }
+/* One event: a single tall row, the words a step larger. */
+.stage[data-kind='content'] .card--takwim .takwim__list.n-1 .takwim__row { max-height: 22rem; }
+.stage[data-kind='content'] .card--takwim .takwim__list.n-1 .takwim__days { width: 22rem; }
+.stage[data-kind='content'] .card--takwim .takwim__list.n-1 .takwim__n { font-size: calc(8rem * var(--scale, 1)); }
+.stage[data-kind='content'] .card--takwim .takwim__list.n-1 .takwim__title { font-size: calc(5.6rem * var(--scale, 1)); }
+.stage[data-kind='content'] .card--takwim .takwim__list.n-1 .takwim__date { font-size: calc(3.1rem * var(--scale, 1)); }
+
+/* A notice without a picture: the text block runs the full width of the card (PengumumanCard lets a short one grow
+   further, PENGUMUMAN_TEXT_FIT_MAX, and steps a long one down and pages it as before). */
+.stage[data-kind='content'] .card--pengumuman:not(.has-picture) { padding: 2rem 3rem; gap: 1rem; }
+.stage[data-kind='content'] .card--pengumuman:not(.has-picture) :is(.pengumuman__title, .pengumuman__body) { max-width: none; }
+/* (0,4,0 on purpose: Old School's serif title keeps its own taller line) */
+.stage[data-kind='content'] .card--pengumuman .pengumuman__title { line-height: 1.22; }
+
 /* ---- Ayat: tag + surah | Arabic (QPC Hafs) / Malay | credit --------------- */
 .card--ayat {
   flex-direction: column;
@@ -847,188 +941,520 @@
   .ticker__track.is-live { animation: none; }
 }
 
-/* ---- Tabung: eyebrow, one glass column per fund | DuitNow QR ---------------- */
-.card--tabung {
-  gap: 2rem;
-  padding: 1.3rem 2rem;
+/* ---- Tabung (mockup tabung-r1, operator 2026-11-17) ------------------------------------------------------------
+   The funds as large rows in a panel (at most 4 a page), the DuitNow QR panel fixed on the right (20rem code). One
+   fund: a ring and a very large amount; featured fund: the first fund large over small tiles; a summary page with the
+   total. Every theme skins it through the --tb-* tokens (themes/<id>/theme.css); these are the Default skin. */
+.tabung {
+  --tb-name: var(--text);
+  --tb-amt: #ffffff;
+  --tb-muted: rgb(255 255 255 / 0.72);
+  --tb-title: var(--accent);
+  --tb-on-acc: var(--ink);
+  --tb-row-bg: rgb(255 255 255 / 0.045);
+  --tb-row-border: 1px solid rgb(255 255 255 / 0.06);
+  --tb-row-radius: var(--radius-md);
+  --tb-track: rgb(255 255 255 / 0.12);
+  --tb-fill: linear-gradient(90deg, #c9973f, #f6d58e);
+  --tb-pct: var(--accent);
+  --tb-ring: var(--accent);
+  --tb-dot: rgb(255 255 255 / 0.22);
+  --tb-hair: rgb(255 255 255 / 0.1);
+  --tb-hot-bg: linear-gradient(90deg, rgb(var(--accent-rgb) / 0.22), rgb(var(--accent-rgb) / 0.06));
+  --tb-qr-h: var(--accent);
+  --tb-nmfont: var(--font);
+  --tb-titlefont: var(--font);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22.9rem;
+  gap: 1.67rem;
+  color: var(--tb-name);
+  font-family: var(--font);
 }
-.tabung__main {
-  flex: 1;
+.tabung.no-qr { grid-template-columns: minmax(0, 1fr); }
+.tabung .num { font-variant-numeric: tabular-nums lining-nums; }
+.tabung__panel {
+  position: relative;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  padding: 1.56rem 2.29rem 1.8rem;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 .tabung__head {
   flex: none;
   display: flex;
   align-items: baseline;
-  gap: 1rem;
+  gap: 1.35rem;
+  height: 3.23rem;
   min-width: 0;
 }
+.tabung__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--tb-titlefont);
+  font-size: calc(2.29rem * var(--scale, 1));
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--tb-title);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .tabung__updated {
-  font-size: 1.35rem;
-  font-weight: 600;
-  opacity: 0.85;
+  flex: none;
+  font-size: calc(1.46rem * var(--scale, 1));
+  font-weight: 500;
+  color: var(--tb-muted);
   white-space: nowrap;
 }
-.tabung__list {
+.tabung__dots {
+  flex: none;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--tb-muted);
+}
+.tabung__dots i {
+  display: block;
+  width: 0.83rem;
+  height: 0.83rem;
+  border-radius: 0.42rem;
+  background: var(--tb-dot);
+}
+.tabung__dots i.is-on { width: 2.4rem; background: var(--accent); }
+.tabung__dots .num { margin-left: 0.42rem; }
+.tabung__body {
+  --f: calc(var(--fit, 1) * var(--scale, 1));
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 0.42rem;
+  overflow: hidden;
+}
+
+/* A fund's name: at most two lines, a longer one shrinks (useFit, --name-fit). */
+.tabung__name {
+  display: block;
+  min-width: 0;
+  /* Two lines; the padding holds the glyphs that reach past a tight line, so a name that fits is not measured as
+     overflowing (useFit would shrink it). */
+  max-height: calc(2.2em + 2 * var(--tb-nmpad, 0.3em));
+  margin: calc(0.1em - var(--tb-nmpad, 0.3em)) 0;
+  padding: var(--tb-nmpad, 0.3em) 0;
+  overflow: hidden;
+  font-family: var(--tb-nmfont);
+  font-size: calc(var(--nm, 2.4rem) * var(--f, 1) * var(--name-fit, 1));
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--tb-name);
+  overflow-wrap: break-word;
+}
+.tabung__new {
+  display: inline-block;
+  margin-left: 0.83rem;
+  padding: 0.16em 0.55em 0.2em;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--tb-on-acc);
+  font-family: var(--font);
+  font-size: 0.5em;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  vertical-align: 0.18em;
+  white-space: nowrap;
+}
+/* The figure: RM small, the amount very large, always one line (useFigureFit sets --k on the group). */
+.tabung__fig {
+  display: block;
+  min-width: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+.tabung__value {
+  display: inline-block;
+  font-size: calc(var(--amt, 5.8rem) * var(--f, 1) * var(--k, 1));
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--tb-amt);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.tabung__value small {
+  margin-right: 0.22em;
+  font-size: 0.4em;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--tb-muted);
+}
+.tabung__value b { font-weight: inherit; }
+.tabung__amount { font-weight: 700; color: var(--tb-name); white-space: nowrap; }
+
+/* Under a fund: the big percent, the thick bar and the target, or "Sasaran tercapai"; or the small line. */
+.tabung__prog {
+  grid-column: 1 / -1;
+  min-width: 0;
+  min-height: calc(var(--pct, 2.9rem) * var(--f, 1));
+  display: flex;
+  align-items: center;
+  gap: 1.35rem;
+}
+.tabung__pct {
+  flex: none;
+  min-width: 2.75em;
+  font-size: calc(var(--pct, 2.9rem) * var(--f, 1));
+  font-weight: 800;
+  line-height: 1;
+  color: var(--tb-pct);
+}
+.tabung__bar {
+  flex: 1;
+  min-width: 4rem;
+  display: block;
+  height: calc(var(--barh, 1.4rem) * var(--f, 1));
+  border-radius: 999px;
+  background: var(--tb-track);
+  overflow: hidden;
+}
+.tabung__bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tb-fill);
+}
+.tabung__tgt {
+  flex: none;
+  font-size: calc(var(--tgt, 1.56rem) * var(--f, 1));
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--tb-muted);
+  white-space: nowrap;
+}
+.tabung__sub {
+  font-size: calc(var(--tgt, 1.56rem) * 1.15 * var(--f, 1));
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--tb-muted);
+  white-space: nowrap;
+}
+.tabung__sub .tabung__amount { font-weight: 800; }
+.tabung__done {
+  flex: none;
+  padding: 0.3em 0.7em;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--tb-on-acc);
+  font-size: calc(var(--tgt, 1.56rem) * var(--f, 1));
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Rows, sized by how many share the page (2 = largest). */
+.tabung__rows {
   flex: 1;
   min-height: 0;
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 0.94rem;
 }
-.tabung__col {
+.tabung__rows.n-2 { --nm: 3.02rem; --amt: 7.81rem; --barh: 1.77rem; --pct: 3.75rem; --tgt: 1.77rem; --amtw: 39.6rem; --rpad: 1.35rem; }
+.tabung__rows.n-3 { --nm: 2.4rem; --amt: 5.83rem; --barh: 1.46rem; --pct: 2.92rem; --tgt: 1.56rem; --amtw: 36.5rem; --rpad: 0.73rem; }
+.tabung__rows.n-4 { --nm: 1.98rem; --amt: 4.375rem; --barh: 1.15rem; --pct: 2.29rem; --tgt: 1.4rem; --amtw: 32.3rem; --rpad: 0.625rem; }
+.tabung__row {
+  position: relative;
   flex: 1 1 0;
+  min-height: 0;
+  max-height: 17.2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--amtw, 36rem));
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  column-gap: 1.875rem;
+  row-gap: 0.42rem;
+  padding: var(--rpad, 0.73rem) 1.67rem;
+  border: var(--tb-row-border);
+  border-radius: var(--tb-row-radius);
+  background: var(--tb-row-bg);
+  overflow: hidden;
+}
+.tabung__row.is-done .tabung__pct { color: var(--accent); }
+/* Finance off: the typed rows, same row without bars. */
+/* The figure column stays a fixed width (the figure fit measures against it); narrower here, the names get the room. */
+.card--tabung-manual .tabung__rows { --nm: 2.6rem; --amt: 5.42rem; --amtw: 30rem; }
+.card--tabung-manual .tabung__row { grid-template-rows: 1fr; }
+
+/* The "Baru" moment: the row lit, a gold star, no amount and no percent, one shine pass. */
+.tabung__row.is-hot {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 1fr;
+  border: 0.16rem solid var(--accent);
+  background: var(--tb-hot-bg);
+}
+.tabung__row.is-hot::after,
+.tabung__mini.is-hot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.28) 48%, transparent 66%);
+  transform: translateX(-110%);
+  animation: tabung-shine 1.8s ease-out 0.3s 1 both;
+  pointer-events: none;
+}
+@keyframes tabung-shine { to { transform: translateX(110%); } }
+.tabung__hotname {
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  justify-content: center; /* guarantees this value whether or not the `safe` line below is understood */
-  justify-content: safe center;
-  gap: 0.9rem;
-  padding: 1.4rem 1.6rem;
-  border-radius: var(--radius-md);
-  background: rgb(255 255 255 / 0.06);
-  border: 1px solid rgb(255 255 255 / 0.08);
-  transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+  align-items: center;
+  gap: 1.15rem;
 }
-.tabung__col--hot {
-  background: rgb(var(--accent-rgb) / 0.16);
-  border-color: var(--accent);
-  box-shadow: 0 0 2rem rgb(var(--accent-rgb) / 0.35);
-}
-.tabung__name {
-  /* Two lines of the full size, whatever the name: useFit shrinks a longer one to stay inside. */
+.tabung__rosette {
   flex: none;
-  height: calc(2 * 1.2 * 2.3rem);
-  display: grid;
-  align-content: end; /* guarantees this value whether or not the `safe` line below is understood */
-  align-content: safe end;
-  overflow: hidden;
-  font-size: calc(2.3rem * var(--fit, 1) * var(--scale, 1) * var(--name-fit, 1));
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1.2;
-  text-transform: uppercase;
-  overflow-wrap: anywhere;
+  width: calc(var(--nm, 2.4rem) * 1.65);
+  height: calc(var(--nm, 2.4rem) * 1.65);
+  color: var(--accent);
+  animation: tabung-bloom 1.2s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
-/* Four funds side by side: the names one step smaller, so a three-word name keeps its two lines. */
-.tabung__list[data-cols='4'] .tabung__name {
-  height: calc(2 * 1.2 * 1.85rem);
-  font-size: calc(1.85rem * var(--fit, 1) * var(--scale, 1) * var(--name-fit, 1));
-}
-.tabung__new {
-  display: inline-block;
-  margin-left: 0.6rem;
-  padding: 0.1rem 0.5rem;
-  border-radius: 0.4rem;
-  background: var(--accent);
-  color: var(--ink);
-  font-size: 0.72em;
+@keyframes tabung-bloom { from { transform: scale(0.4) rotate(-45deg); opacity: 0; } }
+.tabung__thanks { min-width: 0; text-align: right; }
+.tabung__thanks b {
+  display: block;
+  font-size: calc(var(--nm, 2.4rem) * 1.09 * var(--f, 1));
   font-weight: 800;
-  letter-spacing: 0.05em;
-  vertical-align: 0.14em;
-  text-shadow: none;
-}
-.tabung__value {
-  display: block;
-  font-size: var(--figure, 3rem);
   line-height: 1.1;
-  white-space: nowrap;
+  color: var(--accent);
 }
-.tabung__value small {
-  margin-right: 0.18em;
-  font-size: 0.46em;
-  font-weight: 700;
-  opacity: 0.8;
-}
-.tabung__sub,
-.tabung__target small {
-  font-size: calc(2rem * var(--fit, 1) * var(--scale, 1));
-  font-weight: 600;
-  line-height: 1.25;
-  opacity: 0.85;
-}
-.tabung__amount { white-space: nowrap; }
-/* Same height with a small line, a bar or nothing, so the columns line up. */
-.tabung__foot {
-  flex: none;
+.tabung__thanks span {
   display: block;
-  min-height: 6.6rem;
-}
-.tabung__target {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.tabung__bar {
-  display: block;
-  height: 1.2rem;
-  border-radius: 0.6rem;
-  background: rgb(255 255 255 / 0.18);
-  overflow: hidden;
-}
-.tabung__bar i {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-}
-.tabung__qr {
-  flex: none;
-  width: 16rem;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.6rem;
-  font-size: 1.5rem;
-  font-weight: 600;
+  margin-top: 0.52rem;
+  font-size: calc(var(--nm, 2.4rem) * 0.61 * var(--f, 1));
+  font-weight: 500;
   line-height: 1.2;
-  text-align: center;
+  color: var(--tb-name);
 }
-.tabung__qr img {
+
+/* One fund: the ring beside a very large amount, the target and what is still needed. */
+.tabung__single {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  padding: 0 1rem;
+}
+.tabung__single.has-ring { grid-template-columns: 24.5rem minmax(0, 1fr); gap: 2.9rem; }
+.tabung__ring {
+  position: relative;
   display: block;
   width: 100%;
   aspect-ratio: 1;
-  padding: 0.6rem;
-  border-radius: 0.8rem;
-  background: #fff;
-  object-fit: contain;
+  --rp: 6.77rem;
+  --rs: 1.67rem;
 }
-/* Finance off: the rows the admin typed, name left and figure right. */
-.card--tabung-manual .tabung__list {
+.tabung__ring svg { display: block; width: 100%; height: 100%; }
+.tabung__ring-track { fill: none; stroke: var(--tb-track); stroke-width: 17; }
+.tabung__ring-fill { fill: none; stroke: var(--tb-ring); stroke-width: 17; stroke-linecap: round; }
+.tabung__ring-c {
+  position: absolute;
+  inset: 0;
+  display: flex;
   flex-direction: column;
-  justify-content: center; /* guarantees this value whether or not the `safe` line below is understood */
-  justify-content: safe center;
-  gap: 0;
+  align-items: center;
+  justify-content: center;
 }
-.card--tabung-manual .tabung__col {
+.tabung__ring-c b { font-size: var(--rp); font-weight: 800; line-height: 1; letter-spacing: -0.02em; color: var(--tb-pct); }
+.tabung__ring-c span { margin-top: 0.42rem; font-size: var(--rs); font-weight: 600; line-height: 1.1; color: var(--tb-muted); }
+.tabung__hinfo {
+  --nm: 3.44rem;
+  --amt: 8.96rem;
+  --tgt: 2.08rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.tabung__hinfo .tabung__name { margin-bottom: 1.35rem; }
+.tabung__hinfo .tabung__fig { width: 100%; text-align: left; }
+.tabung__hinfo .tabung__tgt { display: block; margin-top: 1.56rem; white-space: normal; }
+.tabung__hinfo :is(.tabung__sub, .tabung__done) { margin-top: 1.56rem; }
+.tabung__hinfo .tabung__thanks { margin-top: 1.56rem; text-align: left; }
+.tabung__needed {
+  display: inline-block;
+  margin-top: 1.04rem;
+  font-size: calc(2.08rem * var(--f, 1));
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--accent);
+}
+
+/* Featured fund (Tetapan Tonjolkan tabung pertama): the first fund large on every page, the others as tiles. */
+.tabung__feat { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.94rem; }
+.tabung__fhero {
   flex: none;
-  flex-direction: row;
+  min-height: 20.3rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  padding: 0.94rem 1.875rem;
+  border: var(--tb-row-border);
+  border-radius: var(--tb-row-radius);
+  background: var(--tb-row-bg);
+}
+.tabung__fhero.has-ring { grid-template-columns: 17.7rem minmax(0, 1fr); gap: 2.5rem; }
+.tabung__fhero .tabung__ring { width: 17.7rem; --rp: 5rem; --rs: 1.35rem; }
+.tabung__fhero .tabung__hinfo { --nm: 2.6rem; --amt: 6.875rem; --tgt: 1.5rem; }
+.tabung__fhero .tabung__hinfo .tabung__name { margin-bottom: 0.7rem; }
+.tabung__fhero .tabung__hinfo .tabung__tgt { margin-top: 0.9rem; }
+.tabung__fsub {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.21rem 0.21rem 0;
+  font-size: calc(1.56rem * var(--scale, 1));
+  font-weight: 600;
+  color: var(--tb-muted);
+}
+.tabung__fsub .tabung__dots { margin-left: 0; }
+.tabung__minis {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.94rem;
+}
+.tabung__mini {
+  --nm: 1.67rem;
+  --amt: 3.23rem;
+  --barh: 0.73rem;
+  --pct: 1.77rem;
+  --tgt: 1.25rem;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 1.04rem 1.25rem 1.15rem;
+  border: var(--tb-row-border);
+  border-radius: var(--tb-row-radius);
+  background: var(--tb-row-bg);
+  overflow: hidden;
+}
+.tabung__mini .tabung__fig { text-align: left; }
+.tabung__mini .tabung__prog { gap: 0.83rem; }
+.tabung__mini .tabung__pct { min-width: 0; }
+.tabung__mini .tabung__thanks { text-align: left; }
+.tabung__mini.is-hot { border: 0.16rem solid var(--accent); background: var(--tb-hot-bg); }
+
+/* Summary page (two pages or more): every fund and its figure, then the total of all funds. */
+.tabung__summary { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tabung__sgrid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-content: start;
+  column-gap: 3.33rem;
+  padding-top: 0.31rem;
+}
+.tabung__scol { min-width: 0; margin: 0; padding: 0; list-style: none; }
+.tabung__srow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 1.25rem;
+  padding: 0.73rem 0.21rem 0.68rem;
+  border-bottom: 1px solid var(--tb-hair);
+}
+.tabung__sname {
+  min-width: 0;
+  font-family: var(--tb-nmfont);
+  font-size: calc(1.77rem * var(--f, 1));
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--tb-name);
+}
+.tabung__samt {
+  font-size: calc(2.08rem * var(--f, 1));
+  font-weight: 800;
+  line-height: 1;
+  color: var(--tb-amt);
+  white-space: nowrap;
+}
+.tabung__samt small { margin-right: 0.25em; font-size: 0.55em; color: var(--tb-muted); }
+.tabung__srow .tabung__new { font-size: calc(1.2rem * var(--f, 1)); }
+.tabung__total {
+  --amt: 4.375rem;
+  flex: none;
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
-  padding: 0.9rem 0;
-  border: 0;
-  border-bottom: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 0;
-  background: none;
+  margin-top: 0.94rem;
+  padding: 1.04rem 1.67rem;
+  border: var(--tb-row-border);
+  border-radius: var(--tb-row-radius);
+  background: var(--tb-row-bg);
 }
-.card--tabung-manual .tabung__col:last-child { border-bottom: 0; }
-.card--tabung-manual .tabung__name {
-  flex: 1;
-  min-width: 0;
-  height: auto;
-  display: block;
-  font-size: calc(2.9rem * var(--fit, 1) * var(--scale, 1));
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-}
-.card--tabung-manual .tabung__value {
+.tabung__total > span:first-child {
   flex: none;
-  font-size: calc(4.6rem * var(--fit, 1) * var(--scale, 1));
+  font-size: calc(1.98rem * var(--f, 1));
+  font-weight: 700;
+  color: var(--tb-muted);
+  white-space: nowrap;
 }
+.tabung__total .tabung__fig { flex: 1; }
+.tabung__total .tabung__value { color: var(--accent); }
+
+/* The DuitNow QR panel, fixed on the right (no QR uploaded: the rows take the whole width). */
+.tabung__qr {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.56rem 1.46rem;
+  border-radius: var(--radius-lg);
+  background-image: linear-gradient(180deg, rgb(var(--accent-rgb) / 0.12), rgb(var(--accent-rgb) / 0.04));
+  text-align: center;
+  overflow: hidden;
+}
+.tabung__qrbox {
+  flex: none;
+  display: block;
+  width: 20rem;
+  max-width: 100%;
+  aspect-ratio: 1;
+  padding: 0.94rem;
+  border-radius: 1.15rem;
+  background: #ffffff;
+  box-shadow: 0 0.42rem 1.56rem rgb(0 0 0 / 0.18);
+}
+.tabung__qrbox img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.tabung__qrtitle { margin-top: 1.56rem; font-size: 2.4rem; font-weight: 800; line-height: 1.1; color: var(--tb-qr-h); }
+.tabung__qrname { margin-top: 0.42rem; font-size: 1.56rem; font-weight: 700; line-height: 1.2; color: var(--tb-name); }
+.tabung__qrhint { max-width: 18em; margin-top: 0.73rem; font-size: 1.25rem; font-weight: 500; line-height: 1.3; color: var(--tb-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tabung__row.is-hot::after, .tabung__mini.is-hot::after { display: none; animation: none; }
+  .tabung__rosette { animation: none; }
+}
+

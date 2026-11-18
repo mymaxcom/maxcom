@@ -10,7 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.ts';
 import { openDb } from '../src/db.ts';
-import { runMigrations } from '../src/migrations/index.ts';
+import { MIGRATIONS, runMigrations } from '../src/migrations/index.ts';
 import { applySurauIni, parseSurauIni, SURAU_INI_ACTOR } from '../src/surauIni.ts';
 import { getSettings, putFeature } from '../src/settingsStore.ts';
 import { withHomeScreenName } from '../src/surauLogo.ts';
@@ -51,8 +51,19 @@ function collect(): { logger: { info(m: string): void; warn(m: string): void }; 
 
 describe('migration 005: poster titles', () => {
   const ASSET = 'a'.repeat(64);
+  // 005 runs only on databases older than 019 (surau_id joins meta's key there), so the fixture is a database left
+  // at 004: the pre-019 base tables of db.ts, then 002 to 004.
+  const upTo005 = MIGRATIONS.filter((m) => m.name <= '005-poster-titles');
   function seed(d: string): ReturnType<typeof openDb> {
-    const db = openDb(join(d, 'x.db'));
+    const { DatabaseSync } = req('node:sqlite') as typeof import('node:sqlite');
+    const db = new DatabaseSync(join(d, 'x.db'));
+    db.exec(`
+      CREATE TABLE settings (surau_id TEXT NOT NULL DEFAULT 'sdm', feature TEXT PRIMARY KEY, json TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL);
+      CREATE TABLE change_log (surau_id TEXT NOT NULL DEFAULT 'sdm', id INTEGER PRIMARY KEY, at TEXT NOT NULL, actor TEXT NOT NULL, entity TEXT NOT NULL, entity_id TEXT, before_json TEXT, after_json TEXT);
+      CREATE TABLE meta (surau_id TEXT NOT NULL DEFAULT 'sdm', key TEXT PRIMARY KEY, value TEXT);
+      CREATE TABLE prayer_days (surau_id TEXT NOT NULL DEFAULT 'sdm', zone TEXT NOT NULL, date TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY (zone, date));
+    `);
+    runMigrations(db, upTo005);
     const ins = (id: string, item: Record<string, unknown>, deleted: string | null = null): void => {
       db.prepare(
         "INSERT INTO content_items (kind, id, json, updated_at, updated_by, deleted_at) VALUES ('poster', ?, ?, 't', 'u', ?)",
@@ -75,13 +86,13 @@ describe('migration 005: poster titles', () => {
 
   it('names untitled live posters by position among live posters, skips deleted, and is idempotent', () => {
     const db = seed(tmp());
-    expect(runMigrations(db)).toEqual(['005-poster-titles']);
+    expect(runMigrations(db, upTo005)).toEqual(['005-poster-titles']);
     // live by order: a(10)=1, b(20)=2 keeps its own title, c(30)=3; the deleted one is not renamed
     expect(titles(db)).toEqual({ a: 'Poster 1', b: 'Maulidur Rasul', c: 'Poster 3', gone: undefined });
     const before = JSON.stringify(titles(db));
     const version = db.prepare("SELECT value FROM meta WHERE key = 'version'").get();
     db.prepare("DELETE FROM schema_migrations WHERE name = '005-poster-titles'").run();
-    runMigrations(db);
+    runMigrations(db, upTo005);
     expect(JSON.stringify(titles(db))).toBe(before);
     expect(db.prepare("SELECT value FROM meta WHERE key = 'version'").get()).toEqual(version);
     db.close();
@@ -118,7 +129,7 @@ describe('first-boot surau.ini', () => {
     const log = collect();
     const r = applySurauIni(db, d, log.logger);
     expect(r.refused).toEqual([]);
-    const s = getSettings(db);
+    const s = getSettings(db, 'sdm');
     expect(s.surauInfo).toMatchObject({ name: 'Masjid Al-Falah', kind: 'masjid', shortAddress: 'Taman Seri, Shah Alam', helpPhone: '012-345 6789' });
     expect(s.zone.zone).toBe('SGR01');
     const actors = (db.prepare("SELECT actor FROM change_log WHERE entity = 'settings'").all() as { actor: string }[]).map((x) => x.actor);
@@ -131,11 +142,11 @@ describe('first-boot surau.ini', () => {
     const d = tmp();
     writeFileSync(join(d, 'surau.ini'), INI);
     const db = openDb(join(d, 'b.db'));
-    putFeature(db, 'surauInfo', { name: 'Dipilih Admin' }, 'user:1');
+    putFeature(db, 'surauInfo', { name: 'Dipilih Admin' }, 'user:1', undefined, 'sdm');
     const log = collect();
     const r = applySurauIni(db, d, log.logger);
     expect(r.skipped).toBe('already-saved');
-    expect(getSettings(db).surauInfo.name).toBe('Dipilih Admin');
+    expect(getSettings(db, 'sdm').surauInfo.name).toBe('Dipilih Admin');
     expect(log.infos).toHaveLength(1);
     // never applies on a second start either
     expect(applySurauIni(db, d, collect().logger).skipped).toBe('already-saved');
@@ -152,7 +163,7 @@ describe('first-boot surau.ini', () => {
     expect(r.refused.sort()).toEqual(['helpPhone', 'kind', 'zone']);
     expect(log.warns.some((w) => w.includes('"helpPhone"'))).toBe(true);
     expect(log.warns.some((w) => w.includes('"zone"'))).toBe(true);
-    const s = getSettings(db);
+    const s = getSettings(db, 'sdm');
     expect(s.surauInfo.name).toBe('Surau Baik');
     expect(s.surauInfo.helpPhone).toBe('');
     expect(s.surauInfo.kind).toBe('surau');
@@ -178,7 +189,7 @@ describe('first-boot surau.ini', () => {
     const db = openDb(join(d, 'e.db'));
     const log = collect();
     applySurauIni(db, d, log.logger);
-    const logo = getSettings(db).surauInfo.logo as string;
+    const logo = getSettings(db, 'sdm').surauInfo.logo as string;
     expect(logo).toMatch(/^[0-9a-f]{64}$/);
     expect(db.prepare('SELECT mime, created_by FROM assets WHERE id = ?').get(logo)).toEqual({ mime: 'image/png', created_by: SURAU_INI_ACTOR });
     expect(log.warns).toEqual([]);
@@ -192,8 +203,8 @@ describe('first-boot surau.ini', () => {
     const db = openDb(join(d, 'f.db'));
     const log = collect();
     applySurauIni(db, d, log.logger);
-    expect(getSettings(db).surauInfo.logo).toBe('');
-    expect(getSettings(db).surauInfo.name).toBe('Surau Palsu');
+    expect(getSettings(db, 'sdm').surauInfo.logo).toBe('');
+    expect(getSettings(db, 'sdm').surauInfo.name).toBe('Surau Palsu');
     expect(log.warns.some((w) => w.includes('logo.png'))).toBe(true);
     expect(db.prepare('SELECT COUNT(*) AS n FROM assets').get()).toEqual({ n: 0 });
     db.close();
@@ -204,7 +215,7 @@ describe('first-boot surau.ini', () => {
     const db2 = openDb(join(d2, 'g.db'));
     const log2 = collect();
     applySurauIni(db2, d2, log2.logger);
-    expect(getSettings(db2).surauInfo.logo).toBe('');
+    expect(getSettings(db2, 'sdm').surauInfo.logo).toBe('');
     expect(log2.warns.some((w) => w.includes('logo.png'))).toBe(true);
     db2.close();
 
@@ -213,7 +224,7 @@ describe('first-boot surau.ini', () => {
     writeFileSync(join(d3, 'logo.jpg'), jpg(40, 40));
     const db3 = openDb(join(d3, 'h.db'));
     applySurauIni(db3, d3, collect().logger);
-    expect(getSettings(db3).surauInfo.logo).toMatch(/^[0-9a-f]{64}$/);
+    expect(getSettings(db3, 'sdm').surauInfo.logo).toMatch(/^[0-9a-f]{64}$/);
     db3.close();
   });
 
@@ -397,7 +408,7 @@ describe('GET /surau-logo and the app icons', () => {
     // a PUT that omits shortName keeps it
     expect((await put({ kind: 'masjid' })).statusCode).toBe(200);
     const reread = openDb(join(d, 's.db'));
-    try { expect(getSettings(reread).surauInfo.shortName).toBe('SDM'); } finally { reread.close(); }
+    try { expect(getSettings(reread, 'sdm').surauInfo.shortName).toBe('SDM'); } finally { reread.close(); }
     expect((await manifest()).short_name).toBe('SDM');
 
     // refused

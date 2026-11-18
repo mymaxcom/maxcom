@@ -11,8 +11,9 @@ import { runCloudLink } from '../src/cli/cloudLink.ts';
 import { putFeature } from '../src/settingsStore.ts';
 import { readFeed, snapshot } from '../src/sync/feed.ts';
 import { applyFeedEntry } from '../src/sync/apply.ts';
-import { insertReplicatedEntry, putMonthIn } from '../src/finance/store.ts';
+import { insertReplicatedEntry, listMonths, putMonthIn } from '../src/finance/store.ts';
 import { issueLinkCode } from '../src/sync/sites.ts';
+import { ensureSurau } from './support/surauRow.ts';
 import { loadSyncKey } from '../src/sync/syncKey.ts';
 import { verifySiteEntry } from '../src/sync/verify.ts';
 import { freezeReport, reportFor } from '../src/finance/report.ts';
@@ -53,7 +54,7 @@ async function rig(): Promise<Rig> {
   const treasurer = await loginAs(app, 'treasurer');
   const ajk = await loginAs(app, 'ajk');
   const media = await loginAs(app, 'media');
-  putFeature(app.surau.db, 'finance', { enabled: true }, 'test');
+  putFeature(app.surau.db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
   const funds = (await app.inject({ method: 'GET', url: '/api/finance/funds', headers: treasurer.headers })).json().funds as { id: string }[];
   const per = (await app.inject({ method: 'GET', url: '/api/finance/perihal', headers: treasurer.headers })).json().perihal as { id: string; direction: string; label: string }[];
   return {
@@ -195,7 +196,7 @@ describe('finance feed entries (replication)', () => {
 
   it('a cloud entry with no reference number is numbered by the box; a replay fills only a missing number and changes nothing else', async () => {
     const r = await rig();
-    const ctxBox = { now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
+    const ctxBox = { surauId: 'sdm', now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
     expect(applyFeedEntry(r.app.surau.db, entry(r), ctxBox).status).toBe('applied');
     const row = r.app.surau.db.prepare("SELECT ref_no, amount_sen FROM finance_entries WHERE id = 'x1'").get()!;
     expect(row).toMatchObject({ ref_no: 'K-0001', amount_sen: 50000 });
@@ -215,9 +216,9 @@ describe('finance feed entries (replication)', () => {
     const fundSql = r.app.surau.db.prepare('SELECT * FROM finance_funds').all();
     expect(fundSql.length).toBeGreaterThan(1);
     for (const f of readFeed(r.app.surau.db, 0, 500, { users: true, devices: true, keys: true, finance: true, financeWrite: true }).entries.filter((e) => e.entity === 'finance:fund' || e.entity === 'finance:perihal')) {
-      expect(applyFeedEntry(cloud.surau.db, f, { now: AT, origin: `box:${r.app.surau.boxId}`, actor: f.actor, dataDir: cloudDir, role: 'cloud' }).status).toBe('applied');
+      expect(applyFeedEntry(cloud.surau.db, f, { surauId: 'sdm', now: AT, origin: `box:${r.app.surau.boxId}`, actor: f.actor, dataDir: cloudDir, role: 'cloud' }).status).toBe('applied');
     }
-    const ctx = { now: AT, origin: `box:${r.app.surau.boxId}`, actor: 'user:u1', dataDir: cloudDir, role: 'cloud' as const };
+    const ctx = { surauId: 'sdm', now: AT, origin: `box:${r.app.surau.boxId}`, actor: 'user:u1', dataDir: cloudDir, role: 'cloud' as const };
     expect(applyFeedEntry(cloud.surau.db, entry(r), ctx).status).toBe('applied');
     const before = cloud.surau.db.prepare("SELECT * FROM finance_entries WHERE id = 'x1'").get()!;
     expect(before.ref_no).toBeNull();
@@ -230,7 +231,7 @@ describe('finance feed entries (replication)', () => {
 
   it('a malformed entry (a string amount, an unknown fund) is refused and nothing is written', async () => {
     const r = await rig();
-    const ctx = { now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
+    const ctx = { surauId: 'sdm', now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
     expect(applyFeedEntry(r.app.surau.db, entry(r, { amountSen: '500' }), ctx).status).toBe('refused');
     expect(applyFeedEntry(r.app.surau.db, entry(r, { fundId: 'nope' }), ctx).status).toBe('refused');
     expect(applyFeedEntry(r.app.surau.db, { ...entry(r), after: { ...(entry(r).after as object), id: 'other' } }, ctx).status).toBe('refused');
@@ -239,7 +240,7 @@ describe('finance feed entries (replication)', () => {
 
   it('a replicated month report must have the report shape: a wrong one is refused, a right one is stored and the PDF renders from it', async () => {
     const r = await rig();
-    const ctx = { now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
+    const ctx = { surauId: 'sdm', now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
     expect(applyFeedEntry(r.app.surau.db, entry(r), ctx).status).toBe('applied');
     const month = (report: unknown): FeedEntry => ({
       seq: 2, entity: 'finance:month', entityId: '2026-11', rev: '2026-11-09T02:00:00.000Z|dev1', editedAt: '2026-11-09T02:00:00.000Z',
@@ -247,14 +248,14 @@ describe('finance feed entries (replication)', () => {
       after: { ym: '2026-11', status: 'closed', report },
     });
     const state = () => r.app.surau.db.prepare("SELECT status, report_json FROM finance_months WHERE ym = '2026-11'").get();
-    for (const bad of [{ funds: 'x' }, { ...JSON.parse(freezeReport(r.app.surau.db, '2026-11', AT)), totals: null }, { ...JSON.parse(freezeReport(r.app.surau.db, '2026-11', AT)), ym: '2026-10' }]) {
+    for (const bad of [{ funds: 'x' }, { ...JSON.parse(freezeReport(r.app.surau.db, '2026-11', AT, 'box', 'sdm')), totals: null }, { ...JSON.parse(freezeReport(r.app.surau.db, '2026-11', AT, 'box', 'sdm')), ym: '2026-10' }]) {
       expect(applyFeedEntry(r.app.surau.db, month(bad), ctx).status).toBe('refused');
       expect(state()).toBeUndefined();
     }
-    const good = JSON.parse(freezeReport(r.app.surau.db, '2026-11', AT));
+    const good = JSON.parse(freezeReport(r.app.surau.db, '2026-11', AT, 'box', 'sdm'));
     expect(applyFeedEntry(r.app.surau.db, month(good), ctx).status).toBe('applied');
     expect(state()).toMatchObject({ status: 'closed' });
-    const served = reportFor(r.app.surau.db, '2026-11', AT, 'box');
+    const served = reportFor(r.app.surau.db, '2026-11', AT, 'box', 'sdm');
     expect(served).toEqual(good);
     expect(renderReportPdf(served, { name: 'Surau Test', kind: 'surau' }).subarray(0, 5).toString()).toBe('%PDF-');
   });
@@ -338,7 +339,7 @@ describe('replicated photo bytes', () => {
     const r = await rig();
     const ph = jpeg(40_000);
     const id = createHash('sha256').update(ph).digest('hex');
-    const ctx = { now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
+    const ctx = { surauId: 'sdm', now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
     expect(applyFeedEntry(r.app.surau.db, photoRow(id, ph.length - 1), ctx).status).toBe('applied');
     expect((await put(r, id, ph)).statusCode).toBe(400);
     expect(present(r, id)).toBe(0);
@@ -351,7 +352,7 @@ describe('replicated photo bytes', () => {
     const r = await rig();
     const ph = jpeg(40_000);
     const id = createHash('sha256').update(ph).digest('hex');
-    const ctx = { now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
+    const ctx = { surauId: 'sdm', now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
     expect(applyFeedEntry(r.app.surau.db, photoRow(id, ph.length), ctx).status).toBe('applied');
     const old = process.env.SURAU_FINANCE_PHOTOS_MAX_MB;
     process.env.SURAU_FINANCE_PHOTOS_MAX_MB = '0.01';
@@ -377,7 +378,7 @@ describe('finance by sync follows the finance controls', () => {
     const snap = async (l: Login) => (await r.app.inject({ method: 'GET', url: '/api/sync/snapshot', headers: l.headers })).json();
     expect(financeIn((await feed(r.treasurer)).entries)).toBeGreaterThan(0);
     expect((await snap(r.treasurer)).finance.entries).toHaveLength(1);
-    putFeature(r.app.surau.db, 'finance', { enabled: false }, 'test');
+    putFeature(r.app.surau.db, 'finance', { enabled: false }, 'test', undefined, 'sdm');
     expect(financeIn((await feed(r.treasurer)).entries)).toBe(0);
     expect('finance' in (await snap(r.treasurer))).toBe(false);
     const sup = await loginAs(r.app, ['superadmin', 'treasurer']);
@@ -422,7 +423,7 @@ describe('box and cloud end to end', () => {
     clouds.push(cloud);
     const worker = new FakeWorker(cloud.fetch);
     hook.fetch = worker.fetch;
-    const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau D\'Waqaf' });
+    const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau D\'Waqaf', target: { surauId: ensureSurau(cloud.app.surau.db) } });
     const lines: string[] = [];
     await runCloudLink(['--data', boxDir, '--db', join(boxDir, 'box.db'), 'link', CLOUD_URL, code], { out: (l) => lines.push(l), err: (l) => lines.push(l) }, worker.fetch);
     worker.setSecret(boxId, loadSyncKey(boxDir)!.wakeSecret);
@@ -432,7 +433,7 @@ describe('box and cloud end to end', () => {
   it('the box pushes two entries and a photo; the cloud holds them, the bytes came by their own route, and the box learns the cloud receipt time', async () => {
     const p = await pair();
     const treasurer = await loginAs(p.box, 'treasurer');
-    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test');
+    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
     const funds = (await p.box.inject({ method: 'GET', url: '/api/finance/funds', headers: treasurer.headers })).json().funds as { id: string }[];
     const perIn = ((await p.box.inject({ method: 'GET', url: '/api/finance/perihal', headers: treasurer.headers })).json().perihal as { id: string; direction: string }[]).find((x) => x.direction === 'in')!.id;
     const today = klDateOf(new Date());
@@ -462,7 +463,7 @@ describe('box and cloud end to end', () => {
   it('a phone entry made on the cloud has no number there; the box numbers it and the cloud learns the number', async () => {
     const p = await pair();
     const treasurer = await loginAs(p.box, 'treasurer');
-    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test');
+    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
     const funds = (await p.box.inject({ method: 'GET', url: '/api/finance/funds', headers: treasurer.headers })).json().funds as { id: string }[];
     const perIn = ((await p.box.inject({ method: 'GET', url: '/api/finance/perihal', headers: treasurer.headers })).json().perihal as { id: string; direction: string }[]).find((x) => x.direction === 'in')!.id;
     await p.run(); // lookups reach the cloud first
@@ -483,12 +484,12 @@ describe('box and cloud end to end', () => {
   it('a snapshot applies originals before corrections, even when the correction was edited earlier', async () => {
     const p = await pair();
     const treasurer = await loginAs(p.box, 'treasurer');
-    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test');
+    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
     const funds = (await p.box.inject({ method: 'GET', url: '/api/finance/funds', headers: treasurer.headers })).json().funds as { id: string }[];
     const perIn = ((await p.box.inject({ method: 'GET', url: '/api/finance/perihal', headers: treasurer.headers })).json().perihal as { id: string; direction: string }[]).find((x) => x.direction === 'in')!.id;
     await p.run(); // lookups reach the cloud
     const cdb = p.cloud.app.surau.db;
-    const cloudCtx = { now: new Date(), role: 'cloud' as const };
+    const cloudCtx = { surauId: 'sdm', now: new Date(), role: 'cloud' as const };
     const meta = (editedAt: string) => ({ editedAt, origin: 'local' });
     insertReplicatedEntry(cdb, {
       kind: 'in', entryDate: '2026-11-05', fundId: funds[0]!.id, perihalId: perIn, amountSen: 10000, method: 'bank', reference: 'FPX1',
@@ -505,14 +506,14 @@ describe('box and cloud end to end', () => {
   it('an entry the box numbers after a snapshot is pushed back so the cloud learns its number', async () => {
     const p = await pair();
     const treasurer = await loginAs(p.box, 'treasurer');
-    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test');
+    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
     const funds = (await p.box.inject({ method: 'GET', url: '/api/finance/funds', headers: treasurer.headers })).json().funds as { id: string }[];
     const perIn = ((await p.box.inject({ method: 'GET', url: '/api/finance/perihal', headers: treasurer.headers })).json().perihal as { id: string; direction: string }[]).find((x) => x.direction === 'in')!.id;
     await p.run();
     const cdb = p.cloud.app.surau.db;
     insertReplicatedEntry(cdb, {
       kind: 'in', entryDate: '2026-11-05', fundId: funds[0]!.id, perihalId: perIn, amountSen: 10000, method: 'bank', reference: 'FPX1',
-    }, 'ph1', 'user:u1', { now: new Date(), role: 'cloud' }, { editedAt: '2026-11-05T09:00:00.000Z', origin: 'local' });
+    }, 'ph1', 'user:u1', { surauId: 'sdm', now: new Date(), role: 'cloud' }, { editedAt: '2026-11-05T09:00:00.000Z', origin: 'local' });
     expect(cdb.prepare("SELECT ref_no FROM finance_entries WHERE id = 'ph1'").get()!.ref_no).toBeNull();
     cdb.prepare("INSERT INTO sync_state (key, value) VALUES ('log_floor', '100000')").run();
     await p.run();
@@ -524,23 +525,69 @@ describe('box and cloud end to end', () => {
 
   it('a snapshot month row carries its real edit time: a stale open row cannot reopen a month the box closed later', async () => {
     const p = await pair();
-    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test');
+    putFeature(p.box.surau.db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
     await p.run();
     const freeze = () => '{}';
     const at = new Date('2026-11-10T02:00:00.000Z');
     // the cloud closed October on 1 Nov and reopened it on 2 Nov; the box closed it again on 5 Nov
-    putMonthIn(p.cloud.app.surau.db, '2026-10', { status: 'closed' }, 'test', { now: at, role: 'cloud', freeze }, { editedAt: '2026-11-01T02:00:00.000Z', trusted: true });
-    putMonthIn(p.cloud.app.surau.db, '2026-10', { status: 'open' }, 'test', { now: at, role: 'cloud' }, { editedAt: '2026-11-02T02:00:00.000Z', trusted: true });
-    putMonthIn(p.box.surau.db, '2026-10', { status: 'closed' }, 'test', { now: at, role: 'box', freeze }, { editedAt: '2026-11-05T02:00:00.000Z', trusted: true });
+    putMonthIn(p.cloud.app.surau.db, '2026-10', { status: 'closed' }, 'test', { surauId: 'sdm', now: at, role: 'cloud', freeze }, { editedAt: '2026-11-01T02:00:00.000Z', trusted: true });
+    putMonthIn(p.cloud.app.surau.db, '2026-10', { status: 'open' }, 'test', { surauId: 'sdm', now: at, role: 'cloud' }, { editedAt: '2026-11-02T02:00:00.000Z', trusted: true });
+    putMonthIn(p.box.surau.db, '2026-10', { status: 'closed' }, 'test', { surauId: 'sdm', now: at, role: 'box', freeze }, { editedAt: '2026-11-05T02:00:00.000Z', trusted: true });
     p.cloud.app.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('log_floor', '100000')").run();
     await p.run();
     expect(p.box.surau.db.prepare("SELECT status FROM finance_months WHERE ym = '2026-10'").get()!.status).toBe('closed');
     // and a genuinely newer open on the cloud still reopens it
-    putMonthIn(p.cloud.app.surau.db, '2026-10', { status: 'closed' }, 'test', { now: at, role: 'cloud', freeze }, { editedAt: '2026-11-06T02:00:00.000Z', trusted: true });
-    putMonthIn(p.cloud.app.surau.db, '2026-10', { status: 'open' }, 'test', { now: at, role: 'cloud' }, { editedAt: '2026-11-07T02:00:00.000Z', trusted: true });
+    putMonthIn(p.cloud.app.surau.db, '2026-10', { status: 'closed' }, 'test', { surauId: 'sdm', now: at, role: 'cloud', freeze }, { editedAt: '2026-11-06T02:00:00.000Z', trusted: true });
+    putMonthIn(p.cloud.app.surau.db, '2026-10', { status: 'open' }, 'test', { surauId: 'sdm', now: at, role: 'cloud' }, { editedAt: '2026-11-07T02:00:00.000Z', trusted: true });
     p.cloud.app.surau.db.prepare("UPDATE sync_state SET value = '200000' WHERE key = 'log_floor'").run();
     await p.run();
     expect(p.box.surau.db.prepare("SELECT status FROM finance_months WHERE ym = '2026-10'").get()!.status).toBe('open');
+  });
+
+  it('[F2] an entry replicated into a month closed here is stored and flagged; the frozen totals stay', async () => {
+    const r = await rig();
+    const db = r.app.surau.db;
+    const early = new Date(AT.getTime() - 3600_000);
+    const freeze = (ym: string) => freezeReport(db, ym, early, 'box', 'sdm');
+    putMonthIn(db, '2026-10', { status: 'closed' }, 'test', { surauId: 'sdm', now: early, role: 'box', freeze }, { trusted: true });
+    const frozenBefore = JSON.parse(String(db.prepare("SELECT report_json FROM finance_months WHERE ym = '2026-10'").get()!.report_json)) as { totals: unknown };
+    insertReplicatedEntry(db, {
+      kind: 'in', entryDate: '2026-10-20', fundId: r.fundA, perihalId: r.perIn, amountSen: 7000, method: 'bank', reference: 'FPX1',
+    }, 'late1', 'user:u1', { surauId: 'sdm', now: AT, role: 'box' }, { editedAt: '2026-10-20T04:00:00.000Z', origin: 'cloud' });
+    expect(db.prepare("SELECT amount_sen FROM finance_entries WHERE id = 'late1'").get()!.amount_sen).toBe(7000);
+    const logged = db.prepare("SELECT after_json FROM change_log WHERE entity = 'finance:month' AND entity_id = '2026-10' ORDER BY id DESC LIMIT 1").get()!;
+    expect(JSON.parse(String(logged.after_json))).toMatchObject({ lateEntry: { id: 'late1', amountSen: 7000 } });
+    expect(listMonths(db, 'sdm').find((m) => m.ym === '2026-10')!.lateEntries).toEqual(['late1']);
+    const rep = reportFor(db, '2026-10', AT, 'box', 'sdm');
+    expect(rep.totals).toEqual(frozenBefore.totals);
+    expect(rep.lateEntries).toEqual(['late1']);
+    // the frozen text itself is untouched
+    expect(JSON.parse(String(db.prepare("SELECT report_json FROM finance_months WHERE ym = '2026-10'").get()!.report_json))).toEqual(frozenBefore);
+  });
+
+  it('[F2] the cloud never freezes a report, and a late entry there is still flagged', async () => {
+    const r = await rig();
+    const cdb = r.app.surau.db;
+    const early = new Date(AT.getTime() - 3600_000);
+    putMonthIn(cdb, '2026-10', { status: 'closed' }, 'test', { surauId: 'sdm', now: early, role: 'cloud' }, { trusted: true });
+    insertReplicatedEntry(cdb, {
+      kind: 'in', entryDate: '2026-10-21', fundId: r.fundA, perihalId: r.perIn, amountSen: 100, method: 'bank', reference: 'FPX2',
+    }, 'late2', 'user:u1', { surauId: 'sdm', now: AT, role: 'cloud' }, { editedAt: '2026-10-21T04:00:00.000Z', origin: 'local' });
+    expect(cdb.prepare("SELECT report_json FROM finance_months WHERE ym = '2026-10'").get()!.report_json).toBeNull();
+    expect(listMonths(cdb, 'sdm').find((m) => m.ym === '2026-10')!.lateEntries).toEqual(['late2']);
+  });
+
+  it('[F2] a month row that only reports a late entry never closes or reopens the month on the other side', async () => {
+    const r = await rig();
+    const db = r.app.surau.db;
+    const e: FeedEntry = {
+      seq: 1, entity: 'finance:month', entityId: '2026-10', rev: '2026-11-09T01:00:00.000Z|dev1', editedAt: '2026-11-09T01:00:00.000Z',
+      syncedAt: '2026-11-09T01:00:01.000Z', actor: 'user:u1', deviceId: 'dev1', origin: 'app', opId: null,
+      after: { ym: '2026-10', lateEntry: { id: 'x', amountSen: 1 } },
+    };
+    const ctxBox = { surauId: 'sdm', now: AT, origin: 'cloud', actor: 'user:u1', dataDir: r.dir, role: 'box' as const };
+    expect(applyFeedEntry(db, e, ctxBox).status).toBe('duplicate');
+    expect(db.prepare("SELECT status FROM finance_months WHERE ym = '2026-10'").get()).toBeUndefined();
   });
 
   it('a site token cannot read the finance routes on a server it is linked to', async () => {

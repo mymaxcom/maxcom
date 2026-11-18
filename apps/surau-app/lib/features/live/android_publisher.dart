@@ -15,6 +15,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../shell/live_camera_gateway.dart' show LiveAudioMix;
 import 'publisher.dart';
 
 /// A refusal from the native plugin; [code] is a reason code, never a URL.
@@ -34,7 +35,7 @@ class _MetricsWatcher with WidgetsBindingObserver {
   void didChangeMetrics() => onTurn();
 }
 
-class AndroidPublisher implements LivePublisher {
+class AndroidPublisher implements LivePublisher, LiveSourceControl {
   AndroidPublisher({
     this.segmentMinutes = 15,
     this.videoBitrateKbps = 2500,
@@ -92,7 +93,17 @@ class AndroidPublisher implements LivePublisher {
   Future<void> prepare(PublisherConfig c) async {
     _recordingOn = c.recording;
     final portrait = c.portrait ?? _portraitProvider();
-    _emit(_state.copyWith(phase: PublisherPhase.preparing, portrait: portrait));
+    if (c.video == VideoSourceKind.external && c.camera == null) {
+      _emit(_state.copyWith(phase: PublisherPhase.error));
+      return;
+    }
+    _emit(
+      _state.copyWith(
+        phase: PublisherPhase.preparing,
+        portrait: portrait,
+        clearEndReason: true,
+      ),
+    );
     try {
       final r = await methodChannel.invokeMethod<Map<Object?, Object?>>(
         'prepare',
@@ -104,6 +115,7 @@ class AndroidPublisher implements LivePublisher {
           'height': 720,
           'fps': 30,
           'portrait': portrait,
+          ..._sourceArgs(c.video, c.camera, c.mix, c.avOffsetMs),
         },
       );
       if (r != null && r['ok'] == false) {
@@ -115,10 +127,89 @@ class AndroidPublisher implements LivePublisher {
           phase: PublisherPhase.ready,
           frontCamera: c.frontCamera,
           recording: RecordingState(on: c.recording),
+          video: c.video,
+          clearExternal: c.video == VideoSourceKind.phone,
         ),
       );
     } on PlatformException {
       _emit(_state.copyWith(phase: PublisherPhase.error));
+    }
+  }
+
+  // ---- the external camera and the audio mix (K2) ----
+
+  /// The channel arguments of a source: `source` = `{kind, url, transport}`,
+  /// `mix` and `avOffsetMs`. The address (it may hold the login) is sent for
+  /// the external camera only, here and nowhere else; it is not kept.
+  static Map<String, Object?> _sourceArgs(
+    VideoSourceKind kind,
+    ExternalCameraSource? camera,
+    LiveAudioMix? mix,
+    int avOffsetMs,
+  ) => {
+    'source': {
+      'kind': kind.name,
+      if (kind == VideoSourceKind.external && camera != null) ...{
+        'url': camera.url,
+        'transport': camera.transport,
+      },
+    },
+    'mix': mix?.toJson(),
+    'avOffsetMs': avOffsetMs,
+  };
+
+  @override
+  Future<void> setVideoSource(
+    VideoSourceKind kind, {
+    ExternalCameraSource? camera,
+    LiveAudioMix? mix,
+    int avOffsetMs = 0,
+  }) async {
+    if (kind == VideoSourceKind.external && camera == null) {
+      throw const PublisherException('camera_source_missing');
+    }
+    try {
+      await methodChannel.invokeMethod<void>(
+        'setSource',
+        _sourceArgs(kind, camera, mix, avOffsetMs),
+      );
+    } on PlatformException catch (e) {
+      throw PublisherException(_code(e.code) ?? 'error');
+    }
+    _emit(
+      _state.copyWith(
+        video: kind,
+        clearExternal: kind == VideoSourceKind.phone,
+      ),
+    );
+  }
+
+  @override
+  Future<void> setAudioMix(LiveAudioMix mix) => _call('setMix', {
+    'source': {'kind': _state.video.name},
+    'mix': mix.toJson(),
+  });
+
+  @override
+  Future<void> setAvOffset(int ms) => _call('setAvOffset', ms);
+
+  @override
+  Future<void> clapCapture() => _call('clapCapture');
+
+  @override
+  Future<void> clapReplay(int offsetMs) => _call('clapReplay', offsetMs);
+
+  @override
+  Future<void> clapOffset(int offsetMs) => _call('clapOffset', offsetMs);
+
+  @override
+  Future<void> clapStop() => _call('clapStop');
+
+  Future<void> _call(String method, [Object? args]) async {
+    try {
+      await methodChannel.invokeMethod<void>(method, args);
+    } on PlatformException catch (e) {
+      throw PublisherException(_code(e.code) ?? 'error');
     }
   }
 
@@ -197,6 +288,9 @@ class AndroidPublisher implements LivePublisher {
       _emit(_state.copyWith(phase: PublisherPhase.error));
     }
   }
+
+  @override
+  String? get recordingSessionId => null;
 
   @override
   Future<List<String>> sessionRecordings() async {
@@ -366,7 +460,81 @@ class AndroidPublisher implements LivePublisher {
           next.add(w);
         }
         _emit(_state.copyWith(warnings: next));
+      case 'audio':
+        _onAudio(e);
+      case 'ended':
+        final reason = _code(e['reason']);
+        if (reason != null) _emit(_state.copyWith(endReason: reason));
+      case 'clap':
+        final c = _byName(ClapPhase.values, e['state']);
+        if (c != null) _emit(_state.copyWith(clap: c));
     }
+  }
+
+  /// The phone's own mix: a row per source with its meter and alignment, the
+  /// mixed level and the camera link. Anything unexpected is dropped.
+  void _onAudio(Map<dynamic, dynamic> e) {
+    final rows = <AudioRow>[];
+    final src = e['sources'];
+    if (src is List) {
+      for (final r in src) {
+        if (r is! Map || r['id'] is! String) continue;
+        final align = r['align'];
+        rows.add(
+          AudioRow(
+            id: r['id'] as String,
+            enabled: r['enabled'] == true,
+            volume: _int(r['volume']),
+            level: _level(r['level']),
+            state: _stateWord(r['state']),
+            alignState: align is Map ? _alignWord(align['state']) : null,
+            delayMs: align is Map && align['delayMs'] is num
+                ? (align['delayMs'] as num).toInt()
+                : null,
+            residualMs: align is Map && align['residualMs'] is num
+                ? (align['residualMs'] as num).toDouble()
+                : null,
+          ),
+        );
+      }
+    }
+    final cam = e['camera'];
+    _emit(
+      _state.copyWith(
+        audio: PublisherAudio(
+          rows: rows,
+          mixed: _level(e['mixed']),
+          micFailed: e['micFailed'] == true,
+        ),
+        camera: cam is Map
+            ? CameraStatus(
+                link:
+                    _byName(CameraLink.values, cam['link']) ?? CameraLink.idle,
+                hasAudio: cam['hasAudio'] is bool
+                    ? cam['hasAudio'] as bool
+                    : null,
+                lostSec: _int(cam['lostSec']),
+                transport:
+                    cam['transport'] == 'tcp' || cam['transport'] == 'udp'
+                    ? cam['transport'] as String
+                    : null,
+                width: _int(cam['width']),
+                height: _int(cam['height']),
+              )
+            : null,
+      ),
+    );
+  }
+
+  static double _level(Object? v) =>
+      v is num ? v.toDouble().clamp(0.0, 1.0) : 0.0;
+
+  static String _stateWord(Object? v) =>
+      v == 'lost' || v == 'silent' ? v as String : 'ok';
+
+  static String? _alignWord(Object? v) {
+    const words = {'searching', 'locked', 'holding', 'failed', 'manual'};
+    return v is String && words.contains(v) ? v : null;
   }
 
   static int _int(Object? v) => v is num ? v.toInt() : 0;

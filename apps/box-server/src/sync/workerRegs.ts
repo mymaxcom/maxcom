@@ -9,7 +9,15 @@ export interface Registration {
   boxId: string;
   name: string;
   claimHash: string;
+  /** First registration. */
   at: string;
+  /** Last registration (the Worker refreshes it on every one); absent from a Worker that predates it. */
+  seenAt?: string;
+  /** The box's own name, as the box sent it (absent from boxes that do not send it). */
+  boxName?: string;
+  platform?: 'android' | 'windows' | 'linux';
+  /** The MAX Kiosk Server version, YYYY.MM.N. */
+  version?: string;
 }
 
 const CALL_TIMEOUT_MS = 15_000;
@@ -49,6 +57,11 @@ async function jsonOf(res: Response): Promise<unknown> {
   }
 }
 
+/** Text shown to an operator: no control (Cc) or format (Cf) characters (bidi overrides, zero-width), at most `max`. */
+function text(v: unknown, max: number): string {
+  return typeof v === 'string' ? v.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, max).replace(/[\uD800-\uDBFF]$/, '') : '';
+}
+
 function clean(boxId: unknown, v: unknown): Registration | null {
   if (typeof v !== 'object' || v === null) return null;
   const o = v as Record<string, unknown>;
@@ -56,9 +69,14 @@ function clean(boxId: unknown, v: unknown): Registration | null {
   return {
     boxId,
     // shown to an operator: no control (Cc) or format (Cf) characters (bidi overrides, zero-width), whatever the Worker holds
-    name: typeof o.name === 'string' ? o.name.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, 80).replace(/[\uD800-\uDBFF]$/, '') : '',
+    name: text(o.name, 80),
     claimHash: o.claimHash,
     at: typeof o.at === 'string' ? o.at.slice(0, 40) : '',
+    ...(typeof o.seenAt === 'string' && o.seenAt !== '' ? { seenAt: o.seenAt.slice(0, 40) } : {}),
+    // optional, whatever the Worker holds: each is checked again here and left out when empty or not valid
+    ...(text(o.boxName, 60) !== '' ? { boxName: text(o.boxName, 60) } : {}),
+    ...(o.platform === 'android' || o.platform === 'windows' || o.platform === 'linux' ? { platform: o.platform } : {}),
+    ...(typeof o.version === 'string' && /^\d{4}\.\d{2}\.\d{1,3}$/.test(o.version) ? { version: o.version } : {}),
   };
 }
 
@@ -97,4 +115,22 @@ export async function deleteRegistration(config: WorkerAdminConfig, boxId: strin
   const res = await adminCall(config, 'DELETE', `/_admin/reg/${boxId}`);
   await res.arrayBuffer().catch(() => undefined);
   if (res.status !== 204 && res.status !== 200 && res.status !== 404) throw new RegError(`http_${res.status}`);
+}
+
+/** A registration older than this (by the time it carries) is stale: not listed as pending (it still expires at the Worker). */
+export const PENDING_FRESH_MS = 24 * 3_600_000;
+/** A box that registered less than this ago and is not held by the cap is simply about to link by itself. */
+export const PENDING_GRACE_MS = 10 * 60_000;
+
+/** Milliseconds since the first registration (`at`); NaN when it carries no readable time. */
+export function registrationAgeMs(r: Pick<Registration, 'at'>, now: Date): number {
+  const at = Date.parse(r.at);
+  return Number.isFinite(at) ? now.getTime() - at : Number.NaN;
+}
+
+/** True when the box last registered over a day ago (by `seenAt`, else `at` for an older Worker), or carries no time. */
+export function isStaleRegistration(r: Pick<Registration, 'at' | 'seenAt'>, now: Date): boolean {
+  const seen = Date.parse(r.seenAt ?? r.at);
+  const age = Number.isFinite(seen) ? now.getTime() - seen : Number.NaN;
+  return !(age <= PENDING_FRESH_MS);
 }

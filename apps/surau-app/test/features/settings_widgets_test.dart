@@ -12,6 +12,7 @@ import 'package:surau_app/features/settings_widgets/field_meta.dart';
 import '../features/fakes.dart';
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
+import 'package:surau_app/ops/ops_build.dart';
 
 Finder k(String key) => find.byKey(ValueKey(key));
 
@@ -72,7 +73,7 @@ void main() {
     await settle(tester);
     expect(find.text('3000 kbps'), findsOneWidget);
     expect(await saved(tester, h, 'liveYoutube'), {'maxBitrateKbps': 3000});
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets('chips: cacheMaxMb is four choices; a stored value outside them is still shown', (tester) async {
     final h = await open(tester, 'tilawah', roles: const ['superadmin']);
@@ -87,7 +88,7 @@ void main() {
     await open(tester, 'tilawah', roles: const ['superadmin'], stored: {'cacheMaxMb': 250});
     await reveal(tester, k('setting-cacheMaxMb-250'));
     expect(tester.widget<ChoiceChip>(k('setting-cacheMaxMb-250')).selected, isTrue);
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets('surah search finds 18. Al-Kahf; the range clamps to the surah and to five verses', (tester) async {
     final h = await open(tester, 'ayatCard');
@@ -231,6 +232,40 @@ void main() {
     expect(await saved(tester, h, 'solatScreen'), {'message': 'Sila tutup telefon bimbit anda'});
   });
 
+  testWidgets('[K17] preset text: an English TV gets the English sentences (presetsEn)', (tester) async {
+    final h = await pumpShell(tester, roles: const ['admin']);
+    h.settings['language'] = {'enabled': true, 'lang': 'en'};
+    h.container.invalidate(settingsProvider);
+    await settle(tester);
+    h.router.go('/settings/solatScreen');
+    await settle(tester);
+    await reveal(tester, k('preset-3'));
+    expect(find.text('Please switch off your phones'), findsOneWidget);
+    expect(find.text('Sila tutup telefon bimbit anda'), findsNothing);
+  });
+
+  testWidgets('[K17] a feature that needs another says so and cannot be switched on first (featureRequires)', (tester) async {
+    final h = await pumpShell(tester, roles: const ['admin'], features: const {'liveOnKiosk': false, 'liveYoutube': false});
+    h.router.go('/settings/liveYoutube');
+    await settle(tester);
+    expect(k('feature-requires'), findsOneWidget);
+    expect(tester.widget<Switch>(find.descendant(of: k('feature-switch'), matching: find.byType(Switch))).onChanged, isNull);
+  });
+
+  testWidgets('[K17] settings nothing reads are absent from the forms', (tester) async {
+    for (final (feature, field) in const [
+      ('pengumuman', 'daysAhead'),
+      ('programKhas', 'daysAhead'),
+      ('autoTone', 'override'),
+      ('system', 'suspendedAt'),
+    ]) {
+      final h = await open(tester, feature, roles: const ['superadmin']);
+      expect(k('setting-$field'), findsNothing, reason: '$feature.$field');
+      h.router.go('/settings');
+      await settle(tester);
+    }
+  });
+
   testWidgets('Hijri month is picked by name', (tester) async {
     final h = await open(tester, 'tarawih');
     expect(find.text('Ramadan'), findsOneWidget);
@@ -241,11 +276,17 @@ void main() {
     expect(await saved(tester, h, 'tarawih'), {'hijriMonth': 2});
   });
 
-  testWidgets('Lanjutan card: absent without system:read, there for a superadmin, dimmed on Telefon terus', (tester) async {
+  testWidgets('Lanjutan card: absent without system:read, and in the public build even for a superadmin', (tester) async {
     await open(tester, 'liveYoutube');
     expect(k('lanjutan-card'), findsNothing);
     expect(find.text('Video ke YouTube'), findsNothing, reason: 'hidden, not read-only');
     expect(find.text('Kadar bit maksimum (kbps)'), findsNothing);
+    if (!kOpsBuild) {
+      await open(tester, 'liveYoutube', roles: const ['admin', 'superadmin']);
+      expect(k('lanjutan-card'), findsNothing);
+      expect(find.text('Video ke YouTube'), findsNothing);
+      return;
+    }
 
     await open(tester, 'liveYoutube', roles: const ['admin', 'superadmin']);
     await reveal(tester, k('lanjutan-card'));
@@ -338,7 +379,7 @@ void main() {
     final sent = jsonDecode(h.box.byPath('/api/settings/test-source')!.body) as Map<String, dynamic>;
     expect(sent['kind'], 'source');
     expect(sent['url'], startsWith('https://www.e-solat'));
-  });
+  }, skip: !kOpsBuild);
 
   group('goldens', () {
     const superadmin = ['admin', 'superadmin'];
@@ -355,7 +396,7 @@ void main() {
       testWidgets(name, (tester) async {
         final h = await open(tester, feature, roles: roles);
         await expectGoldens(tester, h.app, name);
-      });
+      }, skip: !kOpsBuild && roles.contains('superadmin')); // the Lanjutan goldens are ops-build pictures
     }
   });
 

@@ -16,7 +16,10 @@ import { migration as prayerSources015 } from './015-prayer-sources.ts';
 import { migration as finance016 } from './016-finance.ts';
 import { migration as siteApprovals017 } from './017-site-approvals.ts';
 import { migration as userFeedRepair018 } from './018-user-feed-repair.ts';
-import { migration as siteThemeSupport019 } from './019-site-theme-support.ts';
+import { migration as multiSurau019 } from './019-multi-surau.ts';
+import { migration as siteThemeSupport020 } from './020-site-theme-support.ts';
+import { migration as cameraSecret021 } from './021-camera-secret.ts';
+import { migration as peopleRelook022 } from './022-people-relook.ts';
 
 export interface Migration {
   name: string;
@@ -24,7 +27,7 @@ export interface Migration {
 }
 
 /** Add new migrations here. They are applied in name order, each recorded by name. */
-export const MIGRATIONS: readonly Migration[] = [content002, auth003, kioskCookies004, posterTitles005, assetDerivatives006, derivativeFailures007, sync008, workerOutbox009, gateFixes010, uploadReplace011, youtubePendingComplete012, boxCodes013, hadisSources014, prayerSources015, finance016, siteApprovals017, userFeedRepair018, siteThemeSupport019];
+export const MIGRATIONS: readonly Migration[] = [content002, auth003, kioskCookies004, posterTitles005, assetDerivatives006, derivativeFailures007, sync008, workerOutbox009, gateFixes010, uploadReplace011, youtubePendingComplete012, boxCodes013, hadisSources014, prayerSources015, finance016, siteApprovals017, userFeedRepair018, multiSurau019, siteThemeSupport020, cameraSecret021, peopleRelook022];
 
 /**
  * Apply every migration whose name is not yet recorded, in name order, each in its own

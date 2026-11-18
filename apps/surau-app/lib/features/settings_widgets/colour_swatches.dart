@@ -103,8 +103,8 @@ class _ColourSwatchesState extends State<ColourSwatches> {
                 selected: isAuto,
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                    begin: AlignmentDirectional.topStart,
+                    end: AlignmentDirectional.bottomEnd,
                     colors: [Colors.white, Colors.white, Color(0xFF10211E), Color(0xFF10211E)],
                     stops: [0, 0.5, 0.5, 1],
                   ),
@@ -248,8 +248,8 @@ class _TvPreview extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
           colors: [Color(0xFF3B5D58), Color(0xFF9BB7A4), Color(0xFFE9E2C7)],
           stops: [0, 0.55, 1],
         ),
@@ -274,7 +274,7 @@ class _TvPreview extends StatelessWidget {
           const SizedBox(width: 16),
           Expanded(
             child: Text(
-              'Kuliah Maghrib, Ustaz Haji Ahmad Fauzi',
+              'Kuliah Maghrib, Ustaz Haji Ahmad Fauzi', // lang-ok: a sample kuliah title, the way the TV shows real data
               maxLines: 2,
               style: text.bodySmall!.copyWith(color: colour, fontWeight: FontWeight.w600),
             ),

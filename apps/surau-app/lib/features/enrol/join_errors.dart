@@ -16,6 +16,7 @@ import 'enrol_flow.dart';
 enum JoinErrorKind {
   expired,
   used,
+  unknown,
   otherSurau,
   unreachable,
   mismatch,
@@ -30,7 +31,13 @@ enum JoinErrorKind {
 /// The kind of failure, or null when the error is not one of these (the caller shows its own text).
 JoinErrorKind? classifyJoinError(Object error) => switch (error) {
   EnrolExpired() || BoxQrExpired() => JoinErrorKind.expired,
-  BoxError(status: 401, code: 'bad_enrol_code') => JoinErrorKind.used,
+  // The box tells the three apart (`enrol_code_*`); only a USED code says
+  // "if it was not you, tell the Pentadbir". An older box sends one code for
+  // all three, which says nothing about use: shown as an unknown code.
+  BoxError(code: 'enrol_code_used') => JoinErrorKind.used,
+  BoxError(code: 'enrol_code_expired') => JoinErrorKind.expired,
+  BoxError(code: 'enrol_code_unknown') ||
+  BoxError(code: 'bad_enrol_code') => JoinErrorKind.unknown,
   SetupCodeInvalid() => JoinErrorKind.badRecoveryCode,
   EnrolAlreadyEnrolled() => JoinErrorKind.otherSurau,
   BoxUnreachable() || TrustError() => JoinErrorKind.unreachable,
@@ -94,9 +101,10 @@ class JoinErrorView extends StatelessWidget {
     final (String title, String body) = switch (kind) {
       JoinErrorKind.expired => (
         s.errCodeExpired,
-        s.errCodeExpiredBody(expiredAt == null ? '' : _hhmm(expiredAt!)),
+        expiredAt == null ? s.enrolExpired : s.errCodeExpiredBody(_hhmm(expiredAt!)),
       ),
       JoinErrorKind.used => (s.errCodeUsed, s.errCodeUsedBody),
+      JoinErrorKind.unknown => (s.ra5CodeUnknown, s.ra5CodeUnknownBody),
       JoinErrorKind.otherSurau => (s.errOtherSurau, s.errOtherSurauBody(currentSurau ?? s.productName)),
       JoinErrorKind.unreachable => (s.errUnreachableTitle, s.errUnreachableBody),
       JoinErrorKind.mismatch => (s.setupMismatch, ''),

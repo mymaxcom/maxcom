@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { LOCAL_SURAU_ID } from '../src/tenant.ts';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -55,7 +56,7 @@ describe('theme store', () => {
     expect(s.stagedId).toMatch(/^[0-9a-f]{32}$/);
     const p = await store.install(s.stagedId!, 'u1');
     expect(p.name).toBe('hijau-siti');
-    expect(getSettings(db).themeStyle.packs['hijau-siti']).toMatchObject({ version: 3, base: 'creative', contract: 1, assetId: sha(z), fonts: [], screens: ['poster'], images: { kuliah: 'jpg' } });
+    expect(getSettings(db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toMatchObject({ version: 3, base: 'creative', contract: 1, assetId: sha(z), fonts: [], screens: ['poster'], images: { kuliah: 'jpg' } });
     const folder = join(dir, 'themes', 'hijau-siti', hashOf(sha(z)));
     expect(existsSync(join(folder, 'bundle.css'))).toBe(true);
     expect(readdirSync(folder).sort()).toEqual(['bundle.css', 'images']);
@@ -137,11 +138,11 @@ describe('theme store', () => {
     const v3 = pack({ version: 3 });
     const v4 = pack({ version: 4 });
     await store.install((await store.stage(v3)).stagedId!, 'u1');
-    putFeature(db, 'themeStyle', { styles: { 'hijau-siti': { semua: { shade: 40 }, skrin: { kuliah: { accent: '#112233' } } } } }, 'u1');
-    const stylesBefore = getSettings(db).themeStyle.styles;
+    putFeature(db, 'themeStyle', { styles: { 'hijau-siti': { semua: { shade: 40 }, skrin: { kuliah: { accent: '#112233' } } } } }, 'u1', undefined, LOCAL_SURAU_ID);
+    const stylesBefore = getSettings(db, LOCAL_SURAU_ID).themeStyle.styles;
     await store.install((await store.stage(v4)).stagedId!, 'u1');
-    expect(getSettings(db).themeStyle.styles).toEqual(stylesBefore);
-    expect(getSettings(db).themeStyle.packs['hijau-siti']!.version).toBe(4);
+    expect(getSettings(db, LOCAL_SURAU_ID).themeStyle.styles).toEqual(stylesBefore);
+    expect(getSettings(db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']!.version).toBe(4);
     expect(existsSync(join(dir, 'themes', 'hijau-siti', hashOf(sha(v3))))).toBe(true);
     expect(existsSync(join(dir, 'themes', 'hijau-siti', hashOf(sha(v4))))).toBe(true);
     createThemeStore({ db, dataDir: dir, now: () => new Date() });
@@ -170,23 +171,23 @@ describe('theme store', () => {
     const { db, dir, make } = setup();
     const store = make();
     await installV(store, 3);
-    putFeature(db, 'themeStyle', { styles: { 'hijau-siti': { semua: { shade: 40 }, skrin: {} } } }, 'u1');
-    putFeature(db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'u1');
+    putFeature(db, 'themeStyle', { styles: { 'hijau-siti': { semua: { shade: 40 }, skrin: {} } } }, 'u1', undefined, LOCAL_SURAU_ID);
+    putFeature(db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'u1', undefined, LOCAL_SURAU_ID);
     expect(() => store.remove('hijau-siti', 'u1')).toThrow(expect.objectContaining({ code: 'in_use' }));
     expect(() => store.remove('creative', 'u1')).toThrow(expect.objectContaining({ code: 'built_in' }));
     expect(() => store.remove('arabic', 'u1')).toThrow(expect.objectContaining({ code: 'built_in' }));
     expect(() => store.remove('con', 'u1')).toThrow(expect.objectContaining({ code: 'built_in' }));
     expect(() => store.remove('tiada-tema', 'u1')).toThrow(expect.objectContaining({ code: 'not_found' }));
-    putFeature(db, 'kioskTemplate', { templateId: 'creative' }, 'u1');
+    putFeature(db, 'kioskTemplate', { templateId: 'creative' }, 'u1', undefined, LOCAL_SURAU_ID);
     store.remove('hijau-siti', 'u1');
-    const s = getSettings(db).themeStyle;
+    const s = getSettings(db, LOCAL_SURAU_ID).themeStyle;
     expect(s.packs['hijau-siti']).toBeUndefined();
     expect(s.styles['hijau-siti']).toMatchObject({ semua: { shade: 40 } });
     expect(existsSync(join(dir, 'themes', 'hijau-siti'))).toBe(false);
     expect(await store.ensureExtracted('hijau-siti')).toBeNull();
     // the same name can be uploaded again afterwards
     await installV(store, 1);
-    expect(getSettings(db).themeStyle.packs['hijau-siti']!.version).toBe(1);
+    expect(getSettings(db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']!.version).toBe(1);
   });
 
   it('ensureExtracted rebuilds a missing folder from the asset', async () => {
@@ -207,7 +208,7 @@ describe('theme store', () => {
     const store = make();
     const bad = zip({ 'theme.json': json(), 'theme.css': '@import "https://x.example/a.css";' });
     const meta = putAsset(db, dir, bad, PACK_MIME, 'sync');
-    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: bad.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync');
+    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: bad.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync', undefined, LOCAL_SURAU_ID);
     expect(await store.ensureExtracted('hijau-siti')).toBeNull();
     expect((await store.problemOf('hijau-siti'))!.code).toBe('css_import');
     expect(existsSync(join(dir, 'themes', 'hijau-siti'))).toBe(false);
@@ -226,7 +227,7 @@ describe('theme store', () => {
       const name = `sync-${i}`;
       const zz = pack({ name }, extra);
       const meta = putAsset(db, dir, zz, PACK_MIME, 'sync');
-      putFeature(db, 'themeStyle', { packs: { [name]: { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: zz.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync');
+      putFeature(db, 'themeStyle', { packs: { [name]: { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: zz.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync', undefined, LOCAL_SURAU_ID);
       expect(await store.ensureExtracted(name), why).toBeNull();
       expect((await store.problemOf(name))!.code, why).toBe(code);
       expect(existsSync(join(dir, 'themes', name)), why).toBe(false);
@@ -238,10 +239,10 @@ describe('theme store', () => {
     const store = make();
     const z = pack({ version: 2 });
     const meta = putAsset(db, dir, z, PACK_MIME, 'sync');
-    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 9, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: z.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync');
+    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 9, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: z.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync', undefined, LOCAL_SURAU_ID);
     expect(await store.ensureExtracted('hijau-siti')).toBeNull();
     expect((await store.problemOf('hijau-siti'))!.code).toBe('bad_theme_json');
-    putFeature(db, 'themeStyle', { packs: { 'other-name': { assetId: meta.id, version: 2, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: z.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync');
+    putFeature(db, 'themeStyle', { packs: { 'other-name': { assetId: meta.id, version: 2, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: z.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync', undefined, LOCAL_SURAU_ID);
     expect(await store.ensureExtracted('other-name')).toBeNull();
     expect(existsSync(join(dir, 'themes', 'other-name'))).toBe(false);
   });
@@ -250,7 +251,7 @@ describe('theme store', () => {
     const { db, dir, make } = setup();
     const store = make();
     const z = pack();
-    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { assetId: sha(z), version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: z.length, fonts: [], screens: ['poster'], images: { kuliah: 'jpg' }, defaults: {} } } }, 'sync');
+    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { assetId: sha(z), version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: z.length, fonts: [], screens: ['poster'], images: { kuliah: 'jpg' }, defaults: {} } } }, 'sync', undefined, LOCAL_SURAU_ID);
     expect(await store.ensureExtracted('hijau-siti')).toBeNull();
     expect(await store.problemOf('hijau-siti')).toBeNull();
     putAsset(db, dir, z, PACK_MIME, 'sync');
@@ -262,7 +263,7 @@ describe('theme store', () => {
     const store = make();
     const z = pack({ contract: 2 });
     const meta = putAsset(db, dir, z, PACK_MIME, 'sync');
-    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 2, bytes: z.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync');
+    putFeature(db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 2, bytes: z.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'sync', undefined, LOCAL_SURAU_ID);
     expect(await store.ensureExtracted('hijau-siti')).toBeNull();
     expect((await store.problemOf('hijau-siti'))!.code).toBe('needs_newer');
   });
@@ -320,7 +321,7 @@ describe('item 4: storage', () => {
     const store = make();
     const v3 = pack({ version: 3 });
     await store.install((await store.stage(v3)).stagedId!, 'u1');
-    putFeature(db, 'themeStyle', { packs: { 'twin-one': { ...getSettings(db).themeStyle.packs['hijau-siti']! } } }, 'u1');
+    putFeature(db, 'themeStyle', { packs: { 'twin-one': { ...getSettings(db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']! } } }, 'u1', undefined, LOCAL_SURAU_ID);
     await installV(store, 4);
     expect(rowOf(db, sha(v3))).toBeDefined();
     expect(existsSync(join(dir, 'assets', `${sha(v3)}.maxtheme`))).toBe(true);
@@ -339,7 +340,7 @@ describe('item 4: storage', () => {
     await expect(store.install(staged.stagedId!, 'u1')).rejects.toThrow();
     expect(rowOf(db, sha(z))).toBeUndefined();
     expect(existsSync(join(dir, 'assets', `${sha(z)}.maxtheme`))).toBe(false);
-    expect(getSettings(db).themeStyle.packs['hijau-siti']).toBeUndefined();
+    expect(getSettings(db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toBeUndefined();
     expect(readdirSync(join(dir, 'themes')).filter((n) => n.startsWith('.tmp-'))).toEqual([]);
   });
 

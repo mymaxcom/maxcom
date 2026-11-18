@@ -357,3 +357,19 @@
 .stage[data-template='colourful'][data-screen='poster'] .poster-fill { filter: blur(2.396rem) brightness(0.5) saturate(1.2); }
 /* Theme round 2 (rules 4 to 6): the chip's countdown pill is white with the chip's own pink, as in the mockup. */
 .stage[data-template='colourful'][data-kind='content'] .next--chip { --chip-cd-bg: #ffffff; --chip-cd-ink: #c2305c; }
+
+/* Tabung (mockup tabung-r1 frame H): a different colour for each fund. */
+.stage[data-template='colourful'][data-kind='content'] .tabung {
+  --tb-amt: #ffffff; --tb-muted: rgb(255 255 255 / 0.78); --tb-on-acc: #2a1757;
+  --tb-row-bg: rgb(255 255 255 / 0.08); --tb-row-border: 0; --tb-track: rgb(255 255 255 / 0.26); --tb-fill: #ffffff;
+  --tb-pct: #ffffff; --tb-dot: rgb(255 255 255 / 0.3); --tb-hair: rgb(255 255 255 / 0.18);
+  --tb-hot-bg: linear-gradient(90deg, #f0a73a, #e8705a);
+}
+.stage[data-template='colourful'][data-kind='content'] :is(.tabung__row, .tabung__mini) { --tb-muted: rgb(255 255 255 / 0.85); }
+.stage[data-template='colourful'][data-kind='content'] :is(.tabung__row, .tabung__mini):nth-child(5n+1) { background: #3f4bc0; }
+.stage[data-template='colourful'][data-kind='content'] :is(.tabung__row, .tabung__mini):nth-child(5n+2) { background: #0f8b7d; }
+.stage[data-template='colourful'][data-kind='content'] :is(.tabung__row, .tabung__mini):nth-child(5n+3) { background: #b8701b; }
+.stage[data-template='colourful'][data-kind='content'] :is(.tabung__row, .tabung__mini):nth-child(5n+4) { background: #b8345a; }
+.stage[data-template='colourful'][data-kind='content'] :is(.tabung__row, .tabung__mini):nth-child(5n+5) { background: #6b3fc0; }
+.stage[data-template='colourful'][data-kind='content'] :is(.tabung__row, .tabung__mini).is-hot { background: var(--tb-hot-bg); border-color: #ffd166; }
+.stage[data-template='colourful'][data-kind='content'] .tabung .is-hot .tabung__thanks b { color: #ffffff; }

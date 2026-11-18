@@ -169,16 +169,16 @@ class LivePreviewFrame extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                left: 12,
+              PositionedDirectional(
+                start: 12,
                 top: 12,
                 child: live
                     ? OnAirPill(seconds: state.durationSec)
                     : _ReadyPill(label: s.liveReady),
               ),
               if (state.muted)
-                Positioned(
-                  right: 12,
+                PositionedDirectional(
+                  end: 12,
                   top: 12,
                   child: _GlassTag(
                     icon: Icons.mic_off_rounded,
@@ -187,8 +187,8 @@ class LivePreviewFrame extends StatelessWidget {
                   ),
                 ),
               if (onMinimise != null)
-                Positioned(
-                  left: 10,
+                PositionedDirectional(
+                  start: 10,
                   bottom: 10,
                   child: _GlassButton(
                     key: const ValueKey('live-minimise'),
@@ -197,8 +197,8 @@ class LivePreviewFrame extends StatelessWidget {
                     onPressed: onMinimise,
                   ),
                 ),
-              Positioned(
-                right: 10,
+              PositionedDirectional(
+                end: 10,
                 bottom: 10,
                 child: Row(
                   children: [
@@ -272,7 +272,7 @@ class OnAirPill extends StatelessWidget {
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
+      padding: const EdgeInsetsDirectional.fromSTEB(10, 6, 12, 6),
       decoration: BoxDecoration(
         color: LiveColors.onAir,
         borderRadius: BorderRadius.circular(999),
@@ -337,7 +337,7 @@ class _GlassTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(9, 5, 12, 5),
+      padding: const EdgeInsetsDirectional.fromSTEB(9, 5, 12, 5),
       decoration: BoxDecoration(
         color: SurauColors.glass.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(999),
@@ -492,7 +492,7 @@ class LiveFoldedView extends StatelessWidget {
             : null;
         final Widget overlay = landscape
             ? Align(
-                alignment: Alignment.centerRight,
+                alignment: AlignmentDirectional.centerEnd,
                 child: Container(
                   key: const ValueKey('folded-side'),
                   padding: const EdgeInsets.all(8),
@@ -591,7 +591,7 @@ class _LegChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(9, 6, 12, 6),
+      padding: const EdgeInsetsDirectional.fromSTEB(9, 6, 12, 6),
       decoration: BoxDecoration(
         color: SurauColors.glass.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(999),
@@ -821,7 +821,7 @@ class OutputRow extends StatelessWidget {
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 72),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
+        padding: const EdgeInsetsDirectional.fromSTEB(20, 12, 12, 12),
         child: Row(
           children: [
             Container(
@@ -888,9 +888,13 @@ class LiveNotice extends StatelessWidget {
     this.body,
     this.action,
     this.danger = false,
+    this.leading,
   });
 
   final IconData icon;
+
+  /// Drawn instead of [icon] when set (the box's own status glyph).
+  final Widget? leading;
   final String title;
   final String? body;
   final Widget? action;
@@ -901,7 +905,7 @@ class LiveNotice extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final ink = danger ? SurauColors.dangerInk : SurauColors.ink;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: danger ? SurauColors.dangerSoft : SurauColors.goldSoft,
         borderRadius: BorderRadius.circular(SurauTheme.radiusCard),
@@ -917,11 +921,12 @@ class LiveNotice extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                icon,
-                color: danger ? SurauColors.danger : SurauColors.ink,
-                size: 24,
-              ),
+              leading ??
+                  Icon(
+                    icon,
+                    color: danger ? SurauColors.danger : SurauColors.ink,
+                    size: 24,
+                  ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -939,7 +944,7 @@ class LiveNotice extends StatelessWidget {
           ),
           if (action != null) ...[
             const SizedBox(height: 10),
-            Align(alignment: Alignment.centerRight, child: action),
+            Align(alignment: AlignmentDirectional.centerEnd, child: action),
           ],
         ],
       ),

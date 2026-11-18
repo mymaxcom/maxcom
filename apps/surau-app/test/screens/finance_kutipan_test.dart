@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/finance/finance_models.dart';
+import 'package:surau_app/store/local_store.dart';
 
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
@@ -44,6 +45,37 @@ void main() {
     await tester.drag(find.byType(ListView).first, const Offset(0, 4000));
     await settle(tester);
     await expectGoldens(tester, h.app, 'finance_kutipan');
+  });
+
+  testWidgets('[F3] [F9] Enter, < and > cannot be typed; note 200 and reference 60 characters at most', (
+    tester,
+  ) async {
+    await pumpFinance(tester, f, route: '/finance/kutipan');
+    String text(String k) =>
+        tester.widget<TextField>(find.byKey(Key(k))).controller!.text;
+    await typeAt(tester, find.byKey(const Key('fin-note')), 'a\nb<c>d');
+    expect(text('fin-note'), 'abcd');
+    await typeAt(tester, find.byKey(const Key('fin-note')), 'n' * 201);
+    expect(text('fin-note').length, 200);
+    await tapAt(tester, find.byKey(const Key('fin-chip-bank')));
+    await typeAt(tester, find.byKey(const Key('fin-reference')), 'r' * 61);
+    expect(text('fin-reference').length, 60);
+  });
+
+  testWidgets('[F4] the date picker starts in the first open month', (
+    tester,
+  ) async {
+    await f.store.putDoc(Collections.financeMonths, '2026-10', {
+      'id': '2026-10',
+      'ym': '2026-10',
+      'status': 'closed',
+    });
+    await pumpFinance(tester, f, route: '/finance/kutipan');
+    await tapAt(tester, find.byKey(const Key('fin-date')));
+    final picker = tester.widget<CalendarDatePicker>(
+      find.byType(CalendarDatePicker),
+    );
+    expect(picker.firstDate, DateTime(2026, 11, 1));
   });
 
   testWidgets('a name outside the app counts as a counter', (tester) async {

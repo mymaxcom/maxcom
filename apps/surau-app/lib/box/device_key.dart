@@ -41,7 +41,7 @@ Future<void> deviceKeySelfCheck(DeviceKey key, Map<String, String> jwk) async {
     }
   } catch (_) {
     await key.clear();
-    throw StateError('Kunci peranti tidak sah. Cuba lagi');
+    throw StateError('Kunci peranti tidak sah. Cuba lagi'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
   }
 }
 
@@ -59,7 +59,7 @@ String b64url(Uint8List bytes) =>
 /// Strict base64url decode: unpadded, URL-safe alphabet only.
 Uint8List unB64url(String s) {
   if (!_b64urlChars.hasMatch(s) || s.length % 4 == 1) {
-    throw const FormatException('base64url tidak sah');
+    throw const FormatException('base64url tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
   }
   final padded = s + '=' * ((4 - s.length % 4) % 4);
   return Uint8List.fromList(base64Url.decode(padded));
@@ -82,7 +82,7 @@ Uint8List fixed32(BigInt v) {
 /// Builds the JWK `{kty, crv, x, y}` from an uncompressed SEC1 point `04 || X || Y`.
 Map<String, String> jwkFromUncompressedPoint(Uint8List point) {
   if (point.length != 65 || point[0] != 0x04) {
-    throw const FormatException('titik kunci awam tidak sah');
+    throw const FormatException('titik kunci awam tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
   }
   return {
     'kty': 'EC',
@@ -97,7 +97,7 @@ Map<String, String> jwkFromUncompressedPoint(Uint8List point) {
 /// throws [FormatException]. The `0x00` sign padding on a high-bit value is removed, a value
 /// shorter than 32 bytes is left-padded, so the output is always exactly 64 bytes.
 Uint8List derToP1363(Uint8List der) {
-  const bad = FormatException('tandatangan DER tidak sah');
+  const bad = FormatException('tandatangan DER tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
   var p = 0;
 
   int readByte() {

@@ -134,12 +134,13 @@ void main() {
     });
 
     test(
-      'a later void wins over an earlier amount; a later amount un-voids',
+      '[F6] a later void wins over an earlier amount; a later amount or tabung change does not un-void',
       () {
         expect(effective(entriesOf(scenario('7'))).first.voided, isTrue);
-        final un = effective(entriesOf(scenario('5'))).first;
-        expect(un.voided, isFalse);
-        expect(un.effAmountSen, 40000);
+        final stays = effective(entriesOf(scenario('5'))).first;
+        expect(stays.voided, isTrue);
+        final moved = effective(entriesOf(scenario('6'))).first;
+        expect(moved.voided, isTrue);
       },
     );
 

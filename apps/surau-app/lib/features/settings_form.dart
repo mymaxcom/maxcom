@@ -20,15 +20,17 @@ import '../content/adjusted_picture.dart';
 import '../content/asset_picker.dart';
 import '../content/image_ref.dart';
 import '../l10n/generated/s.dart';
+import '../ops/lanjutan_card.dart';
+import '../ops/ops_build.dart';
 import '../screens/widgets/pieces.dart';
 import 'data_sources.dart';
+import 'labels.dart';
 import 'labels_ms.dart';
 import 'registry.g.dart';
 import 'settings_widgets/audio_asset_picker.dart';
 import 'settings_widgets/chips_field.dart';
 import 'settings_widgets/colour_swatches.dart';
 import 'settings_widgets/field_meta.dart';
-import 'settings_widgets/lanjutan_card.dart';
 import 'settings_widgets/named_dropdown.dart';
 import 'settings_widgets/preset_text_field.dart';
 import 'settings_widgets/reciter_dropdown.dart';
@@ -84,10 +86,11 @@ class SettingsForm extends StatelessWidget {
   final Map<String, Map<String, dynamic>> others;
 
   /// On a page that is all system values the card would say nothing new.
-  bool get _systemPage => systemFeatures.contains(feature.key);
+  bool get _systemPage => feature.group == 'lanjutan';
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangOf(context);
     final sections = <Widget>[];
     var rows = <Widget>[];
     final lanjutan = <Widget>[];
@@ -112,7 +115,8 @@ class SettingsForm extends StatelessWidget {
       // A value another control owns (autoTone.override: Ubah suai's accent) is kept but not offered.
       if (fieldMeta(feature.key, key)?.hidden == true) continue;
       if (fieldMeta(feature.key, key)?.isSystem == true && !_systemPage) {
-        if (lanjutanVisible) {
+        // System values are never drawn in the public app; the ops build draws them in the Lanjutan card.
+        if (kOpsBuild && lanjutanVisible) {
           lanjutan.add(_leafRow(context, path: key, name: key, d: d, v: v, onChanged: (nv) => onChanged(key, nv)));
         }
         continue;
@@ -121,7 +125,7 @@ class SettingsForm extends StatelessWidget {
       if (key == 'ayatTo' && fieldMeta(feature.key, key)?.ui == 'ayatRange') continue;
       if (d is Map && _isWeekTable(d)) {
         flush();
-        sections.add(SectionLabel(settingLabelMs(key)));
+        sections.add(SectionLabel(settingLabel(key, lang)));
         sections.add(
           WeekTableEditor(
             name: key,
@@ -134,7 +138,7 @@ class SettingsForm extends StatelessWidget {
         sections.add(const SizedBox(height: 20));
       } else if (d is Map && _isPrayerRow(d)) {
         flush();
-        sections.add(SectionLabel(settingLabelMs(key)));
+        sections.add(SectionLabel(settingLabel(key, lang)));
         sections.add(
           Card(
             child: Padding(
@@ -180,7 +184,7 @@ class SettingsForm extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
                   child: ImageField(
                     key: const ValueKey('setting-logo'),
-                    label: settingLabelMs(key),
+                    label: settingLabel(key, lang),
                     value: v == '' ? null : v,
                     slot: ImageSlot.logo,
                     hint: s.logoHint,
@@ -195,8 +199,8 @@ class SettingsForm extends StatelessWidget {
                     key: const ValueKey('setting-showName'),
                     value: showName,
                     onChanged: readOnly || !hasLogo ? null : (on) => onChanged('showName', on),
-                    title: Text(settingLabelMs('showName')),
-                    contentPadding: const EdgeInsets.fromLTRB(20, 6, 12, 6),
+                    title: Text(settingLabel('showName', lang)),
+                    contentPadding: const EdgeInsetsDirectional.fromSTEB(20, 6, 12, 6),
                   ),
                   if (hasLogo)
                     Padding(
@@ -223,7 +227,7 @@ class SettingsForm extends StatelessWidget {
         // box rules the address (https, public host); its 400 lands under
         // the field through [errors].
         flush();
-        sections.add(SectionLabel(settingLabelMs(key)));
+        sections.add(SectionLabel(settingLabel(key, lang)));
         final sub = (v is Map ? v : d).cast<String, dynamic>();
         sections.add(
           RowsCard(
@@ -231,7 +235,7 @@ class SettingsForm extends StatelessWidget {
               for (final x in d.entries)
                 TextRow(
                   path: '$key.${x.key}',
-                  label: sourceLeafLabelMs(x.key as String),
+                  label: sourceLeafLabel(x.key as String, lang),
                   value: sub[x.key] is String ? sub[x.key] as String : '${x.value}',
                   maxLength: x.key == 'url' ? sourceUrlMaxLength : sourceNameMaxLength,
                   url: x.key == 'url',
@@ -255,7 +259,7 @@ class SettingsForm extends StatelessWidget {
       } else if (d is Map) {
         // A nested object the registry does not have today: its leaves as rows.
         flush();
-        sections.add(SectionLabel(settingLabelMs(key)));
+        sections.add(SectionLabel(settingLabel(key, lang)));
         final sub = (v is Map ? v : d).cast<String, dynamic>();
         sections.add(
           RowsCard(
@@ -278,7 +282,7 @@ class SettingsForm extends StatelessWidget {
       }
     }
     flush();
-    if (lanjutan.isNotEmpty) {
+    if (kOpsBuild && lanjutan.isNotEmpty) {
       final s = S.of(context);
       sections.add(
         KeyedSubtree(
@@ -311,8 +315,9 @@ class SettingsForm extends StatelessWidget {
     required Object? v,
     required void Function(Object? value) onChanged,
   }) {
+    final lang = appLangOf(context);
     final ro = readOnly || meta.readOnly;
-    final help = settingHelpFor(name, en: _isEn(context));
+    final help = settingHelp(name, lang);
     switch (meta.ui) {
       case 'slider':
         return SliderField(
@@ -385,8 +390,8 @@ class SettingsForm extends StatelessWidget {
           surah: _intOf('surah'),
           from: _intOf('ayatFrom'),
           to: _intOf('ayatTo'),
-          labelFrom: settingLabelMs('ayatFrom'),
-          labelTo: settingLabelMs('ayatTo'),
+          labelFrom: settingLabel('ayatFrom', lang),
+          labelTo: settingLabel('ayatTo', lang),
           errorFrom: errors['ayatFrom'],
           errorTo: errors['ayatTo'],
           readOnly: ro,
@@ -433,6 +438,7 @@ class SettingsForm extends StatelessWidget {
           meta: meta,
           error: error,
           readOnly: ro,
+          english: others['language']?['lang'] == 'en',
           onChanged: onChanged,
         );
       case 'phone':
@@ -487,14 +493,11 @@ class SettingsForm extends StatelessWidget {
         Padding(
           key: ValueKey('setting-note-$path'),
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-          child: Text(_isEn(context) ? dep.noteEn : dep.noteMs, style: Theme.of(context).textTheme.bodySmall),
+          child: Text(dep.note(appLangOf(context)), style: Theme.of(context).textTheme.bodySmall),
         ),
       ],
     );
   }
-
-  /// The app is in English: English notes and help sentences show where there are any (labels stay as they are).
-  bool _isEn(BuildContext context) => Localizations.localeOf(context).languageCode == 'en';
 
   Widget _leafRowPlain(
     BuildContext context, {
@@ -504,7 +507,9 @@ class SettingsForm extends StatelessWidget {
     required Object? v,
     required void Function(Object? value) onChanged,
   }) {
-    final label = settingLabelMs(name);
+    final lang = appLangOf(context);
+    final help = settingHelp(name, lang);
+    final label = settingLabel(name, lang);
     final error = errors[path];
     final meta = fieldMeta(feature.key, path);
     if (meta != null) {
@@ -527,8 +532,8 @@ class SettingsForm extends StatelessWidget {
         value: v is bool ? v : d,
         onChanged: readOnly ? null : onChanged,
         title: Text(label),
-        subtitle: settingHelpFor(name, en: _isEn(context)) == null ? null : Text(settingHelpFor(name, en: _isEn(context))!),
-        contentPadding: const EdgeInsets.fromLTRB(20, 6, 12, 6),
+        subtitle: help == null ? null : Text(help),
+        contentPadding: const EdgeInsetsDirectional.fromSTEB(20, 6, 12, 6),
       );
     }
     if (d is num) {
@@ -828,7 +833,7 @@ class IntStepper extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: text.bodyLarge!.copyWith(fontWeight: FontWeight.w600)),
-        Text('$min hingga $max', style: text.bodySmall),
+        Text(s.ra6RangeTo('$min', '$max'), style: text.bodySmall),
       ],
     );
     final minus = IconButton.outlined(
@@ -851,7 +856,7 @@ class IntStepper extends StatelessWidget {
       onChanged: onChanged,
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
+      padding: const EdgeInsetsDirectional.fromSTEB(20, 10, 12, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -915,13 +920,14 @@ class ChoiceField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangOf(context);
     final text = Theme.of(context).textTheme;
     final Widget control;
     if (choices.length <= 3) {
       control = SegmentedButton<String>(
         key: ValueKey('setting-$path'),
         segments: [
-          for (final c in choices) ButtonSegment(value: c, label: Text(choiceLabelMs(name, c))),
+          for (final c in choices) ButtonSegment(value: c, label: Text(choiceLabel(name, c, lang))),
         ],
         selected: {if (choices.contains(value)) value},
         emptySelectionAllowed: true,
@@ -946,7 +952,7 @@ class ChoiceField extends StatelessWidget {
         enabled: !readOnly,
         expandedInsets: EdgeInsets.zero,
         dropdownMenuEntries: [
-          for (final c in choices) DropdownMenuEntry(value: c, label: choiceLabelMs(name, c)),
+          for (final c in choices) DropdownMenuEntry(value: c, label: choiceLabel(name, c, lang)),
         ],
         onSelected: (v) {
           if (v != null) onChanged(v);
@@ -1082,6 +1088,7 @@ class PrayerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangOf(context);
     final text = Theme.of(context).textTheme;
     final cellErrors = [
       for (final p in _prayers)
@@ -1099,7 +1106,7 @@ class PrayerRow extends StatelessWidget {
                 child: Column(
                   children: [
                     Text(
-                      settingLabelMs(_prayers[i]),
+                      settingLabel(_prayers[i], lang),
                       style: text.labelSmall!.copyWith(color: SurauColors.muted),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1148,6 +1155,7 @@ class WeekTableEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangOf(context);
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
     return Card(
@@ -1158,21 +1166,21 @@ class WeekTableEditor extends StatelessWidget {
             if (i > 0) const Divider(),
             Padding(
               key: ValueKey('day-${_days[i]}'),
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 14),
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     children: [
                       Expanded(
-                        child: Text(settingLabelMs(_days[i]), style: text.titleSmall),
+                        child: Text(settingLabel(_days[i], lang), style: text.titleSmall),
                       ),
                       if (!readOnly)
                         TextButton.icon(
                           onPressed: () {
                             final row = copyJson(value[_days[i]]);
                             onChanged({for (final d in _days) d: copyJson(row)});
-                            toast(context, s.settingsCopiedToAllDays(settingLabelMs(_days[i])));
+                            toast(context, s.settingsCopiedToAllDays(settingLabel(_days[i], lang)));
                           },
                           icon: const Icon(Icons.copy_all_rounded, size: 20),
                           label: Text(s.settingsCopyToAllDays),
@@ -1180,7 +1188,7 @@ class WeekTableEditor extends StatelessWidget {
                     ],
                   ),
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsetsDirectional.only(end: 8),
                     child: PrayerRow(
                       path: '$name.${_days[i]}',
                       value: ((value[_days[i]] as Map?) ?? const {}).cast<String, dynamic>(),

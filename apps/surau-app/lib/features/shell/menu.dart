@@ -8,6 +8,10 @@ import 'package:flutter/material.dart';
 
 import '../../app/router.dart';
 import '../../l10n/generated/s.dart';
+import '../../ops/fleet/fleet_menu.dart';
+import '../../ops/fleet/fleet_routes.dart';
+import '../../ops/ops_build.dart';
+import '../validate.dart' show featureByKey;
 import 'permissions.dart';
 
 enum MenuEntry {
@@ -20,6 +24,9 @@ enum MenuEntry {
   upload,
   finance,
   jemaah,
+
+  /// The MAXCOM Ops fleet entries (ops build only; see lib/ops/fleet/fleet_menu.dart).
+  fleet,
 }
 
 class MenuItem {
@@ -28,6 +35,7 @@ class MenuItem {
     required this.route,
     required this.icon,
     required this.selectedIcon,
+    this.labelOf,
   });
 
   final MenuEntry entry;
@@ -35,7 +43,10 @@ class MenuItem {
   final IconData icon;
   final IconData selectedIcon;
 
-  String label(S s) => switch (entry) {
+  /// A label that does not come from the arb files (the ops entries).
+  final String Function(S s)? labelOf;
+
+  String label(S s) => labelOf?.call(s) ?? switch (entry) {
     MenuEntry.dashboard => s.navDashboard,
     MenuEntry.content => s.navContent,
     MenuEntry.settings => s.navSettings,
@@ -45,6 +56,7 @@ class MenuItem {
     MenuEntry.upload => s.navUpload,
     MenuEntry.finance => s.navFinance,
     MenuEntry.jemaah => s.navJemaah,
+    MenuEntry.fleet => '',
   };
 
   /// True when [location] is this entry's page or one of its children; the
@@ -120,16 +132,19 @@ const List<MenuItem> _allItems = [
 
 /// The menu for a person: entries their roles allow and whose feature is
 /// on, in display order.
-List<MenuItem> menuFor(Set<String> roles, FeatureFlags features) => [
+List<MenuItem> menuFor(Set<String> roles, FeatureFlags features, {bool ops = false}) => [
+  if (kOpsBuild && ops) ...opsFleetMenu(roles),
   for (final item in _allItems)
-    if (routeAllowed(item.route, roles, features)) item,
+    if (routeAllowed(item.route, roles, features) &&
+        !(kOpsBuild && opsLocalDataClosed(cloud: ops, roles: roles) && isLocalDataPath(item.route)))
+      item,
 ];
 
-const Set<String> _systemPages = {
-  '/settings/cloudSync',
-  '/settings/dataSources',
-  '/settings/system',
-};
+/// The MAXCOM system pages (Lanjutan): a settings page whose feature is of group `lanjutan`.
+bool _isSystemPage(String path) {
+  final key = path.startsWith('${AppRoutes.settings}/') ? path.substring(AppRoutes.settings.length + 1) : '';
+  return key.isNotEmpty && featureByKey(key)?.group == 'lanjutan';
+}
 
 /// Whether [location] may be opened by someone with [roles] while
 /// [features] are switched on. Unknown paths are refused.
@@ -137,14 +152,17 @@ bool routeAllowed(String location, Set<String> roles, FeatureFlags features) {
   final path = _normalise(location);
   bool has(String p) => canSee(roles, p);
 
+  // The MAXCOM Ops screens exist only in the ops build, for `fleet:read`.
+  if (isOpsPath(path)) return kOpsBuild && opsRouteAllowed(path, roles);
   if (path == AppRoutes.dashboard) return true;
   if (path == AppRoutes.thisDevice) return true;
   // Scanning a box QR (a probe, an enrolment code) is for any signed-in person.
   if (path == AppRoutes.scan) return true;
   // Everyone's own edits that did not land.
   if (path == AppRoutes.syncConflicts) return true;
-  // MAXCOM system pages (Lanjutan) are for the Pentadbir MAXCOM; the group is hidden from others and so is the route.
-  if (_systemPages.contains(path)) return has('system:read');
+  // MAXCOM system pages (Lanjutan) exist only in the ops build (Plan 14 Task 25), for `system:read`;
+  // the public app refuses the route whoever asks.
+  if (_isSystemPage(path)) return kOpsBuild && has('system:read');
   if (path == AppRoutes.settingsOrder) return has('settings:write');
   if (_under(path, AppRoutes.settings)) return has('settings:read');
   if (_under(path, AppRoutes.content)) return has('content:read');
@@ -173,8 +191,8 @@ bool routeAllowed(String location, Set<String> roles, FeatureFlags features) {
     return has('finance:read');
   }
   if (path == AppRoutes.live) {
-    return has('live:control') &&
-        (features.isOn('liveOnKiosk') || features.isOn('liveYoutube'));
+    // The box refuses every start while the kiosk switch is off, YouTube-only included.
+    return has('live:control') && features.isOn('liveOnKiosk');
   }
   if (path == AppRoutes.upload) {
     return has('live:control') && features.isOn('youtubeCatchUp');

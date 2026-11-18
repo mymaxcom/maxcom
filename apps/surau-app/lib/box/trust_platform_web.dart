@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:http/browser_client.dart';
 import 'package:http/http.dart' as http;
 
-import '../features/enrol/enrol_flow.dart' show TrustError;
+import '../features/enrol/enrol_flow.dart' show TrustError, TrustKind;
 import 'box_client.dart' show BoxUnreachable;
 
 const bool pinsCa = false;
@@ -30,10 +30,10 @@ Future<Uint8List> fetchUnverified(
   try {
     final res = await c.get(url).timeout(connect + read);
     if (res.statusCode != 200) {
-      throw const TrustError('Sijil akar tidak dapat diambil dari kotak');
+      throw TrustError.of(TrustKind.rootFetch);
     }
     if (res.bodyBytes.length > maxBytes) {
-      throw const TrustError('Sijil akar tidak sah');
+      throw TrustError.of(TrustKind.rootInvalid);
     }
     return res.bodyBytes;
   } on TrustError {

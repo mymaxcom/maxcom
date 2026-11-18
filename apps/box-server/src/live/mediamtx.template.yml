@@ -60,3 +60,13 @@ paths:
   # the kiosk's sound leg (ffmpeg republishes the picture with Opus audio here while the kiosk audio is on)
   surau-kiosk:
     source: publisher
+  # The external camera and the box combiner (plan 4.6). All publisher paths: the camera address is NEVER written here, it
+  # reaches MediaMTX only as a JSON string through the API (`surau-cam` for a box-pulled live, `surau-uji` for the camera test).
+  surau-cam:
+    source: publisher
+  surau-mic:
+    source: publisher
+  surau-in:
+    source: publisher
+  surau-uji:
+    source: publisher

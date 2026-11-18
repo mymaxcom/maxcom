@@ -1,5 +1,6 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import type { DatabaseSync } from 'node:sqlite';
-import { CONTENT_KINDS } from '@surau/core';
+import { CONTENT_KINDS, SURAU_ID_RE } from '@surau/core';
 import type { FeedEntry, Snapshot } from '@surau/core';
 import { readFieldStamps, surauPublicInfo } from '../settingsStore.ts';
 import { snapshotCorrections } from '../prayer/corrections.ts';
@@ -8,6 +9,7 @@ import { officialYears, officialZones } from '../prayerStore.ts';
 import { retentionDays } from './trim.ts';
 import { allEntries, listFunds, listMonths, listPerihal } from '../finance/store.ts';
 import { listPhotoMeta } from '../finance/photos.ts';
+import { refOfRow } from '../auth/ids.ts';
 
 /** What the caller may see: users need `users:manage`, devices `devices:manage`. */
 export interface FeedScope {
@@ -18,10 +20,28 @@ export interface FeedScope {
    * gets none: a missing `keys` means no keys.
    */
   keys?: boolean;
+  /** A site or an ops-device session also gets the Pentadbir MAXCOM rows (`users.surau_id = '*'`) and their devices. */
+  star?: boolean;
+  /**
+   * The surau whose entries are read (Plan 14 Task 6): its own change_log rows, plus, for a `star` scope, the
+   * Pentadbir MAXCOM user and device entries (nothing else filed under `'*'`). Absent = the box's local surau.
+   */
+  surauId?: string;
   /** `finance:read`: the ledger, lookups and month states (never the audit-only rows `finance:report|view|export`). */
   finance?: boolean;
   /** `finance:write`: also the photo ids and photo metadata. A reader without it never learns a photo exists. */
   financeWrite?: boolean;
+  /**
+   * `content:write`: the editors of content also get a penceramah's private phone number. A missing flag means
+   * no phone (every read-only role). A linked site and the box-to-cloud agent carry it.
+   */
+  contentWrite?: boolean;
+  /**
+   * The cloud serving a linked site: user and device entries leave without `no` and `noSrc`. An older box refuses
+   * a device entry with a key it does not know, so a cloud-series ID reaches a box through `GET /api/sync/device-seen`
+   * instead (the box asks for it; an older box never does).
+   */
+  omitIds?: boolean;
 }
 
 export interface Feed {
@@ -52,8 +72,30 @@ function entityPredicate(scope: FeedScope): string {
   }
   if (scope.users) parts.push("entity IN ('users', 'user')");
   if (scope.devices) parts.push("entity IN ('devices', 'device')");
-  return `(${parts.join(' OR ')})`;
+  const own = `surau_id = ${sqlText(scopeSurau(scope))}`;
+  if (scope.keys === true || scope.star === true) {
+    // The feed of a site (or an ops session) = its surau's entries plus the `*` user and device entries: a row
+    // filed under '*', or any row of a `*` user or an ops device (older rows were filed under the local surau).
+    const star: string[] = [];
+    if (scope.users) star.push(`(entity IN ('users', 'user') AND (surau_id = '*' OR entity_id IN (SELECT id FROM users WHERE surau_id = '*')))`);
+    if (scope.devices) star.push(`(entity IN ('devices', 'device') AND (surau_id = '*' OR entity_id IN (SELECT id FROM devices WHERE surau_id = '*')))`);
+    const mine = `(${own} AND (${parts.join(' OR ')}))`;
+    return star.length === 0 ? mine : `(${mine} OR ${star.join(' OR ')})`;
+  }
+  // A surau session never sees a Pentadbir MAXCOM or its devices (operator decision 22).
+  return `(${own} AND (${parts.join(' OR ')}) AND NOT (entity IN ('users', 'user') AND entity_id IN (SELECT id FROM users WHERE surau_id = '*'))`
+    + ` AND NOT (entity IN ('devices', 'device') AND entity_id IN (SELECT d.id FROM devices d JOIN users u ON u.id = d.user_id WHERE u.surau_id = '*' OR d.surau_id = '*')))`;
 }
+
+/** The surau a scope reads: its own, else the box's local one. Never `'*'` (that is not a tenant). */
+function scopeSurau(scope: FeedScope): string {
+  const s = scope.surauId ?? LOCAL_SURAU_ID;
+  if (!SURAU_ID_RE.test(s)) throw new Error('feed scope needs a surau id');
+  return s;
+}
+
+/** A surau id as an SQL string literal (checked against SURAU_ID_RE first, so it holds no quote). */
+const sqlText = (s: string): string => `'${s}'`;
 
 /** Run fn in one read snapshot (a deferred transaction), unless the caller already holds a transaction. */
 function inSnapshot<T>(db: DatabaseSync, fn: () => T): T {
@@ -82,10 +124,24 @@ function withoutPhoto(after: unknown): unknown {
   return rest;
 }
 
+/** A reader who may not edit content gets a penceramah without the speaker's private phone number. */
+function withoutPhone<T>(item: T): T {
+  if (typeof item !== 'object' || item === null || Array.isArray(item) || !('phone' in item)) return item;
+  const { phone: _drop, ...rest } = item as Record<string, unknown>;
+  return rest as T;
+}
+
 /** Remove device key material from a feed `after` unless the scope may carry keys. */
 function withoutKeys(after: unknown): unknown {
   if (typeof after !== 'object' || after === null || Array.isArray(after) || !('publicJwk' in after)) return after;
   const { publicJwk: _drop, ...rest } = after as Record<string, unknown>;
+  return rest;
+}
+
+/** An entry's `after` without the ID keys (see `FeedScope.omitIds`). */
+function withoutIds(after: unknown): unknown {
+  if (typeof after !== 'object' || after === null || Array.isArray(after) || !('no' in after || 'noSrc' in after)) return after;
+  const { no: _a, noSrc: _b, ...rest } = after as Record<string, unknown>;
   return rest;
 }
 
@@ -104,11 +160,15 @@ function toEntry(r: Row, scope: FeedScope): FeedEntry {
     deviceId: typeof r.device_id === 'string' ? r.device_id : null,
     origin: typeof r.origin === 'string' ? r.origin : 'local',
     opId: typeof r.op_id === 'string' ? r.op_id : null,
-    after: entity === 'devices' && scope.keys !== true
+    after: (entity === 'devices' || entity === 'users') && scope.omitIds === true
+      ? withoutIds(entity === 'devices' && scope.keys !== true ? withoutKeys(parseJson(r.after_json)) : parseJson(r.after_json))
+      : entity === 'devices' && scope.keys !== true
       ? withoutKeys(parseJson(r.after_json))
       : entity === 'finance:entry' && scope.financeWrite !== true
         ? withoutPhoto(parseJson(r.after_json))
-        : parseJson(r.after_json),
+        : entity === 'content:penceramah' && scope.contentWrite !== true
+          ? withoutPhone(parseJson(r.after_json))
+          : parseJson(r.after_json),
     ...(stamps !== null && typeof stamps === 'object' && !Array.isArray(stamps) ? { stamps: stamps as FeedEntry['stamps'] } : {}),
   };
 }
@@ -173,9 +233,12 @@ function parseRoles(v: unknown): unknown[] {
 export function snapshot(
   db: DatabaseSync,
   scope: FeedScope,
-  opts: { surauId?: string; boxId: string; now?: Date; role?: 'box' | 'cloud' },
+  opts: { boxId: string; now?: Date; role?: 'box' | 'cloud' },
 ): Snapshot {
   const now = opts.now ?? new Date();
+  // the surau is the scope's, so the data and the `seq` (the head of the same scope) can never disagree
+  const surauId = scopeSurau(scope);
+  const withStar = scope.keys === true || scope.star === true;
   // Tombstones travel for as long as the change history is kept (one window, see trim.ts `retentionDays`), so a
   // snapshot never loses a delete the feed could still replay.
   const cutoff = new Date(now.getTime() - retentionDays(db, opts.role ?? 'box') * 86_400_000).toISOString();
@@ -184,7 +247,7 @@ export function snapshot(
 
     const settings: Record<string, unknown> = {};
     const settingsMeta: NonNullable<Snapshot['settingsMeta']> = {};
-    for (const r of db.prepare('SELECT feature, json, rev, edited_at, updated_at FROM settings ORDER BY feature').all()) {
+    for (const r of db.prepare('SELECT feature, json, rev, edited_at, updated_at FROM settings WHERE surau_id = ? ORDER BY feature').all(surauId)) {
       const v = parseJson(r.json);
       if (v === null) continue;
       const feature = String(r.feature);
@@ -193,61 +256,62 @@ export function snapshot(
       settingsMeta[feature] = {
         editedAt,
         rev: typeof r.rev === 'string' ? r.rev : `${editedAt}|local`,
-        stamps: readFieldStamps(db, feature),
+        stamps: readFieldStamps(db, feature, surauId),
       };
     }
 
     const content: Record<string, unknown[]> = {};
     for (const kind of CONTENT_KINDS) content[kind] = [];
     for (const r of db
-      .prepare('SELECT kind, id, json, deleted_at FROM content_items ORDER BY kind, id')
-      .all()) {
+      .prepare('SELECT kind, id, json, deleted_at FROM content_items WHERE surau_id = ? ORDER BY kind, id')
+      .all(surauId)) {
       const list = content[String(r.kind)];
       if (list === undefined) continue;
       if (r.deleted_at === null || r.deleted_at === undefined) {
         const item = parseJson(r.json);
-        if (item !== null) list.push(item);
+        if (item !== null) list.push(String(r.kind) === 'penceramah' && scope.contentWrite !== true ? withoutPhone(item) : item);
       } else if (String(r.deleted_at) >= cutoff) {
         list.push({ id: String(r.id), deletedAt: String(r.deleted_at) });
       }
     }
 
     const out: Snapshot = {
-      surauId: opts.surauId ?? 'sdm',
+      // the wire value phones sign ops with (Plan 14 section 3.1: `sdm`, "my own surau", until a version floor)
+      surauId: LOCAL_SURAU_ID,
       boxId: opts.boxId,
       seq,
       settings,
       content,
       settingsMeta,
-      surauInfo: surauPublicInfo(db),
+      surauInfo: surauPublicInfo(db, undefined, surauId),
       serverTime: now.toISOString(),
       prayer: {
-        official: officialZones(db).flatMap((zone) => officialYears(db, zone).map((y) => ({ zone, year: y.year, days: y.days, fetchedAt: y.fetchedAt }))),
-        imports: snapshotImports(db),
-        corrections: snapshotCorrections(db),
+        official: officialZones(db, surauId).flatMap((zone) => officialYears(db, zone, surauId).map((y) => ({ zone, year: y.year, days: y.days, fetchedAt: y.fetchedAt }))),
+        imports: snapshotImports(db, surauId),
+        corrections: snapshotCorrections(db, surauId),
       },
     };
     if (scope.finance === true) {
-      const entries = allEntries(db);
+      const entries = allEntries(db, surauId);
       out.finance = {
-        funds: listFunds(db, { includeArchived: true }),
-        perihal: listPerihal(db, { includeArchived: true }),
+        funds: listFunds(db, { includeArchived: true }, surauId),
+        perihal: listPerihal(db, { includeArchived: true }, surauId),
         entries: scope.financeWrite === true ? entries : entries.map((e) => ({ ...e, photoId: null })),
-        months: listMonths(db).map((m) => {
-          const st = db.prepare('SELECT edited_at, rev FROM finance_months WHERE ym = ?').get(m.ym);
+        months: listMonths(db, surauId).map((m) => {
+          const st = db.prepare('SELECT edited_at, rev FROM finance_months WHERE surau_id = ? AND ym = ?').get(surauId, m.ym);
           return {
             ...m,
             ...(typeof st?.edited_at === 'string' ? { editedAt: st.edited_at } : {}),
             ...(typeof st?.rev === 'string' ? { rev: st.rev } : {}),
           };
         }),
-        photos: scope.financeWrite === true ? listPhotoMeta(db) : [],
+        photos: scope.financeWrite === true ? listPhotoMeta(db, surauId) : [],
       };
     }
     if (scope.users) {
       out.users = db
-        .prepare('SELECT id, name, roles_json, active, created_at, rev, edited_at FROM users ORDER BY created_at, id')
-        .all()
+        .prepare(`SELECT id, name, roles_json, active, created_at, rev, edited_at, no, no_src, surau_id, deleted_at, phone FROM users WHERE surau_id IN (?, ?) ORDER BY created_at, id`)
+        .all(surauId, withStar ? '*' : surauId)
         .map((r) => {
           const editedAt = typeof r.edited_at === 'string' ? r.edited_at : String(r.created_at);
           return {
@@ -258,13 +322,17 @@ export function snapshot(
             createdAt: String(r.created_at),
             editedAt,
             rev: typeof r.rev === 'string' ? r.rev : `${editedAt}|local`,
+            ...(scope.omitIds === true ? {} : { ref: refOfRow(r, 'user') }),
+            ...(typeof r.deleted_at === 'string' ? { deleted: true } : {}),
+            // personal data: only for the surau's own people (never a Pentadbir MAXCOM's), and only to who may manage users
+            ...(typeof r.phone === 'string' && String(r.surau_id) !== '*' ? { phone: r.phone } : {}),
           };
         });
     }
     if (scope.devices) {
       out.devices = db
-        .prepare('SELECT id, user_id, name, platform, enrolled_at, revoked_at, public_jwk FROM devices ORDER BY enrolled_at, id')
-        .all()
+        .prepare(`SELECT id, user_id, name, platform, enrolled_at, revoked_at, public_jwk, no, no_src, surau_id FROM devices WHERE surau_id IN (?, ?)${withStar ? '' : " AND user_id NOT IN (SELECT id FROM users WHERE surau_id = '*')"} ORDER BY enrolled_at, id`)
+        .all(surauId, withStar ? '*' : surauId)
         .map((r) => {
           const out: Record<string, unknown> = {
             id: String(r.id),
@@ -273,6 +341,7 @@ export function snapshot(
             platform: String(r.platform),
             enrolledAt: String(r.enrolled_at),
             revokedAt: typeof r.revoked_at === 'string' ? r.revoked_at : null,
+            ...(scope.omitIds === true ? {} : { ref: refOfRow(r, 'device') }),
           };
           // The public key, for the site scope only; a device without a key (a kiosk) has none to give.
           if (scope.keys === true) {

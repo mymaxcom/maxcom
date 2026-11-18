@@ -46,7 +46,7 @@ class PickerField extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 56),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+                  padding: const EdgeInsetsDirectional.fromSTEB(16, 10, 10, 10),
                   child: Row(
                     children: [
                       Expanded(
@@ -226,7 +226,7 @@ class _PickerSheetState<T> extends State<_PickerSheet<T>> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: SurauTheme.minTapSize + 8),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 8, 16, 8),
           child: Row(
             children: [
               Expanded(

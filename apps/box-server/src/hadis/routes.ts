@@ -1,3 +1,4 @@
+import { reqSurau } from '../reqSurau.ts';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { HADIS_MAX_SAVED, attributionOf, gradeOf, hadisLength, providerItemId } from '@surau/core';
@@ -119,8 +120,8 @@ function summarize(h: HeHadith, saved: ReadonlySet<string>): Summary {
   };
 }
 
-function savedIds(db: DatabaseSync): Set<string> {
-  return new Set(listItems(db, 'hadis').filter((h) => h.ext !== undefined).map((h) => h.id));
+function savedIds(db: DatabaseSync, surauId: string): Set<string> {
+  return new Set(listItems(db, 'hadis', undefined, surauId).filter((h) => h.ext !== undefined).map((h) => h.id));
 }
 
 /** Registers `/api/hadis/*`. Every route is permission-listed in `ROUTE_PERMISSIONS`; nothing here is public. */
@@ -182,10 +183,10 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
 
   const pendingCount = (): number => Number(db.prepare('SELECT COUNT(*) AS n FROM hadis_source_updates').get()?.n ?? 0);
 
-  app.get('/api/hadis/status', lightOpts, async () => ({
+  app.get('/api/hadis/status', lightOpts, async (request) => ({
     online: await isOnline(),
     catalog: { ...catalogStats(db), job: deps.job.current(), lastJob: deps.job.last() },
-    saved: countLive(db, 'hadis'),
+    saved: countLive(db, 'hadis', reqSurau(request)),
     max: HADIS_MAX_SAVED,
     updates: pendingCount(),
   }));
@@ -201,14 +202,14 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
     const perPage = queryInt(request, 'perPage', 30, 10, 100);
     if (page === null || perPage === null) return send(reply, 400, 'invalid', 'invalid page');
     const r = itemsInCategory(db, id, page, perPage);
-    const saved = savedIds(db);
+    const saved = savedIds(db, reqSurau(request));
     return { items: r.items.map((h) => summarize(h, saved)), total: r.total };
   });
 
   app.get('/api/hadis/search', heavyOpts, async (request, reply) => {
     const q = queryString(request, 'q')?.trim();
     if (q === undefined || q.length < 2 || q.length > 80) return send(reply, 400, 'invalid', 'q must be 2 to 80 characters');
-    const saved = savedIds(db);
+    const saved = savedIds(db, reqSurau(request));
     return { items: search(db, q, 50).map((h) => summarize(h, saved)) };
   });
 
@@ -231,7 +232,7 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
       }
     }
     const savedItemId = providerItemId('hadeethenc', id);
-    const s = summarize(h, savedIds(db));
+    const s = summarize(h, savedIds(db, reqSurau(request)));
     const { digest: _digest, ...rest } = h;
     return {
       hadith: { ...rest, grade: s.grade, attribution: s.attribution, length: s.length, allowed: s.allowed, saved: s.saved, savedItemId: s.saved ? savedItemId : null },
@@ -249,14 +250,14 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
     const id = body.id;
     const itemId = providerItemId('hadeethenc', id);
     const liveExisting = (): Hadis | null => {
-      const e = getItem(db, 'hadis', itemId);
+      const e = getItem(db, 'hadis', itemId, reqSurau(request));
       return e !== null && e.ext?.provider === 'hadeethenc' ? e : null;
     };
 
     // Saved already: the same row, no request. Full: refused before any request.
     const already = liveExisting();
     if (already) return reply.code(200).send({ item: already });
-    if (countLive(db, 'hadis') >= HADIS_MAX_SAVED) return send(reply, 409, 'limit_reached', MSG.limit);
+    if (countLive(db, 'hadis', reqSurau(request)) >= HADIS_MAX_SAVED) return send(reply, 409, 'limit_reached', MSG.limit);
 
     let h: HeHadith;
     try {
@@ -270,20 +271,20 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
     // The checks that matter run again here, in the same synchronous step as the write (the request above awaited).
     const again = liveExisting();
     if (again) return reply.code(200).send({ item: again });
-    if (countLive(db, 'hadis') >= HADIS_MAX_SAVED) return send(reply, 409, 'limit_reached', MSG.limit);
+    if (countLive(db, 'hadis', reqSurau(request)) >= HADIS_MAX_SAVED) return send(reply, 409, 'limit_reached', MSG.limit);
     const at = deps.now().toISOString();
     const built = buildProviderItem(h, at);
     if (!built.ok) return send(reply, 400, built.error, built.error === 'field_too_long' ? MSG.fieldTooLong : MSG.tooLong);
     if (built.blocked) return send(reply, 400, 'grade_blocked', built.grade === null ? MSG.gradeUnknown : MSG.gradeBlocked);
-    const order = Math.min(MAX_ORDER, listItems(db, 'hadis').reduce((m, x) => Math.max(m, x.order ?? 0), 0) + STEP);
+    const order = Math.min(MAX_ORDER, listItems(db, 'hadis', undefined, reqSurau(request)).reduce((m, x) => Math.max(m, x.order ?? 0), 0) + STEP);
     try {
-      const result = putProviderItem(db, { ...built.item, order }, deps.actorOf(request));
+      const result = putProviderItem(db, { ...built.item, order }, deps.actorOf(request), reqSurau(request));
       try {
         upsertHadith(db, h, at);
       } catch {
         // the catalog is a convenience
       }
-      bus.emit(getVersion(db));
+      bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
       return reply.code(result.created ? 201 : 200).send({ item: result.item });
     } catch (err) {
       return contentFailure(reply, err);
@@ -296,12 +297,13 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
       return send(reply, 400, 'invalid', 'body must be {ids:[...]}');
     }
     const ids = body.ids as unknown[];
-    if (ids.length < 1 || ids.length > HADIS_MAX_SAVED || !ids.every((x): x is string => typeof x === 'string' && SAFE_ID.test(x)) ||
+    // A surau above the cap (older data, an import) can still reorder: the list must be the whole saved set anyway.
+    if (ids.length < 1 || ids.length > Math.max(HADIS_MAX_SAVED, countLive(db, 'hadis', reqSurau(request))) || !ids.every((x): x is string => typeof x === 'string' && SAFE_ID.test(x)) ||
         new Set(ids).size !== ids.length) {
-      return send(reply, 400, 'invalid', 'ids must be 1 to 500 distinct ids');
+      return send(reply, 400, 'invalid', 'ids must be 1 or more distinct ids');
     }
     const order = ids as string[];
-    const live = new Map(listItems(db, 'hadis').map((h) => [h.id, h]));
+    const live = new Map(listItems(db, 'hadis', undefined, reqSurau(request)).map((h) => [h.id, h]));
     // Every id must exist, and the list must be the whole set: a stale list would silently reshuffle what it leaves out.
     const unknown = order.find((id) => !live.has(id));
     if (unknown !== undefined) return send(reply, 400, 'invalid', `hadis ${unknown} not found`);
@@ -313,7 +315,7 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
           const item = live.get(id)!;
           const next = (i + 1) * STEP;
           if (item.order === next) continue;
-          putItemIn(db, 'hadis', { ...item, order: next }, deps.actorOf(request));
+          putItemIn(db, 'hadis', { ...item, order: next }, deps.actorOf(request), undefined, reqSurau(request));
           changed++;
         }
       });
@@ -321,15 +323,15 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
       return contentFailure(reply, err);
     }
     if (changed === 0) return { ok: true, count: order.length };
-    bus.emit(getVersion(db));
+    bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
     return { ok: true, count: order.length };
   });
 
-  app.get('/api/hadis/updates', lightOpts, async () => {
+  app.get('/api/hadis/updates', lightOpts, async (request) => {
     const rows = db.prepare('SELECT item_id, provider_id, new_json, found_at FROM hadis_source_updates ORDER BY found_at, item_id').all();
     const updates = [];
     for (const r of rows) {
-      const item = getItem(db, 'hadis', String(r.item_id));
+      const item = getItem(db, 'hadis', String(r.item_id), reqSurau(request));
       const pending = parsePending(r.new_json);
       if (item === null || item.ext === undefined || pending === null) continue;
       const changed: string[] = [];
@@ -356,7 +358,7 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
     const row = db.prepare('SELECT new_json FROM hadis_source_updates WHERE item_id = ?').get(id);
     if (row === undefined) return send(reply, 404, 'no_update', 'no pending update');
     const pending = parsePending(row.new_json);
-    const item = getItem(db, 'hadis', id);
+    const item = getItem(db, 'hadis', id, reqSurau(request));
     if (item === null || item.ext?.provider !== 'hadeethenc') {
       db.prepare('DELETE FROM hadis_source_updates WHERE item_id = ?').run(id);
       return send(reply, 404, 'no_update', 'no pending update');
@@ -374,11 +376,11 @@ export function registerHadisRoutes(app: FastifyInstance, deps: HadisRouteDeps):
     }
     try {
       const out = tx(db, () => {
-        const r = putProviderItemIn(db, built.item, deps.actorOf(request));
+        const r = putProviderItemIn(db, built.item, deps.actorOf(request), reqSurau(request));
         db.prepare('DELETE FROM hadis_source_updates WHERE item_id = ?').run(id);
         return r;
       });
-      bus.emit(getVersion(db));
+      bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
       return { item: out.item, gradeBlocked: built.blocked };
     } catch (err) {
       return contentFailure(reply, err);

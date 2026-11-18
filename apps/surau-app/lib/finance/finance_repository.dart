@@ -21,12 +21,22 @@ import '../store/local_store.dart';
 import '../sync/outbox.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_providers.dart';
+import 'entry_check.dart';
 import 'finance_local.dart';
 import 'finance_models.dart';
 import 'ledger.dart';
 import 'photo_prep.dart';
 
 final RegExp _ymPattern = RegExp(r'^\d{4}-(0[1-9]|1[0-2])$');
+
+/// The box would refuse this entry; it was not queued.
+class FinanceEntryRefused implements Exception {
+  const FinanceEntryRefused(this.reasons);
+  final List<String> reasons;
+
+  @override
+  String toString() => 'FinanceEntryRefused: ${reasons.join('; ')}';
+}
 
 class FinanceRepository {
   FinanceRepository({
@@ -122,6 +132,20 @@ class FinanceRepository {
   ]) => local.perihal(direction: direction, includeArchived: includeArchived);
 
   Future<List<MonthState>> months() => local.months();
+
+  /// True when the month `YYYY-MM` is closed in the local copy.
+  Future<bool> monthClosed(String ym) async =>
+      await local.monthStatus(ym) == 'closed';
+
+  /// The entries that reached a closed month after it was closed: ids from
+  /// the month's own row or its frozen report.
+  Future<List<String>> lateEntryIds(String ym) async {
+    for (final m in await local.months()) {
+      if (m.ym != ym) continue;
+      return {...m.lateEntries, ...?m.report?.lateEntries}.toList();
+    }
+    return const [];
+  }
 
   /// The month's report as data: the frozen copy of a closed month, else
   /// computed from the local ledger (works offline).
@@ -241,6 +265,14 @@ class FinanceRepository {
         throw ArgumentError('$k is required');
       }
     }
+    final refused = validateEntryPayload(
+      payload,
+      todayKl: todayKl,
+      // An opening balance dated on the day the module started is always
+      // inside the date window; the box knows that day, here it is the date.
+      startedOn: kind == 'opening' ? payload['entryDate'] as String : null,
+    );
+    if (refused.isNotEmpty) throw FinanceEntryRefused(refused);
     final id = _ulid.next();
     if (photo != null) {
       // Queued first, so the bytes are there when the entry lands.

@@ -13,13 +13,18 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_lang.dart';
 import '../../app/deps.dart';
 import '../../app/providers.dart';
 import '../../box/box_client.dart';
-import '../../sync/live_only.dart';
+import '../../l10n/generated/s.dart';
+import '../../l10n/s_lookup.dart';
+import '../common/error_text.dart' show errorText;
 import '../shell/box_gateway.dart';
+import '../shell/live_camera_gateway.dart';
 import 'publisher.dart';
 import 'recordings_store.dart';
+import 'web_publisher.dart';
 
 // ---- the box's side ----
 
@@ -77,6 +82,9 @@ class LiveBoxStatus {
     this.ingestReady,
     this.stopping = false,
     this.warnings = const {},
+    this.audio = const [],
+    this.otherLive,
+    this.stopFailed = false,
   });
 
   final bool boxReachable;
@@ -124,6 +132,26 @@ class LiveBoxStatus {
   /// codes this app does not know are dropped.
   final Set<String> warnings;
 
+  /// Per-source health of the audio mix as the box reports it (alignment,
+  /// level, lost sources); empty while the box says nothing.
+  final List<LiveAudioSourceDto> audio;
+
+  /// A live another device started (this one holds no session): who started
+  /// it and its box session id. Read-only here; the Pentadbir may stop it.
+  final OtherLive? otherLive;
+
+  /// This device's stop did not reach the box: [sessionId] is kept (the box
+  /// still has the live, and so may YouTube and the TV) and the controller
+  /// tries again every few seconds while the page lives.
+  final bool stopFailed;
+
+  LiveAudioSourceDto? audioOf(String id) {
+    for (final a in audio) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
   LiveBoxStatus copyWith({
     bool? boxReachable,
     bool? internet,
@@ -139,6 +167,9 @@ class LiveBoxStatus {
     Object? ingestReady = _keep,
     bool? stopping,
     Set<String>? warnings,
+    List<LiveAudioSourceDto>? audio,
+    Object? otherLive = _keep,
+    bool? stopFailed,
   }) => LiveBoxStatus(
     boxReachable: boxReachable ?? this.boxReachable,
     internet: internet ?? this.internet,
@@ -162,7 +193,23 @@ class LiveBoxStatus {
         : ingestReady as bool?,
     stopping: stopping ?? this.stopping,
     warnings: warnings ?? this.warnings,
+    audio: audio ?? this.audio,
+    otherLive: identical(otherLive, _keep) ? this.otherLive : otherLive as OtherLive?,
+    stopFailed: stopFailed ?? this.stopFailed,
   );
+}
+
+/// A live started by another device (see [LiveBoxStatus.otherLive]).
+class OtherLive {
+  const OtherLive({required this.sessionId, required this.starter, this.video});
+
+  final String sessionId;
+
+  /// The starting device as the box names it.
+  final String starter;
+
+  /// `phone` or `external`; null while the box does not say.
+  final String? video;
 }
 
 /// The box's firewall rules for the media ports are missing or wrong.
@@ -200,6 +247,9 @@ OutputState? kioskLeg(OutputState? publisher, bool? boxReady) {
 /// branch): `--dart-define=youtubeViaBox=true`. The phone then sends SRT only.
 const bool youtubeViaBoxBuild = bool.fromEnvironment('youtubeViaBox');
 
+/// Seconds between the tries to end a live whose stop did not reach the box.
+const Duration liveStopRetryInterval = Duration(seconds: 5);
+
 /// Seconds between status polls while the Live tab is open.
 const Duration livePollInterval = Duration(seconds: 2);
 
@@ -233,16 +283,49 @@ final livePublisherProvider = Provider<LivePublisher>((ref) {
     return v is int ? v : fallback;
   }
 
-  final p = publisherFor(
-    deps.platform,
-    box: ref.read(enrolledBoxProvider)?.box,
-    tokenProvider: () async => ref.read(sessionProvider)?.token,
-    segmentMinutes: setting('recording', 'segmentMinutes', 15),
-    maxBitrateKbps: setting('liveYoutube', 'maxBitrateKbps', 2500),
-  );
+  final segmentMinutes = setting('recording', 'segmentMinutes', 15);
+  final maxBitrateKbps = setting('liveYoutube', 'maxBitrateKbps', 2500);
+  final LivePublisher p;
+  if (kIsWeb || deps.platform == 'web' || deps.platform == 'ios-web') {
+    // The browser publisher also changes the box's audio mix (a box-combined live) and saves the fallback offset.
+    p = WebPublisher(
+      tokenProvider: () async => ref.read(sessionProvider)?.token,
+      box: ref.read(enrolledBoxProvider)?.box,
+      segmentMinutes: segmentMinutes,
+      maxBitrateKbps: maxBitrateKbps,
+      audioSender: (mix, {video, avOffsetMs}) async =>
+          await ref.read(gatewayProvider)?.changeLiveAudio(mix, video: video, avOffsetMs: avOffsetMs),
+      offsetSaver: (id, ms) => saveCameraOffset(ref.read(gatewayProvider), ref.read(settingsProvider).value?.value, id, ms),
+      lang: () => sFor(ref.read(appLangProvider)),
+    );
+  } else {
+    p = publisherFor(
+      deps.platform,
+      box: ref.read(enrolledBoxProvider)?.box,
+      tokenProvider: () async => ref.read(sessionProvider)?.token,
+      segmentMinutes: segmentMinutes,
+      maxBitrateKbps: maxBitrateKbps,
+    );
+  }
   ref.onDispose(() => disposePublisher(p));
   return p;
 });
+
+/// "Imbangan masa audio" saved into the camera settings (`liveCamera.avOffsetMs`): one source's value changed.
+Future<void> saveCameraOffset(
+  BoxGateway? gateway,
+  Map<String, dynamic>? settings,
+  String id,
+  int ms,
+) async {
+  if (gateway == null) return;
+  final f = settings?['liveCamera'];
+  final cur = f is Map && f['avOffsetMs'] is Map ? (f['avOffsetMs'] as Map) : const <dynamic, dynamic>{};
+  int of(String k) => cur[k] is int ? cur[k] as int : 0;
+  await gateway.put('/api/settings/liveCamera', {
+    'avOffsetMs': {'deviceMic': of('deviceMic'), 'boxInput': of('boxInput'), id: ms},
+  });
+}
 
 /// The state holder behind the Live tab. This base class works on a bare
 /// publisher with no box (the screen tests and goldens); [LiveController]
@@ -266,6 +349,8 @@ class LiveBoxNotifier extends Notifier<LiveBoxStatus> {
   Future<void> startLive({
     required String? kuliahId,
     required bool youtube,
+    VideoSourceKind video = VideoSourceKind.phone,
+    LiveAudioMix? mix,
   }) async {
     await ref
         .read(livePublisherProvider)
@@ -277,7 +362,21 @@ class LiveBoxNotifier extends Notifier<LiveBoxStatus> {
         );
   }
 
-  Future<void> stopLive() => ref.read(livePublisherProvider).stop();
+  Future<void> stopLive({String? notice}) async {
+    await ref.read(livePublisherProvider).stop();
+    if (notice != null) state = state.copyWith(notice: notice);
+  }
+
+  /// The Pentadbir stops a live another device started ("Henti kecemasan").
+  Future<void> emergencyStop() async => state = state.copyWith(otherLive: null);
+
+  /// Tries again to end this device's own live after a stop that did not
+  /// reach the box.
+  Future<void> retryStop() async {}
+
+  /// True once per live when the person has left the Live page while it is
+  /// still running (the screen then says so).
+  bool takeLeaveReminder() => false;
 
   Future<void> signIn() async =>
       state = state.copyWith(youtube: const YoutubeAccount.signingIn());
@@ -299,11 +398,18 @@ final liveBoxProvider = NotifierProvider<LiveBoxNotifier, LiveBoxStatus>(
 class LiveController extends LiveBoxNotifier {
   LiveController() : super();
 
-  static const String signInFailed =
-      'Log masuk YouTube tidak berjaya. Cuba lagi.';
-  static const String startFailed = 'Siaran tidak dapat dimulakan';
+  /// The catalogue of the app language now; a notice keeps the language it was made in.
+  S get _s => sFor(ref.read(appLangProvider));
+
+  /// BM texts (the notice itself is made in the app language).
+  static String get signInFailed => sBm.liveSignInFailed;
+  static String get startFailed => sBm.liveStartFailed;
 
   Timer? _poll;
+  Timer? _retryTimer;
+  bool _leftWhileLive = false;
+  bool _leaveAsked = false;
+  bool _retrying = false;
   Timer? _signInTimer;
   Timer? _ingestTimer;
   List<String> _boxWarnings = const [];
@@ -322,6 +428,7 @@ class LiveController extends LiveBoxNotifier {
     ref.onDispose(() {
       _disposed = true;
       _poll?.cancel();
+      _retryTimer?.cancel();
       _signInTimer?.cancel();
       _ingestTimer?.cancel();
       _targets = null;
@@ -335,7 +442,9 @@ class LiveController extends LiveBoxNotifier {
       ref.read(appDepsProvider).platform == 'android' ? 'android' : 'web';
 
   void _put(LiveBoxStatus s) {
-    if (!_disposed) state = s;
+    if (_disposed) return;
+    state = s;
+    _syncPoll();
   }
 
   // ---- polling ----
@@ -346,16 +455,37 @@ class LiveController extends LiveBoxNotifier {
     _attached = true;
     unawaited(refreshPending());
     unawaited(pollOnce());
-    _poll = Timer.periodic(ref.read(livePollIntervalProvider), (_) {
-      unawaited(pollOnce());
-    });
+    _syncPoll();
   }
 
   @override
   void detach() {
+    if (_disposed || !_attached) return;
     _attached = false;
-    _poll?.cancel();
-    _poll = null;
+    if (state.sessionId != null) _leftWhileLive = true;
+    _syncPoll();
+  }
+
+  /// The status poll is also the heartbeat of the box session (an external
+  /// camera live ends 10 minutes after the last one): it runs while the page
+  /// is open AND while this device holds a live, whether or not the page is.
+  void _syncPoll() {
+    final want = !_disposed && (_attached || state.sessionId != null);
+    if (want && _poll == null) {
+      _poll = Timer.periodic(ref.read(livePollIntervalProvider), (_) {
+        unawaited(pollOnce());
+      });
+    } else if (!want && _poll != null) {
+      _poll?.cancel();
+      _poll = null;
+    }
+  }
+
+  @override
+  bool takeLeaveReminder() {
+    if (_disposed || !_leftWhileLive || _leaveAsked || state.sessionId == null) return false;
+    _leaveAsked = true;
+    return true;
   }
 
   @visibleForTesting
@@ -373,9 +503,11 @@ class LiveController extends LiveBoxNotifier {
     _polling = true;
     final sentWith = state.sessionId;
     try {
-      final dto = LiveStatusDto.fromJson(
-        await gateway.getFresh('/api/live/status', quiet: () => state.stopping),
-      );
+      final raw = await gateway.getFresh('/api/live/status', quiet: () => state.stopping);
+      final dto = LiveStatusDto.fromJson(raw);
+      final pub = ref.read(livePublisherProvider);
+      // The browser publisher words the audio rows and messages from the box's own status.
+      if (pub is WebPublisher && state.sessionId != null) pub.applyBoxStatus(raw);
       // An answer that predates a start or a stop made meanwhile is stale.
       if (state.sessionId != sentWith) return dto;
       if (!state.stopping && sentWith != null && dto.sessionId != sentWith) {
@@ -397,13 +529,12 @@ class LiveController extends LiveBoxNotifier {
     }
   }
 
-  static const endedByBox = 'Siaran telah dihentikan oleh kotak.';
-
   /// The box no longer has our session (or has another one): the live is
   /// over. Stop the publisher, clear the state, tell the person. No stop
   /// is POSTed: there is nothing left to stop on the box.
   Future<void> _endedByBox(LiveStatusDto d) async {
     _stopIngestPoll();
+    _stopRetry();
     final publisher = ref.read(livePublisherProvider);
     _put(state.copyWith(stopping: true));
     try {
@@ -421,7 +552,9 @@ class LiveController extends LiveBoxNotifier {
         youtubeViaBox: false,
         ingestReady: null,
         stopping: false,
-        notice: endedByBox,
+        // A stop we were retrying needs no "ended by the box" line: it is simply over.
+        notice: state.stopFailed ? null : _s.ra4EndedByBox,
+        stopFailed: false,
         warnings: _mediaWarnings(state.warnings, live: false),
       ),
     );
@@ -464,6 +597,10 @@ class LiveController extends LiveBoxNotifier {
         youtubeLeg: leg,
         ingestReady: live ? d.ingestReady : null,
         warnings: _mediaWarnings(d.warnings, live: live),
+        audio: d.audio,
+        otherLive: !live && d.sessionId != null
+            ? OtherLive(sessionId: d.sessionId!, starter: d.startedBy ?? _s.liveOtherDevice, video: d.video)
+            : null,
       ),
     );
   }
@@ -474,6 +611,8 @@ class LiveController extends LiveBoxNotifier {
   Future<void> startLive({
     required String? kuliahId,
     required bool youtube,
+    VideoSourceKind video = VideoSourceKind.phone,
+    LiveAudioMix? mix,
   }) async {
     final publisher = ref.read(livePublisherProvider);
     final gateway = _gateway;
@@ -483,7 +622,10 @@ class LiveController extends LiveBoxNotifier {
     }
     final android = _source == 'android';
     final via = android && !youtubeViaBoxBuild ? 'device' : 'box';
-    _put(state.copyWith(notice: null, busyDevice: null, youtubeSeconds: 0));
+    _put(state.copyWith(notice: null, busyDevice: null, youtubeSeconds: 0, stopFailed: false));
+    _stopRetry();
+    _leftWhileLive = false;
+    _leaveAsked = false;
 
     LiveStartResult result;
     try {
@@ -493,6 +635,11 @@ class LiveController extends LiveBoxNotifier {
           'source': _source,
           'outputs': {'kiosk': true, 'youtube': youtube},
           'youtubeVia': via,
+          // The external camera and Mic-in: an older box reads neither and starts today's phone live.
+          if (video == VideoSourceKind.external || (mix?.boxInput.enabled ?? false)) ...{
+            'video': video == VideoSourceKind.external ? 'external' : 'phone',
+            'audio': ?mix?.toJson(),
+          },
         }),
       );
     } on OfflineWriteRefused {
@@ -505,11 +652,11 @@ class LiveController extends LiveBoxNotifier {
       rethrow;
     } on BoxError catch (e) {
       if (e.code == 'live_busy') {
-        _put(state.copyWith(busyDevice: _deviceIn(e.message)));
+        _put(state.copyWith(busyDevice: _deviceIn(e.message, _s)));
       } else if (e.code == 'live_rate') {
-        _put(state.copyWith(notice: liveRateText));
+        _put(state.copyWith(notice: _s.liveRateText));
       } else {
-        _put(state.copyWith(notice: e.message));
+        _put(state.copyWith(notice: errorText(_s, e)));
       }
       return;
     }
@@ -546,7 +693,7 @@ class LiveController extends LiveBoxNotifier {
             : null,
         ingestReady: false,
         watchUrl: null,
-        notice: youtube && !ytRunning ? _youtubeDropped(result.warnings) : null,
+        notice: youtube && !ytRunning ? _youtubeDropped(result.warnings, _s) : null,
         warnings: _mediaWarnings(result.warnings, live: true),
       ),
     );
@@ -556,7 +703,7 @@ class LiveController extends LiveBoxNotifier {
       // No picture will come: free the box side again and say so.
       _targets = null;
       _put(
-        state.copyWith(sessionId: null, ingestReady: null, notice: startFailed),
+        state.copyWith(sessionId: null, ingestReady: null, notice: _s.liveStartFailed),
       );
       await _postStop(gateway, result.sessionId);
       rethrow;
@@ -650,14 +797,20 @@ class LiveController extends LiveBoxNotifier {
     _stopIngestPoll();
     _put(
       state.copyWith(
-        notice:
-            _youtubeDropped(_boxWarnings) ?? warningText('youtube_forbidden'),
+        notice: _youtubeDropped(_boxWarnings, _s) ??
+            // The cloud holds the YouTube sign-in: it did not answer, YouTube did not refuse.
+            (_boxWarnings.contains(cloudUnreachableWarning)
+                ? warningText(cloudUnreachableWarning, _s)
+                : warningText('youtube_forbidden', _s)),
       ),
     );
   }
 
+  @visibleForTesting
+  void giveUpYoutubeForTest() => _ingestGaveUp();
+
   @override
-  Future<void> stopLive() async {
+  Future<void> stopLive({String? notice}) async {
     final publisher = ref.read(livePublisherProvider);
     final gateway = _gateway;
     final id = state.sessionId;
@@ -683,65 +836,143 @@ class LiveController extends LiveBoxNotifier {
       }
       // One last look for the summary (YouTube minutes, watch page).
       await pollOnce(duringStop: true);
-      await _postStop(gateway, id);
-      _put(
-        state.copyWith(
-          sessionId: null,
-          youtubeLeg: null,
-          youtubeViaBox: false,
-          ingestReady: null,
-          warnings: _mediaWarnings(state.warnings, live: false),
-        ),
-      );
+      if (!await _postStop(gateway, id)) {
+        // The stop did not reach the box: it still has the live (and so may
+        // YouTube and the TV). Keep the session and try again until it answers.
+        _put(state.copyWith(stopFailed: true, notice: _s.ra4StopNotYet));
+        _startRetry();
+        return;
+      }
+      _clearSession();
       unawaited(refreshPending());
     } finally {
-      _put(state.copyWith(stopping: false));
+      _put(
+        state.copyWith(
+          stopping: false,
+          notice: state.stopFailed ? state.notice : (notice ?? state.notice),
+        ),
+      );
     }
   }
 
-  Future<void> _postStop(BoxGateway gateway, String id) async {
+  void _clearSession() {
+    _stopRetry();
+    _put(
+      state.copyWith(
+        sessionId: null,
+        youtubeLeg: null,
+        youtubeViaBox: false,
+        ingestReady: null,
+        stopFailed: false,
+        warnings: _mediaWarnings(state.warnings, live: false),
+      ),
+    );
+  }
+
+  void _startRetry() {
+    _retryTimer ??= Timer.periodic(liveStopRetryInterval, (_) {
+      unawaited(retryStop());
+    });
+  }
+
+  void _stopRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+  }
+
+  @override
+  Future<void> retryStop() async {
+    final gateway = _gateway;
+    final id = state.sessionId;
+    if (_retrying || _disposed || gateway == null || id == null || !state.stopFailed) {
+      return;
+    }
+    _retrying = true;
+    try {
+      if (await _postStop(gateway, id)) {
+        _clearSession();
+        _put(state.copyWith(notice: null));
+        unawaited(refreshPending());
+      }
+    } finally {
+      _retrying = false;
+    }
+  }
+
+  /// "Henti kecemasan": the Pentadbir (`settings:write`) stops the live of
+  /// another device. The box writes the emergency-stop audit entry.
+  @override
+  Future<void> emergencyStop() async {
+    final gateway = _gateway;
+    final id = state.otherLive?.sessionId;
+    if (gateway == null || id == null) return;
+    if (!await _postStop(gateway, id)) {
+      // Not stopped: the live stays on the screen with its Stop.
+      _put(state.copyWith(notice: _s.ra4StopNotYet));
+      return;
+    }
+    _put(state.copyWith(otherLive: null, audio: const [], notice: null));
+    unawaited(pollOnce());
+  }
+
+  /// `POST /api/live/stop`. True when the box no longer has that live (it
+  /// stopped it, or it was already over: 404 or 409 no_session); false when
+  /// the stop did not get an answer from it (away, 401/403/429/5xx): the live
+  /// may still be running.
+  Future<bool> _postStop(BoxGateway gateway, String id) async {
     try {
       await gateway.post('/api/live/stop', {'sessionId': id});
       _put(state.copyWith(boxReachable: true));
+      return true;
     } on OfflineWriteRefused {
       _put(state.copyWith(boxReachable: false));
     } on BoxUnreachable {
       _put(state.copyWith(boxReachable: false));
+    } on LiveOnly {
+      _put(state.copyWith(boxReachable: false));
+    } on Uncertain {
+      _put(state.copyWith(boxReachable: false));
     } on SessionExpired {
-      // the guard sends the person to unlock
-    } on BoxError {
-      // already ended on the box: nothing to do
+      // the guard sends the person to unlock; the live is still there
+    } on BoxError catch (e) {
+      // Only "no such live" means ended: a 404, or a 409 with the box's
+      // no_session code. 401/403/429/5xx are not an answer (403 not_owner:
+      // another device owns the live, so the session stays).
+      if (e.status == 404) return true;
+      if (e.status == 409 && (e.code == 'no_session' || e.code == 'not_found')) return true;
+      _put(state.copyWith(boxReachable: true));
     }
+    return false;
   }
 
-  static String _deviceIn(String message) {
+  static String _deviceIn(String message, S s) {
     final m = RegExp(r'\(([^)]+)\)\s*$').firstMatch(message);
-    return m?.group(1) ?? 'peranti lain';
+    return m?.group(1) ?? s.liveOtherDevice;
   }
 
-  static const liveRateText =
-      'Terlalu banyak cubaan mula siaran. Cuba lagi sebentar lagi.';
-
-  /// BM text of one box warning code, null when unknown.
+  /// The text of one box warning code in the language of [lang] (BM when
+  /// none is given), null when unknown.
   @visibleForTesting
-  static String? warningText(String code) => switch (code) {
-    'youtube_not_signed_in' =>
-      'YouTube belum dilog masuk di kotak. Siaran ke skrin surau berjalan.',
-    'no_internet' => 'Tiada internet: YouTube dimatikan',
-    'youtube_off' => 'YouTube dimatikan oleh pentadbir',
-    'youtube_quota' => 'Kuota YouTube hari ini telah habis.',
-    'youtube_reauthorise' => 'Log masuk YouTube perlu diperbaharui.',
-    'youtube_forbidden' => 'YouTube menolak permintaan.',
-    'live_rate' => liveRateText,
-    cloudUnreachableWarning => 'YouTube: awan tidak dapat dihubungi',
-    _ => null,
-  };
+  static String? warningText(String code, [S? lang]) {
+    final s = lang ?? sBm;
+    return switch (code) {
+      'youtube_not_signed_in' => s.liveWarnYoutubeNotSignedIn,
+      'no_internet' => s.liveWarnNoInternet,
+      'youtube_off' => s.liveWarnYoutubeOff,
+      'youtube_quota' => s.liveWarnYoutubeQuota,
+      'youtube_reauthorise' => s.liveWarnYoutubeReauth,
+      'youtube_forbidden' => s.liveWarnYoutubeForbidden,
+      'live_rate' => s.liveRateText,
+      cloudUnreachableWarning => s.liveWarnCloudUnreachable,
+      _ => null,
+    };
+  }
 
-  static String? _youtubeDropped(List<String> warnings) {
+  static String? _youtubeDropped(List<String> warnings, S s) {
     for (final w in warnings) {
       // the live screen's banner already says this one
       if (w == cloudUnreachableWarning) continue;
-      final t = warningText(w);
+      final t = warningText(w, s);
       if (t != null) return t;
     }
     return null;
@@ -770,11 +1001,11 @@ class LiveController extends LiveBoxNotifier {
       _schedulePoll(dto.interval);
     } on LiveOnly {
       // the cloud holds the YouTube sign-in and did not answer
-      _put(state.copyWith(notice: liveOnlyMessage));
+      _put(state.copyWith(notice: _s.liveOnlyNeedsConnection));
     } on OfflineWriteRefused {
       _put(state.copyWith(boxReachable: false));
     } on BoxError catch (e) {
-      _put(state.copyWith(notice: e.message));
+      _put(state.copyWith(notice: errorText(_s, e)));
     } on BoxUnreachable {
       _put(state.copyWith(boxReachable: false));
     }
@@ -806,7 +1037,7 @@ class LiveController extends LiveBoxNotifier {
         _put(
           state.copyWith(
             youtube: const YoutubeAccount.signedOut(),
-            notice: signInFailed,
+            notice: _s.liveSignInFailed,
           ),
         );
       }
@@ -814,7 +1045,7 @@ class LiveController extends LiveBoxNotifier {
       _put(
         state.copyWith(
           youtube: const YoutubeAccount.signedOut(),
-          notice: e.message,
+          notice: errorText(_s, e),
         ),
       );
     } on LiveOnly {
@@ -835,11 +1066,11 @@ class LiveController extends LiveBoxNotifier {
       await gateway.post('/api/live/youtube/signout', const {});
       _put(state.copyWith(youtube: const YoutubeAccount.signedOut()));
     } on LiveOnly {
-      _put(state.copyWith(notice: liveOnlyMessage));
+      _put(state.copyWith(notice: _s.liveOnlyNeedsConnection));
     } on OfflineWriteRefused {
       _put(state.copyWith(boxReachable: false));
     } on BoxError catch (e) {
-      _put(state.copyWith(notice: e.message));
+      _put(state.copyWith(notice: errorText(_s, e)));
     } on BoxUnreachable {
       _put(state.copyWith(boxReachable: false));
     }

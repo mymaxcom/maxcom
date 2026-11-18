@@ -18,6 +18,8 @@ import { openDb } from '../src/db.ts';
 import { getSettings } from '../src/settingsStore.ts';
 import { getAssetPath, putAsset } from '../src/assets/store.ts';
 import { loginAsAdmin } from './authHelpers.ts';
+import { setUsersRole } from '../src/auth/users.ts';
+import { putSurauAsset, StorageFullError } from '../src/surau/storage.ts';
 
 const req = createRequire(import.meta.url);
 const { PNG } = req('pngjs') as typeof import('pngjs');
@@ -346,11 +348,56 @@ describe('through the API', () => {
 
   it('showName is a setting, true by default, and is in the public info', async () => {
     const { app, admin } = await boot();
-    expect(getSettings(app.surau.db).surauInfo.showName).toBe(true);
+    expect(getSettings(app.surau.db, 'sdm').surauInfo.showName).toBe(true);
     const off = await app.inject({ method: 'PUT', url: '/api/settings/surauInfo', headers: admin.headers, payload: { showName: false } });
     expect(off.statusCode).toBe(200);
     const info = (await app.inject({ method: 'GET', url: '/api/surau/info' })).json();
     expect(info.showName).toBe(false);
+  });
+});
+
+describe('deriveImage on the cloud: per surau (qs-gate)', () => {
+  function cloud() {
+    const d = tmp();
+    const db = track(openDb(join(d, 'x.db')));
+    setUsersRole(db, 'cloud');
+    for (const s of ['sa', 'sb']) {
+      db.prepare('INSERT INTO suraus (id, name, created_at, created_by) VALUES (?, ?, ?, ?)').run(s, `Surau ${s}`, new Date().toISOString(), 'test');
+    }
+    const id = putSurauAsset(db, d, MAXCOM, 'image/png', 'test', 'sa').id;
+    const holds = (s: string, a: string): boolean => db.prepare('SELECT 1 AS x FROM surau_assets WHERE surau_id = ? AND asset_id = ?').get(s, a) !== undefined;
+    return { d, db, id, holds };
+  }
+  const ref = (id: string) => ({ asset: id, bg: 'remove' as const, crop: { x: 0.03, y: 0.05, w: 0.94, h: 0.94 } });
+
+  it('the derivative is held and counted by the surau it was made for', () => {
+    const { d, db, id, holds } = cloud();
+    const out = deriveImage(db, d, 'logo', ref(id), undefined, 'sa');
+    expect(out).toMatch(ID);
+    expect(out).not.toBe(id);
+    expect(holds('sa', out)).toBe(true);
+    expect(holds('sb', out)).toBe(false);
+    // the same again finds it (no second copy)
+    expect(deriveImage(db, d, 'logo', ref(id), undefined, 'sa')).toBe(out);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM asset_derivatives').get()!.n).toBe(1);
+  });
+
+  it('another surau cannot derive from a source it does not hold, nor reuse the derivative of the first surau', () => {
+    const { d, db, id, holds } = cloud();
+    const out = deriveImage(db, d, 'logo', ref(id), undefined, 'sa');
+    expect(() => deriveImage(db, d, 'logo', ref(id), undefined, 'sb')).toThrow(/does not exist/);
+    expect(resolveImageId(db, d, 'logo', ref(id), 'sb')).toBe(id);
+    expect(holds('sb', out)).toBe(false);
+    // once B holds the source (its own upload), its derivative is made and held for B
+    putSurauAsset(db, d, MAXCOM, 'image/png', 'test', 'sb');
+    expect(deriveImage(db, d, 'logo', ref(id), undefined, 'sb')).toBe(out);
+    expect(holds('sb', out)).toBe(true);
+  });
+
+  it('a derivative past the limit of the surau is refused storage_full', () => {
+    const { d, db, id } = cloud();
+    db.prepare('UPDATE suraus SET storage_limit_bytes = ? WHERE id = ?').run(MAXCOM.length + 1, 'sa');
+    expect(() => deriveImage(db, d, 'logo', ref(id), undefined, 'sa')).toThrow(StorageFullError);
   });
 });
 
@@ -391,7 +438,7 @@ describe('first-boot logo.png gets an initial adjustment', () => {
     const warns: string[] = [];
     applySurauIni(db, d, { info: () => undefined, warn: (m) => warns.push(m) });
     expect(warns).toEqual([]);
-    const logo = getSettings(db).surauInfo.logo;
+    const logo = getSettings(db, 'sdm').surauInfo.logo;
     expect(typeof logo).toBe('object');
     const ref = logo as { asset: string; crop?: { x: number; y: number; w: number; h: number }; bg?: string };
     expect(ref.asset).toMatch(ID);
@@ -407,6 +454,6 @@ describe('first-boot logo.png gets an initial adjustment', () => {
     writeFileSync(join(d, 'logo.png'), solid(32, 32, [200, 30, 30, 255]));
     const db = track(openDb(join(d, 'x.db')));
     applySurauIni(db, d, { info: () => undefined, warn: () => undefined });
-    expect(getSettings(db).surauInfo.logo).toMatch(ID);
+    expect(getSettings(db, 'sdm').surauInfo.logo).toMatch(ID);
   });
 });

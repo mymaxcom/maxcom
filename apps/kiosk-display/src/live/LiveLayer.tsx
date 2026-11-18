@@ -130,7 +130,15 @@ export function LiveVideo({ live, settings, mode, onAir }: LiveVideoProps) {
     };
   }, [showVideo]);
 
-  const shown = showVideo && playing && fresh;
+  // While the camera is lost (live.waiting) the last picture stays: the video element is not removed and the live
+  // screen keeps the stage. Only a picture that was really on air is held; when waiting clears the normal
+  // freshness rules apply again. (The box ends a wait longer than 10 minutes by stopping the live itself.)
+  const waiting = live.waiting === true;
+  const flowing = showVideo && playing && fresh;
+  const heldRef = useRef(false);
+  if (flowing) heldRef.current = true;
+  else if (!waiting || !showVideo) heldRef.current = false;
+  const shown = flowing || (waiting && heldRef.current);
   const onAirRef = useRef(onAir);
   onAirRef.current = onAir;
   useEffect(() => {

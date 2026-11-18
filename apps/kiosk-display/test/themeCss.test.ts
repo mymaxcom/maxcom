@@ -15,8 +15,12 @@ function rule(css: string, sel: string): string {
 
 it('every fitted card text also follows --scale', () => {
   const fits = content.match(/font-size:[^;]*var\(--fit[^;]*;/g) ?? [];
-  expect(fits.length).toBe(14); // + the four-fund tabung name (theme round 2, maximise the screen)
+  expect(fits.length).toBe(9); // the tabung screen (tabung-r1) fits through its own --f below
   for (const d of fits) expect(d, d).toContain('var(--scale, 1)');
+  // The tabung screen: one factor for the fit and the text size, used by every text that grows with the page.
+  expect(content).toContain('--f: calc(var(--fit, 1) * var(--scale, 1));');
+  const tabungFits = content.match(/font-size:[^;]*var\(--f[,)][^;]*;/g) ?? [];
+  expect(tabungFits.length).toBeGreaterThanOrEqual(12);
 });
 it('the phase title and sub line follow --scale; the big countdown and the clock do not', () => {
   expect(rule(styles, '.phase__title')).toMatch(/font-size:\s*calc\(3\.2rem \* var\(--scale, 1\)\)/);

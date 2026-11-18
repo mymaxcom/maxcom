@@ -5,6 +5,7 @@
 // that was already corrected still points at the ORIGINAL entry.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/shell.dart';
@@ -68,6 +69,15 @@ class _CorrectionScreenState extends ConsumerState<CorrectionScreen> {
     }
     final detail = await repo.entry(target);
     if (!mounted || detail == null) return;
+    // A cancelled entry takes no correction: the box refuses every kind.
+    if (detail.effective.voided) {
+      setState(() {
+        _id = null;
+        _detail = null;
+        _error = S.of(context).errcAlreadyVoided;
+      });
+      return;
+    }
     setState(() {
       _detail = detail;
       _id = detail.entry.id;
@@ -167,6 +177,10 @@ class _CorrectionScreenState extends ConsumerState<CorrectionScreen> {
       for (final e in entries)
         if (e.kind == 'adjust' && e.correctsId != null) e.correctsId!,
     };
+    final voided = <String>{
+      for (final e in effective(entries))
+        if (e.voided) e.id,
+    };
     final q = _search.text.trim().toLowerCase();
     final list = [
       for (final e in entries)
@@ -184,6 +198,15 @@ class _CorrectionScreenState extends ConsumerState<CorrectionScreen> {
             .copyWith(color: SurauColors.muted),
       ),
       const SizedBox(height: 12),
+      if (_error != null) ...[
+        FinInfoBox(
+          key: const Key('fin-cor-refused'),
+          text: _error!,
+          icon: Icons.error_outline_rounded,
+          tone: FinTone.danger,
+        ),
+        const SizedBox(height: 12),
+      ],
       TextField(
         key: const Key('fin-cor-search'),
         controller: _search,
@@ -203,13 +226,39 @@ class _CorrectionScreenState extends ConsumerState<CorrectionScreen> {
         RowsCard(
           children: [
             for (final e in list)
-              FinEntryTile(
-                key: Key('fin-pick-${e.id}'),
-                entry: e,
-                lookups: lookups,
-                corrected: corrected.contains(e.id),
-                onTap: () => _open(e.id),
-              ),
+              if (voided.contains(e.id))
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FinEntryTile(
+                      key: Key('fin-pick-${e.id}'),
+                      entry: e,
+                      lookups: lookups,
+                      corrected: corrected.contains(e.id),
+                    ),
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(
+                        start: 16,
+                        end: 16,
+                        bottom: 10,
+                      ),
+                      child: Text(
+                        s.errcAlreadyVoided,
+                        key: Key('fin-pick-voided-${e.id}'),
+                        style: Theme.of(context).textTheme.bodySmall!
+                            .copyWith(color: SurauColors.muted),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                FinEntryTile(
+                  key: Key('fin-pick-${e.id}'),
+                  entry: e,
+                  lookups: lookups,
+                  corrected: corrected.contains(e.id),
+                  onTap: () => _open(e.id),
+                ),
           ],
         ),
     ];
@@ -300,6 +349,8 @@ class _CorrectionScreenState extends ConsumerState<CorrectionScreen> {
                               c.userId != null
                                   ? FinUserName(
                                       c.userId!,
+                                      snapshot: e.names?.counters[c.userId!],
+                                      snapshotRef: e.names?.counterRefs[c.userId!],
                                       style: text.bodyMedium!.copyWith(
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -360,7 +411,7 @@ class _CorrectionScreenState extends ConsumerState<CorrectionScreen> {
                               ),
                             ),
                             Text(
-                              finSigned(delta),
+                              finLtr(s, finSigned(delta)),
                               key: const Key('fin-cor-delta'),
                               style: text.bodyLarge!.copyWith(
                                 color: const Color(0xFF7A5D00),
@@ -377,7 +428,7 @@ class _CorrectionScreenState extends ConsumerState<CorrectionScreen> {
                   padding: const EdgeInsets.only(bottom: 18),
                   child: FinInfoBox(
                     key: const Key('fin-cor-void-info'),
-                    text: s.finCorVoidInfo(e.refLabel, finSigned(delta ?? 0)),
+                    text: s.finCorVoidInfo(e.refLabel, finLtr(s, finSigned(delta ?? 0))),
                     icon: Icons.warning_amber_rounded,
                     tone: FinTone.danger,
                   ),
@@ -406,6 +457,12 @@ class _CorrectionScreenState extends ConsumerState<CorrectionScreen> {
                       minLines: 3,
                       maxLines: 5,
                       maxLength: 500,
+                      // No < or >, no control character (Enter still wraps).
+                      inputFormatters: [
+                        FilteringTextInputFormatter.deny(
+                          RegExp(r'[<>\x00-\x08\x0b\x0c\x0e-\x1f\x7f]'),
+                        ),
+                      ],
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(hintText: s.finCorReasonHint),
                     ),

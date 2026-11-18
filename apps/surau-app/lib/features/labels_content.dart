@@ -1,0 +1,464 @@
+// English and Arabic words for the content kinds, their fields, hints, choices,
+// days, months and weekdays. The BM words stay in lib/content/kinds.dart (word
+// for word); labels.dart picks by app language and falls back to BM. Keys are
+// the kind key, or `kind.field`. No dashes or arrows; digits stay 0-9.
+
+// ---- English ----
+
+/// One item of a content kind ("Lecture"), by kind key.
+const Map<String, String> contentKindLabelsEn = {
+  'penceramah': 'Speaker',
+  'kitab': 'Book',
+  'kuliah': 'Lecture',
+  'pengumuman': 'Announcement',
+  'ticker': 'Scrolling text',
+  'poster': 'Poster',
+  'programKhas': 'Special event',
+  'takwim': 'Calendar day',
+  'hadis': 'Hadith',
+  'worldTime': 'World time',
+  'petugas': 'Person on duty',
+  'tugasan': 'Duty',
+  'zikir': 'Zikir',
+  'tilawahSlot': 'Recitation slot',
+};
+
+/// The list title of a content kind ("Lectures"), by kind key.
+const Map<String, String> contentKindPluralsEn = {
+  'penceramah': 'Speakers',
+  'kitab': 'Books',
+  'kuliah': 'Lectures',
+  'pengumuman': 'Announcements',
+  'ticker': 'Scrolling text',
+  'poster': 'Posters',
+  'programKhas': 'Special events',
+  'takwim': 'Calendar',
+  'hadis': 'Hadith',
+  'worldTime': 'World times',
+  'petugas': 'People on duty',
+  'tugasan': 'Duties',
+  'zikir': 'Zikir',
+  'tilawahSlot': 'Recitation',
+};
+
+/// A field of a content kind, by `kind.field`.
+const Map<String, String> contentFieldLabelsEn = {
+  'penceramah.name': 'Name',
+  'penceramah.title': 'Title',
+  'penceramah.phone': 'Phone',
+  'penceramah.photoAssetId': 'Picture',
+  'kitab.title': 'Book title',
+  'kitab.author': 'Author',
+  'kitab.coverAssetId': 'Book cover',
+  'kuliah.date': 'Date',
+  'kuliah.slot': 'After prayer',
+  'kuliah.time': 'Time',
+  'kuliah.label': 'Lecture name',
+  'kuliah.penceramahId': 'Speaker',
+  'kuliah.kitabId': 'Book',
+  'kuliah.topic': 'Topic',
+  'kuliah.status': 'Status',
+  'kuliah.seriesId': 'Series',
+  'pengumuman.title': 'Title',
+  'pengumuman.body': 'Announcement text',
+  'pengumuman.from': 'Start date',
+  'pengumuman.to': 'End date',
+  'pengumuman.priority': 'Priority',
+  'pengumuman.pictureAssetId': 'Picture',
+  'ticker.text': 'Text',
+  'ticker.from': 'Start date',
+  'ticker.to': 'End date',
+  'poster.title': 'Poster title',
+  'poster.assetId': 'Poster picture',
+  'poster.days': 'Days shown',
+  'poster.from': 'Start date',
+  'poster.to': 'End date',
+  'poster.order': 'Order',
+  'programKhas.title': 'Event name',
+  'programKhas.at': 'Event date and time',
+  'programKhas.showFrom': 'Show from',
+  'programKhas.showTo': 'Show until',
+  'programKhas.assetId': 'Picture',
+  'programKhas.note': 'Note',
+  'programKhas.status': 'Status',
+  'takwim.date': 'Date',
+  'takwim.hijriLabel': 'Hijri date',
+  'takwim.title': 'Day name',
+  'takwim.assetId': 'Picture',
+  'hadis.textMs': 'Translation',
+  'hadis.textAr': 'Arabic text',
+  'hadis.source': 'Source',
+  'worldTime.city': 'City',
+  'worldTime.tz': 'Time zone',
+  'worldTime.order': 'Order',
+  'petugas.name': 'Name',
+  'petugas.photoAssetId': 'Picture',
+  'tugasan.date': 'Date',
+  'tugasan.role': 'Duty',
+  'tugasan.petugasId': 'Person on duty',
+  'tugasan.note': 'Note',
+  'zikir.order': 'Order',
+  'zikir.textAr': 'Arabic text',
+  'zikir.textMs': 'Translation',
+  'zikir.repeat': 'Number of repeats',
+  'tilawahSlot.days': 'Days',
+  'tilawahSlot.before': 'Before prayer',
+  'tilawahSlot.minutesBefore': 'Minutes before the time',
+  'tilawahSlot.surah': 'Surah',
+  'tilawahSlot.enabled': 'Played',
+};
+
+/// The example under a field (an input hint), by `kind.field`.
+const Map<String, String> contentFieldHintsEn = {
+  'penceramah.name': 'Example: Ustaz Ahmad Fauzi',
+  'penceramah.title': 'Example: Ustaz, Dr.',
+  'kitab.title': 'Example: Riyadhus Salihin',
+  'kuliah.label': 'Example: Maghrib lecture',
+  'takwim.hijriLabel': 'Example: 12 Rabi al-Awwal 1448',
+  'hadis.source': 'Example: Narrated by al-Bukhari',
+  'worldTime.city': 'Example: Makkah',
+};
+
+const Map<String, String> _slotLabelsEn = {
+  'subuh': 'Fajr',
+  'zohor': 'Dhuhr',
+  'asar': 'Asr',
+  'maghrib': 'Maghrib',
+  'isyak': 'Isha',
+  'lain': 'Other',
+};
+const Map<String, String> _statusLabelsEn = {'aktif': 'Active', 'batal': 'Cancelled'};
+
+/// The names of the choices of an enum field, by `kind.field`, then value.
+const Map<String, Map<String, String>> contentChoiceLabelsEn = {
+  'kuliah.slot': _slotLabelsEn,
+  'kuliah.status': _statusLabelsEn,
+  'programKhas.status': _statusLabelsEn,
+  'pengumuman.priority': {'1': 'Normal', '2': 'Important', '3': 'Urgent'},
+  'tugasan.role': {'imam': 'Imam', 'bilal': 'Bilal', 'khatib': 'Khatib', 'ajk': 'Committee on duty'},
+  'tilawahSlot.before': _slotLabelsEn,
+};
+
+/// The seven days and "every day", by day key.
+const Map<String, String> dayLabelsEn = {
+  'umum': 'Every day',
+  'daily': 'Every day',
+  'ahad': 'Sunday',
+  'isnin': 'Monday',
+  'selasa': 'Tuesday',
+  'rabu': 'Wednesday',
+  'khamis': 'Thursday',
+  'jumaat': 'Friday',
+  'sabtu': 'Saturday',
+};
+
+const List<String> monthWordsEn = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// Monday first, as DateTime.weekday.
+const List<String> weekdayWordsEn = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+];
+
+// ---- Arabic ----
+
+const Map<String, String> contentKindLabelsAr = {
+  'penceramah': 'محاضر',
+  'kitab': 'كتاب',
+  'kuliah': 'درس',
+  'pengumuman': 'إعلان',
+  'ticker': 'نص متحرك',
+  'poster': 'ملصق',
+  'programKhas': 'برنامج خاص',
+  'takwim': 'يوم في التقويم',
+  'hadis': 'حديث',
+  'worldTime': 'توقيت عالمي',
+  'petugas': 'مناوب',
+  'tugasan': 'مناوبة',
+  'zikir': 'ذكر',
+  'tilawahSlot': 'موعد تلاوة',
+};
+
+const Map<String, String> contentKindPluralsAr = {
+  'penceramah': 'المحاضرون',
+  'kitab': 'الكتب',
+  'kuliah': 'الدروس',
+  'pengumuman': 'الإعلانات',
+  'ticker': 'النص المتحرك',
+  'poster': 'الملصقات',
+  'programKhas': 'البرامج الخاصة',
+  'takwim': 'التقويم',
+  'hadis': 'الأحاديث',
+  'worldTime': 'التوقيت العالمي',
+  'petugas': 'المناوبون',
+  'tugasan': 'المناوبات',
+  'zikir': 'الأذكار',
+  'tilawahSlot': 'التلاوة',
+};
+
+const Map<String, String> contentFieldLabelsAr = {
+  'penceramah.name': 'الاسم',
+  'penceramah.title': 'اللقب',
+  'penceramah.phone': 'الهاتف',
+  'penceramah.photoAssetId': 'الصورة',
+  'kitab.title': 'عنوان الكتاب',
+  'kitab.author': 'المؤلف',
+  'kitab.coverAssetId': 'غلاف الكتاب',
+  'kuliah.date': 'التاريخ',
+  'kuliah.slot': 'بعد صلاة',
+  'kuliah.time': 'الوقت',
+  'kuliah.label': 'اسم الدرس',
+  'kuliah.penceramahId': 'المحاضر',
+  'kuliah.kitabId': 'الكتاب',
+  'kuliah.topic': 'الموضوع',
+  'kuliah.status': 'الحالة',
+  'kuliah.seriesId': 'السلسلة',
+  'pengumuman.title': 'العنوان',
+  'pengumuman.body': 'نص الإعلان',
+  'pengumuman.from': 'تاريخ البدء',
+  'pengumuman.to': 'تاريخ الانتهاء',
+  'pengumuman.priority': 'الأولوية',
+  'pengumuman.pictureAssetId': 'الصورة',
+  'ticker.text': 'النص',
+  'ticker.from': 'تاريخ البدء',
+  'ticker.to': 'تاريخ الانتهاء',
+  'poster.title': 'عنوان الملصق',
+  'poster.assetId': 'صورة الملصق',
+  'poster.days': 'أيام العرض',
+  'poster.from': 'تاريخ البدء',
+  'poster.to': 'تاريخ الانتهاء',
+  'poster.order': 'الترتيب',
+  'programKhas.title': 'اسم البرنامج',
+  'programKhas.at': 'تاريخ البرنامج ووقته',
+  'programKhas.showFrom': 'العرض من',
+  'programKhas.showTo': 'العرض حتى',
+  'programKhas.assetId': 'الصورة',
+  'programKhas.note': 'ملاحظة',
+  'programKhas.status': 'الحالة',
+  'takwim.date': 'التاريخ',
+  'takwim.hijriLabel': 'التاريخ الهجري',
+  'takwim.title': 'اسم اليوم',
+  'takwim.assetId': 'الصورة',
+  'hadis.textMs': 'الترجمة',
+  'hadis.textAr': 'النص العربي',
+  'hadis.source': 'المصدر',
+  'worldTime.city': 'المدينة',
+  'worldTime.tz': 'المنطقة الزمنية',
+  'worldTime.order': 'الترتيب',
+  'petugas.name': 'الاسم',
+  'petugas.photoAssetId': 'الصورة',
+  'tugasan.date': 'التاريخ',
+  'tugasan.role': 'المهمة',
+  'tugasan.petugasId': 'المناوب',
+  'tugasan.note': 'ملاحظة',
+  'zikir.order': 'الترتيب',
+  'zikir.textAr': 'النص العربي',
+  'zikir.textMs': 'الترجمة',
+  'zikir.repeat': 'عدد التكرار',
+  'tilawahSlot.days': 'الأيام',
+  'tilawahSlot.before': 'قبل صلاة',
+  'tilawahSlot.minutesBefore': 'الدقائق قبل الوقت',
+  'tilawahSlot.surah': 'السورة',
+  'tilawahSlot.enabled': 'مفعّلة',
+};
+
+const Map<String, String> contentFieldHintsAr = {
+  'penceramah.name': 'مثال: الأستاذ أحمد فوزي',
+  'penceramah.title': 'مثال: الأستاذ، الدكتور',
+  'kitab.title': 'مثال: رياض الصالحين',
+  'kuliah.label': 'مثال: درس المغرب',
+  'takwim.hijriLabel': 'مثال: 12 ربيع الأول 1448',
+  'hadis.source': 'مثال: رواه البخاري',
+  'worldTime.city': 'مثال: مكة المكرمة',
+};
+
+const Map<String, String> _slotLabelsAr = {
+  'subuh': 'الفجر',
+  'zohor': 'الظهر',
+  'asar': 'العصر',
+  'maghrib': 'المغرب',
+  'isyak': 'العشاء',
+  'lain': 'أخرى',
+};
+const Map<String, String> _statusLabelsAr = {'aktif': 'نشط', 'batal': 'ملغى'};
+
+const Map<String, Map<String, String>> contentChoiceLabelsAr = {
+  'kuliah.slot': _slotLabelsAr,
+  'kuliah.status': _statusLabelsAr,
+  'programKhas.status': _statusLabelsAr,
+  'pengumuman.priority': {'1': 'عادي', '2': 'مهم', '3': 'عاجل'},
+  'tugasan.role': {'imam': 'الإمام', 'bilal': 'المؤذن', 'khatib': 'الخطيب', 'ajk': 'عضو اللجنة المناوب'},
+  'tilawahSlot.before': _slotLabelsAr,
+};
+
+const Map<String, String> dayLabelsAr = {
+  'umum': 'كل يوم',
+  'daily': 'كل يوم',
+  'ahad': 'الأحد',
+  'isnin': 'الاثنين',
+  'selasa': 'الثلاثاء',
+  'rabu': 'الأربعاء',
+  'khamis': 'الخميس',
+  'jumaat': 'الجمعة',
+  'sabtu': 'السبت',
+};
+
+const List<String> monthWordsAr = [
+  'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+];
+
+/// Monday first, as DateTime.weekday.
+const List<String> weekdayWordsAr = [
+  'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد',
+];
+
+// ---- Month and weekday words in BM (the other two languages are above) ----
+
+const List<String> monthWordsMs = [
+  'Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep', 'Okt', 'Nov', 'Dis',
+];
+
+/// Monday first, as DateTime.weekday.
+const List<String> weekdayWordsMs = [
+  'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu', 'Ahad',
+];
+
+// ---- City names of the world-time zones, by IANA zone ----
+
+const Map<String, String> zoneCityNamesMs = {
+  'Asia/Kuala_Lumpur': 'Kuala Lumpur',
+  'Asia/Riyadh': 'Makkah, Madinah, Riyadh',
+  'Asia/Jakarta': 'Jakarta',
+  'Asia/Singapore': 'Singapura',
+  'Asia/Bangkok': 'Bangkok',
+  'Asia/Dubai': 'Dubai',
+  'Asia/Qatar': 'Doha',
+  'Asia/Amman': 'Amman',
+  'Asia/Jerusalem': 'Baitulmaqdis',
+  'Africa/Cairo': 'Kaherah',
+  'Europe/Istanbul': 'Istanbul',
+  'Asia/Karachi': 'Karachi',
+  'Asia/Dhaka': 'Dhaka',
+  'Asia/Kolkata': 'New Delhi',
+  'Asia/Tokyo': 'Tokyo',
+  'Asia/Seoul': 'Seoul',
+  'Asia/Shanghai': 'Beijing',
+  'Asia/Hong_Kong': 'Hong Kong',
+  'Asia/Manila': 'Manila',
+  'Australia/Sydney': 'Sydney',
+  'Australia/Perth': 'Perth',
+  'Pacific/Auckland': 'Auckland',
+  'Europe/London': 'London',
+  'Europe/Paris': 'Paris',
+  'Europe/Berlin': 'Berlin',
+  'Europe/Moscow': 'Moscow',
+  'America/New_York': 'New York',
+  'America/Chicago': 'Chicago',
+  'America/Los_Angeles': 'Los Angeles',
+  'America/Toronto': 'Toronto',
+  'America/Sao_Paulo': 'Sao Paulo',
+  'Africa/Johannesburg': 'Johannesburg',
+  'Africa/Lagos': 'Lagos',
+  'Africa/Nairobi': 'Nairobi',
+  'UTC': 'UTC',
+};
+
+const Map<String, String> zoneCityNamesEn = {
+  'Asia/Kuala_Lumpur': 'Kuala Lumpur',
+  'Asia/Riyadh': 'Makkah, Madinah, Riyadh',
+  'Asia/Jakarta': 'Jakarta',
+  'Asia/Singapore': 'Singapore',
+  'Asia/Bangkok': 'Bangkok',
+  'Asia/Dubai': 'Dubai',
+  'Asia/Qatar': 'Doha',
+  'Asia/Amman': 'Amman',
+  'Asia/Jerusalem': 'Jerusalem',
+  'Africa/Cairo': 'Cairo',
+  'Europe/Istanbul': 'Istanbul',
+  'Asia/Karachi': 'Karachi',
+  'Asia/Dhaka': 'Dhaka',
+  'Asia/Kolkata': 'New Delhi',
+  'Asia/Tokyo': 'Tokyo',
+  'Asia/Seoul': 'Seoul',
+  'Asia/Shanghai': 'Beijing',
+  'Asia/Hong_Kong': 'Hong Kong',
+  'Asia/Manila': 'Manila',
+  'Australia/Sydney': 'Sydney',
+  'Australia/Perth': 'Perth',
+  'Pacific/Auckland': 'Auckland',
+  'Europe/London': 'London',
+  'Europe/Paris': 'Paris',
+  'Europe/Berlin': 'Berlin',
+  'Europe/Moscow': 'Moscow',
+  'America/New_York': 'New York',
+  'America/Chicago': 'Chicago',
+  'America/Los_Angeles': 'Los Angeles',
+  'America/Toronto': 'Toronto',
+  'America/Sao_Paulo': 'Sao Paulo',
+  'Africa/Johannesburg': 'Johannesburg',
+  'Africa/Lagos': 'Lagos',
+  'Africa/Nairobi': 'Nairobi',
+  'UTC': 'UTC',
+};
+
+const Map<String, String> zoneCityNamesAr = {
+  'Asia/Kuala_Lumpur': 'كوالالمبور',
+  'Asia/Riyadh': 'مكة، المدينة، الرياض',
+  'Asia/Jakarta': 'جاكرتا',
+  'Asia/Singapore': 'سنغافورة',
+  'Asia/Bangkok': 'بانكوك',
+  'Asia/Dubai': 'دبي',
+  'Asia/Qatar': 'الدوحة',
+  'Asia/Amman': 'عمّان',
+  'Asia/Jerusalem': 'القدس',
+  'Africa/Cairo': 'القاهرة',
+  'Europe/Istanbul': 'إسطنبول',
+  'Asia/Karachi': 'كراتشي',
+  'Asia/Dhaka': 'دكا',
+  'Asia/Kolkata': 'نيودلهي',
+  'Asia/Tokyo': 'طوكيو',
+  'Asia/Seoul': 'سيول',
+  'Asia/Shanghai': 'بكين',
+  'Asia/Hong_Kong': 'هونغ كونغ',
+  'Asia/Manila': 'مانيلا',
+  'Australia/Sydney': 'سيدني',
+  'Australia/Perth': 'بيرث',
+  'Pacific/Auckland': 'أوكلاند',
+  'Europe/London': 'لندن',
+  'Europe/Paris': 'باريس',
+  'Europe/Berlin': 'برلين',
+  'Europe/Moscow': 'موسكو',
+  'America/New_York': 'نيويورك',
+  'America/Chicago': 'شيكاغو',
+  'America/Los_Angeles': 'لوس أنجلوس',
+  'America/Toronto': 'تورونتو',
+  'America/Sao_Paulo': 'ساو باولو',
+  'Africa/Johannesburg': 'جوهانسبرغ',
+  'Africa/Lagos': 'لاغوس',
+  'Africa/Nairobi': 'نيروبي',
+  'UTC': 'التوقيت العالمي',
+};
+
+// ---- Day and prayer-slot words in BM (the BM source of the lookups in labels.dart) ----
+
+const Map<String, String> dayLabelsMs = {
+  'umum': 'Setiap hari',
+  'daily': 'Setiap hari',
+  'ahad': 'Ahad',
+  'isnin': 'Isnin',
+  'selasa': 'Selasa',
+  'rabu': 'Rabu',
+  'khamis': 'Khamis',
+  'jumaat': 'Jumaat',
+  'sabtu': 'Sabtu',
+};
+
+const Map<String, String> slotLabelsMs = {
+  'subuh': 'Subuh',
+  'zohor': 'Zohor',
+  'asar': 'Asar',
+  'maghrib': 'Maghrib',
+  'isyak': 'Isyak',
+  'lain': 'Lain-lain',
+};

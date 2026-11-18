@@ -51,6 +51,7 @@ describe('migration 008', () => {
       CREATE TABLE settings (surau_id TEXT NOT NULL DEFAULT 'sdm', feature TEXT PRIMARY KEY, json TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL);
       CREATE TABLE change_log (surau_id TEXT NOT NULL DEFAULT 'sdm', id INTEGER PRIMARY KEY, at TEXT NOT NULL, actor TEXT NOT NULL, entity TEXT NOT NULL, entity_id TEXT, before_json TEXT, after_json TEXT);
       CREATE TABLE meta (surau_id TEXT NOT NULL DEFAULT 'sdm', key TEXT PRIMARY KEY, value TEXT);
+      CREATE TABLE prayer_days (surau_id TEXT NOT NULL DEFAULT 'sdm', zone TEXT NOT NULL, date TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY (zone, date));
     `);
     const upTo7 = MIGRATIONS.filter((m) => m.name < '008');
     expect(runMigrations(db, upTo7)).toHaveLength(upTo7.length);
@@ -61,7 +62,7 @@ describe('migration 008', () => {
     db.prepare("INSERT INTO devices (id, user_id, name, platform, enrolled_at) VALUES ('d1', 'u1', 'Telefon', 'android', '2026-10-04T01:00:00.000Z')").run();
     db.prepare("INSERT INTO change_log (at, actor, entity, entity_id, after_json) VALUES ('2026-10-01T01:00:00.000Z', 'local', 'content:penceramah', 'p1', '{}')").run();
 
-    expect(runMigrations(db)).toEqual(['008-sync', '009-worker-outbox', '010-gate-fixes', '011-upload-replace', '012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair', '019-site-theme-support']);
+    expect(runMigrations(db)).toEqual(['008-sync', '009-worker-outbox', '010-gate-fixes', '011-upload-replace', '012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair', '019-multi-surau', '020-site-theme-support', '021-camera-secret', '022-people-relook']);
 
     expect(db.prepare('SELECT rev, edited_at, origin FROM content_items WHERE id = ?').get('p1')).toMatchObject({
       rev: '2026-10-01T01:00:00.000Z|local', edited_at: '2026-10-01T01:00:00.000Z', origin: 'local',
@@ -79,13 +80,14 @@ describe('migration 008', () => {
       origin: 'local', rev: '2026-10-01T01:00:00.000Z|local', op_id: null, synced_at: null,
     });
     for (const t of ['applied_ops', 'sync_state', 'sites', 'uploads']) {
-      expect(db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get()).toEqual({ n: 0 });
+      // 022 sets two one-time flags in sync_state; they are not data
+      expect(db.prepare(`SELECT COUNT(*) AS n FROM ${t}${t === 'sync_state' ? " WHERE key NOT IN ('people_resync', 'ids_push')" : ''}`).get()).toEqual({ n: 0 });
     }
   });
 
   it('a local putItem writes origin local and rev <updated_at>|local', () => {
     const db = newDb();
-    const { item } = putItem(db, 'penceramah', { name: 'Ustaz Ahmad' }, 'local');
+    const { item } = putItem(db, 'penceramah', { name: 'Ustaz Ahmad' }, 'local', undefined, 'sdm');
     const row = db.prepare('SELECT rev, edited_at, origin, updated_at FROM content_items WHERE id = ?').get(item.id)!;
     expect(row.origin).toBe('local');
     expect(row.rev).toBe(`${String(row.updated_at)}|local`);
@@ -98,9 +100,9 @@ describe('migration 008', () => {
 describe('readFeed', () => {
   it('lists content and settings changes in id order with after and tombstones', () => {
     const db = newDb();
-    const a = putItem(db, 'penceramah', { name: 'A' }, 'local').item;
-    putFeature(db, 'zone', { zone: 'SGR01' }, 'local');
-    deleteItem(db, 'penceramah', a.id, 'local');
+    const a = putItem(db, 'penceramah', { name: 'A' }, 'local', undefined, 'sdm').item;
+    putFeature(db, 'zone', { zone: 'SGR01' }, 'local', undefined, 'sdm');
+    deleteItem(db, 'penceramah', a.id, 'local', undefined, 'sdm');
     const feed = readFeed(db, 0, 500, NONE);
     expect(feed.entries.map((e) => [e.entity, e.entityId])).toEqual([
       ['content:penceramah', a.id], ['settings', 'zone'], ['content:penceramah', a.id],
@@ -116,7 +118,7 @@ describe('readFeed', () => {
 
   it('never lists live, islamic, youtube or auth entities', () => {
     const db = newDb();
-    putItem(db, 'penceramah', { name: 'A' }, 'local');
+    putItem(db, 'penceramah', { name: 'A' }, 'local', undefined, 'sdm');
     for (const entity of ['live', 'islamic', 'youtube/token', 'auth']) {
       db.prepare("INSERT INTO change_log (at, actor, entity, entity_id, after_json) VALUES ('2026-11-05T00:00:00.000Z', 'local', ?, 'x', '{}')").run(entity);
     }
@@ -125,7 +127,7 @@ describe('readFeed', () => {
 
   it('hides user entries unless the scope allows them, and devices likewise', () => {
     const db = newDb();
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
     db.prepare("INSERT INTO devices (id, user_id, name, platform, enrolled_at) VALUES ('d1', ?, 'T', 'android', '2026-11-05T00:00:00.000Z')").run(u.id);
     db.prepare("INSERT INTO change_log (at, actor, entity, entity_id, after_json) VALUES ('2026-11-05T00:00:00.000Z', 'local', 'devices', 'd1', '{}')").run();
     expect(readFeed(db, 0, 500, NONE).entries).toEqual([]);
@@ -136,7 +138,7 @@ describe('readFeed', () => {
 
   it('pages by since and next, and head is the highest visible id in the same read', () => {
     const db = newDb();
-    for (let i = 0; i < 5; i += 1) putItem(db, 'penceramah', { name: `P${i}` }, 'local');
+    for (let i = 0; i < 5; i += 1) putItem(db, 'penceramah', { name: `P${i}` }, 'local', undefined, 'sdm');
     db.prepare("INSERT INTO change_log (at, actor, entity, entity_id) VALUES ('2026-11-05T00:00:00.000Z', 'local', 'live', 'x')").run();
     const first = readFeed(db, 0, 2, NONE);
     expect(first.entries).toHaveLength(2);
@@ -157,9 +159,9 @@ describe('readFeed', () => {
 
   it('a change committed after the read does not appear in its entries or its head', () => {
     const db = newDb();
-    putItem(db, 'penceramah', { name: 'A' }, 'local');
+    putItem(db, 'penceramah', { name: 'A' }, 'local', undefined, 'sdm');
     const feed = readFeed(db, 0, 500, NONE);
-    putItem(db, 'penceramah', { name: 'B' }, 'local');
+    putItem(db, 'penceramah', { name: 'B' }, 'local', undefined, 'sdm');
     expect(feed.head).toBe(1);
     expect(feed.entries).toHaveLength(1);
     expect(readFeed(db, feed.head, 500, NONE).entries).toHaveLength(1);
@@ -170,14 +172,14 @@ describe('snapshot', () => {
   it('includes a tombstone deleted yesterday and one 100 days ago, not one 190 days ago; seq is the feed head', () => {
     const db = newDb();
     const now = new Date('2026-11-05T02:00:00.000Z');
-    const keep = putItem(db, 'penceramah', { name: 'Live' }, 'local').item;
-    const recent = putItem(db, 'penceramah', { name: 'Recent' }, 'local').item;
-    const old = putItem(db, 'penceramah', { name: 'Old' }, 'local').item;
-    const mid = putItem(db, 'penceramah', { name: 'Mid' }, 'local').item;
-    deleteItem(db, 'penceramah', mid.id, 'local');
+    const keep = putItem(db, 'penceramah', { name: 'Live' }, 'local', undefined, 'sdm').item;
+    const recent = putItem(db, 'penceramah', { name: 'Recent' }, 'local', undefined, 'sdm').item;
+    const old = putItem(db, 'penceramah', { name: 'Old' }, 'local', undefined, 'sdm').item;
+    const mid = putItem(db, 'penceramah', { name: 'Mid' }, 'local', undefined, 'sdm').item;
+    deleteItem(db, 'penceramah', mid.id, 'local', undefined, 'sdm');
     db.prepare('UPDATE content_items SET deleted_at = ? WHERE id = ?').run('2026-07-27T02:00:00.000Z', mid.id);
-    deleteItem(db, 'penceramah', recent.id, 'local');
-    deleteItem(db, 'penceramah', old.id, 'local');
+    deleteItem(db, 'penceramah', recent.id, 'local', undefined, 'sdm');
+    deleteItem(db, 'penceramah', old.id, 'local', undefined, 'sdm');
     db.prepare('UPDATE content_items SET deleted_at = ? WHERE id = ?').run('2026-11-04T02:00:00.000Z', recent.id);
     db.prepare('UPDATE content_items SET deleted_at = ? WHERE id = ?').run('2026-04-28T02:00:00.000Z', old.id);
 
@@ -195,8 +197,8 @@ describe('snapshot', () => {
 
   it('carries settings and, in scope, users and devices without secrets', () => {
     const db = newDb();
-    putFeature(db, 'zone', { zone: 'SGR01' }, 'local');
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local');
+    putFeature(db, 'zone', { zone: 'SGR01' }, 'local', undefined, 'sdm');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'local', 'sdm');
     db.prepare("UPDATE users SET pin_hash = 'SECRET-HASH' WHERE id = ?").run(u.id);
     db.prepare("INSERT INTO devices (id, user_id, name, platform, public_jwk, enrolled_at) VALUES ('d1', ?, 'T', 'android', 'SECRET-KEY', '2026-11-05T00:00:00.000Z')").run(u.id);
     const snap = snapshot(db, ALL, { boxId: 'b' });
@@ -205,5 +207,21 @@ describe('snapshot', () => {
     expect(snap.devices).toEqual([expect.objectContaining({ id: 'd1', revokedAt: null })]);
     expect(JSON.stringify(snap)).not.toMatch(/SECRET/);
     expect(snapshot(db, NONE, { boxId: 'b' }).users).toBeUndefined();
+  });
+});
+
+describe('[C2] a penceramah phone stays with content editors', () => {
+  it('[C2] feed and snapshot carry the phone only with contentWrite', () => {
+    const db = newDb();
+    putItem(db, 'penceramah', { id: 'p1', name: 'Ustaz Contoh', phone: '+60 12-000 0011' }, 'test', undefined, 'sdm');
+    const seen = (scope: { users: boolean; devices: boolean; contentWrite?: boolean }) => {
+      const feed = readFeed(db, 0, 500, scope);
+      const e = feed.entries.find((x) => x.entity === 'content:penceramah');
+      const snap = snapshot(db, scope, { boxId: 'b' });
+      const p = (snap.content.penceramah as { phone?: string }[])[0];
+      return { feed: (e?.after as { phone?: string } | null)?.phone, snap: p?.phone };
+    };
+    expect(seen({ users: false, devices: false })).toEqual({ feed: undefined, snap: undefined });
+    expect(seen({ users: false, devices: false, contentWrite: true })).toEqual({ feed: '+60 12-000 0011', snap: '+60 12-000 0011' });
   });
 });

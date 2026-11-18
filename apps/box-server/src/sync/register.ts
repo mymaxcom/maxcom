@@ -1,6 +1,9 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import type { DatabaseSync } from 'node:sqlite';
 import { sha256hex } from '../auth/crypto.ts';
 import { getSettings } from '../settingsStore.ts';
+import { boxName as boxNameOf } from '../setup/state.ts';
+import { boxVersion } from '../productVersion.ts';
 import { parseLinkAnswer, storeLink } from './linkStore.ts';
 import { generateSyncKeyPair, loadOrCreateClaim, normaliseCloudUrl } from './syncKey.ts';
 
@@ -55,6 +58,29 @@ export function cleanRegName(raw: string): string {
   return raw.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, 80).replace(/[\uD800-\uDBFF]$/, '');
 }
 
+/** A box name fit to send and to show an operator: no control or format characters, 1 to 60 characters, else null. */
+export function cleanBoxName(raw: string): string | null {
+  const v = raw.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, 60).replace(/[\uD800-\uDBFF]$/, '').trim();
+  return v === '' ? null : v;
+}
+
+/** The platform this box runs on, in the words the Worker accepts. */
+export function boxPlatform(): 'android' | 'windows' | 'linux' {
+  if (process.platform === 'win32') return 'windows';
+  if ((process.platform as string) === 'android' || process.env.ANDROID_ROOT !== undefined) return 'android';
+  return 'linux';
+}
+
+/** The optional registration fields that say which box this is. A field that is not valid is left out. */
+export function registrationFields(db: DatabaseSync, boxId: string): { boxName?: string; platform: string; version?: string } {
+  const out: { boxName?: string; platform: string; version?: string } = { platform: boxPlatform() };
+  const bn = cleanBoxName(boxNameOf(db, boxId));
+  if (bn !== null) out.boxName = bn;
+  const v = boxVersion();
+  if (/^\d{4}\.\d{2}\.\d{1,3}$/.test(v)) out.version = v;
+  return out;
+}
+
 /** The claim code a pending box shows (`GET /api/sync/status`), or null. */
 export function claimCodeOf(db: DatabaseSync): string | null {
   const r = db.prepare('SELECT value FROM sync_state WHERE key = ?').get(CLAIM_CODE_KEY);
@@ -72,7 +98,8 @@ export type StepResult = 'linked' | 'pending' | 'retry';
 export function isBlockedUnderTest(cloudUrl: string, env: Record<string, string | undefined> = process.env): boolean {
   if (env.VITEST === undefined || env.VITEST === '') return false;
   try {
-    const host = new URL(cloudUrl).hostname.toLowerCase();
+    // `api.mymaxcom.my.` (a trailing dot) names the same host.
+    const host = new URL(cloudUrl).hostname.toLowerCase().replace(/\.+$/, '');
     return host === 'mymaxcom.my' || host.endsWith('.mymaxcom.my');
   } catch {
     return false;
@@ -110,7 +137,7 @@ let blockedLogged = false;
 export function linkState(db: DatabaseSync): LinkState {
   const linked = db.prepare("SELECT value FROM sync_state WHERE key = 'linked'").get();
   if (linked?.value === '1') return 'linked';
-  return getSettings(db).cloudSync.enabled === true ? 'pending' : 'off';
+  return getSettings(db, LOCAL_SURAU_ID).cloudSync.enabled === true ? 'pending' : 'off';
 }
 
 export interface AutoLinkOptions {
@@ -195,9 +222,9 @@ export class AutoLink {
 
   private async register(cloud: string, claim: string, now: number): Promise<void> {
     const { db, boxId } = this.o;
-    const name = cleanRegName(getSettings(db).surauInfo.name);
+    const name = cleanRegName(getSettings(db, LOCAL_SURAU_ID).surauInfo.name);
     const claimHash = sha256hex(claim);
-    const res = await this.post(`${cloud}/register`, { boxId, name, claimHash });
+    const res = await this.post(`${cloud}/register`, { boxId, name, claimHash, ...registrationFields(db, boxId) });
     const status = res?.status ?? 0;
     await res?.arrayBuffer().catch(() => undefined);
     // a network failure or a 5xx is tried again on the next check
@@ -220,7 +247,7 @@ export class AutoLink {
   /** One try: register when due, then claim when due. Never throws. */
   async step(): Promise<StepResult> {
     const { db, dataDir, boxId } = this.o;
-    const cloud = autoLinkCloud(this.o.cloudUrl, getSettings(db).cloudSync.cloudUrl);
+    const cloud = autoLinkCloud(this.o.cloudUrl, getSettings(db, LOCAL_SURAU_ID).cloudSync.cloudUrl);
     if (cloud === null) return 'pending';
     let claim: string;
     try {

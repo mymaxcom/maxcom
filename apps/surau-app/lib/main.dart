@@ -1,14 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'app/app_lang.dart';
 import 'app/deps.dart';
 import 'app/providers.dart';
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'features/common/trilingual_strings.dart';
+import 'features/common/trilingual_text.dart';
 import 'l10n/generated/s.dart';
+import 'ops/ops_build.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Plan 14 section 3.4 B belt: the compiled build switch and the installed
+  // package name must agree (public id vs `.ops`), else the app does not run.
+  if (!await buildIdentityOk()) {
+    runApp(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: ColoredBox(
+          color: Color(0xFF06302B),
+          child: Center(
+            child: TrilingualText(
+              ms: TrilingualStrings.badBuildMs,
+              en: TrilingualStrings.badBuildEn,
+              ar: TrilingualStrings.badBuildAr,
+              style: TextStyle(color: Color(0xFFFFFFFF), fontSize: 18),
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
+  }
+  // The first frame while the app's own storage and certificates load.
+  runApp(
+    const Directionality(
+      textDirection: TextDirection.ltr,
+      child: ColoredBox(
+        color: SurauColors.glass,
+        child: Center(
+          child: TrilingualWait(
+            ms: TrilingualStrings.loadingMs,
+            en: TrilingualStrings.loadingEn,
+            ar: TrilingualStrings.loadingAr,
+          ),
+        ),
+      ),
+    ),
+  );
   final deps = await AppDeps.forPlatform();
   runApp(
     ProviderScope(
@@ -33,7 +74,7 @@ class SurauApp extends ConsumerWidget {
       onGenerateTitle: (context) => S.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       theme: SurauTheme.light(),
-      locale: defaultLocale,
+      locale: ref.watch(appLangProvider).locale,
       localizationsDelegates: S.localizationsDelegates,
       supportedLocales: S.supportedLocales,
       routerConfig: ref.watch(routerProvider),

@@ -1,0 +1,126 @@
+# Plan 14 Task 24: strings that must NOT be in any public binary (the MAX Admin Client APK and
+# build/web/main.dart.js), and MUST all be in the MAXCOM Ops APK (the scan's positive control).
+# One per line, exact and case-sensitive; blank lines and lines starting with # are ignored.
+# An empty or missing list makes scripts/check-public-apk.mjs fail. Never add the role word
+# "Pentadbir MAXCOM" alone or permission names: they stay in the public app by decision (plan 14, found 17).
+# Later tasks append their own, each in the task that creates the thing:
+#   Task 25 (moved screens), Task 14 (fleet routes, /api/fleet/, /api/suraus, X-Maxcom-Surau),
+#   Task 15, Task 26 (Daftar peranti MAXCOM).
+#
+# Plan 12 Pentadbir MAXCOM widgets (moved into lib/ops by Task 25)
+superadmin-badge
+lanjutan-card
+lanjutan-dim-note
+Anda Pentadbir MAXCOM
+superadmin-device-lock
+this-device-lock-always
+fin-super-banner
+Anda melihat Kewangan sebagai Pentadbir MAXCOM
+You are viewing Finance as the MAXCOM administrator
+Tetapan sistem MAXCOM, tersembunyi daripada Pentadbir Surau
+MAXCOM system settings, hidden from the Surau Administrator
+Tidak digunakan bila Telefon terus dipilih
+Not used when Phone direct is chosen
+Cara video disalurkan dan kadar bit maksimum.
+Had ruang cakera MAXCOM untuk audio tilawah.
+Penyiaran YouTube
+Ruang simpanan tilawah
+Tidak boleh dimatikan. Akaun Pentadbir MAXCOM boleh mengubah tetapan sistem
+
+# Plan 14 fleet routes and ops enrolment (added at the qs-gate, before the Phase 2 screens: an ops build fails its
+# positive control until Tasks 14 and 26 put these in lib/ops)
+/api/fleet/
+/api/suraus
+X-Maxcom-Surau
+Daftar peranti MAXCOM
+
+# Plan 14 Task 14: surau switcher, acting banner, Senarai surau (lib/ops/fleet). Route paths, widget keys and texts
+# (BM and English) found as whole literals; the header name X-Maxcom-Surau is above.
+/ops/suraus
+/ops/switch
+surau-switcher
+acting-banner
+acting-change
+acting-exit
+view-as-maxcom
+fleet-card-
+fleet-search
+fleet-choose-hint
+Senarai surau
+Surau list
+Anda melihat sebagai MAXCOM
+You are viewing as MAXCOM
+Menunggu MAXCOM
+Waiting for MAXCOM
+Pilih surau
+Choose surau
+Lihat sebagai MAXCOM
+View as MAXCOM
+Cari surau atau ID kotak
+Tiada surau dipilih
+Pilihan tidak diingat selepas aplikasi ditutup.
+Storan awan
+Cloud storage
+Belum ada kotak yang memaut
+
+# Plan 14 Task 15: Kotak menunggu, approve sheet, revoke and restore a box (lib/ops/fleet).
+/ops/pending
+/api/fleet/pending
+/api/fleet/boxes/
+pending-card-
+pending-approve-
+approve-submit
+typed-confirm-field
+Kotak menunggu
+Waiting boxes
+Luluskan kotak
+Approve box
+Surau yang sudah ada
+Existing surau
+Taip nama surau untuk sahkan
+Ditahan oleh had harian
+Held by the daily limit
+Tiada kotak menunggu
+No box is waiting
+Batal kotak
+Revoke box
+Pulihkan kotak
+Restore box
+# Plan 14 Task 15 follow-up: reject a waiting box (box_actions.dart, pending_screen.dart)
+pending-reject-
+Tolak kotak
+Reject box
+Kotak ditolak
+Box rejected
+Pendaftaran kotak ini dibuang daripada senarai menunggu. Tiada surau dicipta dan tiada apa yang dipautkan. Kotak boleh mendaftar semula kemudian.
+This box registration is removed from the waiting list. No surau is created and nothing is linked. The box can register again later.
+Kotak ini sudah dipautkan atau diluluskan; guna Batal kotak, bukan Tolak.
+This box is already linked or approved; use Revoke box, not Reject.
+# Plan 14 Task 26: Daftar peranti MAXCOM screen and cloud-only enrolment (own block)
+ops-enrol-entry
+ops-enrol-code
+ops-enrol-submit
+ops-enrol-continue
+ops-unmarked
+Kod ini hanya boleh digunakan dalam MAXCOM Ops.
+Akaun ini sudah ada 3 peranti MAXCOM. Batalkan satu di pelayan dahulu.
+Telefon ini kini peranti MAXCOM
+Peranti ini bukan lagi peranti MAXCOM
+Telefon MAXCOM 1
+ops-unmarked-device
+/ops/unmarked
+Buka halaman peranti ini
+Open this device page
+Disambungkan ke awan MAXCOM (TLS awam).
+Anda perlukan kod sekali guna daripada sesi pelayan MAXCOM.
+This phone is now a MAXCOM device
+
+# Plan 14 Phase 2 gate: texts of the lists found in no public file, and the local-data notice (all lib/ops)
+Tiada surau dijumpai
+Search surau or box ID
+Belum dilihat
+/ops/local
+ops-local-only
+ops-unmarked-retry
+Tidak tersedia semasa bertindak sebagai MAXCOM. Gunakan telefon pentadbir surau itu.
+Not available while acting as MAXCOM. Use the phone of that surau administrator.

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Relay } from '../src/live/relay.ts';
 import type { RelayOptions, RelayStartOptions } from '../src/live/relay.ts';
+import { must } from './helpers/must.ts';
 
 // The slim Android ffmpeg is built from scripts/android/ffmpeg-features.json. This test proves the
 // relay's real ffmpeg command lines only use what that list switches on, and that the build script
@@ -43,7 +44,7 @@ function relayArgs(kind: 'youtube' | 'kioskAudio', start: Partial<RelayStartOpti
 function valuesOf(args: string[], flag: string): string[] {
   const out: string[] = [];
   args.forEach((a, i) => {
-    if (a === flag && i + 1 < args.length) out.push(args[i + 1]);
+    if (a === flag && i + 1 < args.length) out.push(String(args[i + 1]));
   });
   return out;
 }
@@ -54,11 +55,12 @@ function endpoints(args: string[]): { scheme: string; role: 'input' | 'output' |
   const iIndex = args.indexOf('-i');
   args.forEach((a, i) => {
     const m = /^([a-z][a-z0-9+.-]*):/i.exec(a);
-    if (!m || i === 0) return;
+    const scheme = m?.[1]?.toLowerCase();
+    if (scheme === undefined || i === 0) return;
     const prev = args[i - 1];
-    if (prev === '-progress') list.push({ scheme: m[1].toLowerCase(), role: 'progress' });
-    else if (prev === '-i') list.push({ scheme: m[1].toLowerCase(), role: 'input' });
-    else if (i > iIndex && /^[a-z]+:\/\//i.test(a)) list.push({ scheme: m[1].toLowerCase(), role: 'output' });
+    if (prev === '-progress') list.push({ scheme, role: 'progress' });
+    else if (prev === '-i') list.push({ scheme, role: 'input' });
+    else if (i > iIndex && /^[a-z]+:\/\//i.test(a)) list.push({ scheme, role: 'output' });
   });
   return list;
 }
@@ -135,14 +137,14 @@ describe('relay arguments stay inside the slim ffmpeg feature list', () => {
   }
 
   it('the kiosk audio leg really uses aresample, the Opus encoder and the rtsp muxer', () => {
-    const args = scenarios[1].args;
+    const args = must(scenarios[1], 'scenario 1').args;
     expect(valuesOf(args, '-af')[0]).toMatch(/^aresample=/);
     expect(valuesOf(args, '-c:a')).toContain('libopus');
     expect(valuesOf(args, '-f')).toContain('rtsp');
   });
 
   it('the YouTube leg in copy mode copies video and encodes AAC into flv over rtmps', () => {
-    const args = scenarios[0].args;
+    const args = must(scenarios[0], 'scenario 0').args;
     expect(valuesOf(args, '-c:v')).toEqual(['copy']);
     expect(valuesOf(args, '-c:a')).toEqual(['aac']);
     expect(valuesOf(args, '-f')).toEqual(['flv']);
@@ -164,6 +166,23 @@ describe('feature list file', () => {
       expect(Array.isArray(list), key).toBe(true);
       expect((list as string[]).length, key).toBeGreaterThan(0);
       for (const n of list as string[]) expect(n, `${key}:${n}`).toMatch(/^[a-z0-9_]+$/);
+    }
+  });
+
+  it('has what the camera audio combiner needs (G.711 camera audio, mix, PCM monitor, test still frame)', () => {
+    const need: Record<keyof Features, string[]> = {
+      protocols: ['pipe', 'tcp', 'udp'],
+      demuxers: ['rtsp', 'rtp', 'sdp'],
+      muxers: ['flv', 'rtsp', 's16le', 'image2'],
+      encoders: ['aac', 'pcm_s16le', 'mjpeg'],
+      decoders: ['h264', 'aac', 'pcm_alaw', 'pcm_mulaw'],
+      parsers: [],
+      bsfs: [],
+      filters: ['aresample', 'aformat', 'anullsrc', 'amix', 'adelay', 'volume', 'asplit', 'amerge', 'arealtime'],
+      externalLibs: [],
+    };
+    for (const [kind, names] of Object.entries(need)) {
+      for (const n of names) expect(features[kind as keyof Features], `${kind} ${n}`).toContain(n);
     }
   });
 
@@ -189,11 +208,12 @@ describe('build script (static checks)', () => {
     // the only mentions of the flags are inside the case guard that dies on them
     const lines = code.split('\n');
     const flagLines = lines.map((l, i) => ({ l, i })).filter((x) => /--enable-(gpl|nonfree)/.test(x.l));
+    const flagLine = must(flagLines[0], 'the enable-nonfree guard line');
     expect(flagLines.length).toBe(1);
-    expect(flagLines[0].l).toContain('--enable-nonfree');
-    expect(flagLines[0].l.trimStart().startsWith('*"')).toBe(true); // a case pattern
-    expect(lines[flagLines[0].i + 1]).toContain('die');
-    expect(lines[flagLines[0].i - 1]).toContain('case');
+    expect(flagLine.l).toContain('--enable-nonfree');
+    expect(flagLine.l.trimStart().startsWith('*"')).toBe(true); // a case pattern
+    expect(lines[flagLine.i + 1]).toContain('die');
+    expect(lines[flagLine.i - 1]).toContain('case');
   });
 
   it('starts from --disable-everything and takes the lists from the JSON', () => {
@@ -228,19 +248,20 @@ describe('build script (static checks)', () => {
 });
 
 describe('pins', () => {
-  const pins = JSON.parse(readFileSync(join(DIR, 'android-pins.json'), 'utf8')) as Record<string, Record<string, string | number>>;
+  const allPins = JSON.parse(readFileSync(join(DIR, 'android-pins.json'), 'utf8')) as Record<string, Record<string, string | number>>;
+  const pin = (k: string): Record<string, string | number> => must(allPins[k], `pin ${k}`);
 
   it('pins the three sources by version and sha256, and the image by digest', () => {
     for (const k of ['ffmpegSrc', 'opusSrc', 'mbedtlsSrc']) {
-      expect(String(pins[k].version), k).toMatch(/^\d+\.\d+(\.\d+)?$/);
-      expect(String(pins[k].sha256), k).toMatch(/^[0-9a-f]{64}$/);
-      expect(String(pins[k].url), k).toMatch(/^https:\/\//);
-      expect(String(pins[k].url), k).toContain(String(pins[k].version));
+      expect(String(pin(k).version), k).toMatch(/^\d+\.\d+(\.\d+)?$/);
+      expect(String(pin(k).sha256), k).toMatch(/^[0-9a-f]{64}$/);
+      expect(String(pin(k).url), k).toMatch(/^https:\/\//);
+      expect(String(pin(k).url), k).toContain(String(pin(k).version));
     }
-    expect(String(pins.ndkImage.base)).toMatch(/^ubuntu:[\d.]+@sha256:[0-9a-f]{64}$/);
-    expect(String(pins.ndkImage.ndkSha256)).toMatch(/^[0-9a-f]{64}$/);
-    expect(String(pins.ndkImage.ndkUrl)).toMatch(/^https:\/\/dl\.google\.com\//);
-    expect(Number(pins.ndkImage.apiLevel)).toBe(28);
+    expect(String(pin('ndkImage').base)).toMatch(/^ubuntu:[\d.]+@sha256:[0-9a-f]{64}$/);
+    expect(String(pin('ndkImage').ndkSha256)).toMatch(/^[0-9a-f]{64}$/);
+    expect(String(pin('ndkImage').ndkUrl)).toMatch(/^https:\/\/dl\.google\.com\//);
+    expect(Number(pin('ndkImage').apiLevel)).toBe(28);
   });
 });
 

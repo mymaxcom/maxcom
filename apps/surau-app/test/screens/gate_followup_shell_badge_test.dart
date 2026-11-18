@@ -13,7 +13,7 @@ Future<void> _shell(
   WidgetTester tester,
   int count,
   GoldenSize size, {
-  List<String> roles = const ['media'],
+  List<String> roles = const ['live'],
 }) async {
   await pumpShell(
     tester,

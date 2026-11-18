@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import type { DatabaseSync } from 'node:sqlite';
 import { getSettings } from '../settingsStore.ts';
 
@@ -12,7 +13,7 @@ const DAY_MS = 86_400_000;
  */
 export function retentionDays(db: DatabaseSync, role: 'box' | 'cloud'): 180 | 365 {
   if (role === 'cloud') return CLOUD_RETENTION_DAYS;
-  return getSettings(db).system.syncHistoryDays === 365 ? 365 : 180;
+  return getSettings(db, LOCAL_SURAU_ID).system.syncHistoryDays === 365 ? 365 : 180;
 }
 
 /** `sync_state` key: the highest change_log id the box has pushed (the trim never removes anything above it). */

@@ -7,6 +7,18 @@ const ZONE = /^[A-Z]{3}\d{2}$/;
 const TIMEOUT_MS = 20_000;
 const MAX_BYTES = 5 * 1024 * 1024;
 
+/** A failed e-Solat fetch with a stable code the app words in its own language; the sentence is unchanged. */
+export class EsolatError extends Error {
+  readonly code: 'esolat_unreachable' | 'esolat_no_record';
+  readonly detail: Record<string, unknown>;
+  constructor(code: 'esolat_unreachable' | 'esolat_no_record', message: string, detail: Record<string, unknown> = {}) {
+    super(message);
+    this.name = 'EsolatError';
+    this.code = code;
+    this.detail = detail;
+  }
+}
+
 const isLeapYear = (year: number): boolean =>
   (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 
@@ -24,15 +36,20 @@ export async function fetchJakimYear(
   // NOTE: the upstream "duration" form (POST datestart/dateend) is unverified against the live
   // e-Solat API; a field test is still to do. The year is requested explicitly so a request made
   // late in the year cannot return the wrong one.
-  const response = await fetchImpl(`${apiUrl}${zone}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ datestart: `${year}-01-01`, dateend: `${year}-12-31` }).toString(),
-    redirect: 'error',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetchImpl(`${apiUrl}${zone}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ datestart: `${year}-01-01`, dateend: `${year}-12-31` }).toString(),
+      redirect: 'error',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new EsolatError('esolat_unreachable', error instanceof Error ? error.message : 'e-Solat could not be reached');
+  }
   if (!response.ok) {
-    throw new Error(`e-Solat request failed with HTTP ${response.status}`);
+    throw new EsolatError('esolat_unreachable', `e-Solat request failed with HTTP ${response.status}`, { status: response.status });
   }
 
   const text = new TextDecoder().decode(await readCapped(response, MAX_BYTES, 'e-Solat response'));
@@ -40,14 +57,14 @@ export async function fetchJakimYear(
   try {
     json = JSON.parse(text);
   } catch {
-    throw new Error('e-Solat response is not valid JSON');
+    throw new EsolatError('esolat_unreachable', 'e-Solat response is not valid JSON');
   }
 
   // Measured 2026-11-03: a year JAKIM has not published yet comes back as
   // { status: 'NO_RECORD!', prayerTime: { data: [...] } } with HTTP 200.
   const status = (json as { status?: unknown } | null)?.status;
   if (typeof status === 'string' && status.toUpperCase().startsWith('NO_RECORD')) {
-    throw new Error(`e-Solat has not published ${year} prayer times for ${zone} yet; try later or import a CSV`);
+    throw new EsolatError('esolat_no_record', `e-Solat has not published ${year} prayer times for ${zone} yet; try later or import a CSV`, { year, zone });
   }
 
   const days = parseJakimApi(json).filter((day) => day.date.startsWith(`${year}-`));

@@ -8,6 +8,8 @@ import '../../box/box_client.dart';
 import '../../box/box_name.dart';
 import '../../box/device_key.dart';
 import '../../box/payload.dart';
+import '../../l10n/generated/s.dart';
+import '../../l10n/s_lookup.dart';
 import '../common/payload_extras.dart';
 import '../common/surau_info.dart';
 import 'pin_policy.dart';
@@ -196,10 +198,39 @@ class BrowserEnrolTrust implements EnrolTrust {
   Future<void> commit(String? caSha256) async {}
 }
 
-class TrustError implements Exception {
-  const TrustError(this.message);
+/// Why the box's certificate could not be trusted (the app words each one).
+enum TrustKind {
+  rootMissing,
+  rootInvalid,
+  rootMismatch,
+  cloudFailed,
+  badQr,
+  rootFetch,
+  noHttps,
+}
 
+class TrustError implements Exception {
+  const TrustError(this.message, [this.kind]);
+
+  /// A failure the app words itself: BM as [message], any language through [text].
+  TrustError.of(TrustKind this.kind) : message = _textOf(sBm, kind);
+
+  /// BM text; screens show [text].
   final String message;
+  final TrustKind? kind;
+
+  /// What to show, in the language of [s].
+  String text(S s) => kind == null ? message : _textOf(s, kind!);
+
+  static String _textOf(S s, TrustKind k) => switch (k) {
+    TrustKind.rootMissing => s.trustRootMissing,
+    TrustKind.rootInvalid => s.trustRootInvalid,
+    TrustKind.rootMismatch => s.trustRootMismatch,
+    TrustKind.cloudFailed => s.trustCloudFailed,
+    TrustKind.badQr => s.trustBadQr,
+    TrustKind.rootFetch => s.trustRootFetch,
+    TrustKind.noHttps => s.trustNoHttps,
+  };
 
   @override
   String toString() => 'TrustError($message)';
@@ -350,7 +381,7 @@ class EnrolFlow {
       );
     } on BoxError catch (e) {
       await key.clear();
-      if (e.status == 400 && e.message.startsWith('PIN sudah ditetapkan')) {
+      if (e.status == 400 && e.message.startsWith('PIN sudah ditetapkan')) { // lang-ok: box wire text, matched exactly
         throw const EnrolPinExists();
       }
       rethrow;

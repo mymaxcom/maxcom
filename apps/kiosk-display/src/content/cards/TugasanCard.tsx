@@ -4,8 +4,8 @@ import { fmtDateShort, t, ymdParts } from '../../i18n.ts';
 import { assetSrc, num } from '../assets.ts';
 import type { CardProps } from '../ContentLayer.tsx';
 
-/** Columns (dates) and rows per column the card holds at a size readable from 10 m. */
-const MAX_DAYS = 3;
+/** Columns (dates) and rows per column the screen holds at a size readable from 10 m: today (or the next duty day) and the one after it. */
+const MAX_DAYS = 2;
 const MAX_ROWS = 4;
 const ROLE_ORDER: Record<TugasanRole, number> = { imam: 0, bilal: 1, khatib: 2, ajk: 3 };
 const ROLE_KEY: Record<TugasanRole, string> = { imam: 'roleImam', bilal: 'roleBilal', khatib: 'roleKhatib', ajk: 'roleAjk' };
@@ -36,6 +36,9 @@ export function groupTugasan(list: TugasanView[], today: string, daysAhead: numb
         .slice(0, MAX_ROWS),
     }));
 }
+
+/** A name longer than this takes two lines at a step smaller size instead of being cut (the screen's name column). */
+const LONG_NAME = 24;
 
 const initial = (name: string): string => (name.trim().match(/\p{L}/u)?.[0] ?? '').toUpperCase();
 
@@ -71,7 +74,7 @@ export function TugasanCard({ view, lang, content }: CardProps) {
                     )}
                     <span class="tugasan__text">
                       <span class="tugasan__role">{t(ROLE_KEY[x.role] ?? 'roleAjk', lang)}</span>
-                      <span class="tugasan__name">{x.petugas.name}</span>
+                      <span class={`tugasan__name${x.petugas.name.length > LONG_NAME ? ' is-long' : ''}`}>{x.petugas.name}</span>
                     </span>
                   </li>
                 );

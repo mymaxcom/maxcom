@@ -3,14 +3,15 @@ import { join } from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { isThemeName, KIOSK_TEMPLATE_IDS, THEME_CONTRACT } from '@surau/core';
 import type { ChangeBus } from '../events.ts';
+import { NEUTRAL_SURAU_ID, publicSurauOf } from '../reqSurau.ts';
 import { getSettings, getVersion } from '../settingsStore.ts';
 import { themeSupportOf } from '../sync/sites.ts';
-import { DEFAULT_SURAU_ID } from '../sync/verify.ts';
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { buildDownload, DownloadError } from './download.ts';
 import { parseHealthBody, recordThemeHealth } from './health.ts';
 import { issue, MAX_PACK_BYTES, PACK_MIME, ThemeError } from './packFormat.ts';
 import type { ThemeStore } from './store.ts';
-import { ThemeStoreError } from './store.ts';
+import { hashOf, ThemeStoreError } from './store.ts';
 import { emptyReport } from './validate.ts';
 
 export interface ThemeRouteDeps {
@@ -29,8 +30,30 @@ export interface ThemeRouteDeps {
 
 /** The theme the surau has chosen for the display. */
 function activeThemeName(db: import('node:sqlite').DatabaseSync): string | null {
-  const k = getSettings(db).kioskTemplate as { enabled?: unknown; templateId?: unknown };
+  const k = getSettings(db, LOCAL_SURAU_ID).kioskTemplate as { enabled?: unknown; templateId?: unknown };
   return k.enabled !== false && typeof k.templateId === 'string' ? k.templateId : null;
+}
+
+/**
+ * The suraus (cloud only: the display preview) whose installed record of this name has exactly this address. The
+ * request's own surau (a tenant, or the linked box named by `X-Maxcom-Box`) comes first and is the only one asked
+ * when it holds the pack; otherwise every surau whose settings mention the pack file's hash is checked from its
+ * settings alone (no file is read or checked here), so there is no cap and no other tenant's pack is validated.
+ */
+function surausWithPack(db: import('node:sqlite').DatabaseSync, request: FastifyRequest, name: string, hash: string): string[] {
+  const holds = (id: string): boolean => {
+    const packs = getSettings(db, id).themeStyle.packs;
+    return Object.prototype.hasOwnProperty.call(packs, name) && hashOf(packs[name]!.assetId) === hash;
+  };
+  const own = [request.tenant?.surauId, publicSurauOf(db, request, 'cloud')].find((id): id is string => typeof id === 'string' && id !== NEUTRAL_SURAU_ID && id !== '*' && holds(id));
+  if (own !== undefined) return [own];
+  const out: string[] = [];
+  // HASH_RE has been matched: 16 hex and a format number, so it is safe in a LIKE pattern
+  for (const r of db.prepare("SELECT surau_id FROM settings WHERE feature = 'themeStyle' AND json LIKE ? ORDER BY surau_id").all(`%${hash.slice(0, 16)}%`)) {
+    const id = String(r.surau_id);
+    if (holds(id)) out.push(id);
+  }
+  return out;
 }
 
 /** The only files an extracted or staged pack serves, matched before any filesystem call. */
@@ -64,11 +87,11 @@ export const SUPPORT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
  * not linked: itself. On a linked box: the list the cloud last sent (this box's own entry always live); it is
  * `complete` only while that list is younger than 24 hours.
  */
-export function themeSupport(deps: Pick<ThemeRouteDeps, 'db' | 'role' | 'boxId' | 'now'>): { contract: number; builtIn: string[]; boxes: SupportBox[]; complete: boolean } {
+export function themeSupport(deps: Pick<ThemeRouteDeps, 'db' | 'role' | 'boxId' | 'now'>, surauId: string = LOCAL_SURAU_ID): { contract: number; builtIn: string[]; boxes: SupportBox[]; complete: boolean } {
   const builtIn = [...KIOSK_TEMPLATE_IDS] as string[];
   const base = { contract: THEME_CONTRACT, builtIn };
-  if (deps.role === 'cloud') return { ...base, boxes: themeSupportOf(deps.db, DEFAULT_SURAU_ID), complete: true };
-  const self: SupportBox = { boxId: deps.boxId, name: getSettings(deps.db).surauInfo.name, contract: THEME_CONTRACT, builtIn };
+  if (deps.role === 'cloud') return { ...base, boxes: themeSupportOf(deps.db, surauId), complete: true };
+  const self: SupportBox = { boxId: deps.boxId, name: getSettings(deps.db, LOCAL_SURAU_ID).surauInfo.name, contract: THEME_CONTRACT, builtIn };
   const state = (k: string): string | null => {
     const r = deps.db.prepare('SELECT value FROM sync_state WHERE key = ?').get(k);
     return typeof r?.value === 'string' ? r.value : null;
@@ -116,8 +139,8 @@ export function registerThemeRoutes(app: FastifyInstance, deps: ThemeRouteDeps):
   const healthSeen = new Map<string, number>();
 
   const bump = (before: number): void => {
-    const after = getVersion(db);
-    if (after !== before) bus.emit(after);
+    const after = getVersion(db, LOCAL_SURAU_ID);
+    if (after !== before) bus.emit(after, LOCAL_SURAU_ID);
   };
 
   void app.register(async (scope) => {
@@ -159,7 +182,7 @@ export function registerThemeRoutes(app: FastifyInstance, deps: ThemeRouteDeps):
       const body: unknown = request.body;
       const stagedId = isPlain(body) ? body.stagedId : undefined;
       if (typeof stagedId !== 'string' || !ID_RE.test(stagedId)) return reply.code(400).send({ errors: ['stagedId must be the id from the check'] });
-      const before = getVersion(db);
+      const before = getVersion(db, LOCAL_SURAU_ID);
       try {
         const p = await store.install(stagedId, deps.actorOf(request), deps.deviceOf(request));
         bump(before);
@@ -173,7 +196,7 @@ export function registerThemeRoutes(app: FastifyInstance, deps: ThemeRouteDeps):
       }
     });
 
-    scope.get('/api/themes/support', async (_request, reply) => reply.header('Cache-Control', 'no-store').send(themeSupport(deps)));
+    scope.get('/api/themes/support', async (request, reply) => reply.header('Cache-Control', 'no-store').send(themeSupport(deps, request.tenant?.surauId)));
 
     // A linked box asks the cloud which contract its sibling boxes support. Only a site token has this route.
     scope.get('/api/sync/theme-support', async (request, reply) => {
@@ -223,7 +246,7 @@ export function registerThemeRoutes(app: FastifyInstance, deps: ThemeRouteDeps):
     scope.delete('/api/themes/:name', async (request, reply) => {
       const { name } = request.params as { name: string };
       if (!isThemeName(name) && !/^[A-Za-z0-9-]{1,64}$/.test(name)) return reply.code(404).send({ errors: ['not found'] });
-      const before = getVersion(db);
+      const before = getVersion(db, LOCAL_SURAU_ID);
       try {
         store.remove(name, deps.actorOf(request), deps.deviceOf(request));
         bump(before);
@@ -262,7 +285,13 @@ export function registerThemeRoutes(app: FastifyInstance, deps: ThemeRouteDeps):
         const name = params.name ?? '';
         const hash = params.hash ?? '';
         if (!isThemeName(name) || !HASH_RE.test(hash)) return reply.code(404).send({ errors: ['not found'] });
-        const found = await store.ensureExtracted(name);
+        // Content-addressed like /assets (a shared route): a box has its own surau; the cloud serves the pack of whichever
+        // surau holds this name at this exact address, so one surau never reads another's by name alone.
+        let found: { dir: string; version: number; hash: string } | null = null;
+        for (const sid of deps.role === 'cloud' ? surausWithPack(db, request, name, hash) : [LOCAL_SURAU_ID]) {
+          const f = await store.ensureExtracted(name, sid);
+          if (f !== null && f.hash === hash) { found = f; break; }
+        }
         // Only the installed file is served; an older address answers 404 (a kiosk keeps its own cached copy).
         if (found === null || found.hash !== hash) return reply.code(404).send({ errors: ['not found'] });
         const file = fileIn(found.dir, subOf(shape, params));

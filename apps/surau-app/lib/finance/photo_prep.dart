@@ -17,7 +17,7 @@ class FinancePhotoError implements Exception {
   final String message;
 
   static const String notAnImage =
-      'Fail ini bukan gambar yang boleh dibaca. Pilih gambar JPEG atau PNG.';
+      'Fail ini bukan gambar yang boleh dibaca. Pilih gambar JPEG atau PNG.'; // lang-ok: identifier; screens show S text
   static const String tooBig =
       'Gambar masih terlalu besar. Ambil gambar semula dari jarak yang lebih dekat.';
 

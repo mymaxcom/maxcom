@@ -15,7 +15,7 @@ class AndroidDeviceKey implements DeviceKey {
 
   Future<Uint8List> _bytes(String method, [Object? args]) async {
     final r = await _ch.invokeMethod<Uint8List>(method, args);
-    if (r == null) throw StateError('Kunci peranti tidak tersedia');
+    if (r == null) throw StateError('Kunci peranti tidak tersedia'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     return r;
   }
 
@@ -63,7 +63,7 @@ class AndroidDeviceKey implements DeviceKey {
       if (e.code == 'no_key') {
         throw StateError('Kunci peranti tiada. Daftar semula peranti ini');
       }
-      throw StateError('Kunci peranti tidak dapat digunakan');
+      throw StateError('Kunci peranti tidak dapat digunakan'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }
   }
 }

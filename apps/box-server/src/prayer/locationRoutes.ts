@@ -1,3 +1,4 @@
+import { reqSurau } from '../reqSurau.ts';
 import type { FastifyInstance } from 'fastify';
 import { actorOf } from '../actor.ts';
 import { tooMany } from '../auth/authz.ts';
@@ -14,7 +15,7 @@ export function registerLocationRoutes(app: FastifyInstance, deps: PrayerDeps): 
     const body = request.body;
     const query = typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as { query?: unknown }).query : undefined;
     if (typeof query !== 'string') return reply.code(400).send({ errors: ['query must be text'], reason: 'bad_query' });
-    const result = await searchLocation(db, query, fetchImpl, sourceUrlsFrom(getSettings(db)).nominatim, now, limiters.locationSearch, { key: actorOf(request), ...(deps.nominatimMinIntervalMs !== undefined ? { minIntervalMs: deps.nominatimMinIntervalMs } : {}) });
+    const result = await searchLocation(db, query, fetchImpl, sourceUrlsFrom(getSettings(db, reqSurau(request))).nominatim, now, limiters.locationSearch, { key: actorOf(request), ...(deps.nominatimMinIntervalMs !== undefined ? { minIntervalMs: deps.nominatimMinIntervalMs } : {}) });
     reply.header('Cache-Control', 'no-store');
     if (result.ok) return { ...result, attribution: ATTRIBUTION };
     switch (result.reason) {

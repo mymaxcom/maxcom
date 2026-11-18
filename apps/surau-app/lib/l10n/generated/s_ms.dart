@@ -58,7 +58,7 @@ class SMs extends S {
   String get navDashboard => 'Papan pemuka';
 
   @override
-  String get navSettings => 'Tetapan';
+  String get navSettings => 'Konfigurasi';
 
   @override
   String get navContent => 'Kandungan';
@@ -103,7 +103,7 @@ class SMs extends S {
   String get dashboardTitle => 'Papan pemuka';
 
   @override
-  String get settingsTitle => 'Tetapan';
+  String get settingsTitle => 'Konfigurasi';
 
   @override
   String get enrolTitle => 'Daftar peranti ini';
@@ -540,6 +540,37 @@ class SMs extends S {
   @override
   String get previewShortcutHint =>
       'Lihat apa yang dipaparkan di TV surau sekarang.';
+
+  @override
+  String get dashAttention => 'Perlu perhatian';
+
+  @override
+  String dashPrayerDaysLeft(int n) {
+    return 'Data waktu solat tinggal $n hari';
+  }
+
+  @override
+  String get dashPrayerNone => 'Tiada data waktu solat';
+
+  @override
+  String dashLockedUsers(int n) {
+    return '$n pengguna dikunci';
+  }
+
+  @override
+  String get dashLockedHint => 'Buka kunci mereka di Pengguna & peranti.';
+
+  @override
+  String get dashOnTv => 'Di skrin TV sekarang';
+
+  @override
+  String get dashSeeTv => 'Lihat skrin TV';
+
+  @override
+  String get dashSystem => 'Butiran sistem';
+
+  @override
+  String get dashAppVersion => 'Versi aplikasi';
 
   @override
   String get comingBody =>
@@ -1218,7 +1249,18 @@ class SMs extends S {
   String get roleTreasurerHint => 'Kewangan dan tabung surau';
 
   @override
-  String get roleMediaHint => 'Kandungan, poster dan siaran langsung';
+  String get roleMediaHint => 'Kandungan dan poster';
+
+  @override
+  String get roleLive => 'Siaran Langsung';
+
+  @override
+  String get roleLiveHint =>
+      'Membuka menu Siaran langsung dan tetapannya: kamera luaran, sumber audio, skrin, YouTube dan rakaman';
+
+  @override
+  String get usersMediaNoLiveHint =>
+      'Peranan Media tidak lagi boleh membuat siaran langsung. Beri peranan Siaran Langsung kepada pengguna yang perlu.';
 
   @override
   String get roleAjkHint =>
@@ -1283,7 +1325,7 @@ class SMs extends S {
 
   @override
   String userDeactivateHint(String name) {
-    return '$name tidak lagi dapat buka kunci aplikasi ini.';
+    return 'Semua peranti dan kod $name dipadam. Nama kekal dalam log dan rekod kewangan.';
   }
 
   @override
@@ -1325,7 +1367,7 @@ class SMs extends S {
   }
 
   @override
-  String get enrolQrCodeLabel => 'Atau taip kod ini';
+  String get enrolQrCodeLabel => 'Kod semakan';
 
   @override
   String enrolQrExpiresIn(String time) {
@@ -1355,11 +1397,11 @@ class SMs extends S {
   String get devicesPair => 'Padankan skrin TV';
 
   @override
-  String get devicesRevoke => 'Batalkan';
+  String get devicesRevoke => 'Padam';
 
   @override
   String devicesRevokeTitle(String name) {
-    return 'Batalkan $name?';
+    return 'Padam $name?';
   }
 
   @override
@@ -1367,11 +1409,11 @@ class SMs extends S {
       'Peranti ini tidak lagi boleh buka kunci. Untuk guna semula, daftar dengan kod QR baharu.';
 
   @override
-  String get devicesRevoked => 'Dibatalkan';
+  String get devicesRevoked => 'Dipadam';
 
   @override
   String devicesRevokedToast(String name) {
-    return '$name dibatalkan.';
+    return '$name dipadam.';
   }
 
   @override
@@ -1504,7 +1546,7 @@ class SMs extends S {
   String get auditEntityDevices => 'Peranti';
 
   @override
-  String get auditEntitySettings => 'Tetapan';
+  String get auditEntitySettings => 'Konfigurasi';
 
   @override
   String get auditEntityContent => 'Kandungan';
@@ -2505,7 +2547,7 @@ class SMs extends S {
 
   @override
   String get appLockOffHint =>
-      'Sesiapa yang memegang peranti ini boleh membuka MAXCOM. Pentadbir boleh menghidupkan kunci di Tetapan.';
+      'Sesiapa yang memegang peranti ini boleh membuka MAXCOM. Pentadbir boleh menghidupkan kunci di Konfigurasi.';
 
   @override
   String get appLockEnrolHint =>
@@ -2589,6 +2631,30 @@ class SMs extends S {
   String syncConflicts(int n) {
     return 'Konflik: $n';
   }
+
+  @override
+  String get linkCloudConnected => 'Awan MAXCOM: bersambung';
+
+  @override
+  String get linkCloudConnecting => 'Awan MAXCOM: sedang menyambung';
+
+  @override
+  String get linkCloudSyncing => 'Awan MAXCOM: sedang menghantar perubahan';
+
+  @override
+  String get linkCloudDisconnected => 'Awan MAXCOM: tidak bersambung';
+
+  @override
+  String get linkBoxConnected => 'MAXCOM di surau: bersambung';
+
+  @override
+  String get linkBoxConnecting => 'MAXCOM di surau: sedang menyambung';
+
+  @override
+  String get linkBoxSyncing => 'MAXCOM di surau: sedang menghantar perubahan';
+
+  @override
+  String get linkBoxDisconnected => 'MAXCOM di surau: tidak dapat dihubungi';
 
   @override
   String get syncNow => 'Selaraskan sekarang';
@@ -2688,7 +2754,7 @@ class SMs extends S {
   String get conflictDeleted => 'Anda memadam item ini';
 
   @override
-  String get conflictEntitySettings => 'Tetapan';
+  String get conflictEntitySettings => 'Konfigurasi';
 
   @override
   String get conflictEntityUser => 'Pengguna';
@@ -2784,7 +2850,7 @@ class SMs extends S {
 
   @override
   String get devicesEnrolViaCloud =>
-      'Anda disambungkan melalui awan. Kod QR dibuat oleh awan dan boleh diimbas dari rumah.';
+      'Anda di luar rangkaian surau. Kod QR hanya boleh dibuat di Wi-Fi surau.';
 
   @override
   String get navUpload => 'Muat naik YouTube';
@@ -3132,6 +3198,26 @@ class SMs extends S {
   String get settingsSearchHint => 'Cari tetapan, contoh: azan';
 
   @override
+  String settingsWhyGroup(String name) {
+    return 'Kumpulan: $name';
+  }
+
+  @override
+  String settingsWhyField(String name) {
+    return 'Medan: $name';
+  }
+
+  @override
+  String settingsWhyChoice(String name) {
+    return 'Pilihan: $name';
+  }
+
+  @override
+  String settingsWhyKeyword(String name) {
+    return 'Kata kunci: $name';
+  }
+
+  @override
   String settingsSearchFound(int n) {
     return '$n tetapan sepadan. Kumpulan yang sepadan dibuka sendiri.';
   }
@@ -3278,7 +3364,7 @@ class SMs extends S {
 
   @override
   String get setupConfirmHint =>
-      'Pastikan nama surau betul. Anda boleh mengubahnya di Tetapan kemudian.';
+      'Pastikan nama surau betul. Anda boleh mengubahnya di Konfigurasi kemudian.';
 
   @override
   String get setupFingerprintHint =>
@@ -3503,7 +3589,7 @@ class SMs extends S {
 
   @override
   String get devicesBoxRowHint =>
-      'Pelayan dan skrin di surau. Tidak boleh dibatalkan.';
+      'Skrin utama di surau. Sentiasa ada, tidak boleh dipadam.';
 
   @override
   String get devicesAwayBanner =>
@@ -3751,7 +3837,7 @@ class SMs extends S {
 
   @override
   String get hadisListHelp =>
-      'Susunan ini ialah susunan giliran di TV bila sumber Kedua-dua. Tetapan sumber dan giliran di Tetapan, Hadis. Suis menyembunyikan hadis dari TV tetapi kekal tersimpan; Buang memadamnya dari senarai MAXCOM.';
+      'Susunan ini ialah susunan giliran di TV bila sumber Kedua-dua. Tetapan sumber dan giliran di Konfigurasi, Hadis. Suis menyembunyikan hadis dari TV tetapi kekal tersimpan; Buang memadamnya dari senarai MAXCOM.';
 
   @override
   String hadisNearFull(int n, int max) {
@@ -3990,7 +4076,7 @@ class SMs extends S {
 
   @override
   String get hadisArabicHidden =>
-      'Teks Arab disembunyikan dalam pratonton ini. Tetapan TV di Tetapan, Hadis.';
+      'Teks Arab disembunyikan dalam pratonton ini. Tetapan TV di Konfigurasi, Hadis.';
 
   @override
   String get hadisDetails => 'Butiran';
@@ -5844,11 +5930,11 @@ class SMs extends S {
 
   @override
   String get themeSizeNote =>
-      'Skala di atas saiz asas; saiz asas hadis dan ayat dipilih di Tetapan. S ialah saiz sekarang, tiada saiz lebih kecil supaya jelas dari 3 meter.';
+      'Skala di atas saiz asas; saiz asas hadis dan ayat dipilih di Konfigurasi. S ialah saiz sekarang, tiada saiz lebih kecil supaya jelas dari 3 meter.';
 
   @override
   String get themeBgNote =>
-      'Ikut tema: gambar latar di Tetapan digunakan (atau gambar tema yang dimuat naik).';
+      'Ikut tema: gambar latar di Konfigurasi digunakan (atau gambar tema yang dimuat naik).';
 
   @override
   String get themeAlign => 'Susunan kandungan';
@@ -6128,4 +6214,2000 @@ class SMs extends S {
 
   @override
   String get themeDeleted => 'Tema dipadam';
+
+  @override
+  String get valRequired => 'Wajib diisi';
+
+  @override
+  String valTooLong(int max) {
+    return 'Terlalu panjang (paling banyak $max aksara)';
+  }
+
+  @override
+  String get valNoSpaces => 'Tidak boleh ada ruang atau aksara kawalan';
+
+  @override
+  String get valWebAddress => 'Mesti alamat web yang sah';
+
+  @override
+  String get valStartHttps => 'Mesti bermula dengan https://';
+
+  @override
+  String get valNoUserInfo => 'Tidak boleh ada nama pengguna atau kata laluan';
+
+  @override
+  String get valNoFragment => 'Tidak boleh ada bahagian #';
+
+  @override
+  String get valPublicAddress =>
+      'Mesti alamat internet awam (bukan setempat atau peribadi)';
+
+  @override
+  String valRectShape(String shape) {
+    return 'Mesti objek $shape';
+  }
+
+  @override
+  String get valUnknownField => 'Medan tidak dikenali';
+
+  @override
+  String get valRectNumbers => 'x, y, w dan h mesti nombor';
+
+  @override
+  String get valCropInside => 'Petak potongan mesti berada dalam gambar';
+
+  @override
+  String get valImageIdBad => 'Id gambar tidak sah';
+
+  @override
+  String get valSquareLogoOnly => 'Petak segi empat hanya untuk logo';
+
+  @override
+  String get valBgChoice => 'Latar mesti keep, remove atau card';
+
+  @override
+  String get valRotateChoice => 'Putaran mesti 0, 90, 180 atau 270';
+
+  @override
+  String get valBool => 'Mesti hidup atau mati';
+
+  @override
+  String valOneOf(String list) {
+    return 'Mesti salah satu daripada: $list';
+  }
+
+  @override
+  String valWholeNumber(int min, int max) {
+    return 'Mesti nombor bulat $min hingga $max';
+  }
+
+  @override
+  String get valMustText => 'Mesti teks';
+
+  @override
+  String valMustWhat(String what) {
+    return 'Mesti $what';
+  }
+
+  @override
+  String get valWhatPlain => 'teks biasa';
+
+  @override
+  String get valWhatPlainNoHtml => 'teks biasa tanpa aksara HTML';
+
+  @override
+  String get valWhatPhone => 'nombor telefon seperti 012-345 6789';
+
+  @override
+  String get valWhatEmail => 'alamat e-mel seperti nama@contoh.my';
+
+  @override
+  String get valWhatHttps => 'alamat https://';
+
+  @override
+  String get valWhatValid => 'sah';
+
+  @override
+  String valDecimal(int min, int max) {
+    return 'Mesti nombor $min hingga $max dengan paling banyak 4 titik perpuluhan, atau kosong';
+  }
+
+  @override
+  String get valColourHex => 'Tulis # diikuti 6 aksara, contoh #F6E7B8';
+
+  @override
+  String get valAudioFile => 'Mesti fail audio yang sah';
+
+  @override
+  String get valTimeValid => 'Mesti masa yang sah';
+
+  @override
+  String get valTextOrEmpty => 'Mesti teks atau kosong';
+
+  @override
+  String get valTextList => 'Mesti senarai teks';
+
+  @override
+  String valItemMax(int max) {
+    return 'Item mesti paling banyak $max aksara';
+  }
+
+  @override
+  String get valSourceOrder =>
+      'Mesti senaraikan official, calc dan file sekali sahaja';
+
+  @override
+  String valMaxImages(int max) {
+    return 'Paling banyak $max gambar';
+  }
+
+  @override
+  String get valImageNames =>
+      'Gambar mesti nama sedia ada (a-z, 0-9, -) atau /uploads/<nama fail>';
+
+  @override
+  String get valUnsupported => 'Tetapan ini tidak disokong';
+
+  @override
+  String get valMustObject => 'Mesti objek';
+
+  @override
+  String get valUnknownSetting => 'Tetapan tidak dikenali';
+
+  @override
+  String valSurahAyat(String name, int ayat) {
+    return '$name ada $ayat ayat';
+  }
+
+  @override
+  String get valAyatOrder =>
+      'Ayat dari mesti sebelum atau sama dengan Ayat hingga';
+
+  @override
+  String get valAyatMax => 'Paling banyak 5 ayat sekali paparan';
+
+  @override
+  String get valUnknownFeature => 'Ciri tidak dikenali';
+
+  @override
+  String get valSettingsObject => 'Tetapan mesti objek';
+
+  @override
+  String valAlwaysOn(String name) {
+    return '$name sentiasa hidup dan tidak boleh dimatikan';
+  }
+
+  @override
+  String get valFromBeforeTo => 'Tarikh mula mesti sebelum tarikh tamat';
+
+  @override
+  String get valDate => 'Mesti tarikh yang sah';
+
+  @override
+  String get valTimeHm => 'Mesti masa yang sah (JJ:MM)';
+
+  @override
+  String get valDateTime => 'Mesti tarikh dan masa yang sah';
+
+  @override
+  String get valPickDays => 'Pilih sekurang-kurangnya satu hari';
+
+  @override
+  String get valPickTz => 'Pilih zon waktu daripada senarai';
+
+  @override
+  String get valUnknownKind => 'Jenis kandungan tidak dikenali';
+
+  @override
+  String get valItemObject => 'Item mesti objek';
+
+  @override
+  String get valImageBad => 'Gambar tidak sah';
+
+  @override
+  String get valFitBad => 'Paparan gambar tidak sah';
+
+  @override
+  String get valChoiceBad => 'Pilihan tidak sah';
+
+  @override
+  String get valColourLike => 'Warna mesti seperti #12AB34';
+
+  @override
+  String get valFontBad => 'Fon tidak sah';
+
+  @override
+  String get valSizeChoice => 'Saiz mesti S, M, L atau XL';
+
+  @override
+  String get valValueUnknown => 'Nilai tidak dikenali';
+
+  @override
+  String get kindHintSeries => 'Kod siri untuk kuliah bersambung (pilihan)';
+
+  @override
+  String get kindHintPhone => 'Untuk AJK sahaja, tidak dipaparkan di TV';
+
+  @override
+  String get kindDescPengumuman =>
+      'Makluman kepada jemaah untuk tempoh tertentu.';
+
+  @override
+  String get kindDescHadis => 'Hadis pilihan untuk kad hadis di TV.';
+
+  @override
+  String get errorRequestFailed => 'Permintaan gagal';
+
+  @override
+  String get errorFeatureNotFound => 'Ciri tidak dijumpai';
+
+  @override
+  String get tvLangNeedsUpdate =>
+      'Kemas kini MAX Kiosk Server untuk pilihan ini';
+
+  @override
+  String get prayerErrNotFound => 'Tidak dijumpai';
+
+  @override
+  String get prayerErrRateLimited =>
+      'Terlalu banyak carian. Cuba lagi sebentar lagi';
+
+  @override
+  String get prayerErrOffline =>
+      'Carian lokasi perlukan sambungan internet pada MAXCOM';
+
+  @override
+  String get prayerErrUpstream =>
+      'Sumber waktu solat tidak menjawab. Cuba lagi nanti';
+
+  @override
+  String get prayerErrZonesUpstream =>
+      'Senarai zon tidak dapat dimuat turun sekarang. Cuba lagi nanti';
+
+  @override
+  String get prayerErrConflict => 'Tindakan ini tidak boleh dibuat lagi';
+
+  @override
+  String get prayerErrTooLarge =>
+      'Fail terlalu besar. Pilih fail yang lebih kecil';
+
+  @override
+  String get prayerErrBadType => 'Jenis fail tidak disokong';
+
+  @override
+  String get prayerErrUnavailable =>
+      'Perkhidmatan tidak tersedia buat masa ini';
+
+  @override
+  String get prayerErrInvalidData => 'Data tidak sah';
+
+  @override
+  String get liveSignInFailed => 'Log masuk YouTube tidak berjaya. Cuba lagi.';
+
+  @override
+  String get liveStartFailed => 'Siaran tidak dapat dimulakan';
+
+  @override
+  String get liveOtherDevice => 'peranti lain';
+
+  @override
+  String get liveRateText =>
+      'Terlalu banyak cubaan mula siaran. Cuba lagi sebentar lagi.';
+
+  @override
+  String get liveWarnYoutubeNotSignedIn =>
+      'YouTube belum dilog masuk di MAXCOM. Siaran ke skrin surau berjalan.';
+
+  @override
+  String get liveWarnYoutubeOff => 'YouTube dimatikan oleh pentadbir';
+
+  @override
+  String get liveWarnYoutubeQuota => 'Kuota YouTube hari ini telah habis.';
+
+  @override
+  String get liveWarnYoutubeReauth => 'Log masuk YouTube perlu diperbaharui.';
+
+  @override
+  String get liveWarnYoutubeForbidden => 'YouTube menolak permintaan.';
+
+  @override
+  String get liveWarnCloudUnreachable => 'YouTube: awan tidak dapat dihubungi';
+
+  @override
+  String liveCamUnreachable(String name) {
+    return '$name, tidak dapat dihubungi';
+  }
+
+  @override
+  String liveCamReady(String name) {
+    return '$name, sedia';
+  }
+
+  @override
+  String liveExtBoxPullNote(String camera) {
+    return 'Di iPad, MAXCOM yang menarik gambar dan audio dari $camera dan menghantar pratonton ke iPad ini. Siaran yang digabungkan di MAXCOM sampai ke skrin surau dan YouTube 1 hingga 2 saat lewat.';
+  }
+
+  @override
+  String get liveExtControllerOnly =>
+      'Audio kamera sahaja. iPad ini mengawal siaran dan memaparkan pratonton; ia tidak menghantar bunyi.';
+
+  @override
+  String get liveExtScreenLock =>
+      'Letak iPad dekat penceramah dan kekalkan skrin terbuka. Mengunci skrin akan menghentikan mikrofon.';
+
+  @override
+  String get liveExtRecordingFallback =>
+      'Rakaman tidak dibuat apabila iPad mengawal Kamera luaran. Salinan siaran ada di YouTube.';
+
+  @override
+  String get liveExtSourceName => 'Mikrofon iPad';
+
+  @override
+  String liveExtMicLostCamera(String source) {
+    return '$source terputus. Siaran diteruskan dengan audio kamera.';
+  }
+
+  @override
+  String liveExtMicLostSilent(String source) {
+    return '$source terputus. Siaran diteruskan tanpa bunyi.';
+  }
+
+  @override
+  String get liveExtMicLostHint =>
+      'Mikrofon disambung semula secara automatik dan diselaraskan sebelum dicampur semula. Kekalkan skrin iPad terbuka.';
+
+  @override
+  String get liveExtMicRefused =>
+      'Mikrofon iPad tidak dapat dibuka. Siaran diteruskan dengan audio kamera.';
+
+  @override
+  String get liveExtChipRealign => 'Diselaraskan semula bila kembali';
+
+  @override
+  String get liveExtChipOnStart => 'Diselaraskan bila siaran bermula';
+
+  @override
+  String get liveExtChipAligned => 'Selaras';
+
+  @override
+  String get liveExtChipNotAligned => 'Belum selaras';
+
+  @override
+  String get liveExtChipManual => 'Imbangan masa audio';
+
+  @override
+  String get liveExtChipAligning => 'Sedang diselaraskan';
+
+  @override
+  String liveExtAlignFailedCamera(String source) {
+    return 'Penyelarasan automatik belum berjaya, jadi $source belum dicampur supaya suara tidak kedengaran berganda. Pastikan ada suara di dalam surau dan kamera boleh mendengarnya.';
+  }
+
+  @override
+  String get liveExtAlignFailedSilent =>
+      'Penyelarasan automatik belum berjaya. Bunyi mungkin tidak selari dengan gambar.';
+
+  @override
+  String liveExtUseMicOnly(String source) {
+    return 'Guna $source sahaja';
+  }
+
+  @override
+  String liveExtCameraNoAudioMic(String source) {
+    return 'Kamera ini tiada audio. $source digunakan bersendirian. Tetapkan \'Imbangan masa audio\' dengan \'Uji tepukan\'.';
+  }
+
+  @override
+  String get liveExtCameraNoAudioAlone =>
+      'Kamera ini tiada audio. Tekan \'Tambah audio\' untuk memilih mikrofon, atau siaran tiada bunyi.';
+
+  @override
+  String get liveExtAllMuted =>
+      'Semua sumber audio disenyapkan. Siaran tiada bunyi.';
+
+  @override
+  String get liveExtPreviewRetry => 'Pratonton terputus. Menyambung semula...';
+
+  @override
+  String get liveOnlyEnrol => 'Daftar peranti baharu';
+
+  @override
+  String get liveOnlyRevoke => 'Padam peranti';
+
+  @override
+  String get liveOnlyRevokeWhy =>
+      'Pentadbir mesti nampak peranti berjaya dipadam';
+
+  @override
+  String get liveOnlyAddUser => 'Tambah pengguna';
+
+  @override
+  String get liveOnlyResetPin => 'Tetapkan semula PIN';
+
+  @override
+  String get liveOnlyAppLock => 'Kunci aplikasi';
+
+  @override
+  String get liveOnlyPairDisplay => 'Luluskan pasangan paparan';
+
+  @override
+  String get liveOnlyYoutubeSign => 'Log masuk dan log keluar YouTube';
+
+  @override
+  String get liveOnlyLive => 'Siaran langsung';
+
+  @override
+  String get liveOnlyPrayerOps => 'Import, pembetulan dan carian waktu solat';
+
+  @override
+  String get liveOnlyPrayerData => 'Data waktu solat';
+
+  @override
+  String get liveOnlyIslamic => 'Kandungan Islam';
+
+  @override
+  String get liveOnlyAnalyse => 'Analisis gambar';
+
+  @override
+  String get liveOnlyUploadRecording => 'Muat naik rakaman ke YouTube';
+
+  @override
+  String get liveOnlySyncNow => 'Selaraskan sekarang';
+
+  @override
+  String get liveOnlyChangePin => 'Tukar PIN';
+
+  @override
+  String get liveOnlyReportPdf => 'Muat turun PDF laporan';
+
+  @override
+  String get liveOnlyCountPhoto => 'Lihat foto helaian kiraan';
+
+  @override
+  String get liveOnlyReportShared => 'Rekod perkongsian laporan';
+
+  @override
+  String get liveOnlyFinanceAudit => 'Sejarah audit kewangan';
+
+  @override
+  String get hadisGradeNoteSahih => 'Darjat tertinggi';
+
+  @override
+  String get hadisGradeNoteHasan => 'Diterima sebagai hujah';
+
+  @override
+  String get hadisGradeNoteHasanLi => 'Hasan kerana sokongan riwayat lain';
+
+  @override
+  String get hadisGradeNoteDhaif => 'Lemah; tidak dipaparkan';
+
+  @override
+  String get hadisGradeNoteMaudhu => 'Tidak sekali-kali dipaparkan';
+
+  @override
+  String get valWhatThemeName =>
+      'nama tema (a-z, 0-9, sempang, paling banyak 32 aksara)';
+
+  @override
+  String get valWhatReciter => 'nama folder qari';
+
+  @override
+  String get valWhatCountry => 'kod negara dua huruf seperti MY';
+
+  @override
+  String get valWhatTimezone => 'zon waktu seperti Asia/Kuala_Lumpur';
+
+  @override
+  String get valWhatZone => 'kod zon seperti SGR01';
+
+  @override
+  String get valWhatImageOrEmpty => 'id gambar atau kosong';
+
+  @override
+  String get valWhatFundOrEmpty => 'id tabung atau kosong';
+
+  @override
+  String get valWhatDateOrEmpty => 'tarikh YYYY-MM-DD atau kosong';
+
+  @override
+  String get kindDescPenceramah =>
+      'Ustaz dan ustazah yang menyampaikan kuliah.';
+
+  @override
+  String get kindDescKitab => 'Kitab yang dibaca dalam kuliah.';
+
+  @override
+  String get kindDescKuliah => 'Jadual kuliah yang dipaparkan di TV.';
+
+  @override
+  String get kindDescTicker => 'Ayat pendek yang bergerak di bawah skrin.';
+
+  @override
+  String get kindDescPoster => 'Gambar penuh skrin yang bergilir di TV.';
+
+  @override
+  String get kindDescProgramKhas => 'Majlis dan program yang akan datang.';
+
+  @override
+  String get kindDescTakwim => 'Tarikh penting dalam kalendar surau.';
+
+  @override
+  String get kindDescWorldTime => 'Jam bandar lain yang dipaparkan di TV.';
+
+  @override
+  String get kindDescPetugas => 'Imam, bilal dan AJK yang bertugas.';
+
+  @override
+  String get kindDescTugasan => 'Siapa bertugas pada hari mana.';
+
+  @override
+  String get kindDescZikir => 'Zikir selepas solat, dalam susunan bacaan.';
+
+  @override
+  String get kindDescTilawahSlot =>
+      'Bacaan Al-Quran yang dimainkan sebelum waktu solat.';
+
+  @override
+  String get hadisGradeNoteSahihLi => 'Sahih kerana sokongan riwayat lain';
+
+  @override
+  String get trustRootMissing => 'Sijil akar tiada. Daftar semula';
+
+  @override
+  String get trustRootInvalid => 'Sijil akar tidak sah';
+
+  @override
+  String get trustRootMismatch => 'Sijil akar tidak sepadan';
+
+  @override
+  String get trustCloudFailed => 'Sambungan selamat ke awan MAXCOM gagal.';
+
+  @override
+  String get trustBadQr => 'Kod QR pendaftaran tidak sah';
+
+  @override
+  String get trustRootFetch => 'Sijil akar tidak dapat diambil dari MAXCOM';
+
+  @override
+  String get trustNoHttps => 'MAXCOM ini belum ada sijil HTTPS';
+
+  @override
+  String get imageNotReadable =>
+      'Fail ini bukan gambar yang boleh dibaca. Pilih fail JPEG, PNG atau WebP.';
+
+  @override
+  String get errcWrongPin => 'PIN salah';
+
+  @override
+  String errcLocked(int minutes) {
+    return 'PIN dikunci. Cuba lagi dalam $minutes minit.';
+  }
+
+  @override
+  String get errcUnlockFailed => 'Buka kunci tidak berjaya. Cuba lagi.';
+
+  @override
+  String get errcPinPolicy => 'PIN mestilah 6 digit dan tidak mudah diteka';
+
+  @override
+  String get errcPinExists => 'PIN sudah ditetapkan untuk pengguna ini';
+
+  @override
+  String get errcPinRequired => 'PIN diperlukan';
+
+  @override
+  String get errcPinMissing => 'PIN belum ditetapkan';
+
+  @override
+  String get errcAppLockOff => 'Kunci aplikasi tidak dihidupkan';
+
+  @override
+  String get errcSuspended => 'Surau ini digantung buat sementara';
+
+  @override
+  String get errcBadEnrolCode =>
+      'Kod pendaftaran tidak sah atau sudah digunakan';
+
+  @override
+  String get errcOpsAppRequired =>
+      'Gunakan aplikasi MAXCOM Ops untuk akaun ini';
+
+  @override
+  String get errcOpsCliOnly =>
+      'Pendaftaran ini dibuat melalui awan MAXCOM sahaja';
+
+  @override
+  String get errcNotOpsUser => 'Pengguna ini tiada peranan MAXCOM Ops';
+
+  @override
+  String get errcOpsDeviceLimit =>
+      'Had pendaftaran MAXCOM Ops bagi pengguna ini telah dicapai';
+
+  @override
+  String get errcNotOpsDevice => 'Peranti ini bukan untuk MAXCOM Ops';
+
+  @override
+  String get errcBadRequest => 'Permintaan tidak sah';
+
+  @override
+  String get errcBadName => 'Nama tidak sah';
+
+  @override
+  String get errcBadRoles => 'Peranan tidak sah';
+
+  @override
+  String get errcBadTtl => 'Tempoh kod tidak sah';
+
+  @override
+  String get errcBadDevice => 'Peranti tidak sah';
+
+  @override
+  String get errcBadChoice => 'Pilihan tidak sah';
+
+  @override
+  String get errcUserNotFound => 'Pengguna tidak dijumpai';
+
+  @override
+  String get errcDeviceNotFound => 'Peranti tidak dijumpai';
+
+  @override
+  String get errcNotFound => 'Tidak dijumpai';
+
+  @override
+  String get errcPairGone =>
+      'Pasangan skrin ini sudah tamat atau telah digunakan';
+
+  @override
+  String get errcBadPairCode => 'Kod pasangan tidak betul';
+
+  @override
+  String get errcKuliahNotFound => 'Kuliah tidak ditemui';
+
+  @override
+  String get errcUploadNotFound => 'Muat naik tidak ditemui';
+
+  @override
+  String get errcLastAdmin =>
+      'Mesti ada sekurang-kurangnya seorang Pentadbir yang aktif';
+
+  @override
+  String get errcLastSuperadmin =>
+      'Mesti ada sekurang-kurangnya seorang Pentadbir MAXCOM yang aktif';
+
+  @override
+  String get errcLastAdminDevice => 'Daftarkan peranti Pentadbir lain dahulu';
+
+  @override
+  String get errcRefMismatch =>
+      'ID pengguna tidak sepadan. Buka semula halaman pengguna dan cuba lagi';
+
+  @override
+  String get errcOwnAccount => 'Anda tidak boleh memadam akaun sendiri';
+
+  @override
+  String get errcPhoneRequired => 'Nombor telefon diperlukan';
+
+  @override
+  String get errcBadPhone => 'Nombor telefon tidak sah';
+
+  @override
+  String get errcPhoneTaken =>
+      'Nombor telefon ini sudah digunakan oleh pengguna lain';
+
+  @override
+  String get errcSuperadminCliOnly =>
+      'Peranan ini hanya boleh diurus melalui CLI MAXCOM';
+
+  @override
+  String get errcSuperadminCloudOnly =>
+      'Urus Pentadbir MAXCOM melalui awan MAXCOM';
+
+  @override
+  String get errcSuperadminExists => 'Pentadbir MAXCOM sudah wujud';
+
+  @override
+  String get errcBoxOnly =>
+      'Kod peranti mesti dibuat di surau. Gunakan telefon Pentadbir Surau pada Wi-Fi surau.';
+
+  @override
+  String get errcNotEmpty => 'Surau ini masih ada data dan tidak boleh dipadam';
+
+  @override
+  String get errcModuleOff => 'Modul ini tidak dihidupkan';
+
+  @override
+  String get errcLiveBusy =>
+      'Siaran langsung sedang berjalan. Cuba selepas siaran tamat.';
+
+  @override
+  String get errcBadAddress => 'Alamat kamera tidak sah';
+
+  @override
+  String get errcUnknownVideo => 'Video itu bukan salah satu siaran surau ini';
+
+  @override
+  String get ra4StopNotYet => 'Siaran belum berhenti. Cuba lagi.';
+
+  @override
+  String get ra4StopRetry => 'Cuba lagi';
+
+  @override
+  String get ra4EndedByBox => 'Siaran ditamatkan oleh MAXCOM.';
+
+  @override
+  String get ra4StillLive =>
+      'Siaran masih berjalan. Buka Siaran langsung untuk menghentikannya.';
+
+  @override
+  String get ra4CameraName => 'Kamera luaran';
+
+  @override
+  String get ra4CameraStoppedByIpad =>
+      'Kamera dihentikan oleh iPad. Buka semula skrin ini.';
+
+  @override
+  String get ra4CamNotRtsp => 'Alamat mesti bermula dengan rtsp://';
+
+  @override
+  String get ra4CamNotIpv4 =>
+      'Guna alamat IPv4 kamera di rangkaian surau (contoh 10.168.1.20), bukan nama.';
+
+  @override
+  String get ra4CamNotPrivate =>
+      'Alamat mesti dalam rangkaian persendirian (10.x.x.x, 172.16 hingga 172.31 atau 10.168.x.x).';
+
+  @override
+  String get ra4CamIsBox =>
+      'Alamat ini ialah MAXCOM sendiri. Masukkan alamat kamera.';
+
+  @override
+  String get ra4CamBadPort => 'Port mesti nombor dari 1 hingga 65535.';
+
+  @override
+  String get ra4CamBadLogin =>
+      'Nama pengguna atau kata laluan dalam alamat ada aksara yang mesti dikodkan (tulis @ sebagai %40).';
+
+  @override
+  String get ra4CamBadPath =>
+      'Laluan alamat ada aksara yang tidak dibenarkan (ruang, tanda petik atau #).';
+
+  @override
+  String get ra4CamTooLong =>
+      'Alamat terlalu panjang (paling banyak 400 aksara).';
+
+  @override
+  String get errcUnusable => 'Input audio ini tidak boleh digunakan';
+
+  @override
+  String get errcCameraError => 'Kamera tidak dapat diproses';
+
+  @override
+  String get errcCameraNotConfigured => 'Kamera belum ditetapkan';
+
+  @override
+  String get errcUnavailable =>
+      'Perkhidmatan tidak tersedia sekarang. Cuba lagi nanti.';
+
+  @override
+  String get errcBadClaim => 'Pendaftaran MAXCOM tidak sah';
+
+  @override
+  String get errcWorkerUnreachable =>
+      'MAXCOM tidak dapat menyemak pendaftaran sekarang. Cuba lagi.';
+
+  @override
+  String get errcClaimPending => 'Menunggu kelulusan MAXCOM';
+
+  @override
+  String get errcBoxRevoked => 'MAXCOM ini telah dibatalkan oleh awan';
+
+  @override
+  String get errcYoutubeQuota =>
+      'Had harian YouTube telah dicapai. Cuba lagi esok.';
+
+  @override
+  String get errcYoutubeReauthorise => 'Log masuk YouTube perlu dibuat semula';
+
+  @override
+  String get errcYoutubeNotConfigured => 'YouTube belum disediakan';
+
+  @override
+  String get errcYoutubeForbidden => 'YouTube menolak tindakan ini';
+
+  @override
+  String get errcYoutubeNotFound => 'Video YouTube tidak ditemui';
+
+  @override
+  String get errcYoutubeNetwork =>
+      'Tidak dapat menghubungi YouTube. Cuba lagi.';
+
+  @override
+  String get errcCatchupOff => 'Muat naik rakaman ke YouTube tidak dihidupkan';
+
+  @override
+  String get errcVideoMismatch => 'Video tidak sepadan dengan muat naik ini';
+
+  @override
+  String get errcUploadExpired => 'Muat naik ini sudah tamat tempoh';
+
+  @override
+  String get errcTooManyUploads => 'Terlalu banyak muat naik sedang berjalan';
+
+  @override
+  String get errcUnknownLiveVideo => 'Siaran langsung itu tidak dikenali';
+
+  @override
+  String get errcThemeGone =>
+      'Semakan sudah tamat tempoh. Semak fail sekali lagi.';
+
+  @override
+  String get errcThemeInUse =>
+      'Tema ini sedang digunakan. Pilih tema lain dahulu.';
+
+  @override
+  String get errcThemeBuiltIn => 'Tema bawaan MAXCOM tidak boleh dipadam';
+
+  @override
+  String errcContentInUse(int count) {
+    return 'Masih digunakan oleh $count kuliah akan datang';
+  }
+
+  @override
+  String get errcAssetMissing => 'Gambar itu tidak lagi ada';
+
+  @override
+  String get errcHadisFull => 'Had hadis sudah dicapai';
+
+  @override
+  String get errcEntryExists => 'Rekod ini sudah wujud';
+
+  @override
+  String get errcUncertain => 'Semak sama ada tindakan itu sudah berlaku';
+
+  @override
+  String get liveOnlyThemeCheck => 'Semak fail tema';
+
+  @override
+  String get liveOnlyThemeInstall => 'Pasang tema';
+
+  @override
+  String get liveOnlyThemeDelete => 'Padam tema';
+
+  @override
+  String get liveOnlyRecoveryCode => 'Buat kod pemulihan';
+
+  @override
+  String get liveOnlyLeave => 'Keluar dari surau';
+
+  @override
+  String get liveOnlyLogout => 'Log keluar';
+
+  @override
+  String get errcSurauNotFound => 'Surau tidak dijumpai';
+
+  @override
+  String get errcSurauRequired => 'Surau belum dipilih';
+
+  @override
+  String get errcNotRegistered =>
+      'MAXCOM ini belum mendaftar atau pendaftarannya sudah tamat';
+
+  @override
+  String get errcCodeMismatch =>
+      'Kod tuntutan tidak sepadan dengan pendaftaran ini';
+
+  @override
+  String get errcNoWorker =>
+      'Perkhidmatan MAXCOM belum ditetapkan pada awan ini';
+
+  @override
+  String get errcWorker =>
+      'Perkhidmatan MAXCOM tidak dapat dihubungi atau menolak permintaan';
+
+  @override
+  String get errcNotLinked => 'MAXCOM ini sudah dibatalkan';
+
+  @override
+  String get errcBadBoxName => 'Nama MAXCOM mestilah 1 hingga 60 aksara';
+
+  @override
+  String get errcNotSupport => 'Pengguna ini bukan pengguna Sokongan MAXCOM';
+
+  @override
+  String get errcEsolatUnreachable =>
+      'e-Solat tidak dapat dihubungi sekarang. Cuba lagi.';
+
+  @override
+  String get errcAlreadyLinked =>
+      'MAXCOM ini sudah dipautkan atau diluluskan. Guna Batalkan, bukan Tolak.';
+
+  @override
+  String errcEsolatNoRecord(int year, String zone) {
+    return 'e-Solat belum menerbitkan waktu solat $year untuk zon $zone. Cuba lagi nanti atau import fail CSV.';
+  }
+
+  @override
+  String errcCsvYearMismatch(int year, String from, String to) {
+    return 'Fail ini bukan untuk tahun $year ($from hingga $to)';
+  }
+
+  @override
+  String get errcNoOfficialSource =>
+      'Negara ini tiada sumber rasmi. Gunakan fail atau kiraan.';
+
+  @override
+  String errcUndoBlocked(String date, String by) {
+    return 'Import ini tidak boleh dibatalkan kerana hari $date telah diganti atau dibetulkan pada $by';
+  }
+
+  @override
+  String get ra2Month1 => 'Januari';
+
+  @override
+  String get ra2Month2 => 'Februari';
+
+  @override
+  String get ra2Month3 => 'Mac';
+
+  @override
+  String get ra2Month4 => 'April';
+
+  @override
+  String get ra2Month5 => 'Mei';
+
+  @override
+  String get ra2Month6 => 'Jun';
+
+  @override
+  String get ra2Month7 => 'Julai';
+
+  @override
+  String get ra2Month8 => 'Ogos';
+
+  @override
+  String get ra2Month9 => 'September';
+
+  @override
+  String get ra2Month10 => 'Oktober';
+
+  @override
+  String get ra2Month11 => 'November';
+
+  @override
+  String get ra2Month12 => 'Disember';
+
+  @override
+  String get ra2MonthShort1 => 'Jan';
+
+  @override
+  String get ra2MonthShort2 => 'Feb';
+
+  @override
+  String get ra2MonthShort3 => 'Mac';
+
+  @override
+  String get ra2MonthShort4 => 'Apr';
+
+  @override
+  String get ra2MonthShort5 => 'Mei';
+
+  @override
+  String get ra2MonthShort6 => 'Jun';
+
+  @override
+  String get ra2MonthShort7 => 'Jul';
+
+  @override
+  String get ra2MonthShort8 => 'Ogos';
+
+  @override
+  String get ra2MonthShort9 => 'Sep';
+
+  @override
+  String get ra2MonthShort10 => 'Okt';
+
+  @override
+  String get ra2MonthShort11 => 'Nov';
+
+  @override
+  String get ra2MonthShort12 => 'Dis';
+
+  @override
+  String get ra2Weekday1 => 'Isnin';
+
+  @override
+  String get ra2Weekday2 => 'Selasa';
+
+  @override
+  String get ra2Weekday3 => 'Rabu';
+
+  @override
+  String get ra2Weekday4 => 'Khamis';
+
+  @override
+  String get ra2Weekday5 => 'Jumaat';
+
+  @override
+  String get ra2Weekday6 => 'Sabtu';
+
+  @override
+  String get ra2Weekday7 => 'Ahad';
+
+  @override
+  String get ra2WeekdayShort1 => 'Isn';
+
+  @override
+  String get ra2WeekdayShort2 => 'Sel';
+
+  @override
+  String get ra2WeekdayShort3 => 'Rab';
+
+  @override
+  String get ra2WeekdayShort4 => 'Kha';
+
+  @override
+  String get ra2WeekdayShort5 => 'Jum';
+
+  @override
+  String get ra2WeekdayShort6 => 'Sab';
+
+  @override
+  String get ra2WeekdayShort7 => 'Ahd';
+
+  @override
+  String get ra2PrayerImsak => 'Imsak';
+
+  @override
+  String get ra2PrayerSubuh => 'Subuh';
+
+  @override
+  String get ra2PrayerSyuruk => 'Syuruk';
+
+  @override
+  String get ra2PrayerZohor => 'Zohor';
+
+  @override
+  String get ra2PrayerAsar => 'Asar';
+
+  @override
+  String get ra2PrayerMaghrib => 'Maghrib';
+
+  @override
+  String get ra2PrayerIsyak => 'Isyak';
+
+  @override
+  String get ra2PrayerDhuha => 'Dhuha';
+
+  @override
+  String get ra2MethodMwl => 'Liga Dunia Islam';
+
+  @override
+  String get ra2MethodEgyptian => 'Mesir';
+
+  @override
+  String get ra2MethodKarachi => 'Karachi';
+
+  @override
+  String get ra2MethodUmmAlQura => 'Umm al-Qura';
+
+  @override
+  String get ra2MethodDubai => 'Dubai';
+
+  @override
+  String get ra2MethodQatar => 'Qatar';
+
+  @override
+  String get ra2MethodKuwait => 'Kuwait';
+
+  @override
+  String get ra2MethodMoonsighting => 'Jawatankuasa Moonsighting';
+
+  @override
+  String get ra2MethodSingapore => 'Singapura';
+
+  @override
+  String get ra2MethodTehran => 'Tehran';
+
+  @override
+  String get ra2MethodTurkey => 'Turki (Diyanet)';
+
+  @override
+  String get ra2MethodNorthAmerica => 'Amerika Utara (ISNA)';
+
+  @override
+  String get ra2MethodJakim => 'JAKIM 18/18';
+
+  @override
+  String get ra2MethodKemenag => 'Kemenag Indonesia 20/18';
+
+  @override
+  String get ra2MethodUoif => 'UOIF Perancis 12/12';
+
+  @override
+  String get ra2MethodMorocco => 'Maghribi 19/17';
+
+  @override
+  String get ra2MethodAlgeria => 'Algeria 18/17';
+
+  @override
+  String get ra2MethodRussia => 'Rusia 16/15';
+
+  @override
+  String get ra2WarnNoDataToday => 'Tiada data waktu solat untuk hari ini';
+
+  @override
+  String get ra2WarnNotLocated =>
+      'Lokasi surau belum ditetapkan; waktu solat tidak dapat dikira';
+
+  @override
+  String get ra2WarnEmergencyToday => 'Hari ini guna kiraan sementara';
+
+  @override
+  String get ra2WarnZoneNoDataFetch =>
+      'Tiada data untuk zon ini; MAXCOM akan memuat turun';
+
+  @override
+  String get ra2WarnZoneNoDataManual =>
+      'Tiada data untuk zon ini; muat naik data atau hidupkan muat turun automatik';
+
+  @override
+  String get ra2FieldDate => 'Tarikh';
+
+  @override
+  String ra2RowMissingColumn(String field) {
+    return 'Lajur $field tiada';
+  }
+
+  @override
+  String ra2RowMasjidOnly(String field) {
+    return 'Lajur $field untuk masjid sahaja';
+  }
+
+  @override
+  String ra2RowEmpty(String field) {
+    return '$field kosong';
+  }
+
+  @override
+  String ra2RowInvalid(String field) {
+    return '$field tidak sah';
+  }
+
+  @override
+  String ra2RowOutOfRange(String field) {
+    return '$field di luar had';
+  }
+
+  @override
+  String get ra2RowDuplicate => 'Tarikh berulang';
+
+  @override
+  String get ra2RowBeforeMidnight =>
+      'Imsak terbitan jatuh sebelum tengah malam';
+
+  @override
+  String get ra2RowOrder => 'Waktu tidak mengikut turutan';
+
+  @override
+  String get ra2RowNoRows => 'Tiada baris waktu solat dalam fail';
+
+  @override
+  String get ra2RowTooMany => 'Terlalu banyak baris dalam fail';
+
+  @override
+  String get ra2RowGap => 'Ada tarikh yang tiada sebelum baris ini';
+
+  @override
+  String get ra2CsvRecorded =>
+      'Dicatat dalam Rekod import; boleh dibatalkan di sana.';
+
+  @override
+  String get ra2NoOfficialCard =>
+      'Negara ini tiada sumber rasmi. Muat naik fail atau guna kiraan.';
+
+  @override
+  String valRange(int min, int max) {
+    return '$min hingga $max';
+  }
+
+  @override
+  String contentRefDeleted(String what) {
+    return '$what dipadam';
+  }
+
+  @override
+  String contentInUseDates(String dates) {
+    return 'Tarikh: $dates';
+  }
+
+  @override
+  String get errcAlreadyVoided => 'Catatan ini sudah dibatalkan';
+
+  @override
+  String get errcOpeningExists => 'Baki awal tabung ini sudah ada';
+
+  @override
+  String get errcOpeningFundFixed =>
+      'Baki awal tidak boleh dipindahkan ke tabung lain';
+
+  @override
+  String get ra3MonthNames =>
+      'Januari|Februari|Mac|April|Mei|Jun|Julai|Ogos|September|Oktober|November|Disember';
+
+  @override
+  String ra3LateEntries(int n) {
+    return '$n rekod masuk selepas bulan ini ditutup';
+  }
+
+  @override
+  String get ra3AskAdminClose => 'Minta Pentadbir menutup bulan ini';
+
+  @override
+  String get ra3ClosedMonthToday =>
+      'Bulan kuliah ini sudah ditutup. Bayaran dicatat pada tarikh hari ini.';
+
+  @override
+  String get ra3DateClosedNote =>
+      'Bulan yang sudah ditutup tidak boleh dipilih.';
+
+  @override
+  String get ra3LateEntriesShow => 'Lihat rekod';
+
+  @override
+  String get ra5CodeUnknown => 'Kod tidak dikenali';
+
+  @override
+  String get ra5CodeUnknownBody =>
+      'Semak kod yang ditaip, atau minta Pentadbir menjana kod baharu.';
+
+  @override
+  String get ra5CodeInvalid =>
+      'Ini bukan kod pendaftaran MAXCOM. Imbas semula kod QR atau tampal seluruh teksnya.';
+
+  @override
+  String ra5UnlockTooMany(int minutes) {
+    return 'Terlalu banyak percubaan. Cuba lagi dalam $minutes minit';
+  }
+
+  @override
+  String get ra5OfflineClosed =>
+      'Kunci luar talian ditutup. Sambung ke MAXCOM untuk membuka.';
+
+  @override
+  String get ra5RoleSupport => 'Sokongan MAXCOM';
+
+  @override
+  String get ra5ListSeparator => ', ';
+
+  @override
+  String get ra5SealCheckFailed =>
+      'PIN tidak dapat disemak sekarang. Sambung ke MAXCOM dan cuba lagi.';
+
+  @override
+  String get ra5LeaveHint =>
+      'Keluar dari surau ialah satu-satunya cara memadam peranti ini. Pentadbir terakhir mesti mendaftar peranti Pentadbir lain dahulu.';
+
+  @override
+  String get ra6SyncErrorChip => 'Ralat penyelarasan';
+
+  @override
+  String get ra6SyncErrorShort => 'Ralat';
+
+  @override
+  String get ra6RefusedMonthClosed => 'Ditolak: bulan sudah ditutup';
+
+  @override
+  String get ra6RefusedFundArchived => 'Ditolak: tabung telah diarkibkan';
+
+  @override
+  String get ra6RefusedAlreadyVoided => 'Ditolak: catatan sudah dibatalkan';
+
+  @override
+  String get ra6RefusedOpeningExists => 'Ditolak: baki permulaan sudah ada';
+
+  @override
+  String get ra6RefusedBlobMissing => 'Gambar tidak lagi ada pada peranti ini';
+
+  @override
+  String get ra6RefusedUserInactive => 'Ditolak: pengguna tidak aktif';
+
+  @override
+  String get ra6RefusedLastAdmin =>
+      'Ditolak: mesti ada sekurang-kurangnya seorang Pentadbir';
+
+  @override
+  String get ra6Rejected => 'Ditolak';
+
+  @override
+  String get ra6CopyDetails => 'Salin butiran';
+
+  @override
+  String get ra6DetailsCopied => 'Butiran disalin';
+
+  @override
+  String ra6ConflictPartial(String names) {
+    return 'Sebahagian tetapan tidak disimpan kerana ada perubahan yang lebih baharu: $names';
+  }
+
+  @override
+  String get ra6ConflictEntityFinance => 'Catatan kewangan';
+
+  @override
+  String get ra6SettingsSavedQueued =>
+      'Disimpan di peranti ini, menunggu penyelarasan';
+
+  @override
+  String get ra6AppLockNeedsBox => 'Perlukan sambungan ke MAXCOM';
+
+  @override
+  String ra6RangeTo(String min, String max) {
+    return '$min hingga $max';
+  }
+
+  @override
+  String ra6FeatureNeeds(String name) {
+    return 'Perlu $name dihidupkan dahulu';
+  }
+
+  @override
+  String get ra6TplLabel => 'Label kuliah';
+
+  @override
+  String get ra6TplSpeaker => 'Penceramah';
+
+  @override
+  String get ra6TplTopic => 'Topik';
+
+  @override
+  String get ra6TplBook => 'Kitab';
+
+  @override
+  String get ra6TplSurau => 'Nama surau';
+
+  @override
+  String get ra6TplDate => 'Tarikh';
+
+  @override
+  String get ra6TplTime => 'Masa';
+
+  @override
+  String get ra6LiveBadge => 'LANGSUNG';
+
+  @override
+  String get ra6LinkCloudError => 'Awan MAXCOM: ralat penyelarasan';
+
+  @override
+  String get ra6LinkBoxError => 'MAXCOM di surau: ralat';
+
+  @override
+  String get liveNoticeShare => 'Kongsi pautan siaran';
+
+  @override
+  String get liveNoticeTitle => 'Makluman siaran langsung';
+
+  @override
+  String get liveNoticeEditHint => 'Semak dan ubah teks sebelum dikongsi.';
+
+  @override
+  String get liveNoticeToOne => 'Hantar kepada seorang';
+
+  @override
+  String get liveNoticeReset => 'Kembalikan teks asal';
+
+  @override
+  String get liveNoticePickTitle => 'Hantar kepada siapa?';
+
+  @override
+  String get liveNoticePickSearch => 'Cari nama';
+
+  @override
+  String get liveNoticePickEmpty => 'Tiada pengguna dijumpai.';
+
+  @override
+  String get liveNoticeStarted =>
+      'Siaran sudah bermula. Kongsi pautan kepada AJK dan jemaah.';
+
+  @override
+  String get liveNoticeShareGo => 'Kongsi';
+
+  @override
+  String get liveNoticeCopied => 'Teks disalin. Tampalkan di WhatsApp.';
+
+  @override
+  String get liveNoticeShareFailed => 'Teks tidak dapat dikongsi.';
+
+  @override
+  String waOpensTo(String number) {
+    return 'WhatsApp dibuka terus ke $number';
+  }
+
+  @override
+  String get liveNoticeOpenGo => 'Buka WhatsApp';
+
+  @override
+  String get liveNoticeWhatsAppFailed => 'WhatsApp tidak dapat dibuka.';
+
+  @override
+  String get peopleNeedsUpdate =>
+      'Kemas kini MAX Kiosk Server untuk fungsi ini';
+
+  @override
+  String get peopleFlagsBoxOnly =>
+      'Status aktif ditunjukkan apabila anda di Wi-Fi surau.';
+
+  @override
+  String get peopleNeedsAction => 'Perlu tindakan';
+
+  @override
+  String get peopleNoAdminPhone =>
+      'Tiada Pentadbir mempunyai telefon yang aktif. Daftarkan telefon Pentadbir.';
+
+  @override
+  String get peopleActiveToday => 'aktif hari ini';
+
+  @override
+  String get peopleActiveYesterday => 'aktif semalam';
+
+  @override
+  String peopleActiveDaysAgo(int n) {
+    return 'aktif $n hari lalu';
+  }
+
+  @override
+  String peopleUnusedDays(int n) {
+    return 'tidak digunakan $n hari';
+  }
+
+  @override
+  String get peopleInactiveBadge => 'Tidak aktif';
+
+  @override
+  String usersAllActive(int n) {
+    return 'Semua pengguna aktif ($n)';
+  }
+
+  @override
+  String usersDeviceCount(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n peranti',
+      zero: 'Belum ada peranti',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String usersNoDeviceYet(int n) {
+    return 'Ditambah $n hari lalu, belum daftar telefon';
+  }
+
+  @override
+  String get usersQrButton => 'Kod QR';
+
+  @override
+  String get usersUnlock => 'Buka kunci';
+
+  @override
+  String usersUnlocked(String name) {
+    return 'PIN $name dibuka. PIN tidak berubah.';
+  }
+
+  @override
+  String usersLockedUntil(String time) {
+    return 'PIN dikunci sehingga $time. Kunci tamat sendiri, atau buka sekarang.';
+  }
+
+  @override
+  String usersSuggestDeactivate(String name) {
+    return '$name tidak menggunakan aplikasi lebih 90 hari. Nyahaktifkan?';
+  }
+
+  @override
+  String usersDeactivatedFold(int n) {
+    return 'Dinyahaktifkan ($n)';
+  }
+
+  @override
+  String get usersDeactivatedHint =>
+      'Tidak boleh buka kunci. Nama kekal dalam rekod lama.';
+
+  @override
+  String usersDeactivatedOn(String date) {
+    return 'Dinyahaktifkan $date';
+  }
+
+  @override
+  String usersAutoDeleteIn(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'Dipadam automatik dalam $n hari',
+      one: 'Dipadam automatik dalam 1 hari',
+      zero: 'Dipadam automatik hari ini',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get usersActivate => 'Aktifkan semula';
+
+  @override
+  String usersActivated(String name) {
+    return '$name diaktifkan semula. Daftar telefon dengan kod QR baharu.';
+  }
+
+  @override
+  String get usersRecoveryFold => 'Kod pemulihan';
+
+  @override
+  String get usersRecoveryHint =>
+      'Untuk masuk semula jika semua telefon Pentadbir hilang';
+
+  @override
+  String get usersRolesFold => 'Apa setiap peranan boleh buat';
+
+  @override
+  String get usersHintDismiss => 'Tutup';
+
+  @override
+  String get userRename => 'Tukar nama';
+
+  @override
+  String get userRenameTitle => 'Tukar nama';
+
+  @override
+  String get userRenameBody =>
+      'Nama baharu dipakai mulai sekarang di aplikasi dan senarai.';
+
+  @override
+  String get userRenameHistory =>
+      'Rekod lama tidak berubah. Log perubahan dan kewangan terus menunjukkan nama yang dipakai pada masa itu.';
+
+  @override
+  String get userRenameSave => 'Simpan nama';
+
+  @override
+  String userRenamed(String name) {
+    return 'Nama ditukar kepada $name.';
+  }
+
+  @override
+  String userNameTaken(String name) {
+    return 'Sudah ada pengguna bernama $name. Simpan juga?';
+  }
+
+  @override
+  String get nameInvalid => 'Nama mesti 1 hingga 80 aksara';
+
+  @override
+  String userDevicesOf(String name, int n) {
+    return 'Peranti $name ($n)';
+  }
+
+  @override
+  String userAddedBy(String date, String name) {
+    return 'Ditambah $date oleh $name';
+  }
+
+  @override
+  String get deviceEdit => 'Ubah';
+
+  @override
+  String get deviceNameLabel => 'Nama peranti';
+
+  @override
+  String get deviceNameHint =>
+      'Contoh: Telefon Ustaz Ahmad, iPad meja bendahari';
+
+  @override
+  String get deviceRenameHistory =>
+      'Log perubahan lama kekal dengan nama lama peranti ini.';
+
+  @override
+  String get deviceRenamed => 'Nama peranti disimpan.';
+
+  @override
+  String deviceOwnedBy(String name, String platform, String date) {
+    return 'Milik $name. $platform, didaftarkan $date';
+  }
+
+  @override
+  String get deviceRemoveThis => 'Padam peranti ini';
+
+  @override
+  String get deviceRemoveHint =>
+      'Peranti ini tidak lagi boleh membuka aplikasi. Untuk guna semula, daftar dengan kod QR baharu.';
+
+  @override
+  String devicesUnusedCard(int n) {
+    return '$n peranti tidak digunakan lebih 60 hari';
+  }
+
+  @override
+  String get devicesUnusedHint =>
+      'Rekod lama kekal. Pemiliknya boleh mendaftar semula dengan kod QR baharu.';
+
+  @override
+  String get devicesRemoveAll => 'Padam semua';
+
+  @override
+  String devicesRemoveAllConfirm(int n) {
+    return 'Padam $n peranti yang tidak digunakan?';
+  }
+
+  @override
+  String devicesRemovedSome(int n, int m) {
+    return '$n dipadam, $m dilangkau';
+  }
+
+  @override
+  String get devicesSkipOwn => 'peranti ini sendiri';
+
+  @override
+  String get devicesSkipInUse => 'baru digunakan';
+
+  @override
+  String get devicesSkipLastAdmin => 'telefon Pentadbir terakhir';
+
+  @override
+  String get devicesLastAdmin => 'Daftar peranti Pentadbir lain dahulu';
+
+  @override
+  String devicesOpenCodes(int n) {
+    return 'Kod belum digunakan ($n)';
+  }
+
+  @override
+  String devicesCodeExpiresIn(String device, int n) {
+    return '$device, tamat dalam $n minit';
+  }
+
+  @override
+  String get devicesEndCode => 'Tamatkan kod';
+
+  @override
+  String get devicesCodeEnded => 'Kod ditamatkan.';
+
+  @override
+  String get devicesRemovedNote =>
+      'Peranti yang dipadam hilang dari senarai serta-merta. Catatannya kekal dalam Log perubahan.';
+
+  @override
+  String get tvBoxTitle => 'MAXCOM di surau';
+
+  @override
+  String tvExtraScreens(int n) {
+    return 'Skrin tambahan ($n)';
+  }
+
+  @override
+  String tvPairedSeen(String date, String ago) {
+    return 'Dipadankan $date, dilihat $ago';
+  }
+
+  @override
+  String tvNotSeenDays(int n) {
+    return 'Tidak dilihat $n hari';
+  }
+
+  @override
+  String get tvPairNew => 'Padankan skrin baharu';
+
+  @override
+  String get tvNoneWaiting => 'Tiada skrin sedang menunggu.';
+
+  @override
+  String get tvOn => 'Hidup';
+
+  @override
+  String get devicesSkipTv => 'skrin TV';
+
+  @override
+  String get devicesSkipGone => 'sudah tiada';
+
+  @override
+  String tvPaired(String date) {
+    return 'Dipadankan $date';
+  }
+
+  @override
+  String get tvSeenNow => 'baru tadi';
+
+  @override
+  String tvSeenMinutes(int n) {
+    return '$n minit lalu';
+  }
+
+  @override
+  String tvSeenHours(int n) {
+    return '$n jam lalu';
+  }
+
+  @override
+  String tvSeenDays(int n) {
+    return '$n hari lalu';
+  }
+
+  @override
+  String addStep(int n) {
+    return 'Langkah $n daripada 3';
+  }
+
+  @override
+  String get addWhatRole => 'Apa yang dia akan buat?';
+
+  @override
+  String get addNameHint => 'Nama yang AJK lain kenal. Boleh ditukar kemudian.';
+
+  @override
+  String get addRoleAjk => 'Melihat sahaja: waktu solat, kandungan, kewangan';
+
+  @override
+  String get addRoleBendahari => 'Merekod derma dan perbelanjaan';
+
+  @override
+  String get addRoleMedia => 'Pengumuman dan poster di skrin TV';
+
+  @override
+  String get addRoleLive => 'Siaran langsung dan rakaman';
+
+  @override
+  String get addRoleAdmin => 'Semua, termasuk pengguna dan peranti';
+
+  @override
+  String addDeviceSummary(String device, int n) {
+    return '$device, kod sah $n minit';
+  }
+
+  @override
+  String get addChangeDevice => 'Tukar nama peranti atau tempoh';
+
+  @override
+  String addDefaultDevice(String name) {
+    return 'Telefon $name';
+  }
+
+  @override
+  String get addSaveAndQr => 'Simpan dan buat kod QR';
+
+  @override
+  String addSavedNoQr(String name) {
+    return '$name disimpan. Buat kod QR apabila anda di Wi-Fi surau.';
+  }
+
+  @override
+  String addScanTitle(String name) {
+    return '$name imbas kod ini dengan aplikasi MAXCOM';
+  }
+
+  @override
+  String get addShare => 'Kongsi';
+
+  @override
+  String addShareConfirmTitle(String name) {
+    return 'Hantar kepada $name sahaja';
+  }
+
+  @override
+  String addShareConfirmBody(String name) {
+    return 'Bukan ke kumpulan. Sesiapa yang memegang kod ini di Wi-Fi surau boleh masuk sebagai $name sehingga kod digunakan.';
+  }
+
+  @override
+  String addShareText(String name, String surau, int n) {
+    return 'Jemputan MAXCOM untuk $name di $surau. Sah $n minit dan sekali guna. Di Wi-Fi surau, buka aplikasi MAXCOM, pilih \"Masukkan kod secara manual\" dan tampal teks di bawah. Jangan kongsi dengan orang lain.';
+  }
+
+  @override
+  String get addShareAdminInPerson =>
+      'Kod untuk Pentadbir mesti diimbas di depan anda semasa kunci aplikasi dimatikan.';
+
+  @override
+  String get addShareUnavailable =>
+      'Kongsi tidak tersedia pada MAXCOM ini. Tunjukkan kod QR.';
+
+  @override
+  String get addLockOffHint =>
+      'Kunci aplikasi dimatikan. Hidupkan di Konfigurasi untuk keselamatan lebih.';
+
+  @override
+  String addWaiting(String name) {
+    return 'Menunggu $name mendaftar';
+  }
+
+  @override
+  String get addEndCode => 'Tamatkan kod ini';
+
+  @override
+  String addDoneTitle(String name) {
+    return '$name sudah masuk';
+  }
+
+  @override
+  String addDoneBody(String roles) {
+    return 'Dia boleh guna aplikasi sebagai $roles mulai sekarang.';
+  }
+
+  @override
+  String addDoneDevice(String platform, String time) {
+    return '$platform, didaftarkan $time';
+  }
+
+  @override
+  String addNotTheirs(String name) {
+    return 'Bukan telefon $name? Padam peranti ini';
+  }
+
+  @override
+  String addReuseWarning(int n) {
+    return 'Kod ini cuba digunakan lagi $n kali selepas itu.';
+  }
+
+  @override
+  String get addAnother => 'Tambah pengguna lain';
+
+  @override
+  String get addBackToList => 'Kembali ke senarai';
+
+  @override
+  String get thisDeviceRename => 'Tukar nama peranti ini';
+
+  @override
+  String get liveOnlyRename => 'Tukar nama peranti';
+
+  @override
+  String get liveOnlyUnlock => 'Buka kunci PIN';
+
+  @override
+  String get liveOnlyCodes => 'Urus kod pendaftaran';
+
+  @override
+  String get liveOnlyActivity => 'Lihat status aktif';
+
+  @override
+  String get liveOnlyDeleteUser => 'Padam pengguna';
+
+  @override
+  String get liveOnlyRestoreUser => 'Pulihkan pengguna';
+
+  @override
+  String get liveOnlyPhone => 'Tukar nombor telefon';
+
+  @override
+  String get idLabel => 'ID';
+
+  @override
+  String get idPending => 'ID belum ada';
+
+  @override
+  String get searchNameOrId => 'Cari nama atau ID';
+
+  @override
+  String get userDelete => 'Padam pengguna';
+
+  @override
+  String userDeleteTitle(String name) {
+    return 'Padam $name?';
+  }
+
+  @override
+  String userDeleteBody(String name, String ref) {
+    return '$name ($ref) tidak lagi boleh masuk dan hilang dari semua senarai. Semua perantinya dipadam. Log perubahan dan rekod kewangan kekal dengan nama dan ID ini.';
+  }
+
+  @override
+  String userDeleted(String name) {
+    return '$name dipadam.';
+  }
+
+  @override
+  String get userDeleteSelf => 'Anda tidak boleh memadam akaun sendiri';
+
+  @override
+  String get userDeleteLastAdmin =>
+      'Mesti ada sekurang-kurangnya seorang Pentadbir aktif';
+
+  @override
+  String get userRestore => 'Pulihkan';
+
+  @override
+  String userRestored(String name) {
+    return '$name dipulihkan sebagai dinyahaktifkan. Aktifkan semula dan daftar telefon dengan kod QR baharu.';
+  }
+
+  @override
+  String get auditUserDeleted => 'Pengguna dipadam';
+
+  @override
+  String get auditDeviceDeleted => 'Peranti dipadam';
+
+  @override
+  String get auditPhoneChanged => 'Nombor telefon ditukar';
+
+  @override
+  String get autoCleanNote =>
+      'Peranti yang tidak digunakan 180 hari dan pengguna yang dinyahaktifkan 365 hari dipadam secara automatik. Sejarah kekal.';
+
+  @override
+  String autoCleanSoon(int n) {
+    return 'Dipadam automatik dalam $n hari';
+  }
+
+  @override
+  String get phoneLabel => 'Nombor telefon';
+
+  @override
+  String get phoneHint => 'Contoh: 012-000 0000';
+
+  @override
+  String get phoneRequired => 'Nombor telefon diperlukan';
+
+  @override
+  String get phoneInvalid =>
+      'Nombor telefon tidak sah. Untuk nombor luar negara, mulakan dengan + dan kod negara.';
+
+  @override
+  String phoneTaken(String ref) {
+    return 'Nombor ini sudah digunakan oleh pengguna lain ($ref).';
+  }
+
+  @override
+  String get phoneNeeded => 'Nombor telefon diperlukan';
+
+  @override
+  String get phoneFill => 'Isi nombor';
+
+  @override
+  String get phoneDuplicate => 'Nombor telefon sama dengan pengguna lain';
+
+  @override
+  String get phoneSaved => 'Nombor telefon disimpan.';
+
+  @override
+  String get phoneEdit => 'Tukar nombor';
+
+  @override
+  String get phonePrivate =>
+      'Hanya Pentadbir dan orang itu sendiri boleh melihat nombor ini.';
+
+  @override
+  String waTo(String name) {
+    return 'WhatsApp kepada $name';
+  }
+
+  @override
+  String get waUnavailable => 'WhatsApp tidak dapat dibuka. Guna Kongsi.';
+
+  @override
+  String get waUnavailablePage => 'WhatsApp tidak tersedia pada telefon ini.';
+
+  @override
+  String get shareContinue => 'Teruskan';
+
+  @override
+  String userRestoreTitle(String name) {
+    return 'Pulihkan $name?';
+  }
+
+  @override
+  String userRestoreBody(String name, String ref) {
+    return '$name ($ref) kembali ke senarai sebagai dinyahaktifkan, tanpa peranti. Aktifkan semula dan daftar telefon dengan kod QR baharu.';
+  }
+
+  @override
+  String get phoneSave => 'Simpan';
+
+  @override
+  String get userDeleteHint =>
+      'Orang ini hilang dari senarai dan tidak lagi boleh masuk. Sejarah kekal. Boleh dipulihkan dari Log perubahan.';
+
+  @override
+  String get a6Other => 'Lain-lain';
+
+  @override
+  String needsBoth(String first, String second) {
+    return '$first dan $second';
+  }
 }

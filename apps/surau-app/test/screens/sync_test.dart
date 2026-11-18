@@ -1,4 +1,4 @@
-// Plan 6 Task 9: the sync status chip in every state, its sheet with
+// Plan 6 Task 9 (the chip is now the cloud icon, round 1): the cloud in every state, its sheet with
 // `Selaraskan sekarang`, the conflicts screen (a superseded edit with the
 // winner's name, refusals in BM, `Guna versi saya semula` re-enqueues),
 // the live-only dialog, the cloud sync settings page (https only, link
@@ -16,6 +16,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:surau_app/app/app_lang.dart';
+import 'package:surau_app/features/labels.dart' show settingLabel;
 import 'package:surau_app/features/live/fake_publisher.dart';
 import 'package:surau_app/features/live/live_screen.dart'
     show livePublisherProvider;
@@ -23,6 +25,7 @@ import 'package:surau_app/features/sync/live_only_dialog.dart';
 import 'package:surau_app/features/sync/sync_actions.dart';
 import 'package:surau_app/features/sync/sync_settings_screen.dart';
 import 'package:surau_app/features/sync/sync_status_chip.dart';
+import 'package:surau_app/l10n/s_lookup.dart';
 import 'package:surau_app/sync/live_only.dart';
 import 'package:surau_app/sync/sync_engine.dart';
 import 'package:surau_app/sync/sync_providers.dart';
@@ -30,6 +33,7 @@ import 'package:surau_app/sync/sync_providers.dart';
 import '../features/fakes.dart';
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
+import 'package:surau_app/ops/ops_build.dart';
 
 /// The engine as the screens see it: a view the test sets, and a record of
 /// what was asked.
@@ -154,34 +158,28 @@ Future<ShellHarness> _open(
   return h;
 }
 
-Finder _chip(SyncChipKind kind) =>
-    find.byKey(ValueKey('sync-chip-${kind.name}'));
+Finder _cloud() => find.byKey(const ValueKey('link-cloud'));
 
 void main() {
-  group('the chip', () {
-    testWidgets('synced through MAXCOM: `Diselaraskan`', (tester) async {
+  // The chip of Plan 6 is now the MAXCOM cloud icon in the top bar (operator
+  // round 1); its sheet is the same.
+  group('the cloud icon', () {
+    testWidgets('synced through MAXCOM: `Awan MAXCOM: bersambung`', (tester) async {
       final fake = FakeSyncActions(_synced());
       final h = await _open(tester, fake, '/settings');
-      expect(_chip(SyncChipKind.synced), findsOneWidget);
-      expect(find.text('Diselaraskan'), findsOneWidget);
+      expect(_cloud(), findsOneWidget);
+      expect(find.bySemanticsLabel('Awan MAXCOM: bersambung'), findsOneWidget);
       await expectGoldens(tester, h.app, 'sync_chip_synced');
     });
 
-    testWidgets('3 edits waiting', (tester) async {
+    testWidgets('3 edits waiting: sending', (tester) async {
       final fake = FakeSyncActions(_synced().copyWith(pendingOut: 3));
       final h = await _open(tester, fake, '/settings');
-      expect(
-        find.text('3 menunggu'),
-        findsOneWidget,
-        reason: 'short on a phone',
-      );
-      expect(find.bySemanticsLabel('3 perubahan menunggu'), findsOneWidget);
-      await pumpAtSize(tester, h.app, GoldenSize.ipadMiniPortrait);
-      expect(find.text('3 perubahan menunggu'), findsOneWidget);
+      expect(find.bySemanticsLabel('Awan MAXCOM: sedang menghantar perubahan'), findsOneWidget);
       await expectGoldens(tester, h.app, 'sync_chip_pending');
     });
 
-    testWidgets('offline: short on a phone, the whole sentence on an iPad', (
+    testWidgets('offline: the red X, on a phone and an iPad alike', (
       tester,
     ) async {
       final fake = FakeSyncActions(
@@ -192,52 +190,53 @@ void main() {
         ),
       );
       final h = await _open(tester, fake, '/settings');
-      expect(_chip(SyncChipKind.offline), findsOneWidget);
-      expect(find.text('Luar talian'), findsOneWidget);
+      expect(find.bySemanticsLabel('Awan MAXCOM: tidak bersambung'), findsOneWidget);
       await pumpAtSize(tester, h.app, GoldenSize.ipadMiniLandscape);
-      expect(
-        find.text('Luar talian, akan diselaraskan kemudian'),
-        findsOneWidget,
-      );
+      expect(find.bySemanticsLabel('Awan MAXCOM: tidak bersambung'), findsOneWidget);
       await expectGoldens(tester, h.app, 'sync_chip_offline');
     });
 
-    testWidgets('the cloud is waking: `Menyambung ke awan...`', (tester) async {
+    testWidgets('the cloud is waking: connecting', (tester) async {
       final fake = FakeSyncActions(_synced().copyWith(state: SyncState.waking));
       final h = await _open(tester, fake, '/settings');
-      expect(find.text('Menyambung...'), findsOneWidget);
-      await pumpAtSize(tester, h.app, GoldenSize.ipadMiniLandscape);
-      expect(find.text('Menyambung ke awan...'), findsOneWidget);
+      expect(find.bySemanticsLabel('Awan MAXCOM: sedang menyambung'), findsOneWidget);
       await expectGoldens(tester, h.app, 'sync_chip_waking');
     });
 
     testWidgets('synced through the cloud, with two conflicts', (tester) async {
       final fake = FakeSyncActions(_synced(via: 'cloud', conflicts: 2));
       final h = await _open(tester, fake, '/settings');
-      expect(find.text('Melalui awan'), findsOneWidget);
-      expect(find.byKey(const ValueKey('sync-chip-conflicts')), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp('Konflik: 2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('link-conflicts')), findsOneWidget);
+      expect(find.bySemanticsLabel('Awan MAXCOM: bersambung. Konflik: 2'), findsOneWidget);
       await expectGoldens(tester, h.app, 'sync_chip_cloud');
     });
 
-    testWidgets('the chip follows the engine as it changes', (tester) async {
+    testWidgets('the icon follows the engine as it changes', (tester) async {
       final fake = FakeSyncActions(_synced());
       await _open(tester, fake, '/settings');
       fake.set(_synced().copyWith(pendingOut: 1));
       await settle(tester);
-      expect(find.text('1 menunggu'), findsOneWidget);
+      expect(find.bySemanticsLabel('Awan MAXCOM: sedang menghantar perubahan'), findsOneWidget);
     });
 
-    testWidgets('no engine, no chip', (tester) async {
+    testWidgets('no engine, no cloud icon', (tester) async {
       final h = await pumpShell(tester, roles: const ['admin']);
       h.router.go('/settings');
       await settle(tester);
-      expect(find.byType(SyncStatusChip), findsOneWidget);
-      for (final k in SyncChipKind.values) {
-        expect(_chip(k), findsNothing);
-      }
+      expect(_cloud(), findsNothing);
+      expect(find.byKey(const ValueKey('link-box')), findsOneWidget);
       expect(find.text('Diselaraskan'), findsNothing);
-      expect(find.byKey(const ValueKey('sync-dashboard')), findsNothing);
+    });
+
+    testWidgets('[K7] a server error that is not the network shows the error state, not offline', (tester) async {
+      final fake = FakeSyncActions(
+        _synced().copyWith(state: SyncState.offline, lastError: 'http_400'),
+      );
+      await _open(tester, fake, '/settings');
+      expect(find.bySemanticsLabel('Awan MAXCOM: ralat penyelarasan'), findsOneWidget);
+      expect(find.bySemanticsLabel('Awan MAXCOM: tidak bersambung'), findsNothing);
+      expect(chipKindOf(_synced().copyWith(state: SyncState.offline, lastError: 'http_400')), SyncChipKind.error);
+      expect(chipKindOf(_synced().copyWith(state: SyncState.offline, lastError: 'unreachable')), SyncChipKind.offline);
     });
 
     test('chipKindOf: the most urgent state wins', () {
@@ -271,7 +270,7 @@ void main() {
         conflicts: [conflictsFixture().first],
       );
       final h = await _open(tester, fake, '/settings');
-      await tester.tap(_chip(SyncChipKind.pending));
+      await tester.tap(_cloud());
       await settle(tester);
       expect(find.text('Penyelarasan'), findsOneWidget);
       expect(find.text('Melalui MAXCOM di surau'), findsOneWidget);
@@ -295,7 +294,7 @@ void main() {
         _synced().copyWith(state: SyncState.offline, lastError: 'unreachable'),
       );
       await _open(tester, fake, '/settings');
-      await tester.tap(_chip(SyncChipKind.offline));
+      await tester.tap(_cloud());
       await settle(tester);
       expect(
         find.text('MAXCOM dan awan tidak dapat dihubungi'),
@@ -354,6 +353,80 @@ void main() {
       expect(fake.discarded, ['01JC0000000000000000000002']);
     });
 
+    testWidgets('[K6] a refused October collection shows tabung, amount, date and the reason, and stays listed', (
+      tester,
+    ) async {
+      final fake = FakeSyncActions(
+        _synced(conflicts: 1),
+        conflicts: [
+          {
+            'opId': '01JC0000000000000000000010',
+            'kind': 'finance.append',
+            'entity': 'finance:entry',
+            'entityId': 'e1',
+            'reason': 'month_closed',
+            'fundName': 'Tabung Contoh',
+            'mine': {'kind': 'in', 'fundId': 'f1', 'entryDate': '2026-10-05', 'amountSen': 12000},
+            'winner': null,
+            'editedAt': '2026-11-04T14:05:00.000Z',
+            'at': '2026-11-04T14:20:00.000Z',
+          },
+        ],
+      );
+      await _open(tester, fake, '/sync/conflicts');
+      expect(find.text('Tabung Contoh, RM 120.00, 5 Okt'), findsOneWidget);
+      expect(find.text('Ditolak: bulan sudah ditutup'), findsOneWidget);
+      expect(find.byKey(const ValueKey('conflict-rejected')), findsOneWidget);
+      expect(find.text('Salin butiran'), findsOneWidget);
+      expect(fake.discarded, isEmpty, reason: 'it stays until the person puts it away');
+    });
+
+    testWidgets('[K15] a user conflict shows the name and the ID', (tester) async {
+      final fake = FakeSyncActions(
+        _synced(conflicts: 1),
+        conflicts: [
+          {
+            'opId': '01JC0000000000000000000011',
+            'kind': 'user.put',
+            'entity': 'user',
+            'entityId': 'u9',
+            'reason': 'last_admin',
+            'userName': 'Aminah Contoh',
+            'mine': {'roles': <String>[]},
+            'winner': null,
+            'editedAt': '2026-11-04T14:05:00.000Z',
+            'at': '2026-11-04T14:20:00.000Z',
+          },
+        ],
+      );
+      await _open(tester, fake, '/sync/conflicts');
+      expect(find.text('Pengguna: Aminah Contoh (u9)'), findsOneWidget);
+      expect(find.text('Ditolak: mesti ada sekurang-kurangnya seorang Pentadbir'), findsOneWidget);
+    });
+
+    testWidgets('[K5] a partial settings save names the settings that were left out', (tester) async {
+      final fake = FakeSyncActions(
+        _synced(conflicts: 1),
+        conflicts: [
+          {
+            'opId': '01JC0000000000000000000012',
+            'kind': 'settings.put',
+            'entity': 'settings',
+            'entityId': 'clock',
+            'reason': 'partial',
+            'skipped': ['showSeconds'],
+            'mine': {'showSeconds': true},
+            'winner': null,
+            'editedAt': '2026-11-04T14:05:00.000Z',
+            'at': '2026-11-04T14:20:00.000Z',
+          },
+        ],
+      );
+      await _open(tester, fake, '/sync/conflicts');
+      expect(find.textContaining('Sebahagian tetapan tidak disimpan'), findsOneWidget);
+      expect(find.textContaining(settingLabel('showSeconds', AppLang.ms)), findsWidgets);
+    });
+
     testWidgets('none: `Tiada konflik`', (tester) async {
       final fake = FakeSyncActions(_synced());
       final h = await _open(tester, fake, '/sync/conflicts');
@@ -399,7 +472,7 @@ void main() {
       late BuildContext ctx;
       final fake = FakeSyncActions(_synced());
       await _open(tester, fake, '/settings');
-      ctx = tester.element(find.byType(SyncStatusChip).first);
+      ctx = tester.element(_cloud());
       unawaited(
         showLiveOnlyIf(ctx, const LiveOnly('/api/devices/dev-2/revoke')),
       );
@@ -408,38 +481,37 @@ void main() {
         tester
             .widget<Text>(find.byKey(const ValueKey('live-only-action')))
             .data,
-        'Batalkan peranti',
+        'Padam peranti',
       );
       expect(LiveOnly.message, 'Perlukan sambungan ke MAXCOM atau awan');
-      expect(liveOnlyLabelFor('/api/sync/run'), 'Selaraskan sekarang');
+      expect(liveOnlyLabelFor('/api/sync/run', sBm), 'Selaraskan sekarang');
     });
   });
 
   group('enrol from home', () {
+    // Plan PP decision 10: away from the surau no enrolment code can be made
+    // (the cloud answers `box_only`), so the button is off and says why.
     testWidgets(
-      'through the cloud: the note, then the person, then the QR page',
+      '[PP-D10] through the cloud: the note, and Daftar peranti baharu is off',
       (tester) async {
         final fake = FakeSyncActions(_synced(via: 'cloud'));
         final h = await _open(tester, fake, '/devices');
         expect(
           find.text(
-            'Anda disambungkan melalui awan. Kod QR dibuat oleh awan dan boleh diimbas dari rumah.',
+            'Anda di luar rangkaian surau. Kod QR hanya boleh dibuat di Wi-Fi surau.',
           ),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Status aktif ditunjukkan apabila anda di Wi-Fi surau.'),
           findsOneWidget,
         );
         await expectGoldens(tester, h.app, 'devices_cloud');
         await pumpAtSize(tester, h.app, GoldenSize.phone);
         await tester.tap(find.byKey(const ValueKey('devices-enrol-new')));
         await settle(tester);
-        expect(find.text('Peranti ini untuk siapa?'), findsOneWidget);
-        expect(
-          find.byKey(const ValueKey('enrol-for-u4')),
-          findsNothing,
-          reason: 'inactive',
-        );
-        await tester.tap(find.byKey(const ValueKey('enrol-for-u2')));
-        await settle(tester);
-        expect(h.location, '/users/u2/enrol');
+        expect(find.text('Peranti ini untuk siapa?'), findsNothing);
+        expect(h.location, '/devices');
       },
     );
   });
@@ -563,7 +635,7 @@ void main() {
       h.router.go('/settings/cloudSync');
       await settle(tester);
       expect(find.byType(SyncSettingsScreen), findsOneWidget);
-    });
+    }, skip: !kOpsBuild);
 
   });
 

@@ -5,6 +5,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:surau_app/finance/finance_models.dart';
+import 'package:surau_app/store/local_store.dart' show Collections;
 
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
@@ -111,6 +113,54 @@ void main() {
     expect(find.text('Dibetulkan'), findsOneWidget);
   });
 
+  testWidgets('[F6] a cancelled entry offers no correction', (tester) async {
+    await f.entry({
+      'id': 'v1',
+      'kind': 'adjust',
+      'entryDate': '2026-11-03',
+      'fundId': 'f1',
+      'amountSen': 0,
+      'correctsId': 'e2',
+      'correctionKind': 'void',
+      'reason': 'Kuliah dibatalkan, bayaran tidak jadi.',
+      'refNo': 'P-0009',
+      'editedAt': '2026-11-03T13:00:00.000Z',
+    });
+    await pumpFinance(tester, f, route: '/finance/pembetulan');
+    expect(find.byKey(const Key('fin-pick-e2')), findsOneWidget);
+    expect(find.byKey(const Key('fin-pick-voided-e2')), findsOneWidget);
+    await tapAt(tester, find.byKey(const Key('fin-pick-e2')));
+    expect(find.byKey(const Key('fin-cor-original')), findsNothing);
+  });
+
+  testWidgets('[F6] a link to a cancelled entry opens no correction form', (tester) async {
+    await f.entry({
+      'id': 'v1',
+      'kind': 'adjust',
+      'entryDate': '2026-11-03',
+      'fundId': 'f1',
+      'amountSen': 0,
+      'correctsId': 'e2',
+      'correctionKind': 'void',
+      'reason': 'Kuliah dibatalkan, bayaran tidak jadi.',
+      'refNo': 'P-0009',
+      'editedAt': '2026-11-03T13:00:00.000Z',
+    });
+    await pumpFinance(tester, f, route: '/finance/pembetulan?entry=e2');
+    expect(find.byKey(const Key('fin-cor-original')), findsNothing);
+    expect(find.byKey(const Key('fin-cor-save')), findsNothing);
+    expect(find.byKey(const Key('fin-cor-refused')), findsOneWidget);
+  });
+
+  testWidgets('[F3] the reason refuses < and > and a control character', (tester) async {
+    await pumpFinance(tester, f, route: '/finance/pembetulan?entry=e1');
+    await typeAt(tester, find.byKey(_reason), 'Salah <b>tabung</b> \u0007 betul');
+    expect(
+      tester.widget<TextField>(find.byKey(_reason)).controller!.text,
+      'Salah btabung/b  betul',
+    );
+  });
+
   testWidgets('cancelling an entry counts it as zero', (tester) async {
     await pumpFinance(tester, f, route: '/finance/pembetulan?entry=e2');
     await tapAt(tester, find.byKey(const Key('fin-chip-void')));
@@ -197,6 +247,88 @@ void main() {
     expect(find.text('Encik Kamal bin Hassan'), findsOneWidget);
     expect(find.byKey(const Key('fin-history-photo')), findsNothing);
     expect(find.byKey(const Key('fin-history-correct')), findsNothing);
+  });
+
+  testWidgets('[PP-A8b] an entry with names shows the names and IDs of the time after a rename; a deleted counter still shows', (
+    tester,
+  ) async {
+    await f.entry({
+      'id': 'e9',
+      'kind': 'in',
+      'entryDate': '2026-11-02',
+      'fundId': 'f1',
+      'perihalId': 'in-j',
+      'amountSen': 5000,
+      'method': 'tunai',
+      'createdBy': 'u3',
+      'deviceId': 'd1',
+      'counters': [
+        {'userId': 'u3'},
+        {'userId': 'u9'},
+      ],
+      'refNo': 'K-0120',
+      'names': {
+        'createdBy': 'Ustaz Ahmad',
+        'device': 'Telefon lama Ustaz Ahmad',
+        'counters': {'u3': 'Ustaz Ahmad', 'u9': 'Haji Osman'},
+        'createdByRef': 'U-0003',
+        'deviceRef': 'D-0004',
+        'counterRefs': {'u3': 'U-0003', 'u9': 'U-0009'},
+      },
+    });
+    // Renamed since; u9 was deleted and is gone from the local copy.
+    await f.store.putDoc(Collections.users, 'u3', {
+      'id': 'u3',
+      'name': 'Ustaz Ahmad bin Ali',
+      'active': true,
+      'roles': ['ajk'],
+    });
+    await pumpFinance(tester, f, route: '/finance/entry/e9');
+    expect(find.text('Ustaz Ahmad bin Ali'), findsNothing);
+    expect(find.textContaining('Ustaz Ahmad'), findsNWidgets(3), reason: 'creator, counter and the device of the time');
+    expect(find.text('U-0003'), findsNWidgets(2));
+    expect(find.textContaining('Haji Osman'), findsOneWidget);
+    expect(find.text('U-0009'), findsOneWidget);
+    expect(find.textContaining('Telefon lama Ustaz Ahmad'), findsOneWidget);
+    expect(find.text('D-0004'), findsOneWidget);
+    expect(find.textContaining('tidak dikenali'), findsNothing);
+  });
+
+  testWidgets('[PP-A8b] an entry without names (older box) shows today\'s name, with the ID from the local copy', (
+    tester,
+  ) async {
+    await f.store.putDoc(Collections.users, 'u3', {
+      'id': 'u3',
+      'name': 'Encik Hafiz',
+      'active': true,
+      'roles': ['ajk'],
+      'no': 3,
+      'noSrc': 'b',
+    });
+    await pumpFinance(tester, f, route: '/finance/entry/e1');
+    expect(find.textContaining('Encik Hafiz'), findsOneWidget);
+    expect(find.text('U-0003'), findsOneWidget);
+  });
+
+  test('[PP-A8b] names survive the local round trip and are never part of a signed finance.append payload', () {
+    final e = FinanceEntry.fromJson({
+      'id': 'e9',
+      'kind': 'in',
+      'entryDate': '2026-11-02',
+      'fundId': 'f1',
+      'createdBy': 'u3',
+      'names': {
+        'createdBy': 'Ustaz Ahmad',
+        'counters': {'u3': 'Ustaz Ahmad'},
+        'createdByRef': 'U-0003',
+      },
+    });
+    final back = FinanceEntry.fromJson(e.toJson());
+    expect(back.names?.createdBy, 'Ustaz Ahmad');
+    expect(back.names?.createdByRef, 'U-0003');
+    expect(back.names?.counters, {'u3': 'Ustaz Ahmad'});
+    expect(financeEntryInputKeys.contains('names'), isFalse);
+    expect(FinanceEntry.fromJson({'id': 'x', 'names': 'bad'}).names, isNull);
   });
 
   testWidgets('the history opens from the home list as a sheet', (tester) async {

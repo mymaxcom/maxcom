@@ -7,6 +7,7 @@ import { getAssetPath } from '../assets/store.ts';
 import { writeStoredZip } from '../files/zipWrite.ts';
 import type { ZipEntry } from '../files/zipWrite.ts';
 import { getSettings } from '../settingsStore.ts';
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { isReservedName, MAX_PACK_BYTES, MAX_PACK_FILES, readPack } from './packFormat.ts';
 import type { ImageExt, PackFiles } from './packFormat.ts';
 import { validatePack } from './validate.ts';
@@ -108,7 +109,7 @@ const tooBigAfterBake = new DownloadError(400, ['Fail tema melebihi had selepas 
 
 function titleFor(deps: DownloadDeps, id: KioskTemplateId): string {
   // eslint-disable-next-line no-control-regex
-  const surau = getSettings(deps.db).surauInfo.name.replace(/[<>\u0000-\u001f\u007f]/g, '').trim().slice(0, 40);
+  const surau = getSettings(deps.db, LOCAL_SURAU_ID).surauInfo.name.replace(/[<>\u0000-\u001f\u007f]/g, '').trim().slice(0, 40);
   return (surau === '' ? THEME_TITLES[id] : `${THEME_TITLES[id]} (${surau})`).slice(0, 60);
 }
 
@@ -123,7 +124,7 @@ function assemble(files: PackFiles, manifest: Record<string, unknown>, images: M
 }
 
 export function buildDownload(deps: DownloadDeps, name: string, opts: { bake: boolean; as?: string }): { fileName: string; data: Buffer } {
-  const styles = getSettings(deps.db).themeStyle.styles;
+  const styles = getSettings(deps.db, LOCAL_SURAU_ID).themeStyle.styles;
   const own = Object.prototype.hasOwnProperty.call(styles, name) ? styles[name] : undefined;
   let fileName: string;
   let data: Buffer;
@@ -141,7 +142,7 @@ export function buildDownload(deps: DownloadDeps, name: string, opts: { bake: bo
     data = assemble(files, { name: as, title: titleFor(deps, name), version: 1, contract: THEME_CONTRACT, base: name, defaults }, images);
     fileName = `${as}.maxtheme`;
   } else {
-    const rec = Object.prototype.hasOwnProperty.call(getSettings(deps.db).themeStyle.packs, name) ? getSettings(deps.db).themeStyle.packs[name] : undefined;
+    const rec = Object.prototype.hasOwnProperty.call(getSettings(deps.db, LOCAL_SURAU_ID).themeStyle.packs, name) ? getSettings(deps.db, LOCAL_SURAU_ID).themeStyle.packs[name] : undefined;
     const asset = rec === undefined ? null : getAssetPath(deps.db, deps.dataDir, rec.assetId);
     if (rec === undefined || asset === null) throw new DownloadError(404, ['not found']);
     const stored = readFileSync(asset.path);

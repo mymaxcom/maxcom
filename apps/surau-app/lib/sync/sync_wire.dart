@@ -9,6 +9,7 @@ class OpResultDto {
     this.rev,
     this.reason,
     this.winner,
+    this.skipped = const [],
   });
 
   factory OpResultDto.fromJson(Map<String, dynamic> j) => OpResultDto(
@@ -19,6 +20,10 @@ class OpResultDto {
     winner: j['winner'] is Map<String, dynamic>
         ? WinnerDto.fromJson(j['winner'] as Map<String, dynamic>)
         : null,
+    skipped: [
+      for (final p in (j['skipped'] as List? ?? const []))
+        if (p is String) p,
+    ],
   );
 
   final String opId;
@@ -30,6 +35,10 @@ class OpResultDto {
   /// Set when [status] is `refused`: `device_revoked`, `forbidden`, ...
   final String? reason;
   final WinnerDto? winner;
+
+  /// An applied settings edit: the field paths that lost to a newer stored
+  /// stamp (the rest of the edit landed).
+  final List<String> skipped;
 
   bool get done => status == 'applied' || status == 'duplicate';
 }

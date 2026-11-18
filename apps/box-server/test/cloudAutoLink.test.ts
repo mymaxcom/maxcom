@@ -2,14 +2,14 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.ts';
 import { sha256hex } from '../src/auth/crypto.ts';
 import { run as usersCli } from '../src/cli/users.ts';
 import { putItem } from '../src/content/store.ts';
 import { putFeature } from '../src/settingsStore.ts';
 import { BACKOFF_MS } from '../src/sync/agent.ts';
-import { autoLinkCloud, CLAIM_BACKOFF_MS, CLAIM_EVERY_MS, DEFAULT_CLOUD_URL, REG_BAD_RETRY_MS, REG_RETRY_MS, REGISTER_EVERY_MS, UNAPPROVED_WARN_MS } from '../src/sync/register.ts';
+import { autoLinkCloud, boxPlatform, cleanBoxName, CLAIM_BACKOFF_MS, CLAIM_EVERY_MS, DEFAULT_CLOUD_URL, REG_BAD_RETRY_MS, REG_RETRY_MS, REGISTER_EVERY_MS, UNAPPROVED_WARN_MS } from '../src/sync/register.ts';
 import { approveSite, CLAIM_FLUSH_WAIT_MS, createClaimHandler, revokeSite } from '../src/sync/sites.ts';
 import type { WorkerOutboxSender } from '../src/sync/workerOutbox.ts';
 import { CLAIM_FILE, generateSyncKeyPair, loadOrCreateClaim, loadSyncKey } from '../src/sync/syncKey.ts';
@@ -19,9 +19,16 @@ import { FakeWorker } from './support/fakeWorker.ts';
 import { loginAs } from './authHelpers.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
+// Plan 14 decision 23: a registered box now links itself into a new surau. These tests are about the path that stays
+// once the daily cap is reached (the box waits, MAXCOM approves it by the CLI), so the cap is 0 here; the automatic
+// link itself is tested in approveSurau.test.ts.
+beforeEach(() => {
+  process.env.MAXCOM_AUTO_SURAU_DAILY_CAP = '0';
+});
 afterEach(async () => {
   for (const c of cleanups.splice(0)) await c();
   vi.restoreAllMocks();
+  delete process.env.MAXCOM_AUTO_SURAU_DAILY_CAP;
 });
 
 interface Rig {
@@ -81,7 +88,7 @@ async function rig(): Promise<Rig> {
     approve: async (name?: string) => {
       const lines: string[] = [];
       const code = await usersCli(
-        ['--db', join(cloud.dir, 'cloud.db'), 'cloud-approve', '--box-id', boxId, ...(name ? ['--name', name] : [])],
+        ['--db', join(cloud.dir, 'cloud.db'), 'cloud-approve', '--box-id', boxId, '--new-surau', ...(name ? ['--name', name] : [])],
         { workerAdmin: { url: 'https://worker.test', token: 'test-admin-token', fetchImpl: viaWorker }, out: (l) => lines.push(l), err: (l) => lines.push(l) },
       );
       return { code, lines };
@@ -129,7 +136,7 @@ describe('automatic cloud link (T3b)', () => {
 
     // the next check (claims go at most every 5 minutes) claims the link and syncs in the same go
     later();
-    putItem(r.box.surau.db, 'penceramah', { id: 'p-auto', name: 'Ustaz Auto' }, 'local');
+    putItem(r.box.surau.db, 'penceramah', { id: 'p-auto', name: 'Ustaz Auto' }, 'local', undefined, 'sdm');
     await r.box.syncAgent!.runOnce();
     expect(linkOf(r.box)).toBe('linked');
     const key = loadSyncKey(r.boxDir)!;
@@ -156,15 +163,20 @@ describe('automatic cloud link (T3b)', () => {
       r.cloud.app.inject({ method: 'POST', url: '/api/sync/claim', remoteAddress: ip, payload: body as Record<string, unknown> });
     const pair = generateSyncKeyPair();
     const claim = loadOrCreateClaim(r.boxDir, CLOUD_URL);
-    // unapproved
+    // unapproved while the daily cap holds new suraus back (Plan 14 decision 23): pending, no key
     const un = await claimAt({ boxId: r.boxId, claim, publicJwk: pair.publicJwk }, '10.1.0.1');
-    expect(un.statusCode).toBe(401);
-    expect(un.json().code).toBe('bad_claim');
+    expect(un.statusCode).toBe(202);
+    expect(un.json().code).toBe('pending');
+    expect(un.json().siteToken).toBeUndefined();
+    // an unregistered id is the plain 401
+    const unknown = await claimAt({ boxId: 'f'.repeat(16), claim, publicJwk: pair.publicJwk }, '10.1.0.8');
+    expect(unknown.statusCode).toBe(401);
+    expect(unknown.json().code).toBe('bad_claim');
     expect((await r.approve()).code).toBe(0);
     // wrong claim, malformed bodies: the same 401
     const wrong = await claimAt({ boxId: r.boxId, claim: 'f'.repeat(64), publicJwk: pair.publicJwk }, '10.1.0.2');
     expect(wrong.statusCode).toBe(401);
-    expect(wrong.json()).toEqual(un.json());
+    expect(wrong.json()).toEqual(unknown.json());
     expect((await claimAt({ boxId: r.boxId, claim }, '10.1.0.3')).statusCode).toBe(401);
     expect((await claimAt({ boxId: 'nothex', claim, publicJwk: pair.publicJwk }, '10.1.0.4')).statusCode).toBe(401);
     // the right one works (a replay within 24 hours is the lost-answer recovery, see F9 below)
@@ -238,6 +250,23 @@ describe('automatic cloud link (T3b)', () => {
     expect(linkOf(box2)).toBe('linked');
   });
 
+  it('the registration says which box it is: box name, platform and version, all valid for the Worker', async () => {
+    const r = await rig();
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    r.box.surau.db.prepare("INSERT INTO meta (key, value) VALUES ('box_name', ?) ON CONFLICT(surau_id, key) DO UPDATE SET value = excluded.value").run('Kotak Dewan‮');
+    await r.box.syncAgent!.runOnce();
+    const body = r.worker.registerCalls[0] as Record<string, unknown>;
+    expect(body.boxName).toBe('Kotak Dewan');
+    expect(body.platform).toBe(boxPlatform());
+    expect(body.platform).toMatch(/^(android|windows|linux)$/);
+    if (body.version !== undefined) expect(body.version).toMatch(/^\d{4}\.\d{2}\.\d{1,3}$/);
+    // the old fields are still there and unchanged
+    expect(body.boxId).toBe(r.boxId);
+    expect(body.claimHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(cleanBoxName('  ​ ')).toBeNull();
+    expect(cleanBoxName('x'.repeat(100))!.length).toBe(60);
+  });
+
   it('registers again after 6 hours while still unlinked; a squatted id is reported once, retried every 15 minutes and left to MAXCOM', async () => {
     const r = await rig();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -270,7 +299,7 @@ describe('automatic cloud link (T3b)', () => {
 
   it('cloudSync off: no registration, link off', async () => {
     const r = await rig();
-    putFeature(r.box.surau.db, 'cloudSync', { enabled: false }, 'local');
+    putFeature(r.box.surau.db, 'cloudSync', { enabled: false }, 'local', undefined, 'sdm');
     await r.box.syncAgent!.runOnce();
     expect(r.worker.registerCalls.length).toBe(0);
     expect((await status(r.box)).link).toBe('off');
@@ -430,14 +459,14 @@ describe('automatic cloud link: gate fixes', () => {
     expect(lines(log).find((l) => l.includes('registered'))).toContain(code);
     const pending = await cli(r, ['cloud-pending']);
     expect(pending.out.join('\n')).toContain(hash);
-    const wrong = await cli(r, ['cloud-approve', '--box-id', r.boxId, '--code', code === '00000000' ? '11111111' : '00000000']);
+    const wrong = await cli(r, ['cloud-approve', '--box-id', r.boxId, '--new-surau', '--code', code === '00000000' ? '11111111' : '00000000']);
     expect(wrong.code).toBe(1);
     expect(wrong.out.join(' ')).toContain('Kod tuntutan tidak sepadan');
     expect(approvals(r), 'nothing stored on a wrong code').toBe(0);
-    const malformed = await cli(r, ['cloud-approve', '--box-id', r.boxId, '--code', 'xyz']);
+    const malformed = await cli(r, ['cloud-approve', '--box-id', r.boxId, '--new-surau', '--code', 'xyz']);
     expect(malformed.code).toBe(1);
     expect(approvals(r)).toBe(0);
-    const right = await cli(r, ['cloud-approve', '--box-id', r.boxId, '--code', code.toUpperCase()]);
+    const right = await cli(r, ['cloud-approve', '--box-id', r.boxId, '--new-surau', '--code', code.toUpperCase()]);
     expect(right.code, right.out.join('\n')).toBe(0);
     expect(approvals(r)).toBe(1);
     later();
@@ -448,7 +477,7 @@ describe('automatic cloud link: gate fixes', () => {
 
   it('F5: control and format characters are stripped from the box name and from what cloud-pending shows; approve uses the cleaned name', async () => {
     const r = await rig();
-    putFeature(r.box.surau.db, 'surauInfo', { name: 'Surau‮ Al​-Ikhlas⁦' }, 'test');
+    putFeature(r.box.surau.db, 'surauInfo', { name: 'Surau‮ Al​-Ikhlas⁦' }, 'test', undefined, 'sdm');
     await r.box.syncAgent!.runOnce();
     expect(r.worker.regs.get(r.boxId)!.name).toBe('Surau Al-Ikhlas');
     // a registration carrying such characters (an older Worker) is cleaned on the cloud side
@@ -456,7 +485,7 @@ describe('automatic cloud link: gate fixes', () => {
     const pending = await cli(r, ['cloud-pending']);
     expect(pending.out.join('\n')).toContain('Evilgnp.exe');
     expect(pending.out.join('\n')).not.toMatch(/[\p{Cc}\p{Cf}]/u);
-    expect((await cli(r, ['cloud-approve', '--box-id', r.boxId])).code).toBe(0);
+    expect((await cli(r, ['cloud-approve', '--box-id', r.boxId, '--new-surau'])).code).toBe(0);
     expect(r.cloud.app.surau.db.prepare('SELECT name FROM site_approvals WHERE box_id = ?').get(r.boxId)?.name).toBe('Evilgnp.exe');
   });
 
@@ -480,6 +509,8 @@ describe('automatic cloud link: gate fixes', () => {
 
   it('F7: after 24 hours of 401 the box says once how to recover, then keeps trying quietly', async () => {
     const r = await rig();
+    // the box-side note on 401 (the cloud itself now answers 202 `pending` while the daily cap holds a box back)
+    r.worker.claimStatus = 401;
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const stale = () => lines(log).filter((l) => l.includes('Belum diluluskan selepas 24 jam')).length;
     await r.box.syncAgent!.runOnce();

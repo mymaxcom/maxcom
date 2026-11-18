@@ -1,3 +1,4 @@
+import { autoPruneDays } from './surau/prune.ts';
 import { existsSync, mkdirSync, realpathSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
@@ -7,9 +8,11 @@ import { fileURLToPath } from 'node:url';
 import type { FastifyInstance, FastifyServerFactory } from 'fastify';
 import { buildApp } from './app.ts';
 import { purgeExpired } from './auth/sessions.ts';
+import { autoCleanPeople, cloudSeenFresh } from './auth/activity.ts';
 import { LiveFirewall } from './live/firewall.ts';
 import { buildDamagedApp, isDatabaseDamage, setDamagedAllowedHosts } from './setup/damaged.ts';
 import { hardenServer } from './serverLimits.ts';
+import { enableCloudDiskGuard } from './surau/storage.ts';
 import { workerAdminFrom } from './sync/workerOutbox.ts';
 import { expiryWarning, loadTls, startCertReload } from './tls.ts';
 import type { CertReloader, TlsMaterial } from './tls.ts';
@@ -172,6 +175,7 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
         allowedHosts: hostsFromTls(o.tls, o.env),
         ...(o.autoPrayerFetch === false ? {} : { autoPrayerFetch: {} }),
         ...(o.hadisTimers === false ? {} : { hadisTimers: {} }),
+        ...(o.role === 'cloud' ? { autoPrune: { days: autoPruneDays(o.env) } } : {}),
         serverFactory,
         tls: o.tls,
         tlsNow: () => currentTls,
@@ -207,6 +211,13 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
       purgeExpired(app.surau.db, new Date());
     } catch (error) {
       console.error('purgeExpired failed', error);
+    }
+    // Unused devices (180 days) and long-deactivated people (365 days) are removed on the box only, and logged.
+    try {
+      const at = new Date();
+      autoCleanPeople(app.surau.db, at, o.role === 'cloud' ? 'cloud' : 'box', cloudSeenFresh(app.surau.db, at));
+    } catch (error) {
+      console.error('autoCleanPeople failed', error);
     }
   }, 3_600_000);
   purgeTimer.unref();
@@ -296,6 +307,8 @@ async function start(): Promise<void> {
     console.error(`Invalid SURAU_ROLE "${process.env.SURAU_ROLE}": expected box or cloud`);
     process.exit(1);
   }
+  // the cloud refuses new uploads while its data disk runs low (every surau under its limit can still fill it)
+  if (role === 'cloud') enableCloudDiskGuard(dataDir);
 
   const repoRoot = resolve(import.meta.dirname, '../../..');
   const staticDir = resolve(repoRoot, 'apps/kiosk-display/dist');

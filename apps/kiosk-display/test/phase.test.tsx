@@ -297,3 +297,20 @@ describe('surau logo on the phase screens', () => {
     expect(r.getByText('Surau')).toBeTruthy();
   });
 });
+
+describe('[K9] the silent-phone message follows the TV language until the surau writes its own', () => {
+  const EN = { language: { enabled: true, lang: 'en' } } as const;
+  it('[K9] untouched default: BM on a BM TV, English on an English TV', () => {
+    expect(show(makeView('2026-11-03', '16:35')).getByText('Sila senyapkan telefon bimbit')).toBeTruthy();
+    cleanup();
+    expect(show(makeView('2026-11-03', '16:35', { settings: EN })).getByText('Please silence your phones')).toBeTruthy();
+  });
+  it('[K9] the old stored BM default still counts as untouched', () => {
+    const r = show(makeView('2026-11-03', '16:35', { settings: { ...EN, solatScreen: { message: 'Sila senyapkan telefon bimbit' } } }));
+    expect(r.getByText('Please silence your phones')).toBeTruthy();
+  });
+  it('[K9] a surau\'s own text is never replaced', () => {
+    const r = show(makeView('2026-11-03', '16:35', { settings: { ...EN, solatScreen: { message: 'Sila senyap, terima kasih' } } }));
+    expect(r.getByText('Sila senyap, terima kasih')).toBeTruthy();
+  });
+});

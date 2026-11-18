@@ -139,6 +139,10 @@ class ReadCache {
   /// Bumped by [clear]; a load that started before it must not seed.
   int _epoch = 0;
 
+  /// Changes whenever the cache is cleared or switches box. A reader that kept the value it saw when it started (a
+  /// gateway) stores no answer once this has moved on: its answer belongs to what was cleared.
+  int get epoch => _epoch;
+
   CachedBody? get(String path) => _bodies[path];
 
   /// Entries from a previous run; a body fetched in this run wins.

@@ -12,11 +12,13 @@ import 'package:surau_app/features/finance/setup_screen.dart';
 import 'package:surau_app/features/shell/coming_screen.dart';
 import 'package:surau_app/features/shell/menu.dart';
 import 'package:surau_app/features/shell/permissions.dart';
+import 'package:surau_app/finance/ledger.dart' show formatRm;
 import 'package:surau_app/l10n/generated/s_ms.dart';
 
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
 import 'finance_a_harness.dart';
+import 'package:surau_app/ops/ops_build.dart';
 
 void main() {
   late FinA f;
@@ -148,6 +150,18 @@ void main() {
     expect(find.byKey(const Key('fin-corrections-badge')), findsNothing);
   });
 
+  testWidgets('[F11] after a correction the home month figures are the report figures', (
+    tester,
+  ) async {
+    await f.seedCorrection();
+    await pumpFinance(tester, f, roles: const ['admin']);
+    final report = await f.repo.report('2026-11');
+    String shown(int i) =>
+        tester.widget<Text>(find.byKey(Key('fin-hero-io-$i'))).data!;
+    expect(shown(0), formatRm(report.totals.inSen));
+    expect(shown(1), formatRm(report.totals.outSen));
+  });
+
   testWidgets('a treasurer has no corrections list and no superadmin strip', (
     tester,
   ) async {
@@ -161,7 +175,7 @@ void main() {
     await pumpFinance(tester, f, roles: const ['superadmin']);
     expect(find.byKey(const Key('fin-super-banner')), findsOneWidget);
     expect(find.textContaining('Pentadbir MAXCOM'), findsOneWidget);
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets('a waiting entry shows N catatan belum di skrin TV and Menunggu', (
     tester,
@@ -244,7 +258,7 @@ void main() {
       'Papan pemuka',
       'Kewangan',
       'Kandungan',
-      'Tetapan',
+      'Konfigurasi',
     ]);
     expect(menuFor({'ajk'}, on).map((i) => i.entry).toList(), [
       MenuEntry.dashboard,

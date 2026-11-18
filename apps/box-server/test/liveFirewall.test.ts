@@ -3,7 +3,7 @@ import { LiveFirewall, evaluateRules, parseRules, ruleName } from '../src/live/f
 import type { RunCommand } from '../src/live/firewall.ts';
 
 function block(name: string, over: Record<string, string> = {}): string {
-  const port = name.includes('SRT') ? '8890' : '8189';
+  const port = name.includes('SRT') ? '8890' : name.includes('RTP') ? '8000-8001' : '8189';
   const f: Record<string, string> = {
     Enabled: 'Yes',
     Direction: 'In',
@@ -23,7 +23,7 @@ function block(name: string, over: Record<string, string> = {}): string {
   return lines.join('\r\n');
 }
 const NO_RULE = 'No rules match the specified criteria.';
-const GOOD = { WebRTC: block('MAXCOM Live WebRTC'), SRT: block('MAXCOM Live SRT') };
+const GOOD = { WebRTC: block('MAXCOM Live WebRTC'), SRT: block('MAXCOM Live SRT'), RTP: block('MAXCOM Live RTP') };
 
 /** A fake netsh/fltmc/powershell. `rules` maps the queried rule name to the output (or null = no such rule). */
 function fakeRunner(opts: {
@@ -76,7 +76,8 @@ describe('parseRules / evaluateRules', () => {
     const ok = parseRules(GOOD.SRT);
     expect(evaluateRules(ok, 8890)).toBe('ok');
     expect(evaluateRules([], 8890)).toBe('missing');
-    for (const bad of <Array<Record<string, string>>>[{ Profiles: 'Private' }, { Profiles: 'Private,Public' }, { RemoteIP: 'Any' }, { Enabled: 'No' }, { Protocol: 'TCP' }, { LocalPort: '9999' }, { Action: 'Block' }, { Direction: 'Out' }]) {
+    const bads: Array<Record<string, string>> = [{ Profiles: 'Private' }, { Profiles: 'Private,Public' }, { RemoteIP: 'Any' }, { Enabled: 'No' }, { Protocol: 'TCP' }, { LocalPort: '9999' }, { Action: 'Block' }, { Direction: 'Out' }];
+    for (const bad of bads) {
       expect(evaluateRules(parseRules(block('MAXCOM Live SRT', bad)), 8890), JSON.stringify(bad)).toBe('wrong');
     }
   });
@@ -116,7 +117,7 @@ describe('LiveFirewall', () => {
   });
 
   it('missing when a rule is absent; wrong when one is Private only. Not elevated: no repair, one clear log line with the admin command', async () => {
-    const r = fakeRunner({ rules: { WebRTC: GOOD.WebRTC, SRT: null }, elevated: false });
+    const r = fakeRunner({ rules: { WebRTC: GOOD.WebRTC, SRT: null, RTP: GOOD.RTP }, elevated: false });
     const { fw, logs, clock } = mk(r);
     expect(await fw.check()).toBe('missing');
     expect(r.calls.some((c) => c[0] === 'powershell')).toBe(false);
@@ -129,7 +130,7 @@ describe('LiveFirewall', () => {
     await fw.check();
     expect(logs).toHaveLength(1);
 
-    const w = mk(fakeRunner({ rules: { WebRTC: block('MAXCOM Live WebRTC', { Profiles: 'Private' }), SRT: GOOD.SRT } }));
+    const w = mk(fakeRunner({ rules: { WebRTC: block('MAXCOM Live WebRTC', { Profiles: 'Private' }), SRT: GOOD.SRT, RTP: GOOD.RTP } }));
     expect(await w.fw.check()).toBe('wrong');
   });
 
@@ -141,6 +142,7 @@ describe('LiveFirewall', () => {
       onEnsure: () => {
         rules.WebRTC = GOOD.WebRTC;
         rules.SRT = GOOD.SRT;
+        rules.RTP = GOOD.RTP;
       },
     });
     const { fw, logs } = mk(r);
@@ -171,6 +173,7 @@ describe('LiveFirewall', () => {
       onEnsure: () => {
         rules.WebRTC = GOOD.WebRTC;
         rules.SRT = GOOD.SRT;
+        rules.RTP = GOOD.RTP;
       },
     });
     const run: RunCommand = (f, a) => {
@@ -190,7 +193,7 @@ describe('LiveFirewall', () => {
       expect(r.calls.some((c) => c[0] === 'powershell')).toBe(false);
       expect(logs).toEqual([]);
     }
-    expect(await mk(fakeRunner({ rules: { WebRTC: GOOD.WebRTC, SRT: null } })).fw.check()).toBe('missing');
+    expect(await mk(fakeRunner({ rules: { WebRTC: GOOD.WebRTC, SRT: null, RTP: GOOD.RTP } })).fw.check()).toBe('missing');
   });
 
   it('elevated but the repair fails: stays not ok, runs the script only once, logs the failure', async () => {
@@ -226,7 +229,19 @@ describe('LiveFirewall', () => {
     const r = fakeRunner({ rules: GOOD });
     const { fw } = mk(r);
     await Promise.all([fw.check(), fw.check(), fw.check()]);
-    expect(r.calls.filter((c) => c[0] === 'netsh')).toHaveLength(2);
+    expect(r.calls.filter((c) => c[0] === 'netsh')).toHaveLength(3);
     vi.restoreAllMocks();
+  });
+});
+
+describe('the camera RTP rule (UDP transport of the external camera)', () => {
+  it('is the third rule: 8000-8001, and only the exact rule is ok', async () => {
+    expect(ruleName('rtp')).toBe('MAXCOM Live RTP');
+    expect(evaluateRules(parseRules(GOOD.RTP), '8000-8001')).toBe('ok');
+    expect(evaluateRules(parseRules(block('MAXCOM Live RTP', { LocalPort: '8000' })), '8000-8001')).toBe('wrong');
+    expect(evaluateRules(parseRules(block('MAXCOM Live RTP', { RemoteIP: 'Any' })), '8000-8001')).toBe('wrong');
+    expect(await mk(fakeRunner({ rules: { WebRTC: GOOD.WebRTC, SRT: GOOD.SRT, RTP: GOOD.RTP } })).fw.check()).toBe('ok');
+    // an install from before the camera work has no RTP rule: the media-ports check reports it missing
+    expect(await mk(fakeRunner({ rules: { WebRTC: GOOD.WebRTC, SRT: GOOD.SRT } })).fw.check()).toBe('missing');
   });
 });

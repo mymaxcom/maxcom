@@ -24,8 +24,9 @@ export function fetchEsolatYear(
   zone: string,
   year: number,
   fetchImpl: typeof fetch,
+  surauId: string,
 ): Promise<PrayerDay[]> {
-  return fetchJakimYear(zone, year, fetchImpl, sourceUrlsFrom(getSettings(db)).esolat);
+  return fetchJakimYear(zone, year, fetchImpl, sourceUrlsFrom(getSettings(db, surauId)).esolat);
 }
 
 export interface AutoFetchStatus {
@@ -35,6 +36,8 @@ export interface AutoFetchStatus {
   lastOk: boolean | null;
   /** Short reason of the last failure, with addresses removed. */
   lastError?: string;
+  /** The zone the state above is for (absent before any attempt). */
+  zone?: string;
 }
 
 export type AutoFetchOutcome =
@@ -47,18 +50,26 @@ export interface AutoFetchOptions {
   now: () => Date;
   fetchImpl: typeof fetch;
   /** Called with the new settings version after days were added (so screens refresh). */
-  onChanged?: (version: number) => void;
+  onChanged?: (version: number, surauId: string) => void;
+  /** The suraus to top up each round: a box has its own, the cloud one per surau (read at every round). */
+  surauIds: () => string[];
+  /** True for a surau this server must not fetch for (the cloud leaves a surau with an unrevoked linked box to that box). */
+  skipSurau?: (surauId: string) => boolean;
   /** Test seam: where the settings come from (default: the database). */
-  readSettings?: () => Settings;
+  readSettings?: (surauId: string) => Settings;
   firstDelayMs?: number;
   intervalMs?: number;
 }
 
 export interface PrayerAutoFetch {
-  runOnce: () => Promise<AutoFetchOutcome>;
+  runOnce: (surauId: string) => Promise<AutoFetchOutcome>;
+  /** One round over every surau of `surauIds()`, one after the other. */
+  runAll: () => Promise<void>;
   start: () => void;
   stop: () => void;
-  status: () => AutoFetchStatus;
+  status: (surauId: string) => AutoFetchStatus;
+  /** Drop what is kept in memory for a surau that was deleted (its status entry); a later round no longer visits it. */
+  forget: (surauId: string) => void;
 }
 
 const isLeap = (y: number): boolean => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -76,95 +87,120 @@ function safeReason(error: unknown): string {
 
 export function createPrayerAutoFetch(o: AutoFetchOptions): PrayerAutoFetch {
   const { db, now, fetchImpl } = o;
-  const readSettings = o.readSettings ?? (() => getSettings(db));
-  let lastAttemptAt: string | null = null;
-  let lastOk: boolean | null = null;
-  let lastError: string | undefined;
-  let running = false;
+  const readSettings = o.readSettings ?? ((surauId: string) => getSettings(db, surauId));
+  interface PerSurau { lastAttemptAt: string | null; lastOk: boolean | null; lastError: string | undefined; running: boolean; zone: string | undefined }
+  const states = new Map<string, PerSurau>();
+  const stateOf = (surauId: string): PerSurau => {
+    let st = states.get(surauId);
+    if (st === undefined) {
+      st = { lastAttemptAt: null, lastOk: null, lastError: undefined, running: false, zone: undefined };
+      states.set(surauId, st);
+    }
+    return st;
+  };
   let first: NodeJS.Timeout | null = null;
   let every: NodeJS.Timeout | null = null;
   let stopped = false;
 
-  const enabledNow = (): boolean => {
+  const enabledNow = (surauId: string): boolean => {
     try {
-      return readSettings().zone.autoFetch !== false;
+      return readSettings(surauId).zone.autoFetch !== false;
     } catch {
       return false;
     }
   };
 
   /** First year, current then next, that lacks days from today on; null when both are complete. */
-  function targetYear(zone: string, today: string): number | null {
+  function targetYear(zone: string, today: string, surauId: string): number | null {
     const thisYear = Number(today.slice(0, 4));
     for (const year of [thisYear, thisYear + 1]) {
       const from = year === thisYear ? today : `${year}-01-01`;
       const expected = (isLeap(year) ? 366 : 365) - dayOfYear(from) + 1;
       const have = (db
-        .prepare('SELECT COUNT(*) AS n FROM prayer_days WHERE zone = ? AND date >= ? AND date <= ?')
-        .get(zone, from, `${year}-12-31`)?.n ?? 0) as number;
+        .prepare('SELECT COUNT(*) AS n FROM prayer_days WHERE surau_id = ? AND zone = ? AND date >= ? AND date <= ?')
+        .get(surauId, zone, from, `${year}-12-31`)?.n ?? 0) as number;
       if (Number(have) < expected) return year;
     }
     return null;
   }
 
-  async function runOnce(): Promise<AutoFetchOutcome> {
-    if (running) return { ran: false };
-    running = true;
+  async function runOnce(surauId: string): Promise<AutoFetchOutcome> {
+    const st = stateOf(surauId);
+    if (st.running) return { ran: false };
+    st.running = true;
     try {
-      const settings = readSettings();
+      const settings = readSettings(surauId);
       if (settings.zone.autoFetch === false) return { ran: false };
       // Only a country with an official source has anything to fetch (Malaysia: JAKIM).
       if (!hasOfficialSource(settings.location.country)) return { ran: false };
       const zone = settings.zone.zone;
       if (typeof zone !== 'string' || !ZONE.test(zone)) return { ran: false };
+      if (o.skipSurau?.(surauId) === true) return { ran: false };
+      // The state is the zone's: a new zone starts clean.
+      if (st.zone !== undefined && st.zone !== zone) { st.lastAttemptAt = null; st.lastOk = null; st.lastError = undefined; }
+      st.zone = zone;
       const today = dateOf(now(), tzOf(settings));
-      if (countDaysFrom(db, zone, today) >= AUTO_FETCH_BELOW_DAYS) return { ran: false };
-      const year = targetYear(zone, today);
+      if (countDaysFrom(db, zone, today, surauId) >= AUTO_FETCH_BELOW_DAYS) return { ran: false };
+      const year = targetYear(zone, today, surauId);
       if (year === null) return { ran: false };
 
-      lastAttemptAt = now().toISOString();
+      st.lastAttemptAt = now().toISOString();
       try {
-        const days = (await fetchEsolatYear(db, zone, year, fetchImpl)).filter((d) => d.date >= today);
-        const source = String(sourceName(db));
+        const days = (await fetchEsolatYear(db, zone, year, fetchImpl, surauId)).filter((d) => d.date >= today);
+        const source = String(sourceName(db, surauId));
         const result = importDays(db, zone, days, AUTO_FETCH_ACTOR, undefined, {
           insertOnly: true,
           summary: (n) => `Data waktu solat dimuat turun secara automatik dari ${source}: ${n} hari ditambah`,
-        });
-        lastOk = true;
-        lastError = undefined;
+        }, surauId);
+        st.lastOk = true;
+        st.lastError = undefined;
         if (result.inserted > 0) {
           try {
-            o.onChanged?.(getVersion(db));
+            o.onChanged?.(getVersion(db, surauId), surauId);
           } catch {
             // A listener must not turn a good fetch into a failure.
           }
         }
         return { ran: true, ok: true, added: result.inserted, year };
       } catch (error) {
-        lastOk = false;
-        lastError = safeReason(error);
-        console.warn(`Auto prayer fetch for ${zone} ${year} failed: ${lastError}`);
+        st.lastOk = false;
+        st.lastError = safeReason(error);
+        console.warn(`Auto prayer fetch for ${zone} ${year} failed: ${st.lastError}`);
         return { ran: true, ok: false, year };
       }
     } catch (error) {
       // Reading the settings or the database failed (for example while closing).
-      lastAttemptAt = now().toISOString();
-      lastOk = false;
-      lastError = safeReason(error);
-      console.warn(`Auto prayer fetch failed: ${lastError}`);
+      st.lastAttemptAt = now().toISOString();
+      st.lastOk = false;
+      st.lastError = safeReason(error);
+      console.warn(`Auto prayer fetch failed: ${st.lastError}`);
       return { ran: true, ok: false, year: 0 };
     } finally {
-      running = false;
+      st.running = false;
+    }
+  }
+
+  async function runAll(): Promise<void> {
+    let ids: string[] = [];
+    try {
+      ids = o.surauIds();
+    } catch {
+      return;
+    }
+    for (const id of ids) {
+      if (stopped) return;
+      await runOnce(id).catch(() => undefined);
     }
   }
 
   const tick = (): void => {
     if (stopped) return;
-    void runOnce().catch(() => undefined);
+    void runAll();
   };
 
   return {
     runOnce,
+    runAll,
     start() {
       if (first !== null || every !== null || stopped) return;
       first = setTimeout(tick, o.firstDelayMs ?? FIRST_DELAY_MS);
@@ -179,18 +215,33 @@ export function createPrayerAutoFetch(o: AutoFetchOptions): PrayerAutoFetch {
       first = null;
       every = null;
     },
-    status() {
+    forget(surauId: string) {
+      states.delete(surauId);
+    },
+    status(surauId: string) {
+      const st = stateOf(surauId);
+      let zoneNow: string | undefined;
+      try {
+        const z = readSettings(surauId).zone.zone;
+        zoneNow = typeof z === 'string' ? z : undefined;
+      } catch {
+        zoneNow = undefined;
+      }
+      if (st.zone !== undefined && zoneNow !== undefined && st.zone !== zoneNow) {
+        return { enabled: enabledNow(surauId), lastAttemptAt: null, lastOk: null, zone: zoneNow };
+      }
       return {
-        enabled: enabledNow(),
-        lastAttemptAt,
-        lastOk,
-        ...(lastError !== undefined ? { lastError } : {}),
+        enabled: enabledNow(surauId),
+        ...(st.zone !== undefined ? { zone: st.zone } : {}),
+        lastAttemptAt: st.lastAttemptAt,
+        lastOk: st.lastOk,
+        ...(st.lastError !== undefined ? { lastError: st.lastError } : {}),
       };
     },
   };
 }
 
-function sourceName(db: DatabaseSync): string {
-  const name = getSettings(db).dataSources.esolat.name;
+function sourceName(db: DatabaseSync, surauId: string): string {
+  const name = getSettings(db, surauId).dataSources.esolat.name;
   return typeof name === 'string' && name.trim() !== '' ? name : 'e-Solat';
 }

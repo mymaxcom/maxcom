@@ -38,6 +38,11 @@ abstract final class SurauColors {
   static const Color dangerSoft = Color(0xFFFCEEED);
   static const Color dangerInk = Color(0xFF5E1612);
 
+  /// Something is on or working: the "Hidup" pill and the tick on a
+  /// connected status icon. [success] on [successSoft] is about 6.9:1.
+  static const Color success = Color(0xFF0E5B45);
+  static const Color successSoft = Color(0xFFDDF2EA);
+
   /// Gold at 35 %, the kiosk's glass border.
   static const Color goldHairline = Color(0x59F0C97A);
 }

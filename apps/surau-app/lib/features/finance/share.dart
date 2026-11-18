@@ -17,6 +17,7 @@
 
 import 'dart:typed_data';
 
+import '../common/contact_links.dart' show UrlOpener, launchOutside;
 import 'share_stub.dart'
     if (dart.library.js_interop) 'share_web.dart'
     if (dart.library.io) 'share_android.dart'
@@ -96,9 +97,13 @@ class SaveResult {
 /// What [shareBytes] did. [via] is `whatsapp`, `email` or `other`: from the
 /// app the person chose when the system reports it, else `other`.
 class ShareResult {
-  const ShareResult(this.via, {this.completed = true});
+  const ShareResult(this.via, {this.completed = true, this.unavailable = false});
 
   final String via;
+
+  /// True when the platform has no way to share a text (the stub, or a
+  /// browser without `navigator.share`): the caller copies it instead.
+  final bool unavailable;
 
   /// False when the person backed out or the system did not say which app
   /// was chosen: nothing then proves the file was sent.
@@ -126,6 +131,44 @@ Future<ShareResult> shareBytes(
 }) async {
   checkShareArgs(filename, mime, bytes);
   return platform.share(bytes, filename, mime);
+}
+
+/// Most characters of a text [shareText] sends.
+const int shareTextMaxLength = 4096;
+
+/// Opens the phone's share sheet with a short [text] (and an optional
+/// [subject]). Refused with [ShareArgsError] when the text is empty or
+/// longer than [shareTextMaxLength]. The text is never logged. A platform
+/// that cannot share a text answers [ShareResult.unavailable] true and the
+/// caller copies it to the clipboard.
+Future<ShareResult> shareText(String text, {String? subject}) async {
+  if (text.isEmpty || text.length > shareTextMaxLength) {
+    throw const ShareArgsError('text');
+  }
+  if (subject != null && subject.length > 200) {
+    throw const ShareArgsError('subject');
+  }
+  return platform.shareText(text, subject);
+}
+
+/// Whether [u] is `https://wa.me/<8 to 15 digits>` with at most one
+/// `text=` query parameter: the only address [openWhatsApp] opens.
+bool isWaMeUri(Uri u) {
+  if (u.scheme != 'https' || u.host != 'wa.me') return false;
+  if (u.hasPort || u.userInfo.isNotEmpty || u.fragment.isNotEmpty) return false;
+  if (!RegExp(r'^/[0-9]{8,15}$').hasMatch(u.path)) return false;
+  final q = u.queryParametersAll;
+  if (q.isEmpty) return true;
+  return q.length == 1 && q.containsKey('text') && q['text']!.length == 1;
+}
+
+/// Opens a WhatsApp chat in the WhatsApp app (or the browser when it is not
+/// installed) through url_launcher. Anything but a [isWaMeUri] address is
+/// refused with [ShareArgsError]. False when nothing could open it. [open]
+/// is for tests.
+Future<bool> openWhatsApp(Uri waUri, {UrlOpener? open}) async {
+  if (!isWaMeUri(waUri)) throw const ShareArgsError('uri');
+  return (open ?? launchOutside)(waUri);
 }
 
 /// The finance PDF: opens the share sheet (which also offers Drive and

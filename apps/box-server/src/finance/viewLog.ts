@@ -17,7 +17,7 @@ export function isPentadbirMaxcom(auth: AuthIdentity | null | undefined): auth i
 }
 
 export function noteFinanceView(
-  db: DatabaseSync, auth: AuthIdentity | null | undefined, route: string, now: Date, actor: string, deviceId?: string,
+  db: DatabaseSync, auth: AuthIdentity | null | undefined, route: string, now: Date, actor: string, deviceId: string | undefined, surauId: string,
 ): void {
   if (!isPentadbirMaxcom(auth)) return;
   let map = seen.get(db);
@@ -28,5 +28,5 @@ export function noteFinanceView(
   if (last !== undefined && nowMs - last < VIEW_WINDOW_MS) return;
   if (map.size > 500) for (const [k, t] of map) if (nowMs - t >= VIEW_WINDOW_MS) map.delete(k);
   map.set(key, nowMs);
-  logChange(db, actor, 'finance:view', route, undefined, { route }, deviceId === undefined ? undefined : { deviceId });
+  logChange(db, actor, 'finance:view', route, undefined, { route }, deviceId === undefined ? undefined : { deviceId }, surauId);
 }

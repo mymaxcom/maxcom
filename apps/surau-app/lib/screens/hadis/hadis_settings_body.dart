@@ -117,7 +117,7 @@ class _HadisSettingsBodyState extends ConsumerState<HadisSettingsBody> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 10, 12, 10),
+          padding: const EdgeInsetsDirectional.fromSTEB(18, 10, 12, 10),
           child: Row(
             children: [
               Expanded(
@@ -374,7 +374,7 @@ class _HadisSettingsBodyState extends ConsumerState<HadisSettingsBody> {
             _switchRow('showAttribution', s.hadisFieldAttribution, s.hadisFieldAttributionHelp),
             _switchRow('showGrade', s.hadisFieldGrade, s.hadisFieldGradeHelp),
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 10, 12, 10),
+              padding: const EdgeInsetsDirectional.fromSTEB(18, 10, 12, 10),
               child: Row(
                 children: [
                   Expanded(
@@ -445,7 +445,7 @@ class _HadisSettingsBodyState extends ConsumerState<HadisSettingsBody> {
   Widget _gradeRow(S s, HadisGradeRow g, Map<dynamic, dynamic> allowed) {
     final text = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 8, 12, 8),
+      padding: const EdgeInsetsDirectional.fromSTEB(18, 8, 12, 8),
       child: Row(
         children: [
           Expanded(
@@ -453,7 +453,7 @@ class _HadisSettingsBodyState extends ConsumerState<HadisSettingsBody> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(g.ms, style: text.titleSmall!.copyWith(fontSize: 15.5)),
-                Text(g.note, style: text.bodySmall!.copyWith(fontSize: 12.5)),
+                Text(_gradeNote(s, g.key), style: text.bodySmall!.copyWith(fontSize: 12.5)),
               ],
             ),
           ),
@@ -526,3 +526,13 @@ class _HadisSettingsBodyState extends ConsumerState<HadisSettingsBody> {
     );
   }
 }
+
+/// The one-line meaning of a hadith grade, in the app language.
+String _gradeNote(S s, String key) => switch (key) {
+  'sahih' => s.hadisGradeNoteSahih,
+  'hasan' => s.hadisGradeNoteHasan,
+  'sahih_lighairihi' => s.hadisGradeNoteSahihLi,
+  'hasan_lighairihi' => s.hadisGradeNoteHasanLi,
+  'dhaif' => s.hadisGradeNoteDhaif,
+  _ => s.hadisGradeNoteMaudhu,
+};

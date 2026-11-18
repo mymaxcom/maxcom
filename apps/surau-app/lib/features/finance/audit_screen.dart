@@ -17,10 +17,12 @@ import '../../finance/finance_repository.dart';
 import '../../finance/ledger.dart';
 import '../../l10n/generated/s.dart';
 import '../../screens/widgets/box_read.dart' show writeErrorText;
+import '../common/ltr.dart' show ltr;
 import '../shell/permissions.dart';
 import 'finance_box_api.dart';
 import 'finance_widgets.dart' show FinTwoColumnPage, finTwoColumnMinWidth;
-import 'report_a4.dart' show klStamp, monthNameMs;
+import 'month_label.dart';
+import 'report_a4.dart' show klStamp;
 
 /// Which chip a row belongs to.
 enum AuditGroup { entryIn, entryOut, correction, settings, report, refused }
@@ -257,13 +259,13 @@ String auditTitle(S s, FinanceAuditRow r, Map<String, String> fundNames) {
     case 'finance:month':
       final ym = r.entityId ?? '';
       return a?['status'] == 'closed'
-          ? s.finrAuditMonthClosed(monthNameMs(ym))
-          : s.finrAuditMonthOpened(monthNameMs(ym));
+          ? s.finrAuditMonthClosed(monthLabel(s, ym))
+          : s.finrAuditMonthOpened(monthLabel(s, ym));
     case 'finance:report':
       final ym = (a?['ym'] as String?) ?? r.entityId ?? '';
       return a?['action'] == 'share'
-          ? s.finrAuditReportShared(monthNameMs(ym))
-          : s.finrAuditReportDownloaded(monthNameMs(ym));
+          ? s.finrAuditReportShared(monthLabel(s, ym))
+          : s.finrAuditReportDownloaded(monthLabel(s, ym));
     case 'finance:refused':
       return s.finrAuditRefused(refusalText(s, r.refusedDetail));
     default:
@@ -298,7 +300,7 @@ class _AuditTile extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final bad = row.refused;
     final waiting = !bad && row.syncedAt == null && row.origin != 'local';
-    final who = row.userName ?? row.actor;
+    final who = _who(row);
     final dot = bad
         ? SurauColors.danger
         : (waiting ? const Color(0xFFB07400) : SurauColors.teal);
@@ -337,7 +339,7 @@ class _AuditTile extends StatelessWidget {
               ],
             ),
             Padding(
-              padding: const EdgeInsets.only(left: 20, top: 2),
+              padding: const EdgeInsetsDirectional.only(start: 20, top: 2),
               child: Text(
                 '$who, ${klStamp(row.editedAt)}',
                 style: text.bodyMedium!.copyWith(color: SurauColors.muted),
@@ -345,7 +347,7 @@ class _AuditTile extends StatelessWidget {
             ),
             if (bad)
               Padding(
-                padding: const EdgeInsets.only(left: 20, top: 2),
+                padding: const EdgeInsetsDirectional.only(start: 20, top: 2),
                 child: Text(
                   refusalText(s, row.refusedDetail),
                   key: const Key('finr-audit-reason'),
@@ -366,6 +368,13 @@ class _AuditTile extends StatelessWidget {
 const List<int> _auditColumns = [5, 3, 3, 3, 3, 3];
 
 /// The short device id the detail sheet also shows.
+/// The name of the time, then the person's ID (left to right) when known.
+String _who(FinanceAuditRow row) {
+  final name = row.userName ?? row.actor;
+  final r = row.userRef;
+  return r == null ? name : '$name ${ltr(r)}';
+}
+
 String _deviceLabel(S s, FinanceAuditRow row) => row.deviceId == null
     ? s.finrNoDevice
     : (row.deviceId!.length > 8
@@ -397,7 +406,7 @@ class _AuditHeader extends StatelessWidget {
             Expanded(
               flex: _auditColumns[i],
               child: Padding(
-                padding: const EdgeInsets.only(right: 10),
+                padding: const EdgeInsetsDirectional.only(end: 10),
                 child: Text(labels[i].toUpperCase(), style: style),
               ),
             ),
@@ -454,7 +463,7 @@ class _AuditTableRow extends StatelessWidget {
             ),
         ],
       ),
-      Text(row.userName ?? row.actor, style: cell),
+      Text(_who(row), style: cell),
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -484,7 +493,7 @@ class _AuditTableRow extends StatelessWidget {
               Expanded(
                 flex: _auditColumns[i],
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 10),
+                  padding: const EdgeInsetsDirectional.only(end: 10),
                   child: children[i],
                 ),
               ),
@@ -515,7 +524,7 @@ class _AuditDetail extends StatelessWidget {
         iso == null || iso.isEmpty ? none : klStamp(iso);
     final device = _deviceLabel(s, row);
     final cells = <(String, String, Color?)>[
-      (s.finrColWho, row.userName ?? row.actor, null),
+      (s.finrColWho, _who(row), null),
       (s.finrColDevice, device, null),
       (
         s.finrColSignature,

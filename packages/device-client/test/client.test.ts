@@ -8,6 +8,7 @@ import { beginEnrolment, completeEnrolment, getDeviceWithKey, revokeDevice } fro
 import { issueChallenge, resolveSession, unlock as serverUnlock } from '../../../apps/box-server/src/auth/sessions.ts';
 import { AuthError, createUser } from '../../../apps/box-server/src/auth/users.ts';
 import { openDb } from '../../../apps/box-server/src/db.ts';
+import { LOCAL_SURAU_ID } from '../../../apps/box-server/src/tenant.ts';
 import { putFeature } from '../../../apps/box-server/src/settingsStore.ts';
 import {
   ClientError,
@@ -68,8 +69,8 @@ function fakeBox(db: DatabaseSync, seen: { signatures: string[]; auth: (string |
 /** `lock`: switch the app lock on first (it is off by default since Plan 5, and then the PIN step is skipped). */
 function setup(lock = false) {
   const db = openDb(':memory:');
-  if (lock) putFeature(db, 'appLock', { enabled: true }, 'local');
-  const admin = createUser(db, { name: 'Admin', roles: ['admin'] }, 'local');
+  if (lock) putFeature(db, 'appLock', { enabled: true }, 'local', undefined, LOCAL_SURAU_ID);
+  const admin = createUser(db, { name: 'Admin', roles: ['admin'] }, 'local', LOCAL_SURAU_ID);
   const code = beginEnrolment(db, { userId: admin.id, deviceName: 'Telefon' }, 'local').code;
   const seen = { signatures: [] as string[], auth: [] as (string | null)[] };
   return { db, admin, code, fetchImpl: fakeBox(db, seen), keys: memoryKeyStore(), seen };

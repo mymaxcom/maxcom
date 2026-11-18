@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/deps.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/features/common/surau_info.dart';
@@ -77,6 +78,23 @@ Map<String, Object?> _status({
   },
 };
 
+final List<_Env> _envs = [];
+
+/// A widget test whose live session (and so its 2 s heartbeat) is closed with the container
+/// before the framework looks for timers still pending.
+void _liveTest(String name, Future<void> Function(WidgetTester tester) body) {
+  testWidgets(name, (tester) async {
+    try {
+      await body(tester);
+    } finally {
+      for (final e in _envs) {
+        e.container.dispose();
+      }
+      _envs.clear();
+    }
+  });
+}
+
 class _Env {
   _Env(this.platform, {bool throwingStop = false}) {
     pub = throwingStop ? _ThrowingStopPublisher(log) : _LoggingPublisher(log);
@@ -113,7 +131,7 @@ class _Env {
         ),
       ],
     );
-    addTearDown(container.dispose);
+    _envs.add(this);
   }
 
   final String platform;
@@ -132,6 +150,10 @@ class _Env {
   bool away = false;
   bool statusDown = false;
   Completer<void>? stopGate;
+  int stopStatus = 200;
+  String? stopCode;
+  int signinStatus = 200;
+  Map<String, Object?> signinError = const {};
   Map<String, Object?> signin = {
     'verificationUrl': 'https://www.google.com/device',
     'userCode': 'ABCD-EFGH',
@@ -150,12 +172,16 @@ class _Env {
             : jsonResponse(startStatus, startError);
       case 'POST /api/live/stop':
         await stopGate?.future;
-        return jsonResponse(200, {'stopped': true});
+        return stopStatus == 200
+            ? jsonResponse(200, {'stopped': true})
+            : jsonResponse(stopStatus, {'errors': ['x'], if (stopCode != null) 'code': stopCode});
       case 'GET /api/live/status':
         if (statusDown) throw http.ClientException('status down');
         return jsonResponse(200, status);
       case 'POST /api/live/youtube/signin':
-        return jsonResponse(200, signin);
+        return signinStatus == 200
+            ? jsonResponse(200, signin)
+            : jsonResponse(signinStatus, signinError);
       case 'POST /api/live/youtube/signin/poll':
         return jsonResponse(
           200,
@@ -187,7 +213,7 @@ Future<void> _drain(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('web start posts source web, youtubeVia box; the box relays '
+  _liveTest('web start posts source web, youtubeVia box; the box relays '
       'so the publisher gets the WHIP path and no YouTube key', (tester) async {
     final e = _Env('web')..startAnswer = _startAnswer(ytVia: 'box', srt: false);
     await e.ctrl.startLive(kuliahId: 'c3', youtube: true);
@@ -205,7 +231,7 @@ void main() {
     expect(e.state.youtubeViaBox, isTrue);
   });
 
-  testWidgets('android start posts youtubeVia device and hands the SRT '
+  _liveTest('android start posts youtubeVia device and hands the SRT '
       'target and the YouTube key to the publisher', (tester) async {
     final e = _Env('android')..startAnswer = _startAnswer(ytVia: 'device');
     await e.ctrl.startLive(kuliahId: null, youtube: true);
@@ -228,7 +254,7 @@ void main() {
     expect(e.state.toString(), isNot(contains(_key)));
   });
 
-  testWidgets('YouTube off sends youtube false and no key is held', (
+  _liveTest('YouTube off sends youtube false and no key is held', (
     tester,
   ) async {
     final e = _Env('android');
@@ -239,7 +265,7 @@ void main() {
     expect(t.youtubeUrl, isNull);
   });
 
-  testWidgets('a YouTube leg the box dropped is not started on the phone', (
+  _liveTest('a YouTube leg the box dropped is not started on the phone', (
     tester,
   ) async {
     final e = _Env('android')
@@ -251,7 +277,7 @@ void main() {
     expect(e.state.notice, contains('YouTube'));
   });
 
-  testWidgets('stop ends the publisher before POST /api/live/stop; the '
+  _liveTest('stop ends the publisher before POST /api/live/stop; the '
       'credentials are gone afterwards', (tester) async {
     final e = _Env('android')..startAnswer = _startAnswer(ytVia: 'device');
     await e.ctrl.startLive(kuliahId: 'c3', youtube: true);
@@ -270,7 +296,7 @@ void main() {
     expect(stopBody, {'sessionId': 's1'});
   });
 
-  testWidgets('409 live_busy shows who is live and never starts the '
+  _liveTest('409 live_busy shows who is live and never starts the '
       'publisher', (tester) async {
     final e = _Env('web')
       ..startStatus = 409
@@ -284,7 +310,7 @@ void main() {
     expect(e.state.sessionId, isNull);
   });
 
-  testWidgets('another refusal shows the box\'s own words', (tester) async {
+  _liveTest('another refusal shows the box\'s own words', (tester) async {
     final e = _Env('web')
       ..startStatus = 409
       ..startError = {
@@ -296,7 +322,7 @@ void main() {
     expect(e.pub.started, isEmpty);
   });
 
-  testWidgets('a box that cannot be reached at start never starts the '
+  _liveTest('a box that cannot be reached at start never starts the '
       'publisher', (tester) async {
     final e = _Env('android')..away = true;
     await e.ctrl.startLive(kuliahId: 'c3', youtube: false);
@@ -305,7 +331,7 @@ void main() {
     expect(e.state.sessionId, isNull);
   });
 
-  testWidgets('a publisher that fails to start frees the box session', (
+  _liveTest('a publisher that fails to start frees the box session', (
     tester,
   ) async {
     final e = _Env('android');
@@ -336,7 +362,7 @@ void main() {
     expect(c.read(liveBoxProvider).sessionId, isNull);
   });
 
-  testWidgets('a status failure during a live keeps the publisher and marks '
+  _liveTest('a status failure during a live keeps the publisher and marks '
       'the box unreachable; it comes back on the next good poll', (
     tester,
   ) async {
@@ -354,7 +380,7 @@ void main() {
     expect(e.state.boxReachable, isTrue);
   });
 
-  testWidgets('media warnings of the box reach the state: from the start '
+  _liveTest('media warnings of the box reach the state: from the start '
       'answer and from every poll, and no_video clears when the picture '
       'arrives', (tester) async {
     final e = _Env('android')
@@ -380,7 +406,7 @@ void main() {
     expect(e.state.warnings, isEmpty);
   });
 
-  testWidgets('polls every 2 s while attached and stops when detached', (
+  _liveTest('polls every 2 s while attached and stops when detached', (
     tester,
   ) async {
     final e = _Env('android');
@@ -402,7 +428,7 @@ void main() {
     expect(polls(), first + 2);
   });
 
-  testWidgets('YouTube seconds add up while YouTube receives, for the '
+  _liveTest('YouTube seconds add up while YouTube receives, for the '
       'summary, and the watch page is kept', (tester) async {
     final e = _Env('android')..startAnswer = _startAnswer(ytVia: 'device');
     await e.ctrl.startLive(kuliahId: 'c3', youtube: true);
@@ -423,7 +449,7 @@ void main() {
     expect(e.state.youtubeSeconds, 6);
   });
 
-  testWidgets('the kiosk leg is not on air until the box confirms the '
+  _liveTest('the kiosk leg is not on air until the box confirms the '
       'stream; ready turns it on', (tester) async {
     final e = _Env('android');
     await e.ctrl.startLive(kuliahId: null, youtube: false);
@@ -461,7 +487,7 @@ void main() {
     expect(e.state.ingestReady, isNull);
   });
 
-  testWidgets('a box-relayed leg takes its light from the box', (tester) async {
+  _liveTest('a box-relayed leg takes its light from the box', (tester) async {
     final e = _Env('web')..startAnswer = _startAnswer(ytVia: 'box', srt: false);
     await e.ctrl.startLive(kuliahId: 'c3', youtube: true);
     e.status = _status(session: 's1', relay: 'retrying');
@@ -477,7 +503,7 @@ void main() {
     expect(e.state.youtubeLeg!.phase, OutputPhase.up);
   });
 
-  testWidgets('sign-in shows the code, polls at the box\'s interval and '
+  _liveTest('sign-in shows the code, polls at the box\'s interval and '
       'ends signed in', (tester) async {
     final e = _Env('android');
     e.polls.addAll([
@@ -508,7 +534,7 @@ void main() {
     expect(e.state.youtube.channel, 'Surau D\'Waqaf');
   });
 
-  testWidgets('an expired or denied sign-in goes back to signed out with a '
+  _liveTest('an expired or denied sign-in goes back to signed out with a '
       'notice', (tester) async {
     final e = _Env('android');
     e.polls.add({'state': 'expired', 'signedIn': false});
@@ -519,7 +545,7 @@ void main() {
     expect(e.state.notice, LiveController.signInFailed);
   });
 
-  testWidgets('sign-out posts and signs out', (tester) async {
+  _liveTest('sign-out posts and signs out', (tester) async {
     final e = _Env('android');
     e.ctrl.set(const LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau')));
     await e.ctrl.signOut();
@@ -527,7 +553,7 @@ void main() {
     expect(e.state.youtube.phase, YoutubeAccountPhase.signedOut);
   });
 
-  testWidgets('web: pending recordings are counted at open and saved one '
+  _liveTest('web: pending recordings are counted at open and saved one '
       'tap each', (tester) async {
     final e = _Env('web');
     for (final i in [0, 1]) {
@@ -549,7 +575,7 @@ void main() {
     expect(e.state.recordingsPending, 0);
   });
 
-  testWidgets('stopping: flagged until the box answers, periodic polls are '
+  _liveTest('stopping: flagged until the box answers, periodic polls are '
       'skipped meanwhile', (tester) async {
     final e = _Env('android')..startAnswer = _startAnswer();
     await e.ctrl.startLive(kuliahId: 'c3', youtube: false);
@@ -568,7 +594,7 @@ void main() {
     expect(e.state.boxReachable, isTrue);
   });
 
-  testWidgets('a status poll that fails during our own stop is not an '
+  _liveTest('a status poll that fails during our own stop is not an '
       'outage', (tester) async {
     final e = _Env('android')..startAnswer = _startAnswer();
     await e.ctrl.startLive(kuliahId: 'c3', youtube: false);
@@ -581,7 +607,7 @@ void main() {
     expect(e.log, contains('POST /api/live/stop'));
   });
 
-  testWidgets('outside a stop a failing poll still marks the box '
+  _liveTest('outside a stop a failing poll still marks the box '
       'unreachable', (tester) async {
     final e = _Env('android')..startAnswer = _startAnswer();
     await e.ctrl.startLive(kuliahId: 'c3', youtube: false);
@@ -590,7 +616,7 @@ void main() {
     expect(e.state.boxReachable, isFalse);
   });
 
-  testWidgets('a live the box ended is reconciled: publisher stopped, state '
+  _liveTest('a live the box ended is reconciled: publisher stopped, state '
       'cleared, notice shown, no stop POST', (tester) async {
     final e = _Env('android');
     await e.ctrl.startLive(kuliahId: null, youtube: false);
@@ -599,12 +625,12 @@ void main() {
     await e.ctrl.pollOnce();
     expect(e.state.sessionId, isNull);
     expect(e.pub.stops, 1);
-    expect(e.state.notice, 'Siaran telah dihentikan oleh kotak.');
+    expect(e.state.notice, 'Siaran ditamatkan oleh MAXCOM.');
     expect(e.ctrl.holdsTargets, isFalse);
     expect(e.log, isNot(contains('POST /api/live/stop')));
   });
 
-  testWidgets('a different session id on the box also ends our live', (
+  _liveTest('a different session id on the box also ends our live', (
     tester,
   ) async {
     final e = _Env('android');
@@ -612,11 +638,11 @@ void main() {
     e.status = _status(session: 'other');
     await e.ctrl.pollOnce();
     expect(e.state.sessionId, isNull);
-    expect(e.state.notice, 'Siaran telah dihentikan oleh kotak.');
+    expect(e.state.notice, 'Siaran ditamatkan oleh MAXCOM.');
     expect(e.log, isNot(contains('POST /api/live/stop')));
   });
 
-  testWidgets('a publisher whose stop throws still gets the box stop', (
+  _liveTest('a publisher whose stop throws still gets the box stop', (
     tester,
   ) async {
     final e = _Env('android', throwingStop: true);
@@ -625,6 +651,186 @@ void main() {
     expect(e.log, contains('POST /api/live/stop'));
     expect(e.state.sessionId, isNull);
     expect(e.state.stopping, isFalse);
+  });
+
+  _liveTest('[L2] a stop that cannot reach the box keeps the session, says so '
+      'and the retry stops it when the box is back', (tester) async {
+    final e = _Env('android');
+    await e.ctrl.startLive(kuliahId: null, youtube: false);
+    e.status = _status(session: 's1');
+    expect(e.state.sessionId, 's1');
+    e.away = true;
+    await e.ctrl.stopLive();
+    expect(e.state.sessionId, 's1', reason: 'the box still has the live');
+    expect(e.state.stopFailed, isTrue);
+    expect(e.state.stopping, isFalse);
+    expect(e.state.notice, 'Siaran belum berhenti. Cuba lagi.');
+    expect(e.pub.stops, 1, reason: 'the phone side is over');
+    // The box answers again: the next try (every 5 s) ends it.
+    e.away = false;
+    await tester.pump(const Duration(seconds: 5));
+    await _drain(tester);
+    expect(e.log, contains('POST /api/live/stop'));
+    expect(e.state.sessionId, isNull);
+    expect(e.state.stopFailed, isFalse);
+    expect(e.state.notice, isNull);
+  });
+
+  _liveTest('[L2] the retry keeps trying every 5 s while the box is away and '
+      'the manual retry works at once', (tester) async {
+    final e = _Env('android');
+    await e.ctrl.startLive(kuliahId: null, youtube: false);
+    e.status = _status(session: 's1');
+    e.away = true;
+    await e.ctrl.stopLive();
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(seconds: 5));
+      await _drain(tester);
+      expect(e.state.sessionId, 's1');
+      expect(e.state.stopFailed, isTrue);
+    }
+    e.away = false;
+    await e.ctrl.pollOnce(); // the heartbeat that finds the box again
+    await e.ctrl.retryStop();
+    expect(e.state.sessionId, isNull);
+    expect(e.state.stopFailed, isFalse);
+    final stops = e.log.where((l) => l == 'POST /api/live/stop').length;
+    await tester.pump(const Duration(seconds: 30));
+    await _drain(tester);
+    expect(
+      e.log.where((l) => l == 'POST /api/live/stop').length,
+      stops,
+      reason: 'no more tries once stopped',
+    );
+  });
+
+  _liveTest('[L2] a stop the box refuses with a coded 5xx also stays; a 404 '
+      'for an unknown session ends it', (tester) async {
+    final e = _Env('android');
+    await e.ctrl.startLive(kuliahId: null, youtube: false);
+    e.stopStatus = 503;
+    await e.ctrl.stopLive();
+    expect(e.state.sessionId, 's1');
+    expect(e.state.stopFailed, isTrue);
+    e.stopStatus = 404;
+    await e.ctrl.retryStop();
+    expect(e.state.sessionId, isNull, reason: 'the box has no such live');
+    expect(e.state.stopFailed, isFalse);
+  });
+
+  _liveTest('[Q5] 401, 403, 429 and 5xx keep the session retrying; 409 '
+      'no_session and 404 end it', (tester) async {
+    final e = _Env('android');
+    await e.ctrl.startLive(kuliahId: null, youtube: false);
+    for (final st in [401, 403, 429, 500]) {
+      e.stopStatus = st;
+      e.stopCode = st == 403 ? 'not_owner' : null;
+      await e.ctrl.stopLive();
+      expect(e.state.sessionId, 's1', reason: 'status $st');
+      expect(e.state.stopFailed, isTrue, reason: 'status $st');
+    }
+    e.stopStatus = 409;
+    e.stopCode = 'live_busy';
+    await e.ctrl.retryStop();
+    expect(e.state.sessionId, 's1', reason: 'an unrelated 409 is not ended');
+    e.stopCode = 'no_session';
+    await e.ctrl.retryStop();
+    expect(e.state.sessionId, isNull);
+    expect(e.state.stopFailed, isFalse);
+  });
+
+  _liveTest('[L2] a status poll that shows no session ends a stop that was '
+      'waiting to be retried', (tester) async {
+    final e = _Env('android');
+    await e.ctrl.startLive(kuliahId: null, youtube: false);
+    e.away = true;
+    await e.ctrl.stopLive();
+    e.away = false;
+    e.status = _status();
+    await e.ctrl.pollOnce();
+    expect(e.state.sessionId, isNull);
+    expect(e.state.stopFailed, isFalse);
+  });
+
+  _liveTest('[L3] the heartbeat keeps coming after the page is left while a '
+      'session is open, and stops once the live ends', (tester) async {
+    final e = _Env('android');
+    e.ctrl.attach();
+    await e.ctrl.startLive(kuliahId: null, youtube: false);
+    e.status = _status(session: 's1');
+    e.ctrl.detach();
+    int polls() => e.log.where((l) => l == 'GET /api/live/status').length;
+    final before = polls();
+    await tester.pump(const Duration(seconds: 2));
+    await _drain(tester);
+    await tester.pump(const Duration(seconds: 2));
+    await _drain(tester);
+    expect(polls(), before + 2, reason: 'the page is gone, the live is not');
+    expect(e.ctrl.polling, isTrue);
+    e.status = _status();
+    await tester.pump(const Duration(seconds: 2));
+    await _drain(tester);
+    expect(e.state.sessionId, isNull);
+    final after = polls();
+    await tester.pump(const Duration(seconds: 10));
+    await _drain(tester);
+    expect(polls(), after, reason: 'no live, no page, no heartbeat');
+    expect(e.ctrl.polling, isFalse);
+  });
+
+  _liveTest('[L3] leaving the page during a live is asked once per live', (
+    tester,
+  ) async {
+    final e = _Env('android');
+    e.ctrl.attach();
+    await e.ctrl.startLive(kuliahId: null, youtube: false);
+    expect(e.ctrl.takeLeaveReminder(), isFalse, reason: 'still on the page');
+    e.ctrl.detach();
+    expect(e.ctrl.takeLeaveReminder(), isTrue);
+    expect(e.ctrl.takeLeaveReminder(), isFalse, reason: 'once');
+  });
+
+  _liveTest('[L6] a YouTube leg lost because the cloud is unreachable says '
+      'so, not that YouTube refused', (tester) async {
+    final e = _Env('android')..startAnswer = _startAnswer(ytVia: 'device');
+    e.status = _status(
+      session: 's1',
+      warnings: ['cloud_unreachable'],
+    );
+    await e.ctrl.startLive(kuliahId: 'c3', youtube: true);
+    await e.ctrl.pollOnce();
+    e.ctrl.giveUpYoutubeForTest();
+    expect(e.state.notice, 'YouTube: awan tidak dapat dihubungi');
+    expect(e.state.notice, isNot('YouTube menolak permintaan.'));
+  });
+
+  _liveTest('[L7] the ended-by-box and stop notices follow the app language', (
+    tester,
+  ) async {
+    final e = _Env('android');
+    await e.container.read(appLangProvider.notifier).set(AppLang.en);
+    await e.ctrl.startLive(kuliahId: null, youtube: false);
+    e.status = _status();
+    await e.ctrl.pollOnce();
+    expect(e.state.notice, 'The broadcast was ended by the box.');
+    await e.ctrl.startLive(kuliahId: null, youtube: false);
+    e.away = true;
+    await e.ctrl.stopLive();
+    expect(e.state.notice, 'The broadcast has not stopped yet. Try again.');
+  });
+
+  _liveTest('[L7] a YouTube sign-in refused by a code reads in English', (
+    tester,
+  ) async {
+    final e = _Env('android');
+    await e.container.read(appLangProvider.notifier).set(AppLang.en);
+    e.signinStatus = 409;
+    e.signinError = {
+      'errors': ['Siaran langsung sedang berjalan'],
+      'code': 'live_busy',
+    };
+    await e.ctrl.signIn();
+    expect(e.state.notice, 'A live broadcast is running. Try again when it ends.');
   });
 
   test('each box warning code maps to its BM text', () {
@@ -651,7 +857,7 @@ void main() {
     expect(LiveController.warningText('zzz'), isNull);
   });
 
-  testWidgets('a quota warning at start shows the quota text', (tester) async {
+  _liveTest('a quota warning at start shows the quota text', (tester) async {
     final e = _Env('web')
       ..startAnswer = {
         ..._startAnswer(),
@@ -662,7 +868,7 @@ void main() {
     expect(e.state.notice, 'Kuota YouTube hari ini telah habis.');
   });
 
-  testWidgets('429 live_rate shows the rate text', (tester) async {
+  _liveTest('429 live_rate shows the rate text', (tester) async {
     final e = _Env('web')
       ..startStatus = 429
       ..startError = {'errors': <String>[], 'code': 'live_rate'};

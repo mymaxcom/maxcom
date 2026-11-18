@@ -43,7 +43,7 @@ function rig(): { db: DatabaseSync; ctx: ApplyCtx } {
   dirs.push(dir);
   const db = openDb(join(dir, 't.db'));
   dbs.push(db);
-  return { db, ctx: { now: NOW, origin: 'app', actor: 'user:u1', dataDir: dir } };
+  return { db, ctx: { surauId: 'sdm', now: NOW, origin: 'app', actor: 'user:u1', dataDir: dir } };
 }
 const rows = (db: DatabaseSync) => db.prepare("SELECT * FROM change_log WHERE entity = 'recording/deleted'").all();
 

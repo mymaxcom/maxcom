@@ -35,7 +35,7 @@ afterEach(async () => {
 async function enrolDevice(app: FastifyInstance) {
   const { db, boxId } = app.surau;
   const ip = `10.66.0.${++n}`;
-  const user = createUser(db, { name: `Orang ${n}`, roles: ['ajk'] }, 'test');
+  const user = createUser(db, { name: `Orang ${n}`, roles: ['ajk'] }, 'test', 'sdm');
   const { code } = beginEnrolment(db, { userId: user.id, deviceName: 'Tel' }, 'test');
   const keys = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const jwk = await webcrypto.subtle.exportKey('jwk', keys.publicKey);

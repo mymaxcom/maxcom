@@ -415,7 +415,7 @@ class _SurahField extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
+          padding: const EdgeInsetsDirectional.fromSTEB(18, 14, 12, 14),
           child: Row(
             children: [
               Expanded(

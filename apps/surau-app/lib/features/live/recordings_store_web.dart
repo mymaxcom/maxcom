@@ -54,10 +54,10 @@ class IndexedDbRecordingsStore implements RecordingsStore {
       c.complete(req.result as web.IDBDatabase);
     }).toJS;
     req.onerror = ((web.Event _) {
-      c.completeError(StateError('IndexedDB tidak dapat dibuka'));
+      c.completeError(StateError('IndexedDB tidak dapat dibuka')); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }).toJS;
     req.onblocked = ((web.Event _) {
-      c.completeError(StateError('IndexedDB tidak dapat dibuka'));
+      c.completeError(StateError('IndexedDB tidak dapat dibuka')); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }).toJS;
     return c.future.catchError((Object e) {
       _dbFuture = null; // try again next time
@@ -69,7 +69,7 @@ class IndexedDbRecordingsStore implements RecordingsStore {
     final c = Completer<JSAny?>();
     r.onsuccess = ((web.Event _) => c.complete(r.result)).toJS;
     r.onerror = ((web.Event _) => c.completeError(
-      StateError('IndexedDB gagal'),
+      StateError('IndexedDB gagal'), // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     )).toJS;
     return c.future;
   }
@@ -78,10 +78,10 @@ class IndexedDbRecordingsStore implements RecordingsStore {
     final c = Completer<void>();
     tx.oncomplete = ((web.Event _) => c.complete()).toJS;
     tx.onerror = ((web.Event _) => c.completeError(
-      StateError('IndexedDB gagal'),
+      StateError('IndexedDB gagal'), // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     )).toJS;
     tx.onabort = ((web.Event _) => c.completeError(
-      StateError('IndexedDB tidak cukup ruang'),
+      StateError('IndexedDB tidak cukup ruang'), // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     )).toJS;
     return c.future;
   }

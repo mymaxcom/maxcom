@@ -8,6 +8,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:surau_app/app/theme.dart';
@@ -17,7 +18,10 @@ import 'package:surau_app/features/unlock/biometric_pin.dart';
 import 'package:surau_app/features/unlock/pin_pad.dart';
 import 'package:surau_app/features/unlock/session.dart';
 import 'package:surau_app/features/unlock/unlock_flow.dart';
+import 'package:surau_app/features/unlock/offline_vault.dart' show OfflineVault;
 import 'package:surau_app/features/unlock/unlock_screen.dart';
+import 'package:surau_app/store/local_store.dart';
+import 'package:surau_app/sync/sync_providers.dart' show localStoreProvider, revokedProvider;
 import 'package:surau_app/l10n/generated/s.dart';
 
 import '../../golden_sizes.dart';
@@ -67,8 +71,9 @@ Widget screen(
   void Function(SessionDto)? onUnlocked,
   VoidCallback? onEnrolAgain,
   bool cachedInfo = true,
+  List<Override> overrides = const [],
 }) {
-  container = ProviderContainer();
+  container = ProviderContainer(overrides: overrides);
   addTearDown(container.dispose);
   opener = FakeOpener();
   final enrolled = fixtureBox(roles: roles, appLock: boxAppLock);
@@ -323,6 +328,23 @@ void main() {
     expect(box.seen.where((r) => r.url.path == '/api/auth/unlock').length, 1);
   });
 
+  testWidgets('[A7] 429: the wait in minutes, nothing is re-sent, no offline door',
+      (tester) async {
+    final box = boxAnswering(
+      429,
+      'Terlalu banyak percubaan',
+      headers: {'retry-after': '600'},
+    );
+    await pumpAtSize(tester, screen(flowFor(box)), GoldenSize.phone);
+    await typeDigits(tester, '280419');
+    expect(find.text('Terlalu banyak percubaan. Cuba lagi dalam 10 minit'), findsOneWidget);
+    expect(find.text('MAXCOM tidak dapat dihubungi'), findsNothing);
+    // The pad is dim for the wait, and nothing is sent by itself later.
+    await typeDigits(tester, '280419');
+    await tester.pump(const Duration(seconds: 40));
+    expect(box.seen.where((r) => r.url.path == '/api/auth/unlock').length, 1);
+  });
+
   testWidgets(
     '409: asks for a new PIN twice, refuses a weak one, sends newPin',
     (tester) async {
@@ -390,6 +412,33 @@ void main() {
       expect(again, 1);
     },
   );
+
+  testWidgets('[K2] a device_revoked answer on the unlock screen wipes the copy and the vault', (
+    tester,
+  ) async {
+    final store = MemoryLocalStore();
+    await store.putDoc('notes', 'n1', {'x': 1});
+    final box = FakeBox((r) async {
+      if (r.url.path != '/api/auth/unlock') return happyBox(r);
+      return jsonResponse(401, {
+        'errors': ['Peranti telah dibatalkan'],
+        'code': 'device_revoked',
+      });
+    });
+    await pumpAtSize(
+      tester,
+      screen(
+        flowFor(box),
+        overrides: [localStoreProvider.overrideWith((ref) async => store)],
+      ),
+      GoldenSize.phone,
+    );
+    await typeDigits(tester, '280419');
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(await store.getDoc('notes', 'n1'), isNull);
+    expect(await OfflineVault(store: store, now: fixedNow, iterations: 1000, minIterations: 1000).isRevoked(), isTrue);
+    expect(container.read(revokedProvider), isTrue);
+  });
 
   testWidgets('missing device key: no request, Daftar semula offered', (
     tester,

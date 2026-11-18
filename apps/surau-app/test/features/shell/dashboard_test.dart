@@ -1,20 +1,34 @@
-// The shell and the home screen: the surau and the person lead, the menu
-// is the union of the roles, the status board reads the box's health,
+// The shell and the home screen (operator round 1): the surau and the
+// person lead, the menu is the union of the roles, "Perlu perhatian" only
+// when something needs doing, no "Tugas biasa", the status board folded
+// under "Butiran sistem" (folded every time), two columns on an iPad,
 // warnings are gold, the person's sheet reaches help and the device page,
 // a refused page sends the person home with the notice; the certificate
 // is never mentioned unless its automatic renewal is failing close to
 // expiry (admin only). Goldens: dashboard, dashboard_three_roles,
-// dashboard_offline, dashboard_tech_check, menu, forbidden.
+// dashboard_offline, dashboard_tech_check, dashboard_en, dashboard_ar,
+// dashboard_system_open, menu, forbidden.
+
+import 'dart:io';
 
 import 'package:flutter/material.dart'
-    show BackButton, Icons, RichText, Text, ValueKey;
+    show BackButton, Icons, RichText, Size, Text, ValueKey;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/app/shell.dart';
+import 'package:surau_app/features/live/fake_publisher.dart';
+import 'package:surau_app/features/live/live_screen.dart' show livePublisherProvider;
 
 import '../../golden_sizes.dart';
 import '../fakes.dart' show jsonResponse;
 import 'harness.dart';
+
+/// Opens "Butiran sistem" (folded whenever the dashboard is built).
+Future<void> openSystem(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('dash-system-toggle')));
+  await settle(tester);
+}
 
 void main() {
   testWidgets('one role: surau, greeting, role, health rows, three entries', (
@@ -35,8 +49,19 @@ void main() {
       reason: 'the box is MAXCOM',
     );
 
+    expect(find.text('Tugas biasa'), findsNothing, reason: 'removed by the operator');
+    expect(find.text('Perlu perhatian'), findsNothing, reason: 'all is well');
+    expect(find.text('Butiran sistem'), findsOneWidget);
+    expect(find.text('Dihubungi 10:30 malam'), findsOneWidget, reason: 'under the fold title');
+    expect(find.text('Data waktu solat'), findsNothing, reason: 'folded');
+    expect(find.text('Lihat skrin TV'), findsOneWidget);
+    expect(find.text('Di skrin TV sekarang'), findsOneWidget);
+    await expectGoldens(tester, h.app, 'dashboard');
+
+    await pumpAtSize(tester, h.app, GoldenSize.phone);
+    await openSystem(tester);
     expect(find.text('Keadaan MAXCOM'), findsOneWidget);
-    expect(find.text('Dihubungi 10:30 malam'), findsOneWidget);
+    expect(find.text('Melalui MAXCOM di surau'), findsOneWidget);
     expect(find.text('Data waktu solat'), findsOneWidget);
     expect(find.text('212 hari lagi'), findsOneWidget);
     // Certificate renewal is automatic: no row, no countdown, no word
@@ -47,7 +72,7 @@ void main() {
     expect(find.text('Pengguna dikunci'), findsOneWidget);
     expect(find.text('Versi data'), findsNothing, reason: 'admin only');
     expect(find.text('17'), findsNothing);
-    expect(find.text('Pratonton skrin'), findsOneWidget);
+    expect(find.text('Versi aplikasi'), findsOneWidget);
     expect(
       find.text('Muat naik data waktu solat tahun baharu sebelum habis.'),
       findsNothing,
@@ -59,7 +84,7 @@ void main() {
       reason: 'an AJK never asks',
     );
 
-    for (final label in ['Papan pemuka', 'Kandungan', 'Tetapan']) {
+    for (final label in ['Papan pemuka', 'Kandungan', 'Konfigurasi']) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
     for (final label in [
@@ -71,8 +96,6 @@ void main() {
       expect(find.text(label), findsNothing, reason: label);
     }
     expect(h.location, '/');
-
-    await expectGoldens(tester, h.app, 'dashboard');
   });
 
   testWidgets(
@@ -173,29 +196,33 @@ void main() {
         features: const {'finance': true},
       );
       expect(find.text('Pentadbir, Bendahari dan Media'), findsOneWidget);
-      expect(
-        find.text('Versi data'),
-        findsOneWidget,
-        reason: 'the admin sees it',
-      );
-      expect(find.text('17'), findsOneWidget);
       for (final label in ['Papan pemuka', 'Kewangan', 'Kandungan', 'Lagi']) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
       expect(
-        find.text('Tetapan'),
+        find.text('Konfigurasi'),
         findsNothing,
         reason: 'behind Lagi on a phone',
       );
 
       await expectGoldens(tester, h.app, 'dashboard_three_roles');
 
+      await pumpAtSize(tester, h.app, GoldenSize.phone);
+      await openSystem(tester);
+      expect(
+        find.text('Versi data'),
+        findsOneWidget,
+        reason: 'the admin sees it',
+      );
+      expect(find.text('17'), findsOneWidget);
+      await expectGoldens(tester, h.app, 'dashboard_system_open', sizes: const [GoldenSize.phone]);
+
       // On the iPad the rail shows every entry.
       await pumpAtSize(tester, h.app, GoldenSize.ipadMiniLandscape);
       for (final label in [
         'Papan pemuka',
         'Kandungan',
-        'Tetapan',
+        'Konfigurasi',
         'Pengguna & peranti',
         'Log perubahan',
         'Siaran langsung',
@@ -226,12 +253,15 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Tidak dapat dihubungi'), findsOneWidget);
+    expect(find.bySemanticsLabel('MAXCOM di surau: tidak dapat dihubungi'), findsOneWidget);
+    await expectGoldens(tester, h.app, 'dashboard_offline');
+    await pumpAtSize(tester, h.app, GoldenSize.phone);
+    await openSystem(tester);
     expect(
       find.text('212 hari lagi'),
       findsOneWidget,
       reason: 'last data still shown',
     );
-    await expectGoldens(tester, h.app, 'dashboard_offline');
   });
 
   testWidgets(
@@ -252,11 +282,13 @@ void main() {
           'lockedUsers': 2,
         },
       );
-      expect(find.text('12 hari lagi'), findsOneWidget);
+      expect(find.text('Perlu perhatian'), findsOneWidget);
+      expect(find.text('Data waktu solat tinggal 12 hari'), findsOneWidget);
       expect(
         find.text('Muat naik data waktu solat tahun baharu sebelum habis.'),
         findsOneWidget,
       );
+      expect(find.text('2 pengguna dikunci'), findsOneWidget);
       expect(
         find.textContaining('Import'),
         findsNothing,
@@ -268,6 +300,8 @@ void main() {
         reason: 'no certificate countdown',
       );
       expect(find.textContaining('ijil'), findsNothing);
+      await openSystem(tester);
+      expect(find.text('12 hari lagi'), findsOneWidget);
       expect(find.text('2'), findsOneWidget);
       // The admin's app did ask the box; the 404 of a box without the route
       // (or any other error) reads as nothing to say.
@@ -317,8 +351,10 @@ void main() {
         'lastAttemptAt': null,
         'lastOk': null,
       });
-      expect(find.text('20 hari lagi'), findsOneWidget);
       expect(find.text(hint), findsNothing);
+      expect(find.text('Perlu perhatian'), findsNothing);
+      await openSystem(tester);
+      expect(find.text('20 hari lagi'), findsOneWidget);
     });
 
     testWidgets('on and healthy: under 14 days is flagged', (tester) async {
@@ -366,13 +402,31 @@ void main() {
       roles: const ['admin'],
       health: {...healthyJson, 'appLock': false},
     );
+    await openSystem(tester);
     expect(find.byKey(const ValueKey('status-app-lock')), findsOneWidget);
     expect(find.text('Kunci aplikasi'), findsOneWidget);
     expect(find.text('Dimatikan'), findsOneWidget);
   });
 
+  testWidgets('[A11] a Pentadbir MAXCOM sees the data-version and app-lock rows', (tester) async {
+    await pumpShell(
+      tester,
+      roles: const ['superadmin'],
+      health: {...healthyJson, 'appLock': true},
+    );
+    await openSystem(tester);
+    expect(find.text('Versi data'), findsOneWidget);
+    expect(find.byKey(const ValueKey('status-app-lock')), findsOneWidget);
+  });
+
+  test('[A11] the dashboard asks by permission, never by the name of a role', () {
+    final src = File('lib/features/shell/dashboard_screen.dart').readAsStringSync();
+    expect(src.contains("roles.contains('admin')"), isFalse);
+  });
+
   testWidgets('no app lock row when health does not say', (tester) async {
     await pumpShell(tester, roles: const ['admin']);
+    await openSystem(tester);
     expect(find.byKey(const ValueKey('status-app-lock')), findsNothing);
   });
 
@@ -382,6 +436,7 @@ void main() {
       roles: const ['admin'],
       health: {'ok': true, 'version': 3},
     );
+    await openSystem(tester);
     expect(find.text('Belum diketahui'), findsNWidgets(2));
     expect(find.textContaining('ijil'), findsNothing);
     expect(find.text('Versi data'), findsOneWidget);
@@ -435,7 +490,7 @@ void main() {
         expect(find.text('Butiran teknikal'), findsOneWidget);
         expect(find.textContaining('ijil'), findsNothing, reason: 'folded');
         expect(
-          find.text('Keadaan MAXCOM'),
+          find.text('Butiran sistem'),
           findsOneWidget,
           reason: 'the board stays',
         );
@@ -553,7 +608,7 @@ void main() {
       );
       if (!wide) {
         for (final label in [
-          'Tetapan',
+          'Konfigurasi',
           'Pengguna & peranti',
           'Log perubahan',
           'Siaran langsung',
@@ -622,6 +677,7 @@ void main() {
     'the Data waktu solat row opens the import page for an admin and is plain for an AJK',
     (tester) async {
       final h = await pumpShell(tester, roles: const ['admin']);
+      await openSystem(tester);
       final row = find.byKey(const ValueKey('status-prayer-data'));
       expect(
         find.descendant(
@@ -636,6 +692,7 @@ void main() {
       expect(h.location, '/prayer-data');
 
       final ajk = await pumpShell(tester, roles: const ['ajk']);
+      await openSystem(tester);
       final plain = find.byKey(const ValueKey('status-prayer-data'));
       expect(
         find.descendant(
@@ -650,9 +707,9 @@ void main() {
     },
   );
 
-  testWidgets('the preview tile and the bar navigate', (tester) async {
-    final h = await pumpShell(tester, roles: const ['media']);
-    await tester.tap(find.text('Pratonton skrin'));
+  testWidgets('Lihat skrin TV and the bar navigate', (tester) async {
+    final h = await pumpShell(tester, roles: const ['live']);
+    await tester.tap(find.text('Lihat skrin TV'));
     await settle(tester);
     expect(h.location, '/preview');
     expect(find.text('Pratonton'), findsOneWidget);
@@ -662,6 +719,68 @@ void main() {
     await tester.tap(find.text('Papan pemuka'));
     await settle(tester);
     expect(h.location, '/');
+  });
+
+  testWidgets('Butiran sistem: folded, opens to the old board, folded again next time', (tester) async {
+    final h = await pumpShell(tester, roles: const ['admin']);
+    expect(find.byKey(const ValueKey('status-prayer-data')), findsNothing);
+    await openSystem(tester);
+    for (final label in ['Keadaan MAXCOM', 'Data waktu solat', 'Pengguna dikunci', 'Versi data']) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+    // Away and back: built again, folded again.
+    h.router.go('/settings');
+    await settle(tester);
+    h.router.go('/');
+    await settle(tester);
+    expect(find.byKey(const ValueKey('status-prayer-data')), findsNothing);
+    // A new start of the app: folded too (nothing remembered).
+    await pumpShell(tester, roles: const ['admin']);
+    expect(find.byKey(const ValueKey('status-prayer-data')), findsNothing);
+    expect(find.text('Butiran sistem'), findsOneWidget);
+  });
+
+  testWidgets('locked people need attention only for whoever can unlock them', (tester) async {
+    final h = await pumpShell(tester, roles: const ['admin'], health: {...healthyJson, 'lockedUsers': 1});
+    expect(find.text('1 pengguna dikunci'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('attention-locked')));
+    await settle(tester);
+    expect(h.location, '/users');
+
+    await pumpShell(tester, roles: const ['ajk'], health: {...healthyJson, 'lockedUsers': 1});
+    expect(find.text('Perlu perhatian'), findsNothing);
+  });
+
+  testWidgets('an iPad at 1024 x 768: two columns side by side', (tester) async {
+    final h = await pumpShell(tester, roles: const ['admin'], health: {...healthyJson, 'daysAhead': 12});
+    tester.view.physicalSize = const Size(1024, 768) * 2;
+    tester.view.devicePixelRatio = 2;
+    await tester.pumpWidget(h.app);
+    await settle(tester);
+    final start = tester.getRect(find.byKey(const ValueKey('dash-col-start')));
+    final end = tester.getRect(find.byKey(const ValueKey('dash-col-end')));
+    expect(end.left, greaterThan(start.right), reason: 'beside, not under');
+    expect((end.top - start.top).abs(), lessThan(1));
+    expect(find.descendant(of: find.byKey(const ValueKey('dash-col-start')), matching: find.text('Perlu perhatian')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('dash-col-end')), matching: find.text('Butiran sistem')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('English and Arabic', (tester) async {
+    for (final lang in [AppLang.en, AppLang.ar]) {
+      final h = await pumpShell(
+        tester,
+        roles: const ['admin', 'treasurer', 'media'],
+        features: const {'finance': true},
+        health: {...healthyJson, 'daysAhead': 12, 'lockedUsers': 1},
+        overrides: [
+          livePublisherProvider.overrideWithValue(FakePublisher()),
+          appLangStoreProvider.overrideWithValue(MemoryAppLangStore(lang)),
+        ],
+      );
+      expect(find.text(lang == AppLang.en ? 'System details' : 'تفاصيل النظام'), findsOneWidget);
+      await expectGoldens(tester, h.app, 'dashboard_${lang.code}', sizes: const [GoldenSize.phone]);
+    }
   });
 
   testWidgets('not enrolled: the app opens on enrolment', (tester) async {

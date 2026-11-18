@@ -48,7 +48,7 @@ export interface CardProps {
   startedAt: Date | null;
   /** The slot's length in seconds (the feature's `durationSeconds` under the `?card=` override). */
   durationSeconds: number;
-  /** Which part of a long hadis this slot shows (0-based); undefined for every other card. */
+  /** Which part of a long hadis this slot shows (0-based); a windowed tabung screen's showing number; else undefined. */
   page?: number;
   /**
    * A card whose whole content is one picture (posters) reports whether it is really on screen: false while
@@ -102,7 +102,9 @@ export function pickSlot(cv: ContentView, settings?: Settings): Pick | null {
     const inRotation = override === 'hadis' ? undefined : rotation.find((s) => s.feature === override);
     if (inRotation) {
       const live = current && current.slot.feature === override ? current.startedAt : null;
-      return { feature: override, itemId: inRotation.itemId, startedAt: live, durationSeconds: inRotation.durationSeconds };
+      // A tabung screen of many pages shows this showing's run of pages (Slot.page), as the rotation would.
+      const page = live && override === 'tabungCard' ? inRotation.page : undefined;
+      return { feature: override, itemId: inRotation.itemId, startedAt: live, durationSeconds: inRotation.durationSeconds, ...(page !== undefined ? { page } : {}) };
     }
     const itemId = firstItemId(content, override);
     return itemId === undefined

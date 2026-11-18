@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/store/local_store.dart';
+import 'package:surau_app/l10n/s_lookup.dart';
 import 'package:surau_app/sync/live_only.dart';
 import 'package:surau_app/sync/outbox.dart';
 
@@ -225,7 +226,7 @@ void main() {
 
     test('no dash or arrow in a label', () {
       for (final e in liveOnlyList) {
-        expect(e.label, isNot(matches(RegExp('[–—→]'))));
+        expect(e.label(sBm), isNot(matches(RegExp('[–—→]'))));
       }
     });
   });

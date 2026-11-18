@@ -16,7 +16,7 @@ import '../../box/box_client.dart';
 import '../../l10n/generated/s.dart';
 import '../../screens/widgets/box_read.dart';
 import '../../screens/widgets/pieces.dart';
-import '../labels_ms.dart';
+import '../labels.dart';
 import '../settings_repository.dart';
 import '../settings_widgets/chips_field.dart';
 import '../settings_widgets/field_meta.dart';
@@ -181,7 +181,7 @@ class _CloudFormState extends ConsumerState<_CloudForm> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = e.message;
+        _error = e.text(s);
       });
     } on SessionExpired {
       if (mounted) setState(() => _busy = false);
@@ -233,10 +233,10 @@ class _CloudFormState extends ConsumerState<_CloudForm> {
             ChipsField(
               path: 'dirtyCheckSeconds',
               name: 'dirtyCheckSeconds',
-              label: settingLabelMs('dirtyCheckSeconds'),
+              label: settingLabel('dirtyCheckSeconds', appLangOf(context)),
               value: _dirtyCheck,
               meta: fieldMeta(cloudSyncKey, 'dirtyCheckSeconds')!,
-              help: settingHelpFor('dirtyCheckSeconds', en: Localizations.localeOf(context).languageCode == 'en'),
+              help: settingHelp('dirtyCheckSeconds', appLangOf(context)),
               readOnly: ro || _busy,
               padding: const EdgeInsets.symmetric(vertical: 10),
               onChanged: (v) => setState(() => _dirtyCheck = v as int),
@@ -248,7 +248,7 @@ class _CloudFormState extends ConsumerState<_CloudForm> {
             if (!ro) ...[
               const SizedBox(height: 16),
               Align(
-                alignment: Alignment.centerRight,
+                alignment: AlignmentDirectional.centerEnd,
                 child: FilledButton(
                   onPressed: _busy || !_dirty ? null : _save,
                   child: Text(s.actionSave),
@@ -286,7 +286,7 @@ class _StatusCard extends ConsumerWidget {
     final today = deps.toLocal(deps.now());
     String when(DateTime? t) => t == null
         ? s.syncSettingsNone
-        : stampWords(deps.toLocal(t), today: today);
+        : stampWords(deps.toLocal(t), today: today, lang: appLangOf(context));
 
     Widget row(String label, Widget value) => Padding(
       padding: const EdgeInsets.fromLTRB(20, 13, 20, 13),
@@ -303,7 +303,7 @@ class _StatusCard extends ConsumerWidget {
           const SizedBox(width: 12),
           Expanded(
             flex: 6,
-            child: Align(alignment: Alignment.centerRight, child: value),
+            child: Align(alignment: AlignmentDirectional.centerEnd, child: value),
           ),
         ],
       ),

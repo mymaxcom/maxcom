@@ -11,6 +11,8 @@ describe('tests never reach the MAXCOM production cloud', () => {
     expect(isBlockedUnderTest('https://api.mymaxcom.my', t)).toBe(true);
     expect(isBlockedUnderTest('https://mymaxcom.my', t)).toBe(true);
     expect(isBlockedUnderTest('https://x.api.MYMAXCOM.my', t)).toBe(true);
+    expect(isBlockedUnderTest('https://api.mymaxcom.my.', t)).toBe(true);
+    expect(isBlockedUnderTest('https://MYMAXCOM.my./x', t)).toBe(true);
     expect(isBlockedUnderTest('https://cloud.example', t)).toBe(false);
     expect(isBlockedUnderTest('https://notmymaxcom.my', t)).toBe(false);
   });

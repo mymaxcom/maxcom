@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/features/common/roles.dart';
 import 'package:surau_app/features/common/time_words.dart';
 import 'package:surau_app/l10n/generated/s.dart';
@@ -81,5 +82,19 @@ void main() {
       whenWords(DateTime(2027, 3, 1, 9, 0), today: today),
       '9:00 pagi, 1 Mac',
     );
+  });
+
+  test('[C8] time words take the app language (BM stays the default)', () {
+    final t = DateTime(2026, 11, 4, 22, 45);
+    expect(timeOfDayWords(t, lang: AppLang.ms), '10:45 malam');
+    expect(timeOfDayWords(t, lang: AppLang.en), '10:45 pm');
+    expect(timeOfDayWords(DateTime(2026, 11, 4, 8, 0), lang: AppLang.en), '8:00 am');
+    expect(timeOfDayWords(t, lang: AppLang.ar), '10:45 مساءً');
+    final today = DateTime(2026, 11, 4, 20, 0);
+    expect(whenWords(DateTime(2026, 11, 5, 0, 10), today: today, lang: AppLang.en), '12:10 am tomorrow');
+    expect(whenWords(DateTime(2026, 11, 12, 9, 0), today: today, lang: AppLang.en), '9:00 am, 12 Nov');
+    expect(whenWords(DateTime(2027, 3, 1, 9, 0), today: today, lang: AppLang.en), '9:00 am, 1 Mar');
+    expect(whenWords(DateTime(2027, 3, 1, 9, 0), today: today, lang: AppLang.ar), contains('1 '));
+    expect(whenWords(DateTime(2026, 11, 5, 0, 10), today: today, lang: AppLang.ar), contains('غدًا'));
   });
 }

@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../common/device_name.dart';
 import '../../app/theme.dart';
 import '../../box/box_qr.dart';
 import '../../l10n/generated/s.dart';
@@ -47,6 +48,7 @@ String? normalisedRecoveryCode(String typed) {
 class RecoveryScreen extends StatefulWidget {
   const RecoveryScreen({
     super.key,
+    this.actions = const [],
     required this.flow,
     required this.qrText,
     required this.defaultPhoneName,
@@ -55,6 +57,10 @@ class RecoveryScreen extends StatefulWidget {
     required this.onScanAnother,
     this.toLocal = _local,
   });
+
+  /// The top bar's trailing widgets (the router puts the language switch
+  /// there; the screen itself needs no providers).
+  final List<Widget> actions;
 
   final SetupFlow flow;
   final String qrText;
@@ -155,7 +161,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
         _inspection!,
         recoveryCode: code!,
         adminName: _admin.text,
-        deviceName: _phone.text,
+        deviceName: cleanDeviceName(_phone.text),
         pin: _pin.text,
       );
       if (!mounted) return;
@@ -193,7 +199,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
   Widget build(BuildContext context) {
     final s = S.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(s.recoverySubmit)),
+      appBar: AppBar(title: Text(s.recoverySubmit), actions: widget.actions),
       body: SurauTheme.page(children: [_body(context, s)]),
     );
   }

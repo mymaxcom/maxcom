@@ -80,7 +80,7 @@ describe('bootstrap CLI', () => {
 
     const d = openDb(db);
     try {
-      const users = listUsers(d);
+      const users = listUsers(d, 'sdm');
       expect(users).toHaveLength(1);
       expect(users[0]!.roles).toEqual(['admin']);
       expect(users[0]!.createdBy).toBe('local');
@@ -104,7 +104,7 @@ describe('bootstrap CLI', () => {
     expect(again.stdout).toBe('');
     const d = openDb(db);
     try {
-      expect(listUsers(d)).toHaveLength(1);
+      expect(listUsers(d, 'sdm')).toHaveLength(1);
     } finally {
       d.close();
     }
@@ -127,7 +127,7 @@ describe('bootstrap CLI', () => {
     expect(again.stdout).toContain('Satu');
     const d = openDb(db);
     try {
-      expect(listUsers(d)).toHaveLength(1);
+      expect(listUsers(d, 'sdm')).toHaveLength(1);
       const done = completeEnrolment(d, { code: code2, publicJwk: publicJwk(), platform: 'android' }, '127.0.0.1');
       expect(done.roles).toEqual(['admin']);
       const log = d.prepare("SELECT actor, after_json FROM change_log WHERE entity = 'users' ORDER BY id DESC LIMIT 1").get();
@@ -147,7 +147,7 @@ describe('bootstrap CLI', () => {
     expect(wrong.stderr).toMatch(/--name/);
     const d = openDb(db);
     try {
-      expect(listUsers(d)).toHaveLength(1);
+      expect(listUsers(d, 'sdm')).toHaveLength(1);
     } finally {
       d.close();
     }
@@ -162,12 +162,12 @@ describe('bootstrap CLI', () => {
     const code = codeOf(forced.stdout);
     const d = openDb(db);
     try {
-      expect(listUsers(d)).toHaveLength(1);
-      expect(listDevices(d)).toHaveLength(1);
-      expect(listDevices(d)[0]!.revokedAt).toBeNull();
+      expect(listUsers(d, 'sdm')).toHaveLength(1);
+      expect(listDevices(d, undefined, undefined, 'sdm')).toHaveLength(1);
+      expect(listDevices(d, undefined, undefined, 'sdm')[0]!.revokedAt).toBeNull();
       const done = completeEnrolment(d, { code, publicJwk: publicJwk(), platform: 'android' }, '127.0.0.1');
       expect(done.roles).toEqual(['admin']);
-      expect(listDevices(d)).toHaveLength(2);
+      expect(listDevices(d, undefined, undefined, 'sdm')).toHaveLength(2);
     } finally {
       d.close();
     }
@@ -229,7 +229,7 @@ describe('users CLI', () => {
     const version = (): number => {
       const d = openDb(db);
       try {
-        return getVersion(d);
+        return getVersion(d, 'sdm');
       } finally {
         d.close();
       }
@@ -250,7 +250,7 @@ describe('users CLI', () => {
     expect(cli(BOOTSTRAP, ['--db', db, '--name', 'Admin']).code).toBe(0);
     const d = openDb(db);
     try {
-      expect(getVersion(d)).toBeGreaterThan(0);
+      expect(getVersion(d, 'sdm')).toBeGreaterThan(0);
     } finally {
       d.close();
     }
@@ -262,7 +262,7 @@ describe('users CLI', () => {
     expect(r.code).toBe(0);
     const d = openDb(db);
     try {
-      expect(listDevices(d, undefined, { includeRevoked: true })[0]!.revokedAt).not.toBeNull();
+      expect(listDevices(d, undefined, { includeRevoked: true }, 'sdm')[0]!.revokedAt).not.toBeNull();
       const row = d.prepare("SELECT actor FROM change_log WHERE entity = 'devices' ORDER BY id DESC LIMIT 1").get();
       expect(row?.actor).toBe('local');
     } finally {
@@ -323,7 +323,7 @@ describe('users CLI', () => {
     const dChk = openDb(db2);
     try {
       expect(getAuthUser(dChk, u2)!.pinHash).not.toBeNull();
-      expect(listDevices(dChk, u2)).toHaveLength(1);
+      expect(listDevices(dChk, u2, undefined, 'sdm')).toHaveLength(1);
     } finally {
       dChk.close();
     }
@@ -334,7 +334,7 @@ describe('users CLI', () => {
     const d = openDb(db);
     try {
       expect(getAuthUser(d, userId)!.pinHash).toBeNull();
-      const active = listDevices(d, userId).map((x) => x.id);
+      const active = listDevices(d, userId, undefined, 'sdm').map((x) => x.id);
       expect(active).toEqual([deviceId]);
     } finally {
       d.close();
@@ -358,7 +358,7 @@ describe('users CLI', () => {
       expect(JSON.stringify(log)).not.toMatch(/scrypt|280419/);
       const done = completeEnrolment(d, { code, publicJwk: publicJwk(), platform: 'android' }, '127.0.0.1');
       expect(done.userId).toBe(userId);
-      expect(listDevices(d)).toHaveLength(2);
+      expect(listDevices(d, undefined, undefined, 'sdm')).toHaveLength(2);
     } finally {
       d.close();
     }
@@ -403,10 +403,10 @@ describe('bootstrap on the setup core and the Plan 14 dev commands', () => {
     const d = openDb(db);
     try {
       expect(verifyRecoveryCode(d, recovery)).toBe(true);
-      expect(getSettings(d).surauInfo.name).toBe('Surau Al-Hidayah');
+      expect(getSettings(d, 'sdm').surauInfo.name).toBe('Surau Al-Hidayah');
       expect(d.prepare("SELECT value FROM meta WHERE key = 'box_name'").get()?.value).toBe('MAXCOM Dewan Utama');
       expect(String(d.prepare("SELECT value FROM meta WHERE key = 'surau_id'").get()?.value)).toMatch(/^[a-z2-7]{12}$/);
-      expect(listUsers(d)).toHaveLength(1);
+      expect(listUsers(d, 'sdm')).toHaveLength(1);
     } finally {
       d.close();
     }
@@ -434,7 +434,7 @@ describe('bootstrap on the setup core and the Plan 14 dev commands', () => {
     expect(r.code).toBe(1);
     const d = openDb(db);
     try {
-      expect(listUsers(d)).toHaveLength(0);
+      expect(listUsers(d, 'sdm')).toHaveLength(0);
     } finally {
       d.close();
     }

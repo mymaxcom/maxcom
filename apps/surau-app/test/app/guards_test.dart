@@ -6,6 +6,7 @@ import 'package:surau_app/app/router.dart';
 import 'package:surau_app/features/shell/menu.dart';
 import 'package:surau_app/features/shell/permissions.dart';
 import 'package:surau_app/l10n/generated/s_ms.dart';
+import 'package:surau_app/ops/ops_build.dart';
 
 GuardResult run(
   String location, {
@@ -60,10 +61,52 @@ void main() {
 
     test('enrolled, no session: everything goes to /unlock', () {
       expect(run('/', unlocked: false).redirect, AppRoutes.unlock);
-      expect(run('/content', unlocked: false).redirect, AppRoutes.unlock);
+      expect(
+        run('/content', unlocked: false).redirect,
+        '${AppRoutes.unlock}?from=%2Fcontent',
+      );
       expect(run('/unlock', unlocked: false).redirect, isNull);
       expect(run('/enrol', unlocked: false).redirect, AppRoutes.unlock,
           reason: 'an enrolled app never shows the enrol form');
+    });
+
+    test('[A9] a session that ends keeps the page: unlock remembers it and '
+        'returns there, never to the dashboard', () {
+      final out = run('/finance/laporan', unlocked: false);
+      expect(out.redirect, '/unlock?from=%2Ffinance%2Flaporan');
+      expect(
+        run(out.redirect!, unlocked: true).redirect,
+        '/finance/laporan',
+        reason: 'unlocked at the door with a remembered page',
+      );
+      expect(
+        run('/unlock?from=%2Ffinance%2Flaporan%3Fmonth%3D2026-10',
+            unlocked: true, roles: {'admin'}).redirect,
+        '/finance/laporan?month=2026-10',
+      );
+      // The dashboard itself needs no memory; nor does a bare door.
+      expect(run('/', unlocked: false).redirect, AppRoutes.unlock);
+      expect(run('/unlock').redirect, AppRoutes.dashboard);
+    });
+
+    test('[A9] a remembered page is only an in-app path', () {
+      for (final bad in [
+        'https://evil.example/x',
+        '//evil.example/x',
+        '/unlock',
+        '/enrol',
+        '/setup',
+        'finance',
+        '',
+      ]) {
+        expect(
+          run('/unlock?from=${Uri.encodeQueryComponent(bad)}').redirect,
+          AppRoutes.dashboard,
+          reason: bad,
+        );
+      }
+      expect(returnPathOf('/unlock?from=%2Fusers'), '/users');
+      expect(returnPathOf('/unlock'), isNull);
     });
 
     test('unlocked: the doors lead home', () {
@@ -84,7 +127,21 @@ void main() {
       expect(run('/this-device', roles: {'ajk'}).redirect, isNull);
     });
 
-    test('the MAXCOM system pages need system:read: an admin is sent home, the Pentadbir MAXCOM may open them', () {
+    test('public build: the MAXCOM system pages are refused for everyone, even a superadmin session', () {
+      for (final p in ['/settings/system', '/settings/cloudSync', '/settings/dataSources', '/settings/system?x=1']) {
+        for (final roles in [
+          {'admin'},
+          {'ajk'},
+          {'superadmin'},
+          {'admin', 'superadmin'},
+        ]) {
+          expect(run(p, roles: roles).forbidden, isTrue, reason: '$p $roles');
+        }
+      }
+      expect(run('/settings/clock', roles: {'admin'}).redirect, isNull);
+    }, skip: kOpsBuild);
+
+    test('ops build: the MAXCOM system pages need system:read: an admin is sent home, the Pentadbir MAXCOM may open them', () {
       for (final p in ['/settings/system', '/settings/cloudSync', '/settings/dataSources', '/settings/system?x=1']) {
         expect(run(p, roles: {'admin'}).forbidden, isTrue, reason: p);
         expect(run(p, roles: {'ajk'}).forbidden, isTrue, reason: p);
@@ -94,7 +151,7 @@ void main() {
       // an ordinary settings page is unchanged
       expect(run('/settings/clock', roles: {'admin'}).redirect, isNull);
       expect(run('/settings/clock', roles: {'superadmin'}).redirect, isNull);
-    });
+    }, skip: !kOpsBuild);
 
     test('feature-gated pages need the switch on', () {
       expect(run('/finance', roles: {'treasurer'}).forbidden, isTrue);
@@ -102,14 +159,17 @@ void main() {
       expect(run('/finance', roles: {'treasurer'}, features: financeOn).redirect, isNull);
       expect(run('/finance', roles: {'media'}, features: financeOn).forbidden, isTrue);
 
-      expect(run('/live', roles: {'media'}).redirect, isNull, reason: 'liveOnKiosk default on');
+      expect(run('/live', roles: {'live'}).redirect, isNull, reason: 'liveOnKiosk default on');
       final liveOff = FeatureFlags.defaults.copyWith({
         'liveOnKiosk': false,
         'liveYoutube': false,
       });
-      expect(run('/live', roles: {'media'}, features: liveOff).forbidden, isTrue);
+      expect(run('/live', roles: {'live'}, features: liveOff).forbidden, isTrue);
+      // [L4] The kiosk switch rules the page: YouTube alone cannot start a live.
       final youtubeOnly = liveOff.copyWith({'liveYoutube': true});
-      expect(run('/live', roles: {'media'}, features: youtubeOnly).redirect, isNull);
+      expect(run('/live', roles: {'live'}, features: youtubeOnly).forbidden, isTrue);
+      final kioskOnly = liveOff.copyWith({'liveOnKiosk': true});
+      expect(run('/live', roles: {'live'}, features: kioskOnly).redirect, isNull);
 
       expect(run('/jemaah', roles: {'admin'}).forbidden, isTrue);
       // jemaahPage is hidden (planned): off whatever is stored, so the route stays closed.
@@ -143,15 +203,15 @@ void main() {
   });
 
   group('menu', () {
-    test('an AJK sees exactly Papan pemuka, Kandungan, Tetapan', () {
-      expect(labels({'ajk'}), ['Papan pemuka', 'Kandungan', 'Tetapan']);
+    test('an AJK sees exactly Papan pemuka, Kandungan, Konfigurasi', () {
+      expect(labels({'ajk'}), ['Papan pemuka', 'Kandungan', 'Konfigurasi']);
     });
 
     test('a treasurer gets Kewangan once finance is on', () {
-      expect(labels({'treasurer'}), ['Papan pemuka', 'Kandungan', 'Tetapan']);
+      expect(labels({'treasurer'}), ['Papan pemuka', 'Kandungan', 'Konfigurasi']);
       expect(
         labels({'treasurer'}, FeatureFlags.defaults.copyWith({'finance': true})),
-        ['Papan pemuka', 'Kewangan', 'Kandungan', 'Tetapan'],
+        ['Papan pemuka', 'Kewangan', 'Kandungan', 'Konfigurasi'],
       );
     });
 
@@ -164,7 +224,7 @@ void main() {
       expect(labels({'admin'}, off), [
         'Papan pemuka',
         'Kandungan',
-        'Tetapan',
+        'Konfigurasi',
         'Pengguna & peranti',
         'Log perubahan',
       ]);
@@ -177,7 +237,7 @@ void main() {
         'Papan pemuka',
         'Kewangan',
         'Kandungan',
-        'Tetapan',
+        'Konfigurasi',
         'Pengguna & peranti',
         'Log perubahan',
         'Siaran langsung',
@@ -186,8 +246,8 @@ void main() {
 
     test('several roles show the union', () {
       expect(
-        labels({'treasurer', 'media'}, FeatureFlags.defaults.copyWith({'finance': true})),
-        ['Papan pemuka', 'Kewangan', 'Kandungan', 'Tetapan', 'Siaran langsung'],
+        labels({'treasurer', 'media', 'live'}, FeatureFlags.defaults.copyWith({'finance': true})),
+        ['Papan pemuka', 'Kewangan', 'Kandungan', 'Konfigurasi', 'Siaran langsung'],
       );
     });
 
@@ -209,7 +269,7 @@ void main() {
     test('an entry matches its own page and its children only', () {
       final s = SMs();
       final items = menuFor({'admin'}, FeatureFlags.defaults);
-      final settings = items.singleWhere((i) => i.label(s) == 'Tetapan');
+      final settings = items.singleWhere((i) => i.label(s) == 'Konfigurasi');
       final home = items.first;
       expect(settings.matches('/settings'), isTrue);
       expect(settings.matches('/settings/clock'), isTrue);

@@ -94,7 +94,7 @@ class SetupFlow {
     if (payload.isExpired(_now())) throw BoxQrExpired(payload.expiresAt);
     if (payload.box.isEmpty) {
       // a box with no certificate: never fall back to plain HTTP
-      throw const TrustError('MAXCOM ini belum ada sijil HTTPS');
+      throw TrustError.of(TrustKind.noHttps);
     }
     final box = Uri.parse(payload.box);
     await trust.establish(box, payload.caSha256);

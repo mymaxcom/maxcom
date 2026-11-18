@@ -8,6 +8,7 @@ import type { LiveRuntime } from './mediamtx.ts';
 export const MAX_SDP_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_WHEP_SESSIONS = 4;
+const MAX_PREVIEW_SESSIONS = 2;
 const WHEP_TTL_MS = 30 * 60 * 1000;
 const ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 
@@ -124,6 +125,9 @@ export interface WebrtcProxy {
   whipDelete(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply>;
   whepPost(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply>;
   whepDelete(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply>;
+  /** The starting device's live preview of the combined stream (`surau`). */
+  previewPost(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply>;
+  previewDelete(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply>;
   /** Forgets the open WHEP sessions (the live ended, MediaMTX closed them). */
   resetWhep(): void;
 }
@@ -177,11 +181,57 @@ export function createWebrtcProxy(deps: WebrtcProxyDeps): WebrtcProxy {
       whep.clear();
     },
 
+    async previewPost(request, reply) {
+      try {
+        const offer = sdpBody(request);
+        const view = deps.sessions.previewFor(deviceOf(request));
+        // the oldest preview makes room (a tab that closed without a DELETE)
+        while (view.ids.size >= MAX_PREVIEW_SESSIONS) {
+          const oldest = view.ids.values().next().value;
+          if (oldest === undefined) break;
+          view.ids.delete(oldest);
+          void forwardToMediamtx({ port: port(), method: 'DELETE', path: `/${view.path}/whep/${oldest}`, authorization: boxAuth() }).catch(() => undefined);
+        }
+        const up = await forwardToMediamtx({ port: port(), method: 'POST', path: `/${view.path}/whep`, authorization: boxAuth(), body: offer });
+        if (up.status !== 201 && up.status !== 200) {
+          const why = refuse(up, true);
+          if (why === 'no_stream') return reply.code(404).header('Cache-Control', 'no-store').send({ errors: [MSG.noStream] });
+          throw why;
+        }
+        const id = sessionIdFrom(up.location);
+        if (id === null) throw new LiveError(502, 'mediamtx_error', MSG.upstream);
+        view.ids.add(id);
+        return reply
+          .code(201)
+          .header('Content-Type', 'application/sdp')
+          .header('Location', `/api/live/preview/whep/${id}`)
+          .header('Cache-Control', 'no-store')
+          .send(up.body);
+      } catch (error) {
+        return sendLiveError(reply, error);
+      }
+    },
+
+    async previewDelete(request, reply) {
+      try {
+        const { id } = request.params as { id: string };
+        const view = deps.sessions.previewFor(deviceOf(request));
+        if (!ID_RE.test(id) || !view.ids.has(id)) return reply.code(404).header('Cache-Control', 'no-store').send({ errors: [MSG.noStream] });
+        const up = await forwardToMediamtx({ port: port(), method: 'DELETE', path: `/${view.path}/whep/${id}`, authorization: boxAuth() });
+        view.ids.delete(id);
+        if ((up.status >= 200 && up.status < 300) || up.status === 404) return reply.code(204).header('Cache-Control', 'no-store').send();
+        const why = refuse(up, false);
+        throw why === 'no_stream' ? new LiveError(502, 'mediamtx_error', MSG.upstream) : why;
+      } catch (error) {
+        return sendLiveError(reply, error);
+      }
+    },
+
     async whipPost(request, reply) {
       try {
         const offer = sdpBody(request);
         const pub = deps.sessions.publisherFor(deviceOf(request));
-        const up = await forwardToMediamtx({ port: port(), method: 'POST', path: '/surau/whip', authorization: pub.authorization, body: offer });
+        const up = await forwardToMediamtx({ port: port(), method: 'POST', path: `/${pub.path}/whip`, authorization: pub.authorization, body: offer });
         if (up.status !== 201 && up.status !== 200) {
           const why = refuse(up, false);
           throw why === 'no_stream' ? new LiveError(502, 'mediamtx_error', MSG.upstream) : why;
@@ -207,7 +257,7 @@ export function createWebrtcProxy(deps: WebrtcProxyDeps): WebrtcProxy {
         if (!ID_RE.test(id) || !pub.whipIds.has(id)) {
           return reply.code(404).header('Cache-Control', 'no-store').send({ errors: [MSG.noStream], code: 'not_found' });
         }
-        const up = await forwardToMediamtx({ port: port(), method: 'DELETE', path: `/surau/whip/${id}`, authorization: pub.authorization });
+        const up = await forwardToMediamtx({ port: port(), method: 'DELETE', path: `/${pub.path}/whip/${id}`, authorization: pub.authorization });
         pub.whipIds.delete(id);
         if (up.status >= 200 && up.status < 300) return reply.code(204).header('Cache-Control', 'no-store').send();
         if (up.status === 404) return reply.code(204).header('Cache-Control', 'no-store').send();

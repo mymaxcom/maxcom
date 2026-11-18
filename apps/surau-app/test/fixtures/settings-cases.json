@@ -1,5 +1,5 @@
 {
- "coreSourceHash": "fabbd536eb51ed940201d4de9b340be7c08cb1e510e56ad9272a9fcf52811641",
+ "coreSourceHash": "5c850d2b9b41dc4a23994a3541debd2d18063db4a656df40a8423010b56072b5",
  "cases": [
   {
    "key": "prayerBar",
@@ -5478,7 +5478,7 @@
       "isyak": 15
      }
     },
-    "message": "Sila senyapkan telefon bimbit"
+    "message": ""
    },
    "ok": true
   },
@@ -5538,7 +5538,7 @@
       "isyak": 15
      }
     },
-    "message": "Sila senyapkan telefon bimbit"
+    "message": ""
    },
    "ok": true
   },
@@ -8546,7 +8546,7 @@
    "patch": {
     "message": ""
    },
-   "ok": false
+   "ok": true
   },
   {
    "key": "solatScreen",
@@ -11649,7 +11649,7 @@
    "key": "language",
    "note": "defaults",
    "patch": {
-    "lang": "ms"
+    "lang": "auto"
    },
    "ok": true
   },
@@ -11658,7 +11658,7 @@
    "note": "reset",
    "patch": {
     "enabled": true,
-    "lang": "ms"
+    "lang": "auto"
    },
    "ok": true
   },
@@ -11676,7 +11676,7 @@
    "patch": {
     "enabled": false
    },
-   "ok": true
+   "ok": false
   },
   {
    "key": "language",
@@ -16065,6 +16065,319 @@
    "ok": false
   },
   {
+   "key": "liveCamera",
+   "note": "defaults",
+   "patch": {
+    "name": "Kamera luaran",
+    "transport": "auto",
+    "avOffsetMs": {
+     "deviceMic": 0,
+     "boxInput": 0
+    }
+   },
+   "ok": true
+  },
+  {
+   "key": "liveCamera",
+   "note": "reset",
+   "patch": {
+    "enabled": false,
+    "name": "Kamera luaran",
+    "transport": "auto",
+    "avOffsetMs": {
+     "deviceMic": 0,
+     "boxInput": 0
+    }
+   },
+   "ok": true
+  },
+  {
+   "key": "liveCamera",
+   "note": "enabled true",
+   "patch": {
+    "enabled": true
+   },
+   "ok": true
+  },
+  {
+   "key": "liveCamera",
+   "note": "enabled false",
+   "patch": {
+    "enabled": false
+   },
+   "ok": true
+  },
+  {
+   "key": "liveCamera",
+   "note": "enabled not bool",
+   "patch": {
+    "enabled": "yes"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "unknown key",
+   "patch": {
+    "zzUnknown": 1
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "unknown nested key under avOffsetMs",
+   "patch": {
+    "avOffsetMs": {
+     "zzUnknown": 1
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs not an object",
+   "patch": {
+    "avOffsetMs": 5
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "name wrong value",
+   "patch": {
+    "name": "zzz-wrong"
+   },
+   "ok": true
+  },
+  {
+   "key": "liveCamera",
+   "note": "name empty",
+   "patch": {
+    "name": ""
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "name 501 chars",
+   "patch": {
+    "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "name 500 chars",
+   "patch": {
+    "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "name number",
+   "patch": {
+    "name": 123
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "name null",
+   "patch": {
+    "name": null
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "transport wrong value",
+   "patch": {
+    "transport": "zzz-wrong"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "transport empty",
+   "patch": {
+    "transport": ""
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "transport 501 chars",
+   "patch": {
+    "transport": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "transport 500 chars",
+   "patch": {
+    "transport": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "transport number",
+   "patch": {
+    "transport": 123
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "transport null",
+   "patch": {
+    "transport": null
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.deviceMic min",
+   "patch": {
+    "avOffsetMs": {
+     "deviceMic": 0
+    }
+   },
+   "ok": true
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.deviceMic max",
+   "patch": {
+    "avOffsetMs": {
+     "deviceMic": 0
+    }
+   },
+   "ok": true
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.deviceMic min-1",
+   "patch": {
+    "avOffsetMs": {
+     "deviceMic": -1
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.deviceMic max+1",
+   "patch": {
+    "avOffsetMs": {
+     "deviceMic": 1
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.deviceMic fraction",
+   "patch": {
+    "avOffsetMs": {
+     "deviceMic": 0.5
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.deviceMic as text",
+   "patch": {
+    "avOffsetMs": {
+     "deviceMic": "0"
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.deviceMic null",
+   "patch": {
+    "avOffsetMs": {
+     "deviceMic": null
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.boxInput min",
+   "patch": {
+    "avOffsetMs": {
+     "boxInput": 0
+    }
+   },
+   "ok": true
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.boxInput max",
+   "patch": {
+    "avOffsetMs": {
+     "boxInput": 0
+    }
+   },
+   "ok": true
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.boxInput min-1",
+   "patch": {
+    "avOffsetMs": {
+     "boxInput": -1
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.boxInput max+1",
+   "patch": {
+    "avOffsetMs": {
+     "boxInput": 1
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.boxInput fraction",
+   "patch": {
+    "avOffsetMs": {
+     "boxInput": 0.5
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.boxInput as text",
+   "patch": {
+    "avOffsetMs": {
+     "boxInput": "0"
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "avOffsetMs.boxInput null",
+   "patch": {
+    "avOffsetMs": {
+     "boxInput": null
+    }
+   },
+   "ok": false
+  },
+  {
    "key": "finance",
    "note": "defaults",
    "patch": {
@@ -16279,7 +16592,8 @@
     "highlightSeconds": 20,
     "showTarget": true,
     "qrAssetId": "",
-    "manualTitle": "Tabung Surau",
+    "featured": false,
+    "manualTitle": "",
     "row1Label": "",
     "row1Sen": 0,
     "row2Label": "",
@@ -16300,7 +16614,8 @@
     "highlightSeconds": 20,
     "showTarget": true,
     "qrAssetId": "",
-    "manualTitle": "Tabung Surau",
+    "featured": false,
+    "manualTitle": "",
     "row1Label": "",
     "row1Sen": 0,
     "row2Label": "",
@@ -16619,6 +16934,22 @@
    "note": "qrAssetId null",
    "patch": {
     "qrAssetId": null
+   },
+   "ok": false
+  },
+  {
+   "key": "tabungCard",
+   "note": "featured flipped",
+   "patch": {
+    "featured": true
+   },
+   "ok": true
+  },
+  {
+   "key": "tabungCard",
+   "note": "featured as text",
+   "patch": {
+    "featured": "true"
    },
    "ok": false
   },

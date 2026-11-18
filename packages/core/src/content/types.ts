@@ -197,7 +197,8 @@ export type ContentItemOf<K extends ContentKind> = ContentItemMap[K];
 
 /** View of a kuliah joined with its penceramah and optional kitab. */
 export type KuliahView = Kuliah & {
-  penceramah: { name: string; title?: string; photoAssetId?: string };
+  /** `null` when the speaker was deleted (another side of a sync): the kuliah is still shown, without a name. */
+  penceramah: { name: string; title?: string; photoAssetId?: string } | null;
   kitab?: { title: string; coverAssetId?: string };
 };
 

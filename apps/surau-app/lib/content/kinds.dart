@@ -10,12 +10,20 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../app/app_lang.dart' show AppLang;
+import '../features/labels.dart'
+    show contentChoiceLabel, contentFieldHint, contentFieldLabel, contentKindLabel, dayLabel, dayPartWord, monthWord, weekdayWord;
+import '../features/labels_content.dart' show dayLabelsMs, monthWordsMs, slotLabelsMs, weekdayWordsMs;
 import '../features/validate.dart' show SettingError, ValidationResult, imageRefError;
+import '../l10n/generated/s.dart';
+import '../l10n/s_lookup.dart';
+
+export '../features/labels_content.dart' show dayLabelsMs;
 
 /// sha256 of core content/schema.ts + content/types.ts (CRLF as LF) this
 /// port was written against; kinds_test fails when core moved on.
 const String contentSourceHash =
-    'af14b65e83b49ed291134b27525a07771348a33fde6fa5d577374d7605d80f8b';
+    '56646702c2b4267159bcd29e7a28024193d12b317676c6b940d3e22436d99eb3';
 
 enum FieldType {
   text,
@@ -50,27 +58,6 @@ const List<String> dayKeys = [
   'sabtu',
 ];
 
-const Map<String, String> dayLabelsMs = {
-  'umum': 'Setiap hari',
-  'daily': 'Setiap hari',
-  'ahad': 'Ahad',
-  'isnin': 'Isnin',
-  'selasa': 'Selasa',
-  'rabu': 'Rabu',
-  'khamis': 'Khamis',
-  'jumaat': 'Jumaat',
-  'sabtu': 'Sabtu',
-};
-
-const Map<String, String> _slotLabels = {
-  'subuh': 'Subuh',
-  'zohor': 'Zohor',
-  'asar': 'Asar',
-  'maghrib': 'Maghrib',
-  'isyak': 'Isyak',
-  'lain': 'Lain-lain',
-};
-
 const Map<String, String> _statusLabels = {'aktif': 'Aktif', 'batal': 'Dibatalkan'};
 
 const Map<String, String> _roleLabels = {
@@ -99,6 +86,7 @@ class FieldSpec {
     this.maxLength = maxContentText,
     this.assetKind = AssetKind.image,
     this.hintMs,
+    this.hidden = false,
   });
 
   final String key;
@@ -125,9 +113,12 @@ class FieldSpec {
   final AssetKind assetKind;
   final String? hintMs;
 
+  /// Validated and sent back as it was, but not drawn in the form (a stored
+  /// field nothing uses any more, such as a kuliah's `seriesId`).
+  final bool hidden;
+
   String choiceLabelMs(String value) => choiceLabels[value] ?? value;
 }
-
 class ContentKindSpec {
   const ContentKindSpec({
     required this.key,
@@ -135,7 +126,6 @@ class ContentKindSpec {
     required this.labelMsPlural,
     required this.icon,
     required this.fields,
-    this.descriptionMs = '',
     this.carried = const [],
   });
 
@@ -148,7 +138,25 @@ class ContentKindSpec {
   final String labelMsPlural;
   final IconData icon;
   final List<FieldSpec> fields;
-  final String descriptionMs;
+
+  /// The line under the title in the content list, in the app language.
+  String description(S s) => switch (key) {
+    'penceramah' => s.kindDescPenceramah,
+    'kitab' => s.kindDescKitab,
+    'kuliah' => s.kindDescKuliah,
+    'pengumuman' => s.kindDescPengumuman,
+    'ticker' => s.kindDescTicker,
+    'poster' => s.kindDescPoster,
+    'programKhas' => s.kindDescProgramKhas,
+    'takwim' => s.kindDescTakwim,
+    'hadis' => s.kindDescHadis,
+    'worldTime' => s.kindDescWorldTime,
+    'petugas' => s.kindDescPetugas,
+    'tugasan' => s.kindDescTugasan,
+    'zikir' => s.kindDescZikir,
+    'tilawahSlot' => s.kindDescTilawahSlot,
+    _ => '',
+  };
 
   /// Keys set elsewhere than the editor (a hadis's `shown` and `order`, set in
   /// the list): an edit sends them back as they were, untouched.
@@ -157,6 +165,22 @@ class ContentKindSpec {
   FieldSpec field(String key) => fields.firstWhere((f) => f.key == key);
 
   FieldSpec? fieldOrNull(String key) => fields.where((f) => f.key == key).firstOrNull;
+
+  /// One item of this kind in the app language (BM is [labelMs] word for word).
+  String label(AppLang lang) => contentKindLabel(key, lang, ms: labelMs);
+
+  /// The list title in the app language.
+  String labelPlural(AppLang lang) => contentKindLabel(key, lang, ms: labelMsPlural, plural: true);
+
+  /// Name of one of this kind's fields in the app language.
+  String fieldLabel(FieldSpec f, AppLang lang) => contentFieldLabel(key, f.key, lang, ms: f.labelMs);
+
+  /// The example under one of this kind's fields; null when it has none.
+  String? fieldHint(FieldSpec f, AppLang lang) => contentFieldHint(key, f.key, lang, ms: f.hintMs);
+
+  /// Name of one choice of one of this kind's enum fields.
+  String choiceLabel(FieldSpec f, String value, AppLang lang) =>
+      contentChoiceLabel(key, f.key, value, lang, ms: f.choiceLabelMs(value));
 }
 
 const List<ContentKindSpec> contentKinds = [
@@ -165,11 +189,10 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Penceramah',
     labelMsPlural: 'Penceramah',
     icon: Icons.record_voice_over_rounded,
-    descriptionMs: 'Ustaz dan ustazah yang menyampaikan kuliah.',
     fields: [
-      FieldSpec(key: 'name', type: FieldType.text, labelMs: 'Nama', hintMs: 'Contoh: Ustaz Ahmad Fauzi'),
+      FieldSpec(key: 'name', type: FieldType.text, labelMs: 'Nama', hintMs: 'Contoh: Ustaz Ahmad Fauzi'), // lang-ok: BM source of the label lookup
       FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Gelaran', required: false, hintMs: 'Contoh: Ustaz, Dr.'),
-      FieldSpec(key: 'phone', type: FieldType.text, labelMs: 'Telefon', required: false, hintMs: 'Untuk AJK sahaja, tidak dipaparkan di TV'),
+      FieldSpec(key: 'phone', type: FieldType.text, labelMs: 'Telefon', required: false),
       FieldSpec(key: 'photoAssetId', type: FieldType.asset, labelMs: 'Gambar', required: false),
     ],
   ),
@@ -178,7 +201,6 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Kitab',
     labelMsPlural: 'Kitab',
     icon: Icons.menu_book_rounded,
-    descriptionMs: 'Kitab yang dibaca dalam kuliah.',
     fields: [
       FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Tajuk kitab', hintMs: 'Contoh: Riyadhus Salihin'),
       FieldSpec(key: 'author', type: FieldType.text, labelMs: 'Pengarang', required: false),
@@ -190,17 +212,16 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Kuliah',
     labelMsPlural: 'Kuliah',
     icon: Icons.school_rounded,
-    descriptionMs: 'Jadual kuliah yang dipaparkan di TV.',
     fields: [
       FieldSpec(key: 'date', type: FieldType.date, labelMs: 'Tarikh'),
-      FieldSpec(key: 'slot', type: FieldType.enumOf, labelMs: 'Selepas solat', choices: ['subuh', 'zohor', 'asar', 'maghrib', 'isyak', 'lain'], choiceLabels: _slotLabels),
+      FieldSpec(key: 'slot', type: FieldType.enumOf, labelMs: 'Selepas solat', choices: ['subuh', 'zohor', 'asar', 'maghrib', 'isyak', 'lain'], choiceLabels: slotLabelsMs),
       FieldSpec(key: 'time', type: FieldType.time, labelMs: 'Masa'),
-      FieldSpec(key: 'label', type: FieldType.text, labelMs: 'Nama kuliah', hintMs: 'Contoh: Kuliah Maghrib'),
+      FieldSpec(key: 'label', type: FieldType.text, labelMs: 'Nama kuliah', hintMs: 'Contoh: Kuliah Maghrib'), // lang-ok: BM source of the label lookup
       FieldSpec(key: 'penceramahId', type: FieldType.ref, labelMs: 'Penceramah', refKind: 'penceramah'),
       FieldSpec(key: 'kitabId', type: FieldType.ref, labelMs: 'Kitab', required: false, refKind: 'kitab'),
       FieldSpec(key: 'topic', type: FieldType.text, labelMs: 'Tajuk', required: false),
       FieldSpec(key: 'status', type: FieldType.status, labelMs: 'Status', choices: ['aktif', 'batal'], choiceLabels: _statusLabels),
-      FieldSpec(key: 'seriesId', type: FieldType.text, labelMs: 'Siri', required: false, hintMs: 'Kod siri untuk kuliah bersambung (pilihan)'),
+      FieldSpec(key: 'seriesId', type: FieldType.text, labelMs: 'Siri', required: false, hidden: true),
     ],
   ),
   ContentKindSpec(
@@ -208,7 +229,6 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Pengumuman',
     labelMsPlural: 'Pengumuman',
     icon: Icons.campaign_rounded,
-    descriptionMs: 'Makluman kepada jemaah untuk tempoh tertentu.',
     fields: [
       FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Tajuk'),
       FieldSpec(key: 'body', type: FieldType.multiline, labelMs: 'Isi pengumuman'),
@@ -223,7 +243,6 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Teks bergerak',
     labelMsPlural: 'Teks bergerak',
     icon: Icons.text_rotation_none_rounded,
-    descriptionMs: 'Ayat pendek yang bergerak di bawah skrin.',
     fields: [
       FieldSpec(key: 'text', type: FieldType.multiline, labelMs: 'Teks', maxLength: maxTickerText),
       FieldSpec(key: 'from', type: FieldType.date, labelMs: 'Tarikh mula'),
@@ -235,7 +254,6 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Poster',
     labelMsPlural: 'Poster',
     icon: Icons.image_rounded,
-    descriptionMs: 'Gambar penuh skrin yang bergilir di TV.',
     fields: [
       FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Tajuk poster', maxLength: 80),
       FieldSpec(key: 'assetId', type: FieldType.asset, labelMs: 'Gambar poster'),
@@ -250,12 +268,11 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Program khas',
     labelMsPlural: 'Program khas',
     icon: Icons.event_available_rounded,
-    descriptionMs: 'Majlis dan program yang akan datang.',
     fields: [
-      FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Nama program'),
+      FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Nama program'), // lang-ok: BM source of the label lookup
       FieldSpec(key: 'at', type: FieldType.dateTime, labelMs: 'Tarikh dan masa program'),
       FieldSpec(key: 'showFrom', type: FieldType.date, labelMs: 'Papar dari'),
-      FieldSpec(key: 'showTo', type: FieldType.date, labelMs: 'Papar hingga'),
+      FieldSpec(key: 'showTo', type: FieldType.date, labelMs: 'Papar hingga'), // lang-ok: BM source of the label lookup
       FieldSpec(key: 'assetId', type: FieldType.asset, labelMs: 'Gambar', required: false),
       FieldSpec(key: 'note', type: FieldType.multiline, labelMs: 'Catatan', required: false),
       FieldSpec(key: 'status', type: FieldType.status, labelMs: 'Status', choices: ['aktif', 'batal'], choiceLabels: _statusLabels),
@@ -266,11 +283,10 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Takwim',
     labelMsPlural: 'Takwim',
     icon: Icons.calendar_month_rounded,
-    descriptionMs: 'Tarikh penting dalam kalendar surau.',
     fields: [
       FieldSpec(key: 'date', type: FieldType.date, labelMs: 'Tarikh'),
       FieldSpec(key: 'hijriLabel', type: FieldType.text, labelMs: 'Tarikh Hijrah', required: false, hintMs: 'Contoh: 12 Rabiulawal 1448'),
-      FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Nama hari'),
+      FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Nama hari'), // lang-ok: BM source of the label lookup
       FieldSpec(key: 'assetId', type: FieldType.asset, labelMs: 'Gambar', required: false),
     ],
   ),
@@ -279,7 +295,6 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Hadis',
     labelMsPlural: 'Hadis',
     icon: Icons.format_quote_rounded,
-    descriptionMs: 'Hadis pilihan untuk kad hadis di TV.',
     carried: ['shown', 'order'],
     fields: [
       FieldSpec(key: 'textMs', type: FieldType.multiline, labelMs: 'Terjemahan'),
@@ -292,7 +307,6 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Waktu dunia',
     labelMsPlural: 'Waktu dunia',
     icon: Icons.public_rounded,
-    descriptionMs: 'Jam bandar lain yang dipaparkan di TV.',
     fields: [
       FieldSpec(key: 'city', type: FieldType.text, labelMs: 'Bandar', hintMs: 'Contoh: Makkah'),
       FieldSpec(key: 'tz', type: FieldType.timezone, labelMs: 'Zon waktu'),
@@ -304,9 +318,8 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Petugas',
     labelMsPlural: 'Petugas',
     icon: Icons.badge_rounded,
-    descriptionMs: 'Imam, bilal dan AJK yang bertugas.',
     fields: [
-      FieldSpec(key: 'name', type: FieldType.text, labelMs: 'Nama'),
+      FieldSpec(key: 'name', type: FieldType.text, labelMs: 'Nama'), // lang-ok: BM source of the label lookup
       FieldSpec(key: 'photoAssetId', type: FieldType.asset, labelMs: 'Gambar', required: false),
     ],
   ),
@@ -315,7 +328,6 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Tugasan',
     labelMsPlural: 'Tugasan',
     icon: Icons.assignment_ind_rounded,
-    descriptionMs: 'Siapa bertugas pada hari mana.',
     fields: [
       FieldSpec(key: 'date', type: FieldType.date, labelMs: 'Tarikh'),
       FieldSpec(key: 'role', type: FieldType.enumOf, labelMs: 'Tugas', choices: ['imam', 'bilal', 'khatib', 'ajk'], choiceLabels: _roleLabels),
@@ -328,7 +340,6 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Zikir',
     labelMsPlural: 'Zikir',
     icon: Icons.self_improvement_rounded,
-    descriptionMs: 'Zikir selepas solat, dalam susunan bacaan.',
     fields: [
       FieldSpec(key: 'order', type: FieldType.int, labelMs: 'Susunan', min: 0, max: 1000000),
       FieldSpec(key: 'textAr', type: FieldType.multiline, labelMs: 'Teks Arab'),
@@ -341,10 +352,9 @@ const List<ContentKindSpec> contentKinds = [
     labelMs: 'Slot tilawah',
     labelMsPlural: 'Tilawah',
     icon: Icons.headphones_rounded,
-    descriptionMs: 'Bacaan Al-Quran yang dimainkan sebelum waktu solat.',
     fields: [
       FieldSpec(key: 'days', type: FieldType.days, labelMs: 'Hari', allowDaily: true),
-      FieldSpec(key: 'before', type: FieldType.enumOf, labelMs: 'Sebelum solat', choices: ['subuh', 'zohor', 'asar', 'maghrib', 'isyak'], choiceLabels: _slotLabels),
+      FieldSpec(key: 'before', type: FieldType.enumOf, labelMs: 'Sebelum solat', choices: ['subuh', 'zohor', 'asar', 'maghrib', 'isyak'], choiceLabels: slotLabelsMs),
       FieldSpec(key: 'minutesBefore', type: FieldType.int, labelMs: 'Minit sebelum waktu', min: 1, max: 120),
       FieldSpec(key: 'surah', type: FieldType.int, labelMs: 'Surah', min: 1, max: 114),
       FieldSpec(key: 'enabled', type: FieldType.bool, labelMs: 'Dimainkan'),
@@ -396,32 +406,19 @@ const List<(String, String)> timezoneChoices = [
   ('UTC', 'UTC'),
 ];
 
-final Set<String> _knownZonesLower = {
-  for (final z in timezoneChoices) z.$2.toLowerCase(),
-};
-
 // ---- validation (core's schema.ts, rule for rule) ----
 
 final RegExp _dateRe = RegExp(r'^\d{4}-\d{2}-\d{2}$');
 final RegExp _timeRe = RegExp(r'^\d{2}:\d{2}$');
 final RegExp _dateTimeRe = RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$');
+/// The first part of every IANA zone name Intl knows ("asia" of "Asia/Brunei",
+/// any case); "UTC" has none.
+const Set<String> _tzRegions = {
+  'utc', 'africa', 'america', 'antarctica', 'arctic', 'asia', 'atlantic', 'australia', 'europe', 'indian',
+  'pacific', 'etc', 'us', 'canada', 'brazil', 'chile', 'mexico',
+};
+
 final RegExp _tzRe = RegExp(r'^(?:[A-Za-z][A-Za-z_]*(?:/[A-Za-z0-9_+\-]+){1,2}|UTC)$');
-
-const String msgRequired = 'Wajib diisi';
-const String msgFromAfterTo = 'Tarikh mula mesti sebelum tarikh tamat';
-const String msgDate = 'Mesti tarikh yang sah';
-const String msgTime = 'Mesti masa yang sah (JJ:MM)';
-const String msgDateTime = 'Mesti tarikh dan masa yang sah';
-const String msgText = 'Mesti teks';
-const String msgAsset = 'Pilih gambar';
-const String msgDays = 'Pilih sekurang-kurangnya satu hari';
-const String msgTz = 'Pilih zon waktu daripada senarai';
-const String msgBool = 'Mesti hidup atau mati';
-const String msgUnknown = 'Medan tidak dikenali';
-
-String msgTooLong(int max) => 'Terlalu panjang (paling banyak $max aksara)';
-String msgInt(int min, int max) => 'Mesti nombor bulat $min hingga $max';
-String msgChoice(List<String> vals) => 'Mesti salah satu daripada: ${vals.join(', ')}';
 
 bool _isInteger(Object? v) =>
     v is int || (v is double && v.isFinite && v == v.truncateToDouble());
@@ -455,10 +452,11 @@ bool _validDateTime(String v) {
 /// Core's `validateContent(kind, item)`: accepts exactly the items core
 /// accepts. `id`, `updatedAt` and `updatedBy` are allowed and ignored; an
 /// optional field may be absent but not null; text is judged trimmed.
-ValidationResult validateContent(String kind, Object? item) {
+ValidationResult validateContent(String kind, Object? item, {S? s}) {
+  final S l = s ?? sBm;
   final spec = _byKey[kind];
-  if (spec == null) return ValidationResult([SettingError(kind, 'Jenis kandungan tidak dikenali')]);
-  if (item is! Map) return const ValidationResult([SettingError('', 'Item mesti objek')]);
+  if (spec == null) return ValidationResult([SettingError(kind, l.valUnknownKind)]);
+  if (item is! Map) return ValidationResult([SettingError('', l.valItemObject)]);
   final errors = <SettingError>[];
   final present = <String>{};
   String? from;
@@ -476,23 +474,23 @@ ValidationResult validateContent(String kind, Object? item) {
       case FieldType.text:
       case FieldType.multiline:
         if (v is! String) {
-          err = f.required && (v == null) ? msgRequired : msgText;
+          err = f.required && (v == null) ? l.valRequired : l.valMustText;
         } else if (v.trim().length > f.maxLength) {
-          err = msgTooLong(f.maxLength);
+          err = l.valTooLong(f.maxLength);
         } else if (f.required && v.trim().isEmpty) {
-          err = msgRequired;
+          err = l.valRequired;
         }
       case FieldType.ref:
         if (v is! String) {
-          err = v == null ? msgRequired : msgText;
+          err = v == null ? l.valRequired : l.valMustText;
         } else if (v.trim().length > maxContentText) {
-          err = msgTooLong(maxContentText);
+          err = l.valTooLong(maxContentText);
         } else if (f.required && v.trim().isEmpty) {
-          err = msgRequired;
+          err = l.valRequired;
         }
       case FieldType.date:
         if (v is! String || !_validDate(v)) {
-          err = v == null && f.required ? msgRequired : msgDate;
+          err = v == null && f.required ? l.valRequired : l.valDate;
         } else {
           if (f.key == 'from' || f.key == 'showFrom') {
             from = v;
@@ -504,55 +502,55 @@ ValidationResult validateContent(String kind, Object? item) {
           }
         }
       case FieldType.time:
-        if (v is! String || !_validTime(v)) err = v == null ? msgRequired : msgTime;
+        if (v is! String || !_validTime(v)) err = v == null ? l.valRequired : l.valTimeHm;
       case FieldType.dateTime:
-        if (v is! String || !_validDateTime(v)) err = v == null ? msgRequired : msgDateTime;
+        if (v is! String || !_validDateTime(v)) err = v == null ? l.valRequired : l.valDateTime;
       case FieldType.int:
       case FieldType.priority:
         if (!_isInteger(v) || (v as num) < f.min || v > f.max) {
-          err = v == null && f.required ? msgRequired : msgInt(f.min, f.max);
+          err = v == null && f.required ? l.valRequired : l.valWholeNumber(f.min, f.max);
         }
       case FieldType.enumOf:
       case FieldType.status:
         if (v is! String || !f.choices.contains(v)) {
-          err = v == null ? msgRequired : msgChoice(f.choices);
+          err = v == null ? l.valRequired : l.valOneOf(f.choices.join(', '));
         }
       case FieldType.days:
         final allowed = {'umum', ...dayKeys, if (f.allowDaily) 'daily'};
         if (v is! List || v.isEmpty || !v.every((x) => x is String && allowed.contains(x))) {
-          err = msgDays;
+          err = l.valPickDays;
         }
       case FieldType.asset:
         // A plain asset id or an adjusted image object (core image.ts); no logo-only square here.
-        if (imageRefError(v) != null) err = msgAsset;
+        if (imageRefError(v, s: l) != null) err = l.imagePick;
       case FieldType.bool:
-        if (v is! bool) err = msgBool;
+        if (v is! bool) err = l.valBool;
       case FieldType.timezone:
         if (v is! String) {
-          err = v == null ? msgRequired : msgText;
+          err = v == null ? l.valRequired : l.valMustText;
         } else if (v.trim().length > maxContentText) {
-          err = msgTooLong(maxContentText);
+          err = l.valTooLong(maxContentText);
         } else {
           final tz = v.trim();
-          if (tz.isEmpty) errors.add(SettingError(f.key, msgRequired));
-          // Node's Intl matches zone names case-insensitively.
-          if (!_tzRe.hasMatch(tz) || !_knownZonesLower.contains(tz.toLowerCase())) {
-            err = msgTz;
-          }
+          if (tz.isEmpty) errors.add(SettingError(f.key, l.valRequired));
+          // Core accepts any zone Node's Intl knows (an imported Brunei, Tehran
+          // or Kuwait clock is stored as such); the app checks the shape and
+          // the region, and the box has the last word on the exact name.
+          if (!_tzRe.hasMatch(tz) || !_tzRegions.contains(tz.split('/').first.toLowerCase())) err = l.valPickTz;
         }
     }
     if (err != null) errors.add(SettingError(f.key, err));
   }
 
   if (from != null && to != null && from.compareTo(to) > 0) {
-    errors.add(SettingError(fromKey, msgFromAfterTo));
-    errors.add(SettingError(toKey, msgFromAfterTo));
+    errors.add(SettingError(fromKey, l.valFromBeforeTo));
+    errors.add(SettingError(toKey, l.valFromBeforeTo));
   }
 
   for (final k in item.keys) {
     if (k == 'id' || k == 'updatedAt' || k == 'updatedBy') continue;
     if (k is! String || spec.fieldOrNull(k) == null) {
-      errors.add(SettingError('$k', msgUnknown));
+      errors.add(SettingError('$k', l.valUnknownField));
     }
   }
   return errors.isEmpty ? ValidationResult.valid : ValidationResult(errors);
@@ -573,54 +571,45 @@ Map<String, dynamic> cleanItem(ContentKindSpec spec, Map<String, dynamic> raw) {
   return out;
 }
 
-const List<String> _monthsMs = [
-  'Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep', 'Okt', 'Nov', 'Dis',
-];
-const List<String> _weekdaysMs = [
-  'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu', 'Ahad',
-];
-
 /// `2026-11-06` as `Khamis, 6 Nov 2026`; the input itself when it is not a
 /// valid date. With [weekday] false: `6 Nov 2026`.
-String dateWordsMs(String iso, {bool weekday = true}) {
+/// In English and Arabic the weekday and month words come from labels.dart
+/// (`Thursday, 6 Nov 2026`); a list is joined with the language's comma.
+String dateWords(String iso, AppLang lang, {bool weekday = true}) {
   if (!_validDate(iso)) return iso;
   final p = iso.split('-').map(int.parse).toList();
   final d = DateTime.utc(p[0], p[1], p[2]);
-  final body = '${d.day} ${_monthsMs[d.month - 1]} ${d.year}';
-  return weekday ? '${_weekdaysMs[d.weekday - 1]}, $body' : body;
+  final body = '${d.day} ${monthWord(d.month, lang, ms: monthWordsMs[d.month - 1])} ${d.year}';
+  final day = weekdayWord(d.weekday, lang, ms: weekdayWordsMs[d.weekday - 1]);
+  return weekday ? '$day${_comma(lang)}$body' : body;
 }
+
+String _comma(AppLang lang) => lang == AppLang.ar ? '، ' : ', ';
 
 /// `2026-11-20T20:30` as `Jumaat, 20 Nov 2026, 8:30 malam`.
-String dateTimeWordsMs(String iso) {
+String dateTimeWords(String iso, AppLang lang) {
   if (!_validDateTime(iso)) return iso;
   final parts = iso.split('T');
-  return '${dateWordsMs(parts[0])}, ${timeWordsMs(parts[1])}';
+  return '${dateWords(parts[0], lang)}${_comma(lang)}${timeWords(parts[1], lang)}';
 }
 
-/// `19:15` as `7:15 malam` (pagi, tengah hari, petang, malam).
-String timeWordsMs(String hhmm) {
+/// `19:15` as `7:15 malam` (BM: pagi, tengah hari, petang, malam; English `7:15 pm`).
+String timeWords(String hhmm, AppLang lang) {
   if (!_validTime(hhmm)) return hhmm;
   final p = hhmm.split(':').map(int.parse).toList();
   final h = p[0];
   final mm = p[1].toString().padLeft(2, '0');
   final h12 = h % 12 == 0 ? 12 : h % 12;
-  final word = h < 12
-      ? 'pagi'
-      : h < 15
-      ? 'tengah hari'
-      : h < 19
-      ? 'petang'
-      : 'malam';
-  return '$h12:$mm $word';
+  return '$h12:$mm ${dayPartWord(h, lang)}';
 }
 
 /// The days chips in words: `Setiap hari`, or `Jumaat, Sabtu`.
-String daysWordsMs(List<dynamic> days) {
-  if (days.contains('umum') || days.contains('daily')) return dayLabelsMs['umum']!;
+String daysWords(List<dynamic> days, AppLang lang) {
+  if (days.contains('umum') || days.contains('daily')) return dayLabel('umum', lang, ms: dayLabelsMs['umum']!);
   return [
     for (final d in dayKeys)
-      if (days.contains(d)) dayLabelsMs[d]!,
-  ].join(', ');
+      if (days.contains(d)) dayLabel(d, lang, ms: dayLabelsMs[d]!),
+  ].join(_comma(lang));
 }
 
 final Random _random = Random.secure();

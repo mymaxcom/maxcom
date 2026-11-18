@@ -9,10 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/common/language_switch.dart';
 import '../features/common/help_card.dart';
 import '../features/common/identity.dart';
 import '../features/common/surau_info.dart';
 import '../features/common/surau_logo.dart';
+import '../features/common/trilingual_strings.dart';
+import '../features/common/trilingual_text.dart';
 import '../features/enrol/enrol_flow.dart';
 import '../features/finance/audit_screen.dart' show FinanceAuditScreen;
 import '../features/finance/bayaran_screen.dart';
@@ -46,6 +49,9 @@ import '../features/unlock/offline_vault.dart';
 import '../features/unlock/session_keeper.dart';
 import '../features/unlock/unlock_flow.dart';
 import '../features/unlock/unlock_screen.dart';
+import '../ops/fleet/fleet_providers.dart';
+import '../ops/fleet/fleet_router.dart';
+import '../ops/ops_build.dart';
 import '../l10n/generated/s.dart';
 import '../screens/audit_screen.dart';
 import '../screens/content_edit_screen.dart';
@@ -63,6 +69,7 @@ import '../screens/settings_feature_screen.dart';
 import '../screens/settings_list_screen.dart';
 import '../screens/settings_order_screen.dart';
 import '../screens/this_device_screen.dart';
+import '../screens/user_add_flow.dart';
 import '../screens/user_edit_screen.dart';
 import '../screens/users_screen.dart';
 import '../screens/widgets/pieces.dart' show platformLabel;
@@ -158,6 +165,14 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.listen(sessionProvider, (_, _) => refresh.ping());
   ref.listen(enrolledBoxProvider, (_, _) => refresh.ping());
   ref.listen(featureFlagsProvider, (_, _) => refresh.ping());
+  if (kOpsBuild) {
+    // A Pentadbir MAXCOM with no surau chosen lands on the list; choosing one lets the surau screens open.
+    ref.listen(needsSurauProvider, (_, _) => refresh.ping());
+    ref.listen(opsRevokedProvider, (_, _) => refresh.ping());
+    ref.listen(opsLocalDataClosedProvider, (_, _) => refresh.ping());
+    // Alive from the start, so it clears the cached answers whenever the session ends.
+    ref.read(actingSurauProvider);
+  }
   // Keeps the offline profile current and the reconnector running.
   ref.read(sessionKeeperProvider);
   final router = createRouter(ref, refreshListenable: refresh);
@@ -185,6 +200,9 @@ GoRouter createRouter(
           unlocked: ref.read(sessionProvider) != null,
           roles: ref.read(rolesProvider),
           features: ref.read(featureFlagsProvider),
+          needsSurau: kOpsBuild && ref.read(needsSurauProvider),
+          opsRevoked: kOpsBuild && ref.read(opsRevokedProvider),
+          localDataClosed: kOpsBuild && ref.read(opsLocalDataClosedProvider),
         ),
       );
       if (result.forbidden) {
@@ -215,10 +233,14 @@ GoRouter createRouter(
         path: AppRoutes.unlock,
         builder: (context, state) => const _UnlockRoute(),
       ),
+      // The notice of a phone whose ops mark was withdrawn: outside the shell, ops build only.
+      if (kOpsBuild) ...opsUnmarkedRoutes((context) => context.go(AppRoutes.thisDevice)),
       ShellRoute(
         builder: (context, state, child) =>
             AppShell(location: state.uri.path, child: child),
         routes: [
+          // The MAXCOM Ops screens exist only in the ops build.
+          if (kOpsBuild) ...opsFleetRoutes(),
           GoRoute(
             path: AppRoutes.dashboard,
             builder: (context, state) => const DashboardScreen(),
@@ -266,7 +288,7 @@ GoRouter createRouter(
                 redirect: (context, state) => settingsFeatureRedirect(state.pathParameters['feature']),
                 builder: (context, state) => SettingsFeatureScreen(
                   featureKey: state.pathParameters['feature']!,
-                  scrollToLanjutan: state.uri.queryParameters['lj'] == '1',
+                  scrollToLanjutan: kOpsBuild && state.uri.queryParameters['lj'] == '1',
                 ),
               ),
             ],
@@ -358,7 +380,7 @@ GoRouter createRouter(
               // `new` before `:id`, so it is never read as a person's id.
               GoRoute(
                 path: 'new',
-                builder: (context, state) => const UserEditScreen(),
+                builder: (context, state) => const UserAddFlow(),
               ),
               GoRoute(
                 path: ':id',
@@ -523,6 +545,7 @@ class _EnrolRoute extends ConsumerWidget {
       scannerBuilder: deps.scannerBuilder ?? defaultScanner,
       initialCode: initialCode,
       pairingUi: true,
+      actions: _languageActions,
       onBoxQr: (text) => ScanRouter(
         enrolled: false,
         go: (path, {extra}) => context.go(path, extra: extra),
@@ -586,6 +609,11 @@ class _BackToEnrolState extends State<_BackToEnrol> {
   Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
+/// The language switch at the end of a first-time screen's top bar.
+const List<Widget> _languageActions = [
+  Padding(padding: EdgeInsetsDirectional.only(end: 12), child: Center(child: LanguageSwitch())),
+];
+
 class _SetupRoute extends ConsumerWidget {
   const _SetupRoute({required this.text});
 
@@ -597,6 +625,7 @@ class _SetupRoute extends ConsumerWidget {
     if (t == null) return const _BackToEnrol();
     final deps = ref.watch(appDepsProvider);
     return SetupScreen(
+      actions: _languageActions,
       flow: ref.watch(setupFlowProvider),
       qrText: t,
       defaultPhoneName: platformLabel(S.of(context), deps.platform),
@@ -619,6 +648,7 @@ class _RecoveryRoute extends ConsumerWidget {
     if (t == null) return const _BackToEnrol();
     final deps = ref.watch(appDepsProvider);
     return RecoveryScreen(
+      actions: _languageActions,
       flow: ref.watch(setupFlowProvider),
       qrText: t,
       defaultPhoneName: platformLabel(S.of(context), deps.platform),
@@ -638,6 +668,10 @@ class _UnlockRoute extends ConsumerWidget {
     final deps = ref.watch(appDepsProvider);
     final box = ref.watch(enrolledBoxProvider);
     if (box == null) return const SizedBox.shrink();
+    // The page the person was on when the session ended (A9).
+    final backTo =
+        returnPathOf(GoRouterState.of(context).uri.toString()) ??
+        AppRoutes.dashboard;
 
     Future<void> enrolAgain() async {
       ref.read(revokedProvider.notifier).clear();
@@ -655,7 +689,7 @@ class _UnlockRoute extends ConsumerWidget {
           skipLoadingOnReload: true,
           loading: () => const _GlassWait(),
           error: (e, _) => _ReEnrolNeeded(
-            message: e is TrustError ? e.message : e.toString(),
+            message: e is TrustError ? e.text(S.of(context)) : e.toString(),
             onEnrolAgain: enrolAgain,
           ),
           data: (client) {
@@ -717,13 +751,14 @@ class _UnlockRoute extends ConsumerWidget {
                     checkPin: (pin) async =>
                         await (await vault())?.checkPin(pin) ??
                         const PinUnknown(),
+                    close: () async => (await vault())?.closeOffline(),
                     enter: (p, {pin, inFlight}) {
                       if (pin != null) ref.read(pinMemoryProvider).value = pin;
                       ref
                           .read(sessionProvider.notifier)
                           .set(SessionDto.offline(p.user));
                       if (inFlight != null) keeper.adopt(inFlight);
-                      if (context.mounted) context.go(AppRoutes.dashboard);
+                      if (context.mounted) context.go(backTo);
                     },
                   );
             return UnlockScreen(
@@ -741,7 +776,7 @@ class _UnlockRoute extends ConsumerWidget {
               toLocal: deps.toLocal,
               onUnlocked: (session) {
                 ref.read(sessionProvider.notifier).set(session);
-                context.go(AppRoutes.dashboard);
+                context.go(backTo);
               },
               onEnrolAgain: enrolAgain,
             );
@@ -774,20 +809,18 @@ class _GlassWait extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Nobody can act on this screen and the person's language may not be
+    // known yet: BM, with small English and Arabic lines under it.
     return const Scaffold(
       backgroundColor: SurauColors.glass,
       body: Center(
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: CircularProgressIndicator(
-            color: SurauColors.gold,
-            strokeWidth: 3,
-          ),
+        child: TrilingualWait(
+          ms: TrilingualStrings.connectingMs,
+          en: TrilingualStrings.connectingEn,
+          ar: TrilingualStrings.connectingAr,
         ),
       ),
-    );
-  }
+    );  }
 }
 
 /// The pinned certificate from enrolment is gone (storage cleared, app

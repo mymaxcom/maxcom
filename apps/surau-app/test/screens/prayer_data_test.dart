@@ -6,13 +6,19 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/router.dart';
+import 'package:surau_app/box/box_client.dart';
+import 'package:surau_app/features/common/error_text.dart';
 import 'package:surau_app/features/csv_file_pick.dart';
+import 'package:surau_app/features/prayer/location_screen.dart' show LocationScreen;
+import 'package:surau_app/features/prayer/prayer_names.dart';
 import 'package:surau_app/features/prayer/prayer_repository.dart';
 import 'package:surau_app/features/prayer/widgets/month_grid.dart';
 import 'package:surau_app/features/shell/menu.dart';
 import 'package:surau_app/features/shell/permissions.dart';
 import 'package:surau_app/screens/prayer_data_screen.dart';
+import 'package:surau_app/l10n/s_lookup.dart';
 
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
@@ -23,6 +29,24 @@ import 't9_fakes.dart';
 /// (the registry default here); the year sits on the line above it.
 const String fetchLabel = 'Muat turun dari e-Solat JAKIM ke dalam MAXCOM';
 
+/// `GET /api/prayer/status` with the official years the box holds.
+Map<String, Object?> statusBody({
+  List<Map<String, Object?>> years = const [
+    {'year': 2026, 'days': 365, 'fetchedAt': '2026-01-02T01:00:00.000Z'},
+  ],
+  String date = '2026-11-04',
+}) => {
+  'country': 'MY',
+  'hasOfficial': true,
+  'zone': 'SGR01',
+  'timezone': 'Asia/Kuala_Lumpur',
+  'located': true,
+  'order': ['official', 'calc', 'file'],
+  'today': {'date': date, 'source': 'official', 'emergency': false},
+  'official': {'zone': 'SGR01', 'years': years},
+  'warnings': <String>[],
+};
+
 void main() {
   testWidgets(
     '212 days ahead for SGR01; e-Solat import for 2027 reports the rows',
@@ -32,6 +56,16 @@ void main() {
         const PrayerDataScreen(),
         location: AppRoutes.prayerData,
         setup: (h) {
+          // 2026 is complete and 2027 is partly loaded: the 212 days run into it.
+          h.handlers['GET /api/prayer/status'] = (_) async => jsonResponse(
+            200,
+            statusBody(
+              years: const [
+                {'year': 2026, 'days': 365, 'fetchedAt': '2026-01-02T01:00:00.000Z'},
+                {'year': 2027, 'days': 150, 'fetchedAt': '2026-10-02T01:00:00.000Z'},
+              ],
+            ),
+          );
           h.handlers['POST /api/prayer/import'] = (_) async =>
               jsonResponse(200, {'inserted': 365, 'replaced': 0});
         },
@@ -87,7 +121,10 @@ void main() {
         order: ['official', 'calc', 'file'],
         today: TodayStatus(date: fakeToday, source: 'official'),
         officialZone: 'SGR01',
-        officialYears: [OfficialYear(year: 2026, days: 365, fetchedAt: '2026-11-06T01:14:00.000Z')],
+        officialYears: [
+          OfficialYear(year: 2026, days: 365, fetchedAt: '2026-11-06T01:14:00.000Z'),
+          OfficialYear(year: 2027, days: 150, fetchedAt: '2026-11-06T01:14:00.000Z'),
+        ],
       ),
     )..daysOf = (from, to) => PrayerDays(
       days: from.startsWith('2026-11')
@@ -269,10 +306,8 @@ void main() {
     );
     await tester.tap(find.text('Muat naik CSV'));
     await settle(tester);
-    await tester.tap(find.text('Ganti'));
-    await settle(tester);
     final body = jsonDecode(t.h.box.byPath('/api/prayer/import')!.body);
-    expect(body, {'zone': 'SGR01', 'csv': 'Tarikh,Imsak\n01-Jan-2027,05:50\n'});
+    expect(body, {'zone': 'SGR01', 'csv': 'Tarikh,Imsak\n01-Jan-2027,05:50\n', 'year': 2027});
     expect(find.text('Ditambah 1, diganti 2'), findsOneWidget);
   });
 
@@ -299,11 +334,10 @@ void main() {
     await tester.enterText(find.byType(TextField), 'Tarikh,Imsak\n');
     await tester.tap(find.text('Muat naik'));
     await settle(tester);
-    await tester.tap(find.text('Ganti'));
-    await settle(tester);
     expect(jsonDecode(t.h.box.byPath('/api/prayer/import')!.body), {
       'zone': 'SGR01',
       'csv': 'Tarikh,Imsak\n',
+      'year': 2027,
     });
     expect(find.text('Ditambah 3, diganti 0'), findsOneWidget);
   });
@@ -329,8 +363,6 @@ void main() {
         findsOneWidget,
       );
       await tester.tap(find.text(fetchLabel));
-      await settle(tester);
-      await tester.tap(find.text('Ganti'));
       await settle(tester);
       expect(find.text('e-Solat tidak dapat dihubungi'), findsOneWidget);
     },
@@ -365,6 +397,8 @@ void main() {
         location: AppRoutes.prayerData,
         setup: (h) {
           h.health = {...healthyJson, 'daysAhead': 0};
+          h.handlers['GET /api/prayer/status'] = (_) async =>
+              jsonResponse(200, statusBody(years: const []));
           h.handlers['POST /api/prayer/import'] = (_) async =>
               jsonResponse(200, {'inserted': 365, 'replaced': 0});
         },
@@ -453,8 +487,224 @@ void main() {
       expect(jsonDecode(t.h.box.byPath('/api/prayer/import')!.body), {
         'zone': 'SGR01',
         'csv': csv,
+        'year': 2027,
       });
       expect(find.text('Ditambah 2, diganti 0'), findsOneWidget);
     },
   );
+
+  group('release 2026.11.12', () {
+    final ms = sFor(AppLang.ms);
+    final en = sFor(AppLang.en);
+    final ar = sFor(AppLang.ar);
+
+    PrayerStatus statusOf({
+      String country = 'MY',
+      bool hasOfficial = true,
+      String today = fakeToday,
+      List<OfficialYear> years = const [],
+      int resolved = 0,
+      int official = 0,
+      List<String> warnings = const [],
+      List<PrayerWarning> warningCodes = const [],
+    }) => PrayerStatus(
+      country: country,
+      hasOfficial: hasOfficial,
+      zone: 'SGR01',
+      located: true,
+      order: const ['official', 'calc', 'file'],
+      today: TodayStatus(date: today, source: 'official'),
+      hasCounts: true,
+      daysResolved: resolved,
+      daysOfficial: official,
+      officialYears: years,
+      warnings: warnings,
+      warningCodes: warningCodes,
+    );
+
+    testWidgets('[P1] 20 official days warn that the data is low though 400 days resolve', (tester) async {
+      final t = await pumpPrayer(
+        tester,
+        const PrayerDataScreen(),
+        location: AppRoutes.prayerData,
+        repo: FakePrayerRepo(
+          status_: statusOf(resolved: 400, official: 20, years: const [OfficialYear(year: 2026, days: 20)]),
+        ),
+        setup: (h) => h.health = {...healthyJson, 'daysAhead': 400},
+      );
+      expect(find.text('20'), findsOneWidget);
+      expect(find.text('400'), findsNothing);
+      expect(find.text(ms.prayerDataLow), findsOneWidget);
+      expect(find.text('Data tahun 2026'), findsOneWidget, reason: 'the current year is incomplete');
+      await expectGoldens(tester, t.app, 'prayer_data_low');
+    });
+
+    testWidgets('[P3] the CSV load sends the chosen year; a file of another year shows its range', (tester) async {
+      final t = await pumpPrayer(
+        tester,
+        PrayerDataScreen(csvPicker: (_) async => 'Tarikh,Imsak\n01-Jan-2026,05:50\n'),
+        location: AppRoutes.prayerData,
+        repo: FakePrayerRepo(status_: statusOf(official: 400, years: const [OfficialYear(year: 2026, days: 365)])),
+        setup: (h) {
+          h.handlers['POST /api/prayer/import'] = (_) async => jsonResponse(400, {
+            'errors': ['Fail ini bukan untuk tahun 2027 (2026-01-01 hingga 2026-12-31)'],
+            'code': 'csv_year_mismatch',
+            'detail': {'year': 2027, 'from': '2026-01-01', 'to': '2026-12-31'},
+          });
+        },
+      );
+      await tester.tap(find.text('Muat naik CSV'));
+      await settle(tester);
+      final body = jsonDecode(t.h.box.byPath('/api/prayer/import')!.body) as Map<String, dynamic>;
+      expect(body['year'], 2027);
+      expect(body['zone'], 'SGR01');
+      expect(find.text(ms.errcCsvYearMismatch(2027, '2026-01-01', '2026-12-31')), findsOneWidget);
+    });
+
+    testWidgets('[P3] a loaded official file says it is in Rekod import', (tester) async {
+      await pumpPrayer(
+        tester,
+        PrayerDataScreen(csvPicker: (_) async => 'Tarikh,Imsak\n01-Jan-2027,05:50\n'),
+        location: AppRoutes.prayerData,
+        repo: FakePrayerRepo(status_: statusOf(official: 400, years: const [OfficialYear(year: 2026, days: 365)])),
+        setup: (h) {
+          h.handlers['POST /api/prayer/import'] = (_) async =>
+              jsonResponse(200, {'inserted': 365, 'replaced': 0, 'id': 'a1b2c3d4'});
+        },
+      );
+      await tester.tap(find.text('Muat naik CSV'));
+      await settle(tester);
+      expect(find.textContaining(ms.ra2CsvRecorded), findsOneWidget);
+    });
+
+    for (final (lang, locale) in [(en, const Locale('en')), (ar, const Locale('ar'))]) {
+      testWidgets('[P4] in ${locale.languageCode} the grid and the day sheet use the catalogue names', (tester) async {
+        await pumpPrayer(
+          tester,
+          const PrayerDataScreen(),
+          location: AppRoutes.prayerData,
+          repo: FakePrayerRepo(status_: statusOf(official: 400, years: const [OfficialYear(year: 2026, days: 365)])),
+          locale: locale,
+          size: GoldenSize.ipadMiniLandscape,
+        );
+        expect(find.text('${lang.ra2Month11} 2026'), findsOneWidget);
+        expect(find.text(lang.ra2PrayerSubuh), findsWidgets);
+        expect(find.text('${lang.ra2WeekdayShort3} 4'), findsOneWidget);
+        expect(find.text(ms.ra2PrayerSubuh), findsNothing);
+        expect(find.text(ms.ra2Month11), findsNothing);
+        await tapRevealed(tester, find.byKey(const ValueKey('pd-day-$fakeToday')));
+        expect(find.text('${lang.ra2Weekday3}, 4 ${lang.ra2Month11} 2026'), findsOneWidget);
+        expect(find.text(ms.ra2PrayerZohor), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    test('[P4] short dates, months and weekdays come from the catalogue of each language', () {
+      expect(shortDate(en, '2026-08-03'), '3 ${en.ra2MonthShort8} 2026');
+      expect(shortDate(ar, '2026-08-03'), '3 ${ar.ra2MonthShort8} 2026');
+      expect(shortDate(ms, 'not a date'), 'not a date');
+      expect(monthLong(en, 8), 'August');
+      expect(weekdayLong(en, 1), 'Monday');
+      expect(prayerName(en, 'subuh'), 'Fajr');
+      expect(methodLabel(en, 'mwl'), 'Muslim World League');
+      for (final m in methodIds) {
+        expect(methodLabel(en, m), isNot(m));
+        expect(methodLabel(ar, m), isNot(m));
+      }
+    });
+
+    test('[P5] a file row error renders from its code in ar; an unknown reason keeps the box sentence', () {
+      final e = const ImportRowError(5, 'waktu subuh kosong', field: 'subuh', reason: 'empty');
+      expect(e.text(ar), ar.ra2RowEmpty(ar.ra2PrayerSubuh));
+      expect(e.text(en), en.ra2RowEmpty(en.ra2PrayerSubuh));
+      expect(const ImportRowError(6, 'sebab baharu', field: 'x', reason: 'brand_new').text(ar), 'sebab baharu');
+      expect(const ImportRowError(7, 'ayat lama').text(en), 'ayat lama', reason: 'an older box sends no reason');
+      final apply = BoxError(400, 'baris 3: x', code: 'import_row_invalid', detail: {'row': 3, 'field': 'date', 'reason': 'duplicate'});
+      expect(errorText(ar, apply), '${ar.impRow(3)}: ${ar.ra2RowDuplicate}');
+    });
+
+    test('[P5] a warning is worded from its code; an unknown code and an older box show the sentence', () {
+      final st = PrayerStatus.fromJson({
+        'warnings': ['Tiada data waktu solat untuk hari ini', 'Zon: ayat lain'],
+        'warningCodes': [
+          {'code': 'no_data_today', 'detail': <String, Object?>{}},
+        ],
+      });
+      expect(st.warningTexts(ar), [ar.ra2WarnNoDataToday, 'Zon: ayat lain']);
+      expect(st.warningTexts(en), [en.ra2WarnNoDataToday, 'Zon: ayat lain']);
+      final unknown = PrayerStatus.fromJson({
+        'warnings': ['Ayat baharu'],
+        'warningCodes': [
+          {'code': 'a_new_warning', 'detail': <String, Object?>{}},
+        ],
+      });
+      expect(unknown.warningTexts(en), ['Ayat baharu']);
+      final older = PrayerStatus.fromJson({
+        'warnings': ['Ayat lama'],
+      });
+      expect(older.warningTexts(en), ['Ayat lama']);
+      expect(prayerWarningText(en, 'zone_no_data', {'willFetch': true}), en.ra2WarnZoneNoDataFetch);
+      expect(prayerWarningText(en, 'zone_no_data', {'willFetch': false}), en.ra2WarnZoneNoDataManual);
+    });
+
+    testWidgets('[P5] the status warning shows in the language of the app, not the box sentence', (tester) async {
+      await pumpPrayer(
+        tester,
+        const PrayerDataScreen(),
+        location: AppRoutes.prayerData,
+        repo: FakePrayerRepo(
+          status_: statusOf(
+            official: 400,
+            warnings: const ['Lokasi surau belum ditetapkan'],
+            warningCodes: const [PrayerWarning(code: 'not_located', sentence: 'Lokasi surau belum ditetapkan')],
+          ),
+        ),
+        locale: const Locale('ar'),
+      );
+      expect(find.text(ar.ra2WarnNotLocated), findsOneWidget);
+      expect(find.text('Lokasi surau belum ditetapkan'), findsNothing);
+    });
+
+    testWidgets('[P5] the country list is asked in the language of the app', (tester) async {
+      final repo = FakePrayerRepo();
+      await pumpPrayer(
+        tester,
+        const LocationScreen(),
+        location: AppRoutes.settingsLocation,
+        repo: repo,
+        locale: const Locale('ar'),
+      );
+      expect(repo.countryLangs, contains('ar'));
+      expect(repo.countryLangs, isNot(contains('ms')));
+    });
+
+    testWidgets('[P7] a surau abroad is offered no e-Solat card and no official CSV', (tester) async {
+      await pumpPrayer(
+        tester,
+        const PrayerDataScreen(),
+        location: AppRoutes.prayerData,
+        repo: FakePrayerRepo(status_: statusOf(country: 'GB', hasOfficial: false, resolved: 400)),
+      );
+      expect(find.byKey(const ValueKey('pd-no-official')), findsOneWidget);
+      expect(find.text(ms.ra2NoOfficialCard), findsOneWidget);
+      expect(find.text(fetchLabel), findsNothing);
+      expect(find.text('Muat naik CSV'), findsNothing);
+      expect(find.byKey(const ValueKey('prayer-year')), findsNothing);
+    });
+
+    testWidgets('[P12] the years offered come from the box date, not the phone clock', (tester) async {
+      // The phone says 4 November 2026; the box is already on 1 January 2027.
+      await pumpPrayer(
+        tester,
+        const PrayerDataScreen(),
+        location: AppRoutes.prayerData,
+        repo: FakePrayerRepo(status_: statusOf(today: '2027-01-01', official: 400)),
+      );
+      final pick = find.byKey(const ValueKey('prayer-year'));
+      expect(find.descendant(of: pick, matching: find.text('2027')), findsOneWidget);
+      expect(find.descendant(of: pick, matching: find.text('2028')), findsOneWidget);
+      expect(find.descendant(of: pick, matching: find.text('2026')), findsNothing);
+      expect(find.text('Data tahun 2027'), findsOneWidget);
+    });
+  });
 }

@@ -72,12 +72,12 @@ const BLOCK_ACTOR = 'system:hadis-update';
  * Sets or clears `ext.blocked` on a saved provider hadis through the box's own provider write path.
  * `shown` stays the person's choice. True when the row changed.
  */
-function setBlocked(db: DatabaseSync, id: string, blocked: boolean): boolean {
-  const item = listItems(db, 'hadis').find((h) => h.id === id);
+function setBlocked(db: DatabaseSync, id: string, blocked: boolean, surauId: string): boolean {
+  const item = listItems(db, 'hadis', {}, surauId).find((h) => h.id === id);
   if (!item?.ext || (item.ext.blocked === true) === blocked) return false;
   const { updatedAt: _a, updatedBy: _b, ...rest } = item as unknown as Record<string, unknown>;
   const { blocked: _old, ...ext } = item.ext;
-  putProviderItem(db, { ...rest, ext: blocked ? { ...ext, blocked: true } : ext }, BLOCK_ACTOR);
+  putProviderItem(db, { ...rest, ext: blocked ? { ...ext, blocked: true } : ext }, BLOCK_ACTOR, surauId);
   return true;
 }
 
@@ -89,12 +89,13 @@ export async function checkProviderUpdates(
   db: DatabaseSync,
   client: HadeethEncClient,
   now: () => Date,
-  onLog?: (action: string, detail: string) => void,
+  onLog: ((action: string, detail: string) => void) | undefined,
   opts: UpdateCheckDeps = {},
+  surauId: string,
 ): Promise<{ checked: number; changed: number; aborted?: true }> {
   const pauseMs = opts.pauseMs ?? 300;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const saved = listItems(db, 'hadis').filter((h) => h.ext?.provider === 'hadeethenc');
+  const saved = listItems(db, 'hadis', {}, surauId).filter((h) => h.ext?.provider === 'hadeethenc');
   let checked = 0;
   let changed = 0;
   const noteUnknown = opts.noteUnknown ?? createUnknownNoter(onLog);
@@ -136,18 +137,18 @@ export async function checkProviderUpdates(
       if (buildProviderItem(h, at).ok) {
         changed++;
         db.prepare(
-          `INSERT INTO hadis_source_updates (item_id, provider, provider_id, new_json, found_at) VALUES (?, 'hadeethenc', ?, ?, ?)
-           ON CONFLICT(item_id) DO UPDATE SET new_json = excluded.new_json, found_at = excluded.found_at`,
-        ).run(item.id, ext.id, JSON.stringify(pendingFrom(h, at)), at);
+          `INSERT INTO hadis_source_updates (surau_id, item_id, provider, provider_id, new_json, found_at) VALUES (?, ?, 'hadeethenc', ?, ?, ?)
+           ON CONFLICT(surau_id, item_id) DO UPDATE SET new_json = excluded.new_json, found_at = excluded.found_at`,
+        ).run(surauId, item.id, ext.id, JSON.stringify(pendingFrom(h, at)), at);
       } else {
         // a new text MAXCOM cannot keep would sit pending for ever: say so once and leave the saved one
-        db.prepare('DELETE FROM hadis_source_updates WHERE item_id = ?').run(item.id);
+        db.prepare('DELETE FROM hadis_source_updates WHERE surau_id = ? AND item_id = ?').run(surauId, item.id);
         onLog?.('hadis.updateTooLong', ext.id);
       }
-      visibilityChanged = setBlocked(db, item.id, !savable);
+      visibilityChanged = setBlocked(db, item.id, !savable, surauId);
     } else {
-      db.prepare('DELETE FROM hadis_source_updates WHERE item_id = ?').run(item.id);
-      visibilityChanged = setBlocked(db, item.id, false);
+      db.prepare('DELETE FROM hadis_source_updates WHERE surau_id = ? AND item_id = ?').run(surauId, item.id);
+      visibilityChanged = setBlocked(db, item.id, false, surauId);
     }
     if (visibilityChanged) opts.onChange?.();
     noteUnknown(h);
@@ -160,7 +161,8 @@ export async function checkProviderUpdates(
 
 export interface HadisTimerDeps {
   db: DatabaseSync;
-  role: 'box' | 'cloud';
+  /** The suraus a round serves: a box has its own; the cloud one per surau (read at every round). */
+  surauIds: () => string[];
   client: HadeethEncClient;
   job: CatalogJob;
   now: () => Date;
@@ -173,16 +175,15 @@ export interface HadisTimerDeps {
   /** Passed on to the weekly check. */
   check?: UpdateCheckDeps;
   /** Called when a check hid or showed a hadis again (the kiosk version is already bumped). */
-  onChange?: () => void;
+  onChange?: (surauId: string) => void;
 }
 
 /**
- * Box role only: the monthly catalog refresh and the weekly update check, both skipped when HadeethEnc does
- * not answer. A `setTimeout` chain, so a slow run never overlaps the next one. Returns a stop function
- * (null on a cloud, which runs no timers).
+ * The monthly catalog refresh (shared by every surau) and the weekly update check (once per surau of `surauIds()`:
+ * a box has one, the cloud one each), both skipped when HadeethEnc does not answer. A `setTimeout` chain, so a
+ * slow run never overlaps the next one. Returns a stop function.
  */
-export function startHadisTimers(deps: HadisTimerDeps): (() => void) | null {
-  if (deps.role !== 'box') return null;
+export function startHadisTimers(deps: HadisTimerDeps): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
   let running = false;
@@ -203,12 +204,14 @@ export function startHadisTimers(deps: HadisTimerDeps): (() => void) | null {
         const release = deps.job.hold();
         if (release !== null) {
           try {
-            const res = await checkProviderUpdates(deps.db, deps.client, deps.now, deps.onLog, {
-              ...(deps.onChange ? { onChange: deps.onChange } : {}),
-              noteUnknown: deps.job.noteUnknown,
-              ...deps.check,
-            });
-            retrySoon = res.aborted === true;
+            for (const surauId of deps.surauIds()) {
+              const res = await checkProviderUpdates(deps.db, deps.client, deps.now, deps.onLog, {
+                ...(deps.onChange ? { onChange: () => deps.onChange?.(surauId) } : {}),
+                noteUnknown: deps.job.noteUnknown,
+                ...deps.check,
+              }, surauId);
+              if (res.aborted === true) retrySoon = true;
+            }
           } finally {
             release();
           }

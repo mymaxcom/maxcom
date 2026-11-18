@@ -262,7 +262,7 @@ class _HadisListScreenState extends ConsumerState<HadisListScreen> {
         trailing: canWrite
             ? Text(
                 state.sortMode ? s.hadisOrderHintSort : s.hadisOrderHintSwitch,
-                textAlign: TextAlign.right,
+                textAlign: TextAlign.end,
                 style: text.bodySmall!.copyWith(fontWeight: FontWeight.w600),
               )
             : null,
@@ -332,7 +332,7 @@ class _SortAction extends StatelessWidget {
     final s = S.of(context);
     final fg = on ? SurauColors.ink : SurauColors.gold;
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsetsDirectional.only(end: 8),
       child: Center(
         child: Material(
           color: on ? SurauColors.gold : SurauColors.gold.withValues(alpha: 0.12),
@@ -478,7 +478,7 @@ class _HadisRow extends StatelessWidget {
       ],
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
+      padding: const EdgeInsetsDirectional.fromSTEB(14, 14, 8, 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

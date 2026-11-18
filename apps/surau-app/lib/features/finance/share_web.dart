@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
@@ -26,6 +27,23 @@ Future<SaveResult> save(Uint8List bytes, String filename, String mime) async {
   // The browser has started the download; free the object URL later.
   Timer(const Duration(seconds: 30), () => web.URL.revokeObjectURL(url));
   return const SaveResult(saved: true);
+}
+
+/// `navigator.share({ text })` when the browser has it; otherwise
+/// unavailable and the caller copies the text.
+Future<ShareResult> shareText(String text, [String? subject]) async {
+  final nav = web.window.navigator;
+  if (!nav.has('share')) {
+    return const ShareResult('other', completed: false, unavailable: true);
+  }
+  try {
+    await nav.share(web.ShareData(text: text)).toDart;
+    // The browser never says which app took it.
+    return const ShareResult('other');
+  } on Object {
+    // The person closed the sheet (AbortError) or the browser refused.
+    return const ShareResult('other', completed: false);
+  }
 }
 
 Future<ShareResult> share(Uint8List bytes, String filename, String mime) async {

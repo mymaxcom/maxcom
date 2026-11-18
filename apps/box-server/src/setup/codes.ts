@@ -145,7 +145,7 @@ export function issueRecoveryCode(db: DatabaseSync): string {
   let code = '';
   for (const b of randomBytes(RECOVERY_LENGTH)) code += CODE_ALPHABET[b % 32]!;
   db.prepare(
-    `INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    `INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(surau_id, key) DO UPDATE SET value = excluded.value`,
   ).run(RECOVERY_HASH_KEY, sha256hex(code));
   return code.match(/.{4}/g)!.join('-');
 }

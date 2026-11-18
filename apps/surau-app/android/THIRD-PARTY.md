@@ -61,3 +61,26 @@ Why this one: it is the platform's own way to run a resumable upload in the back
 - The YouTube resumable session URI is a bearer secret. It is held in memory, in the Dart local store's `uploads` collection (Keystore-sealed on Android) and in the worker's private preferences `maxcom_upload_state` (so a WorkManager retry resumes instead of beginning a new session). It is removed from the Dart job when the part is done; the worker's saved state is cleared by `forget` when the app has seen the job finish or the person removes the job.
 - Neither the token nor the URI is written to `Log`, to the notification (numbers only: `Bahagian 2 daripada 4: 35%`) or to an error sent to Dart (reason codes only). The generated `toString` of the job and event classes is overridden to leave the URI out.
 - The recordings are only read. Nothing in the upload package deletes, moves or renames a file in `Movies/MAXCOM`; the only file it deletes is its own joined copy in `cacheDir/maxcom-upload/`, after a successful upload.
+
+## rtsp-client-android (external camera pull, live external source)
+
+| | |
+|---|---|
+| Library | rtsp-client-android, `com.github.alexeyvasilyev:rtsp-client-android` |
+| Version (pinned) | 6.1.3 (tag `6.1.3`, released 2026-10-29). 7.0.0 (2026-11-07) only adds RTSP multicast and was not taken. |
+| Licence | Apache License 2.0. The `LICENSE` file at the root of the tagged source (https://github.com/alexeyvasilyev/rtsp-client-android/blob/6.1.3/LICENSE) is the unmodified Apache-2.0 text, read on 2026-11-17; the GitHub licence field reads `Apache-2.0`. |
+| Source | https://github.com/alexeyvasilyev/rtsp-client-android |
+| Where it is published | JitPack (`https://jitpack.io`). `android/build.gradle.kts` lets JitPack serve only the groups `com.github.pedroSG94.RootEncoder` and `com.github.alexeyvasilyev`. |
+| Used by | `app/src/main/kotlin/my/maxcom/app/live/RtspVideoSource.kt` (RTSP client, NAL units, the library's MediaCodec surface decoder thread). The camera audio is decoded by MAXCOM's own code (`RtspAudioSource.kt`). |
+| Pulled in transitively | `androidx.media3:media3-exoplayer` 1.11.1 (Apache-2.0), `androidx.camera:camera-core` (Apache-2.0, already present through RootEncoder), `org.jcodec:jcodec` 0.2.5 (FreeBSD / BSD 2-clause licence, http://jcodec.org/lic.html), `androidx.annotation` (Apache-2.0). |
+
+Apache-2.0 allows use, modification and redistribution in a closed application provided the licence text and notices travel with the distribution. jcodec's BSD 2-clause text asks that its copyright notice and disclaimer be reproduced with binary redistributions; it travels inside the library's dependency metadata and is listed here.
+
+- **Why 6.1.3 and not an older line:** RTSP over UDP (the "Automatik" transport falls back from TCP to UDP) exists from 6.1.0; 5.6.4 is TCP only. Every release since 5.6.5 is built against compileSdk 37 and so declares `minCompileSdk 37` in its AAR metadata, while the Android Gradle Plugin in use (9.1.0) goes to compileSdk 36 and platform 37 is not installed. `app/build.gradle.kts` therefore skips the `check*AarMetadata` tasks and the app stays on compileSdk 36; the library has minSdk 24 and runs on the device's API. Remove the exemption when the toolchain moves to compileSdk 37.
+- **API used (read from the 6.1.3 / 7.0.0 sources):** `RtspClient.Builder(Socket, uri, AtomicBoolean exitFlag, RtspClientListener)` with `.withCredentials`, `.withTransport(TCP | UDP)`, `.requestVideo/.requestAudio`; `execute()` blocks until the exit flag is set or the connection ends. The listener gives `SdpInfo` (video H.264 / H.265 / AV1 with SPS, PPS, VPS; audio AAC, Opus, G.711 u-law and a-law with rate, channels and the AAC config), raw video NAL units and raw audio samples with a millisecond timestamp, and `onRtspFailedUnauthorized`.
+
+### API facts the live external source relies on (RootEncoder 2.8.1 binaries, checked with `javap`, 2026-11-17)
+
+- `com.pedro.encoder.input.sources.video.VideoSource` (abstract): `create(width, height, fps, rotation): Boolean` (protected, called by `init`), `start(SurfaceTexture)`, `stop()`, `release()`, `isRunning()`, `getOrientationConfig()`.
+- `com.pedro.encoder.input.sources.audio.AudioSource` (abstract): `create(sampleRate, isStereo, echoCanceler, noiseSuppressor): Boolean` (protected, called by `init`), `start(GetMicrophoneData)`, `stop()`, `isRunning()`, `release()`. PCM goes back through `GetMicrophoneData.inputPCMData(Frame)`; `Frame(byte[] buffer, int offset, int size, long timeStampUs)`; 16-bit little-endian. `BufferAudioSource` and `MicrophoneSource` are the shipped examples.
+- `StreamBase` (the base of `MultiStream`): `changeVideoSource(VideoSource)` and `changeAudioSource(AudioSource)`, both `final`, both usable while streaming. Video: the new source is `init`ed with the encoder's size, fps and rotation, the old one is stopped and released, and the new one is started on the GL interface's `SurfaceTexture`. Audio: the new source is `init`ed with the old one's rate, stereo and effect flags, the old one stopped and released, the new one started with the same data callback. `getVideoSource()` and `getAudioSource()` return the current ones. `MultiStream` has a constructor taking `(Context, ConnectChecker[] x4, VideoSource, AudioSource)`.

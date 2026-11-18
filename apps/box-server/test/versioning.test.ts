@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { boxVersion } from '../src/productVersion.ts';
+import { must } from './helpers/must.ts';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const setVersion = join(repoRoot, 'scripts', 'set-version.mjs');
@@ -15,7 +16,7 @@ const VERSION_RE = /^20\d\d\.(0[1-9]|1[0-2])\.([1-9]|[1-9]\d)$/;
 const versions = JSON.parse(read('versions.json')) as Record<string, string>;
 const code = (v: string) => {
   const [y, m, n] = v.split('.').map(Number);
-  return ((y - 2000) * 10000 + m * 100 + n) * 10;
+  return ((must(y, 'year') - 2000) * 10000 + must(m, 'month') * 100 + must(n, 'release number')) * 10;
 };
 
 function run(root: string, args: string[]) {
@@ -64,7 +65,7 @@ describe('files that carry a product version agree with versions.json', () => {
     const m = /^version:\s*(\S+)\+(\d+)\s*$/m.exec(read('apps', 'surau-app', 'pubspec.yaml'));
     expect(m).not.toBeNull();
     expect(m![1]).toBe(versions['admin-client-android']);
-    expect(Number(m![2])).toBe(code(versions['admin-client-android']));
+    expect(Number(m![2])).toBe(code(must(versions['admin-client-android'], 'admin-client-android version')));
     expect(Number(m![2])).toBeGreaterThan(1);
   });
   it('admin client: the compile-time default of MAXCOM_VERSION is the pubspec version', () => {
@@ -79,7 +80,7 @@ describe('files that carry a product version agree with versions.json', () => {
     }
     const lock = JSON.parse(read('package-lock.json')) as { packages: Record<string, { version: string }> };
     for (const p of ['apps/box-server', 'apps/kiosk-display', 'packages/core', 'packages/device-client']) {
-      expect(lock.packages[p].version, p).toBe(JSON.parse(read(...p.split('/'), 'package.json')).version);
+      expect(must(lock.packages[p], `lock entry ${p}`).version, p).toBe(JSON.parse(read(...p.split('/'), 'package.json')).version);
     }
     expect(read('scripts', 'set-version.mjs')).toMatch(/NOT tied to any product/);
   });
@@ -234,6 +235,49 @@ describe('build scripts default -Version from versions.json (static)', () => {
     expect(app.indexOf('--check --key admin-client-android')).toBeLessThan(app.indexOf('& $flutter build'));
     expect(app).toContain('--dart-define=MAXCOM_VERSION=$appVersion');
     expect((app.match(/& \$flutter build [^\n]*\$defineVersion/g) ?? []).length).toBe(3);
+  });
+  it('build-app: the public command line is unchanged without -Ops; -Ops is private, scanned and checked (Plan 14 Task 24)', () => {
+    // the release build is the same line plus an empty splat unless -Ops
+    expect(app).toContain('& $flutter build apk --release --split-per-abi $defineVersion @extraDefine');
+    expect(app).toContain("if ($Ops) { $extraDefine = @('--dart-define=MAXCOM_OPS=true') }");
+    expect(app).toContain('$extraDefine = @()');
+    // -Ops refusals
+    expect(app).toContain("if ($Ops -and $Web) { Fail");
+    expect(app).toContain("if ($Ops -and $Debug) { Fail");
+    expect(app).toContain("if ($Ops -and -not $Apk) { Fail");
+    expect(app).toContain('Test-Under $opsOut $root');
+    expect(app).toContain("Test-Under $opsOut (Join-Path $root 'dist')");
+    expect(app).toContain('google ?drive|my drive|onedrive|dropbox');
+    expect(app).toContain("'maxcom-work\\secret'");
+    expect(app).toContain('Test-Under $opsOut $secretBase');
+    // the ops key is its own file, and the public key is not demanded for -Ops
+    expect(app).toContain("android\\key-ops.properties");
+    expect(app).toContain('if (-not $Ops -and -not (Test-Path $keyFile))');
+    // stale outputs removed before a build; ops outputs moved then deleted
+    expect(app.indexOf('Remove-Item -LiteralPath $outputsDir -Recurse -Force')).toBeLessThan(app.indexOf('& $flutter build apk --debug'));
+    expect(app).toContain('Move-Item -LiteralPath $apkPath -Destination $opsDest -Force');
+    expect(app).toContain('MAXCOM-Ops-$apkVersion-arm64-v8a.apk');
+    // package id check, then the scan, both BEFORE the copy to dist\android
+    const copy = app.indexOf('Copy-Item -LiteralPath $apkPath -Destination $dest -Force');
+    expect(app.indexOf('--kind $apkPath')).toBeGreaterThan(-1);
+    expect(app.indexOf('--kind $apkPath')).toBeLessThan(copy);
+    expect(app.indexOf('Invoke-Check @($apkPath)')).toBeGreaterThan(app.indexOf('--kind $apkPath'));
+    expect(app.indexOf('Invoke-Check @($apkPath)')).toBeLessThan(copy);
+    // the web bundle is scanned before it is copied to public/app
+    expect(app.indexOf('Invoke-Check @($built)')).toBeGreaterThan(-1);
+    expect(app.indexOf('Invoke-Check @($built)')).toBeLessThan(app.indexOf('Copy-Item -Path (Join-Path $built'));
+  });
+  it('publish-installers refuses secret paths, ops names, .ops packages and marker hits before any copy', () => {
+    const pub = read('scripts', 'publish-installers.ps1');
+    // eslint-disable-next-line no-control-regex
+    expect(/[^\x00-\x7F]/.test(pub)).toBe(false);
+    expect(pub).toContain('[\\\\/]secret[\\\\/]');
+    expect(pub).toContain('^MAXCOM-Ops-');
+    expect(pub).toContain("--kind $src");
+    expect(pub).toContain("-ne 'public'");
+    expect(pub).toContain('check-public-apk.mjs');
+    expect(pub.indexOf("-ne 'public'")).toBeLessThan(pub.indexOf('Copy-Item'));
+    expect(pub.indexOf('Fail "fail berada di bawah folder')).toBeLessThan(pub.indexOf('Copy-Item'));
   });
   it('the Gradle property keeps its name boxVersion', () => {
     expect(read('apps', 'box-android', 'app', 'build.gradle.kts')).toContain('findProperty("boxVersion")');

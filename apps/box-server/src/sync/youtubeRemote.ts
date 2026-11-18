@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import type { DatabaseSync } from 'node:sqlite';
 import type { LiveStatus, YoutubeMeta } from '@surau/core';
 import type { YoutubeLeg } from '../live/sessions.ts';
@@ -129,7 +130,7 @@ export class RemoteYoutubeLeg implements YoutubeLeg {
   /** Linked to a cloud and `cloudSync` on. Otherwise the box's own YouTube service is used (the fallback). */
   active(): boolean {
     try {
-      if (getSettings(this.o.db).cloudSync.enabled !== true) return false;
+      if (getSettings(this.o.db, LOCAL_SURAU_ID).cloudSync.enabled !== true) return false;
     } catch {
       return false;
     }

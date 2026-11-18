@@ -24,16 +24,24 @@ export class ZoneListError extends Error {
   }
 }
 
-function setMeta(db: DatabaseSync, key: string, value: string | null): void {
-  if (value === null) {
-    db.prepare('DELETE FROM meta WHERE key = ?').run(key);
-    return;
-  }
-  db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+/** When the zone list was last refreshed for this surau, else the newest row's time in the shared list (null: never). */
+export function zonesFetchedAt(db: DatabaseSync, surauId: string): string | null {
+  const meta = db.prepare("SELECT value FROM meta WHERE surau_id = ? AND key = 'jakimZones.fetchedAt'").get(surauId);
+  if (typeof meta?.value === 'string') return meta.value;
+  const newest = db.prepare('SELECT MAX(fetched_at) AS at FROM jakim_zones').get();
+  return typeof newest?.at === 'string' ? newest.at : null;
 }
 
-function getMeta(db: DatabaseSync, key: string): string | null {
-  const r = db.prepare('SELECT value FROM meta WHERE key = ?').get(key);
+function setMeta(db: DatabaseSync, key: string, value: string | null, surauId: string): void {
+  if (value === null) {
+    db.prepare('DELETE FROM meta WHERE surau_id = ? AND key = ?').run(surauId, key);
+    return;
+  }
+  db.prepare('INSERT INTO meta (surau_id, key, value) VALUES (?, ?, ?) ON CONFLICT(surau_id, key) DO UPDATE SET value = excluded.value').run(surauId, key, value);
+}
+
+function getMeta(db: DatabaseSync, key: string, surauId: string): string | null {
+  const r = db.prepare('SELECT value FROM meta WHERE surau_id = ? AND key = ?').get(surauId, key);
   return typeof r?.value === 'string' ? r.value : null;
 }
 
@@ -54,6 +62,7 @@ export async function refreshZones(
   fetchImpl: typeof fetch,
   baseUrl: string,
   now: () => Date,
+  surauId: string,
 ): Promise<ZoneRefreshResult> {
   assertSourceUrl(baseUrl, 'e-Solat zone list');
   const at = now().toISOString();
@@ -68,14 +77,14 @@ export async function refreshZones(
     if (!response.ok) throw new Error(`e-Solat zone page answered HTTP ${response.status}`);
     html = new TextDecoder().decode(await readCapped(response, MAX_PAGE_BYTES, 'e-Solat zone page'));
   } catch (error) {
-    setMeta(db, 'jakimZones.lastError', safeMessage(error));
+    setMeta(db, 'jakimZones.lastError', safeMessage(error), surauId);
     throw error;
   }
 
   const listed = parseZoneOptions(html);
   if (listed.length < MIN_ZONES || !listed.some((z) => z.code === 'SGR01')) {
     const msg = 'The e-Solat page does not look like the zone list; the stored list is kept';
-    setMeta(db, 'jakimZones.lastError', msg);
+    setMeta(db, 'jakimZones.lastError', msg, surauId);
     throw new ZoneListError(msg);
   }
 
@@ -109,13 +118,13 @@ export async function refreshZones(
         removed.push(code);
       }
     }
-    setMeta(db, 'jakimZones.fetchedAt', at);
-    setMeta(db, 'jakimZones.lastError', null);
-    setMeta(db, 'jakimZones.renamed', JSON.stringify(renamed));
+    setMeta(db, 'jakimZones.fetchedAt', at, surauId);
+    setMeta(db, 'jakimZones.lastError', null, surauId);
+    setMeta(db, 'jakimZones.renamed', JSON.stringify(renamed), surauId);
     db.prepare(
-      `INSERT INTO change_log (at, actor, entity, entity_id, before_json, after_json)
-       VALUES (?, 'system:zone-refresh', 'jakim_zones', 'refresh', NULL, ?)`,
-    ).run(at, JSON.stringify({ added, removed, renamed, count: listed.length }));
+      `INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json)
+       VALUES (?, ?, 'system:zone-refresh', 'jakim_zones', 'refresh', NULL, ?)`,
+    ).run(surauId, at, JSON.stringify({ added, removed, renamed, count: listed.length }));
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
@@ -126,12 +135,12 @@ export async function refreshZones(
 
 export interface ZoneRow { code: string; state: string; name: string; lat: number | null; lon: number | null; removed: boolean; years: number[] }
 
-/** Every zone of the list; `years` are the years this box really holds (300 days or more) for it. */
-export function listZones(db: DatabaseSync): ZoneRow[] {
+/** Every zone of the list; `years` are the years this surau really holds (300 days or more) for it. */
+export function listZones(db: DatabaseSync, surauId: string): ZoneRow[] {
   const years = new Map<string, number[]>();
   for (const r of db
-    .prepare('SELECT zone, substr(date, 1, 4) AS y, COUNT(*) AS n FROM prayer_days GROUP BY zone, y HAVING n >= ? ORDER BY y')
-    .all(MIN_DAYS_FOR_YEAR)) {
+    .prepare('SELECT zone, substr(date, 1, 4) AS y, COUNT(*) AS n FROM prayer_days WHERE surau_id = ? GROUP BY zone, y HAVING n >= ? ORDER BY y')
+    .all(surauId, MIN_DAYS_FOR_YEAR)) {
     const list = years.get(String(r.zone));
     const y = Number(r.y);
     if (list) list.push(y); else years.set(String(r.zone), [y]);
@@ -157,10 +166,10 @@ function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): nu
 }
 
 /** The zone whose centre is nearest to a place; null when none is within 150 km. Never applied by itself. */
-export function suggestZone(db: DatabaseSync, lat: number, lon: number): { code: string; distanceKm: number } | null {
+export function suggestZone(db: DatabaseSync, lat: number, lon: number, surauId: string): { code: string; distanceKm: number } | null {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   let best: { code: string; distanceKm: number } | null = null;
-  for (const z of listZones(db)) {
+  for (const z of listZones(db, surauId)) {
     if (z.removed || z.lat === null || z.lon === null) continue;
     const d = haversineKm(lat, lon, z.lat, z.lon);
     if (best === null || d < best.distanceKm) best = { code: z.code, distanceKm: d };
@@ -172,19 +181,19 @@ export function suggestZone(db: DatabaseSync, lat: number, lon: number): { code:
 const MONTHS = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogo', 'Sep', 'Okt', 'Nov', 'Dis'];
 
 /** BM warning for the chosen zone when JAKIM dropped or renamed it; null when all is well. */
-export function zoneWarning(db: DatabaseSync, settings: Settings): string | null {
+export function zoneWarning(db: DatabaseSync, settings: Settings, surauId: string): string | null {
   const code = String(settings.zone.zone);
   if (!ZONE.test(code)) return null;
   const row = db.prepare('SELECT removed_at FROM jakim_zones WHERE code = ?').get(code);
   if (row && typeof row.removed_at === 'string') {
-    const last = db.prepare('SELECT MAX(date) AS d FROM prayer_days WHERE zone = ?').get(code);
+    const last = db.prepare('SELECT MAX(date) AS d FROM prayer_days WHERE surau_id = ? AND zone = ?').get(surauId, code);
     const d = typeof last?.d === 'string' ? last.d : null;
     if (d === null) return `Zon ${code} tiada lagi dalam senarai JAKIM`;
     const day = Number(d.slice(8, 10));
     return `Zon ${code} tiada lagi dalam senarai JAKIM; data tersimpan digunakan sehingga ${day} ${MONTHS[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
   }
   try {
-    const renamed = JSON.parse(getMeta(db, 'jakimZones.renamed') ?? '[]') as unknown;
+    const renamed = JSON.parse(getMeta(db, 'jakimZones.renamed', surauId) ?? '[]') as unknown;
     if (Array.isArray(renamed) && renamed.includes(code)) return `Nama zon ${code} bertukar`;
   } catch { /* an unreadable note is no warning */ }
   return null;

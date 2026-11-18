@@ -73,6 +73,12 @@ afterEach(() => {
 });
 
 describe('parseKioskLive', () => {
+  it('keeps waiting only when it is true', () => {
+    expect(parseKioskLive({ ...LIVE_ON, waiting: true })).toMatchObject({ waiting: true });
+    expect(parseKioskLive({ ...LIVE_ON, waiting: false })).not.toHaveProperty('waiting');
+    expect(parseKioskLive({ ...LIVE_ON, waiting: 'yes' })).not.toHaveProperty('waiting');
+    expect(parseKioskLive(LIVE_ON)).not.toHaveProperty('waiting');
+  });
   it('keeps a known path and drops an unknown one', () => {
     expect(parseKioskLive({ ...LIVE_ON, path: 'surau-kiosk' })).toMatchObject({ path: 'surau-kiosk' });
     expect(parseKioskLive({ ...LIVE_ON, path: '../x' })).not.toHaveProperty('path');

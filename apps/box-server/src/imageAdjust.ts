@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { IMAGE_SLOTS, MIN_CROP_SPAN } from '@surau/core';
 import type { AdjustedImage, ImageRect, ImageRef, ImageSlotKey } from '@surau/core';
-import { getAssetPath, putAsset } from './assets/store.ts';
+import { getAssetPath } from './assets/store.ts';
+import { serverRoleOf } from './auth/users.ts';
+import { putSurauAsset, surauHoldsAsset } from './surau/storage.ts';
+import { LOCAL_SURAU_ID } from './tenant.ts';
 import { decodeImage, encodeJpeg, encodePng, premulToRgba, resamplePremul, scaleToBox } from './imageResize.ts';
 import type { Rgba } from './imageResize.ts';
 
@@ -354,12 +357,24 @@ function relevant(slot: ImageSlotKey, ref: AdjustedImage): boolean {
   return ref.crop !== undefined || ref.bg !== undefined || ref.rotate !== undefined || (slot === 'logoSquare' && ref.square !== undefined);
 }
 
-function keyOf(slot: ImageSlotKey, ref: AdjustedImage): string {
-  const payload = ['v1', slot, ref.asset, rectKey(ref.crop), ref.bg ?? null, ref.rotate ?? null, slot === 'logoSquare' ? rectKey(ref.square) : null];
+/**
+ * The derivative's key. On the cloud the surau is part of it, so a derivative (and a remembered failure) is looked up
+ * per surau; a box (one surau) keeps the key it always had.
+ */
+function keyOf(slot: ImageSlotKey, ref: AdjustedImage, cloudSurau: string | null): string {
+  const payload: unknown[] = ['v1', slot, ref.asset, rectKey(ref.crop), ref.bg ?? null, ref.rotate ?? null, slot === 'logoSquare' ? rectKey(ref.square) : null];
+  if (cloudSurau !== null) payload.push({ surau: cloudSurau });
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
-function loadSource(db: DatabaseSync, dataDir: string, id: string): Rgba {
+/** The surau a derivative is made for on the cloud; null on a box (no per-surau store there). */
+const cloudSurauOf = (db: DatabaseSync, surauId: string): string | null => (serverRoleOf(db) === 'cloud' ? surauId : null);
+
+function loadSource(db: DatabaseSync, dataDir: string, id: string, cloudSurau: string | null): Rgba {
+  // on the cloud only a source the surau holds: the content hash alone is not a licence to read
+  if (cloudSurau !== null && !surauHoldsAsset(db, 'cloud', cloudSurau, id)) {
+    throw new ImageAdjustError('the picture refers to an asset that does not exist', true);
+  }
   const found = getAssetPath(db, dataDir, id);
   if (found === null) throw new ImageAdjustError('the picture refers to an asset that does not exist', true);
   if (found.mime !== 'image/png' && found.mime !== 'image/jpeg') {
@@ -378,16 +393,27 @@ function loadSource(db: DatabaseSync, dataDir: string, id: string): Rgba {
  * asset; the same adjustment finds it again by its key, so no copy is ever made twice.
  * Throws ImageAdjustError when the source is missing or cannot be adjusted.
  */
-export function deriveImage(db: DatabaseSync, dataDir: string, slot: ImageSlotKey, ref: ImageRef, actor: string = IMAGE_ADJUST_ACTOR): string {
+export function deriveImage(
+  db: DatabaseSync,
+  dataDir: string,
+  slot: ImageSlotKey,
+  ref: ImageRef,
+  actor: string = IMAGE_ADJUST_ACTOR,
+  /** The surau the picture is for. On the cloud the derivative is stored for it (counted in its limit, held by it). */
+  surauId: string = LOCAL_SURAU_ID,
+): string {
   if (typeof ref === 'string') return ref;
   if (!relevant(slot, ref)) return ref.asset;
-  const key = keyOf(slot, ref);
+  const cloudSurau = cloudSurauOf(db, surauId);
+  const key = keyOf(slot, ref, cloudSurau);
   const row = db.prepare('SELECT derived_id FROM asset_derivatives WHERE key = ?').get(key);
   if (row !== undefined && typeof row.derived_id === 'string') {
-    if (db.prepare('SELECT 1 AS ok FROM assets WHERE id = ?').get(row.derived_id) !== undefined) return row.derived_id;
+    const present = db.prepare('SELECT 1 AS ok FROM assets WHERE id = ?').get(row.derived_id) !== undefined;
+    if (present && (cloudSurau === null || surauHoldsAsset(db, 'cloud', cloudSurau, row.derived_id))) return row.derived_id;
   }
-  const out = renderSlot(loadSource(db, dataDir, ref.asset), slot, ref);
-  const meta = putAsset(db, dataDir, out.data, out.mime, actor);
+  const out = renderSlot(loadSource(db, dataDir, ref.asset, cloudSurau), slot, ref);
+  // putSurauAsset is the plain putAsset where the surau has no limit row (every box)
+  const meta = putSurauAsset(db, dataDir, out.data, out.mime, actor, surauId);
   db.prepare(
     'INSERT INTO asset_derivatives (key, source_id, slot, derived_id, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET derived_id = excluded.derived_id',
   ).run(key, ref.asset, slot, meta.id, new Date().toISOString());
@@ -401,15 +427,16 @@ export function deriveImage(db: DatabaseSync, dataDir: string, slot: ImageSlotKe
  * not decode it again on every request; a different source or different params is a new key.
  * A missing source is not remembered: the asset may still arrive.
  */
-export function resolveImageId(db: DatabaseSync, dataDir: string, slot: ImageSlotKey, ref: ImageRef): string {
+export function resolveImageId(db: DatabaseSync, dataDir: string, slot: ImageSlotKey, ref: ImageRef, surauId: string = LOCAL_SURAU_ID): string {
   const original = typeof ref === 'string' ? ref : ref.asset;
   if (typeof ref === 'string' || !relevant(slot, ref)) return original;
-  const key = keyOf(slot, ref);
+  const key = keyOf(slot, ref, cloudSurauOf(db, surauId));
   try {
     if (db.prepare('SELECT 1 AS ok FROM asset_derivative_failures WHERE key = ?').get(key) !== undefined) return original;
-    return deriveImage(db, dataDir, slot, ref);
+    return deriveImage(db, dataDir, slot, ref, IMAGE_ADJUST_ACTOR, surauId);
   } catch (error) {
-    if (!(error instanceof ImageAdjustError && error.missing)) {
+    // only a picture that cannot be adjusted is remembered; a missing source or a full store may change
+    if (error instanceof ImageAdjustError && !error.missing) {
       try {
         db.prepare('INSERT OR IGNORE INTO asset_derivative_failures (key, source_id, slot, failed_at) VALUES (?, ?, ?, ?)').run(
           key,

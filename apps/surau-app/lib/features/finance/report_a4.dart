@@ -279,10 +279,10 @@ class _Sheet extends StatelessWidget {
           ),
         body,
         if (a.fullPage)
-          Positioned(left: 0, right: 0, bottom: 36, child: footer)
+          Positioned(left: 0, right: 0, bottom: 36, child: footer) // dir-ok: the A4 sheet is BM and always left to right
         else
           Positioned(
-            left: 0,
+            left: 0, // dir-ok: the A4 sheet is BM and always left to right
             right: 0,
             top: a4Height - 65,
             height: 65,
@@ -327,7 +327,7 @@ class _Sheet extends StatelessWidget {
                 // Right edges 88 points apart, the first column narrow, as
                 // in pdf.ts.
                 width: i == 0 ? 56 : 88,
-                child: Text(c, style: st, textAlign: TextAlign.right),
+                child: Text(c, style: st, textAlign: TextAlign.right), // dir-ok: A4 figures column
               ),
           ],
         ),
@@ -380,7 +380,7 @@ class _Sheet extends StatelessWidget {
               for (final x in g.rows) _entryRow(x.date, x.ref, x.desc, x.sen),
               const SizedBox(height: 2),
               const Align(
-                alignment: Alignment.centerRight,
+                alignment: Alignment.centerRight, // dir-ok: A4 figures column
                 child: SizedBox(
                   width: 110,
                   child: Divider(
@@ -400,7 +400,7 @@ class _Sheet extends StatelessWidget {
                     child: Text(
                       _money(g.total),
                       style: _b(9),
-                      textAlign: TextAlign.right,
+                      textAlign: TextAlign.right, // dir-ok: A4 figures column
                     ),
                   ),
                 ],
@@ -431,7 +431,7 @@ class _Sheet extends StatelessWidget {
           width: 100,
           child: Text(
             _money(sen),
-            textAlign: TextAlign.right,
+            textAlign: TextAlign.right, // dir-ok: A4 figures column
             style: _base.copyWith(fontSize: 8.5),
           ),
         ),
@@ -451,7 +451,7 @@ class _Sheet extends StatelessWidget {
             const SizedBox(width: 8),
             SizedBox(
               width: 100,
-              child: Text('Kesan', style: _b(8.5), textAlign: TextAlign.right),
+              child: Text('Kesan', style: _b(8.5), textAlign: TextAlign.right), // dir-ok: A4 figures column
             ),
           ],
         ),

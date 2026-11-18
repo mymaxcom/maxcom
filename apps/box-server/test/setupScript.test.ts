@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeFakeBundle, type FakeBundle } from './helpers/fakeBundle.ts';
+import { must } from './helpers/must.ts';
 
 const setupPath = fileURLToPath(new URL('../../../scripts/setup/setup.ps1', import.meta.url));
 const cmdPath = fileURLToPath(new URL('../../../scripts/setup/Pasang MAXCOM.cmd', import.meta.url));
@@ -278,7 +279,7 @@ describe.runIf(isWin)('setup.ps1 runs', () => {
     const backups = join(e1.base, 'backups');
     const pre = readdirSync(backups).filter((n) => n.startsWith('pre-2026.11.2-'));
     expect(pre.length).toBe(1);
-    expect(readFileSync(join(backups, pre[0], 'surau.db'), 'utf8')).toBe('fake database bytes');
+    expect(readFileSync(join(backups, must(pre[0], 'pre-upgrade backup'), 'surau.db'), 'utf8')).toBe('fake database bytes');
   });
 
   it('refuses to install an older version over a newer one', () => {

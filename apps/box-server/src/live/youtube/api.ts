@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from '../../tenant.ts';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -20,8 +21,9 @@ export type VideoPrivacy = 'private' | 'unlisted' | 'public';
 export interface YoutubeService extends YoutubeLeg {
   configured(): boolean;
   begin(actor: string): Promise<SigninBegin>;
-  poll(actor: string): Promise<SigninPoll>;
-  signout(actor: string): Promise<void>;
+  /** `surauId`: the surau whose change log gets the sign-in row (the request's tenant; default the local one). */
+  poll(actor: string, surauId?: string): Promise<SigninPoll>;
+  signout(actor: string, surauId?: string): Promise<void>;
   /**
    * At start. Box role: ends the broadcasts an earlier run left open (completed if it went live, deleted if
    * not). Cloud role: only reloads the open-broadcast record, because the cloud restarting says nothing about
@@ -32,6 +34,8 @@ export interface YoutubeService extends YoutubeLeg {
   touch(scopePrefix: string): void;
   /** Completes the open broadcasts nobody has touched for `maxAgeMs` (default 6 hours); returns how many were ended. */
   sweepOrphans(maxAgeMs?: number): Promise<number>;
+  /** True while a broadcast of this sign-in is open (made and not yet completed). */
+  hasOpenBroadcast(): boolean;
   info(): { configured: boolean; signedIn: boolean; channelTitle: string | null; lastError: YoutubeReason | null };
   /** Stops the health timer (the box is closing). */
   shutdown(): void;
@@ -99,6 +103,12 @@ export interface YoutubeServiceDeps {
   healthMs?: number;
   /** `cloud`: recover() never ends a broadcast (see `YoutubeService.recover`). Default `box`. */
   role?: 'box' | 'cloud';
+  /** The surau this service signs in for: its name titles the stream and its change log gets the audit rows (default the local one). */
+  surauId?: string;
+  /** Token file under the secret folder (default `youtube-token.json`; the cloud uses one per surau). */
+  tokenFile?: string;
+  /** Open-broadcast record under `live/` (default `youtube-open.json`). */
+  openFile?: string;
 }
 
 type Health = NonNullable<LiveStatus['youtube']['health']>;
@@ -107,7 +117,8 @@ const HEALTHS: ReadonlySet<string> = new Set<Health>(['noData', 'bad', 'ok', 'go
 export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
   const { db, now } = deps;
   const timeoutMs = deps.timeoutMs ?? 10_000;
-  const auth = new YoutubeAuth({ dataDir: deps.dataDir, fetchImpl: deps.fetchImpl, now, timeoutMs });
+  const surauOf = deps.surauId ?? LOCAL_SURAU_ID;
+  const auth = new YoutubeAuth({ dataDir: deps.dataDir, fetchImpl: deps.fetchImpl, now, timeoutMs, ...(deps.tokenFile !== undefined ? { tokenFile: deps.tokenFile } : {}) });
 
   let broadcastId: string | null = null;
   let watchUrl: string | null = null;
@@ -118,8 +129,9 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
   let timer: NodeJS.Timeout | null = null;
   let polling = false;
 
-  const audit = (actor: string, entityId: string, after: Record<string, unknown>): void => {
-    db.prepare('INSERT INTO change_log (at, actor, entity, entity_id, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?)').run(
+  const audit = (actor: string, entityId: string, after: Record<string, unknown>, surauId: string): void => {
+    db.prepare('INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+      surauId,
       now().toISOString(),
       actor,
       'youtube',
@@ -224,7 +236,7 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
    * stream delete 50 = about 250 of the 10,000 daily units.
    */
   async function createStream(): Promise<{ id: string; key: string }> {
-    const surau = getSettings(db).surauInfo.name.trim();
+    const surau = getSettings(db, surauOf).surauInfo.name.trim();
     const made = await call(
       'POST',
       'liveStreams',
@@ -253,7 +265,7 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
   /* The open broadcasts are written down, by session, so a crash or power cut cannot leave one dangling on the
      channel and a retried request finds the one it made. Ids and times only: no key, no token. */
   const role = deps.role ?? 'box';
-  const openFile = join(deps.dataDir, 'live', 'youtube-open.json');
+  const openFile = join(deps.dataDir, 'live', deps.openFile ?? 'youtube-open.json');
   const open = new Map<string, OpenRec>();
   const creating = new Map<string, Promise<{ broadcastId: string; watchUrl: string; key: string }>>();
   let persistedSeen = 0;
@@ -530,19 +542,21 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
 
     info: () => ({ configured: auth.configured(), signedIn: auth.signedIn(), channelTitle: auth.channelTitle(), lastError: lastError ?? auth.lastError() }),
 
+    hasOpenBroadcast: () => open.size > 0,
+
     async begin(actor: string): Promise<SigninBegin> {
       void actor;
       return auth.begin();
     },
 
-    async poll(actor: string): Promise<SigninPoll> {
+    async poll(actor: string, surauId: string = surauOf): Promise<SigninPoll> {
       const wasIn = auth.signedIn();
       const r = await auth.poll();
-      if (r.state === 'signed_in' && !wasIn) audit(actor, 'signin', { channelTitle: r.channelTitle });
+      if (r.state === 'signed_in' && !wasIn) audit(actor, 'signin', { channelTitle: r.channelTitle }, surauId);
       return r;
     },
 
-    async signout(actor: string): Promise<void> {
+    async signout(actor: string, surauId: string = surauOf): Promise<void> {
       stopTimer();
       await auth.signout();
       broadcastId = null;
@@ -550,7 +564,7 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
       state = 'none';
       health = null;
       lastError = null;
-      audit(actor, 'signout', {});
+      audit(actor, 'signout', {}, surauId);
     },
 
     async createResumableUpload(meta: YoutubeMeta, privacy: VideoPrivacy, bytes?: number) {

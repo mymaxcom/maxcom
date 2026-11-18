@@ -10,7 +10,10 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointycastle/digests/sha256.dart';
 import 'package:surau_app/content/image_ref.dart' show ImageSlot, slotForField;
+import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/content/kinds.dart';
+import 'package:surau_app/features/labels.dart' show zoneCityName;
+import 'package:surau_app/l10n/s_lookup.dart';
 
 String _read(String relative) {
   final file = File(relative);
@@ -199,5 +202,48 @@ void main() {
     for (final id in ids) {
       expect(re.hasMatch(id), isTrue, reason: id);
     }
+  });
+
+  group('release 2026.11.12 (RA1)', () {
+    Map<String, dynamic> zone(String tz) => {'city': 'Bandar', 'tz': tz, 'order': 1};
+
+    test('[C5] a stored zone outside the list is valid: Asia/Brunei, Asia/Tehran, Asia/Kuwait', () {
+      for (final tz in ['Asia/Brunei', 'Asia/Tehran', 'Asia/Kuwait', 'America/Argentina/Buenos_Aires']) {
+        expect(validateContent('worldTime', zone(tz)).ok, isTrue, reason: tz);
+      }
+      expect(validateContent('worldTime', zone('not a zone')).ok, isFalse);
+      expect(validateContent('worldTime', zone('Asia')).ok, isFalse);
+    });
+
+    test('[C7] seriesId is carried, not a form field, and still validated', () {
+      final spec = contentKindByKey('kuliah')!;
+      expect(spec.fieldOrNull('seriesId')?.hidden, isTrue);
+      final base = {
+        'date': '2026-11-05',
+        'slot': 'maghrib',
+        'time': '19:15',
+        'label': 'Kuliah',
+        'penceramahId': 'p1',
+        'status': 'aktif',
+      };
+      expect(validateContent('kuliah', {...base, 'seriesId': 'siri-a'}).ok, isTrue);
+      expect(validateContent('kuliah', {...base, 'seriesId': 5}).ok, isFalse);
+      expect(cleanItem(spec, {...base, 'seriesId': 'siri-a'})['seriesId'], 'siri-a');
+    });
+
+    test('[C8] the range hint and the city names come from catalogues in three languages', () {
+      for (final z in timezoneChoices) {
+        final en = zoneCityName(z.$2, AppLang.en, ms: z.$1);
+        final ar = zoneCityName(z.$2, AppLang.ar, ms: z.$1);
+        expect(en, isNotEmpty);
+        expect(ar, isNotEmpty);
+        expect(RegExp(r'[\u0600-\u06FF]').hasMatch(ar), isTrue, reason: '${z.$2} has an Arabic name');
+      }
+      expect(zoneCityName('Asia/Singapore', AppLang.en, ms: 'Singapura'), 'Singapore');
+      expect(zoneCityName('Asia/Singapore', AppLang.ms, ms: 'Singapura'), 'Singapura');
+      expect(sFor(AppLang.en).valRange(1, 120), '1 to 120');
+      expect(sFor(AppLang.ms).valRange(1, 120), '1 hingga 120');
+      expect(sFor(AppLang.ar).valRange(1, 120), contains('120'));
+    });
   });
 }

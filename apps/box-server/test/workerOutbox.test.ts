@@ -6,6 +6,7 @@ import { revokeDevice } from '../src/auth/devices.ts';
 import { putItem } from '../src/content/store.ts';
 import { generateSyncKeyPair } from '../src/sync/syncKey.ts';
 import { issueLinkCode, revokeSite } from '../src/sync/sites.ts';
+import { ensureSurau } from './support/surauRow.ts';
 import { BACKOFF_MIN_MS, backoffMs, outboxStatus, setOutboxOn } from '../src/sync/workerOutbox.ts';
 import { loginAs } from './authHelpers.ts';
 import { buildCloud } from './support/fakeCloud.ts';
@@ -54,7 +55,7 @@ const drain = (r: Rig) => r.cloud.app.workerOutbox!.drain();
 let ipN = 0;
 const freshIp = (): string => `10.8.${(++ipN >> 8) & 255}.${ipN & 255}`;
 
-const change = (r: Rig, id: string) => putItem(db(r), 'penceramah', { id, name: `Ustaz ${id}` }, 'local');
+const change = (r: Rig, id: string) => putItem(db(r), 'penceramah', { id, name: `Ustaz ${id}` }, 'local', undefined, 'sdm');
 
 describe('worker outbox: the dirty flag', () => {
   it('a change on the cloud gives exactly one dirty PUT carrying the head, with the admin token', async () => {
@@ -170,14 +171,14 @@ describe('worker outbox: the dirty flag', () => {
     const base = logs();
     expect(() =>
       tx(db(r), () => {
-        logChange(db(r), 'user:t', 'content:penceramah', 'x1', undefined, { id: 'x1' });
+        logChange(db(r), 'user:t', 'content:penceramah', 'x1', undefined, { id: 'x1' }, undefined, 'sdm');
         expect(rows(r)).toHaveLength(1); // visible inside the transaction
         throw new Error('forced');
       }),
     ).toThrow('forced');
     expect(logs()).toBe(base);
     expect(rows(r)).toHaveLength(0);
-    tx(db(r), () => logChange(db(r), 'user:t', 'content:penceramah', 'x2', undefined, { id: 'x2' }));
+    tx(db(r), () => logChange(db(r), 'user:t', 'content:penceramah', 'x2', undefined, { id: 'x2' }, undefined, 'sdm'));
     expect(logs()).toBe(base + 1);
     expect(rows(r)).toHaveLength(1);
   });
@@ -188,14 +189,14 @@ describe('worker outbox: the dirty flag', () => {
     insertSite(db(r), { boxId: '0011223344556677', revoked: true });
     insertSite(db(r), { boxId: '8899aabbccddeeff', linked: false });
     // entities that never leave the cloud do not raise the flag (the box could never clear it)
-    logChange(db(r), 'user:t', 'live', '1', undefined, { a: 1 });
-    logChange(db(r), 'user:t', 'site', BOX, undefined, { a: 1 });
-    logChange(db(r), 'user:t', 'auth', '1', undefined, { a: 1 });
+    logChange(db(r), 'user:t', 'live', '1', undefined, { a: 1 }, undefined, 'sdm');
+    logChange(db(r), 'user:t', 'site', BOX, undefined, { a: 1 }, undefined, 'sdm');
+    logChange(db(r), 'user:t', 'auth', '1', undefined, { a: 1 }, undefined, 'sdm');
     expect(rows(r)).toHaveLength(0);
     // a change the site itself pushed does not flag that site
-    logChange(db(r), 'user:t', 'settings', 'zone', undefined, { a: 1 }, { origin: `box:${BOX}` });
+    logChange(db(r), 'user:t', 'settings', 'zone', undefined, { a: 1 }, { origin: `box:${BOX}` }, 'sdm');
     expect(rows(r)).toHaveLength(0);
-    logChange(db(r), 'user:t', 'settings', 'zone', undefined, { a: 1 }, { origin: 'app' });
+    logChange(db(r), 'user:t', 'settings', 'zone', undefined, { a: 1 }, { origin: 'app' }, 'sdm');
     expect(rows(r).map((x) => x.key)).toEqual([`dirty/${BOX}`]);
   });
 });
@@ -263,7 +264,7 @@ describe('worker outbox: the device allowlist', () => {
 
 describe('worker outbox: the wake secret', () => {
   async function link(r: Rig) {
-    const { code } = issueLinkCode({ db: db(r), now: () => new Date(r.clock.t) }, { boxId: BOX, name: 'Surau D\'Waqaf' });
+    const { code } = issueLinkCode({ db: db(r), now: () => new Date(r.clock.t) }, { boxId: BOX, name: 'Surau D\'Waqaf', target: { surauId: ensureSurau(db(r)) } });
     return r.cloud.app.inject({
       method: 'POST',
       url: '/api/sync/link',
@@ -357,7 +358,7 @@ describe('worker outbox: secrets and the no-Worker mode', () => {
     change(r, 'p1');
     const login = await loginAs(r.cloud.app, 'admin');
     revokeDevice(db(r), login.deviceId, 'test');
-    const { code } = issueLinkCode({ db: db(r), now: () => new Date() }, { boxId: 'ffeeddccbbaa9988', name: 'Lain' });
+    const { code } = issueLinkCode({ db: db(r), now: () => new Date() }, { boxId: 'ffeeddccbbaa9988', name: 'Lain', target: { newSurau: { name: 'Lain' } } });
     const res = await r.cloud.app.inject({
       method: 'POST',
       url: '/api/sync/link',

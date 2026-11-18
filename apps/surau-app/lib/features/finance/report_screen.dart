@@ -20,7 +20,8 @@ import '../../screens/widgets/box_read.dart' show writeErrorText;
 import '../shell/permissions.dart';
 import '../common/surau_info.dart' show SurauInfo;
 import 'finance_box_api.dart';
-import 'finance_widgets.dart' show FinTwoColumnPage;
+import 'finance_widgets.dart' show FinInfoBox, FinTone, FinTwoColumnPage;
+import 'month_label.dart';
 import 'report_a4.dart';
 import 'share.dart' show ShareResult;
 import 'share_sheet.dart';
@@ -46,6 +47,12 @@ class _ReportData {
   final List<String> known;
 
   bool get closed => month?.closed ?? false;
+
+  /// Entries that came after the month was closed.
+  List<String> get lateEntryIds => {
+    ...?month?.lateEntries,
+    ...report.lateEntries,
+  }.toList();
 }
 
 class ReportScreen extends ConsumerStatefulWidget {
@@ -174,7 +181,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
     final ym = _ym!;
     final cur = _currentYm(repo);
     final isCurrent = ym == cur;
-    final monthName = monthNameMs(ym);
+    final monthName = monthLabel(s, ym);
     final last = _previousYm(cur);
     final today = repo.todayKl;
 
@@ -205,6 +212,15 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       chips,
       const SizedBox(height: 12),
       _statusCard(s, text, d, isCurrent, today, monthName),
+      if (d.lateEntryIds.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        FinInfoBox(
+          key: const Key('finr-late'),
+          text: s.ra3LateEntries(d.lateEntryIds.length),
+          icon: Icons.info_outline_rounded,
+          tone: FinTone.gold,
+        ),
+      ],
       const SizedBox(height: 12),
       if (d.pending > 0)
         Padding(
@@ -273,7 +289,15 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
             ),
           ],
         ),
-        if (!d.closed && ym.compareTo(cur) < 0) ...[
+        if (!d.closed && ym.compareTo(cur) < 0 && !isAdmin) ...[
+          const SizedBox(height: 10),
+          Text(
+            s.ra3AskAdminClose,
+            key: const Key('finr-ask-admin'),
+            style: text.bodyMedium!.copyWith(color: SurauColors.muted),
+          ),
+        ],
+        if (!d.closed && ym.compareTo(cur) < 0 && isAdmin) ...[
           const SizedBox(height: 10),
           OutlinedButton.icon(
             key: const Key('finr-close-month'),
@@ -287,7 +311,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                s.finrCloseOrder(monthNameMs(d.earlierOpen.first)),
+                s.finrCloseOrder(monthLabel(s, d.earlierOpen.first)),
                 key: const Key('finr-close-order'),
                 style: text.bodyMedium!.copyWith(color: SurauColors.muted),
               ),
@@ -441,7 +465,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
             for (final m in d.known)
               ListTile(
                 key: Key('finr-pick-$m'),
-                title: Text(monthNameMs(m)),
+                title: Text(monthLabel(s, m)),
                 trailing: m == _ym ? const Icon(Icons.check_rounded) : null,
                 onTap: () => Navigator.of(context).pop(m),
               ),
@@ -559,7 +583,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
 
   Future<void> _closeMonth(String ym) async {
     final s = S.of(context);
-    if (!await _confirm(s.finrCloseTitle(monthNameMs(ym)), s.finrCloseBody)) {
+    if (!await _confirm(s.finrCloseTitle(monthLabel(s, ym)), s.finrCloseBody)) {
       return;
     }
     await _guarded(() async {
@@ -571,7 +595,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
 
   Future<void> _reopen(String ym) async {
     final s = S.of(context);
-    if (!await _confirm(s.finrReopenTitle(monthNameMs(ym)), s.finrReopenBody)) {
+    if (!await _confirm(s.finrReopenTitle(monthLabel(s, ym)), s.finrReopenBody)) {
       return;
     }
     await _guarded(() async {

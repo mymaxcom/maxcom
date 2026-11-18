@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import '../features/enrol/enrol_flow.dart' show EnrolledBox, TrustError;
+import '../ops/ops_build.dart' show kOpsBuild;
 import 'box_client.dart';
 import 'box_name.dart';
 import 'cloud_origin.dart';
@@ -44,14 +45,33 @@ class DirectBoxLocator implements BoxLocator {
     try {
       health = HealthDto.fromJson(json);
     } on Object {
-      throw const BoxUnreachable('jawapan kesihatan tidak sah');
+      throw const BoxUnreachable('jawapan kesihatan tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }
     try {
       onHealth?.call(health);
     } on Object {
       // learning the cloud is a convenience
     }
-    return Located(base: b.box, via: 'box', health: health);
+    return Located(base: b.box, via: _via(b), health: health);
+  }
+
+  /// `cloud` when this is the Ops build and the enrolled "box" is the cloud
+  /// itself (the Ops enrolment saves the cloud origin in both fields), so a
+  /// session reached there is a cloud session. The public build always says
+  /// `box`: a real public box can share the cloud origin without being the
+  /// cloud. A real box — a LAN origin different from the cloud — stays `box`
+  /// in either build.
+  String _via(EnrolledBox b) =>
+      kOpsBuild && b.cloud != null && _sameOrigin(b.box, b.cloud!)
+      ? 'cloud'
+      : 'box';
+
+  /// Same scheme, host (case-insensitive) and effective port; a trailing
+  /// slash or path is ignored.
+  bool _sameOrigin(Uri a, Uri b) {
+    if (a.scheme.toLowerCase() != b.scheme.toLowerCase()) return false;
+    if (a.host.toLowerCase() != b.host.toLowerCase()) return false;
+    return a.port == b.port;
   }
 }
 
@@ -157,7 +177,7 @@ class NameAwareLocator implements BoxLocator {
     } on BoxError {
       rethrow;
     } on Object {
-      throw const BoxUnreachable('jawapan kesihatan tidak sah');
+      throw const BoxUnreachable('jawapan kesihatan tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }
     return (located: Located(base: origin, via: 'box', health: health), ip: ip);
   }
@@ -308,7 +328,7 @@ class CloudLocator implements BoxLocator {
     try {
       health = HealthDto.fromJson(json);
     } on Object {
-      throw const BoxUnreachable('jawapan kesihatan tidak sah');
+      throw const BoxUnreachable('jawapan kesihatan tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }
     return Located(base: cloud, via: 'cloud', health: health);
   }

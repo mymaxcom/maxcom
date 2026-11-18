@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { createHash, X509Certificate } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -61,7 +62,7 @@ export function issueEnrolmentLines(db: DatabaseSync, user: User, box: string, d
   logChange(
     db, 'local', 'users', user.id,
     { id: user.id, name: user.name, roles: user.roles, active: user.active },
-    { id: user.id, name: user.name, roles: user.roles, active: user.active, enrolCodeIssued: true },
+    { id: user.id, name: user.name, roles: user.roles, active: user.active, enrolCodeIssued: true }, undefined, LOCAL_SURAU_ID,
   );
   const ca = rootCaSha256(dataDir);
   let tls: TlsMaterial | null = null;
@@ -72,7 +73,7 @@ export function issueEnrolmentLines(db: DatabaseSync, user: User, box: string, d
   }
   const localName = boxNameOf(tls);
   const lanIps = lanIpv4Of(tls);
-  const info = surauPublicInfo(db);
+  const info = surauPublicInfo(db, undefined, LOCAL_SURAU_ID);
   const cloudOrigin = enrolCloudOrigin(db);
   const payload =
     'surau1:' +
@@ -89,7 +90,7 @@ export function issueEnrolmentLines(db: DatabaseSync, user: User, box: string, d
         code: enrolment.code,
         user: user.name,
         pinSet: !user.pinRequired,
-        appLock: appLockEnabled(db),
+        appLock: appLockEnabled(db, LOCAL_SURAU_ID),
         exp: new Date(enrolment.expiresAt).getTime(),
         surau: { name: info.name, kind: info.kind },
         ...(info.help ? { help: info.help } : {}),
@@ -123,12 +124,12 @@ function run(argv: string[]): number {
   const dataDir = resolve(args.data ?? dirname(resolve(dbPath)));
   const db = openDb(dbPath);
   try {
-    const admins = listUsers(db).filter((u) => u.active && u.roles.includes('admin'));
+    const admins = listUsers(db, LOCAL_SURAU_ID, true).filter((u) => u.active && u.roles.includes('admin'));
     if (admins.length > 0) {
       // Recovery: never a second admin. A NEW code only for an admin with no active device,
       // or for any admin when --force-new-code is given (devices are never removed).
       const force = args['force-new-code'] === 'true';
-      const candidates = force ? admins : admins.filter((a) => listDevices(db, a.id).length === 0);
+      const candidates = force ? admins : admins.filter((a) => listDevices(db, a.id, { includeStar: true }, LOCAL_SURAU_ID).length === 0);
       // --name is required and must match: a typo or a different person never gets someone else's code.
       const pool = candidates.filter((a) => a.name === name);
       if (pool.length === 0) {
@@ -150,7 +151,7 @@ function run(argv: string[]): number {
       return 0;
     }
     // An empty box runs the same setup core as the QR on the TV; a box with only non-admin users just gets its first admin.
-    if (listUsers(db).length === 0) {
+    if (listUsers(db, LOCAL_SURAU_ID, true).length === 0) {
       const done = setupFromCli(db, dataDir, boxId(dataDir), {
         adminName: name,
         ...(args['surau-name'] !== undefined ? { surauName: args['surau-name'] } : {}),
@@ -161,7 +162,7 @@ function run(argv: string[]): number {
       process.stdout.write(setupLines.join('\n') + '\n');
       return 0;
     }
-    const admin = createUser(db, { name, roles: ['admin'] }, 'local');
+    const admin = createUser(db, { name, roles: ['admin'] }, 'local', LOCAL_SURAU_ID);
     const lines = issueEnrolmentLines(db, admin, box, dataDir, `Pentadbir dicipta: ${admin.name}`);
     process.stdout.write(lines.join('\n') + '\n');
     return 0;

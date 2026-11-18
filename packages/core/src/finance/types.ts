@@ -5,6 +5,17 @@ export type Method = 'tunai' | 'bank' | 'duitnow' | 'cek';
 export type CorrectionKind = 'amount' | 'void' | 'fund';
 export type Counter = { userId: string } | { name: string };
 
+/** The names used when an entry was made, kept so a later rename never rewrites the record. `counters` is keyed by user id. */
+export interface EntryNames {
+  createdBy: string | null;
+  device: string | null;
+  counters: Record<string, string>;
+  /** The IDs (`U-0001`, `D-0001`) of the same people and device, stored when known and filled at read when missing. */
+  createdByRef?: string | null;
+  deviceRef?: string | null;
+  counterRefs?: Record<string, string>;
+}
+
 export interface Denominations {
   '100'?: number;
   '50'?: number;
@@ -66,6 +77,8 @@ export interface FinanceEntry {
   editedAt: string;
   receivedAt: string;
   cloudReceivedAt: string | null;
+  /** Names at the time the entry was made (null on an entry from before they were kept). */
+  names?: EntryNames | null;
 }
 
 export interface MonthState {
@@ -75,6 +88,8 @@ export interface MonthState {
   closedBy: string | null;
   /** The report as it was when the month was closed (names and figures frozen); null while the month is open. */
   report: MonthReport | null;
+  /** Ids of entries that reached this side after the month was closed (absent when there are none). */
+  lateEntries?: string[];
 }
 
 export interface PhotoMeta {
@@ -149,6 +164,8 @@ export interface MonthReport {
   outByPerihal: ReportGroup<ReportOutRow>[];
   corrections: ReportCorrection[];
   totals: { openingSen: number; inSen: number; outSen: number; correctionsSen: number; closingSen: number };
+  /** Ids of entries that reached this side after the month was closed; never part of the frozen figures. */
+  lateEntries?: string[];
 }
 
 export interface TabungRow {

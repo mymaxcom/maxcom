@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.ts';
 import { getAssetPath, putAsset } from '../src/assets/store.ts';
+import { putSurauAsset } from '../src/surau/storage.ts';
 import { putFeature } from '../src/settingsStore.ts';
 import type { PrayerDay } from '@surau/core';
 import { importDays } from '../src/prayerStore.ts';
@@ -13,6 +14,7 @@ import { getItem, putItem } from '../src/content/store.ts';
 import { runCloudLink } from '../src/cli/cloudLink.ts';
 import { assetIdsIn, BACKOFF_MS } from '../src/sync/agent.ts';
 import { issueLinkCode } from '../src/sync/sites.ts';
+import { ensureSurau } from './support/surauRow.ts';
 import { loadSyncKey, saveSyncKey } from '../src/sync/syncKey.ts';
 import { loginAs } from './authHelpers.ts';
 import { buildCloud, CLOUD_URL } from './support/fakeCloud.ts';
@@ -68,7 +70,7 @@ async function makePair(o: { onSleep?: (ms: number, p: Pair) => void; limits?: {
   pair = { box, boxDir, boxId, cloud, worker, sleeps, hook };
   pairs.push(pair);
 
-  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau D\'Waqaf' });
+  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau D\'Waqaf', target: { surauId: ensureSurau(cloud.app.surau.db) } });
   const lines: string[] = [];
   const exit = await runCloudLink(['--data', boxDir, '--db', join(boxDir, 'box.db'), 'link', CLOUD_URL, code], { out: (l) => lines.push(l), err: (l) => lines.push(l) }, worker.fetch);
   expect(lines.join('\n')).toContain('Dipautkan ke awan: Surau D\'Waqaf');
@@ -115,7 +117,7 @@ describe('link and the sealed sync key', () => {
 describe('push and pull', () => {
   it('a pengumuman put on the box appears on the cloud with origin box:<id>, no op id and the same rev', async () => {
     const p = await makePair();
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'Ustaz A' }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'Ustaz A' }, 'local', undefined, 'sdm');
     // the link switched cloudSync on (a settings change) and the item is the second
     expect(agentOf(p).status().pendingOut).toBe(2);
     await agentOf(p).runOnce();
@@ -127,7 +129,7 @@ describe('push and pull', () => {
     const row = p.cloud.app.surau.db.prepare("SELECT rev, origin FROM content_items WHERE id = 'p1'").get();
     expect(row).toMatchObject({ rev: boxRev, origin: `box:${p.boxId}` });
     expect(p.cloud.app.surau.db.prepare("SELECT op_id, origin FROM change_log WHERE entity = 'content:penceramah'").get()).toMatchObject({ op_id: null, origin: `box:${p.boxId}` });
-    expect(getItem(p.cloud.app.surau.db, 'penceramah', 'p1')).toMatchObject({ name: 'Ustaz A' });
+    expect(getItem(p.cloud.app.surau.db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Ustaz A' });
   });
 
   it('a content op pushed by a device to the cloud lands on the box as origin app with its op id, and nothing bounces back', async () => {
@@ -138,7 +140,7 @@ describe('push and pull', () => {
     expect(res.json().results[0].status).toBe('applied');
     await agentOf(p).runOnce();
     expect(p.box.surau.db.prepare("SELECT origin, op_id FROM change_log WHERE entity = 'content:penceramah'").get()).toMatchObject({ origin: 'app', op_id: op.opId });
-    expect(getItem(p.box.surau.db, 'penceramah', 'p2')).toMatchObject({ name: 'Ustaz B' });
+    expect(getItem(p.box.surau.db, 'penceramah', 'p2', 'sdm')).toMatchObject({ name: 'Ustaz B' });
     const cloudBefore = feedCount(p.cloud.app);
     const boxBefore = feedCount(p.box);
     await agentOf(p).runOnce();
@@ -162,7 +164,7 @@ describe('push and pull', () => {
   it('1,000 changes round trip without growth on either side', async () => {
     const p = await makePair();
     const db = p.box.surau.db;
-    for (let i = 0; i < 1000; i++) putItem(db, 'penceramah', { id: `x${i}`, name: `Ustaz ${i}` }, 'local');
+    for (let i = 0; i < 1000; i++) putItem(db, 'penceramah', { id: `x${i}`, name: `Ustaz ${i}` }, 'local', undefined, 'sdm');
     await agentOf(p).runOnce();
     expect(count(p.cloud.app, "SELECT COUNT(*) AS n FROM content_items WHERE kind = 'penceramah'")).toBe(1000);
     const c1 = feedCount(p.cloud.app);
@@ -176,7 +178,7 @@ describe('push and pull', () => {
   it('assets travel with the items that reference them: box to cloud and cloud to box, verified by sha256 = id', async () => {
     const p = await makePair();
     const id = putAsset(p.box.surau.db, p.boxDir, PNG, 'image/png', 'local').id;
-    putItem(p.box.surau.db, 'penceramah', { id: 'pa', name: 'Dengan gambar', photoAssetId: id }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'pa', name: 'Dengan gambar', photoAssetId: id }, 'local', undefined, 'sdm');
     await agentOf(p).runOnce();
     const onCloud = getAssetPath(p.cloud.app.surau.db, p.cloud.dir, id);
     expect(onCloud).not.toBeNull();
@@ -184,30 +186,32 @@ describe('push and pull', () => {
 
     const other = Buffer.from(PNG);
     other[other.length - 20] = (other[other.length - 20] ?? 0) ^ 0x01; // a different file (still a valid PNG header)
-    const id2 = putAsset(p.cloud.app.surau.db, p.cloud.dir, other, 'image/png', 'local').id;
-    putItem(p.cloud.app.surau.db, 'penceramah', { id: 'pb', name: 'Dari awan', photoAssetId: id2 }, 'local');
+    // on the cloud an asset is uploaded for a surau (held by it), as POST /api/assets does
+    const id2 = putSurauAsset(p.cloud.app.surau.db, p.cloud.dir, other, 'image/png', 'local', 'sdm').id;
+    putItem(p.cloud.app.surau.db, 'penceramah', { id: 'pb', name: 'Dari awan', photoAssetId: id2 }, 'local', undefined, 'sdm');
     await agentOf(p).runOnce();
     const onBox = getAssetPath(p.box.surau.db, p.boxDir, id2);
     expect(onBox).not.toBeNull();
     expect(sha(readFileSync(onBox!.path))).toBe(id2);
-    expect(getItem(p.box.surau.db, 'penceramah', 'pb')).toMatchObject({ photoAssetId: id2 });
+    expect(getItem(p.box.surau.db, 'penceramah', 'pb', 'sdm')).toMatchObject({ photoAssetId: id2 });
   });
 
   it('a pengumuman picture (plain and adjusted) round trips with its asset in both directions', async () => {
     const p = await makePair();
     const id = putAsset(p.box.surau.db, p.boxDir, PNG, 'image/png', 'local').id;
     const note = { title: 'Notis', body: 'Isi', from: '2026-11-01', to: '2026-11-10', priority: 2 };
-    putItem(p.box.surau.db, 'pengumuman', { ...note, id: 'na', pictureAssetId: { asset: id, rotate: 90 } }, 'local');
+    putItem(p.box.surau.db, 'pengumuman', { ...note, id: 'na', pictureAssetId: { asset: id, rotate: 90 } }, 'local', undefined, 'sdm');
     await agentOf(p).runOnce();
-    expect(getItem(p.cloud.app.surau.db, 'pengumuman', 'na')).toMatchObject({ pictureAssetId: { asset: id, rotate: 90 } });
+    expect(getItem(p.cloud.app.surau.db, 'pengumuman', 'na', 'sdm')).toMatchObject({ pictureAssetId: { asset: id, rotate: 90 } });
     expect(getAssetPath(p.cloud.app.surau.db, p.cloud.dir, id)).not.toBeNull();
 
     const other = Buffer.from(PNG);
     other[other.length - 20] = (other[other.length - 20] ?? 0) ^ 0x01;
-    const id2 = putAsset(p.cloud.app.surau.db, p.cloud.dir, other, 'image/png', 'local').id;
-    putItem(p.cloud.app.surau.db, 'pengumuman', { ...note, id: 'nb', pictureAssetId: id2 }, 'local');
+    // on the cloud an asset is uploaded for a surau (held by it), as POST /api/assets does
+    const id2 = putSurauAsset(p.cloud.app.surau.db, p.cloud.dir, other, 'image/png', 'local', 'sdm').id;
+    putItem(p.cloud.app.surau.db, 'pengumuman', { ...note, id: 'nb', pictureAssetId: id2 }, 'local', undefined, 'sdm');
     await agentOf(p).runOnce();
-    expect(getItem(p.box.surau.db, 'pengumuman', 'nb')).toMatchObject({ pictureAssetId: id2 });
+    expect(getItem(p.box.surau.db, 'pengumuman', 'nb', 'sdm')).toMatchObject({ pictureAssetId: id2 });
     expect(getAssetPath(p.box.surau.db, p.boxDir, id2)).not.toBeNull();
   });
 
@@ -238,23 +242,23 @@ describe('push and pull', () => {
     const p = await makePair();
     const t1 = '2026-11-05T08:00:00.000Z';
     const t2 = '2026-11-05T09:00:00.000Z';
-    putItem(p.cloud.app.surau.db, 'penceramah', { id: 'p1', name: 'Awan lama' }, 'local', { editedAt: t1 });
-    putItem(p.cloud.app.surau.db, 'penceramah', { id: 'p2', name: 'Hanya di awan' }, 'local', { editedAt: t1 });
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'Kotak baharu' }, 'local', { editedAt: t2 });
+    putItem(p.cloud.app.surau.db, 'penceramah', { id: 'p1', name: 'Awan lama' }, 'local', { editedAt: t1 }, 'sdm');
+    putItem(p.cloud.app.surau.db, 'penceramah', { id: 'p2', name: 'Hanya di awan' }, 'local', { editedAt: t1 }, 'sdm');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'Kotak baharu' }, 'local', { editedAt: t2 }, 'sdm');
     // the box edit was already delivered some other way: only the pull matters here
     const head = Number(p.box.surau.db.prepare('SELECT MAX(id) AS m FROM change_log').get()?.m);
     p.box.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('last_push_seq', ?)").run(String(head));
     p.cloud.app.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('log_floor', '100000')").run();
     await agentOf(p).runOnce();
     expect(agentOf(p).status().lastError).toBeNull();
-    expect(getItem(p.box.surau.db, 'penceramah', 'p1')).toMatchObject({ name: 'Kotak baharu' });
-    expect(getItem(p.box.surau.db, 'penceramah', 'p2')).toMatchObject({ name: 'Hanya di awan' });
+    expect(getItem(p.box.surau.db, 'penceramah', 'p1', 'sdm')).toMatchObject({ name: 'Kotak baharu' });
+    expect(getItem(p.box.surau.db, 'penceramah', 'p2', 'sdm')).toMatchObject({ name: 'Hanya di awan' });
   });
 
   it('cloudSync switched off: runOnce touches nothing', async () => {
     const p = await makePair();
-    putFeature(p.box.surau.db, 'cloudSync', { enabled: false }, 'local');
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putFeature(p.box.surau.db, 'cloudSync', { enabled: false }, 'local', undefined, 'sdm');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     const spy = vi.fn(p.worker.fetch);
     p.hook.fetch = spy as typeof fetch;
     await agentOf(p).runOnce();
@@ -271,7 +275,7 @@ describe('failure, backoff and the box staying fast', () => {
 
   it('5xx flips lastError to http_5xx and backs off 60 s, 2, 5, 15, 15 min; one success resets it to the check interval', async () => {
     const p = await makePair();
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     p.hook.fetch = (async () => new Response('boom', { status: 502 })) as typeof fetch;
     const a = agentOf(p);
     a.start();
@@ -292,7 +296,7 @@ describe('failure, backoff and the box staying fast', () => {
 
   it('an unreachable cloud, a TLS failure and a 401 are reasons, never bodies', async () => {
     const p = await makePair();
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     const a = agentOf(p);
     p.hook.fetch = (async () => {
       throw Object.assign(new Error('getaddrinfo ENOTFOUND secret-host'), { code: 'ENOTFOUND' });
@@ -311,7 +315,7 @@ describe('failure, backoff and the box staying fast', () => {
 
   it('while the cloud hangs, the kiosk bundle and the box API still answer fast', async () => {
     const p = await makePair();
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     let release: (() => void) | undefined;
     p.hook.fetch = ((_i: unknown, init?: RequestInit) =>
       new Promise((_resolve, reject) => {
@@ -343,7 +347,7 @@ describe('wake and dirty flag', () => {
       },
     });
     p.worker.vm = 'down';
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     const seenBefore = count(p.cloud.app, "SELECT COUNT(*) AS n FROM content_items WHERE kind = 'penceramah'");
     expect(seenBefore).toBe(0);
     await agentOf(p).runOnce();
@@ -356,7 +360,7 @@ describe('wake and dirty flag', () => {
   it('a cloud that never wakes ends as unreachable after five tries, still offline-normal', async () => {
     const p = await makePair();
     p.worker.vm = 'down';
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     await agentOf(p).runOnce();
     expect(agentOf(p).status()).toMatchObject({ lastError: 'unreachable', state: 'offline' });
     expect(p.sleeps.length).toBe(4);
@@ -377,7 +381,7 @@ describe('wake and dirty flag', () => {
 
   it('a raised dirty flag pulls and clears with the head the pull received, not the seq read earlier; a later change stays flagged', async () => {
     const p = await makePair();
-    putItem(p.cloud.app.surau.db, 'penceramah', { id: 'c1', name: 'Dari awan' }, 'local');
+    putItem(p.cloud.app.surau.db, 'penceramah', { id: 'c1', name: 'Dari awan' }, 'local', undefined, 'sdm');
     const head = Number(p.cloud.app.surau.db.prepare('SELECT MAX(id) AS m FROM change_log').get()?.m);
     // the Worker already saw a later change (head + 5) than the one the pull will deliver
     p.worker.dirty.set(p.boxId, head + 1000);
@@ -389,7 +393,7 @@ describe('wake and dirty flag', () => {
     // the box's own pending setting went up first, so the cloud head moved: the clear carries the head the pull saw
     const cloudHead = Number(p.cloud.app.surau.db.prepare('SELECT MAX(id) AS m FROM change_log').get()?.m);
     expect(p.worker.clears).toEqual([cloudHead]);
-    expect(getItem(p.box.surau.db, 'penceramah', 'c1')).toMatchObject({ name: 'Dari awan' });
+    expect(getItem(p.box.surau.db, 'penceramah', 'c1', 'sdm')).toMatchObject({ name: 'Dari awan' });
     expect(p.worker.dirty.get(p.boxId)).toBe(head + 1000);
     // the next check pulls again and, with nothing newer, clears for real
     p.worker.dirty.set(p.boxId, cloudHead);
@@ -402,7 +406,7 @@ describe('wake and dirty flag', () => {
     const p = await makePair();
     const a = agentOf(p);
     a.start();
-    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local');
+    putItem(p.box.surau.db, 'penceramah', { id: 'p1', name: 'A' }, 'local', undefined, 'sdm');
     p.box.surau.db.exec('SELECT 1');
     // announce as the version poll would
     (a as unknown as { noteLocalChange: () => void }).noteLocalChange();
@@ -440,7 +444,7 @@ describe('push pages are cut by size (gate 13 item 4)', () => {
 
   it('a page over the limit is split and every entry arrives in order', async () => {
     const p = await makePair({ limits: { push: 150_000 } });
-    for (const y of [2026, 2027, 2028]) importDays(p.box.surau.db, 'SGR01', yearOf(y), 'tester');
+    for (const y of [2026, 2027, 2028]) importDays(p.box.surau.db, 'SGR01', yearOf(y), 'tester', undefined, undefined, 'sdm');
     const sizes = pushes(p);
     await agentOf(p).runOnce();
     expect(agentOf(p).status()).toMatchObject({ lastError: null, pendingOut: 0 });
@@ -453,8 +457,8 @@ describe('push pages are cut by size (gate 13 item 4)', () => {
 
   it('one entry over the limit on its own does not stop the ones after it', async () => {
     const p = await makePair({ limits: { push: 60_000 } });
-    importDays(p.box.surau.db, 'SGR01', yearOf(2026), 'tester');
-    importDays(p.box.surau.db, 'SGR01', yearOf(2027, 5), 'tester');
+    importDays(p.box.surau.db, 'SGR01', yearOf(2026), 'tester', undefined, undefined, 'sdm');
+    importDays(p.box.surau.db, 'SGR01', yearOf(2027, 5), 'tester', undefined, undefined, 'sdm');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await agentOf(p).runOnce();
     expect(warn).toHaveBeenCalled();

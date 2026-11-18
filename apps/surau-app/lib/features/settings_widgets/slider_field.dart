@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../labels.dart';
 import 'field_meta.dart';
 
 class SliderField extends StatelessWidget {
@@ -31,6 +32,7 @@ class SliderField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final lang = appLangOf(context);
     final min = meta.min ?? 0;
     final max = meta.max ?? 100;
     final step = meta.step ?? 1;
@@ -40,7 +42,7 @@ class SliderField extends StatelessWidget {
       help: help,
       error: error,
       trailing: Text(
-        withUnit(current, meta.unit),
+        withUnit(current, meta.unit, lang),
         key: ValueKey('setting-$path-value'),
         style: text.titleMedium!.copyWith(
           color: SurauColors.teal,
@@ -69,8 +71,8 @@ class SliderField extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(withUnit(min, meta.unit), style: text.bodySmall),
-              Text(withUnit(max, meta.unit), style: text.bodySmall),
+              Text(withUnit(min, meta.unit, lang), style: text.bodySmall),
+              Text(withUnit(max, meta.unit, lang), style: text.bodySmall),
             ],
           ),
         ],

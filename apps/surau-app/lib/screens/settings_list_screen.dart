@@ -1,35 +1,54 @@
-// Tetapan: every feature of the box in its registry group, one expandable
-// card per group, with a search box that filters as you type and opens the
-// groups it matches. Each row says what the feature is for. A feature that
-// has nothing to set is a switch right on its row; the rest show their state
-// and open a page. The Lanjutan group (MAXCOM system values) is last and is
-// simply absent for anyone without `system:read`. Which groups are open is
-// remembered on this device.
-
-import 'dart:convert';
+// Konfigurasi (named Tetapan until operator round 1): every feature of the
+// box in its registry group, one folding card per group (a header row with
+// its count and a chevron), with the search box on top that filters as you
+// type and unfolds the groups it matches. Each row says what the feature is
+// for. A feature that has nothing to set is a switch right on its row; the
+// rest show their state (a green "Hidup" pill when on) and open a page. The
+// Lanjutan group (MAXCOM system values) is last and is simply absent for
+// anyone without `system:read`. Every group is folded when the app starts;
+// a group opened (or the group of a search result opened) stays open while
+// the app runs, so coming back from a feature finds it as it was.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app/app_lang.dart';
 import '../app/providers.dart';
 import '../app/router.dart';
 import '../app/shell.dart';
 import '../app/theme.dart';
+import '../features/labels.dart';
 import '../features/labels_ms.dart';
 import '../features/registry.g.dart';
 import '../features/settings_repository.dart';
 import '../features/settings_search.dart';
-import '../features/settings_widgets/lanjutan_card.dart';
 import '../features/shell/permissions.dart';
+import '../ops/lanjutan_card.dart';
+import '../ops/lanjutan_group.dart';
+import '../ops/ops_build.dart';
+import '../ops/system_labels_ms.dart';
 import '../l10n/generated/s.dart';
 import 'widgets/box_read.dart';
 import 'widgets/pieces.dart';
 
-const String settingsOpenGroupsKey = 'settings.openGroups';
+/// The groups opened in this run of the app; empty (all folded) at start.
+class SettingsOpenGroups extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => const {};
 
-const Set<String> _defaultOpen = {'solat'};
+  void toggle(String group) {
+    final next = {...state};
+    if (!next.remove(group)) next.add(group);
+    state = next;
+  }
+
+  void open(String group) {
+    if (!state.contains(group)) state = {...state, group};
+  }
+}
+
+final settingsOpenGroupsProvider = NotifierProvider<SettingsOpenGroups, Set<String>>(SettingsOpenGroups.new);
 
 class SettingsListScreen extends ConsumerStatefulWidget {
   const SettingsListScreen({super.key});
@@ -41,37 +60,8 @@ class SettingsListScreen extends ConsumerStatefulWidget {
 class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
   final _search = TextEditingController();
   String _q = '';
-  Set<String> _open = _defaultOpen;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadOpen();
-  }
-
-  Future<void> _loadOpen() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(settingsOpenGroupsKey);
-      if (raw == null || !mounted) return;
-      final list = jsonDecode(raw);
-      if (list is List) setState(() => _open = list.whereType<String>().toSet());
-    } catch (_) {
-      // A remembered layout is a convenience; the default is fine.
-    }
-  }
-
-  Future<void> _toggle(String group) async {
-    final next = {..._open};
-    if (!next.remove(group)) next.add(group);
-    setState(() => _open = next);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(settingsOpenGroupsKey, jsonEncode(next.toList()));
-    } catch (_) {
-      // Not remembered this time.
-    }
-  }
+  void _toggle(String group) => ref.read(settingsOpenGroupsProvider.notifier).toggle(group);
 
   void _clear() {
     _search.clear();
@@ -99,8 +89,9 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
       return f.locked || (enabled is bool ? enabled : f.defaultEnabled);
     }
 
-    final solat = groupLabelsMs['solat']!;
-    final kandungan = groupLabelsMs['kandungan']!;
+    final lang = ref.watch(appLangProvider);
+    final solat = groupLabel('solat', lang);
+    final kandungan = groupLabel('kandungan', lang);
     final extras = [
       if (canWrite)
         SearchExtra('order', s.settingsOrderRow, kandungan, keywords: const ['giliran', 'urutan', 'susunan']),
@@ -109,14 +100,18 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
       if (canSee(roles, 'settings:read')) SearchExtra('islamic', s.settingsIslamicRow, solat),
     ];
     final searching = _q.trim().isNotEmpty;
+    final openGroups = ref.watch(settingsOpenGroupsProvider);
     final hits = {
-      for (final h in SettingsSearchIndex(extras: extras).search(_q, roles: roles)) h.feature: h,
+      for (final h in SettingsSearchIndex(extras: extras).search(_q, roles: roles, lang: lang)) h.feature: h,
     };
     bool shown(String key) => !searching || hits.containsKey(key);
     String? why(String key) => hits[key]?.why;
 
     // ---- rows of the ordinary groups ----
     List<Widget> rowsOf(String g) {
+      // A row opened (from a search or not) leaves its group unfolded for the
+      // way back.
+      void keep() => ref.read(settingsOpenGroupsProvider.notifier).open(g);
       final rows = <Widget>[];
       if (g == 'kandungan' && canWrite && shown('order')) {
         rows.add(
@@ -128,7 +123,10 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
             why: why('order'),
             query: _q,
             tinted: true,
-            onTap: () => context.go(AppRoutes.settingsOrder),
+            onTap: () {
+              keep();
+              context.go(AppRoutes.settingsOrder);
+            },
           ),
         );
       }
@@ -136,6 +134,8 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
         if (f.group != g || !shown(f.key) || hiddenFeatures.contains(f.key)) continue;
         // Zon JAKIM is for Malaysia only (operator 2026-11-07).
         if (f.key == 'zone' && outsideMalaysia) continue;
+        // The camera form is Siaran Langsung's: only holders of live:settings see it in the list.
+        if (f.key == 'liveCamera' && !canSee(roles, 'live:settings')) continue;
         rows.add(
           _FeatureRow(
             key: ValueKey('settings-row-${f.key}'),
@@ -143,7 +143,8 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
             on: isOn(f),
             why: why(f.key),
             query: _q,
-            canWrite: canWrite,
+            canWrite: canWriteSettingsFeature(roles, f.key),
+            onOpen: keep,
           ),
         );
       }
@@ -158,7 +159,10 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
               hint: daysAhead == null ? s.settingsPrayerDataHint : s.daysLeft(daysAhead),
               why: why('prayer-data'),
               query: _q,
-              onTap: () => context.go(AppRoutes.prayerData),
+              onTap: () {
+                keep();
+                context.go(AppRoutes.prayerData);
+              },
             ),
           );
         }
@@ -171,7 +175,10 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
               hint: s.settingsIslamicHint,
               why: why('islamic'),
               query: _q,
-              onTap: () => context.go(AppRoutes.islamic),
+              onTap: () {
+                keep();
+                context.go(AppRoutes.islamic);
+              },
             ),
           );
         }
@@ -182,7 +189,6 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
     final groups = <Widget>[];
     var total = 0;
     for (final g in groupOrder) {
-      if (g == 'lanjutan') continue;
       final rows = rowsOf(g);
       if (rows.isEmpty) continue;
       total += rows.length;
@@ -190,12 +196,13 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
       groups.add(
         _Group(
           group: g,
-          title: groupLabelsMs[g] ?? g,
+          title: groupLabel(g, lang),
           query: _q,
           subtitle: searching
               ? s.settingsGroupMatches(rows.length)
               : s.settingsGroupCount(mine.length, mine.where(isOn).length),
-          open: searching || _open.contains(g),
+          open: searching || openGroups.contains(g),
+          count: searching ? rows.length : mine.length,
           onToggle: () => _toggle(g),
           children: rows,
         ),
@@ -203,27 +210,23 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
     }
 
     // ---- Lanjutan ----
-    if (canSee(roles, 'system:read')) {
+    // The Lanjutan group exists only in the ops build (Plan 14 Task 25).
+    if (kOpsBuild && canSee(roles, 'system:read')) {
       final rows = <Widget>[
-        for (final f in features)
-          if (f.group == 'lanjutan' && shown(f.key))
+        for (final r in lanjutanRowSpecs())
+          if (shown(r.hitKey))
             _NavRow(
-              key: ValueKey('settings-row-${f.key}'),
-              label: f.labelMs,
-              hint: featureDescTable[f.key]?['ms'] as String? ?? '',
-              why: why(f.key),
+              key: ValueKey('settings-row-${r.rowKey}'),
+              label: r.label,
+              hint: r.hint,
+              why: why(r.hitKey),
               query: _q,
-              onTap: () => context.go(AppRoutes.settingsFor(f.key)),
-            ),
-        for (final r in lanjutanRows)
-          if (shown('lj:${r['feature']}'))
-            _NavRow(
-              key: ValueKey('settings-row-lj-${r['feature']}'),
-              label: r['labelMs'] as String,
-              hint: lanjutanRowHintMs[r['feature']] ?? '',
-              why: why('lj:${r['feature']}'),
-              query: _q,
-              onTap: () => context.go('${AppRoutes.settingsFor(r['feature'] as String)}?lj=1'),
+              onTap: () {
+                ref.read(settingsOpenGroupsProvider.notifier).open('lanjutan');
+                context.go(
+                  r.deepLink ? '${AppRoutes.settingsFor(r.feature)}?lj=1' : AppRoutes.settingsFor(r.feature),
+                );
+              },
             ),
       ];
       if (rows.isNotEmpty) {
@@ -231,12 +234,14 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
         groups.add(
           _Group(
             group: 'lanjutan',
-            title: groupLabelsMs['lanjutan']!,
+            title: lanjutanGroupTitleMs,
             query: _q,
             subtitle: searching ? s.settingsGroupMatches(rows.length) : s.settingsLanjutanSubtitle,
-            open: searching || _open.contains('lanjutan'),
+            open: searching || openGroups.contains('lanjutan'),
+            count: rows.length,
             onToggle: () => _toggle('lanjutan'),
-            lanjutan: true,
+            edgeColor: lanjutanEdge,
+            badge: const PentadbirMaxcomBadge(),
             children: rows,
           ),
         );
@@ -318,8 +323,13 @@ class _Group extends StatelessWidget {
     required this.open,
     required this.onToggle,
     required this.children,
-    this.lanjutan = false,
+    required this.count,
+    this.edgeColor,
+    this.badge,
   });
+
+  /// The features of the group (its matches while searching), on the pill.
+  final int count;
 
   final String group;
   final String title;
@@ -328,12 +338,14 @@ class _Group extends StatelessWidget {
   final bool open;
   final VoidCallback onToggle;
   final List<Widget> children;
-  final bool lanjutan;
+  /// A group with its own edge colour and badge (the ops build's Lanjutan group); null for the rest.
+  final Color? edgeColor;
+  final Widget? badge;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final edge = lanjutan ? lanjutanEdge : SurauColors.line;
+    final edge = edgeColor ?? SurauColors.line;
     final radius = BorderRadius.circular(SurauTheme.radiusCard);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -344,47 +356,66 @@ class _Group extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            InkWell(
-              key: ValueKey('settings-group-$group'),
-              onTap: onToggle,
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 64),
-                decoration: lanjutan
-                    ? const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xFFFFFDF6), SurauColors.card],
-                        ),
-                      )
-                    : null,
-                padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 4,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              _marked(title, query, text.titleMedium!.copyWith(fontWeight: FontWeight.w700)),
-                              if (lanjutan) const PentadbirMaxcomBadge(),
-                            ],
+            Semantics(
+              button: true,
+              expanded: open,
+              child: InkWell(
+                key: ValueKey('settings-group-$group'),
+                onTap: onToggle,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 64),
+                  decoration: edgeColor != null
+                      ? const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xFFFFFDF6), SurauColors.card],
                           ),
-                          const SizedBox(height: 2),
-                          Text(subtitle, style: text.bodySmall),
-                        ],
+                        )
+                      : null,
+                  padding: const EdgeInsetsDirectional.fromSTEB(18, 12, 14, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                _marked(title, query, text.titleMedium!.copyWith(fontWeight: FontWeight.w700)),
+                                ?badge,
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(subtitle, style: text.bodySmall),
+                          ],
+                        ),
                       ),
-                    ),
-                    AnimatedRotation(
-                      turns: open ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 150),
-                      child: const Icon(Icons.expand_more_rounded, color: SurauColors.muted),
-                    ),
-                  ],
+                      Container(
+                        key: ValueKey('settings-group-count-$group'),
+                        constraints: const BoxConstraints(minWidth: 28),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: SurauColors.paperDeep,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: text.labelMedium!.copyWith(color: SurauColors.muted, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      AnimatedRotation(
+                        turns: open ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 150),
+                        child: const Icon(Icons.expand_more_rounded, color: SurauColors.teal),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -461,7 +492,7 @@ class _NavRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+          padding: const EdgeInsetsDirectional.fromSTEB(18, 12, 12, 12),
           child: Row(
             children: [
               if (icon != null) ...[
@@ -487,7 +518,11 @@ class _FeatureRow extends ConsumerStatefulWidget {
     required this.why,
     required this.query,
     required this.canWrite,
+    this.onOpen,
   });
+
+  /// Called before the row opens its page.
+  final VoidCallback? onOpen;
 
   final FeatureDef feature;
   final bool on;
@@ -512,7 +547,7 @@ class _FeatureRowState extends ConsumerState<_FeatureRow> {
       await repo.save(widget.feature.key, {'enabled': on});
       if (mounted) toast(context, s.settingsSavedShort);
     } catch (e) {
-      if (mounted) toast(context, e is SettingsSaveError ? e.message : writeErrorText(s, e));
+      if (mounted) toast(context, e is SettingsSaveError ? e.text(s) : writeErrorText(s, e));
     } finally {
       if (mounted) setState(() => _pending = null);
     }
@@ -523,25 +558,26 @@ class _FeatureRowState extends ConsumerState<_FeatureRow> {
     final s = S.of(context);
     final f = widget.feature;
     final on = _pending ?? widget.on;
-    final desc = featureDescTable[f.key]?['ms'] as String? ?? '';
+    final lang = ref.watch(appLangProvider);
+    final desc = featureDesc(f.key, lang);
     final noFields = f.defaults.isEmpty;
-    final body = _RowText(title: f.labelMs, desc: desc, why: widget.why, query: widget.query, dim: !on);
+    final body = _RowText(title: featureLabel(f, lang), desc: desc, why: widget.why, query: widget.query, dim: !on);
 
     if (noFields && f.locked) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+        padding: const EdgeInsetsDirectional.fromSTEB(18, 12, 12, 12),
         child: Row(
           children: [
             Expanded(child: body),
             const SizedBox(width: 10),
-            StateChip(label: s.featureLocked, background: SurauColors.goldSoft, foreground: SurauColors.ink),
+            StateChip.on(label: s.featureLocked),
           ],
         ),
       );
     }
     if (noFields && f.key != 'appLock') {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(18, 8, 12, 8),
+        padding: const EdgeInsetsDirectional.fromSTEB(18, 8, 12, 8),
         child: Row(
           children: [
             Expanded(child: body),
@@ -556,17 +592,20 @@ class _FeatureRowState extends ConsumerState<_FeatureRow> {
       );
     }
     return InkWell(
-      onTap: () => context.go(AppRoutes.settingsFor(f.key)),
+      onTap: () {
+        widget.onOpen?.call();
+        context.go(AppRoutes.settingsFor(f.key));
+      },
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+        padding: const EdgeInsetsDirectional.fromSTEB(18, 12, 12, 12),
         child: Row(
           children: [
             Expanded(child: body),
             const SizedBox(width: 10),
             if (f.locked)
-              StateChip(label: s.featureLocked, background: SurauColors.goldSoft, foreground: SurauColors.ink)
+              StateChip.on(label: s.featureLocked)
             else if (on)
-              StateChip(label: s.featureOn, background: SurauColors.tealSoft, foreground: SurauColors.teal)
+              StateChip.on(label: s.featureOn)
             else
               StateChip(label: s.featureOff, background: SurauColors.paperDeep, foreground: SurauColors.muted),
             const SizedBox(width: 6),

@@ -40,14 +40,14 @@ const send = async (app: FastifyInstance, login: Login, entityId: string, payloa
 function seed(db: DatabaseSync, feature: string, json: unknown): void {
   const at = '2026-01-01T00:00:00.000Z';
   db.prepare(
-    'INSERT INTO settings (feature, json, updated_at, updated_by, rev, edited_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(feature) DO UPDATE SET json = excluded.json',
+    'INSERT INTO settings (feature, json, updated_at, updated_by, rev, edited_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(surau_id, feature) DO UPDATE SET json = excluded.json',
   ).run(feature, JSON.stringify(json), at, 'old', `${at}|local`, at, 'local');
 }
 
 const entry = (feature: string, after: Record<string, unknown>, at: string): FeedEntry => ({
   seq: 1, entity: 'settings', entityId: feature, rev: `${at}|dev-x`, editedAt: at, syncedAt: at, actor: 'user:x', deviceId: null, origin: 'cloud', opId: null, after,
 });
-const ctx = (dir: string) => ({ now: new Date(), origin: 'cloud', actor: 'user:x', dataDir: dir });
+const ctx = (dir: string) => ({ surauId: 'sdm', now: new Date(), origin: 'cloud', actor: 'user:x', dataDir: dir });
 
 const stored = (db: DatabaseSync, feature: string): Record<string, unknown> =>
   JSON.parse(String(db.prepare('SELECT json FROM settings WHERE feature = ?').get(feature)?.json)) as Record<string, unknown>;
@@ -65,7 +65,7 @@ describe('the ayatCard cross-field rule runs on the server', () => {
     expect((await put(app, admin, 'ayatCard', { surah: 1, ayatFrom: 1, ayatTo: 8 })).statusCode).toBe(400); // Al-Fatihah has 7
     const ok = await put(app, admin, 'ayatCard', { ayatFrom: 255, ayatTo: 256 });
     expect(ok.statusCode, ok.body).toBe(200);
-    expect(getSettings(app.surau.db).ayatCard).toMatchObject({ ayatFrom: 255, ayatTo: 256 });
+    expect(getSettings(app.surau.db, 'sdm').ayatCard).toMatchObject({ ayatFrom: 255, ayatTo: 256 });
     // a patch against the stored copy: moving only ayatTo past the 5-verse limit is refused
     expect((await put(app, admin, 'ayatCard', { ayatTo: 270 })).statusCode).toBe(400);
   });
@@ -81,7 +81,7 @@ describe('the ayatCard cross-field rule runs on the server', () => {
     const app = makeApp();
     const e = entry('ayatCard', { ayatFrom: 10, ayatTo: 20 }, '2026-11-09T10:00:00.000Z');
     expect(applyFeedEntry(app.surau.db, e, ctx(dirs[0]!)).status).toBe('applied');
-    expect(getSettings(app.surau.db).ayatCard).toMatchObject({ ayatFrom: 10, ayatTo: 20 });
+    expect(getSettings(app.surau.db, 'sdm').ayatCard).toMatchObject({ ayatFrom: 10, ayatTo: 20 });
   });
 
   it('an old stored range that breaks the rule does not block a save that does not touch the verses', async () => {
@@ -90,7 +90,7 @@ describe('the ayatCard cross-field rule runs on the server', () => {
     seed(app.surau.db, 'ayatCard', { surah: 2, ayatFrom: 10, ayatTo: 20 });
     const r = await put(app, admin, 'ayatCard', { showTranslation: false });
     expect(r.statusCode, r.body).toBe(200);
-    expect(getSettings(app.surau.db).ayatCard).toMatchObject({ ayatFrom: 10, ayatTo: 20, showTranslation: false });
+    expect(getSettings(app.surau.db, 'sdm').ayatCard).toMatchObject({ ayatFrom: 10, ayatTo: 20, showTranslation: false });
     // touching a verse field re-checks the whole range
     expect((await put(app, admin, 'ayatCard', { ayatFrom: 11 })).statusCode).toBe(400);
     expect((await put(app, admin, 'ayatCard', { ayatFrom: 16 })).statusCode).toBe(200);

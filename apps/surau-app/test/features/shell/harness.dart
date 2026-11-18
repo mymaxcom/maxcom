@@ -60,6 +60,8 @@ Map<String, Object?> settingsJson([Map<String, bool> features = const {}]) => {
   for (final e in features.entries)
     if (!featureDefaultEnabled.containsKey(e.key)) e.key: {'enabled': e.value},
   'clock': {'enabled': true, 'showSeconds': false},
+  // The real box always answers the lock's own state.
+  if (!features.containsKey('appLock')) 'appLock': {'enabled': false},
 };
 
 /// `GET /api/users` for the people screens: an admin, a treasurer who is

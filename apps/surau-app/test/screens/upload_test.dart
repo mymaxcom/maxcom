@@ -138,7 +138,7 @@ class _Up {
 
 Future<_Up> _open(
   WidgetTester tester, {
-  List<String> roles = const ['media'],
+  List<String> roles = const ['live'],
   bool catchUp = true,
   UploadNetwork net = UploadNetwork.wifi,
   Future<void> Function(UploadQueue q, _FakeRunner r)? seed,
@@ -469,12 +469,12 @@ void main() {
   });
 
   group('menu and route', () {
-    test('media and admins get Muat naik YouTube under Live; AJK never', () {
+    test('Siaran Langsung role and admins get Muat naik YouTube under Live; AJK and Media never', () {
       final s = SMs();
       final on = FeatureFlags.defaults.copyWith({'youtubeCatchUp': true});
       List<String> labels(Set<String> roles, FeatureFlags f) =>
           menuFor(roles, f).map((i) => i.label(s)).toList();
-      final media = labels({'media'}, on);
+      final media = labels({'live'}, on);
       expect(
         media.indexOf('Muat naik YouTube'),
         media.indexOf('Siaran langsung') + 1,
@@ -482,11 +482,13 @@ void main() {
       expect(labels({'admin'}, on), contains('Muat naik YouTube'));
       expect(labels({'ajk'}, on), isNot(contains('Muat naik YouTube')));
       expect(labels({'treasurer'}, on), isNot(contains('Muat naik YouTube')));
+      expect(labels({'media'}, on), isNot(contains('Muat naik YouTube')));
       final off = FeatureFlags.defaults.copyWith({'youtubeCatchUp': false});
-      expect(labels({'media'}, off), isNot(contains('Muat naik YouTube')));
+      expect(labels({'live'}, off), isNot(contains('Muat naik YouTube')));
       expect(routeAllowed('/upload', {'ajk'}, on), isFalse);
-      expect(routeAllowed('/upload', {'media'}, on), isTrue);
-      expect(routeAllowed('/upload', {'media'}, off), isFalse);
+      expect(routeAllowed('/upload', {'live'}, on), isTrue);
+      expect(routeAllowed('/upload', {'live'}, off), isFalse);
+      expect(routeAllowed('/upload', {'media'}, on), isFalse);
     });
 
     testWidgets('an AJK sent to /upload goes home with the notice', (

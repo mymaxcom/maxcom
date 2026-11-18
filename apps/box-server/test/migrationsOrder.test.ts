@@ -9,8 +9,8 @@ afterEach(() => { for (const d of dbs.splice(0)) d.close(); });
 const NAMES = MIGRATIONS.map((m) => m.name);
 
 describe('migration order', () => {
-  it('lists the released 012 first, then box codes, hadis sources, prayer sources and finance, each name once', () => {
-    expect(NAMES.slice(-8)).toEqual(['012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair', '019-site-theme-support']);
+  it('lists the released 012 first, then box codes, hadis sources, prayer sources and finance, site approvals, user feed repair, multi-surau, site theme support and camera secret, each name once', () => {
+    expect(NAMES.slice(-11)).toEqual(['012-youtube-pending-complete', '013-box-codes', '014-hadis-sources', '015-prayer-sources', '016-finance', '017-site-approvals', '018-user-feed-repair', '019-multi-surau', '020-site-theme-support', '021-camera-secret', '022-people-relook']);
     expect(new Set(NAMES).size).toBe(NAMES.length);
     expect(NAMES).toEqual([...NAMES].sort());
   });

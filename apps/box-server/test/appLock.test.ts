@@ -46,7 +46,7 @@ interface Dev {
 async function makeDevice(app: FastifyInstance, role: Role, pin: string | undefined): Promise<Dev> {
   const { db, boxId } = app.surau;
   const ip = nextIp();
-  const user = createUser(db, { name: `U ${ipCounter}`, roles: [role] }, 'test');
+  const user = createUser(db, { name: `U ${ipCounter}`, roles: [role] }, 'test', 'sdm');
   const { code } = beginEnrolment(db, { userId: user.id, deviceName: 'Tel' }, 'test');
   const keys = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const jwk = await webcrypto.subtle.exportKey('jwk', keys.publicKey);
@@ -97,7 +97,7 @@ async function setLock(app: FastifyInstance, enabled: boolean): Promise<void> {
 describe('app lock off (the default)', () => {
   it('is off on a new box', () => {
     const app = makeApp();
-    expect(appLockEnabled(app.surau.db)).toBe(false);
+    expect(appLockEnabled(app.surau.db, 'sdm')).toBe(false);
   });
 
   it('unlocks with no pin field and the token works; /me reports appLock false', async () => {
@@ -256,7 +256,7 @@ describe('app lock off (the default)', () => {
     const ch = await app.inject({ method: 'POST', url: '/api/auth/challenge', remoteAddress: d.ip, payload: { deviceId: d.deviceId } });
     expect(ch.json().appLock).toBe(false);
     const admin = await loginAsAdmin(app);
-    const u = createUser(app.surau.db, { name: 'Baru', roles: ['ajk'] }, 'test');
+    const u = createUser(app.surau.db, { name: 'Baru', roles: ['ajk'] }, 'test', 'sdm');
     const begin = await app.inject({
       method: 'POST', url: '/api/enrol/begin', headers: admin.headers, payload: { userId: u.id, deviceName: 'X' },
     });
@@ -295,7 +295,7 @@ describe('switching the lock', () => {
     const hashBefore = pinState(app, withPin.userId).hash;
 
     await setLock(app, true);
-    expect(appLockEnabled(app.surau.db)).toBe(true);
+    expect(appLockEnabled(app.surau.db, 'sdm')).toBe(true);
 
     // session issued while off still resolves
     const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { authorization: `Bearer ${offSession}` } });

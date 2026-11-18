@@ -12,11 +12,14 @@ import '../box/box_name.dart';
 import '../box/cloud_origin.dart';
 import '../features/common/surau_info.dart';
 import '../features/enrol/enrol_flow.dart';
+import '../features/settings_repository.dart' show loadSettings;
 import '../features/shell/box_gateway.dart';
 import '../features/shell/permissions.dart';
 import '../features/shell/read_cache.dart';
 import '../features/unlock/session.dart';
 import '../features/unlock/session_keeper.dart';
+import '../ops/fleet/fleet_providers.dart';
+import '../ops/ops_build.dart';
 import '../sync/sync_providers.dart';
 import '../sync/transport.dart' show boxAt;
 import 'deps.dart';
@@ -149,13 +152,6 @@ final isCloudGatewayProvider = Provider<bool>(
   (ref) => ref.watch(sessionProvider)?.via == SessionDto.viaCloud,
 );
 
-/// May this person give or take the Pentadbir MAXCOM role: on the cloud, with `superadmin:manage`.
-final canGrantSuperadminProvider = Provider<bool>(
-  (ref) =>
-      ref.watch(isCloudGatewayProvider) &&
-      canSee(ref.watch(rolesProvider), 'superadmin:manage'),
-);
-
 // ---- the surau ----
 
 class SurauInfoNotifier extends Notifier<SurauInfo?> {
@@ -276,8 +272,11 @@ final gatewayProvider = Provider<BoxGateway?>((ref) {
       : ref.watch(cloudClientProvider(cloudBase)).value;
   final session = ref.watch(sessionProvider);
   if (client == null || session == null) return null;
+  // Ops build: a Pentadbir MAXCOM on the cloud works in one surau at a time (the acting-surau header).
+  final acting = kOpsBuild && cloudBase != null ? ref.watch(actingSurauIdProvider) : null;
   return BoxGateway(
     client: client,
+    actingSurau: acting,
     token: session.token,
     cache: ref.watch(readCacheProvider),
     reach: ref.watch(connectivityProvider.notifier),
@@ -356,7 +355,7 @@ class SettingsNotifier extends AsyncNotifier<Read<Map<String, dynamic>>?> {
     ref.watch(dataVersionProvider);
     final gateway = ref.watch(gatewayProvider);
     if (gateway == null) return null;
-    return gateway.get('/api/settings');
+    return loadSettings(gateway, enrolledAppLock: ref.read(enrolledBoxProvider)?.appLock);
   }
 }
 

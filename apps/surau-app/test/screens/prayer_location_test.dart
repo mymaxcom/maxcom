@@ -116,7 +116,7 @@ void main() {
 
   testWidgets('an offline MAXCOM says so and offers typed coordinates', (tester) async {
     final repo = FakePrayerRepo()
-      ..searchError = const PrayerError(PrayerFailure.offline, PrayerError.offlineMessage, status: 503);
+      ..searchError = PrayerError.of(PrayerFailure.offline, PrayerMsg.offline, status: 503);
     await pumpPrayer(tester, _screen, location: AppRoutes.settingsLocation, repo: repo);
     await reveal(tester, find.byKey(const ValueKey('loc-search')));
     await tester.enterText(find.byKey(const ValueKey('loc-search')), 'Gombak');

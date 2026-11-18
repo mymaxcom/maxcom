@@ -1,3 +1,4 @@
+import { reqSurau } from './reqSurau.ts';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { DatabaseSync } from 'node:sqlite';
 import { isBlockedHost, sourceUrlError } from '@surau/core';
@@ -99,7 +100,7 @@ export function registerSettingsTest(app: FastifyInstance, deps: SettingsTestDep
     }
     if (b.kind === 'reciter') {
       if (typeof b.folder !== 'string' || !RECITER_RE.test(b.folder)) return reply.code(400).send({ errors: ['Nama folder qari tidak sah'] });
-      const base = sourceUrlsFrom(getSettings(deps.db)).quranAudio.replace(/\/+$/, '');
+      const base = sourceUrlsFrom(getSettings(deps.db, reqSurau(request))).quranAudio.replace(/\/+$/, '');
       return logged(request, 'reciter', base, await probe(`${base}/${b.folder}/001001.mp3`, 'HEAD', deps));
     }
     return reply.code(400).send({ errors: ['Jenis ujian tidak sah'] });

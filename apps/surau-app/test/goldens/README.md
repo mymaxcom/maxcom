@@ -60,6 +60,16 @@ from this file.
 | `settings_auto_tone` | Warna teks: swatches and the TV preview | `test/features/settings_widgets_test.dart` |
 | `settings_solat_screen` | Skrin sedang solat: preset messages with a counter | `test/features/settings_widgets_test.dart` |
 | `settings_tarawih` | Solat tarawih: Hijri month, gap chips, length slider | `test/features/settings_widgets_test.dart` |
+| `camera_form` | Kamera luaran, set up (mockup 07) | `test/features/live_camera_form_test.dart` |
+| `camera_form_new` | Kamera luaran, first time, Lanjutan open (08) | `test/features/live_camera_form_test.dart` |
+| `camera_form_off` | Kamera luaran switched off, record kept (09) | `test/features/live_camera_form_test.dart` |
+| `camera_test_running` | Uji sambungan running (10) | `test/features/live_camera_form_test.dart` |
+| `camera_test_ok` | Uji sambungan success with chips (11) | `test/features/live_camera_form_test.dart` |
+| `camera_test_unreachable` | Uji gagal: tidak dihubungi (12) | `test/features/live_camera_form_test.dart` |
+| `camera_test_login` | Uji gagal: kata laluan (13) | `test/features/live_camera_form_test.dart` |
+| `camera_test_codec` | Uji gagal: codec (14) | `test/features/live_camera_form_test.dart` |
+| `camera_test_path` | Uji gagal: laluan strim (15) | `test/features/live_camera_form_test.dart` |
+| `camera_password_change` | Tukar kata laluan (16) | `test/features/live_camera_form_test.dart` |
 | `settings_ayat_card` | Kad ayat: surah picker and the verse range | `test/features/settings_widgets_test.dart` |
 | `settings_system` | Sistem (Lanjutan): the three system values | `test/features/settings_widgets_test.dart` |
 | `settings_order` | Susunan kad di skrin TV: nine cards, drag handle, up and down | `test/screens/settings_order_test.dart` |
@@ -99,6 +109,29 @@ from this file.
 | `live_stopped` | The `Siaran tamat` summary: duration, the short YouTube line, where the recording is, `Lihat di YouTube` | `test/screens/live_test.dart` |
 | `live_youtube_signin` | An admin connecting the surau's YouTube account: the device code, `Buka google.com/device`, waiting | `test/screens/live_test.dart` |
 | `live_recordings_pending` | `Rakaman belum disimpan` notice for web recording parts left from the last broadcast | `test/screens/live_test.dart` |
+| `live_src_folded` | Siaran langsung, bahagian dilipat: ringkasan Audio "Audio kamera + Mikrofon telefon, selaras" (mockup 01) | `test/screens/live_source_test.dart` |
+| `live_src_open` | All four sections open: Sumber video, Audio, Ke mana siaran pergi, Tetapan siaran (02) | `test/screens/live_source_test.dart` |
+| `live_src_unreachable` | Kamera luaran tidak dapat dihubungi: still selectable with the warning (03) | `test/screens/live_source_test.dart` |
+| `live_src_cam_off` | Kamera luaran dimatikan: phone camera, the reason and Buka Kamera luaran (04) | `test/screens/live_source_test.dart` |
+| `live_src_add_sheet` | Tambah audio sheet, Mic-in greyed with its reason (05) | `test/screens/live_source_test.dart` |
+| `live_src_box_input` | Audio kamera + Mic-in pada kotak, two Kelantangan rows (06) | `test/screens/live_source_test.dart` |
+| `live_align_searching` | Alignment searching: microphone held out until Selaras (28) | `test/screens/live_source_test.dart` |
+| `live_align_failed` | Belum selaras with Guna Mikrofon telefon sahaja (29) | `test/screens/live_source_test.dart` |
+| `live_cam_no_audio` | Camera with no audio: Imbangan masa audio and Uji tepukan (30) | `test/screens/live_source_test.dart` |
+| `live_all_muted` | All volumes at 0: Siaran tiada bunyi warning (31) | `test/screens/live_source_test.dart` |
+| `live_phone_cam_box_input` | Phone camera + Mic-in pada kotak: recording note and 1 hingga 2 saat lewat (34) | `test/screens/live_source_test.dart` |
+| `live_src_run_mix` | On air, camera 40% + phone microphone, Selaras (17) | `test/screens/live_source_test.dart` |
+| `live_src_run_cam_only` | On air, camera audio only (18) | `test/screens/live_source_test.dart` |
+| `live_src_run_reconnecting` | Camera lost for seconds: last picture, microphone goes on (19) | `test/screens/live_source_test.dart` |
+| `live_src_run_lost` | Camera lost for minutes, Tukar ke kamera telefon (20) | `test/screens/live_source_test.dart` |
+| `live_src_run_back` | Camera back, re-aligning before the camera audio is mixed again (32) | `test/screens/live_source_test.dart` |
+| `live_src_run_other` | Another device's live, read-only mix, Berhenti disabled (21) | `test/screens/live_source_test.dart` |
+| `live_src_run_other_admin` | Same for the Pentadbir: Henti kecemasan | `test/screens/live_source_test.dart` |
+| `live_src_stop_dialog` | Hentikan siaran? dialog (22) | `test/screens/live_source_test.dart` |
+| `live_ipad_pre` | iPad before the live: camera + iPad microphone, aligned at the start (23) | `test/screens/live_source_test.dart` |
+| `live_ipad_run` | iPad on air, box-combined mix (24) | `test/screens/live_source_test.dart` |
+| `live_ipad_mic_lost` | iPad microphone lost, the live goes on with the camera audio (33) | `test/screens/live_source_test.dart` |
+| `live_ipad_cam_audio_only` | iPad with camera audio only: controller and preview (35) | `test/screens/live_source_test.dart` |
 | `theme_sample` | Theme sample page | `test/app/theme_test.dart` |
 | `arabic_fonts` | Bismillah in the Quran style and a surah name in the UI fallback (phone only) | `test/app/arabic_fonts_test.dart` |
 
@@ -151,3 +184,13 @@ from this file.
 | `theme_upload_ok` | Muat naik tema, step 2: the theme file is valid, preview of the staged pack, its details, Batal and Pasang | `test/screens/theme_upload_test.dart` |
 | `theme_upload_refused` | Muat naik tema, step 2: a file made for a newer contract, the box's sentence and Tutup | `test/screens/theme_upload_test.dart` |
 | `theme_upload_warn` | Muat naik tema, step 2: valid with two warnings (CSS newer than Chrome 91, a large font) and Pasang juga | `test/screens/theme_upload_test.dart` |
+## Admin UI/UX round 1 (operator decisions 2026-11-18)
+
+The top bar of every shell page now ends with the MAXCOM cloud and box icons, and the settings area is named Konfigurasi, so most goldens above were regenerated for those two changes only.
+
+| Golden | Screen and state | Rendered by |
+|---|---|---|
+| `connection_icons_cloud_<state>`, `connection_icons_box_<state>` | The status icon on glass in each of connected, connecting, syncing, disconnected (single size) | `test/features/shell/connection_icons_test.dart` |
+| `dashboard_en`, `dashboard_ar` | The new dashboard in English and Arabic with Perlu perhatian (phone only) | `test/features/shell/dashboard_test.dart` |
+| `dashboard_system_open` | Butiran sistem unfolded: the old status board (phone only) | `test/features/shell/dashboard_test.dart` |
+| `language_switch_ms`, `language_switch_en`, `language_switch_ar` | The dashboard after each tap on the BM, EN, Arabic switch (phone only) | `test/features/common/language_switch_test.dart` |

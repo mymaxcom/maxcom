@@ -137,6 +137,32 @@ describe('the live screen (the live takes priority)', () => {
   describe('frames stop and resume', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
+    it('while waiting the last picture and the live screen stay past stale frames; when waiting clears, stale frames drop it', () => {
+      const r = render(<App />);
+      const video = r.getByTestId('live-video');
+      act(() => {
+        fireEvent(video, new Event('playing'));
+      });
+      expect(stageOf(r).getAttribute('data-live')).toBe('clear');
+      holder.live = { ...ON_AIR, waiting: true };
+      r.rerender(<App />);
+      act(() => {
+        vi.advanceTimersByTime(30000);
+      });
+      expect(stageOf(r).getAttribute('data-live')).toBe('clear');
+      expect(r.getByTestId('live-video')).toBe(video);
+      expect(r.getByTestId('live-lost').textContent).toBe('Siaran akan bersambung sebentar lagi');
+      holder.live = { ...ON_AIR, waiting: false };
+      r.rerender(<App />);
+      expect(stageOf(r).getAttribute('data-live')).toBe('none');
+      expect(r.container.querySelector('[data-testid="live-lost"]')).toBeNull();
+      expect(whep.open).toHaveBeenCalledTimes(1);
+    });
+    it('waiting without a picture that was ever on air does not take the screen', () => {
+      holder.live = { ...ON_AIR, waiting: true };
+      const r = render(<App />);
+      expect(stageOf(r).getAttribute('data-live')).toBe('none');
+    });
     it('live true with no frames: normal screen, beeps follow; frames: clear; 10 s of none: normal; resume: clear, same video', () => {
       const r = render(<App />);
       const video = r.getByTestId('live-video');

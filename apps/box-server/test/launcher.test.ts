@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { must } from './helpers/must.ts';
 
 const updateDir = fileURLToPath(new URL('../src/update', import.meta.url));
 const launcher = join(updateDir, 'launcher.mjs');
@@ -63,7 +64,7 @@ describe('update files (static)', () => {
   it('launcher.mjs is ASCII only and uses node: imports only', () => {
     const text = readLauncher();
     expect(isAscii(text)).toBe(true);
-    const imports = [...text.matchAll(/from\s+['"]([^'"]+)['"];?/g)].map((m) => m[1]);
+    const imports = [...text.matchAll(/from\s+['"]([^'"]+)['"];?/g)].map((m) => String(m[1]));
     for (const mod of imports) {
       expect(mod.startsWith('node:') || mod === 'node:console').toBe(true);
     }
@@ -314,8 +315,9 @@ describe.runIf(process.platform === 'win32')('launcher.mjs run loop', () => {
       .filter(({ l }) => l.includes('start 0') || l.includes('start 1') || l.includes('start 2'))
       .map(({ l }) => new Date(l.slice(0, 24)).getTime());
     expect(times.length).toBe(3);
-    expect(times[1] - times[0]).toBeLessThan(2000);
-    expect(times[2] - times[1]).toBeGreaterThanOrEqual(4500);
+    const [t0, t1, t2] = [must(times[0], 'start 0 time'), must(times[1], 'start 1 time'), must(times[2], 'start 2 time')];
+    expect(t1 - t0).toBeLessThan(2000);
+    expect(t2 - t1).toBeGreaterThanOrEqual(4500);
 
     // A second launcher on the same root exits immediately
     const second = spawnSync(process.execPath, [join(root, 'launcher.mjs')], {

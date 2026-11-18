@@ -16,6 +16,10 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../app/theme.dart';
 import '../../box/box_client.dart';
+import '../../app/app_lang.dart' show AppLang;
+import '../../features/common/error_text.dart';
+import '../../features/common/ltr.dart';
+import '../../features/labels.dart' show zoneCityName, appLangOf, appLangOfS, contentChoiceLabel, contentFieldLabel, dayLabel;
 import '../../l10n/generated/s.dart';
 import '../../screens/widgets/box_read.dart';
 import '../../screens/widgets/pieces.dart';
@@ -35,19 +39,36 @@ List<Map<String, dynamic>> parseItems(Map<String, dynamic> body) => [
 String refName(Map<String, dynamic> item) =>
     (item['name'] ?? item['title'] ?? item['id'] ?? '').toString();
 
-/// What a 409 from the box means to the person: the referenced thing is
-/// gone (`Penceramah tidak dijumpai`), else the box's own words.
+/// What a refusal from the box means to the person, in the app language. A
+/// speaker or book still used by a coming kuliah (`content_in_use`) names the
+/// dates; a missing picture or a full hadis list has its own text; a 409 from
+/// an older box (no code) that names a missing speaker, book or person is read
+/// as before; anything else goes through [errorText].
 String contentWriteErrorText(S s, Object error) {
-  if (error is BoxError && error.status == 409) {
-    final m = error.message;
-    for (final ref in const ['penceramah', 'kitab', 'petugas']) {
-      if (m.contains('refers to a $ref')) {
-        return s.contentRefMissing(contentKindByKey(ref)!.labelMs);
+  if (error is BoxError) {
+    final lang = appLangOfS(s);
+    if (error.code == 'content_in_use') {
+      final base = errorText(s, error);
+      final items = error.detail['items'];
+      final dates = <String>[
+        if (items is List)
+          for (final it in items)
+            if (it is Map && it['date'] is String && (it['date'] as String).isNotEmpty)
+              dateWords(it['date'] as String, lang, weekday: false),
+      ];
+      if (dates.isEmpty) return base;
+      return '$base\n${s.contentInUseDates(dates.join(lang == AppLang.ar ? '، ' : ', '))}';
+    }
+    if (error.code == null && error.status == 409) {
+      final m = error.message;
+      for (final ref in const ['penceramah', 'kitab', 'petugas']) {
+        if (m.contains('refers to a $ref')) {
+          return s.contentRefMissing(contentKindByKey(ref)!.label(lang));
+        }
       }
     }
-    return m;
   }
-  return writeErrorText(s, error);
+  return errorText(s, error);
 }
 
 class ContentForm extends ConsumerStatefulWidget {
@@ -108,7 +129,7 @@ class _ContentFormState extends ConsumerState<ContentForm> {
     final s = S.of(context);
     final spec = widget.spec;
     final item = _clean;
-    final result = validateContent(spec.key, item);
+    final result = validateContent(spec.key, item, s: s);
     if (!result.ok) {
       setState(() => _submitted = true);
       return;
@@ -128,7 +149,7 @@ class _ContentFormState extends ConsumerState<ContentForm> {
       });
       if (!mounted) return;
       ref.invalidate(boxJsonProvider(contentPath(spec.key)));
-      toast(context, s.contentSaved(spec.labelMs));
+      toast(context, s.contentSaved(spec.label(appLangOf(context))));
       context.go(AppRoutes.contentFor(spec.key));
     } catch (e) {
       if (!mounted) return;
@@ -146,7 +167,7 @@ class _ContentFormState extends ConsumerState<ContentForm> {
     if (id == null) return;
     final ok = await confirmDialog(
       context,
-      title: s.contentDeleteTitle(spec.labelMs.toLowerCase()),
+      title: s.contentDeleteTitle(spec.label(appLangOf(context)).toLowerCase()),
       body: s.contentDeleteBody,
       confirm: s.actionDelete,
       destructive: true,
@@ -162,7 +183,7 @@ class _ContentFormState extends ConsumerState<ContentForm> {
       await gateway.delete('${contentPath(spec.key)}/$id');
       if (!mounted) return;
       ref.invalidate(boxJsonProvider(contentPath(spec.key)));
-      toast(context, s.contentDeleted(spec.labelMs));
+      toast(context, s.contentDeleted(spec.label(appLangOf(context))));
       context.go(AppRoutes.contentFor(spec.key));
     } catch (e) {
       if (!mounted) return;
@@ -178,7 +199,7 @@ class _ContentFormState extends ConsumerState<ContentForm> {
     final s = S.of(context);
     final spec = widget.spec;
     final readOnly = widget.readOnly || _busy;
-    final result = validateContent(spec.key, _clean);
+    final result = validateContent(spec.key, _clean, s: s);
     final errors = <String, String>{};
     for (final e in result.errors) {
       if (_submitted || _touched.contains(e.path)) errors.putIfAbsent(e.path, () => e.message);
@@ -197,13 +218,13 @@ class _ContentFormState extends ConsumerState<ContentForm> {
               style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: SurauColors.muted),
             ),
           ),
-        for (final f in spec.fields) ...[
+        for (final f in spec.fields.where((f) => !f.hidden)) ...[
           FieldEditor(
             spec: f,
             kind: spec.key,
             value: _values[f.key],
             error: errors[f.key],
-            hint: widget.hints[f.key] ?? f.hintMs,
+            hint: widget.hints[f.key] ?? spec.fieldHint(f, appLangOf(context)),
             readOnly: readOnly,
             onChanged: (v) => _set(f.key, v),
           ),
@@ -263,7 +284,9 @@ class FieldEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = S.of(context);
     final f = spec;
-    final label = f.required ? f.labelMs : '${f.labelMs} (${s.contentOptional.toLowerCase()})';
+    final lang = appLangOf(context);
+    final name = contentFieldLabel(kind, f.key, lang, ms: f.labelMs);
+    final label = f.required ? name : '$name (${s.contentOptional.toLowerCase()})';
     switch (f.type) {
       case FieldType.text:
       case FieldType.multiline:
@@ -328,7 +351,7 @@ class FieldEditor extends StatelessWidget {
           fieldKey: f.key,
           label: label,
           choices: f.choices,
-          labelOf: f.choiceLabelMs,
+          labelOf: (v) => contentChoiceLabel(kind, f.key, v, lang, ms: f.choiceLabelMs(v)),
           value: current,
           hint: hint,
           error: error,
@@ -359,7 +382,7 @@ class FieldEditor extends StatelessWidget {
       case FieldType.asset:
         return ImageField(
           key: ValueKey('field-${f.key}'),
-          label: f.labelMs,
+          label: name,
           value: value,
           slot: slotForField(kind, f.key),
           required: f.required,
@@ -374,12 +397,13 @@ class FieldEditor extends StatelessWidget {
             key: ValueKey('field-${f.key}'),
             value: value == true,
             onChanged: readOnly ? null : onChanged,
-            title: Text(f.labelMs),
+            title: Text(name),
             subtitle: hint == null ? null : Text(hint!),
-            contentPadding: const EdgeInsets.fromLTRB(20, 6, 12, 6),
+            contentPadding: const EdgeInsetsDirectional.fromSTEB(20, 6, 12, 6),
           ),
         );
       case FieldType.timezone:
+        final storedZone = value is String ? value as String : null;
         return _Labelled(
           label: label,
           error: error,
@@ -391,10 +415,14 @@ class FieldEditor extends StatelessWidget {
             expandedInsets: EdgeInsets.zero,
             enableFilter: true,
             requestFocusOnTap: true,
-            hintText: s.contentPickRef(f.labelMs.toLowerCase()),
+            hintText: s.contentPickRef(name.toLowerCase()),
             dropdownMenuEntries: [
+              // A stored zone outside the list (an imported Brunei or Tehran
+              // clock) is shown, and kept, as the first entry.
+              if (storedZone != null && storedZone.isNotEmpty && !timezoneChoices.any((z) => z.$2 == storedZone))
+                DropdownMenuEntry(value: storedZone, label: zoneLabel(storedZone, appLangOf(context))),
               for (final z in timezoneChoices)
-                DropdownMenuEntry(value: z.$2, label: '${z.$1} (${z.$2})'),
+                DropdownMenuEntry(value: z.$2, label: zoneLabel(z.$2, appLangOf(context), ms: z.$1)),
             ],
             onSelected: (v) {
               if (v != null) onChanged(v);
@@ -404,6 +432,10 @@ class FieldEditor extends StatelessWidget {
     }
   }
 }
+
+/// `Singapore (Asia/Singapore)`: the city in the app language, then the zone,
+/// the zone isolated left to right so Arabic keeps it in order.
+String zoneLabel(String zone, AppLang lang, {String? ms}) => '${zoneCityName(zone, lang, ms: ms)} (${ltr(zone)})';
 
 /// A title, the control, an error or hint under it.
 class _Labelled extends StatelessWidget {
@@ -567,7 +599,7 @@ class _DateInputState extends State<DateInput> with _FollowsValue<DateInput> {
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    final words = dateWordsMs(widget.value);
+    final words = dateWords(widget.value, appLangOf(context));
     return TextField(
       key: ValueKey('field-${widget.fieldKey}'),
       controller: controller,
@@ -638,7 +670,7 @@ class _TimeInputState extends State<TimeInput> with _FollowsValue<TimeInput> {
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    final words = timeWordsMs(widget.value);
+    final words = timeWords(widget.value, appLangOf(context));
     return TextField(
       key: ValueKey('field-${widget.fieldKey}'),
       controller: controller,
@@ -719,7 +751,7 @@ class _DateTimeInputState extends State<DateTimeInput> with _FollowsValue<DateTi
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    final words = dateTimeWordsMs(widget.value);
+    final words = dateTimeWords(widget.value, appLangOf(context));
     return TextField(
       key: ValueKey('field-${widget.fieldKey}'),
       controller: controller,
@@ -822,7 +854,7 @@ class _IntInputState extends State<IntInput> with _FollowsValue<IntInput> {
             style: text.titleMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
             decoration: InputDecoration(
               labelText: widget.label,
-              helperText: widget.hint ?? '${widget.min} hingga ${widget.max}',
+              helperText: widget.hint ?? s.valRange(widget.min, widget.max),
               errorText: widget.error,
               errorMaxLines: 3,
             ),
@@ -957,7 +989,7 @@ class DaysChips extends StatelessWidget {
         children: [
           chip(everyKey, s.contentEveryDay, every, () => onChanged(every ? [] : [everyKey])),
           for (final d in dayKeys)
-            chip(d, dayLabelsMs[d]!, !every && value.contains(d), () {
+            chip(d, dayLabel(d, appLangOf(context), ms: dayLabelsMs[d]!), !every && value.contains(d), () {
               final next = [
                 for (final x in value)
                   if (x != 'umum' && x != 'daily' && x != d) x,
@@ -1002,6 +1034,7 @@ class RefPicker extends ConsumerWidget {
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
     final refSpec = contentKindByKey(refKind)!;
+    final refKindName = refSpec.label(appLangOf(context));
     final read = ref.watch(boxJsonProvider(contentPath(refKind))).value;
     final items = read == null ? <Map<String, dynamic>>[] : parseItems(read.value);
     items.sort((a, b) => refName(a).toLowerCase().compareTo(refName(b).toLowerCase()));
@@ -1009,7 +1042,7 @@ class RefPicker extends ConsumerWidget {
     return _Labelled(
       label: label,
       error: error,
-      hint: items.isEmpty && read != null ? s.contentNoRefItems(refSpec.labelMs) : null,
+      hint: items.isEmpty && read != null ? s.contentNoRefItems(refKindName) : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1018,7 +1051,7 @@ class RefPicker extends ConsumerWidget {
             initialSelection: known ? value : null,
             enabled: !readOnly && items.isNotEmpty,
             expandedInsets: EdgeInsets.zero,
-            hintText: s.contentPickRef(refSpec.labelMs.toLowerCase()),
+            hintText: s.contentPickRef(refKindName.toLowerCase()),
             dropdownMenuEntries: [
               if (!required) DropdownMenuEntry(value: '', label: s.contentNone),
               for (final x in items) DropdownMenuEntry(value: x['id'] as String, label: refName(x)),
@@ -1029,7 +1062,7 @@ class RefPicker extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                s.contentRefUnknown(refSpec.labelMs),
+                s.contentRefUnknown(refKindName),
                 style: text.bodySmall!.copyWith(color: SurauColors.danger),
               ),
             ),

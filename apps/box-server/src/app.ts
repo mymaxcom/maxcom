@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { basename, dirname } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest, FastifyServerFactory } from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -13,17 +13,22 @@ import { registerThemeRoutes } from './themes/routes.ts';
 import { createThemeStore } from './themes/store.ts';
 import { activeThemeHealth, themeOk } from './themes/health.ts';
 import { registerFinanceRoutes } from './finance/routes.ts';
-import { DEFAULT_SURAU_ID } from './sync/verify.ts';
+import { NEUTRAL_SURAU_ID, healthScopeOf, publicSurauOf, reqSurau, timerSurauIds } from './reqSurau.ts';
+import { LOCAL_SURAU_ID } from './tenant.ts';
 import { assetsTotalBytes } from './assets/store.ts';
+import { surauHoldsAsset } from './surau/storage.ts';
 import { attachPinPepper, derivePinPepper } from './auth/crypto.ts';
-import { authHook, bearerToken, createLimiters, identityCan, parseKioskToken } from './auth/authz.ts';
+import { authHook, bearerToken, createLimiters, identityCan, isDirectLoopback, parseKioskToken } from './auth/authz.ts';
 import type { KioskAuth, Limiters } from './auth/authz.ts';
 import { createKioskResolver } from './auth/pairing.ts';
 import { registerAuthRoutes } from './auth/routes.ts';
+import { registerFleetRoutes } from './surau/routes.ts';
+import { autoPruneDays, startAutoPrune } from './surau/prune.ts';
 import { authLog, resolveSession } from './auth/sessions.ts';
 import { boxId as boxIdOf, loadBoxKey } from './auth/secrets.ts';
 import { appLockEnabled } from './auth/appLock.ts';
-import { AuthError, MSG, setUsersRole } from './auth/users.ts';
+import { AuthError, MSG, setServerBoxId, setUsersRole } from './auth/users.ts';
+import { backfillIds } from './auth/ids.ts';
 import { certInfo } from './tls.ts';
 import { boxNameOf } from './boxName.ts';
 import type { TlsMaterial } from './tls.ts';
@@ -31,6 +36,10 @@ import { hkdfSync, randomBytes } from 'node:crypto';
 import type { FirewallState } from './live/firewall.ts';
 import { createLiveRuntime } from './live/mediamtx.ts';
 import type { LiveToolsOption } from './live/mediamtx.ts';
+import { CameraStore, CameraTester, fileLogTail } from './live/camera.ts';
+import { localAddresses } from './live/onvif.ts';
+import { AudioInputs, registerAudioInputRoutes } from './live/audioInputs.ts';
+import { registerCameraRoutes } from './live/cameraRoutes.ts';
 import { registerLiveRoutes } from './live/routes.ts';
 import { LiveSessions } from './live/sessions.ts';
 import type { RelayOptions } from './live/relay.ts';
@@ -38,6 +47,10 @@ import type { YoutubeLeg } from './live/sessions.ts';
 import { createWebrtcProxy } from './live/webrtcProxy.ts';
 import { createYoutubeService } from './live/youtube/api.ts';
 import { registerYoutubeCloudRoutes } from './sync/youtubeCloud.ts';
+import { createYoutubeRegistry } from './live/youtube/registry.ts';
+import type { YoutubeRegistry } from './live/youtube/registry.ts';
+import { registerCameraSecretCloudRoutes } from './sync/cameraSecretCloud.ts';
+import { attachCameraSecretSync } from './sync/cameraSecretBox.ts';
 import { CloudOrLocalLeg, RemoteYoutubeLeg } from './sync/youtubeRemote.ts';
 import type { YoutubeService } from './live/youtube/api.ts';
 import { isIP } from 'node:net';
@@ -55,6 +68,8 @@ import { registerSecurityHeaders, securityHeaders } from './securityHeaders.ts';
 import { hardenServer } from './serverLimits.ts';
 import { buildKioskContent } from './kioskContent.ts';
 import { backfillOfficialFeed, importDays } from './prayerStore.ts';
+import { EsolatError } from './jakimFetch.ts';
+import { applyOfficialCsv } from './prayer/importFile.ts';
 import { registerPrayerRoutes } from './prayer/index.ts';
 import { afterPrayerSettings, prayerSettingsGuard } from './prayer/settingsGuard.ts';
 import { addDays as addCalendarDays, resolveDays, sourceLine } from './prayer/resolve.ts';
@@ -71,7 +86,7 @@ import { registerCors } from './sync/cors.ts';
 import { registerSyncRoutes, syncStatus } from './sync/routes.ts';
 import { ephemeralIdentity, loadIdentity } from './setup/identity.ts';
 import { registerJoinRoutes } from './setup/joinRoutes.ts';
-import { registerStateRoutes } from './setup/stateRoutes.ts';
+import { registerCloudInfoRoute, registerStateRoutes } from './setup/stateRoutes.ts';
 import { createClaimHandler, createLinkHandler, enrolCloudOrigin, listSites, noteThemeSupport, registerSiteAssetRoute } from './sync/sites.ts';
 import { outboxStatus, setOutboxOn, WorkerOutboxSender } from './sync/workerOutbox.ts';
 import type { WorkerAdminConfig } from './sync/workerOutbox.ts';
@@ -142,6 +157,11 @@ export interface AppOptions {
    */
   hadisTimers?: { firstMs?: number; everyMs?: number };
   /**
+   * Cloud role only: the daily prune of empty suraus (older than `days`, default env MAXCOM_AUTO_PRUNE_DAYS or 7; 0 =
+   * off), with a database backup first. Left out, no timer runs (tests, the CLI).
+   */
+  autoPrune?: { days?: number; firstDelayMs?: number; intervalMs?: number };
+  /**
    * Live video tools folder (MediaMTX, ffmpeg). When set, MediaMTX is started after the box listens
    * and stopped on close. Left out or null: no live tools run (tests, the CLI).
    */
@@ -173,6 +193,9 @@ const BODY_LIMIT = 2 * 1024 * 1024;
 
 /** The cloud has no kiosk to pair, no box screen and no setup: these prefixes answer 404 there. */
 const CLOUD_404_PREFIXES = ['/api/kiosk/pair/', '/api/box/', '/api/setup/', '/api/recovery/'] as const;
+
+/** The only `/api/box/` route the cloud answers (a minimal public body, see registerCloudInfoRoute). */
+const CLOUD_BOX_INFO_PATH = '/api/box/info';
 
 const LOOPBACK_NAMES = new Set(['127.0.0.1', 'localhost', '::1']);
 
@@ -242,8 +265,10 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   const db = openDb(dbPath);
   // The Pentadbir MAXCOM lives on the cloud: the users store needs to know which side it serves.
   setUsersRole(db, role);
+  // Number every user and device that has no ID yet (migration 022 only adds the columns: the series depends on the role).
+  backfillIds(db, role);
   // A box sends the official days it already held before they replicated; a cloud only receives them.
-  if (role === 'box') backfillOfficialFeed(db, now());
+  if (role === 'box') backfillOfficialFeed(db, now(), LOCAL_SURAU_ID);
   // PIN hashes are peppered with a secret derived from box.key (see auth/crypto.ts). An in-memory
   // database with no data folder has no key file; it keeps a random per-handle pepper instead.
   if (!(dbPath === ':memory:' && opts.dataDir === undefined)) attachPinPepper(db, derivePinPepper(loadBoxKey(dataDir)));
@@ -254,6 +279,8 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   let syncAgent: SyncAgent | null = null;
   const limiters: Limiters = createLimiters();
   const boxId = opts.boxId ?? (dbPath === ':memory:' && opts.dataDir === undefined ? randomBytes(8).toString('hex') : boxIdOf(dataDir));
+  // A box stamps its own id on every device it enrols (the box the phone signs for); the cloud stamps the sending site's.
+  setServerBoxId(db, boxId);
   const realDataDir = !(dbPath === ':memory:' && opts.dataDir === undefined);
   // Cloud role: the wake secrets of linked sites are sealed under this key, at rest and in the Worker outbox.
   const sealKey = role === 'cloud' && realDataDir ? Buffer.from(hkdfSync('sha256', loadBoxKey(dataDir), Buffer.alloc(0), 'site-wake', 32)) : null;
@@ -324,6 +351,8 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   if (role === 'cloud') {
     app.addHook('onRequest', async (request, reply) => {
       const path = (request.raw.url ?? '').split('?')[0]!.toLowerCase();
+      // GET /api/box/info is the one exception: MAXCOM Ops reads the cloud's own id from it before it enrols
+      if (path === CLOUD_BOX_INFO_PATH && request.method === 'GET') return undefined;
       if (CLOUD_404_PREFIXES.some((p) => path.startsWith(p))) {
         return reply.code(404).send({ errors: ['not found'] });
       }
@@ -335,7 +364,8 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
 
   const resolveKiosk = opts.resolveKiosk ?? createKioskResolver(db, now);
   app.decorateRequest('auth', null);
-  app.addHook('onRequest', authHook({ db, now, limiters, resolveKiosk }));
+  app.decorateRequest('tenant', null);
+  app.addHook('onRequest', authHook({ db, now, limiters, resolveKiosk, role }));
   // The cloud learns which theme contract each linked box supports from the header its sync agent sends.
   if (role === 'cloud') {
     app.addHook('onRequest', async (request) => {
@@ -368,10 +398,16 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   }
   const lanIps = (opts.tls?.ipSan ?? []).filter((ip) => isIP(ip) !== 0);
   // the box's own YouTube leg (sealed token under <dataDir>/secret); a test may inject its own. No data folder, no leg.
+  // On the cloud every surau has its own sign-in (L1): a registry of services, one token file each. A box has one.
+  const noDataFolder = dbPath === ':memory:' && opts.dataDir === undefined;
+  const youtubeRegistry: YoutubeRegistry | null =
+    role === 'cloud' && opts.live?.youtube === undefined && !noDataFolder ? createYoutubeRegistry({ db, dataDir, fetchImpl, now }) : null;
   const localYoutube: YoutubeLeg | null =
     opts.live?.youtube ??
-    (dbPath === ':memory:' && opts.dataDir === undefined ? null : createYoutubeService({ db, dataDir, fetchImpl, now, role }));
+    (noDataFolder ? null : youtubeRegistry !== null ? youtubeRegistry.for(LOCAL_SURAU_ID) : createYoutubeService({ db, dataDir, fetchImpl, now, role }));
   const youtubeService: YoutubeService | null = localYoutube !== null && 'begin' in localYoutube ? (localYoutube as YoutubeService) : null;
+  /** The YouTube service of one surau: the registry's on the cloud, the box's own otherwise. */
+  const youtubeFor = (surauId: string): YoutubeService | null => (youtubeRegistry !== null ? youtubeRegistry.for(surauId) : youtubeService);
   // A linked box (cloudSync on) takes its live YouTube leg from the cloud, which owns the Google token (Plan 6
   // Task 5); the box's own service stays as the fallback for an unlinked box or `cloudSync` off. A test that
   // injects its own leg keeps it.
@@ -386,7 +422,7 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
           // wakes the cloud through the sync agent's own signed call (the wake secret stays there)
           ...(syncAgent !== null ? { wake: () => syncAgent!.wakeNow() } : {}),
           // how long to wait for an asleep cloud: the Pentadbir MAXCOM's `system.cloudWakeSeconds` (a test may pin it)
-          waitBudgetMs: opts.sync?.youtubeWaitMs ?? ((): number => Number(getSettings(db).system.cloudWakeSeconds) * 1000),
+          waitBudgetMs: opts.sync?.youtubeWaitMs ?? ((): number => Number(getSettings(db, LOCAL_SURAU_ID).system.cloudWakeSeconds) * 1000),
         })
       : null;
   // stored YouTube completes are retried on every sync agent cycle too
@@ -394,6 +430,13 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   const youtube: YoutubeLeg | null =
     youtubeRemote !== null && localYoutube !== null ? new CloudOrLocalLeg(youtubeRemote, localYoutube, () => youtubeRemote.active()) : localYoutube;
   app.addHook('onClose', async () => youtubeRemote?.stop());
+  // "Mic-in pada kotak" (M1): the box's own capture devices; listed once at start so the combiner finds the name at once
+  const audioInputs = new AudioInputs({
+    ffmpegPath: () => live?.runtime.tools.ffmpeg ?? null,
+    ...(dbPath === ':memory:' && opts.dataDir === undefined ? {} : { dataDir }),
+    isLive: () => liveSessions.status().session !== null,
+  });
+  if (live) app.addHook('onReady', async () => void audioInputs.list().catch(() => undefined));
   const liveSessions = new LiveSessions({
     db,
     now,
@@ -401,12 +444,13 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
     onKiosk: (k) => {
       // MediaMTX closes the kiosk's viewers when the picture goes away: forget their slots
       if (!k.live) webrtcProxy.resetWhep();
-      bus.emitLive(k);
+      bus.emitLive(k, LOCAL_SURAU_ID);
     },
     youtube,
     firewall: opts.liveFirewall ?? null,
+    boxInput: () => audioInputs.boxInput(),
     // the no-video warning delay: `system.noVideoSeconds`, read at every check (a test may pin it)
-    noVideoMs: opts.live?.noVideoMs ?? ((): number => Number(getSettings(db).system.noVideoSeconds) * 1000),
+    noVideoMs: opts.live?.noVideoMs ?? ((): number => Number(getSettings(db, LOCAL_SURAU_ID).system.noVideoSeconds) * 1000),
     ...(dbPath === ':memory:' && opts.dataDir === undefined ? {} : { dataDir }),
     ...(opts.live?.relay !== undefined ? { relayOptions: opts.live.relay } : {}),
     ...(opts.live?.monitorMs !== undefined ? { monitorMs: opts.live.monitorMs } : {}),
@@ -415,12 +459,15 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   });
   // a broadcast an earlier run left open (crash, power cut) is ended now, in the background
   // (the cloud makes the broadcasts of a linked box, so it ends the ones a crash left open too)
-  if (youtubeService !== null) app.addHook('onReady', async () => void youtubeService.recover());
+  // (the cloud's services recover as they are made)
+  if (youtubeService !== null && youtubeRegistry === null) app.addHook('onReady', async () => void youtubeService.recover());
   // The cloud has no live of its own: a broadcast the box has not mentioned for 6 hours is an orphan (the box
   // is gone or its complete was lost for good). A daily sweep ends those; the first one runs an hour after start,
   // so the box's status calls after a cloud restart have time to show that its live is still going.
-  if (role === 'cloud' && youtubeService !== null) {
-    const sweep = (): void => void youtubeService.sweepOrphans().catch(() => undefined);
+  if (role === 'cloud' && (youtubeRegistry !== null || youtubeService !== null)) {
+    const sweep = (): void => {
+      for (const svc of youtubeRegistry !== null ? youtubeRegistry.all() : [youtubeService!]) void svc.sweepOrphans().catch(() => undefined);
+    };
     let sweepDaily: NodeJS.Timeout | null = null;
     const sweepFirst = setTimeout(() => {
       sweep();
@@ -450,7 +497,7 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   app.setErrorHandler((error: Error & { statusCode?: number }, request, reply) => {
     if (error instanceof AuthError) {
       if (error.retryAfterSec !== undefined) reply.header('Retry-After', String(error.retryAfterSec));
-      return reply.code(error.status).header('Cache-Control', 'no-store').send({ errors: [error.message], code: error.code });
+      return reply.code(error.status).header('Cache-Control', 'no-store').send({ ...(error.extra ?? {}), errors: [error.message], code: error.code });
     }
     const status = typeof error.statusCode === 'number' && error.statusCode >= 400 ? error.statusCode : 500;
     if (status < 500) {
@@ -465,19 +512,26 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
     db,
     now,
     fetchImpl,
-    onChanged: (version) => bus.emit(version),
+    onChanged: (version, surauId) => bus.emit(version, surauId),
+    surauIds: () => timerSurauIds(db, role),
+    // a surau whose box is linked fetches on that box and receives the days by sync; the cloud does not fetch twice
+    ...(role === 'cloud'
+      ? { skipSurau: (surauId: string): boolean => db.prepare('SELECT 1 FROM sites WHERE surau_id = ? AND linked_at IS NOT NULL AND revoked_at IS NULL').get(surauId) !== undefined }
+      : {}),
     ...(opts.autoPrayerFetch?.firstDelayMs !== undefined ? { firstDelayMs: opts.autoPrayerFetch.firstDelayMs } : {}),
     ...(opts.autoPrayerFetch?.intervalMs !== undefined ? { intervalMs: opts.autoPrayerFetch.intervalMs } : {}),
   });
-  if (opts.autoPrayerFetch && role === 'box') autoFetch.start();
-  const prayerDeps = { db, dataDir, now, fetchImpl, bus, autoFetch, autoFetchOn: opts.autoPrayerFetch !== undefined && role === 'box', role, limiters, ...(opts.nominatimMinIntervalMs !== undefined ? { nominatimMinIntervalMs: opts.nominatimMinIntervalMs } : {}) };
+  // a box tops up its one surau; the cloud, each surau it has
+  if (opts.autoPrayerFetch) autoFetch.start();
+  const prayerDeps = { db, dataDir, now, fetchImpl, bus, autoFetch, autoFetchOn: opts.autoPrayerFetch !== undefined, role, limiters, ...(opts.nominatimMinIntervalMs !== undefined ? { nominatimMinIntervalMs: opts.nominatimMinIntervalMs } : {}) };
 
   let sseClients = 0;
   const sseByIp = new Map<string, number>();
   const clientCleanups = new Set<() => void>();
 
-  app.get('/api/kiosk/bundle', async (_request, reply) => {
-    const settings = getSettings(db);
+  app.get('/api/kiosk/bundle', async (request, reply) => {
+    const surauId = reqSurau(request);
+    const settings = getSettings(db, surauId);
     const zone = String(settings.zone.zone);
     const tz = tzOf(settings);
     const at = now();
@@ -485,30 +539,31 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
     // Each day carries where its times come from; the kiosk shows the source line and the gold band from these.
     // Every row carries its own source line: the kiosk reads today's from the row of the day it is on, so the
     // footer is right after midnight without fetching the bundle again.
-    const days = resolveDays(db, settings, addCalendarDays(today, -1), addCalendarDays(today, 40))
+    const days = resolveDays(db, settings, addCalendarDays(today, -1), addCalendarDays(today, 40), surauId)
       .map((d) => ({ ...d, footerMs: sourceLine(settings, d, 'ms'), footerEn: sourceLine(settings, d, 'en') }));
     const todayDay = days.find((d) => d.date === today);
     const prayer = {
       country: settings.location.country,
       hasOfficial: hasOfficialSource(settings.location.country),
       timezone: tz,
-      utcOffsetMinutes: surauPublicInfo(db, at).utcOffsetMinutes,
+      utcOffsetMinutes: surauPublicInfo(db, at, surauId).utcOffsetMinutes,
       footerMs: todayDay ? sourceLine(settings, todayDay, 'ms') : '',
       footerEn: todayDay ? sourceLine(settings, todayDay, 'en') : '',
     };
     reply.header('Cache-Control', 'no-store');
     // The kiosk loads plain asset ids: its copy of the settings carries the derived wide logo, not the adjustment.
-    const kioskSettings = { ...settings, surauInfo: { ...settings.surauInfo, logo: kioskLogoAssetId(db, dataDir) } };
-    return { version: getVersion(db), zone, days, prayer, settings: kioskSettings, logo: surauLogoUrl(db, dataDir), serverTime: at.toISOString() };
+    const kioskSettings = { ...settings, surauInfo: { ...settings.surauInfo, logo: kioskLogoAssetId(db, dataDir, surauId) } };
+    return { version: getVersion(db, surauId), zone, days, prayer, settings: kioskSettings, logo: surauLogoUrl(db, dataDir, surauId), serverTime: at.toISOString() };
   });
 
-  app.get('/api/kiosk/content', async (_request, reply) => {
+  app.get('/api/kiosk/content', async (request, reply) => {
+    const surauId = reqSurau(request);
     const at = now();
     reply.header('Cache-Control', 'no-store');
     return {
-      version: getVersion(db),
+      version: getVersion(db, surauId),
       serverTime: at.toISOString(),
-      content: buildKioskContent(db, dataDir, at, getSettings(db)),
+      content: buildKioskContent(db, dataDir, at, getSettings(db, surauId), surauId),
     };
   });
 
@@ -537,6 +592,7 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
     });
     res.socket?.setNoDelay(true);
 
+    const surauId = reqSurau(request);
     const identity = request.auth;
     const token = bearerToken(request);
     // The identity checked at connect must still be valid: a revoked device or cookie, an expired
@@ -573,10 +629,10 @@ data: ${JSON.stringify(live)}
     };
 
     // Send the current version once so a reconnecting kiosk catches up, then the current live state.
-    send(getVersion(db), false);
+    send(getVersion(db, surauId), false);
     sendLive(liveSessions.kioskLive(), false);
-    const unsubscribe = bus.on((version) => send(version));
-    const unsubscribeLive = bus.onLive((live) => sendLive(live));
+    const unsubscribe = bus.on((version) => send(version), surauId);
+    const unsubscribeLive = bus.onLive((live) => sendLive(live), surauId);
     const timer = setInterval(() => {
       if (res.writableEnded || res.destroyed) return;
       if (!stillValid()) {
@@ -608,13 +664,14 @@ data: ${JSON.stringify(live)}
     res.on('close', cleanup);
   });
 
-  app.get('/api/settings', async () => getSettings(db));
+  app.get('/api/settings', async (request) => getSettings(db, reqSurau(request)));
 
   app.put('/api/settings/:feature', async (request, reply) => {
     const { feature } = request.params as { feature: string };
     if (!isFeatureKey(feature)) {
       return reply.code(404).send({ errors: [`unknown feature ${feature}`] });
     }
+    const surauId = reqSurau(request);
     const patch = request.body ?? {};
     // MAXCOM system values (Lanjutan) are for the Pentadbir MAXCOM; the page being hidden is not the guard, this is.
     if (patchNeedsSystemWrite(feature, patch) && !identityCan(request.auth, 'system:write')) {
@@ -623,7 +680,7 @@ data: ${JSON.stringify(live)}
       return reply.code(403).send({ errors: [MSG.forbidden] });
     }
     if (feature === 'surauInfo' && isPlain(patch) && typeof patch.logo === 'string' && patch.logo !== '' && /^[0-9a-f]{64}$/.test(patch.logo)) {
-      const found = getAssetPath(db, dataDir, patch.logo);
+      const found = surauHoldsAsset(db, role, surauId, patch.logo) ? getAssetPath(db, dataDir, patch.logo) : null;
       if (found === null) return reply.code(400).send({ errors: ['logo refers to an asset that does not exist'] });
       if (found.mime !== 'image/png' && found.mime !== 'image/jpeg') {
         return reply.code(400).send({ errors: ['logo must be a PNG or JPEG image'] });
@@ -632,8 +689,8 @@ data: ${JSON.stringify(live)}
     // An adjusted logo: render the wide and the square picture now; a bad adjustment is refused before saving.
     if (feature === 'surauInfo' && isPlain(patch) && isPlain(patch.logo) && validateFeatureSettings('surauInfo', { logo: patch.logo }).ok) {
       try {
-        deriveImage(db, dataDir, 'logo', patch.logo as unknown as ImageRef);
-        deriveImage(db, dataDir, 'logoSquare', patch.logo as unknown as ImageRef);
+        deriveImage(db, dataDir, 'logo', patch.logo as unknown as ImageRef, undefined, surauId);
+        deriveImage(db, dataDir, 'logoSquare', patch.logo as unknown as ImageRef, undefined, surauId);
       } catch (error) {
         if (error instanceof AssetError) return reply.code(error.status).send({ errors: error.errors });
         if (error instanceof ImageAdjustError) {
@@ -644,26 +701,34 @@ data: ${JSON.stringify(live)}
     }
     // Menu backgrounds must be pictures this box holds; a missing one is refused, not stored.
     if (feature === 'themeStyle' && isPlain(patch) && isPlain(patch.styles)) {
-      for (const ref of newStyleBgImages(patch.styles, getSettings(db).themeStyle.styles)) {
-        const found = getAssetPath(db, dataDir, ref.id);
+      for (const ref of newStyleBgImages(patch.styles, getSettings(db, surauId).themeStyle.styles)) {
+        const found = surauHoldsAsset(db, role, surauId, ref.id) ? getAssetPath(db, dataDir, ref.id) : null;
         if (found === null || (found.mime !== 'image/jpeg' && found.mime !== 'image/png' && found.mime !== 'image/webp')) {
           return reply.code(400).send({ errors: [`bgImage refers to a picture that does not exist (theme ${ref.theme}, screen ${ref.screen})`] });
         }
       }
     }
+    // On the cloud a theme file named by a pack record must be one this surau holds (a box has one surau; every asset is its own).
+    if (role === 'cloud' && feature === 'themeStyle' && isPlain(patch) && isPlain(patch.packs)) {
+      for (const rec of Object.values(patch.packs)) {
+        if (isPlain(rec) && typeof rec.assetId === 'string' && !surauHoldsAsset(db, role, surauId, rec.assetId)) {
+          return reply.code(400).send({ errors: ['a theme file refers to an asset that does not exist'] });
+        }
+      }
+    }
     const prayerFeature = feature === 'zone' || feature === 'location' || feature === 'prayerSources' || feature === 'prayerCalc';
-    const guard = prayerFeature ? prayerSettingsGuard(db, feature, patch, now()) : {};
+    const guard = prayerFeature ? prayerSettingsGuard(db, feature, patch, now(), surauId, opts.autoPrayerFetch !== undefined) : {};
     if (guard.errors && guard.errors.length > 0) return reply.code(400).send({ errors: guard.errors });
     try {
-      const versionBefore = getVersion(db);
-      const before = prayerFeature ? getSettings(db)[feature as 'zone'] : undefined;
-      const settings = putFeature(db, feature, patch, actorOf(request), deviceOf(request));
-      if (prayerFeature) afterPrayerSettings(db, feature, before, settings[feature as 'zone'], prayerDeps);
-      const versionAfter = getVersion(db);
-      if (versionAfter !== versionBefore) bus.emit(versionAfter);
+      const versionBefore = getVersion(db, surauId);
+      const before = prayerFeature ? getSettings(db, surauId)[feature as 'zone'] : undefined;
+      const settings = putFeature(db, feature, patch, actorOf(request), deviceOf(request), surauId);
+      if (prayerFeature) afterPrayerSettings(db, feature, before, settings[feature as 'zone'], prayerDeps, surauId);
+      const versionAfter = getVersion(db, surauId);
+      if (versionAfter !== versionBefore) bus.emit(versionAfter, surauId);
       // the kiosk hears about audio and on/off changes of the live at once
-      if (feature === 'liveOnKiosk') liveSessions.publishKiosk();
-      return guard.warnings && guard.warnings.length > 0 ? { ...settings, warnings: guard.warnings } : settings;
+      if (feature === 'liveOnKiosk' && surauId === LOCAL_SURAU_ID) liveSessions.publishKiosk();
+      return guard.warnings && guard.warnings.length > 0 ? { ...settings, warnings: guard.warnings, ...(guard.warningCodes ? { warningCodes: guard.warningCodes } : {}) } : settings;
     } catch (error) {
       if (error instanceof SettingsError) {
         return reply.code(400).send({ errors: error.errors });
@@ -681,13 +746,34 @@ data: ${JSON.stringify(live)}
     if (typeof zone !== 'string' || !ZONE.test(zone)) {
       return reply.code(400).send({ errors: ['zone must look like SGR01'] });
     }
+    const surauId = reqSurau(request);
+    // JAKIM data is for a country that has an official source; a surau elsewhere is never offered it
+    if (!hasOfficialSource(getSettings(db, surauId).location.country)) {
+      return reply.code(409).send({ errors: ['Negara ini tiada sumber rasmi; gunakan fail atau kiraan'], code: 'no_official_source' });
+    }
 
     let days: PrayerDay[];
+    let csvYear: number | null = null;
     if (typeof body.csv === 'string') {
+      if (body.year !== undefined) {
+        if (typeof body.year !== 'number' || !Number.isInteger(body.year) || body.year < 2020 || body.year > 2100) {
+          return reply.code(400).send({ errors: ['year must be an integer 2020..2100'] });
+        }
+        csvYear = body.year;
+      }
       try {
         days = parseJakimCsv(body.csv);
       } catch (error) {
         return reply.code(400).send({ errors: [messageOf(error)] });
+      }
+      // The chosen year is enforced: a file for another year is refused whole, nothing is written.
+      if (csvYear !== null && days.length > 0 && days.some((d) => !d.date.startsWith(`${csvYear}-`))) {
+        const dates = days.map((d) => d.date).sort();
+        return reply.code(400).send({
+          errors: [`Fail ini bukan untuk tahun ${csvYear} (${dates[0]} hingga ${dates[dates.length - 1]})`],
+          code: 'csv_year_mismatch',
+          detail: { year: csvYear, from: dates[0], to: dates[dates.length - 1] },
+        });
       }
     } else if (body.source === 'esolat') {
       const year = body.year;
@@ -695,10 +781,14 @@ data: ${JSON.stringify(live)}
         return reply.code(400).send({ errors: ['year must be an integer 2020..2100'] });
       }
       try {
-        days = await fetchEsolatYear(db, zone, year, fetchImpl);
+        days = await fetchEsolatYear(db, zone, year, fetchImpl, surauId);
       } catch (error) {
         // Upstream e-Solat failures are a bad gateway; our own validation is a 400.
-        return reply.code(502).send({ errors: [messageOf(error)] });
+        return reply.code(502).send({
+          errors: [messageOf(error)],
+          code: error instanceof EsolatError ? error.code : 'esolat_unreachable',
+          ...(error instanceof EsolatError ? { detail: error.detail } : {}),
+        });
       }
     } else {
       return reply
@@ -707,18 +797,26 @@ data: ${JSON.stringify(live)}
     }
 
     try {
-      const result = importDays(db, zone, days, actorOf(request), deviceOf(request));
-      bus.emit(getVersion(db));
+      // a pasted official file is recorded with what it replaced, so it can be undone from the import records
+      const result = typeof body.csv === 'string' && days.length > 0
+        ? applyOfficialCsv(db, zone, days, actorOf(request), deviceOf(request), now(), surauId)
+        : importDays(db, zone, days, actorOf(request), deviceOf(request), undefined, surauId);
+      bus.emit(getVersion(db, surauId), surauId);
       return result;
     } catch (error) {
       return reply.code(400).send({ errors: [messageOf(error)] });
     }
   });
 
-  app.get('/api/surau/info', async (_request, reply) => {
+  // Public. A box answers for its own surau. The cloud answers for the surau of the linked site named by the header
+  // `X-Maxcom-Box` and the neutral MAXCOM answer for anything else, after the same lookups (no enumeration).
+  app.get('/api/surau/info', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    const info = surauPublicInfo(db, now());
-    const logo = surauLogoUrl(db, dataDir);
+    const target = publicSurauOf(db, request, role);
+    const sid = target ?? NEUTRAL_SURAU_ID;
+    const info = surauPublicInfo(db, now(), sid);
+    const logo = surauLogoUrl(db, dataDir, sid);
+    if (target === null) return { ...info, name: 'MAXCOM' };
     return logo === null ? info : { ...info, logo };
   });
 
@@ -733,49 +831,63 @@ data: ${JSON.stringify(live)}
     // the numbered local name (public: it is a certificate DNS name), null on a legacy root; not on the cloud
     const localName = role === 'box' ? boxNameOf(tlsNow()) : null;
     // The theme state is for the box's own machine (the setup doctor reads it on loopback) and for an admin; a caller across the network learns nothing about the theme.
-    const onThisMachine = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.ip);
+    // Proxy-aware (a caller behind cloudflared reaches us from 127.0.0.1 too) and only on a box: the cloud has no display of its own.
+    const onThisMachine = role === 'box' && isDirectLoopback(request);
     if (!identityCan(request.auth, 'health:read')) {
-      return withCloud({ ok: true, version: getVersion(db), name: localName, themes, ...(onThisMachine ? { themeOk: themeOk(db) } : {}) });
+      // Anonymous: only that it is up, and (cloud) for the surau of the named linked box; never a list of sites.
+      return withCloud({ ok: true, version: getVersion(db, publicSurauOf(db, request, role) ?? NEUTRAL_SURAU_ID), name: localName, themes, ...(onThisMachine ? { themeOk: themeOk(db) } : {}) });
     }
-    const count = (sql: string): number => Number(db.prepare(sql).get()?.n ?? 0);
-    const prayer = prayerStatus({ db, now, autoFetch });
+    const scope = healthScopeOf(db, request, role);
+    const surauId = scope.surauId;
+    // The cloud counts only the caller's surau (the Pentadbir MAXCOM on an ops device counts everything).
+    const own = !scope.all;
+    const count = (sql: string, ...args: string[]): number => Number(db.prepare(sql).get(...args)?.n ?? 0);
+    const prayer = prayerStatus({ db, now, autoFetch }, surauId);
     return withCloud({
       ok: true,
-      version: getVersion(db),
+      version: getVersion(db, surauId),
       name: localName,
       themes,
-      themeOk: themeOk(db),
-      themeHealth: activeThemeHealth(db),
+      // The theme state is the box's own display; the cloud has none (its themeStyle is per surau and never reported on).
+      ...(role === 'box' ? { themeOk: themeOk(db), themeHealth: activeThemeHealth(db) } : {}),
       tls: tlsNow() ? certInfo(tlsNow()!, now()) : null,
-      users: count('SELECT COUNT(*) AS n FROM users WHERE active = 1'),
-      devices: count('SELECT COUNT(*) AS n FROM devices WHERE revoked_at IS NULL'),
-      lockedUsers: Number(
-        db.prepare('SELECT COUNT(*) AS n FROM users WHERE pin_locked_until > ?').get(now().toISOString())?.n ?? 0,
-      ),
-      daysAhead: prayer.daysAhead.resolved,
+      users: own ? count('SELECT COUNT(*) AS n FROM users WHERE active = 1 AND surau_id = ?', surauId) : count('SELECT COUNT(*) AS n FROM users WHERE active = 1'),
+      devices: own ? count("SELECT COUNT(*) AS n FROM devices WHERE revoked_at IS NULL AND surau_id = ? AND user_id NOT IN (SELECT id FROM users WHERE surau_id = '*')", surauId) : count('SELECT COUNT(*) AS n FROM devices WHERE revoked_at IS NULL'),
+      lockedUsers: own
+        ? count('SELECT COUNT(*) AS n FROM users WHERE pin_locked_until > ? AND deleted_at IS NULL AND surau_id = ?', now().toISOString(), surauId)
+        : count('SELECT COUNT(*) AS n FROM users WHERE pin_locked_until > ? AND deleted_at IS NULL', now().toISOString()),
+      // where official data exists, only official and file days count (a calculated day is a fallback and must not hide missing data)
+      daysAhead: prayer.hasOfficial ? prayer.daysAhead.official + prayer.daysAhead.file : prayer.daysAhead.resolved,
       prayer,
-      autoFetch: autoFetch.status(),
-      assetsBytes: assetsTotalBytes(db),
-      appLock: appLockEnabled(db),
+      autoFetch: autoFetch.status(surauId),
+      // the cloud counts only what the caller's surau holds (`surau_assets`); a box, or the ops view, the whole store
+      assetsBytes: role === 'cloud' && own ? count('SELECT COALESCE(SUM(bytes), 0) AS n FROM surau_assets WHERE surau_id = ?', surauId) : assetsTotalBytes(db),
+      appLock: appLockEnabled(db, surauId),
       live: liveSessions.healthBlock(),
       // the sync facts (was `cloud` before the origin took that name)
-      sync: role === 'cloud' ? { role: 'cloud', sites: listSites(db), workerOutbox: outboxStatus(db) } : syncAgent !== null ? syncAgent.status() : { ...syncStatus(db, 'box'), state: 'idle' },
+      sync: role === 'cloud' ? { role: 'cloud', sites: listSites(db, scope.all ? undefined : surauId), workerOutbox: outboxStatus(db) } : syncAgent !== null ? syncAgent.status() : { ...syncStatus(db, 'box'), state: 'idle' },
     });
   });
 
   // Another process (a CLI import, a user command) may write to the same database: no event reaches
   // this process's bus for that, so the version is re-read on a timer and announced when it moved.
-  let lastVersion = getVersion(db);
-  bus.on((v) => {
-    lastVersion = v;
+  // One version per surau (a box has one; the cloud one for each surau it has).
+  const lastVersions = new Map<string, number>();
+  const pollVersions = (announce: boolean): void => {
+    for (const id of timerSurauIds(db, role)) {
+      const v = getVersion(db, id);
+      const before = lastVersions.get(id);
+      lastVersions.set(id, v);
+      if (announce && before !== undefined && v !== before) bus.emit(v, id);
+    }
+  };
+  pollVersions(false);
+  bus.on((v, id) => {
+    lastVersions.set(id, v);
   });
   const versionTimer = setInterval(() => {
     try {
-      const v = getVersion(db);
-      if (v !== lastVersion) {
-        lastVersion = v;
-        bus.emit(v);
-      }
+      pollVersions(true);
     } catch {
       // The database may be closing.
     }
@@ -808,6 +920,8 @@ data: ${JSON.stringify(live)}
       realDataDir,
     });
     registerJoinRoutes(app, { db, dataDir, boxId, identity, now, limiters });
+  } else {
+    registerCloudInfoRoute(app, { boxId, now });
   }
   registerSyncRoutes(app, {
     db,
@@ -837,6 +951,27 @@ data: ${JSON.stringify(live)}
   });
   // registered on both roles (the route table lists it); a box has no site keys, so it only ever answers 403 there
   registerSiteAssetRoute(app, { db, dataDir });
+  // Plan 14 Task 10: the MAXCOM Ops fleet routes work on the cloud only (a box answers every one of them 404)
+  // a deleted surau leaves no timer or cache entry behind that could bring a row back
+  const forgetSurau = (surauId: string): void => {
+    autoFetch.forget(surauId);
+    lastVersions.delete(surauId);
+  };
+  registerFleetRoutes(app, { db, now, workerAdmin: opts.workerAdmin ?? null, role, onSurauDeleted: forgetSurau });
+  if (role === 'cloud' && opts.autoPrune !== undefined && dbPath !== ':memory:') {
+    const stopPrune = startAutoPrune({
+      db,
+      now,
+      days: opts.autoPrune.days ?? autoPruneDays(),
+      backupDir: join(dirname(resolve(dbPath)), 'backups'),
+      onDeleted: forgetSurau,
+      ...(opts.autoPrune.firstDelayMs !== undefined ? { firstDelayMs: opts.autoPrune.firstDelayMs } : {}),
+      ...(opts.autoPrune.intervalMs !== undefined ? { intervalMs: opts.autoPrune.intervalMs } : {}),
+    });
+    app.addHook('onClose', async () => {
+      stopPrune();
+    });
+  }
   app.post('/api/sync/run', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
     if (role !== 'box' || syncAgent === null) return reply.code(404).send({ errors: ['not found'] });
@@ -864,22 +999,43 @@ data: ${JSON.stringify(live)}
     clearInterval(trimTimer);
     clearTimeout(trimFirst);
   });
-  registerLiveRoutes(app, { sessions: liveSessions, proxy: webrtcProxy, lanIps, youtube: youtubeService });
+  registerLiveRoutes(app, { sessions: liveSessions, proxy: webrtcProxy, lanIps, youtube: youtubeService, youtubeFor, cloud: role === 'cloud' });
+  if (role === 'box') registerAudioInputRoutes(app, { db, inputs: audioInputs });
+  // the external camera: sealed address, the box's own test (a box with a data folder only)
+  if (role === 'box' && realDataDir) {
+    // every address of every local interface is the box itself (the certificate list alone misses some)
+    const selfIps = [...new Set([...lanIps, ...localAddresses()])];
+    const cameraStore = new CameraStore(dataDir, { boxIps: selfIps, now });
+    liveSessions.attachCamera(cameraStore); // the box pulls the saved camera for an iPad or web live
+    const cameraTester = live ? new CameraTester({ api: () => live.runtime.api, log: fileLogTail(dataDir), secrets: live.runtime.secrets, now }) : null;
+    liveSessions.attachCameraBusy(cameraTester !== null ? () => cameraTester.busy : null);
+    registerCameraRoutes(app, {
+      db,
+      store: cameraStore,
+      tester: cameraTester,
+      sessions: liveSessions,
+      limiters,
+      boxIps: selfIps,
+    });
+    attachCameraSecretSync(app, { db, dataDir, now, boxIps: selfIps, fetchImpl: opts.sync?.fetchImpl, cloudUrl: opts.cloud?.url, wake: syncAgent !== null ? () => syncAgent!.wakeNow() : undefined, auto: opts.sync?.auto });
+  }
   // the cloud's YouTube: the box's broadcast leg and the catch-up upload sessions (Plan 6 Task 5); 404 on a box
-  registerYoutubeCloudRoutes(app, { role, db, now, youtube: youtubeService });
+  registerYoutubeCloudRoutes(app, { role, db, now, youtube: youtubeService, youtubeFor });
+  // the sealed backup of the camera address: cloud routes (404 on a box), and the box's push and restore (B5)
+  registerCameraSecretCloudRoutes(app, { role, db, now, masterKey: role === 'cloud' && realDataDir ? loadBoxKey(dataDir) : null });
   registerPrayerRoutes(app, prayerDeps);
   registerContentRoutes(app, { db, bus, dataDir, actorOf });
-  registerAssetRoutes(app, { db, dataDir, actorOf });
-  const themeStore = createThemeStore({ db, dataDir, now });
+  registerAssetRoutes(app, { db, dataDir, actorOf, role });
+  const themeStore = createThemeStore({ db, dataDir, now, role });
   registerThemeRoutes(app, { store: themeStore, bus, db, dataDir, role, boxId, now, staticDir: typeof opts.staticDir === 'string' ? opts.staticDir : null, actorOf, deviceOf });
-  registerFinanceRoutes(app, { db, dataDir, bus, role, surauId: DEFAULT_SURAU_ID, now, limiters, actorOf, deviceOf });
+  registerFinanceRoutes(app, { db, dataDir, bus, role, now, limiters, actorOf, deviceOf });
   registerSettingsTest(app, { db, fetchImpl, ...(opts.sourceTestTimeoutMs !== undefined ? { timeoutMs: opts.sourceTestTimeoutMs } : {}) });
   registerIslamicRoutes(app, {
     dataDir,
     fetchImpl,
-    getReciter: () => String(getSettings(db).tilawah.reciter),
-    getCacheMaxMb: () => Number(getSettings(db).tilawah.cacheMaxMb),
-    getSourceUrls: () => sourceUrlsFrom(getSettings(db)),
+    getReciter: (surauId) => String(getSettings(db, surauId).tilawah.reciter),
+    getCacheMaxMb: (surauId) => Number(getSettings(db, surauId).tilawah.cacheMaxMb),
+    getSourceUrls: (surauId) => sourceUrlsFrom(getSettings(db, surauId)),
     actorOf,
     logChange: (actor, action, detail) => {
       db.prepare(
@@ -890,7 +1046,7 @@ data: ${JSON.stringify(live)}
 
   // HadeethEnc through the box (Plan 14): every request goes through `fetchImpl` (guardedFetch in production)
   // to the address in `dataSources.hadeethenc`. The timers run on the box role only.
-  const hadisClient = lazyHadeethEnc(() => createHadeethEnc(fetchImpl, sourceUrlsFrom(getSettings(db)).hadeethenc));
+  const hadisClient = lazyHadeethEnc(() => createHadeethEnc(fetchImpl, sourceUrlsFrom(getSettings(db, LOCAL_SURAU_ID)).hadeethenc));
   const hadisLog = (action: string, detail: string): void => {
     db.prepare(
       'INSERT INTO change_log (at, actor, entity, entity_id, before_json, after_json) VALUES (?, ?, ?, ?, NULL, ?)',
@@ -912,7 +1068,7 @@ data: ${JSON.stringify(live)}
     },
   });
   const stopHadisTimers = opts.hadisTimers
-    ? startHadisTimers({ db, role, client: hadisClient, job: hadisJob, now, onLog: hadisLog, onChange: () => bus.emit(getVersion(db)), ...opts.hadisTimers })
+    ? startHadisTimers({ db, client: hadisClient, job: hadisJob, now, onLog: hadisLog, surauIds: () => timerSurauIds(db, role), onChange: (surauId) => bus.emit(getVersion(db, surauId), surauId), ...opts.hadisTimers })
     : null;
   app.addHook('onClose', async () => {
     stopHadisTimers?.();
@@ -943,8 +1099,9 @@ data: ${JSON.stringify(live)}
 
   const appDir = typeof opts.appDir === 'string' ? opts.appDir : null;
   const hasApp = appDir !== null && existsSync(appDir);
-  registerSurauLogoRoutes(app, { db, dataDir, appDir: hasApp ? appDir : null });
+  registerSurauLogoRoutes(app, { db, dataDir, appDir: hasApp ? appDir : null, role });
   registerIosProfileRoutes(app, {
+    role,
     db,
     boxId,
     httpsPort: opts.httpsPort ?? 8443,
@@ -991,7 +1148,8 @@ data: ${JSON.stringify(live)}
   app.addHook('onClose', async () => {
     // an open live session ends cleanly (publisher user removed, broadcast completed) before the database closes
     await liveSessions.shutdown().catch(() => undefined);
-    youtubeService?.shutdown();
+    if (youtubeRegistry !== null) for (const svc of youtubeRegistry.all()) svc.shutdown();
+    else youtubeService?.shutdown();
     clearInterval(versionTimer);
     autoFetch.stop();
     for (const cleanup of [...clientCleanups]) {

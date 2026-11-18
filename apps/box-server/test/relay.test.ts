@@ -426,11 +426,11 @@ describe('relay inside a live session', () => {
     });
     harnesses.push(h);
     setup?.(h);
-    const media = await loginAs(h.app, 'media');
-    const call = (url: string, payload: unknown) => h.app.inject({ method: 'POST', url, headers: media.headers, payload: payload as object, remoteAddress: '10.168.1.40' });
+    const liveUser = await loginAs(h.app, 'live');
+    const call = (url: string, payload: unknown) => h.app.inject({ method: 'POST', url, headers: liveUser.headers, payload: payload as object, remoteAddress: '10.168.1.40' });
     const runs = (): string[][] =>
       existsSync(join(dir, 'argv.log')) ? readFileSync(join(dir, 'argv.log'), 'utf8').split('\n').filter((l) => l !== '').map((l) => JSON.parse(l) as string[]) : [];
-    const status = async () => (await h.app.inject({ method: 'GET', url: '/api/live/status', headers: media.headers, remoteAddress: '10.168.1.40' })).json();
+    const status = async () => (await h.app.inject({ method: 'GET', url: '/api/live/status', headers: liveUser.headers, remoteAddress: '10.168.1.40' })).json();
     return { h, dir, call, runs, status, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
   }
 
@@ -477,7 +477,7 @@ describe('relay inside a live session', () => {
   });
 
   it('relayVideo reencode and the bitrate cap come from the liveYoutube settings', async () => {
-    const s = await session((h) => putFeature(h.app.surau.db, 'liveYoutube', { relayVideo: 'reencode', maxBitrateKbps: 1800 }, 'test'));
+    const s = await session((h) => putFeature(h.app.surau.db, 'liveYoutube', { relayVideo: 'reencode', maxBitrateKbps: 1800 }, 'test', undefined, 'sdm'));
     try {
       s.h.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
       await s.call('/api/live/start', startBody(s.h, { source: 'web', outputs: { kiosk: true, youtube: true }, youtubeVia: 'box' }));
@@ -640,13 +640,13 @@ describe('kiosk audio leg (Opus copy for the kiosk)', () => {
       live: { relay: { ffmpegPath: process.execPath, argsPrefix: [script], pollMs: 10, backoffBaseMs: 5, backoffMaxMs: 20, killAfterMs: 500, ...relay } },
     });
     harnesses.push(h);
-    const media = await loginAs(h.app, 'media');
-    const call = (url: string, payload: unknown) => h.app.inject({ method: 'POST', url, headers: media.headers, payload: payload as object, remoteAddress: '10.168.1.40' });
+    const liveUser = await loginAs(h.app, 'live');
+    const call = (url: string, payload: unknown) => h.app.inject({ method: 'POST', url, headers: liveUser.headers, payload: payload as object, remoteAddress: '10.168.1.40' });
     const runs = (): string[][] =>
       existsSync(join(dir, 'argv.log')) ? readFileSync(join(dir, 'argv.log'), 'utf8').split('\n').filter((l) => l !== '').map((l) => JSON.parse(l) as string[]) : [];
     const whep = () => h.app.inject({ method: 'POST', url: '/api/kiosk/live/whep', headers: { 'content-type': 'application/sdp' }, payload: SDP, remoteAddress: '127.0.0.1' });
     const setAudio = (audio: boolean) => {
-      putFeature(h.app.surau.db, 'liveOnKiosk', { audio }, 'test');
+      putFeature(h.app.surau.db, 'liveOnKiosk', { audio }, 'test', undefined, 'sdm');
       h.app.liveSessions!.publishKiosk();
     };
     return { h, dir, call, runs, whep, setAudio, cleanup: () => rmSync(dir, { recursive: true, force: true }) };

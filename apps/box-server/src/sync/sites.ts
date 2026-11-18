@@ -3,13 +3,17 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { openSecret, randomToken, sealSecret, sha256hex } from '../auth/crypto.ts';
 import type { JsonWebKey } from '../auth/crypto.ts';
-import { isAssetId, putAsset, AssetError } from '../assets/store.ts';
+import { SURAU_ID_RE } from '@surau/core';
+import { isAssetId, AssetError } from '../assets/store.ts';
+import { authLog } from '../auth/sessions.ts';
 import { logChange, tx } from '../auth/users.ts';
+import { cleanText, insertSurau } from '../surau/registry.ts';
+import { putSurauAsset, StorageFullError } from '../surau/storage.ts';
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { PACK_MIME } from '../themes/packFormat.ts';
-import { DEFAULT_SURAU_ID } from './verify.ts';
 import { enqueueSiteDelete, enqueueSitePut } from './workerOutbox.ts';
 import type { WorkerAdminConfig, WorkerOutboxSender } from './workerOutbox.ts';
-import { deleteRegistration } from './workerRegs.ts';
+import { deleteRegistration, getRegistration } from './workerRegs.ts';
 
 /**
  * The cloud's side of linking a box (SECURITY code).
@@ -68,28 +72,50 @@ function setState(db: DatabaseSync, key: string, value: string): void {
 }
 
 /** A new one-time link code for a box. Any earlier unspent code for the same box is withdrawn, and expired codes are swept. */
-export function issueLinkCode(deps: SitesDeps, o: { boxId: string; name: string }): LinkCode {
-  if (!BOX_ID_RE.test(o.boxId)) throw new Error('bad box id');
-  const name = o.name.trim().slice(0, 120);
-  if (name === '') throw new Error('name required');
+export function issueLinkCode(
+  deps: SitesDeps,
+  o: { boxId: string; name: string; target?: ApprovalTarget },
+  actor = 'local',
+): LinkCode & { surauId: string; created: boolean } {
+  if (!BOX_ID_RE.test(o.boxId)) throw new ApprovalError('bad_args', 'ID kotak tidak sah');
+  const name = cleanText(o.name, 120);
+  if (name === '') throw new ApprovalError('bad_args', 'Nama diperlukan');
+  // a code names its surau; there is no default (Plan 14 Task 8)
+  if (o.target === undefined || o.target === null) throw new ApprovalError('surau_required', 'Sasaran diperlukan: --new-surau atau --surau <id>');
+  const target = o.target;
   const now = deps.now();
   const code = newCode();
   const expiresAt = new Date(now.getTime() + LINK_CODE_TTL_MS).toISOString();
-  tx(deps.db, () => {
-    const rows = deps.db.prepare("SELECT key, value FROM sync_state WHERE key LIKE 'link_code:%'").all();
+  try {
+    return tx(deps.db, () => {
+      // a live box may be re-linked by a code (its key is replaced), but only into its own surau
+      const { surauId, created } = resolveTarget(deps.db, o.boxId, name, target, actor, now);
+      sweepCodes(deps.db, o.boxId, now);
+      setState(deps.db, CODE_PREFIX + sha256hex(code), JSON.stringify({ boxId: o.boxId, name, expiresAt, surauId }));
+      logChange(deps.db, actor, 'site', o.boxId, undefined, { event: 'link_code', boxId: o.boxId, name, surauId, created }, undefined, surauId);
+      return { code, expiresAt, surauId, created };
+    });
+  } catch (error) {
+    if (error instanceof ApprovalError && error.code === 'foreign_surau') authLog(deps.db, now, 'site_link_code', false, { detail: 'foreign_surau' });
+    throw error;
+  }
+}
+
+/** Withdraw earlier unspent codes of the box and sweep expired ones. Inside the caller's transaction. */
+function sweepCodes(db: DatabaseSync, boxId: string, now: Date): void {
+  {
+    const rows = db.prepare("SELECT key, value FROM sync_state WHERE key LIKE 'link_code:%'").all();
     for (const r of rows) {
       let stale = true;
       try {
         const v = JSON.parse(String(r.value)) as { boxId?: string; expiresAt?: string };
-        stale = v.boxId === o.boxId || String(v.expiresAt) <= now.toISOString();
+        stale = v.boxId === boxId || String(v.expiresAt) <= now.toISOString();
       } catch {
         /* unreadable entry: sweep it */
       }
-      if (stale) deps.db.prepare('DELETE FROM sync_state WHERE key = ?').run(String(r.key));
+      if (stale) db.prepare('DELETE FROM sync_state WHERE key = ?').run(String(r.key));
     }
-    setState(deps.db, CODE_PREFIX + sha256hex(code), JSON.stringify({ boxId: o.boxId, name, expiresAt }));
-  });
-  return { code, expiresAt };
+  }
 }
 
 export interface LinkResult {
@@ -136,7 +162,7 @@ export function redeemLink(deps: SitesDeps, body: unknown): LinkResult {
   if (normalised.length !== CODE_LENGTH) throw new LinkError(401, BAD_CODE);
 
   const now = deps.now();
-  const surauId = deps.surauId ?? DEFAULT_SURAU_ID;
+  let surauId = '';
   const siteToken = randomToken(32);
   const wakeSecret = randomToken(32);
   let name = '';
@@ -147,7 +173,7 @@ export function redeemLink(deps: SitesDeps, body: unknown): LinkResult {
     if (row === undefined) return true;
     // Spent on the first presentation, whatever follows (the delete commits even when the code is refused).
     deps.db.prepare('DELETE FROM sync_state WHERE key = ?').run(key);
-    let entry: { boxId?: unknown; name?: unknown; expiresAt?: unknown };
+    let entry: { boxId?: unknown; name?: unknown; expiresAt?: unknown; surauId?: unknown };
     try {
       entry = JSON.parse(String(row.value)) as typeof entry;
     } catch {
@@ -155,8 +181,15 @@ export function redeemLink(deps: SitesDeps, body: unknown): LinkResult {
     }
     if (entry.boxId !== boxId || typeof entry.name !== 'string' || typeof entry.expiresAt !== 'string') return true;
     if (entry.expiresAt <= now.toISOString()) return true;
+    // the code's own surau (a code made before Task 8 names none and is refused), checked again now
+    if (!surauExists(deps.db, entry.surauId)) return true;
+    const site = deps.db.prepare('SELECT surau_id FROM sites WHERE box_id = ?').get(boxId);
+    if (site !== undefined && site.surau_id !== entry.surauId) return true;
+    if (surauHasOtherBox(deps.db, entry.surauId, boxId)) return true;
+    surauId = entry.surauId;
     name = entry.name;
     writeSite(deps, { boxId, name, jwk, siteToken, wakeSecret, now, surauId, event: 'link' });
+    deps.db.prepare('UPDATE suraus SET linked_at = ? WHERE id = ? AND linked_at IS NULL').run(now.toISOString(), surauId);
     return false;
   });
   if (bad) throw new LinkError(401, BAD_CODE);
@@ -165,38 +198,43 @@ export function redeemLink(deps: SitesDeps, body: unknown): LinkResult {
 }
 
 /**
- * Issue a site key: the one place the cloud writes a linked site (link by code and the automatic claim). Inside the
- * caller's transaction. A re-link replaces the key and token, which die with this statement.
+ * Issue a site key: the one place the cloud writes a linked site (link by code and the claim). Inside the caller's
+ * transaction. A re-link replaces the key and token, which die with this statement; the site keeps its surau.
  */
 function writeSite(
   deps: SitesDeps,
-  o: { boxId: string; name: string; jwk: JsonWebKey; siteToken: string; wakeSecret: string; now: Date; surauId: string; event: 'link' | 'claim' },
+  o: { boxId: string; name: string; jwk: JsonWebKey; siteToken: string; wakeSecret: string; now: Date; surauId: string; event: 'link' | 'claim'; role?: string },
 ): void {
   const nowIso = o.now.toISOString();
+  const role = o.role ?? 'primary';
   const existing = deps.db.prepare('SELECT box_id FROM sites WHERE box_id = ?').get(o.boxId);
   if (existing === undefined) {
     deps.db
-      .prepare('INSERT INTO sites (surau_id, box_id, name, public_jwk, token_hash, linked_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(o.surauId, o.boxId, o.name, JSON.stringify(o.jwk), sha256hex(o.siteToken), nowIso);
+      .prepare('INSERT INTO sites (surau_id, box_id, name, public_jwk, token_hash, linked_at, role) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(o.surauId, o.boxId, o.name, JSON.stringify(o.jwk), sha256hex(o.siteToken), nowIso, role);
   } else {
     deps.db
-      .prepare('UPDATE sites SET name = ?, public_jwk = ?, token_hash = ?, linked_at = ?, revoked_at = NULL, last_seen_at = NULL WHERE box_id = ?')
-      .run(o.name, JSON.stringify(o.jwk), sha256hex(o.siteToken), nowIso, o.boxId);
+      .prepare('UPDATE sites SET name = ?, public_jwk = ?, token_hash = ?, linked_at = ?, revoked_at = NULL, last_seen_at = NULL, role = ? WHERE box_id = ?')
+      .run(o.name, JSON.stringify(o.jwk), sha256hex(o.siteToken), nowIso, role, o.boxId);
   }
   if (deps.sealKey) setState(deps.db, WAKE_PREFIX + o.boxId, sealSecret(deps.sealKey, o.wakeSecret));
   // the wake secret reaches the Worker through the outbox: committed with the link, sealed, retried until accepted
   enqueueSitePut(deps.db, deps.sealKey, o.boxId, o.wakeSecret, o.now);
-  logChange(deps.db, 'system', 'site', o.boxId, undefined, { event: o.event, boxId: o.boxId, name: o.name });
+  logChange(deps.db, 'system', 'site', o.boxId, undefined, { event: o.event, boxId: o.boxId, name: o.name, surauId: o.surauId, role }, undefined, o.surauId);
 }
 
-// ---- automatic link: MAXCOM approves a self-registered box, the box claims (SECURITY code) ----------------------
+// ---- automatic link (Plan 14 decisions 23, 24; SECURITY code) ----------------------------------------------------
 //
-// The box registered `sha256(R)` with the Worker (`register.ts`). `approveSite` stores an approval bound to that hash;
-// `redeemClaim` issues the site key only to a caller that presents R itself for an approved, unclaimed box id whose
-// site is not live. Every refusal is the same 401. The approval is spent by the first good claim; re-linking a live
-// box needs the operator again (revoke, then a new approval or a link code). One exception, for a claim answer lost on
-// the way: within 24 hours of the first claim, while that site is live, the same R gets a fresh key (the old one dies).
-// Only the hash is ever stored here.
+// The box registered `sha256(R)` with the Worker (`register.ts`). At its claim the cloud issues a site key only to a
+// caller that presents R itself:
+//  - an approval made by the CLI (`approveSite`, bound to the registered hash and to a target surau) is spent by the
+//    first good claim; a lost answer can be claimed again within 24 hours while that site is live;
+//  - with no approval, the hash the Worker holds decides. A box id the cloud has never seen gets a NEW surau, named
+//    from its registration, at most `autoSurauDailyCap()` a UTC day cloud-wide (beyond it: `pending`, nothing
+//    written, the registration kept). A known box whose site was revoked re-links into its own surau (after
+//    `cloud-unrevoke`), but only when it presents the key stored for its site, so a fresh registration squatting a
+//    known id (or a reset box with a new key) gets nothing. A live site is never taken over by a claim.
+// Every other refusal is the same 401. Only hashes are ever stored here.
 
 const CLAIM_HASH_RE = /^[0-9a-f]{64}$/;
 const BAD_CLAIM = 'Tuntutan tidak sah';
@@ -204,33 +242,98 @@ const BAD_CLAIM = 'Tuntutan tidak sah';
 const RECLAIM_WINDOW_MS = 24 * 3_600_000;
 /** The claim answer waits at most this long for the Worker outbox (which keeps retrying on its own). */
 export const CLAIM_FLUSH_WAIT_MS = 5_000;
+/** Set by `cloud-unrevoke`: the revoked box may re-link once into its own surau. Cleared by a revoke. */
+const UNREVOKE_PREFIX = 'site_unrevoked:';
+/** `suraus.created_by` of an automatic creation (the daily cap counts these). */
+export const AUTO_SURAU_ACTOR = 'auto';
+export const DEFAULT_AUTO_SURAU_DAILY_CAP = 100;
+
+/** The automatic new-surau cap per UTC day: env MAXCOM_AUTO_SURAU_DAILY_CAP (integer >= 0; 0 = none), default 100. */
+export function autoSurauDailyCap(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = (env.MAXCOM_AUTO_SURAU_DAILY_CAP ?? '').trim();
+  return /^\d{1,6}$/.test(raw) ? Number(raw) : DEFAULT_AUTO_SURAU_DAILY_CAP;
+}
+
+export type ApprovalCode = 'bad_args' | 'linked' | 'surau_required' | 'surau_not_found' | 'surau_has_box' | 'foreign_surau' | 'not_found' | 'not_revoked';
 
 export class ApprovalError extends Error {
-  readonly code: 'bad_args' | 'linked';
-  constructor(code: 'bad_args' | 'linked', message: string) {
+  readonly code: ApprovalCode;
+  constructor(code: ApprovalCode, message: string) {
     super(message);
     this.name = 'ApprovalError';
     this.code = code;
   }
 }
 
+/** Where an approval puts the box: a new surau made now, or an existing one (that must have no live box). */
+export type ApprovalTarget = { newSurau: { name?: string; kind?: string; location?: string; zone?: string } } | { surauId: string };
+
 const liveSite = (db: DatabaseSync, boxId: string): boolean =>
   db.prepare('SELECT 1 AS x FROM sites WHERE box_id = ? AND linked_at IS NOT NULL AND revoked_at IS NULL').get(boxId) !== undefined;
 
-/** Approve a box for the automatic link, bound to the claimHash it registered. Replaces an earlier approval of that id. */
-export function approveSite(deps: { db: DatabaseSync; now: () => Date }, o: { boxId: string; name: string; claimHash: string }, actor = 'local'): void {
-  const name = o.name.trim().slice(0, 120);
+/** Another box is live in the surau, or holds an unclaimed approval into it (one live box per surau for now). */
+const surauHasOtherBox = (db: DatabaseSync, surauId: string, boxId: string): boolean =>
+  db.prepare('SELECT 1 AS x FROM sites WHERE surau_id = ? AND box_id <> ? AND linked_at IS NOT NULL AND revoked_at IS NULL').get(surauId, boxId) !== undefined ||
+  db.prepare('SELECT 1 AS x FROM site_approvals WHERE surau_id = ? AND box_id <> ? AND claimed_at IS NULL').get(surauId, boxId) !== undefined;
+
+const surauExists = (db: DatabaseSync, surauId: unknown): surauId is string =>
+  typeof surauId === 'string' && SURAU_ID_RE.test(surauId) && db.prepare('SELECT 1 AS x FROM suraus WHERE id = ?').get(surauId) !== undefined;
+
+/**
+ * The surau an approval or a link code puts a box in. Inside the caller's transaction. A box the cloud knows stays in
+ * its own surau (`foreign_surau`); an existing target must exist and have no other live box (`surau_has_box`); a new
+ * one is created now (`Menunggu MAXCOM` until the box links).
+ */
+function resolveTarget(db: DatabaseSync, boxId: string, name: string, target: ApprovalTarget, actor: string, now: Date): { surauId: string; created: boolean } {
+  const site = db.prepare('SELECT surau_id FROM sites WHERE box_id = ?').get(boxId);
+  if ('surauId' in target) {
+    if (!surauExists(db, target.surauId)) throw new ApprovalError('surau_not_found', 'Surau tidak dijumpai');
+    if (site !== undefined && site.surau_id !== target.surauId) throw new ApprovalError('foreign_surau', 'Kotak ini milik surau lain; ia tidak boleh dipindahkan');
+    if (surauHasOtherBox(db, target.surauId, boxId)) throw new ApprovalError('surau_has_box', 'Surau ini sudah ada kotak yang aktif');
+    return { surauId: target.surauId, created: false };
+  }
+  if (site !== undefined) throw new ApprovalError('foreign_surau', 'Kotak ini sudah milik surau lain; gunakan --surau dengan surau asalnya');
+  // approving the same box into a new surau again reuses the surau of its earlier, still unclaimed approval: never an orphan
+  const waiting = db.prepare('SELECT surau_id FROM site_approvals WHERE box_id = ? AND claimed_at IS NULL').get(boxId);
+  if (waiting !== undefined && surauExists(db, waiting.surau_id)) return { surauId: waiting.surau_id, created: false };
+  return { surauId: insertSurau(db, { ...target.newSurau, name: target.newSurau.name ?? name }, actor, now).id, created: true };
+}
+
+/**
+ * Approve a box (CLI), bound to the claimHash it registered and to a target surau; there is no default target. A box
+ * the cloud knows stays in its own surau (`foreign_surau`, logged); a surau with another live box is refused
+ * (`surau_has_box`); a live site needs a revoke first (`linked`). Replaces an earlier approval of that id. Not limited
+ * by the daily cap.
+ */
+export function approveSite(
+  deps: { db: DatabaseSync; now: () => Date },
+  o: { boxId: string; name: string; claimHash: string; target?: ApprovalTarget },
+  actor = 'local',
+): { surauId: string; created: boolean } {
+  const name = cleanText(o.name, 120);
   if (!BOX_ID_RE.test(o.boxId) || !CLAIM_HASH_RE.test(o.claimHash) || name === '') throw new ApprovalError('bad_args', 'ID kotak, nama atau cincangan tidak sah');
-  tx(deps.db, () => {
-    if (liveSite(deps.db, o.boxId)) throw new ApprovalError('linked', 'Kotak ini sudah dipautkan; batalkan tapaknya dahulu');
-    deps.db
-      .prepare(
-        `INSERT INTO site_approvals (box_id, name, claim_hash, approved_at, claimed_at) VALUES (?, ?, ?, ?, NULL)
-         ON CONFLICT(box_id) DO UPDATE SET name = excluded.name, claim_hash = excluded.claim_hash, approved_at = excluded.approved_at, claimed_at = NULL`,
-      )
-      .run(o.boxId, name, o.claimHash, deps.now().toISOString());
-    logChange(deps.db, actor, 'site', o.boxId, undefined, { event: 'approve', boxId: o.boxId, name });
-  });
+  const target = o.target;
+  if (target === undefined || target === null) throw new ApprovalError('surau_required', 'Sasaran diperlukan: --new-surau atau --surau <id>');
+  const now = deps.now();
+  try {
+    return tx(deps.db, () => {
+      if (liveSite(deps.db, o.boxId)) throw new ApprovalError('linked', 'Kotak ini sudah dipautkan; batalkan tapaknya dahulu');
+      const { surauId, created } = resolveTarget(deps.db, o.boxId, name, target, actor, now);
+      deps.db
+        .prepare(
+          `INSERT INTO site_approvals (box_id, name, claim_hash, approved_at, claimed_at, surau_id, mode) VALUES (?, ?, ?, ?, NULL, ?, 'primary')
+           ON CONFLICT(box_id) DO UPDATE SET name = excluded.name, claim_hash = excluded.claim_hash, approved_at = excluded.approved_at,
+             claimed_at = NULL, surau_id = excluded.surau_id, mode = excluded.mode`,
+        )
+        .run(o.boxId, name, o.claimHash, now.toISOString(), surauId);
+      logChange(deps.db, actor, 'site', o.boxId, undefined, { event: 'approve', boxId: o.boxId, name, surauId, created }, undefined, surauId);
+      return { surauId, created };
+    });
+  } catch (error) {
+    // the refusal rolled back; its trace is written on its own
+    if (error instanceof ApprovalError && error.code === 'foreign_surau') authLog(deps.db, now, 'site_approve', false, { detail: 'foreign_surau' });
+    throw error;
+  }
 }
 
 /** Withdraw an approval (claimed or not). True when there was one. */
@@ -238,8 +341,64 @@ export function revokeApproval(db: DatabaseSync, boxId: string): boolean {
   return Number(db.prepare('DELETE FROM site_approvals WHERE box_id = ?').run(boxId).changes) > 0;
 }
 
-/** Spend an approval. Throws `LinkError(401)` for every refusal, malformed bodies included. */
-export function redeemClaim(deps: SitesDeps, body: unknown): LinkResult & { boxId: string } {
+/** What the Worker holds for a box with no approval: the hash it registered and its name. */
+export interface ClaimRegistration {
+  claimHash: string;
+  name: string;
+}
+
+/** The box's own secret, but its site was revoked and MAXCOM has not let it back in (`cloud-unrevoke`). */
+export class ClaimRevoked extends Error {
+  constructor() {
+    super('box_revoked');
+    this.name = 'ClaimRevoked';
+  }
+}
+
+/** The claim is good but the daily cap is reached: nothing was written, the box asks again later. */
+export class ClaimPending extends Error {
+  constructor() {
+    super('pending');
+    this.name = 'ClaimPending';
+  }
+}
+
+/** True when the stored site key (JSON) is the same EC point as `jwk` (compared in constant time). */
+function sameJwk(stored: unknown, jwk: JsonWebKey): boolean {
+  let clean: JsonWebKey | null = null;
+  try {
+    clean = typeof stored === 'string' ? cleanPublicJwk(JSON.parse(stored)) : null;
+  } catch {
+    clean = null;
+  }
+  const a = Buffer.from(`${String(jwk.x)}.${String(jwk.y)}`);
+  const b = clean === null ? Buffer.alloc(a.length) : Buffer.from(`${String(clean.x)}.${String(clean.y)}`);
+  return clean !== null && a.length === b.length && timingSafeEqual(a, b);
+}
+
+const hashBuf = (v: unknown): Buffer => (typeof v === 'string' && CLAIM_HASH_RE.test(v) ? Buffer.from(v, 'hex') : Buffer.alloc(32));
+
+/** The start and end (ISO) of the UTC day `now` falls in. */
+function utcDay(now: Date): [string, string] {
+  const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return [new Date(start).toISOString(), new Date(start + 24 * 3_600_000).toISOString()];
+}
+
+/** True when today's (UTC) automatic new suraus have reached the daily cap: a new box would be held pending now. */
+export function autoSurauCapReached(db: DatabaseSync, now: Date): boolean {
+  const [dayStart, dayEnd] = utcDay(now);
+  const today = Number(
+    db.prepare('SELECT COUNT(*) AS n FROM suraus WHERE created_by = ? AND created_at >= ? AND created_at < ?').get(AUTO_SURAU_ACTOR, dayStart, dayEnd)?.n ?? 0,
+  );
+  return today >= autoSurauDailyCap();
+}
+
+/**
+ * Spend an approval, or link a registered box by itself. Throws `LinkError(401)` for every refusal, malformed bodies
+ * included, and `ClaimPending` when the daily cap holds a new box back. `registration` is what the Worker holds for
+ * the box (null: none, or not asked because an approval exists).
+ */
+export function redeemClaim(deps: SitesDeps, body: unknown, registration: ClaimRegistration | null = null): LinkResult & { boxId: string; role: string } {
   const refuse = (): never => {
     throw new LinkError(401, BAD_CLAIM);
   };
@@ -248,52 +407,138 @@ export function redeemClaim(deps: SitesDeps, body: unknown): LinkResult & { boxI
   if (typeof boxId !== 'string' || !BOX_ID_RE.test(boxId) || typeof claim !== 'string' || claim.length !== 64) return refuse();
   const jwk = cleanPublicJwk(publicJwk);
   if (jwk === null) return refuse();
-  const presented = Buffer.from(sha256hex(claim), 'hex');
+  const presentedHex = sha256hex(claim);
+  const presented = Buffer.from(presentedHex, 'hex');
 
   const now = deps.now();
-  const surauId = deps.surauId ?? DEFAULT_SURAU_ID;
+  const nowIso = now.toISOString();
   const siteToken = randomToken(32);
   const wakeSecret = randomToken(32);
   let name = '';
+  let surauId = '';
+  let role = 'primary';
+  let pending = false;
+  let revoked = false;
+  const markLinked = (): void => {
+    deps.db.prepare('UPDATE suraus SET linked_at = ? WHERE id = ? AND linked_at IS NULL').run(nowIso, surauId);
+  };
   const ok = tx(deps.db, (): boolean => {
-    const row = deps.db.prepare('SELECT name, claim_hash, claimed_at FROM site_approvals WHERE box_id = ?').get(boxId);
-    // compare first, whatever the row says, so the answer time does not tell an approved id from an unknown one
-    const stored = row !== undefined && typeof row.claim_hash === 'string' && CLAIM_HASH_RE.test(row.claim_hash) ? Buffer.from(row.claim_hash, 'hex') : Buffer.alloc(32);
-    const match = timingSafeEqual(presented, stored);
-    if (row === undefined || !match) return false;
-    if (row.claimed_at === null) {
-      // the first claim of an approval: the site must not be live (re-linking a live site needs the operator)
-      if (liveSite(deps.db, boxId)) return false;
-      deps.db.prepare('UPDATE site_approvals SET claimed_at = ? WHERE box_id = ?').run(now.toISOString(), boxId);
-    } else {
-      // A lost answer: the box never stored its key, so it still holds R and claims again. Within 24 hours of the
-      // first claim, and only while the site that claim made is live, it gets a fresh key and wake secret (the
-      // previous ones die with writeSite). claimed_at stays at the first claim, so the window never grows.
-      const at = typeof row.claimed_at === 'string' ? Date.parse(row.claimed_at) : NaN;
-      if (!Number.isFinite(at) || now.getTime() - at >= RECLAIM_WINDOW_MS || now.getTime() < at || !liveSite(deps.db, boxId)) return false;
+    const row = deps.db.prepare('SELECT name, claim_hash, claimed_at, surau_id, mode FROM site_approvals WHERE box_id = ?').get(boxId);
+    const site = deps.db.prepare('SELECT surau_id, name, public_jwk FROM sites WHERE box_id = ?').get(boxId);
+    if (row !== undefined) {
+      // compare first, whatever the row says, so the answer time does not tell an approved id from an unknown one
+      if (!timingSafeEqual(presented, hashBuf(row.claim_hash))) return false;
+      // an approval with no target (made before migration 019) can never be claimed
+      if (!surauExists(deps.db, row.surau_id)) return false;
+      if (site !== undefined && site.surau_id !== row.surau_id) return false;
+      surauId = row.surau_id;
+      if (row.claimed_at === null) {
+        // the first claim of an approval: the site must not be live, nor another box live in that surau
+        if (liveSite(deps.db, boxId) || surauHasOtherBox(deps.db, surauId, boxId)) return false;
+        deps.db.prepare('UPDATE site_approvals SET claimed_at = ? WHERE box_id = ?').run(nowIso, boxId);
+      } else {
+        // A lost answer: the box never stored its key, so it still holds R and claims again. Within 24 hours of the
+        // first claim, and only while the site that claim made is live, it gets a fresh key and wake secret (the
+        // previous ones die with writeSite). claimed_at stays at the first claim, so the window never grows.
+        const at = typeof row.claimed_at === 'string' ? Date.parse(row.claimed_at) : NaN;
+        if (!Number.isFinite(at) || now.getTime() - at >= RECLAIM_WINDOW_MS || now.getTime() < at || !liveSite(deps.db, boxId)) return false;
+      }
+      name = String(row.name);
+      role = typeof row.mode === 'string' && row.mode !== '' ? row.mode : 'primary';
+      writeSite(deps, { boxId, name, jwk, siteToken, wakeSecret, now, surauId, event: 'claim', role });
+      markLinked();
+      return true;
     }
-    name = String(row.name);
-    writeSite(deps, { boxId, name, jwk, siteToken, wakeSecret, now, surauId, event: 'claim' });
+
+    // no approval: the Worker's registration decides
+    const registered = registration !== null && timingSafeEqual(presented, hashBuf(registration.claimHash));
+    if (!registered) return false;
+    const regName = cleanText(registration.name, 120);
+    const keep = (): void => {
+      deps.db
+        .prepare(
+          `INSERT INTO site_approvals (box_id, name, claim_hash, approved_at, claimed_at, surau_id, mode) VALUES (?, ?, ?, ?, ?, ?, 'primary')
+           ON CONFLICT(box_id) DO UPDATE SET name = excluded.name, claim_hash = excluded.claim_hash, approved_at = excluded.approved_at,
+             claimed_at = excluded.claimed_at, surau_id = excluded.surau_id, mode = excluded.mode`,
+        )
+        .run(boxId, name, presentedHex, nowIso, nowIso, surauId);
+    };
+
+    if (site !== undefined) {
+      // A known box: back into its own surau, never over a live site, and only the SAME box: the claim matches the
+      // current registration (checked above) AND the key it presents is the key stored for this site. The box makes a
+      // new claim secret after each link, so the secret alone cannot tell it apart; a box that was reset (new key) or
+      // a squatter registering a known id with another key never links here (the operator uses `cloud-approve --surau`).
+      if (liveSite(deps.db, boxId)) return false;
+      if (!sameJwk(site.public_jwk, jwk)) return false;
+      // revoke is final: only the CLI `cloud-unrevoke` lets a revoked box back in (spent by this re-link)
+      if (deps.db.prepare('SELECT 1 AS x FROM sync_state WHERE key = ?').get(UNREVOKE_PREFIX + boxId) === undefined) {
+        revoked = true;
+        return false;
+      }
+      if (!surauExists(deps.db, site.surau_id) || surauHasOtherBox(deps.db, site.surau_id, boxId)) return false;
+      deps.db.prepare('DELETE FROM sync_state WHERE key = ?').run(UNREVOKE_PREFIX + boxId);
+      surauId = site.surau_id;
+      name = regName !== '' ? regName : String(site.name);
+      keep();
+      writeSite(deps, { boxId, name, jwk, siteToken, wakeSecret, now, surauId, event: 'claim', role });
+      markLinked();
+      return true;
+    }
+
+    // a new box: a new surau, within the daily cap (the count and the insert are in this one transaction)
+    if (autoSurauCapReached(deps.db, now)) {
+      pending = true;
+      return false;
+    }
+    name = regName !== '' ? regName : `Surau ${boxId}`;
+    surauId = insertSurau(deps.db, { name }, AUTO_SURAU_ACTOR, now).id;
+    keep();
+    writeSite(deps, { boxId, name, jwk, siteToken, wakeSecret, now, surauId, event: 'claim', role });
+    markLinked();
+    authLog(deps.db, now, 'surau_auto_create', true, { detail: 'surau_auto_create' });
     return true;
   });
+  if (pending) throw new ClaimPending();
+  if (revoked) throw new ClaimRevoked();
   if (!ok) return refuse();
-  return { boxId, siteToken, wakeSecret, surauId, name, cloudTime: now.toISOString() };
+  return { boxId, siteToken, wakeSecret, surauId, name, cloudTime: nowIso, role };
 }
 
 /**
- * The `POST /api/sync/claim` handler body (rate limiting and the role gate are in the route). After a good claim the
- * box's pending registration is removed from the Worker (best effort: it also expires on its own).
+ * The `POST /api/sync/claim` handler body (rate limiting and the role gate are in the route). A box with no approval
+ * is looked up at the Worker (unreachable: 503, the box retries). After a good claim the box's pending registration
+ * is removed from the Worker (best effort: it also expires on its own); a pending one is kept.
  */
 export function createClaimHandler(
   deps: SitesDeps & { workerAdmin?: WorkerAdminConfig | null; /** Test hook; default CLAIM_FLUSH_WAIT_MS. */ flushWaitMs?: number },
 ): (body: unknown) => Promise<{ status: number; body: unknown }> {
   const waitMs = Math.min(Math.max(deps.flushWaitMs ?? CLAIM_FLUSH_WAIT_MS, 0), CLAIM_FLUSH_WAIT_MS);
+  const badClaim = { status: 401, body: { errors: [BAD_CLAIM], code: 'bad_claim' } };
   return async (body) => {
-    let out: LinkResult & { boxId: string };
+    let registration: ClaimRegistration | null = null;
+    const sentId = isPlain(body) ? body.boxId : undefined;
+    const approved =
+      typeof sentId === 'string' && BOX_ID_RE.test(sentId) && deps.db.prepare('SELECT 1 AS x FROM site_approvals WHERE box_id = ?').get(sentId) !== undefined;
+    if (!approved && deps.workerAdmin && typeof sentId === 'string' && BOX_ID_RE.test(sentId)) {
+      try {
+        const reg = await getRegistration(deps.workerAdmin, sentId);
+        registration = reg === null ? null : { claimHash: reg.claimHash, name: reg.name };
+      } catch {
+        return { status: 503, body: { errors: ['MAXCOM tidak dapat menyemak pendaftaran sekarang; cuba lagi'], code: 'worker_unreachable' } };
+      }
+    }
+    let out: LinkResult & { boxId: string; role: string };
     try {
-      out = redeemClaim(deps, body);
+      out = redeemClaim(deps, body, registration);
     } catch (error) {
-      if (error instanceof LinkError) return { status: 401, body: { errors: [error.message], code: 'bad_claim' } };
+      if (error instanceof ClaimPending) return { status: 202, body: { errors: ['Menunggu MAXCOM'], code: 'pending' } };
+      if (error instanceof ClaimRevoked) {
+        // the registration is kept for MAXCOM to see; nothing else is written
+        authLog(deps.db, deps.now(), 'site_claim', false, { detail: 'box_revoked' });
+        return { status: 403, body: { errors: ['Kotak ini telah dibatalkan oleh MAXCOM'], code: 'box_revoked' } };
+      }
+      if (error instanceof LinkError) return badClaim;
       throw error;
     }
     // one prompt try at the Worker, but the box's answer never waits on it for long: a lost answer strands the box
@@ -335,16 +580,37 @@ export function wakeSecretOf(deps: SitesDeps, boxId: string): string | null {
 export function revokeSite(deps: SitesDeps, boxId: string, actor = 'system'): boolean {
   const nowIso = deps.now().toISOString();
   return tx(deps.db, () => {
+    // logged under the surau the box belongs to (its site, else its approval's target)
+    const owner = deps.db.prepare('SELECT surau_id FROM sites WHERE box_id = ?').get(boxId)?.surau_id
+      ?? deps.db.prepare('SELECT surau_id FROM site_approvals WHERE box_id = ?').get(boxId)?.surau_id;
+    const surauId = typeof owner === 'string' && SURAU_ID_RE.test(owner) ? owner : (deps.surauId ?? LOCAL_SURAU_ID);
     const pending = deps.db.prepare('SELECT 1 AS x FROM site_approvals WHERE box_id = ? AND claimed_at IS NULL').get(boxId) !== undefined;
-    if (revokeApproval(deps.db, boxId) && pending) logChange(deps.db, actor, 'site', boxId, undefined, { event: 'approval_revoke', boxId });
+    if (revokeApproval(deps.db, boxId) && pending) logChange(deps.db, actor, 'site', boxId, undefined, { event: 'approval_revoke', boxId }, undefined, surauId);
     const r = deps.db
       .prepare('UPDATE sites SET revoked_at = ?, token_hash = NULL WHERE box_id = ? AND revoked_at IS NULL')
       .run(nowIso, boxId);
     if (Number(r.changes) === 0) return pending;
     deps.db.prepare('DELETE FROM sync_state WHERE key = ?').run(WAKE_PREFIX + boxId);
+    deps.db.prepare('DELETE FROM sync_state WHERE key = ?').run(UNREVOKE_PREFIX + boxId);
     enqueueSiteDelete(deps.db, boxId, deps.now());
-    logChange(deps.db, actor, 'site', boxId, undefined, { event: 'revoke', boxId });
+    logChange(deps.db, actor, 'site', boxId, undefined, { event: 'revoke', boxId }, undefined, surauId);
     return true;
+  });
+}
+
+/**
+ * Let a revoked box re-link once, by itself, into its own surau (CLI `cloud-unrevoke`). Throws `ApprovalError`:
+ * `not_found` for an unknown box, `not_revoked` for a live one.
+ */
+export function unrevokeSite(deps: { db: DatabaseSync; now: () => Date }, boxId: string, actor = 'local'): { surauId: string } {
+  return tx(deps.db, () => {
+    const site = BOX_ID_RE.test(boxId) ? deps.db.prepare('SELECT surau_id, revoked_at FROM sites WHERE box_id = ?').get(boxId) : undefined;
+    if (site === undefined) throw new ApprovalError('not_found', 'Kotak tidak dijumpai');
+    if (site.revoked_at === null) throw new ApprovalError('not_revoked', 'Kotak ini tidak dibatalkan');
+    const surauId = String(site.surau_id);
+    setState(deps.db, UNREVOKE_PREFIX + boxId, deps.now().toISOString());
+    logChange(deps.db, actor, 'site', boxId, undefined, { event: 'unrevoke', boxId }, undefined, surauId);
+    return { surauId };
   });
 }
 
@@ -384,10 +650,11 @@ export function themeSupportOf(db: DatabaseSync, surauId: string): Array<{ boxId
     }));
 }
 
-export function listSites(db: DatabaseSync): SiteSummary[] {
+export function listSites(db: DatabaseSync, surauId?: string): SiteSummary[] {
+  const sql = 'SELECT box_id, name, last_seen_at FROM sites WHERE linked_at IS NOT NULL AND revoked_at IS NULL' + (surauId === undefined ? '' : ' AND surau_id = ?') + ' ORDER BY box_id';
   return db
-    .prepare('SELECT box_id, name, last_seen_at, theme_contract, theme_builtins FROM sites WHERE linked_at IS NOT NULL AND revoked_at IS NULL ORDER BY box_id')
-    .all()
+    .prepare(sql.replace('SELECT box_id, name, last_seen_at FROM', 'SELECT box_id, name, last_seen_at, theme_contract, theme_builtins FROM'))
+    .all(...(surauId === undefined ? [] : [surauId]))
     .map((r) => ({
       boxId: String(r.box_id),
       name: String(r.name),
@@ -441,10 +708,13 @@ export function registerSiteAssetRoute(app: FastifyInstance, deps: { db: Databas
       const body: unknown = request.body;
       if (!isAssetId(id) || !Buffer.isBuffer(body)) return reply.code(400).send({ errors: ['Permintaan tidak sah'], code: 'bad_body' });
       try {
-        const meta = putAsset(deps.db, deps.dataDir, body, request.headers['content-type'] ?? '', `site:${request.auth.boxId}`);
-        if (meta.id !== id) return reply.code(400).send({ errors: ['Fail tidak sepadan dengan pengecam'], code: 'id_mismatch' });
+        // the bytes must be the id before anything is stored or counted for the surau
+        if (sha256hex(body) !== id) return reply.code(400).send({ errors: ['Fail tidak sepadan dengan pengecam'], code: 'id_mismatch' });
+        // counted against the site's own surau (decision 24); a full surau gets 413 storage_full, nothing stored
+        const meta = putSurauAsset(deps.db, deps.dataDir, body, request.headers['content-type'] ?? '', `site:${request.auth.boxId}`, request.auth.surauId);
         return reply.code(meta.created ? 201 : 200).send({ id: meta.id });
       } catch (error) {
+        if (error instanceof StorageFullError) return reply.code(413).send({ errors: error.errors, code: error.code });
         if (error instanceof AssetError) return reply.code(error.status).send({ errors: error.errors, code: 'bad_asset' });
         throw error;
       }

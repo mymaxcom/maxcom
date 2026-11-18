@@ -560,7 +560,7 @@ class _GlassTile extends StatelessWidget {
           const SizedBox(height: 6),
           Expanded(
             child: LayoutBuilder(
-              builder: (context, c) => Align(alignment: Alignment.centerLeft, child: builder(c.maxWidth)),
+              builder: (context, c) => Align(alignment: AlignmentDirectional.centerStart, child: builder(c.maxWidth)),
             ),
           ),
         ],
@@ -737,7 +737,7 @@ class _CropEditorState extends State<CropEditor> {
                       children: [
                         const Positioned.fill(child: ColoredBox(color: SurauColors.glass)),
                         Positioned(
-                          left: shown.left,
+                          left: shown.left, // dir-ok: image pixel geometry, not layout
                           top: shown.top,
                           width: shown.width,
                           height: shown.height,

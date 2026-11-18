@@ -359,7 +359,7 @@ class HadisSection extends StatelessWidget {
           if (trailing != null) ...[
             const SizedBox(width: 12),
             Flexible(
-              child: Align(alignment: Alignment.centerRight, child: trailing),
+              child: Align(alignment: AlignmentDirectional.centerEnd, child: trailing),
             ),
           ],
         ],
@@ -472,7 +472,7 @@ Future<bool> confirmRemoveHadis(
               Text(excerpt, style: text.bodyMedium!.copyWith(fontStyle: FontStyle.italic)),
               const SizedBox(height: 10),
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: own ? HadisTagChip.own(s) : HadisTagChip.provider(s),
               ),
               const SizedBox(height: 12),

@@ -6,6 +6,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/features/finance/finance_widgets.dart' show FinanceSettings;
+import 'package:surau_app/finance/entry_check.dart';
+import 'package:surau_app/store/local_store.dart';
 
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
@@ -140,6 +142,76 @@ void main() {
     await tapAt(tester, find.byKey(const Key('fin-to-home')));
     expect(h.location, '/finance');
     expect(find.text('1 catatan belum di skrin TV'), findsOneWidget);
+  });
+
+  testWidgets('[F1] a default cash payment is queued with no counters and passes the check', (
+    tester,
+  ) async {
+    await pumpFinance(tester, f, route: '/finance/bayaran');
+    await tapAt(tester, find.text('Perbelanjaan lain'));
+    await tapAt(tester, find.byKey(const Key('fin-chip-out-u')));
+    await typeAt(tester, find.byKey(const Key('fin-amount')), '20');
+    await typeAt(tester, find.byKey(const Key('fin-payee')), 'Kedai Contoh');
+    await tapAt(tester, find.byKey(_review));
+    await tapAt(tester, find.byKey(const Key('fin-confirm-save')));
+    expect(find.text('Disimpan di peranti ini'), findsOneWidget);
+    final p = (await f.ops()).single.payload as Map<String, dynamic>;
+    expect(p['method'], 'tunai');
+    expect(p.containsKey('counters'), isFalse);
+    expect(validateEntryPayload(p, todayKl: '2026-11-04'), isEmpty);
+  });
+
+  testWidgets('[F3] Enter, < and > cannot be typed in the note', (tester) async {
+    await pumpFinance(tester, f, route: '/finance/bayaran');
+    await tapAt(tester, find.text('Perbelanjaan lain'));
+    await typeAt(tester, find.byKey(const Key('fin-note')), 'baris 1\nbaris <2>');
+    expect(
+      tester.widget<TextField>(find.byKey(const Key('fin-note'))).controller!.text,
+      'baris 1baris 2',
+    );
+  });
+
+  testWidgets('[F9] payee stops at 80, reference at 60 and note at 200 characters', (
+    tester,
+  ) async {
+    await pumpFinance(tester, f, route: '/finance/bayaran');
+    await tapAt(tester, find.text('Perbelanjaan lain'));
+    await tapAt(tester, find.byKey(const Key('fin-chip-bank')));
+    String text(String k) =>
+        tester.widget<TextField>(find.byKey(Key(k))).controller!.text;
+    await typeAt(tester, find.byKey(const Key('fin-payee')), 'a' * 81);
+    expect(text('fin-payee').length, 80);
+    await typeAt(tester, find.byKey(const Key('fin-reference')), 'r' * 61);
+    expect(text('fin-reference').length, 60);
+    await typeAt(tester, find.byKey(const Key('fin-note')), 'n' * 201);
+    expect(text('fin-note').length, 200);
+  });
+
+  testWidgets('[F4] a kuliah of a closed month is posted today, with the notice', (
+    tester,
+  ) async {
+    await f.store.putDoc(Collections.content('kuliah'), 'k6', {
+      'id': 'k6',
+      'date': '2026-10-28',
+      'time': '19:30',
+      'topic': 'Fiqh Puasa',
+      'penceramahId': 'p2',
+      'status': 'aktif',
+    });
+    await f.store.putDoc(Collections.financeMonths, '2026-10', {
+      'id': '2026-10',
+      'ym': '2026-10',
+      'status': 'closed',
+    });
+    await pumpFinance(tester, f, route: '/finance/bayaran');
+    await _openPicker(tester);
+    await tapAt(tester, find.byKey(const Key('fin-kuliah-k6')));
+    expect(find.byKey(const Key('fin-closed-month-note')), findsOneWidget);
+    await typeAt(tester, find.byKey(const Key('fin-amount')), '100');
+    await tapAt(tester, find.byKey(_review));
+    await tapAt(tester, find.byKey(const Key('fin-confirm-save')));
+    final p = (await f.ops()).single.payload as Map;
+    expect(p['entryDate'], '2026-11-04');
   });
 
   testWidgets('a cancelled and an already paid kuliah show their warning', (

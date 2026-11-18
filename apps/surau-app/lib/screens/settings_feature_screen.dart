@@ -8,19 +8,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/app_lang.dart';
 import '../app/providers.dart';
 import '../app/shell.dart';
 import '../app/theme.dart';
 import '../box/box_client.dart';
-import '../features/labels_ms.dart' show featureHelpMs;
+import '../features/labels.dart';
+import '../features/labels_cam.dart' show cameraUseOff, cameraUseOn, cameraUseTitle;
 import '../features/registry.g.dart';
 import '../features/settings_form.dart';
+import '../features/settings_widgets/camera_source_card.dart';
 import '../features/settings_repository.dart';
 import '../features/shell/box_gateway.dart';
-import '../features/settings_widgets/lanjutan_card.dart';
+import '../features/shell/connection_icons.dart' show LinkGlyph, LinkKind, LinkState;
 import '../features/shell/permissions.dart';
 import '../features/sync/sync_settings_screen.dart';
 import '../features/validate.dart';
+import '../ops/device_lock_card.dart';
+import '../ops/lanjutan_card.dart';
+import '../ops/ops_build.dart';
 import '../l10n/generated/s.dart';
 import 'hadis/hadis_settings_body.dart';
 import 'widgets/box_read.dart';
@@ -38,10 +44,11 @@ class SettingsFeatureScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Cloud sync has its own page: link status and `Selaraskan sekarang`.
-    if (featureKey == cloudSyncKey) return const SyncSettingsScreen();
+    if (kOpsBuild && featureKey == cloudSyncKey) return const SyncSettingsScreen();
     final s = S.of(context);
     final f = featureByKey(featureKey);
-    if (f == null) {
+    // The MAXCOM system pages (group `lanjutan`) exist only in the ops build.
+    if (f == null || (!kOpsBuild && f.group == 'lanjutan')) {
       return ShellPage(
         title: s.settingsTitle,
         body: SurauTheme.page(
@@ -58,7 +65,26 @@ class SettingsFeatureScreen extends ConsumerWidget {
         ),
       );
     }
-    final canWrite = canSee(ref.watch(rolesProvider), 'settings:write');
+    final roles = ref.watch(rolesProvider);
+    // The camera form (address, login, test) belongs to Siaran Langsung (`live:settings`), not to Tetapan in general.
+    if (f.key == liveCameraFeatureKey && !canSee(roles, 'live:settings')) {
+      return ShellPage(
+        title: s.settingsTitle,
+        body: SurauTheme.page(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 28),
+              child: Text(
+                s.settingsNotFound,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final canWrite = canWriteSettingsFeature(roles, f.key);
     final read = ref.watch(settingsProvider);
     final value = read.value;
     final Widget body;
@@ -85,11 +111,14 @@ class SettingsFeatureScreen extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(vertical: 28),
         child: Column(
           children: [
-            const Icon(
-              Icons.cloud_off_rounded,
-              size: 36,
-              color: SurauColors.outline,
-            ),
+            if (error is BoxUnreachable)
+              const LinkGlyph(kind: LinkKind.box, state: LinkState.disconnected, size: 36, onDark: false)
+            else
+              const Icon(
+                Icons.cloud_off_rounded,
+                size: 36,
+                color: SurauColors.outline,
+              ),
             const SizedBox(height: 12),
             Text(
               error is BoxUnreachable ? s.errorBoxUnreachable : s.loadFailed,
@@ -107,7 +136,7 @@ class SettingsFeatureScreen extends ConsumerWidget {
       );
     }
     return ShellPage(
-      title: f.labelMs,
+      title: featureLabel(f, ref.watch(appLangProvider)),
       // Hadis has two columns on an iPad and a `Simpan` that stays in view;
       // its body scrolls by itself.
       body: value != null && f.key == hadisFeatureKey
@@ -179,9 +208,19 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
 
   final GlobalKey _lanjutanKey = GlobalKey();
 
+  /// The sealed camera record behind the Kamera luaran form; saved with the same `Simpan`.
+  CameraSourceController? _camera;
+
   @override
   void initState() {
     super.initState();
+    if (widget.feature.key == liveCameraFeatureKey) {
+      _camera = CameraSourceController(() => ref.read(gatewayProvider))
+        ..addListener(() {
+          if (mounted) setState(() {});
+        })
+        ..load();
+    }
     if (widget.scrollToLanjutan) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final target = _lanjutanKey.currentContext;
@@ -227,6 +266,12 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
     }
   }
 
+  @override
+  void dispose() {
+    _camera?.dispose();
+    super.dispose();
+  }
+
   Map<String, dynamic> get _patch => diffPatch(widget.original, _edited);
 
   void _set(String key, Object? value) => setState(() {
@@ -270,7 +315,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = e.message;
+        _error = e.text(s);
       });
     } on SessionExpired {
       if (mounted) setState(() => _busy = false);
@@ -304,13 +349,18 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
   Future<void> _save() async {
     final s = S.of(context);
     final patch = _patch;
-    if (patch.isEmpty) return;
+    final camera = _camera;
+    if (patch.isEmpty && !(camera?.dirty ?? false)) return;
     await _run((repo) async {
-      await repo.save(widget.feature.key, patch);
+      // The address and login first: a refused address stops the save and shows under its field.
+      if (camera != null && !await camera.save()) return;
+      if (patch.isNotEmpty) await repo.save(widget.feature.key, patch);
       if (mounted) {
         toast(
           context,
-          widget.feature.key == hadisFeatureKey ? s.hadisSettingsSaved : s.settingsSaved,
+          widget.feature.key == hadisFeatureKey
+              ? s.hadisSettingsSaved
+              : (repo.lastSaveQueued ? s.ra6SettingsSavedQueued : s.settingsSaved),
         );
       }
     });
@@ -321,13 +371,13 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
     final f = widget.feature;
     final ok = await confirmDialog(
       context,
-      title: s.settingsResetTitle(f.labelMs),
+      title: s.settingsResetTitle(featureLabel(f, ref.read(appLangProvider))),
       body: s.settingsResetBody,
       confirm: s.settingsReset,
     );
     if (!ok || !mounted) return;
     await _run((repo) async {
-      await repo.resetToDefaults(f.key);
+      await repo.resetToDefaults(f.key, includeSystem: canSee(ref.read(rolesProvider), 'system:write'));
       if (mounted) toast(context, s.settingsResetDone);
     });
   }
@@ -337,9 +387,21 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
     final f = widget.feature;
-    final readOnly = widget.readOnly || _busy;
+    // The app lock lives on the box alone: with the box away its state is the
+    // last one heard, so the page says it needs the connection and changes
+    // nothing (K1).
+    final lockAway = f.key == 'appLock' &&
+        (ref.watch(settingsProvider).value?.value['appLock'] is Map &&
+            (ref.watch(settingsProvider).value!.value['appLock'] as Map)['_live'] == false);
+    // A feature that needs another (Siaran YouTube needs the live on the TV)
+    // cannot be switched on while that one is off: say which (registry
+    // `featureRequires`).
+    final needs = featureRequires[f.key]?['requires'];
+    final needsDef = needs == null ? null : featureByKey(needs);
+    final needsOff = needsDef != null && _othersOf(ref)[needs]?['enabled'] != true;
+    final readOnly = widget.readOnly || _busy || lockAway;
     final patch = _patch;
-    final result = validateFeatureSettings(f.key, patch, current: widget.original);
+    final result = validateFeatureSettings(f.key, patch, current: widget.original, s: s);
     final fieldError = _boxFieldError;
     final errors = {
       for (final e in result.errors) e.path: e.message,
@@ -347,7 +409,11 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
     };
     final enabled = _edited['enabled'] == true;
     final values = {..._edited}..remove('enabled');
-    final canSave = patch.isNotEmpty && result.ok && !readOnly;
+    final camera = _camera;
+    final canSave = (patch.isNotEmpty || (camera?.dirty ?? false)) &&
+        result.ok &&
+        (camera?.valid ?? true) &&
+        !readOnly;
 
     final saveButton = FilledButton.icon(
       key: const ValueKey('feature-save'),
@@ -361,6 +427,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
       label: Text(s.settingsReset),
     );
 
+    final lang = ref.watch(appLangProvider);
     final above = <Widget>[
         if (_changedElsewhere && patch.isNotEmpty)
           Padding(
@@ -395,37 +462,45 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
         Card(
           child: f.locked
               ? ListTile(
-                  title: Text(f.labelMs),
-                  subtitle: Text(systemFeatures.contains(f.key) ? s.featureLocked : s.settingsLockedHint),
-                  trailing: systemFeatures.contains(f.key)
+                  title: Text(featureLabel(f, lang)),
+                  subtitle: Text(kOpsBuild && f.group == 'lanjutan' ? s.featureLocked : s.settingsLockedHint),
+                  trailing: kOpsBuild && f.group == 'lanjutan'
                       ? const PentadbirMaxcomBadge()
-                      : StateChip(
-                          label: s.featureLocked,
-                          background: SurauColors.goldSoft,
-                          foreground: SurauColors.ink,
-                        ),
-                  contentPadding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
+                      : StateChip.on(label: s.featureLocked),
+                  contentPadding: const EdgeInsetsDirectional.fromSTEB(20, 8, 16, 8),
                 )
               : SwitchListTile(
                   key: const ValueKey('feature-switch'),
                   value: enabled,
-                  onChanged: readOnly ? null : (v) => _switch(v),
-                  title: Text(f.labelMs),
-                  subtitle: Text(enabled ? s.featureOn : s.featureOff),
-                  contentPadding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+                  onChanged: readOnly || (needsOff && !enabled) ? null : (v) => _switch(v),
+                  title: Text(camera != null ? cameraUseTitle(lang) : featureLabel(f, lang)),
+                  subtitle: Text(camera != null ? (enabled ? cameraUseOn(lang) : cameraUseOff(lang)) : (enabled ? s.featureOn : s.featureOff)),
+                  contentPadding: const EdgeInsetsDirectional.fromSTEB(20, 8, 12, 8),
                 ),
         ),
-        if (featureHelpMs[f.key] != null)
+        if (needsOff && !enabled)
+          Padding(
+            key: const ValueKey('feature-requires'),
+            padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
+            child: Text(s.ra6FeatureNeeds(featureLabel(needsDef, lang)), style: text.bodyMedium!.copyWith(color: SurauColors.danger)),
+          ),
+        if (lockAway)
+          Padding(
+            key: const ValueKey('applock-needs-box'),
+            padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
+            child: Text(s.ra6AppLockNeedsBox, style: text.bodyMedium!.copyWith(color: SurauColors.danger)),
+          ),
+        if (featureHelp(f.key, lang) != null)
           Padding(
             key: ValueKey('feature-help-${f.key}'),
             padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
             child: Text(
-              featureHelpMs[f.key]!,
+              featureHelp(f.key, lang)!,
               style: text.bodyMedium!.copyWith(color: SurauColors.muted),
             ),
           ),
-        if (f.key == 'appLock' && ref.watch(isSuperadminProvider)) _DeviceLockCard(s: s, text: text),
-        if (!f.locked && !enabled && f.key != 'appLock')
+        if (kOpsBuild && f.key == 'appLock' && ref.watch(isSuperadminProvider)) const DeviceLockCard(),
+        if (!f.locked && !enabled && f.key != 'appLock' && camera == null)
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
             child: Text(s.settingsFeatureOffHint, style: text.bodySmall),
@@ -449,6 +524,16 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
               style: text.bodyMedium!.copyWith(color: SurauColors.muted),
             ),
           )
+        else if (camera != null)
+          CameraSourceCard(
+            controller: camera,
+            enabled: enabled,
+            name: values['name'] is String ? values['name'] as String : '',
+            transport: values['transport'] is String ? values['transport'] as String : 'auto',
+            readOnly: readOnly,
+            nameError: errors['name'],
+            onChanged: _set,
+          )
         else if (f.key == hadisFeatureKey)
           HadisSettingsBody(
             values: values,
@@ -463,7 +548,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
             errors: errors,
             readOnly: readOnly,
             onChanged: _set,
-            lanjutanVisible: canSee(ref.watch(rolesProvider), 'system:read'),
+            lanjutanVisible: kOpsBuild && canSee(ref.watch(rolesProvider), 'system:read'),
             lanjutanKey: _lanjutanKey,
             others: _othersOf(ref),
           ),
@@ -513,73 +598,8 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
   }
 }
 
-/// The Pentadbir MAXCOM's own lock on the `Kunci aplikasi` page: always on,
-/// whatever the surau's switch says.
-class _DeviceLockCard extends StatelessWidget {
-  const _DeviceLockCard({required this.s, required this.text});
-
-  final S s;
-  final TextTheme text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      key: const ValueKey('superadmin-device-lock'),
-      padding: const EdgeInsets.only(top: 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-            child: Row(
-              children: [
-                Text(s.settingsDeviceLockSection, style: text.titleSmall!.copyWith(color: SurauColors.muted)),
-                const SizedBox(width: 10),
-                const PentadbirMaxcomBadge(),
-              ],
-            ),
-          ),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.lock_rounded, size: 26, color: SurauColors.teal),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          s.settingsDeviceLockTitle,
-                          style: text.bodyLarge!.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      StateChip(
-                        label: s.featureLocked,
-                        background: SurauColors.goldSoft,
-                        foreground: SurauColors.ink,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    decoration: BoxDecoration(
-                      color: SurauColors.goldSoft,
-                      borderRadius: BorderRadius.circular(SurauTheme.radiusControl),
-                    ),
-                    child: Text(s.settingsDeviceLockBody, style: text.bodyMedium!.copyWith(color: SurauColors.ink)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+/// The feature whose body is [CameraSourceCard].
+const String liveCameraFeatureKey = 'liveCamera';
 
 /// The feature whose body is [HadisSettingsBody].
 const String hadisFeatureKey = 'hadis';

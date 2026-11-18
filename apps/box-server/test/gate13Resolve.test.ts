@@ -20,9 +20,9 @@ const day = (date: string, over: Partial<PrayerDay['times']> = {}): PrayerDay =>
 describe('gate 13 item 6: a correction can never blank a day', () => {
   it('a correction that keeps the order is used (success path)', () => {
     const db = newDb();
-    importDays(db, 'SGR01', [day('2026-11-03')], 'tester');
-    putCorrection(db, { date: '2026-11-03', prayer: 'asar', time: '16:25', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-11-01T00:00:00Z'));
-    const d = resolveDay(db, my({ zone: { zone: 'SGR01' } }), '2026-11-03')!;
+    importDays(db, 'SGR01', [day('2026-11-03')], 'tester', undefined, undefined, 'sdm');
+    putCorrection(db, { date: '2026-11-03', prayer: 'asar', time: '16:25', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-11-01T00:00:00Z'), undefined, undefined, 'sdm');
+    const d = resolveDay(db, my({ zone: { zone: 'SGR01' } }), '2026-11-03', 'sdm')!;
     expect(d.times.asar).toBe('16:25');
     expect(d.corrected).toEqual(['asar']);
     expect(d.correctionIgnored).toBeUndefined();
@@ -30,12 +30,12 @@ describe('gate 13 item 6: a correction can never blank a day', () => {
 
   it('a correction that a later source change put out of order is ignored for that day and flagged', () => {
     const db = newDb();
-    importDays(db, 'SGR01', [day('2026-11-03')], 'tester');
-    putCorrection(db, { date: '2026-11-03', prayer: 'asar', time: '14:00', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-11-01T00:00:00Z'));
-    putCorrection(db, { date: '2026-11-03', prayer: 'maghrib', time: '19:30', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-11-01T00:00:00Z'));
+    importDays(db, 'SGR01', [day('2026-11-03')], 'tester', undefined, undefined, 'sdm');
+    putCorrection(db, { date: '2026-11-03', prayer: 'asar', time: '14:00', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-11-01T00:00:00Z'), undefined, undefined, 'sdm');
+    putCorrection(db, { date: '2026-11-03', prayer: 'maghrib', time: '19:30', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-11-01T00:00:00Z'), undefined, undefined, 'sdm');
     // the official source is fetched again with a later zohor: the old asar correction (14:00) is now before it
-    importDays(db, 'SGR01', [day('2026-11-03', { zohor: '14:30' })], 'tester');
-    const d = resolveDay(db, my({ zone: { zone: 'SGR01' } }), '2026-11-03')!;
+    importDays(db, 'SGR01', [day('2026-11-03', { zohor: '14:30' })], 'tester', undefined, undefined, 'sdm');
+    const d = resolveDay(db, my({ zone: { zone: 'SGR01' } }), '2026-11-03', 'sdm')!;
     const ordered = ['imsak', 'subuh', 'syuruk', 'zohor', 'asar', 'maghrib', 'isyak'].map((p) => d.times[p as keyof typeof d.times]);
     expect([...ordered].sort()).toEqual(ordered);
     expect(d.correctionIgnored).toEqual(['asar']);
@@ -47,7 +47,7 @@ describe('gate 13 item 6: a correction can never blank a day', () => {
   it('a replicated correction outside 2020..2100 or past the row ceiling is refused; one inside is kept', () => {
     const db = newDb();
     const meta = { editedAt: '2026-11-20T00:00:00.000Z', rev: '2026-11-20T00:00:00.000Z|cloud', origin: 'cloud' } as never;
-    const put = (date: string): void => putCorrection(db, { date, prayer: 'asar', time: '16:25', reason: 'Dari awan' }, 'system:sync', undefined, T('2026-11-20T00:00:00Z'), null, { meta });
+    const put = (date: string): void => putCorrection(db, { date, prayer: 'asar', time: '16:25', reason: 'Dari awan' }, 'system:sync', undefined, T('2026-11-20T00:00:00Z'), null, { meta }, 'sdm');
     expect(() => put('1999-05-01')).toThrow(CorrectionError);
     expect(() => put('2101-05-01')).toThrow(CorrectionError);
     put('2026-05-01');
@@ -59,7 +59,7 @@ describe('gate 13 item 6: a correction can never blank a day', () => {
     expect(() => put('2026-05-02')).toThrow(/too many/);
     put('2026-05-01'); // an existing key may still be updated
     // a local correction is not capped by the replicated ceiling
-    expect(() => putCorrection(db, { date: '2026-05-03', prayer: 'asar', time: '16:25', reason: 'Tempatan' }, 'user:t', undefined, T('2026-11-20T00:00:00Z'))).not.toThrow();
+    expect(() => putCorrection(db, { date: '2026-05-03', prayer: 'asar', time: '16:25', reason: 'Tempatan' }, 'user:t', undefined, T('2026-11-20T00:00:00Z'), undefined, undefined, 'sdm')).not.toThrow();
   });
 });
 
@@ -71,10 +71,10 @@ describe('gate 13 item 7: a dry run says when the file would never be used', () 
     const my = (order: string[], located = true): Settings => resolveSettings({
       location: located ? { latitude: 3.07, longitude: 101.52 } : {}, prayerSources: { sourceOrder: order },
     } as never);
-    expect(dryRun(db, my(['official', 'calc', 'file']), days, 'replace').fileShadowed).toBe(true);
-    expect(dryRun(db, my(['file', 'calc', 'official']), days, 'replace').fileShadowed).toBe(false);
-    expect(dryRun(db, my(['file', 'official', 'calc']), days, 'replace').fileShadowed).toBe(false);
-    expect(dryRun(db, my(['official', 'calc', 'file'], false), days, 'replace').fileShadowed).toBe(false);
+    expect(dryRun(db, my(['official', 'calc', 'file']), days, 'replace', 'sdm').fileShadowed).toBe(true);
+    expect(dryRun(db, my(['file', 'calc', 'official']), days, 'replace', 'sdm').fileShadowed).toBe(false);
+    expect(dryRun(db, my(['file', 'official', 'calc']), days, 'replace', 'sdm').fileShadowed).toBe(false);
+    expect(dryRun(db, my(['official', 'calc', 'file'], false), days, 'replace', 'sdm').fileShadowed).toBe(false);
   });
 });
 
@@ -89,12 +89,12 @@ describe('gate 13 item 8: Hijri stays continuous between sources', () => {
 
     // no official data at all: the calculated day keeps Umm al-Qura, unchanged
     const bare = newDb();
-    expect(hijriKey(resolveDays(bare, settings, addDays(base, 5), addDays(base, 5))[0]!.hijri)).toBe(hijriKey(hijriOf(addDays(base, 5))));
+    expect(hijriKey(resolveDays(bare, settings, addDays(base, 5), addDays(base, 5), 'sdm')[0]!.hijri)).toBe(hijriKey(hijriOf(addDays(base, 5))));
 
     // JAKIM's Malaysian date is one day ahead of Umm al-Qura on the official day
     const db = newDb();
-    importDays(db, 'SGR01', [{ ...day(base), hijri: hijriOf(addDays(base, 1)) }], 'tester');
-    const days = resolveDays(db, settings, addDays(base, -31), addDays(base, 31));
+    importDays(db, 'SGR01', [{ ...day(base), hijri: hijriOf(addDays(base, 1)) }], 'tester', undefined, undefined, 'sdm');
+    const days = resolveDays(db, settings, addDays(base, -31), addDays(base, 31), 'sdm');
     const byDate = new Map(days.map((d) => [d.date, d]));
     expect(byDate.get(base)!.source).toBe('official');
     // after the boundary and before it, within 30 days: the one-day lead carries over
@@ -108,7 +108,7 @@ describe('gate 13 item 8: Hijri stays continuous between sources', () => {
 
     // a difference larger than 2 days is not carried (it would be a data error)
     const far = newDb();
-    importDays(far, 'SGR01', [{ ...day(base), hijri: hijriOf(addDays(base, 3)) }], 'tester');
-    expect(hijriKey(resolveDays(far, settings, addDays(base, 4), addDays(base, 4))[0]!.hijri)).toBe(hijriKey(hijriOf(addDays(base, 4))));
+    importDays(far, 'SGR01', [{ ...day(base), hijri: hijriOf(addDays(base, 3)) }], 'tester', undefined, undefined, 'sdm');
+    expect(hijriKey(resolveDays(far, settings, addDays(base, 4), addDays(base, 4), 'sdm')[0]!.hijri)).toBe(hijriKey(hijriOf(addDays(base, 4))));
   });
 });

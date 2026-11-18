@@ -12,7 +12,7 @@ import type { PhotoMeta } from '@surau/core';
 import { readImageHeader } from '../assets/imageHeader.ts';
 import { logChange } from '../auth/users.ts';
 import type { ChangeMeta } from '../sync/meta.ts';
-import { DEFAULT_SURAU_ID } from '../sync/verify.ts';
+import { STORAGE_FULL_MSG, storageFits } from '../surau/storage.ts';
 
 export { MAX_PHOTO_BYTES };
 export const MAX_PHOTO_SIDE_PX = 4096;
@@ -39,22 +39,22 @@ export function photosMaxBytes(env: NodeJS.ProcessEnv = process.env): number {
   return (Number.isFinite(mb) && mb > 0 ? mb : DEFAULT_PHOTOS_MAX_MB) * 1024 * 1024;
 }
 
-export function photosTotalBytes(db: DatabaseSync): number {
-  return Number(db.prepare('SELECT COALESCE(SUM(bytes), 0) AS n FROM finance_photos WHERE present = 1').get()!.n);
+export function photosTotalBytes(db: DatabaseSync, surauId: string): number {
+  return Number(db.prepare('SELECT COALESCE(SUM(bytes), 0) AS n FROM finance_photos WHERE surau_id = ? AND present = 1').get(surauId)!.n);
 }
 
 function rowOf(r: Record<string, unknown>): PhotoMeta {
   return { id: String(r.id), entryId: String(r.entry_id), mime: String(r.mime), bytes: Number(r.bytes), present: Number(r.present) === 1 };
 }
 
-export function photoMeta(db: DatabaseSync, id: string): PhotoMeta | null {
+export function photoMeta(db: DatabaseSync, id: string, surauId: string): PhotoMeta | null {
   if (!PHOTO_ID_RE.test(id)) return null;
-  const r = db.prepare('SELECT * FROM finance_photos WHERE id = ?').get(id);
+  const r = db.prepare('SELECT * FROM finance_photos WHERE surau_id = ? AND id = ?').get(surauId, id);
   return r === undefined ? null : rowOf(r);
 }
 
-export function listPhotoMeta(db: DatabaseSync): PhotoMeta[] {
-  return db.prepare('SELECT * FROM finance_photos ORDER BY created_at, id').all().map(rowOf);
+export function listPhotoMeta(db: DatabaseSync, surauId: string): PhotoMeta[] {
+  return db.prepare('SELECT * FROM finance_photos WHERE surau_id = ? ORDER BY created_at, id').all(surauId).map(rowOf);
 }
 
 /** Header check shared by the upload route, the sync op and the site route; returns the dimensions. */
@@ -75,9 +75,11 @@ export const sha256Of = (buf: Buffer): string => createHash('sha256').update(buf
  * The checks for bytes that arrive for a photo row another server made (the sync route and the cloud puller): the
  * length must be what the row says and the folder quota that `putPhoto` enforces holds here too.
  */
-export function checkReplicatedBytes(db: DatabaseSync, meta: PhotoMeta, buf: Buffer): void {
+export function checkReplicatedBytes(db: DatabaseSync, meta: PhotoMeta, buf: Buffer, surauId: string): void {
   if (buf.length !== meta.bytes) throw new PhotoError(['photo size does not match its record']);
-  if (photosTotalBytes(db) + buf.length > photosMaxBytes()) throw new PhotoError(['Ruang simpanan foto kewangan penuh.'], 413);
+  // the surau's cloud storage limit (decision 24); a box has none
+  if (!storageFits(db, surauId, buf.length)) throw new PhotoError([STORAGE_FULL_MSG], 413);
+  if (photosTotalBytes(db, surauId) + buf.length > photosMaxBytes()) throw new PhotoError(['Ruang simpanan foto kewangan penuh.'], 413);
 }
 
 /** Writes the bytes under their hash (tmp file then rename, owner-only where the OS allows). */
@@ -103,39 +105,44 @@ export function writePhotoFile(dataDir: string, id: string, buf: Buffer): void {
  * The caller owns the transaction.
  */
 export function putPhoto(
-  db: DatabaseSync, dataDir: string, buf: Buffer, entryId: string, actor: string, now: Date, meta?: ChangeMeta,
+  db: DatabaseSync, dataDir: string, buf: Buffer, entryId: string, actor: string, now: Date, meta: ChangeMeta | undefined,
+  surauId: string,
 ): PhotoMeta {
   if (!SAFE_ID.test(entryId)) throw new PhotoError(['entry id is not valid']);
   const dims = checkJpeg(buf);
   const id = sha256Of(buf);
-  const existing = photoMeta(db, id);
+  const existing = photoMeta(db, id, surauId);
   if (existing !== null && existing.present) return existing;
-  if (photosTotalBytes(db) + buf.length > photosMaxBytes()) {
+  // the surau's cloud storage limit (decision 24); a box has none
+  if (!storageFits(db, surauId, buf.length)) throw new PhotoError([STORAGE_FULL_MSG], 413);
+  if (photosTotalBytes(db, surauId) + buf.length > photosMaxBytes()) {
     throw new PhotoError(['Ruang simpanan foto kewangan penuh.'], 413);
   }
   writePhotoFile(dataDir, id, buf);
   if (existing !== null) {
-    db.prepare('UPDATE finance_photos SET present = 1 WHERE id = ?').run(id);
+    db.prepare('UPDATE finance_photos SET present = 1 WHERE surau_id = ? AND id = ?').run(surauId, id);
     return { ...existing, present: true };
   }
   const saved: PhotoMeta = { id, entryId, mime: 'image/jpeg', bytes: buf.length, present: true };
   db.prepare(
     `INSERT INTO finance_photos (surau_id, id, entry_id, mime, bytes, width, height, created_at, created_by, present)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-  ).run(DEFAULT_SURAU_ID, id, entryId, 'image/jpeg', buf.length, dims.width, dims.height, now.toISOString(), actor);
+  ).run(surauId, id, entryId, 'image/jpeg', buf.length, dims.width, dims.height, now.toISOString(), actor);
   // Metadata only: the bytes are never in the change history.
-  logChange(db, actor, 'finance:photo', id, undefined, { entryId, mime: 'image/jpeg', bytes: buf.length }, meta);
+  logChange(db, actor, 'finance:photo', id, undefined, { entryId, mime: 'image/jpeg', bytes: buf.length }, meta, surauId);
   return saved;
 }
 
 /** The file of a photo whose bytes are on this server, or null. */
-export function photoPath(db: DatabaseSync, dataDir: string, id: string): { path: string; mime: string } | null {
-  const m = photoMeta(db, id);
+export function photoPath(
+  db: DatabaseSync, dataDir: string, id: string, surauId: string,
+): { path: string; mime: string } | null {
+  const m = photoMeta(db, id, surauId);
   if (m === null || !m.present) return null;
   const path = join(photosDirOf(dataDir), `${id}.jpg`);
   return existsSync(path) ? { path, mime: m.mime } : null;
 }
 
-export function markPresent(db: DatabaseSync, id: string): void {
-  db.prepare('UPDATE finance_photos SET present = 1 WHERE id = ?').run(id);
+export function markPresent(db: DatabaseSync, id: string, surauId: string): void {
+  db.prepare('UPDATE finance_photos SET present = 1 WHERE surau_id = ? AND id = ?').run(surauId, id);
 }

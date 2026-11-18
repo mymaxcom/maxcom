@@ -4,6 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { getSettings } from './settingsStore.ts';
 import { shortNameOf } from './surauLogo.ts';
+import { NEUTRAL_SURAU_ID, publicSurauOf } from './reqSurau.ts';
 
 /** The cloud web app used when the box has no linked cloud address. */
 export const DEFAULT_CLOUD_ORIGIN = 'https://api.mymaxcom.my';
@@ -11,6 +12,8 @@ const FALLBACK_HOST = 'box.surau.local';
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
 
 export interface IosProfileDeps {
+  /** Which server this is; the cloud names the surau of the linked box, a box its own. Default `box`. */
+  role?: 'box' | 'cloud';
   db: DatabaseSync;
   boxId: string;
   httpsPort: number;
@@ -209,7 +212,7 @@ export function registerIosProfileRoutes(app: FastifyInstance, deps: IosProfileD
   app.get('/app/ios.mobileconfig', async (request, reply) => {
     const via = (request.query as { via?: unknown } | undefined)?.via;
     const cloud = via === 'cloud';
-    const info = getSettings(deps.db).surauInfo;
+    const info = getSettings(deps.db, publicSurauOf(deps.db, request, deps.role ?? 'box') ?? NEUTRAL_SURAU_ID).surauInfo;
     const surauName = info.name.trim() !== '' ? info.name.trim() : 'MAXCOM';
     const shortStored = info.shortName.trim();
     const label = shortStored !== '' ? shortStored : shortNameOf(surauName);

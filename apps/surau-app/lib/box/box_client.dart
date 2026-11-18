@@ -4,13 +4,20 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../ops/ops_build.dart' show kOpsBuild;
 import 'wire.dart';
 
 export 'wire.dart';
 
 /// An error answered by the box (HTTP status >= 400).
 class BoxError implements Exception {
-  const BoxError(this.status, this.message, {this.retryAfterSec, this.code});
+  const BoxError(
+    this.status,
+    this.message, {
+    this.retryAfterSec,
+    this.code,
+    this.detail = const <String, dynamic>{},
+  });
 
   final int status;
 
@@ -19,9 +26,18 @@ class BoxError implements Exception {
   /// on this, never on [message], which is wording for the person.
   final String? code;
 
+  /// The answer's `detail` object (counts, lists, the names a text needs);
+  /// empty when the answer has none. Carries no secret: the box puts only
+  /// what the person may see.
+  final Map<String, dynamic> detail;
+
   /// First of the box's `errors`, else `Permintaan gagal`.
   final String message;
   final int? retryAfterSec;
+
+  /// The text [message] has when the box's answer carried none. A marker the
+  /// screens swap for `S.errorRequestFailed`; the app's own wording is in the catalogues.
+  static const String genericMessage = 'Permintaan gagal'; // lang-ok: marker, shown as S.errorRequestFailed
 
   @override
   String toString() => 'BoxError($status, $message)';
@@ -29,15 +45,27 @@ class BoxError implements Exception {
 
 /// 401 on a request that carried a session token.
 class SessionExpired extends BoxError {
-  const SessionExpired(String message, {super.retryAfterSec, super.code})
-    : super(401, message);
+  const SessionExpired(
+    String message, {
+    super.retryAfterSec,
+    super.code,
+    super.detail,
+  }) : super(401, message);
 }
 
 /// The box could not be reached (socket error, DNS, TLS, timeout).
 class BoxUnreachable implements Exception {
-  const BoxUnreachable([this.cause]);
+  const BoxUnreachable([this.cause]) : sent = false;
+
+  /// The request left this device and then no answer came in time (a
+  /// timeout): the box may have acted on it. A write must not be sent again
+  /// by another route.
+  const BoxUnreachable.sent([this.cause]) : sent = true;
 
   final Object? cause;
+
+  /// True when the request may have reached the box ([BoxUnreachable.sent]).
+  final bool sent;
 
   @override
   String toString() => 'BoxUnreachable($cause)';
@@ -63,8 +91,8 @@ class BoxClient {
   final Duration connect;
   final Duration read;
 
-  static const String _generic = 'Permintaan gagal';
-  static const String _expired = 'Sesi tamat. Sila buka kunci semula';
+  static const String _generic = BoxError.genericMessage;
+  static const String _expired = 'Sesi tamat. Sila buka kunci semula'; // lang-ok: SessionExpired text, screens show S.errorSessionExpired
 
   // ---- public API ----
 
@@ -74,6 +102,7 @@ class BoxClient {
     required String deviceName,
     required String platform,
     String? pin,
+    String? client,
   }) async {
     final out = await postJson('/api/enrol/complete', {
       'code': code,
@@ -81,6 +110,9 @@ class BoxClient {
       'deviceName': deviceName,
       'platform': platform,
       'pin': ?pin,
+      // Plan 14 Task 26: the ops build's mistake guard; the public build
+      // never sends the field, whatever the caller passes.
+      'client': ?(kOpsBuild ? client : null),
     });
     return EnrolResult.fromJson(out);
   }
@@ -255,6 +287,9 @@ class BoxClient {
       ).timeout(left > Duration.zero ? left : Duration.zero);
     } on BoxError {
       rethrow;
+    } on TimeoutException catch (e) {
+      // Sent (or being sent) and no answer in time: the box may have acted.
+      throw BoxUnreachable.sent(e);
     } on Exception catch (e) {
       // SocketException, TimeoutException, ClientException, TLS failures.
       throw BoxUnreachable(e);
@@ -267,11 +302,20 @@ class BoxClient {
   BoxError _failure(http.Response res, bool hadToken) {
     var message = _generic;
     String? code;
+    var detail = const <String, dynamic>{};
     try {
       final body = jsonDecode(utf8.decode(res.bodyBytes));
       if (body is Map) {
         final c = body['code'];
         if (c is String && c.isNotEmpty && c.length <= 64) code = c;
+        final d = body['detail'];
+        if (d is Map<String, dynamic>) detail = d;
+        // A refusal that names another record by its ID (`phone_taken`) sends
+        // it as a top-level `ref`; it is an ID, never a secret.
+        final r = body['ref'];
+        if (detail.isEmpty && r is String && r.isNotEmpty && r.length <= 64) {
+          detail = {'ref': r};
+        }
         final m = body['message'];
         final e = body['error'];
         final errors = body['errors'];
@@ -294,9 +338,16 @@ class BoxClient {
         message == _generic ? _expired : message,
         retryAfterSec: retry,
         code: code,
+        detail: detail,
       );
     }
-    return BoxError(res.statusCode, message, retryAfterSec: retry, code: code);
+    return BoxError(
+      res.statusCode,
+      message,
+      retryAfterSec: retry,
+      code: code,
+      detail: detail,
+    );
   }
 
   Map<String, dynamic> _decodeObject(http.Response res) {

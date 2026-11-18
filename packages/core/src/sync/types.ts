@@ -33,7 +33,7 @@ export type OpStatus = 'applied' | 'duplicate' | 'superseded' | 'refused';
 export type OpRefusal =
   | 'bad_signature' | 'device_revoked' | 'device_unknown' | 'user_inactive'
   | 'forbidden' | 'invalid' | 'live_only' | 'too_large' | 'last_admin' | 'too_many'
-  | 'month_closed' | 'fund_archived';
+  | 'month_closed' | 'fund_archived' | 'id_taken';
 
 /** Who last wrote one settings field, and when: the unit settings merge by (see `decide`). */
 export interface FieldStamp {
@@ -47,6 +47,8 @@ export interface OpResult {
   rev: string | null;
   reason: OpRefusal | null;
   winner: { actor: string; userName: string | null; editedAt: string } | null;
+  /** settings.put applied in part: the field paths that lost to a newer stored value (absent when none). */
+  skipped?: string[];
 }
 
 export interface FeedEntry {
@@ -82,6 +84,10 @@ export interface DeviceEntryAfter {
   publicJwk?: { kty: 'EC'; crv: 'P-256'; x: string; y: string };
   enrolledAt?: string;
   revoked?: boolean;
+  /** The box this device is the home box of (device feed only, sent from Task 27). */
+  boxId?: string;
+  /** MAXCOM Ops device marker (device feed only, sent from Task 27; receivers ignore it on a box). */
+  ops?: boolean;
 }
 
 export interface Snapshot {

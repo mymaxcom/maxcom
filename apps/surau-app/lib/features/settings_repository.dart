@@ -12,23 +12,57 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/providers.dart';
 import '../box/box_client.dart';
+import '../l10n/generated/s.dart';
+import '../l10n/s_lookup.dart';
+import 'common/error_text.dart' show errorText, kErrorCodeTexts;
+import 'settings_widgets/field_meta.dart' show fieldMeta;
 import 'registry.g.dart';
 import 'shell/box_gateway.dart';
 import 'shell/read_cache.dart';
 
 enum SettingsFailure { invalid, notFound, forbidden, other }
 
+/// A refusal the app words itself (not the box's text): [SettingsSaveError.text]
+/// gives it in the app language.
+enum SettingsMsg { forbidden, notFound, tvLangNeedsUpdate }
+
 /// A save the box refused. [message] is the text to show beside the form:
 /// the box's `errors[0]` for a 400.
 class SettingsSaveError implements Exception {
-  const SettingsSaveError(this.kind, this.message, {this.status});
+  const SettingsSaveError(this.kind, this.message, {this.status, this.msg, this.source});
+
+  /// A refusal worded by the app, in BM as [message] and in any language via [text].
+  SettingsSaveError.of(this.kind, SettingsMsg this.msg, {this.status})
+    : message = _bmText(msg),
+      source = null;
 
   final SettingsFailure kind;
+
+  /// BM text (or the box's own first message for a 400); screens show [text].
   final String message;
   final int? status;
+  final SettingsMsg? msg;
 
-  static const String forbiddenMessage = 'Tiada kebenaran untuk tindakan ini';
-  static const String notFoundMessage = 'Ciri tidak dijumpai';
+  /// The box's refusal, when it named a code the app words itself (K11).
+  final BoxError? source;
+
+  /// What to show beside the form, in the language of [s].
+  String text(S s) {
+    final src = source;
+    if (src != null && kErrorCodeTexts.containsKey(src.code)) return errorText(s, src);
+    return msg == null ? message : _textOf(s, msg!);
+  }
+
+  static String _textOf(S s, SettingsMsg m) => switch (m) {
+    SettingsMsg.forbidden => s.errorForbidden,
+    SettingsMsg.notFound => s.errorFeatureNotFound,
+    SettingsMsg.tvLangNeedsUpdate => s.tvLangNeedsUpdate,
+  };
+
+  static String _bmText(SettingsMsg m) => _textOf(sBm, m);
+
+  static String get forbiddenMessage => _bmText(SettingsMsg.forbidden);
+  static String get notFoundMessage => _bmText(SettingsMsg.notFound);
 
   @override
   String toString() => 'SettingsSaveError($kind, $message)';
@@ -78,6 +112,17 @@ Map<String, dynamic> diffPatch(
   return out;
 }
 
+/// A box from before the TV language "Ikut lokasi" (`auto`) answers 400 and
+/// names `language.lang`: say plainly that the box needs the update.
+bool _olderBoxRefusesTvLang(
+  String feature,
+  Map<String, dynamic> patch,
+  String boxMessage,
+) =>
+    feature == 'language' &&
+    patch['lang'] == 'auto' &&
+    boxMessage.contains('language.lang');
+
 class SettingsRepository {
   SettingsRepository(this.gateway, {this.onSaved});
 
@@ -88,6 +133,9 @@ class SettingsRepository {
   final void Function()? onSaved;
 
   static const String path = '/api/settings';
+
+  /// The last [save] was queued on this device, not yet heard by the box.
+  bool lastSaveQueued = false;
 
   /// All features' settings: fresh, or the cached answer marked stale.
   Future<Read<Map<String, dynamic>>> load() => gateway.get(path);
@@ -101,6 +149,7 @@ class SettingsRepository {
   ) async {
     try {
       final all = await gateway.put('$path/$feature', patch);
+      lastSaveQueued = gateway.lastPutQueued;
       gateway.cache.put(path, all, gateway.now());
       onSaved?.call();
       return all;
@@ -108,46 +157,95 @@ class SettingsRepository {
       rethrow;
     } on BoxError catch (e) {
       throw switch (e.status) {
-        400 => SettingsSaveError(SettingsFailure.invalid, e.message, status: 400),
-        403 => const SettingsSaveError(
+        400 when _olderBoxRefusesTvLang(feature, patch, e.message) =>
+          SettingsSaveError.of(
+            SettingsFailure.invalid,
+            SettingsMsg.tvLangNeedsUpdate,
+            status: 400,
+          ),
+        400 => SettingsSaveError(SettingsFailure.invalid, e.message, status: 400, source: e),
+        403 => SettingsSaveError.of(
           SettingsFailure.forbidden,
-          SettingsSaveError.forbiddenMessage,
+          SettingsMsg.forbidden,
           status: 403,
         ),
-        404 => const SettingsSaveError(
+        404 => SettingsSaveError.of(
           SettingsFailure.notFound,
-          SettingsSaveError.notFoundMessage,
+          SettingsMsg.notFound,
           status: 404,
         ),
-        _ => SettingsSaveError(SettingsFailure.other, e.message, status: e.status),
+        _ => SettingsSaveError(SettingsFailure.other, e.message, status: e.status, source: e),
       };
     }
   }
 
   /// `PUT { enabled: defaultEnabled, ...defaults }` for [feature]. A locked
   /// feature stays on (its default is on).
-  Future<Map<String, dynamic>> resetToDefaults(String feature) {
+  ///
+  /// Fields the Pentadbir MAXCOM owns (scope `system`) and hidden fields are
+  /// left out unless [includeSystem] (the person holds `system:write`): the
+  /// box refuses a patch that carries one for anyone else, which made every
+  /// reset of Siaran YouTube and Tilawah fail (K3).
+  Future<Map<String, dynamic>> resetToDefaults(String feature, {bool includeSystem = false}) {
     final f = features.where((x) => x.key == feature).firstOrNull;
     if (f == null) {
-      throw const SettingsSaveError(
-        SettingsFailure.notFound,
-        SettingsSaveError.notFoundMessage,
-      );
+      throw SettingsSaveError.of(SettingsFailure.notFound, SettingsMsg.notFound);
     }
-    return save(feature, defaultsPatch(f));
+    return save(feature, defaultsPatch(f, includeSystem: includeSystem));
   }
 }
 
 /// `{enabled: defaultEnabled, ...defaults}` as plain JSON values.
-Map<String, dynamic> defaultsPatch(FeatureDef f) => {
+Map<String, dynamic> defaultsPatch(FeatureDef f, {bool includeSystem = true}) => {
   'enabled': f.defaultEnabled,
-  ...(_copy(f.defaults) as Map<String, dynamic>),
+  ...(_without(f.key, '', _copy(f.defaults), includeSystem) as Map<String, dynamic>),
 };
+
+/// [v] without the system-scoped and hidden fields (dot-joined [path]).
+Object? _without(String feature, String path, Object? v, bool includeSystem) {
+  if (includeSystem || v is! Map) return v;
+  final out = <String, dynamic>{};
+  for (final e in v.entries) {
+    final p = path.isEmpty ? '${e.key}' : '$path.${e.key}';
+    final meta = fieldMeta(feature, p);
+    if (meta != null && (meta.isSystem || meta.hidden)) continue;
+    out['${e.key}'] = _without(feature, p, e.value, includeSystem);
+  }
+  return out;
+}
 
 Object? _copy(Object? v) {
   if (v is Map) return {for (final e in v.entries) e.key as String: _copy(e.value)};
   if (v is List) return [for (final x in v) _copy(x)];
   return v;
+}
+
+/// The settings page's read. An offline-first gateway answers from the local
+/// copy, which never holds the app lock (the box keeps it to itself), so the
+/// lock's state is read live from the box; with the box away it is the value
+/// the enrolment or the last unlock recorded, marked `_live: false` so the
+/// page can say it needs the connection (K1).
+Future<Read<Map<String, dynamic>>> loadSettings(
+  BoxGateway gateway, {
+  bool? enrolledAppLock,
+}) async {
+  final read = await gateway.get(SettingsRepository.path);
+  final have = read.value['appLock'];
+  if (have is Map && have['enabled'] is bool) return read;
+  Map<String, dynamic>? live;
+  try {
+    final all = await gateway.getFresh(SettingsRepository.path);
+    final lock = all['appLock'];
+    if (lock is Map) live = lock.cast<String, dynamic>();
+  } on SessionExpired {
+    rethrow;
+  } on Object {
+    live = null;
+  }
+  final lock = live != null
+      ? <String, dynamic>{...live}
+      : <String, dynamic>{if (enrolledAppLock != null) 'enabled': enrolledAppLock, '_live': false};
+  return Read({...read.value, 'appLock': lock}, at: read.at, stale: read.stale);
 }
 
 /// Null until unlocked (no gateway). Saving refreshes [settingsProvider].

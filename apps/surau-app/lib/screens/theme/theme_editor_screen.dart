@@ -192,7 +192,7 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = err is SettingsSaveError ? err.message : writeErrorText(s, err);
+        _error = err is SettingsSaveError ? err.text(s) : writeErrorText(s, err);
       });
     }
   }
@@ -311,7 +311,7 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
           if (wide) {
             return ShellPage(
               title: s.themeEditTitle(title),
-              actions: [if (canWrite) Padding(padding: const EdgeInsets.only(right: 8), child: saveButton)],
+              actions: [if (canWrite) Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: saveButton)],
               body: Row(
                 key: const ValueKey('theme-editor-wide'),
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,7 +319,7 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                   SizedBox(
                     width: 420,
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 12, 24),
+                      padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 12, 24),
                       children: [
                         preview,
                         const SizedBox(height: 8),
@@ -329,7 +329,7 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                   ),
                   Expanded(
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(12, 16, 24, 24),
+                      padding: const EdgeInsetsDirectional.fromSTEB(12, 16, 24, 24),
                       children: [controls, const SizedBox(height: 12), if (canWrite) saveButton],
                     ),
                   ),

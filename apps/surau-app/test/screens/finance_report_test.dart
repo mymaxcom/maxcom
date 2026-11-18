@@ -225,18 +225,18 @@ void main() {
   testWidgets('Tutup bulan waits for the earlier month, then closes with a confirm', (tester) async {
     final (h, sc) = await vectorMonth();
     addTearDown(h.dispose);
-    await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct), roles: {'treasurer'}));
+    await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct), roles: {'admin'}));
     await settle(tester);
 
     await reveal(tester, find.byKey(const Key('finr-close-month')));
     final blocked = tester.widget<OutlinedButton>(find.byKey(const Key('finr-close-month')));
     expect(blocked.onPressed, isNull);
     expect(find.text('Tutup September 2026 dahulu.'), findsOneWidget);
-    expect(find.byKey(const Key('finr-reopen')), findsNothing, reason: 'a Bendahari cannot reopen');
+    expect(find.byKey(const Key('finr-reopen')), findsNothing, reason: 'an open month has nothing to reopen');
 
     // September is made Muktamad: October can follow.
     await closeMonthDoc(h, sc, '2026-09');
-    await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct), roles: {'treasurer'}));
+    await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct), roles: {'admin'}));
     await settle(tester);
     await reveal(tester, find.byKey(const Key('finr-close-month')));
     expect(find.byKey(const Key('finr-close-order')), findsNothing);
@@ -277,6 +277,53 @@ void main() {
     expect((ops.single.payload as Map)['status'], 'open');
     // The sheet is a draft again.
     expect(find.text('DRAF: belum dimuktamadkan'), findsOneWidget);
+  });
+
+  testWidgets('[F7] a Bendahari has no close button and is asked to call a Pentadbir; a Pentadbir has it', (tester) async {
+    final (h, sc) = await vectorMonth();
+    addTearDown(h.dispose);
+    await closeMonthDoc(h, sc, '2026-09');
+    await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct), roles: {'treasurer'}));
+    await settle(tester);
+    await reveal(tester, find.byKey(const Key('finr-download')));
+    expect(find.byKey(const Key('finr-close-month')), findsNothing);
+    expect(find.text('Minta Pentadbir menutup bulan ini'), findsOneWidget);
+
+    await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct), roles: {'admin'}));
+    await settle(tester);
+    await reveal(tester, find.byKey(const Key('finr-close-month')));
+    expect(find.byKey(const Key('finr-close-month')), findsOneWidget);
+    expect(find.text('Minta Pentadbir menutup bulan ini'), findsNothing);
+  });
+
+  testWidgets('[F10] English shows October 2026 in the month list, BM keeps Oktober 2026', (tester) async {
+    final (h, _) = await vectorMonth();
+    addTearDown(h.dispose);
+    await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct), locale: const Locale('en')));
+    await settle(tester);
+    await reveal(tester, find.byKey(const Key('finr-month-pick')));
+    await tester.tap(find.byKey(const Key('finr-month-pick')));
+    await settle(tester);
+    expect(find.descendant(of: find.byKey(const Key('finr-pick-2026-10')), matching: find.text('October 2026')), findsOneWidget);
+
+    await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct)));
+    await settle(tester);
+    await reveal(tester, find.byKey(const Key('finr-month-pick')));
+    await tester.tap(find.byKey(const Key('finr-month-pick')));
+    await settle(tester);
+    expect(find.descendant(of: find.byKey(const Key('finr-pick-2026-10')), matching: find.text('Oktober 2026')), findsOneWidget);
+  });
+
+  testWidgets('[F2] a closed month names the entries that came after the close', (tester) async {
+    final (h, sc) = await vectorMonth();
+    addTearDown(h.dispose);
+    await closeMonthDoc(h, sc, _oct);
+    final doc = await h.store.getDoc(Collections.financeMonths, _oct);
+    await h.store.putDoc(Collections.financeMonths, _oct, {...doc!, 'lateEntries': ['x1', 'x2']});
+    await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct)));
+    await settle(tester);
+    expect(find.byKey(const Key('finr-late')), findsOneWidget);
+    expect(find.text('2 rekod masuk selepas bulan ini ditutup'), findsOneWidget);
   });
 
   testWidgets('goldens', (tester) async {

@@ -1,5 +1,6 @@
 // Kuliah: date, the prayer it follows, time, name, speaker, book, topic,
-// status (a cancelled kuliah stays on the TV marked Batal), series.
+// status (a cancelled kuliah stays on the TV marked Batal). A stored
+// `seriesId` is carried untouched; no form field.
 
 import 'package:flutter/material.dart';
 

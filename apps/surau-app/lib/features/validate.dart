@@ -3,8 +3,12 @@
 // top-level setting name, typed from the registry defaults; the generated
 // `test/fixtures/settings-cases.json` (answers computed by core itself)
 // proves both say yes and no on the same patches. Messages are Bahasa
-// Malaysia for the form; every error carries core's key path.
+// Malaysia by default and follow the app language when the caller passes
+// `s`; every error carries core's key path.
 
+import '../l10n/generated/s.dart';
+import '../l10n/s_lookup.dart';
+import 'labels.dart' show appLangOfS, featureLabel;
 import 'registry.g.dart';
 
 /// What a setting's value must satisfy, by the setting's top-level name.
@@ -56,7 +60,7 @@ class SettingRule {
   final List<String> vals;
   final RegExp? re;
 
-  /// Bahasa Malaysia description for "Mesti ...".
+  /// Key of the phrase that completes "Must be ..." (see [_whatText]).
   final String? what;
 }
 
@@ -126,11 +130,11 @@ SettingRule? ruleFor(String name) {
     case 'timeFormat':
       return const SettingRule.enumOf(['12h', '24h']);
     case 'lang':
-      return const SettingRule.enumOf(['ms', 'en']);
+      return const SettingRule.enumOf(['auto', 'ms', 'en']);
     case 'mode':
       return const SettingRule.enumOf(['landscape', 'portrait']);
     case 'templateId':
-      return SettingRule.regex(_themeNameRe, 'nama tema (a-z, 0-9, sempang, paling banyak 32 aksara)');
+      return SettingRule.regex(_themeNameRe, 'themeName');
     case 'rotate':
       return const SettingRule.enumOf(['daily', 'hourly', 'off']);
     case 'order':
@@ -167,6 +171,11 @@ SettingRule? ruleFor(String name) {
       return const SettingRule.enumOf(['public', 'unlisted', 'private']);
     case 'relayFrom':
       return const SettingRule.enumOf(['box', 'phone']);
+    case 'transport':
+      return const SettingRule.enumOf(['auto', 'tcp', 'udp']);
+    case 'avOffsetMs':
+      // Core's AV_OFFSET_CHOICES: 0 to 2000 ms in steps of 50.
+      return SettingRule.intOf([for (var i = 0; i <= 2000; i += 50) '$i']);
     case 'noVideoSeconds':
       return const SettingRule.int(5, 60);
     case 'cloudWakeSeconds':
@@ -174,7 +183,7 @@ SettingRule? ruleFor(String name) {
     case 'syncHistoryDays':
       return const SettingRule.intOf(['180', '365']);
     case 'message':
-      return const SettingRule.text(1, 100);
+      return const SettingRule.text(0, 100);
     case 'relayVideo':
       return const SettingRule.enumOf(['copy', 'reencode']);
     case 'maxBitrateKbps':
@@ -190,13 +199,13 @@ SettingRule? ruleFor(String name) {
     case 'textSize':
       return const SettingRule.enumOf(['s', 'm', 'l']);
     case 'ds.name':
-      return SettingRule.text(1, 60, re: _sourceNameRe, what: 'teks biasa');
+      return SettingRule.text(1, 60, re: _sourceNameRe, what: 'plain');
     case 'ds.url':
       return const SettingRule.sourceUrl();
     case 'name':
       return const SettingRule.text(1, 80);
     case 'shortName':
-      return SettingRule.text(0, 12, re: _shortNameRe, what: 'teks biasa tanpa aksara HTML');
+      return SettingRule.text(0, 12, re: _shortNameRe, what: 'plainNoHtml');
     case 'kind':
       return const SettingRule.enumOf(['surau', 'masjid']);
     case 'shortAddress':
@@ -208,17 +217,17 @@ SettingRule? ruleFor(String name) {
         0,
         30,
         re: _phoneRe,
-        what: 'nombor telefon seperti 012-345 6789',
+        what: 'phone',
       );
     case 'helpEmail':
       return SettingRule.text(
         0,
         120,
         re: _emailRe,
-        what: 'alamat e-mel seperti nama@contoh.my',
+        what: 'email',
       );
     case 'reciter':
-      return SettingRule.regex(_reciterRe, 'nama folder qari');
+      return SettingRule.regex(_reciterRe, 'reciter');
     case 'dirtyCheckSeconds':
       return const SettingRule.int(60, 900);
     case 'keepDays':
@@ -226,15 +235,15 @@ SettingRule? ruleFor(String name) {
     case 'replaceGappyLive':
       return const SettingRule.enumOf(['ask', 'never', 'always']);
     case 'cloudUrl':
-      return SettingRule.text(0, 200, re: _cloudUrlRe, what: 'alamat https://');
+      return SettingRule.text(0, 200, re: _cloudUrlRe, what: 'https');
     case 'latitude':
       return const SettingRule.decimal(-90, 90);
     case 'longitude':
       return const SettingRule.decimal(-180, 180);
     case 'country':
-      return SettingRule.regex(_countryRe, 'kod negara dua huruf seperti MY');
+      return SettingRule.regex(_countryRe, 'country');
     case 'timezone':
-      return SettingRule.regex(_timeZoneRe, 'zon waktu seperti Asia/Kuala_Lumpur');
+      return SettingRule.regex(_timeZoneRe, 'timezone');
     case 'city':
       return const SettingRule.text(0, 80);
     case 'method':
@@ -244,22 +253,22 @@ SettingRule? ruleFor(String name) {
     case 'highLatitude':
       return const SettingRule.enumOf(['auto', 'middleOfNight', 'seventhOfNight', 'twilightAngle']);
     case 'zone':
-      return SettingRule.regex(_zoneRe, 'kod zon seperti SGR01');
+      return SettingRule.regex(_zoneRe, 'zone');
     case 'figure':
       return const SettingRule.enumOf(['balance', 'month', 'lastEntry']);
     case 'highlightSeconds':
       return const SettingRule.int(0, 120);
     case 'qrAssetId':
-      return SettingRule.regex(_qrAssetRe, 'id gambar atau kosong');
+      return SettingRule.regex(_qrAssetRe, 'imageOrEmpty');
     case 'manualTitle':
     case 'row1Label':
     case 'row2Label':
     case 'row3Label':
       return const SettingRule.text(0, 40);
     case 'penceramahFundId':
-      return SettingRule.regex(_fundIdRe, 'id tabung atau kosong');
+      return SettingRule.regex(_fundIdRe, 'fundOrEmpty');
     case 'startedOn':
-      return SettingRule.regex(_dateOrEmptyRe, 'tarikh YYYY-MM-DD atau kosong');
+      return SettingRule.regex(_dateOrEmptyRe, 'dateOrEmpty');
     default:
       return null;
   }
@@ -402,28 +411,46 @@ bool isBlockedHost(String hostname) {
 
 /// Core's `sourceUrlError` in BM: null when [value] is an acceptable
 /// public https address.
-String? sourceUrlError(String value) {
+String _whatText(S s, String? key) => switch (key) {
+  'plain' => s.valWhatPlain,
+  'plainNoHtml' => s.valWhatPlainNoHtml,
+  'phone' => s.valWhatPhone,
+  'email' => s.valWhatEmail,
+  'https' => s.valWhatHttps,
+  'themeName' => s.valWhatThemeName,
+  'reciter' => s.valWhatReciter,
+  'country' => s.valWhatCountry,
+  'timezone' => s.valWhatTimezone,
+  'zone' => s.valWhatZone,
+  'imageOrEmpty' => s.valWhatImageOrEmpty,
+  'fundOrEmpty' => s.valWhatFundOrEmpty,
+  'dateOrEmpty' => s.valWhatDateOrEmpty,
+  _ => s.valWhatValid,
+};
+
+String? sourceUrlError(String value, [S? lang]) {
+  final s = lang ?? sBm;
   if (value.length > _maxSourceUrl) {
-    return 'Terlalu panjang (paling banyak $_maxSourceUrl aksara)';
+    return s.valTooLong(_maxSourceUrl);
   }
   if (_badUrlChars.hasMatch(value)) {
-    return 'Tidak boleh ada ruang atau aksara kawalan';
+    return s.valNoSpaces;
   }
   final Uri u;
   try {
     u = Uri.parse(value);
   } on FormatException {
-    return 'Mesti alamat web yang sah';
+    return s.valWebAddress;
   }
   if (u.scheme != 'https' || !u.hasAuthority) {
-    return 'Mesti bermula dengan https://';
+    return s.valStartHttps;
   }
   if (u.userInfo.isNotEmpty) {
-    return 'Tidak boleh ada nama pengguna atau kata laluan';
+    return s.valNoUserInfo;
   }
-  if (u.hasFragment || value.contains('#')) return 'Tidak boleh ada bahagian #';
+  if (u.hasFragment || value.contains('#')) return s.valNoFragment;
   if (isBlockedHost(u.host)) {
-    return 'Mesti alamat internet awam (bukan setempat atau peribadi)';
+    return s.valPublicAddress;
   }
   return null;
 }
@@ -480,18 +507,18 @@ bool _isIsoInstant(String v) =>
 
 bool _finite(Object? n) => n is num && n.isFinite;
 
-String? _rectError(Object? v) {
-  if (v is! Map) return 'Mesti objek { x, y, w, h }';
+String? _rectError(Object? v, S s) {
+  if (v is! Map) return s.valRectShape('{ x, y, w, h }');
   for (final k in v.keys) {
     if (k != 'x' && k != 'y' && k != 'w' && k != 'h') {
-      return 'Medan tidak dikenali';
+      return s.valUnknownField;
     }
   }
   if (!_finite(v['x']) ||
       !_finite(v['y']) ||
       !_finite(v['w']) ||
       !_finite(v['h'])) {
-    return 'x, y, w dan h mesti nombor';
+    return s.valRectNumbers;
   }
   final x = (v['x'] as num).toDouble();
   final y = (v['y'] as num).toDouble();
@@ -503,7 +530,7 @@ String? _rectError(Object? v) {
       h < minCropSpan ||
       x + w > 1 + 1e-9 ||
       y + h > 1 + 1e-9) {
-    return 'Petak potongan mesti berada dalam gambar';
+    return s.valCropInside;
   }
   return null;
 }
@@ -511,53 +538,54 @@ String? _rectError(Object? v) {
 /// Core's `validateImageRef` (packages/core/src/image.ts): an image field is
 /// the plain asset id, or an object `{asset, crop?, bg?, rotate?, square?}`.
 /// [allowSquare] is true for the logo only. Null when valid, else the BM text.
-String? imageRefError(Object? v, {bool allowSquare = false}) {
-  if (v is String) return _assetIdRe.hasMatch(v) ? null : 'Id gambar tidak sah';
-  if (v is! Map) return 'Pilih gambar';
+String? imageRefError(Object? v, {bool allowSquare = false, S? s}) {
+  final S l = s ?? sBm;
+  if (v is String) return _assetIdRe.hasMatch(v) ? null : l.valImageIdBad;
+  if (v is! Map) return l.imagePick;
   const known = {'asset', 'crop', 'bg', 'rotate', 'square'};
   for (final k in v.keys) {
     if (k == 'square' && !allowSquare) {
-      return 'Petak segi empat hanya untuk logo';
+      return l.valSquareLogoOnly;
     }
-    if (!known.contains(k)) return 'Medan tidak dikenali';
+    if (!known.contains(k)) return l.valUnknownField;
   }
   final asset = v['asset'];
   if (asset is! String || !_assetIdRe.hasMatch(asset)) {
-    return 'Id gambar tidak sah';
+    return l.valImageIdBad;
   }
   if (v.containsKey('crop')) {
-    final e = _rectError(v['crop']);
+    final e = _rectError(v['crop'], l);
     if (e != null) return e;
   }
   if (allowSquare && v.containsKey('square')) {
-    final e = _rectError(v['square']);
+    final e = _rectError(v['square'], l);
     if (e != null) return e;
   }
   if (v.containsKey('bg') &&
       !const ['keep', 'remove', 'card'].contains(v['bg'])) {
-    return 'Latar mesti keep, remove atau card';
+    return l.valBgChoice;
   }
   if (v.containsKey('rotate')) {
     final r = v['rotate'];
     if (r is! num || !const [0, 90, 180, 270].contains(r)) {
-      return 'Putaran mesti 0, 90, 180 atau 270';
+      return l.valRotateChoice;
     }
   }
   return null;
 }
 
-String? _leafError(String path, String name, Object? v, Object? d) {
+String? _leafError(String path, String name, Object? v, Object? d, S s) {
   // The logo holds an image: empty (none), a plain asset id or an adjusted image.
   if (name == 'logo') {
-    return v == '' ? null : imageRefError(v, allowSquare: true);
+    return v == '' ? null : imageRefError(v, allowSquare: true, s: s);
   }
   final rule = ruleFor(name);
-  if (d is bool) return v is bool ? null : 'Mesti hidup atau mati';
+  if (d is bool) return v is bool ? null : s.valBool;
   if (d is num) {
     if (rule != null && rule.type == SettingRuleType.intOf) {
       return _isInteger(v) && rule.vals.contains('${(v as num).toInt()}')
           ? null
-          : 'Mesti salah satu daripada: ${rule.vals.join(', ')}';
+          : s.valOneOf(rule.vals.join(', '));
     }
     final min = rule != null && rule.type == SettingRuleType.int ? rule.min : 0;
     final max = rule != null && rule.type == SettingRuleType.int
@@ -565,33 +593,33 @@ String? _leafError(String path, String name, Object? v, Object? d) {
         : 1000000;
     return _isInteger(v) && (v as num) >= min && v <= max
         ? null
-        : 'Mesti nombor bulat $min hingga $max';
+        : s.valWholeNumber(min, max);
   }
   if (d is String) {
-    if (v is! String) return 'Mesti teks';
+    if (v is! String) return s.valMustText;
     if (v.length > maxText) {
-      return 'Terlalu panjang (paling banyak $maxText aksara)';
+      return s.valTooLong(maxText);
     }
     if (rule != null &&
         rule.type == SettingRuleType.enumOf &&
         !rule.vals.contains(v)) {
-      return 'Mesti salah satu daripada: ${rule.vals.join(', ')}';
+      return s.valOneOf(rule.vals.join(', '));
     }
     if (rule != null &&
         rule.type == SettingRuleType.regex &&
         !rule.re!.hasMatch(v)) {
-      return 'Mesti ${rule.what}';
+      return s.valMustWhat(_whatText(s, rule.what));
     }
     if (rule != null && rule.type == SettingRuleType.sourceUrl) {
-      return sourceUrlError(v);
+      return sourceUrlError(v, s);
     }
     if (rule != null && rule.type == SettingRuleType.text) {
-      if (v.trim().length < rule.min) return 'Wajib diisi';
+      if (v.trim().length < rule.min) return s.valRequired;
       if (v.length > rule.max) {
-        return 'Terlalu panjang (paling banyak ${rule.max} aksara)';
+        return s.valTooLong(rule.max);
       }
       if (rule.re != null && v != '' && !rule.re!.hasMatch(v)) {
-        return 'Mesti ${rule.what ?? 'sah'}';
+        return s.valMustWhat(_whatText(s, rule.what));
       }
     }
     return null;
@@ -604,48 +632,48 @@ String? _leafError(String path, String name, Object? v, Object? d) {
           v >= rule.min &&
           v <= rule.max &&
           double.parse(v.toStringAsFixed(4)) == v;
-      return ok ? null : 'Mesti nombor ${rule.min} hingga ${rule.max} dengan paling banyak 4 titik perpuluhan, atau kosong';
+      return ok ? null : s.valDecimal(rule.min, rule.max);
     }
     if (name == 'override') {
       return v == null || (v is String && hexColourRe.hasMatch(v))
           ? null
-          : 'Tulis # diikuti 6 aksara, contoh #F6E7B8';
+          : s.valColourHex;
     }
     if (name == 'audioFile') {
       return v == null || (v is String && _assetIdRe.hasMatch(v))
           ? null
-          : 'Mesti fail audio yang sah';
+          : s.valAudioFile;
     }
     if (name == 'suspendedAt') {
       return v == null || (v is String && _isIsoInstant(v))
           ? null
-          : 'Mesti masa yang sah';
+          : s.valTimeValid;
     }
     if (v is String && v.length > maxText) {
-      return 'Terlalu panjang (paling banyak $maxText aksara)';
+      return s.valTooLong(maxText);
     }
-    return v == null || v is String ? null : 'Mesti teks atau kosong';
+    return v == null || v is String ? null : s.valTextOrEmpty;
   }
   if (d is List) {
-    if (v is! List || !v.every((x) => x is String)) return 'Mesti senarai teks';
+    if (v is! List || !v.every((x) => x is String)) return s.valTextList;
     if (v.any((x) => (x as String).length > maxText)) {
-      return 'Item mesti paling banyak $maxText aksara';
+      return s.valItemMax(maxText);
     }
     if (name == 'sourceOrder') {
       const want = ['official', 'calc', 'file'];
       if (v.length != 3 || !want.every((x) => v.contains(x))) {
-        return 'Mesti senaraikan official, calc dan file sekali sahaja';
+        return s.valSourceOrder;
       }
     }
     if (name == 'images') {
-      if (v.length > maxImages) return 'Paling banyak $maxImages gambar';
+      if (v.length > maxImages) return s.valMaxImages(maxImages);
       if (!v.every(_validImage)) {
-        return 'Gambar mesti nama sedia ada (a-z, 0-9, -) atau /uploads/<nama fail>';
+        return s.valImageNames;
       }
     }
     return null;
   }
-  return 'Tetapan ini tidak disokong';
+  return s.valUnsupported;
 }
 
 void _checkObject(
@@ -654,22 +682,23 @@ void _checkObject(
   Object? v,
   Map<Object?, Object?> d,
   List<SettingError> errors,
+  S s,
 ) {
   if (v is! Map) {
-    errors.add(SettingError(path, 'Mesti objek'));
+    errors.add(SettingError(path, s.valMustObject));
     return;
   }
   for (final k in v.keys) {
     final sub = '$path.$k';
     if (!d.containsKey(k)) {
-      errors.add(SettingError(sub, 'Tetapan tidak dikenali'));
+      errors.add(SettingError(sub, s.valUnknownSetting));
       continue;
     }
     final dv = d[k];
     if (_isPlain(dv)) {
-      _checkObject(sub, name, v[k], dv as Map<Object?, Object?>, errors);
+      _checkObject(sub, name, v[k], dv as Map<Object?, Object?>, errors, s);
     } else {
-      final e = _leafError(sub, _leafRuleName(name, '$k'), v[k], dv);
+      final e = _leafError(sub, _leafRuleName(name, '$k'), v[k], dv, s);
       if (e != null) errors.add(SettingError(sub, e));
     }
   }
@@ -682,6 +711,7 @@ void _crossFieldRules(
   String key,
   Map<Object?, Object?> merged,
   List<SettingError> errors,
+  S s,
 ) {
   if (key != 'ayatCard') return;
   final surah = merged['surah'];
@@ -693,19 +723,19 @@ void _crossFieldRules(
   final name = row[1] as String;
   final ayat = row[2] as int;
   if (to > ayat) {
-    errors.add(SettingError('ayatTo', '$name ada $ayat ayat'));
+    errors.add(SettingError('ayatTo', s.valSurahAyat(name, ayat)));
     return;
   }
   if (from > ayat) {
-    errors.add(SettingError('ayatFrom', '$name ada $ayat ayat'));
+    errors.add(SettingError('ayatFrom', s.valSurahAyat(name, ayat)));
     return;
   }
   if (from > to) {
-    errors.add(const SettingError('ayatFrom', 'Ayat dari mesti sebelum atau sama dengan Ayat hingga'));
+    errors.add(SettingError('ayatFrom', s.valAyatOrder));
     return;
   }
   if (to - from > 4) {
-    errors.add(const SettingError('ayatTo', 'Paling banyak 5 ayat sekali paparan'));
+    errors.add(SettingError('ayatTo', s.valAyatMax));
   }
 }
 
@@ -716,39 +746,41 @@ ValidationResult validateFeatureSettings(
   String key,
   Object? patch, {
   Map<Object?, Object?>? current,
+  S? s,
 }) {
+  final S l = s ?? sBm;
   final f = _byKey[key];
   if (f == null) {
-    return ValidationResult([SettingError(key, 'Ciri tidak dikenali')]);
+    return ValidationResult([SettingError(key, l.valUnknownFeature)]);
   }
   if (patch is! Map) {
-    return const ValidationResult([SettingError('', 'Tetapan mesti objek')]);
+    return ValidationResult([SettingError('', l.valSettingsObject)]);
   }
   final errors = <SettingError>[];
   for (final k in patch.keys) {
     if (k == 'enabled') {
       final v = patch['enabled'];
       if (v is! bool) {
-        errors.add(const SettingError('enabled', 'Mesti hidup atau mati'));
+        errors.add(SettingError('enabled', l.valBool));
       } else if (f.locked && !v) {
         errors.add(
           SettingError(
             'enabled',
-            '${f.labelMs} sentiasa hidup dan tidak boleh dimatikan',
+            l.valAlwaysOn(featureLabel(f, appLangOfS(l))),
           ),
         );
       }
       continue;
     }
     if (k is! String || !f.defaults.containsKey(k)) {
-      errors.add(SettingError('$k', 'Tetapan tidak dikenali'));
+      errors.add(SettingError('$k', l.valUnknownSetting));
       continue;
     }
     final dv = f.defaults[k];
     if (_isPlain(dv)) {
-      _checkObject(k, k, patch[k], dv as Map<Object?, Object?>, errors);
+      _checkObject(k, k, patch[k], dv as Map<Object?, Object?>, errors, l);
     } else {
-      final e = _leafError(k, k, patch[k], dv);
+      final e = _leafError(k, k, patch[k], dv, l);
       if (e != null) errors.add(SettingError(k, e));
     }
   }
@@ -759,7 +791,7 @@ ValidationResult validateFeatureSettings(
           patch.containsKey('ayatFrom') ||
           patch.containsKey('ayatTo'));
   if (current != null && errors.isEmpty && touchesRule) {
-    _crossFieldRules(key, {...f.defaults, ...current, ...patch}, errors);
+    _crossFieldRules(key, {...f.defaults, ...current, ...patch}, errors, l);
   }
   return errors.isEmpty ? ValidationResult.valid : ValidationResult(errors);
 }

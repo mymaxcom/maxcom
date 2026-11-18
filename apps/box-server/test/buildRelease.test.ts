@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { must } from './helpers/must.ts';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const script = join(repoRoot, 'scripts', 'build-release.ps1');
@@ -13,7 +14,7 @@ const pinsPath = join(repoRoot, 'scripts', 'release-pins.json');
 const win = process.platform === 'win32';
 const pkgVersion = JSON.parse(readFileSync(join(repoRoot, 'apps', 'box-server', 'package.json'), 'utf8')).version as string;
 const versions = JSON.parse(readFileSync(join(repoRoot, 'versions.json'), 'utf8')) as Record<string, string>;
-const winVersion = versions['kiosk-server-windows'];
+const winVersion = must(versions['kiosk-server-windows'], 'kiosk-server-windows version');
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -83,11 +84,12 @@ describe('build-release.ps1 (static)', () => {
 });
 
 describe('release-pins.json', () => {
-  const pins = JSON.parse(readFileSync(pinsPath, 'utf8')) as Record<string, Record<string, string>>;
+  const pins = JSON.parse(readFileSync(pinsPath, 'utf8')) as Record<string, { version: string; url: string; licence: string; sha256: string }>;
+  const pin = (name: string) => must(pins[name], `pin ${name}`);
   it('has node, mediamtx and ffmpeg with version, https url, sha256 and licence', () => {
     expect(Object.keys(pins).sort()).toEqual(['ffmpeg', 'mediamtx', 'node']);
     for (const name of Object.keys(pins)) {
-      const e = pins[name];
+      const e = pin(name);
       expect(typeof e.version, name).toBe('string');
       expect(e.version.length, name).toBeGreaterThan(0);
       expect(e.url.startsWith('https://'), name).toBe(true);
@@ -98,13 +100,13 @@ describe('release-pins.json', () => {
     }
   });
   it('uses a versioned ffmpeg url, not the moving release-essentials zip', () => {
-    expect(pins.ffmpeg.url).not.toContain('release-essentials');
-    expect(pins.ffmpeg.url).toContain(pins.ffmpeg.version);
+    expect(pin('ffmpeg').url).not.toContain('release-essentials');
+    expect(pin('ffmpeg').url).toContain(pin('ffmpeg').version);
   });
   it('names zips the setup can read (node-v<ver>-win-x64.zip, mediamtx_<ver>_windows_amd64.zip)', () => {
-    expect(pins.node.url.endsWith(`/node-v${pins.node.version}-win-x64.zip`)).toBe(true);
-    expect(pins.mediamtx.url.endsWith(`/mediamtx_${pins.mediamtx.version}_windows_amd64.zip`)).toBe(true);
-    expect(pins.mediamtx.version).toMatch(/^v\d+\.\d+\.\d+$/);
+    expect(pin('node').url.endsWith(`/node-v${pin('node').version}-win-x64.zip`)).toBe(true);
+    expect(pin('mediamtx').url.endsWith(`/mediamtx_${pin('mediamtx').version}_windows_amd64.zip`)).toBe(true);
+    expect(pin('mediamtx').version).toMatch(/^v\d+\.\d+\.\d+$/);
   });
 });
 

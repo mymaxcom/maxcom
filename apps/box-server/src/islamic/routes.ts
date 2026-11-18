@@ -1,3 +1,4 @@
+import { reqSurau } from '../reqSurau.ts';
 import { createReadStream, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -11,11 +12,11 @@ export interface IslamicRouteDeps {
   /** Injected so tests never touch the network. */
   fetchImpl?: typeof fetch;
   /** Current `tilawah.reciter` folder name. */
-  getReciter: () => string;
+  getReciter: (surauId: string) => string;
   /** Current `tilawah.cacheMaxMb`. */
-  getCacheMaxMb: () => number;
+  getCacheMaxMb: (surauId: string) => number;
   /** Current `dataSources` base URLs; the defaults when absent. */
-  getSourceUrls?: () => { quranText: string; quranAudio: string };
+  getSourceUrls?: (surauId: string) => { quranText: string; quranAudio: string };
   /** Who is acting; Plan 3 supplies `user:<id>`. */
   actorOf?: (request: FastifyRequest) => string;
   /** Receives one line per fetch job start, for the change log. */
@@ -92,15 +93,16 @@ export function registerIslamicRoutes(app: FastifyInstance, deps: IslamicRouteDe
     return quran;
   }
 
-  app.get('/api/islamic/status', async () => {
+  app.get('/api/islamic/status', async (request) => {
+    const surauId = reqSurau(request);
     const q = quranNow();
-    const reciter = deps.getReciter();
+    const reciter = deps.getReciter(surauId);
     const surahs = RECITER_RE.test(reciter) ? cachedSurahs(dataDir, reciter) : [];
     return {
       quran: q
         ? { present: true, version: q.version, fetchedAt: q.fetchedAt, ayatCount: countAyat(q) }
         : { present: false },
-      audio: { reciter, surahs, bytes: audioCacheBytes(dataDir), cacheMaxMb: deps.getCacheMaxMb() },
+      audio: { reciter, surahs, bytes: audioCacheBytes(dataDir), cacheMaxMb: deps.getCacheMaxMb(surauId) },
     };
   });
 
@@ -117,7 +119,8 @@ export function registerIslamicRoutes(app: FastifyInstance, deps: IslamicRouteDe
     } else {
       return reply.code(400).send({ errors: ['body must be {what:"quran"} or {what:"audio",surah:1..114}'] });
     }
-    const reciter = deps.getReciter();
+    const surauId = reqSurau(request);
+    const reciter = deps.getReciter(surauId);
     if (task.what === 'audio' && !RECITER_RE.test(reciter)) {
       return reply.code(400).send({ errors: ['tilawah.reciter is not a valid reciter folder name'] });
     }
@@ -141,12 +144,12 @@ export function registerIslamicRoutes(app: FastifyInstance, deps: IslamicRouteDe
     void (async () => {
       try {
         if (task.what === 'quran') {
-          saveQuran(dataDir, await fetchQuranEnc(fetchImpl, undefined, onProgress, deps.getSourceUrls?.().quranText));
+          saveQuran(dataDir, await fetchQuranEnc(fetchImpl, undefined, onProgress, deps.getSourceUrls?.(surauId).quranText));
         } else {
           const count = AYAT_COUNTS[task.surah - 1] ?? 0;
           await fetchEveryAyahSurah(fetchImpl, dataDir, reciter, task.surah, count, onProgress, {
-            cacheMaxMb: deps.getCacheMaxMb(),
-            sourceUrl: deps.getSourceUrls?.().quranAudio,
+            cacheMaxMb: deps.getCacheMaxMb(surauId),
+            sourceUrl: deps.getSourceUrls?.(surauId).quranAudio,
           });
         }
         job.state = 'done';

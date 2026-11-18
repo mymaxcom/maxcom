@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
-import '../features/enrol/enrol_flow.dart' show TrustError;
+import '../features/enrol/enrol_flow.dart' show TrustError, TrustKind;
 import 'box_client.dart' show BoxUnreachable;
 
 const bool pinsCa = true;
@@ -33,12 +33,12 @@ http.Client createClient(
   Duration connect, {
   String? Function(String host)? addressOf,
 }) {
-  if (caDer == null) throw const TrustError('Sijil akar tiada. Daftar semula');
+  if (caDer == null) throw TrustError.of(TrustKind.rootMissing);
   final ctx = SecurityContext(withTrustedRoots: false);
   try {
     ctx.setTrustedCertificatesBytes(utf8.encode(_pem(caDer)));
   } on TlsException {
-    throw const TrustError('Sijil akar tidak sah');
+    throw TrustError.of(TrustKind.rootInvalid);
   }
   final hc = HttpClient(context: ctx);
   hc.connectionTimeout = connect;
@@ -99,13 +99,13 @@ Future<Uint8List> fetchUnverified(
     final res = await req.close().timeout(read);
     if (res.statusCode != 200) {
       await res.drain<void>();
-      throw const TrustError('Sijil akar tidak dapat diambil dari kotak');
+      throw TrustError.of(TrustKind.rootFetch);
     }
     final out = BytesBuilder(copy: false);
     await for (final chunk in res.timeout(read)) {
       out.add(chunk);
       if (out.length > maxBytes) {
-        throw const TrustError('Sijil akar tidak sah');
+        throw TrustError.of(TrustKind.rootInvalid);
       }
     }
     return out.takeBytes();

@@ -33,8 +33,8 @@ const revoked = (db: DatabaseSync, id: string): boolean => db.prepare('SELECT re
 describe('gaining the Pentadbir MAXCOM role ends the old sessions', () => {
   it('setRoles: gaining superadmin revokes the sessions; another role change does not', () => {
     const cloud = memDb('cloud');
-    const u = createUser(cloud, { name: 'Pentadbir', roles: ['admin'] }, 'test');
-    const other = createUser(cloud, { name: 'Lain', roles: ['admin'] }, 'test');
+    const u = createUser(cloud, { name: 'Pentadbir', roles: ['admin'] }, 'test', 'sdm');
+    const other = createUser(cloud, { name: 'Lain', roles: ['admin'] }, 'test', 'sdm');
     const s1 = openSession(cloud, u.id);
     const s2 = openSession(cloud, other.id);
     setRoles(cloud, u.id, ['admin', 'ajk'], 'test');
@@ -44,20 +44,20 @@ describe('gaining the Pentadbir MAXCOM role ends the old sessions', () => {
     expect(revoked(cloud, s2)).toBe(false);
     // the session opened afterwards (with the new role) stays; taking the role away is not a gain
     const s3 = openSession(cloud, u.id);
-    setRoles(cloud, createUser(cloud, { name: 'Ketiga', roles: ['admin'] }, 'test').id, ['admin', 'superadmin'], 'test'); // so the demotion is allowed
+    setRoles(cloud, createUser(cloud, { name: 'Ketiga', roles: ['admin'] }, 'test', 'sdm').id, ['admin', 'superadmin'], 'test'); // so the demotion is allowed
     setRoles(cloud, u.id, ['admin', 'ajk'], 'test');
     expect(revoked(cloud, s3)).toBe(false);
   });
 
   it('putUserSynced (a cloud entry on a box): gaining superadmin revokes the sessions', () => {
     const box = memDb('box');
-    createUser(box, { name: 'Pentadbir Surau', roles: ['admin'] }, 'test');
+    createUser(box, { name: 'Pentadbir Surau', roles: ['admin'] }, 'test', 'sdm');
     const T = '2026-11-09T10:00:00.000Z';
     const entry = (roles: string[], at: string): FeedEntry => ({
       seq: 1, entity: 'user', entityId: 'u-cloud', rev: `${at}|dev-y`, editedAt: at, syncedAt: at, actor: 'user:x', deviceId: null, origin: 'cloud', opId: null,
       after: { name: 'Dari Awan', roles, active: true },
     });
-    const ctx = { now: new Date('2026-11-09T10:30:00.000Z'), origin: 'cloud', actor: 'user:x', dataDir: '.' };
+    const ctx = { surauId: 'sdm', now: new Date('2026-11-09T10:30:00.000Z'), origin: 'cloud', actor: 'user:x', dataDir: '.' };
     expect(applyFeedEntry(box, entry(['admin'], T), ctx).status).toBe('applied');
     const s = openSession(box, 'u-cloud');
     expect(applyFeedEntry(box, entry(['admin', 'ajk'], '2026-11-09T10:10:00.000Z'), ctx).status).toBe('applied');
@@ -68,8 +68,8 @@ describe('gaining the Pentadbir MAXCOM role ends the old sessions', () => {
 
   it('promoteSuperadmin revokes the sessions of the promoted user only', () => {
     const cloud = memDb('cloud');
-    const u = createUser(cloud, { name: 'Pentadbir', roles: ['admin'] }, 'test');
-    const other = createUser(cloud, { name: 'Lain', roles: ['admin'] }, 'test');
+    const u = createUser(cloud, { name: 'Pentadbir', roles: ['admin'] }, 'test', 'sdm');
+    const other = createUser(cloud, { name: 'Lain', roles: ['admin'] }, 'test', 'sdm');
     const s1 = openSession(cloud, u.id);
     const s2 = openSession(cloud, other.id);
     promoteSuperadmin(cloud, u.id, 'local');

@@ -30,7 +30,7 @@ describe('surau.ini app_lock', () => {
     const log = collect();
     const r = applySurauIni(db, d, log.logger);
     expect(r.applied).toContain('appLock');
-    expect(getSettings(db).appLock.enabled).toBe(true);
+    expect(getSettings(db, 'sdm').appLock.enabled).toBe(true);
     const actor = db.prepare("SELECT actor FROM change_log WHERE entity = 'settings' AND entity_id = 'appLock'").get() as { actor: string };
     expect(actor.actor).toBe(SURAU_INI_ACTOR);
     db.close();
@@ -48,7 +48,7 @@ describe('surau.ini app_lock', () => {
       const log = collect();
       const r = applySurauIni(db, d, log.logger);
       expect(r.refused, line).toEqual([]);
-      expect(getSettings(db).appLock.enabled, line).toBe(want);
+      expect(getSettings(db, 'sdm').appLock.enabled, line).toBe(want);
       // an explicit off is stored as a row, so a later ini never overrides the app's choice
       expect(db.prepare("SELECT 1 AS x FROM settings WHERE feature = 'appLock'").get(), line).toBeDefined();
       db.close();
@@ -59,11 +59,11 @@ describe('surau.ini app_lock', () => {
     const d = tmp();
     writeFileSync(join(d, 'surau.ini'), 'name = Dari Fail\napp_lock = on\n');
     const db = openDb(join(d, 'b.db'));
-    putFeature(db, 'surauInfo', { name: 'Dipilih Admin' }, 'user:1');
+    putFeature(db, 'surauInfo', { name: 'Dipilih Admin' }, 'user:1', undefined, 'sdm');
     const log = collect();
     const r = applySurauIni(db, d, log.logger);
-    expect(getSettings(db).surauInfo.name).toBe('Dipilih Admin');
-    expect(getSettings(db).appLock.enabled).toBe(true);
+    expect(getSettings(db, 'sdm').surauInfo.name).toBe('Dipilih Admin');
+    expect(getSettings(db, 'sdm').appLock.enabled).toBe(true);
     expect(r.applied).toContain('appLock');
     expect(r.skipped).toBe('already-saved');
     expect(r.skippedKeys.info).toBe('already-saved');
@@ -75,10 +75,10 @@ describe('surau.ini app_lock', () => {
     const d = tmp();
     writeFileSync(join(d, 'surau.ini'), 'app_lock = on\n');
     const db = openDb(join(d, 'e.db'));
-    putFeature(db, 'appLock', { enabled: false }, 'user:1');
+    putFeature(db, 'appLock', { enabled: false }, 'user:1', undefined, 'sdm');
     const log = collect();
     const r = applySurauIni(db, d, log.logger);
-    expect(getSettings(db).appLock.enabled).toBe(false);
+    expect(getSettings(db, 'sdm').appLock.enabled).toBe(false);
     expect(r.applied).not.toContain('appLock');
     expect(r.skippedKeys.appLock).toBe('already-saved');
     expect(log.warns.some((w) => /app_?lock/i.test(w))).toBe(true);
@@ -107,16 +107,16 @@ describe('surau.ini app_lock', () => {
     const d = tmp();
     writeFileSync(join(d, 'surau.ini'), 'zone = SGR02\n');
     const db = openDb(join(d, 'g.db'));
-    putFeature(db, 'surauInfo', { name: 'X' }, 'user:1');
+    putFeature(db, 'surauInfo', { name: 'X' }, 'user:1', undefined, 'sdm');
     const r = applySurauIni(db, d, collect().logger);
     expect(r.applied).toContain('zone');
-    expect(getSettings(db).zone.zone).toBe('SGR02');
+    expect(getSettings(db, 'sdm').zone.zone).toBe('SGR02');
     // a second start never overrides
-    putFeature(db, 'zone', { zone: 'SGR03' }, 'user:1');
+    putFeature(db, 'zone', { zone: 'SGR03' }, 'user:1', undefined, 'sdm');
     const r2 = applySurauIni(db, d, collect().logger);
     expect(r2.applied).not.toContain('zone');
     expect(r2.skippedKeys.zone).toBe('already-saved');
-    expect(getSettings(db).zone.zone).toBe('SGR03');
+    expect(getSettings(db, 'sdm').zone.zone).toBe('SGR03');
     db.close();
   });
 });

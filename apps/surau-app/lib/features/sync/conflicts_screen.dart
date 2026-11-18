@@ -5,14 +5,19 @@
 // again (`Guna versi saya semula`); any can be put away (`Buang`).
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../app/shell.dart';
 import '../../app/theme.dart';
 import '../../content/kinds.dart';
+import '../../finance/ledger.dart' show formatRm;
 import '../../l10n/generated/s.dart';
 import '../../screens/widgets/pieces.dart';
+import '../common/error_text.dart' show kErrorCodeTexts;
+import '../labels.dart' show appLangOf, appLangOfS, featureLabel, monthWord, settingLabel;
+import '../labels_content.dart' show monthWordsMs;
 import '../validate.dart' show featureByKey;
 import 'sync_actions.dart';
 import 'sync_status_chip.dart';
@@ -93,7 +98,7 @@ String conflictEntityLabel(S s, Map<String, dynamic> c) {
   final mine = c['mine'];
   if (entity.startsWith('content:')) {
     final spec = contentKindByKey(entity.substring('content:'.length));
-    final kind = spec?.labelMs ?? entity.substring('content:'.length);
+    final kind = spec?.label(appLangOfS(s)) ?? entity.substring('content:'.length);
     String? title;
     if (mine is Map) {
       for (final k in const [
@@ -114,11 +119,15 @@ String conflictEntityLabel(S s, Map<String, dynamic> c) {
     }
     return '$kind: ${title ?? id}';
   }
+  if (entity == 'finance:entry' && mine is Map) return financeEntryWords(s, c);
   switch (entity) {
     case 'settings':
-      return '${s.conflictEntitySettings}: ${featureByKey(id)?.labelMs ?? id}';
+      return '${s.conflictEntitySettings}: ${featureByKey(id) == null ? id : featureLabel(featureByKey(id)!, appLangOfS(s))}';
     case 'user':
-      return '${s.conflictEntityUser}: $id';
+      final name = (c['userName'] as String?) ?? (mine is Map ? mine['name'] as String? : null);
+      return name == null || name.isEmpty
+          ? '${s.conflictEntityUser}: $id'
+          : '${s.conflictEntityUser}: $name ($id)';
     case 'device':
       return '${s.conflictEntityDevice}: $id';
     case 'asset':
@@ -127,18 +136,63 @@ String conflictEntityLabel(S s, Map<String, dynamic> c) {
   return '$entity: $id';
 }
 
-/// The refusal in BM, or null for an edit that lost to a later one.
-String? conflictReasonWords(S s, String? reason) => switch (reason) {
-  'superseded' => null,
-  'forbidden' => s.conflictRefusedForbidden,
-  'live_only' => s.conflictRefusedLiveOnly,
-  'too_large' => s.conflictRefusedTooLarge,
-  'invalid' => s.conflictRefusedInvalid,
-  _ => s.conflictRefusedOther,
-};
+/// `Tabung Contoh, RM 120.00, 5 Okt`: a finance entry by its tabung, amount
+/// and date (K6). The tabung name was kept with the card when it was made.
+String financeEntryWords(S s, Map<String, dynamic> c) {
+  final mine = c['mine'];
+  final p = mine is Map ? mine : const <String, dynamic>{};
+  final amount = p['amountSen'];
+  final date = DateTime.tryParse('${p['entryDate'] ?? ''}');
+  final lang = appLangOfS(s);
+  return [
+    (c['fundName'] as String?) ?? s.ra6ConflictEntityFinance,
+    if (amount is int) formatRm(amount),
+    if (date != null)
+      '${date.day} ${monthWord(date.month, lang, ms: monthWordsMs[date.month - 1])}',
+  ].join(', ');
+}
+
+/// The refusal in the app language, or null for an edit that lost to a later
+/// one. A partial settings save names the settings that were left out.
+String? conflictReasonWords(S s, String? reason, {List<String> skipped = const []}) {
+  switch (reason) {
+    case 'superseded':
+      return null;
+    case 'partial':
+      final lang = appLangOfS(s);
+      return s.ra6ConflictPartial(
+        [for (final p in skipped) settingLabel(p.split('.').last, lang)].join(s.ra5ListSeparator),
+      );
+    case 'forbidden':
+      return s.conflictRefusedForbidden;
+    case 'live_only':
+      return s.conflictRefusedLiveOnly;
+    case 'too_large':
+      return s.conflictRefusedTooLarge;
+    case 'invalid':
+      return s.conflictRefusedInvalid;
+    case 'month_closed':
+      return s.ra6RefusedMonthClosed;
+    case 'fund_archived':
+      return s.ra6RefusedFundArchived;
+    case 'already_voided':
+      return s.ra6RefusedAlreadyVoided;
+    case 'opening_exists':
+      return s.ra6RefusedOpeningExists;
+    case 'blob_missing':
+      return s.ra6RefusedBlobMissing;
+    case 'user_inactive':
+      return s.ra6RefusedUserInactive;
+    case 'last_admin':
+      return s.ra6RefusedLastAdmin;
+  }
+  final known = reason == null ? null : kErrorCodeTexts[reason];
+  return known != null ? known(s, const {}) : s.conflictRefusedOther;
+}
 
 /// The fields of the person's edit as `label: value` lines, short.
-List<(String, String)> conflictFieldLines(Map<String, dynamic> c) {
+List<(String, String)> conflictFieldLines(Map<String, dynamic> c, S s) {
+  final lang = appLangOfS(s);
   final mine = c['mine'];
   if (mine is! Map) return const [];
   final entity = (c['entity'] as String?) ?? '';
@@ -164,10 +218,27 @@ List<(String, String)> conflictFieldLines(Map<String, dynamic> c) {
           !(e.key as String).startsWith('_') &&
           e.key != 'id')
         (
-          spec.fieldOrNull(e.key as String)?.labelMs ?? e.key as String,
+          spec.fieldOrNull(e.key as String) == null
+              ? e.key as String
+              : spec.fieldLabel(spec.fieldOrNull(e.key as String)!, lang),
           show(e.value),
         ),
   ].take(6).toList();
+}
+
+/// The card as plain lines for a message to the helper: what, why, and the
+/// entry's own fields (never a photo's bytes).
+String conflictDetails(S s, Map<String, dynamic> c) {
+  final reason = conflictReasonWords(s, c['reason'] as String?) ?? '';
+  final mine = c['mine'];
+  return [
+    conflictEntityLabel(s, c),
+    reason,
+    '${c['reason']}',
+    if (mine is Map)
+      for (final e in mine.entries)
+        if (e.key is String && !(e.key as String).startsWith('_')) '${e.key}: ${e.value}',
+  ].where((l) => l.isNotEmpty).join('\n');
 }
 
 class ConflictCard extends ConsumerStatefulWidget {
@@ -210,10 +281,15 @@ class _ConflictCardState extends ConsumerState<ConflictCard> {
     final c = widget.conflict;
     String when(Object? iso) {
       final t = _parse(iso);
-      return t == null ? '' : stampWords(deps.toLocal(t), today: today);
+      return t == null ? '' : stampWords(deps.toLocal(t), today: today, lang: appLangOf(context));
     }
 
-    final reason = conflictReasonWords(s, c['reason'] as String?);
+    final reason = conflictReasonWords(
+      s,
+      c['reason'] as String?,
+      skipped: [for (final p in (c['skipped'] as List? ?? const [])) '$p'],
+    );
+    final isFinance = (c['entity'] as String? ?? '').startsWith('finance:');
     final winner = c['winner'];
     final String verdict;
     if (reason != null) {
@@ -223,7 +299,7 @@ class _ConflictCardState extends ConsumerState<ConflictCard> {
       final name = (w['userName'] as String?) ?? s.conflictSomeoneElse;
       verdict = s.conflictWinner(name, when(w['editedAt']));
     }
-    final lines = conflictFieldLines(c);
+    final lines = conflictFieldLines(c, s);
     final deleted = c['kind'] == 'content.delete';
     final mineAt = c['editedAt'] ?? c['at'];
 
@@ -234,6 +310,14 @@ class _ConflictCardState extends ConsumerState<ConflictCard> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(conflictEntityLabel(s, c), style: text.titleMedium),
+            if (isFinance && reason != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                s.ra6Rejected,
+                key: const ValueKey('conflict-rejected'),
+                style: text.labelLarge!.copyWith(color: SurauColors.danger, fontWeight: FontWeight.w800),
+              ),
+            ],
             const SizedBox(height: 4),
             Text(
               s.conflictMine(when(mineAt)),
@@ -246,8 +330,8 @@ class _ConflictCardState extends ConsumerState<ConflictCard> {
                 decoration: BoxDecoration(
                   color: SurauColors.paper,
                   borderRadius: BorderRadius.circular(SurauTheme.radiusControl),
-                  border: const Border(
-                    left: BorderSide(color: SurauColors.gold, width: 4),
+                  border: const BorderDirectional(
+                    start: BorderSide(color: SurauColors.gold, width: 4),
                   ),
                 ),
                 child: deleted
@@ -309,6 +393,15 @@ class _ConflictCardState extends ConsumerState<ConflictCard> {
               spacing: 8,
               runSpacing: 4,
               children: [
+                if (isFinance)
+                  TextButton(
+                    key: const ValueKey('conflict-copy'),
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: conflictDetails(s, c)));
+                      if (context.mounted) toast(context, s.ra6DetailsCopied);
+                    },
+                    child: Text(s.ra6CopyDetails),
+                  ),
                 TextButton(
                   onPressed: _busy
                       ? null

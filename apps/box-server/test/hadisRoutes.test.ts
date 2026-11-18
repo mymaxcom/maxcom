@@ -50,7 +50,7 @@ const ones = (c: Ctx) => c.fake.calls.filter((u) => u.includes('/hadeeths/one/')
 describe('POST /api/hadis/add', () => {
   it('saves a hadis from HadeethEnc: 201, deterministic id, BM attribution, grade, intro, kiosk version bumped', async () => {
     const c = await setup();
-    const before = getVersion(c.app.surau.db);
+    const before = getVersion(c.app.surau.db, 'sdm');
     const r = await add(c, '66512');
     expect(r.statusCode).toBe(201);
     const item = r.json().item;
@@ -62,8 +62,8 @@ describe('POST /api/hadis/add', () => {
     expect(item.textMs.startsWith(item.intro)).toBe(true);
     expect(item.ext.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(item)).not.toContain('PENJELASAN');
-    expect(getVersion(c.app.surau.db)).toBeGreaterThan(before);
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')?.textMs).toBe(item.textMs);
+    expect(getVersion(c.app.surau.db, 'sdm')).toBeGreaterThan(before);
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')?.textMs).toBe(item.textMs);
     expect(c.fake.calls[0]).toBe(`${BASE}/hadeeths/one/?language=ms&id=66512`);
   });
 
@@ -92,7 +92,7 @@ describe('POST /api/hadis/add', () => {
       const r = await add(c, id);
       expect(r.statusCode, gradeAr).toBe(400);
       expect(r.json().code).toBe('grade_blocked');
-      expect(getItem(c.app.surau.db, 'hadis', `hadeethenc-${id}`)).toBeNull();
+      expect(getItem(c.app.surau.db, 'hadis', `hadeethenc-${id}`, 'sdm')).toBeNull();
     }
   });
 
@@ -109,12 +109,12 @@ describe('POST /api/hadis/add', () => {
   it('the 501st saved hadis is 409 limit_reached, before any request', async () => {
     const c = await setup();
     const { db } = c.app.surau;
-    for (let i = 0; i < 500; i++) putItem(db, 'hadis', { id: `own-${i}`, textMs: `Teks ${i}`, source: 'Riwayat Muslim' }, 'test');
+    for (let i = 0; i < 500; i++) putItem(db, 'hadis', { id: `own-${i}`, textMs: `Teks ${i}`, source: 'Riwayat Muslim' }, 'test', undefined, 'sdm');
     const r = await add(c, '66512');
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe('limit_reached');
     expect(c.fake.calls).toEqual([]);
-    expect(getItem(db, 'hadis', 'hadeethenc-66512')).toBeNull();
+    expect(getItem(db, 'hadis', 'hadeethenc-66512', 'sdm')).toBeNull();
   });
 
   it('HadeethEnc down or offline is 503 and no row; a broken answer is 502', async () => {
@@ -128,7 +128,7 @@ describe('POST /api/hadis/add', () => {
     c.fake.offline = false;
     c.fake.one.set('66514', { ...fixture('one-66512'), id: '66514', hadeeth: 5 });
     expect((await add(c, '66514')).statusCode).toBe(502);
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')).toBeNull();
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')).toBeNull();
     expect((await get(c, '/api/content/hadis')).json().items).toEqual([]);
   });
 
@@ -172,7 +172,7 @@ describe('the content route cannot change what HadeethEnc served', () => {
     expect((await put({ ...fields, ext: undefined })).statusCode).toBe(400);
     expect((await put(fields, 'forged-id')).statusCode).toBe(400);
     expect((await put({ textMs: 'x', source: 'y' }, 'hadeethenc-12')).statusCode).toBe(400);
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')).toMatchObject({ shown: false, textMs: item.textMs });
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')).toMatchObject({ shown: false, textMs: item.textMs });
     // Buang is a normal delete
     expect((await c.app.inject({ method: 'DELETE', url: '/api/content/hadis/hadeethenc-66512', headers: c.admin.headers })).statusCode).toBe(204);
     // and the hadis can be added again
@@ -184,14 +184,14 @@ describe('PUT /api/hadis/order', () => {
   it('renumbers by 1000 in one step and writes one change row per item whose order changed', async () => {
     const c = await setup();
     for (const id of ['66512', '66513']) await add(c, id);
-    putItem(c.app.surau.db, 'hadis', { id: 'own-a', textMs: 'Sendiri', source: 'Riwayat Muslim', order: 9000 }, 'test');
+    putItem(c.app.surau.db, 'hadis', { id: 'own-a', textMs: 'Sendiri', source: 'Riwayat Muslim', order: 9000 }, 'test', undefined, 'sdm');
     const rows = () => Number(c.app.surau.db.prepare("SELECT COUNT(*) AS n FROM change_log WHERE entity = 'content:hadis'").get()?.n);
     const before = rows();
-    const v = getVersion(c.app.surau.db);
+    const v = getVersion(c.app.surau.db, 'sdm');
     const r = await c.app.inject({ method: 'PUT', url: '/api/hadis/order', headers: c.admin.headers, payload: { ids: ['own-a', 'hadeethenc-66513', 'hadeethenc-66512'] } });
     expect(r.statusCode).toBe(200);
     expect(rows() - before).toBe(2); // hadeethenc-66513 was already at 2000
-    expect(getVersion(c.app.surau.db)).toBeGreaterThan(v);
+    expect(getVersion(c.app.surau.db, 'sdm')).toBeGreaterThan(v);
     const items = (await get(c, '/api/content/hadis')).json().items as { id: string; order: number }[];
     expect(Object.fromEntries(items.map((i) => [i.id, i.order]))).toEqual({ 'own-a': 1000, 'hadeethenc-66513': 2000, 'hadeethenc-66512': 3000 });
   });
@@ -203,8 +203,41 @@ describe('PUT /api/hadis/order', () => {
     for (const body of [{}, { ids: [] }, { ids: 'x' }, { ids: [1] }, { ids: ['../x'] }, { ids: ['a', 'a'] }, { ids: ['hadeethenc-66512', 'nope'] }, { ids: ['hadeethenc-66512'], x: 1 }, []]) {
       expect((await put(body)).statusCode, JSON.stringify(body)).toBe(400);
     }
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')?.order).toBe(1000);
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')?.order).toBe(1000);
     expect((await c.app.inject({ method: 'PUT', url: '/api/hadis/order', headers: c.ajk.headers, payload: { ids: ['hadeethenc-66512'] } })).statusCode).toBe(403);
+  });
+});
+
+describe('C6: one cap on every path', () => {
+  const seed = (c: Ctx, n: number): string[] => {
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const id = `own-${String(i).padStart(4, '0')}`;
+      ids.push(id);
+      // a replicated write skips the own-save cap: how a surau ends up above it
+      putItem(c.app.surau.db, 'hadis', { id, textMs: `Hadis ${i}`, source: 'Riwayat Muslim', order: (i + 1) * 1000 }, 'test', { rev: `2026-11-09T01:00:00.000Z|seed${i}`, trusted: true }, 'sdm');
+    }
+    return ids;
+  };
+
+  it('[C6] the 501st own hadis through PUT /api/content/hadis/:id is 409 hadis_full; an edit of a saved one still works', async () => {
+    const c = await setup();
+    const ids = seed(c, 500);
+    const over = await c.app.inject({ method: 'PUT', url: '/api/content/hadis/own-new', headers: c.admin.headers, payload: { textMs: 'Baru', source: 'Riwayat Muslim', order: 1 } });
+    expect(over.statusCode).toBe(409);
+    expect(over.json()).toMatchObject({ code: 'hadis_full' });
+    expect(getItem(c.app.surau.db, 'hadis', 'own-new', 'sdm')).toBeNull();
+    const edit = await c.app.inject({ method: 'PUT', url: `/api/content/hadis/${ids[3]}`, headers: c.admin.headers, payload: { textMs: 'Ubah', source: 'Riwayat Muslim', order: 4000 } });
+    expect(edit.statusCode).toBe(200);
+  });
+
+  it('[C6] a surau already above the cap (520) can still reorder', async () => {
+    const c = await setup();
+    const ids = seed(c, 520);
+    const r = await c.app.inject({ method: 'PUT', url: '/api/hadis/order', headers: c.admin.headers, payload: { ids: [...ids].reverse() } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ ok: true, count: 520 });
+    expect(getItem(c.app.surau.db, 'hadis', ids[519]!, 'sdm')?.order).toBe(1000);
   });
 });
 
@@ -314,29 +347,29 @@ describe('weekly update check and accept-update', () => {
   it('a changed text is flagged, listed, and replaces the old one only on accept', async () => {
     const c = await setup();
     await add(c, '66512');
-    const old = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')!;
+    const old = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')!;
     c.fake.one.set('66512', { ...fixture('one-66512'), hadeeth: `${String(fixture('one-66512').hadeeth)} Tambahan baharu.` });
-    const res = await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 });
+    const res = await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 }, 'sdm');
     expect(res).toEqual({ checked: 1, changed: 1 });
     expect(stateGet(c.app.surau.db, 'hadeethenc.lastUpdateCheck')).toBe(AT.toISOString());
     // the TV copy is untouched
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')?.textMs).toBe(old.textMs);
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')?.textMs).toBe(old.textMs);
 
     const list = (await get(c, '/api/hadis/updates')).json().updates;
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ itemId: 'hadeethenc-66512', providerId: '66512', changed: ['textMs'] });
     expect((await get(c, '/api/hadis/status')).json().updates).toBe(1);
 
-    const v = getVersion(c.app.surau.db);
+    const v = getVersion(c.app.surau.db, 'sdm');
     const acc = await post(c, '/api/hadis/hadeethenc-66512/accept-update', {});
     expect(acc.statusCode).toBe(200);
     expect(acc.json().gradeBlocked).toBe(false);
-    const now = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')!;
+    const now = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')!;
     expect(now.textMs).toMatch(/Tambahan baharu\.$/);
     expect(now.order).toBe(old.order);
     expect(now.shown).toBe(true);
     expect(now.ext?.digest).not.toBe(old.ext?.digest);
-    expect(getVersion(c.app.surau.db)).toBeGreaterThan(v);
+    expect(getVersion(c.app.surau.db, 'sdm')).toBeGreaterThan(v);
     expect((await get(c, '/api/hadis/updates')).json().updates).toEqual([]);
     expect((await post(c, '/api/hadis/hadeethenc-66512/accept-update', {})).statusCode).toBe(404);
   });
@@ -345,19 +378,19 @@ describe('weekly update check and accept-update', () => {
     const c = await setup();
     await add(c, '66512');
     c.fake.one.set('66512', { ...fixture('one-66512'), hadeeth: `${String(fixture('one-66512').hadeeth)} X` });
-    await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 });
-    const item = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')!;
+    await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 }, 'sdm');
+    const item = getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')!;
     const { id: _i, updatedAt: _a, updatedBy: _b, ...fields } = item;
     await c.app.inject({ method: 'PUT', url: '/api/content/hadis/hadeethenc-66512', headers: c.admin.headers, payload: { ...fields, shown: false } });
     await post(c, '/api/hadis/hadeethenc-66512/accept-update', {});
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')?.shown).toBe(false);
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')?.shown).toBe(false);
 
     c.fake.one.set('66512', { ...fixture('one-66512'), hadeeth: `${String(fixture('one-66512').hadeeth)} Y` });
-    await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 });
+    await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 }, 'sdm');
     expect(Number(c.app.surau.db.prepare('SELECT COUNT(*) AS n FROM hadis_source_updates').get()?.n)).toBe(1);
     // the source goes back to what is saved
     c.fake.one.set('66512', { ...fixture('one-66512'), hadeeth: `${String(fixture('one-66512').hadeeth)} X` });
-    const again = await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 });
+    const again = await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 }, 'sdm');
     expect(again.changed).toBe(0);
     expect(Number(c.app.surau.db.prepare('SELECT COUNT(*) AS n FROM hadis_source_updates').get()?.n)).toBe(0);
   });
@@ -366,17 +399,17 @@ describe('weekly update check and accept-update', () => {
     const c = await setup();
     await add(c, '66512');
     c.fake.one.set('66512', { ...fixture('one-66512'), grade: 'ضعيف' });
-    await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 });
+    await checkProviderUpdates(c.app.surau.db, client(c.fake), () => AT, undefined, { pauseMs: 0 }, 'sdm');
     expect((await get(c, '/api/hadis/updates')).json().updates[0].changed).toEqual(['grade']);
     const acc = await post(c, '/api/hadis/hadeethenc-66512/accept-update', {});
     expect(acc.statusCode).toBe(200);
     expect(acc.json().gradeBlocked).toBe(true);
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')).toMatchObject({ shown: false, grade: 'dhaif' });
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')).toMatchObject({ shown: false, grade: 'dhaif' });
   });
 
   it('accept-update on an item with no pending row or an own item is 404; needs content:write; bad id 400', async () => {
     const c = await setup();
-    putItem(c.app.surau.db, 'hadis', { id: 'own-1', textMs: 'x', source: 'y' }, 'test');
+    putItem(c.app.surau.db, 'hadis', { id: 'own-1', textMs: 'x', source: 'y' }, 'test', undefined, 'sdm');
     expect((await post(c, '/api/hadis/own-1/accept-update', {})).statusCode).toBe(404);
     expect((await post(c, '/api/hadis/nope/accept-update', {})).statusCode).toBe(404);
     expect((await post(c, '/api/hadis/hadeethenc-1/accept-update', {}, c.ajk)).statusCode).toBe(403);
@@ -392,26 +425,25 @@ describe('weekly update check and accept-update', () => {
     });
     for (let i = 0; i < 12; i++) {
       const id = String(80000 + i);
-      putProviderItem(db, { id: `hadeethenc-${id}`, textMs: 'x', source: 'Riwayat Muslim', grade: 'sahih', shown: true, ext: ext(id) }, 'test');
+      putProviderItem(db, { id: `hadeethenc-${id}`, textMs: 'x', source: 'Riwayat Muslim', grade: 'sahih', shown: true, ext: ext(id) }, 'test', 'sdm');
       c.fake.one.set(id, 503);
     }
-    const res = await checkProviderUpdates(db, client(c.fake), () => AT, undefined, { pauseMs: 0 });
+    const res = await checkProviderUpdates(db, client(c.fake), () => AT, undefined, { pauseMs: 0 }, 'sdm');
     expect(res.checked).toBe(0);
     expect(c.fake.calls.filter((u) => u.includes('/hadeeths/one/')).length).toBe(8);
   });
 });
 
 describe('timers', () => {
-  it('a cloud role starts none; a box starts the catalog refresh after the first delay and not when offline', async () => {
+  it('a box starts the catalog refresh after the first delay and not when offline', async () => {
     const c = await setup();
     const { db } = c.app.surau;
     const client = createHadeethEnc(c.fake.fetch, BASE);
     const job = createCatalogJob({ db, client, now: () => AT, sleep: async () => undefined });
-    expect(startHadisTimers({ db, role: 'cloud', client, job, now: () => AT })).toBeNull();
 
     vi.useFakeTimers();
     c.fake.offline = true;
-    const stop = startHadisTimers({ db, role: 'box', client, job, now: () => AT, firstMs: 1000, everyMs: 5000, check: { pauseMs: 0 } })!;
+    const stop = startHadisTimers({ db, surauIds: () => ['sdm'], client, job, now: () => AT, firstMs: 1000, everyMs: 5000, check: { pauseMs: 0 } })!;
     expect(stop).toBeTypeOf('function');
     await vi.advanceTimersByTimeAsync(1100);
     expect(job.current()).toBeNull();
@@ -427,9 +459,12 @@ describe('timers', () => {
     expect(c.fake.calls.length).toBe(calls);
   });
 
-  it('buildApp starts no timer unless asked, and the cloud role never does', async () => {
+  it('buildApp starts no timer unless asked; the cloud role runs it too, for the suraus it has', async () => {
+    const idle = await setup({ role: 'cloud' });
+    await new Promise((r) => setTimeout(r, 60));
+    expect(idle.fake.calls).toEqual([]);
     const c = await setup({ role: 'cloud', hadisTimers: { firstMs: 10 } });
     await new Promise((r) => setTimeout(r, 60));
-    expect(c.fake.calls).toEqual([]);
+    expect(c.fake.calls.length).toBeGreaterThan(0);
   });
 });

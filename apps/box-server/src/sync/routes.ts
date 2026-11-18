@@ -17,8 +17,11 @@ import { freezeReport } from '../finance/report.ts';
 import { MAX_ASSET_OP_BYTES, applyFeedEntry, applyOp } from './apply.ts';
 import { readFeed, snapshot } from './feed.ts';
 import type { FeedScope } from './feed.ts';
-import { DEFAULT_SURAU_ID, logSyncRefusal, verifyDeviceOp, verifySiteEntry } from './verify.ts';
+import { logSyncRefusal, verifyDeviceOp, verifySiteEntry } from './verify.ts';
+import { reqSurau } from '../reqSurau.ts';
 import { claimCodeOf, linkState } from './register.ts';
+import { deviceSeenFor, maxNoFor } from './deviceSeen.ts';
+import { settlePeopleIds } from './peopleIds.ts';
 
 export const MAX_OPS_PER_BATCH = 200;
 export const MAX_ASSET_OPS_PER_BATCH = 2;
@@ -45,7 +48,6 @@ export interface SyncDeps {
   bus: ChangeBus;
   /** `cloud` is the always-on replica (Task 4); a box never serves `/api/sync/link`. */
   role?: SyncRole;
-  surauId?: string;
   /** The cloud's link-by-code exchange (sites.ts); absent, `POST /api/sync/link` answers 501. */
   link?: (body: unknown) => Promise<{ status: number; body: unknown }>;
   /** The cloud's automatic-link claim (sites.ts); absent, `POST /api/sync/claim` answers 501. */
@@ -99,28 +101,33 @@ export function headSeq(db: DatabaseSync, scope: FeedScope): number {
  * What an identity may be served. A signed-in user gets finance only while the finance module is on (the same
  * switch the finance routes honour); a linked site replicates finance whatever the switch says.
  */
-export function scopeOf(identity: AuthContext | SiteAuth, db: DatabaseSync): FeedScope {
-  if (identity.kind === 'site') return { users: true, devices: true, keys: true, finance: true, financeWrite: true };
-  const financeOn = getSettings(db).finance.enabled === true;
+export function scopeOf(identity: AuthContext | SiteAuth, db: DatabaseSync, surauId: string): FeedScope {
+  if (identity.kind === 'site') return { surauId, users: true, devices: true, keys: true, star: true, finance: true, financeWrite: true, contentWrite: true, omitIds: true };
+  const financeOn = getSettings(db, surauId).finance.enabled === true;
   return {
+    surauId,
     users: can(identity.roles, 'users:manage'),
     devices: can(identity.roles, 'devices:manage'),
+    star: identity.ops === true,
     finance: financeOn && can(identity.roles, 'finance:read'),
     financeWrite: financeOn && can(identity.roles, 'finance:write'),
+    contentWrite: can(identity.roles, 'content:write'),
   };
 }
 
-/** The verify-and-apply core, separate from HTTP so it can be exercised with a session captured before a revocation. */
+/**
+ * The verify-and-apply core, separate from HTTP so it can be exercised with a session captured before a revocation.
+ * Every call names the surau it acts for (the request's tenant): nothing is fixed at registration (Plan 14 Task 6).
+ */
 export function createSyncService(deps: SyncDeps) {
   const { db, boxId, dataDir } = deps;
-  const surauId = deps.surauId ?? DEFAULT_SURAU_ID;
-  const server = { boxId, surauId };
 
   /**
    * Verify then apply a device's queued ops, in order. A refused op does not block the rest. The batch is
    * refused whole (nothing applied) when it is too big or carries an op for another device or user.
    */
-  function processDeviceOps(auth: AuthContext, ops: unknown, ip: string | null): DeviceBatchOut {
+  function processDeviceOps(auth: AuthContext, ops: unknown, ip: string | null, surauId: string): DeviceBatchOut {
+    const server = { boxId, surauId };
     if (!Array.isArray(ops)) throw new SyncBatchError(400, 'bad_body', MSG_BAD_BODY);
     if (ops.length > MAX_OPS_PER_BATCH) {
       throw new SyncBatchError(400, 'too_many_ops', `Terlalu banyak operasi dalam satu kumpulan (had ${MAX_OPS_PER_BATCH})`);
@@ -151,18 +158,18 @@ export function createSyncService(deps: SyncDeps) {
         results.push({ opId, status: 'refused', rev: null, reason: v.reason, winner: null });
         continue;
       }
-      const r = applyOp(db, v.op, { now, origin: 'app', actor: `user:${v.op.userId}`, dataDir, role: deps.role ?? 'box', surauId, freezeReport: (d, ym, at) => freezeReport(d, ym, at, deps.role ?? 'box') });
+      const r = applyOp(db, v.op, { now, origin: 'app', actor: `user:${v.op.userId}`, dataDir, role: deps.role ?? 'box', surauId, freezeReport: (d, ym, at, sid) => freezeReport(d, ym, at, deps.role ?? 'box', sid) });
       if (r.status === 'refused') {
         logSyncRefusal(db, now, { userId: v.op.userId, deviceId: v.op.deviceId, ip }, `apply_${r.reason ?? 'invalid'}`);
       }
       if (r.status === 'applied') changed = true;
       results.push(r);
     }
-    return { results, seq: headSeq(db, scopeOf(auth, db)), changed };
+    return { results, seq: headSeq(db, scopeOf(auth, db, surauId)), changed };
   }
 
   /** Apply the feed entries a linked box pushes, in order, under the same merge rule. */
-  function processSiteEntries(site: SiteAuth, entries: unknown, ip: string | null): SiteBatchOut {
+  function processSiteEntries(site: SiteAuth, entries: unknown, ip: string | null, surauId: string): SiteBatchOut {
     if (!Array.isArray(entries)) throw new SyncBatchError(400, 'bad_body', MSG_BAD_BODY);
     if (entries.length > MAX_ENTRIES_PER_BATCH) {
       throw new SyncBatchError(400, 'too_many_entries', `Terlalu banyak entri dalam satu kumpulan (had ${MAX_ENTRIES_PER_BATCH})`);
@@ -180,9 +187,9 @@ export function createSyncService(deps: SyncDeps) {
         note(`site_${v.detail}`);
         continue;
       }
-      const r = applyFeedEntry(db, v.entry, { now, origin: `box:${site.boxId}`, actor: v.entry.actor, dataDir, acceptDeviceEnrolment: true, role: deps.role ?? 'box', surauId });
+      const r = applyFeedEntry(db, v.entry, { now, origin: `box:${site.boxId}`, actor: v.entry.actor, dataDir, acceptDeviceEnrolment: true, siteBoxId: site.boxId, role: deps.role ?? 'box', surauId });
       if (v.entry.entity === 'finance:entry' && (r.status === 'applied' || r.status === 'duplicate') && Object.keys(out.receivedAt).length < MAX_ENTRIES_PER_BATCH) {
-        const held = db.prepare('SELECT received_at FROM finance_entries WHERE id = ?').get(v.entry.entityId);
+        const held = db.prepare('SELECT received_at FROM finance_entries WHERE surau_id = ? AND id = ?').get(surauId, v.entry.entityId);
         if (held !== undefined) out.receivedAt[v.entry.entityId] = String(held.received_at);
       }
       if (r.status === 'applied') {
@@ -192,11 +199,12 @@ export function createSyncService(deps: SyncDeps) {
       else if (r.status === 'superseded') out.superseded += 1;
       else {
         out.refused += 1;
-        note(r.reason ?? 'invalid');
+        // the site is told `invalid` for an id held by another surau (so it cannot probe ids); the log keeps the code
+        note(r.reason === 'foreign_id' ? 'invalid' : r.reason ?? 'invalid');
         logSyncRefusal(db, now, { ip }, `site_apply_${r.reason ?? 'invalid'}`);
       }
     }
-    out.seq = headSeq(db, { users: true, devices: true });
+    out.seq = headSeq(db, scopeOf(site, db, surauId));
     return out;
   }
 
@@ -235,11 +243,12 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
   const { db, now, bus, dataDir } = deps;
   const role: SyncRole = deps.role ?? 'box';
   const service = createSyncService(deps);
-  const surauId = deps.surauId ?? DEFAULT_SURAU_ID;
   // linking has its own bucket: enrolment and linking must not exhaust each other (5 / 10 min per IP)
   const linkIp = createRateLimiter({ windowMs: 10 * 60_000, max: 5 });
   // the automatic claim: the same limit, in its own bucket per box id and address (a pending box asks every 5 minutes)
   const claimIp = createRateLimiter({ windowMs: 10 * 60_000, max: 5 });
+  // and a second bucket on the address alone, so one address cannot walk many box ids into the Worker lookup
+  const claimAddr = createRateLimiter({ windowMs: 10 * 60_000, max: 60 });
 
   const fail = (reply: FastifyReply, status: number, code: string, message: string): FastifyReply =>
     reply.code(status).header('Cache-Control', 'no-store').send({ errors: [message], code });
@@ -258,13 +267,13 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
       reply.header('Cache-Control', 'no-store');
       if (who.kind === 'site') {
         if (b.ops !== undefined) return fail(reply, 400, 'bad_body', MSG_BAD_BODY);
-        const out = service.processSiteEntries(who, b.entries, request.ip);
-        if (out.changed) bus.emit(getVersion(db));
+        const out = service.processSiteEntries(who, b.entries, request.ip, reqSurau(request));
+        if (out.changed) bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
         return { applied: out.applied, duplicate: out.duplicate, superseded: out.superseded, refused: out.refused, reasons: out.reasons, seq: out.seq, receivedAt: out.receivedAt };
       }
       if (b.entries !== undefined) return fail(reply, 400, 'bad_body', MSG_BAD_BODY);
-      const out = service.processDeviceOps(who, b.ops, request.ip);
-      if (out.changed) bus.emit(getVersion(db));
+      const out = service.processDeviceOps(who, b.ops, request.ip, reqSurau(request));
+      if (out.changed) bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
       return { results: out.results, seq: out.seq };
     } catch (error) {
       if (error instanceof SyncBatchError) return fail(reply, error.status, error.code, error.message);
@@ -276,11 +285,11 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
     const who = identityOf(request);
     if (who === null) return fail(reply, 403, 'forbidden', MSG_FORBIDDEN);
     reply.header('Cache-Control', 'no-store');
-    const snap = snapshot(db, scopeOf(who, db), { surauId, boxId: deps.boxId, now: now(), role });
+    const snap = snapshot(db, scopeOf(who, db, reqSurau(request)), { boxId: deps.boxId, now: now(), role });
     if (who.kind === 'user' && snap.finance !== undefined) {
       const f = snap.finance;
       if (f.funds.length + f.perihal.length + f.entries.length + f.months.length + f.photos.length > 0) {
-        noteFinanceView(db, who, '/api/sync/snapshot', now(), actorOf(request), deviceOf(request));
+        noteFinanceView(db, who, '/api/sync/snapshot', now(), actorOf(request), deviceOf(request), reqSurau(request));
       }
     }
     // The app lock is a local, live decision of each box: it never travels.
@@ -302,9 +311,9 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
       return fail(reply, 410, 'snapshot_required', 'Sejarah perubahan telah dipangkas; ambil gambaran penuh');
     }
     reply.header('Cache-Control', 'no-store');
-    const feed = readFeed(db, since, limit, scopeOf(who, db), CHANGES_PAGE_BYTES);
+    const feed = readFeed(db, since, limit, scopeOf(who, db, reqSurau(request)), CHANGES_PAGE_BYTES);
     if (who.kind === 'user' && feed.entries.some((e) => e.entity.startsWith('finance:'))) {
-      noteFinanceView(db, who, '/api/sync/changes', now(), actorOf(request), deviceOf(request));
+      noteFinanceView(db, who, '/api/sync/changes', now(), actorOf(request), deviceOf(request), reqSurau(request));
     }
     // No echo: what a box itself pushed is never handed back to it as a new change. The cursor still passes it.
     const entries = who.kind === 'site' ? feed.entries.filter((e) => e.origin !== `box:${who.boxId}`) : feed.entries;
@@ -324,19 +333,19 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
       const { id } = request.params as { id: string };
       const body: unknown = request.body;
       if (!PHOTO_ID_RE.test(id) || !Buffer.isBuffer(body)) return fail(reply, 400, 'bad_body', MSG_BAD_BODY);
-      const meta = photoMeta(db, id);
+      const meta = photoMeta(db, id, reqSurau(request));
       if (meta === null) return fail(reply, 404, 'not_found', 'Tidak dijumpai');
       if (meta.present) return reply.header('Cache-Control', 'no-store').send({ ok: true });
       if (sha256Of(body) !== id) return fail(reply, 400, 'bad_body', MSG_BAD_BODY);
       try {
         checkJpeg(body);
-        checkReplicatedBytes(db, meta, body);
+        checkReplicatedBytes(db, meta, body, reqSurau(request));
       } catch (error) {
         if (error instanceof PhotoError) return fail(reply, error.status, 'bad_body', MSG_BAD_BODY);
         throw error;
       }
       writePhotoFile(dataDir, id, body);
-      markPresent(db, id);
+      markPresent(db, id, reqSurau(request));
       return reply.header('Cache-Control', 'no-store').send({ ok: true });
     });
 
@@ -346,7 +355,7 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
       if (who.kind === 'user' && !identityCan(who, 'finance:write')) return fail(reply, 403, 'forbidden', MSG_FORBIDDEN);
       const { id } = request.params as { id: string };
       if (!PHOTO_ID_RE.test(id)) return fail(reply, 404, 'not_found', 'Tidak dijumpai');
-      const found = photoPath(db, dataDir, id);
+      const found = photoPath(db, dataDir, id, reqSurau(request));
       if (found === null) return fail(reply, 404, 'not_found', 'Tidak dijumpai');
       return reply
         .header('Content-Type', found.mime)
@@ -354,6 +363,29 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
         .header('X-Content-Type-Options', 'nosniff')
         .send(createReadStream(found.path));
     });
+  });
+
+  // The phones of the site's surau as the cloud last saw them (unlocks made through the cloud), for the box's
+  // "Tidak aktif" flags and clean-up. A linked site only: a person's session gets 404 (the route-table matrix needs a session to pass the hook). A box has no such route.
+  app.get('/api/sync/device-seen', async (request, reply) => {
+    const who = request.auth;
+    // A person's session (and a box, which has no such route) is answered like an unknown route, as theme-support does.
+    if (role !== 'cloud' || who == null || who.kind !== 'site') return fail(reply, 404, 'not_found', 'Tidak dijumpai');
+    reply.header('Cache-Control', 'no-store');
+    return deviceSeenFor(db, who.surauId, who.boxId);
+  });
+
+  // The box's plain-series ID numbers, once after the upgrade (and again after an `id_taken`). The surau's PRIMARY
+  // linked site only; a person's session and a secondary box are refused.
+  app.post('/api/sync/people-ids', { bodyLimit: 2 * 1024 * 1024 }, async (request, reply) => {
+    const who = request.auth;
+    if (role !== 'cloud' || who == null || who.kind !== 'site') return fail(reply, 404, 'not_found', 'Tidak dijumpai');
+    const site = db.prepare('SELECT role FROM sites WHERE box_id = ? AND revoked_at IS NULL').get(who.boxId);
+    if (site === undefined || site.role !== 'primary') return fail(reply, 403, 'forbidden', MSG_FORBIDDEN);
+    reply.header('Cache-Control', 'no-store');
+    const answer = settlePeopleIds(db, who.surauId, request.body);
+    if (answer === null) return fail(reply, 400, 'bad_body', MSG_BAD_BODY);
+    return { ...answer, maxNo: maxNoFor(db, who.surauId) };
   });
 
   app.get('/api/sync/status', async (_request, reply) => {
@@ -390,7 +422,10 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
       // bucket; a malformed box id falls back to the address alone
       const sent = isPlain(_request.body) ? _request.body.boxId : undefined;
       const hit = claimIp.hit(typeof sent === 'string' && CLAIM_BOX_ID_RE.test(sent) ? `${sent}|${_request.ip}` : _request.ip);
-      return hit.ok ? undefined : tooMany(reply, hit.retryAfterSec);
+      if (!hit.ok) return tooMany(reply, hit.retryAfterSec);
+      // both buckets pass before the handler asks the Worker anything
+      const addr = claimAddr.hit(_request.ip);
+      return addr.ok ? undefined : tooMany(reply, addr.retryAfterSec);
     },
   }, async (request, reply) => {
     if (deps.claim === undefined) return fail(reply, 501, 'not_implemented', 'Belum tersedia');

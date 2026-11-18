@@ -5,6 +5,8 @@
  */
 
 import type { FeatureKey } from './registry.ts';
+import { can } from '../auth/permissions.ts';
+import type { Role } from '../auth/permissions.ts';
 
 export type FieldUi =
   | 'switch' | 'stepper' | 'slider' | 'chips' | 'segment' | 'dropdown' | 'hijriMonth' | 'surah'
@@ -19,6 +21,8 @@ export interface FieldMeta {
   choices?: readonly (number | string)[];
   disabledChoices?: readonly string[];
   presets?: readonly string[];
+  /** The same presets in English, same order: an English TV offers these. */
+  presetsEn?: readonly string[];
   unit?: 'saat' | 'minit' | 'hari' | '%' | 'kbps' | 'MB';
   /** Only a holder of `system:write` may change this field. */
   scope?: 'system';
@@ -40,6 +44,7 @@ export interface FieldMeta {
     equals: boolean | number | string | null;
     noteMs: string;
     noteEn: string;
+    noteAr: string;
   };
 }
 
@@ -47,6 +52,19 @@ type FM = Record<string, FieldMeta>;
 
 /** The slider starts at 5 s: a stored 0 meant 15 s on the TV without saying so. */
 const CARD_DURATION: FM = { durationSeconds: { ui: 'slider', min: 5, max: 600, step: 5, unit: 'saat' } };
+
+const TABUNG_MANUAL_OFF: NonNullable<FieldMeta['disabledWhen']> = {
+  feature: 'finance', field: 'enabled', equals: true,
+  noteMs: 'Tidak digunakan: kad tabung memaparkan baki daripada Kewangan.',
+  noteEn: 'Not used: the card shows the balances from Finance.',
+  noteAr: 'غير مستخدم: تعرض البطاقة الأرصدة من المالية.',
+};
+const TABUNG_LIVE_ONLY: NonNullable<FieldMeta['disabledWhen']> = {
+  feature: 'finance', field: 'enabled', equals: false,
+  noteMs: 'Tidak digunakan: tiada Kewangan, kad hanya memaparkan baris yang ditaip.',
+  noteEn: 'Not used: without Finance the card shows only the typed rows.',
+  noteAr: 'غير مستخدم: بدون المالية تعرض البطاقة الصفوف المكتوبة فقط.',
+};
 
 /** Keyed by feature, then by the leaf path (dot-joined for nested values). Week tables and `minutesBefore` rows keep their grid widgets. */
 export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
@@ -68,6 +86,8 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
   },
   // The accent colour has one control, Ubah suai "Warna aksen"; the old override is kept only so stored values stay valid.
   autoTone: { override: { ui: 'colour', hidden: true } },
+  // Nothing reads these: kept in the registry so stored values stay valid, not offered in Tetapan (decision 9).
+  themeStyle: { enabled: { hidden: true } },
   kioskTemplate: { templateId: { ui: 'theme' } },
   solatScreen: {
     message: {
@@ -78,6 +98,12 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
         'Solat sedang berlangsung',
         'Sila luruskan dan rapatkan saf',
         'Sila tutup telefon bimbit anda',
+      ],
+      presetsEn: [
+        'Please silence your phones',
+        'Prayer is in progress',
+        'Please straighten and close the rows',
+        'Please switch off your phones',
       ],
     },
   },
@@ -98,8 +124,14 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
   tabungCard: {
     ...CARD_DURATION,
     figure: { ui: 'segment', choices: ['balance', 'month', 'lastEntry'] },
-    highlightSeconds: { ui: 'slider', min: 0, max: 120, step: 5, unit: 'saat' },
+    highlightSeconds: { ui: 'slider', min: 0, max: 120, step: 5, unit: 'saat', disabledWhen: TABUNG_LIVE_ONLY },
+    showTarget: { disabledWhen: TABUNG_LIVE_ONLY },
     qrAssetId: { ui: 'text' },
+    featured: { ui: 'switch' },
+    manualTitle: { disabledWhen: TABUNG_MANUAL_OFF },
+    row1Label: { disabledWhen: TABUNG_MANUAL_OFF }, row1Sen: { disabledWhen: TABUNG_MANUAL_OFF },
+    row2Label: { disabledWhen: TABUNG_MANUAL_OFF }, row2Sen: { disabledWhen: TABUNG_MANUAL_OFF },
+    row3Label: { disabledWhen: TABUNG_MANUAL_OFF }, row3Sen: { disabledWhen: TABUNG_MANUAL_OFF },
   },
   // `daysAhead` is not offered: a notice shows by its own from and to dates, nothing reads the window.
   pengumuman: { ...CARD_DURATION, daysAhead: { hidden: true } },
@@ -120,6 +152,7 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
         feature: 'recordingCleanup', field: 'enabled', equals: false,
         noteMs: 'Tiada rakaman dipadam selagi Pembersihan rakaman dimatikan.',
         noteEn: 'No recording is deleted while Recording clean-up is off.',
+        noteAr: 'لا يُحذف أي تسجيل ما دام تنظيف التسجيلات متوقفًا.',
       },
     },
   },
@@ -139,6 +172,7 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
     noVideoSeconds: { ui: 'slider', min: 5, max: 60, step: 1, unit: 'saat' },
     cloudWakeSeconds: { ui: 'slider', min: 10, max: 60, step: 5, unit: 'saat' },
     syncHistoryDays: { ui: 'chips', choices: [180, 365], unit: 'hari' },
+    suspendedAt: { hidden: true },
   },
   recordingCleanup: {
     keepDays: {
@@ -147,12 +181,23 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
         feature: 'recording', field: 'keepOnDevice', equals: false,
         noteMs: 'Tidak digunakan: rakaman di peranti dipadam sebaik YouTube mengesahkannya.',
         noteEn: 'Not used: the recording on the device is deleted as soon as YouTube confirms it.',
+        noteAr: 'غير مستخدم: يُحذف التسجيل على الجهاز فور تأكيد YouTube له.',
       },
     },
   },
   youtubeCatchUp: { replaceGappyLive: { ui: 'segment', choices: ['ask', 'never', 'always'] } },
   beeps: { volume: { ui: 'slider', min: 0, max: 100, step: 5, unit: '%' } },
   liveOnKiosk: { volume: { ui: 'slider', min: 0, max: 100, step: 5, unit: '%' } },
+  liveCamera: {
+    transport: { ui: 'segment', choices: ['auto', 'tcp', 'udp'] },
+    'avOffsetMs.deviceMic': { ui: 'stepper', min: 0, max: 2000, step: 50 },
+    'avOffsetMs.boxInput': { ui: 'stepper', min: 0, max: 2000, step: 50 },
+  },
+};
+
+/** A feature that does nothing unless another one is on: the form shows it as depending on that one (the server also refuses). */
+export const FEATURE_REQUIRES: Partial<Record<FeatureKey, { requires: FeatureKey }>> = {
+  liveYoutube: { requires: 'liveOnKiosk' },
 };
 
 export function fieldMeta(feature: FeatureKey, path: string): FieldMeta | undefined {
@@ -203,6 +248,18 @@ export const LANJUTAN_ROWS: readonly { feature: FeatureKey; fields: readonly str
  */
 export const HIDDEN_FEATURES: readonly FeatureKey[] = ['themeStyle', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage'];
 
+/**
+ * The features of the Siaran Langsung menu. A holder of `live:settings` (role Siaran Langsung) may change these and
+ * nothing else; Pentadbir (`settings:write`) may change every feature.
+ */
+export const LIVE_SETTINGS_FEATURES: readonly FeatureKey[] = ['liveOnKiosk', 'liveYoutube', 'recording', 'liveCamera'];
+
+/** The settings write rule: `settings:write`, or `live:settings` and every touched feature is a live one. */
+export function canWriteSettingsFeatures(roles: readonly Role[], features: readonly FeatureKey[]): boolean {
+  if (can(roles, 'settings:write')) return true;
+  return can(roles, 'live:settings') && features.every((f) => LIVE_SETTINGS_FEATURES.includes(f));
+}
+
 /** The features that take part in the TV card rotation (they have an `order` setting). */
 export const ORDERED_FEATURES: readonly FeatureKey[] = [
   'kuliahCard', 'pengumuman', 'posters', 'programKhas', 'takwim', 'hadis', 'worldTimes', 'tugasan', 'ayatCard', 'tabungCard',
@@ -211,12 +268,13 @@ export const ORDERED_FEATURES: readonly FeatureKey[] = [
 export interface FeatureDesc {
   ms: string;
   en: string;
+  ar: string;
   keywords: readonly string[];
 }
 
-const d = (ms: string, en: string, ...keywords: string[]): FeatureDesc => ({ ms, en, keywords });
+const d = (ms: string, en: string, ...keywords: string[]): Omit<FeatureDesc, 'ar'> => ({ ms, en, keywords });
 
-export const FEATURE_DESC: Record<FeatureKey, FeatureDesc> = {
+const DESC_MS_EN: Record<FeatureKey, Omit<FeatureDesc, 'ar'>> = {
   prayerBar: d('Waktu solat sehari di bahagian bawah skrin TV.', 'The day\'s prayer times along the bottom of the TV screen.'),
   clock: d('Jam besar di penjuru skrin TV.', 'A large clock in the corner of the TV screen.'),
   prayerSequenceSafety: d('Skrin azan, iqamah dan solat sentiasa ikut urutan yang betul.', 'The azan, iqamah and prayer screens always follow the right order.'),
@@ -263,7 +321,11 @@ export const FEATURE_DESC: Record<FeatureKey, FeatureDesc> = {
     'Text and accent colours follow the background picture, for the Default theme. A text or accent colour chosen in Ubah suai overrides it.',
     'warna',
   ),
-  language: d('Bahasa paparan skrin TV.', 'The display language of the TV screen.', 'bahasa'),
+  language: d(
+    'Bahasa paparan skrin TV, bukan bahasa aplikasi di telefon. Ikut lokasi: BM di Malaysia, Inggeris di negara lain. Surau di luar negara: tetapkan Lokasi surau.',
+    'The display language of the TV screen, not the language of the app on the phone. Follow location: BM in Malaysia, English in other countries. A surau abroad: set Surau location.',
+    'bahasa',
+  ),
   orientation: d('Skrin TV mendatar atau menegak.', 'The TV screen landscape or portrait.', 'mendatar', 'menegak'),
   kioskTemplate: d(
     'Tema menukar seluruh rupa skrin TV. Setiap skrin boleh diubah suai.',
@@ -301,8 +363,13 @@ export const FEATURE_DESC: Record<FeatureKey, FeatureDesc> = {
   ),
   liveYoutube: d('Siarkan kuliah ke saluran YouTube surau sendiri.', 'Broadcast the lecture to the surau\'s own YouTube channel.', 'youtube'),
   recording: d('Rakam kuliah ke fail di peranti. Jika Simpan rakaman di peranti dimatikan, salinan di peranti dipadam sebaik YouTube mengesahkannya.', 'Record the lecture to files on the device. When Keep the recording on the device is off, the copy on the device is deleted as soon as YouTube confirms it.', 'rakaman'),
+  liveCamera: d('Kamera luaran (RTSP) untuk siaran langsung: gambar dan audionya sendiri, dengan sumber audio lain boleh ditambah.', 'An external (RTSP) camera for the live broadcast: its picture and its own audio, with other audio sources that can be added.', 'rtsp', 'cctv', 'kamera', 'ip'),
   finance: d('Rekod kutipan dan perbelanjaan surau.', 'Record the surau\'s collections and spending.', 'derma'),
-  tabungCard: d('Baki tabung surau di skrin TV.', 'The surau fund balance on the TV screen.', 'derma'),
+  tabungCard: d(
+    'Baki tabung surau di skrin TV, paling banyak 4 tabung sehalaman. Tempoh paparan ialah masa setiap halaman. Tonjolkan tabung pertama memaparkan tabung pertama dalam susunan anda dengan besar.',
+    'The surau fund balances on the TV screen, at most 4 funds a page. The display time is the time of each page. Feature the first fund shows the first fund in your order large.',
+    'derma',
+  ),
   calendarFeed: d('Jadual kuliah dalam kalendar telefon jemaah.', 'The lecture schedule in the congregation\'s phone calendars.', 'kalendar'),
   jemaahPage: d('Laman web ringkas untuk jemaah. Dirancang, belum tersedia.', 'A simple web page for the congregation. Planned, not available yet.'),
   cloudSync: d('Alamat awan MAXCOM dan selang semak perubahan.', 'The MAXCOM cloud address and how often changes are checked.', 'awan'),
@@ -311,3 +378,66 @@ export const FEATURE_DESC: Record<FeatureKey, FeatureDesc> = {
   appLock: d('PIN atau cap jari setiap kali MAXCOM dibuka.', 'A PIN or fingerprint every time MAXCOM is opened.', 'pin', 'cap jari'),
   system: d('Amaran tiada video, tunggu awan bangun, sejarah penyelarasan.', 'The no-video warning, how long to wait for the cloud, and sync history.'),
 };
+
+/** The Arabic sentence of each feature (the keywords stay BM and EN). */
+const DESC_AR: Record<FeatureKey, string> = {
+  prayerBar: 'مواقيت صلاة اليوم في أسفل شاشة التلفاز.',
+  clock: 'ساعة كبيرة في زاوية شاشة التلفاز.',
+  prayerSequenceSafety: 'شاشات الأذان والإقامة والصلاة تتبع دائمًا الترتيب الصحيح.',
+  zone: 'منطقة JAKIM لمواقيت الصلاة، مثل SGR01 غومباك وبيتالينغ وما حولهما.',
+  location: 'الدولة والمنطقة الزمنية وإحداثيات المصلى؛ تُحسب منها مواقيت الصلاة خارج ماليزيا.',
+  prayerCalc: 'طريقة حساب مواقيت الصلاة من إحداثيات المصلى، وتعديل بالدقائق لكل صلاة. الحساب المحلي هو البديل دائمًا عند غياب الجدول الرسمي أو ملف المصلى.',
+  prayerSources: 'ترتيب مصادر مواقيت الصلاة: الرسمي والحساب المحلي وملف المصلى.',
+  azanCountdown: 'عدّ تنازلي على الشاشة قبل دخول وقت الصلاة.',
+  masukWaktu: 'شاشة "دخل وقت الصلاة" أثناء رفع الأذان.',
+  iqamahCountdown: 'عدّ تنازلي من الأذان إلى الإقامة، حسب اليوم والصلاة.',
+  solatScreen: 'شاشة هادئة مع رسالة أثناء صلاة الجماعة. تظهر الرسالة نفسها في شاشة التراويح أيضًا.',
+  jumaat: 'مدة الخطبة والإقامة وصلاة الجمعة.',
+  tarawih: 'جدول التراويح في الشهر المحدد.',
+  syurukWarning: 'تنبيه قبل الشروق، علامة اقتراب انتهاء وقت الفجر.',
+  imsakBeep: 'صوت قصير عند وقت الإمساك. يتبع هذا الصوت مفتاح أصوات التنبيه ومستواها؛ وإذا وقع صوت العد التنازلي للأذان في الدقيقة نفسها فيُسمع صوت واحد فقط.',
+  isyraq: 'تذكير بصلاة الإشراق بعد الشروق.',
+  dataSources: 'عناوين e-Solat وQuranEnc وEveryAyah وNominatim وHadeethEnc.',
+  firstAzanSubuh: 'أذان مبكر قبل الفجر يُشغَّل من ملف صوتي. يُشغَّل مرة واحدة في اليوم ولا يُعاد بعد إعادة تحميل الشاشة. وتنتهي التلاوة قبل الفجر عند بدئه.',
+  surauInfo: 'الاسم والشعار وجهة الاتصال.',
+  hijriDate: 'التاريخ الهجري ووقت تغيّره.',
+  backgrounds: 'صور خلفية شاشة التلفاز وسرعة تغيّرها، لجميع القوالب. صور MAXCOM المدمجة للقالب Default فقط. في التخصيص، "حسب القالب" تعني استخدام الصور هنا (أو صورة القالب المرفوع)؛ وصورة خاصة بشاشة معينة تحلّ محلها.',
+  autoTone: 'لون النص واللون المميّز يتبعان صورة الخلفية، للقالب Default. أما لون النص أو اللون المميّز المختار في التخصيص فيتغلب عليهما.',
+  language: 'لغة عرض شاشة التلفاز، وليست لغة التطبيق على الهاتف. حسب الموقع: البهاسا الملايو في ماليزيا والإنجليزية في الدول الأخرى. مصلى خارج ماليزيا: اضبط موقع المصلى.',
+  orientation: 'شاشة التلفاز أفقية أو عمودية.',
+  kioskTemplate: 'القالب يغيّر مظهر شاشة التلفاز كله. ويمكن تخصيص كل شاشة.',
+  themeStyle: 'خصّص مظهر كل شاشة في القالب.',
+  kuliahCard: 'الدروس القادمة على شاشة التلفاز.',
+  penceramahPhoto: 'شكل صورة المحاضر في بطاقة الدرس.',
+  kitabCover: 'عرض غلاف الكتاب في بطاقة الدرس.',
+  pengumuman: 'إعلانات المصلى على شاشة التلفاز.',
+  ticker: 'نص متحرك في أسفل الشاشة.',
+  posters: 'ملصقات تُعرض بالتناوب على شاشة التلفاز.',
+  programKhas: 'البرامج الخاصة القادمة.',
+  takwim: 'التواريخ الإسلامية المهمة القادمة.',
+  hadis: 'أحاديث تُعرض بالتناوب على شاشة التلفاز، عشوائيًا أو باختيارك. وعدد الأحاديث في اليوم يحدد المجموعة اليومية.',
+  worldTimes: 'الوقت في مكة المكرمة والمدينة المنورة ومدن أخرى.',
+  tugasan: 'جدول مناوبة الإمام والمؤذن وأعضاء اللجنة.',
+  ayatCard: 'آية قرآنية مختارة مع ترجمتها.',
+  zikirSelepasSolat: 'أذكار على الشاشة بعد كل صلاة.',
+  quranReader: 'قراءة المصحف كاملًا في التطبيق وعلى شاشة التلفاز.',
+  tilawah: 'تلاوة القرآن بصوت قارئ مختار.',
+  beeps: 'مفتاح ومستوى أصوات التنبيه قبل الأذان والإقامة، وصوت الإمساك وصوت الشروق. إذا أُوقف المفتاح أو كان المستوى 0، يسكت أيضًا صوت الإمساك وصوت الشروق وأذان الفجر الأول. ويتوقف الأذان الأول عندما يبدأ العد التنازلي لأذان الفجر، أو عند الفجر.',
+  liveOnKiosk: 'الدرس المبثوث حاليًا، يظهر مباشرة على شاشة التلفاز. إذا أُوقف، لا يمكن بدء أي بث مباشر، بما في ذلك البث إلى YouTube فقط.',
+  liveYoutube: 'بث الدرس إلى قناة YouTube الخاصة بالمصلى.',
+  recording: 'تسجيل الدرس في ملفات على الجهاز. إذا أُوقف خيار "حفظ التسجيل على الجهاز"، تُحذف النسخة الموجودة على الجهاز فور تأكيد YouTube لها.',
+  liveCamera: 'كاميرا خارجية (RTSP) للبث المباشر: صورتها وصوتها الخاص، مع إمكانية إضافة مصادر صوت أخرى.',
+  finance: 'سجل تحصيلات المصلى ومصروفاته.',
+  tabungCard: 'أرصدة صناديق تبرعات المصلى على شاشة التلفاز، بحد أقصى 4 صناديق في الصفحة. مدة العرض هي وقت كل صفحة. "إبراز الصندوق الأول" يعرض الصندوق الأول في ترتيبك بحجم كبير.',
+  calendarFeed: 'جدول الدروس في تقويمات هواتف المصلّين.',
+  jemaahPage: 'صفحة ويب بسيطة للمصلّين. مخططة، وغير متاحة بعد.',
+  cloudSync: 'عنوان سحابة MAXCOM وكل كم يُفحص التغيير.',
+  youtubeCatchUp: 'رفع التسجيل عندما ينقطع البث المباشر.',
+  recordingCleanup: 'حذف التسجيلات من الجهاز بعد تأكيد YouTube لها.',
+  appLock: 'رمز PIN أو بصمة الإصبع في كل مرة يُفتح فيها MAXCOM.',
+  system: 'تنبيه غياب الفيديو، ومدة انتظار السحابة، وسجل المزامنة.',
+};
+
+export const FEATURE_DESC: Record<FeatureKey, FeatureDesc> = Object.fromEntries(
+  (Object.keys(DESC_MS_EN) as FeatureKey[]).map((k) => [k, { ...DESC_MS_EN[k], ar: DESC_AR[k] }]),
+) as Record<FeatureKey, FeatureDesc>;

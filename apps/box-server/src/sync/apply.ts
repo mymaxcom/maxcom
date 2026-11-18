@@ -1,10 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
-import { decide, isContentKind, isFeatureKey, isMonthReport, isoInstantMs, newRev, MAX_PHOTO_BYTES } from '@surau/core';
+import { decide, isContentKind, isFeatureKey, isMonthReport, isoInstantMs, newRev, MAX_PHOTO_BYTES, OPS_ROLES } from '@surau/core';
 import type { FeedEntry, OpRefusal, OpResult, OpStatus, SyncOp } from '@surau/core';
-import { AssetError, putAsset } from '../assets/store.ts';
-import { enrolDeviceSynced, getDeviceWithKey } from '../auth/devices.ts';
-import { AuthError, getUserRow, logChange, putUserSynced, revokeDeviceRow, tx } from '../auth/users.ts';
+import { AssetError } from '../assets/store.ts';
+import { putSurauAsset } from '../surau/storage.ts';
+import { enrolDeviceSynced, getDeviceWithKey, renameDeviceRows } from '../auth/devices.ts';
+import { AuthError, cleanNameText, deviceSurau, getUserRow, logChange, putUserSynced, revokeDeviceRow, tx, userSurau } from '../auth/users.ts';
+import { incomingNo, numberTaken, settleIncomingNo } from '../auth/ids.ts';
 import { ContentError, deleteItemIn, putItemIn } from '../content/store.ts';
 import { SettingsError, bumpVersion, putFeatureIn, sanitizeStamps } from '../settingsStore.ts';
 import { deviceOfRev } from './meta.ts';
@@ -13,7 +15,7 @@ import { FinanceError, appendEntryIn, entryRow, fillRefNoFrom, insertReplicatedE
 import { PHOTO_ID_RE, PhotoError, photoMeta, photosDirOf, putPhoto } from '../finance/photos.ts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_SURAU_ID, logSyncRefusal } from './verify.ts';
+import { logSyncRefusal } from './verify.ts';
 import type { ChangeMeta } from './meta.ts';
 
 /** An op whose signature, device, user and permission the caller already verified (Task 3). */
@@ -34,13 +36,18 @@ export interface ApplyCtx {
    */
   acceptDeviceEnrolment?: boolean;
   /**
+   * The sending site's own box id, set with `acceptDeviceEnrolment`: a device enrolled from that feed is homed at
+   * this box (`devices.box_id`, Plan 14 Task 7). Never taken from the entry.
+   */
+  siteBoxId?: string;
+  /**
    * Which server this is. Only the box hands out display numbers (`K-0001`) for finance entries; an unset role
    * is the cloud, which never invents one.
    */
   role?: 'box' | 'cloud';
-  surauId?: string;
+  surauId: string;
   /** Builds the frozen report JSON when a device op closes a finance month (set where the report code is wired). */
-  freezeReport?: (db: DatabaseSync, ym: string, now: Date) => string;
+  freezeReport?: (db: DatabaseSync, ym: string, now: Date, surauId: string) => string;
 }
 
 /** An asset op larger than this after decoding is refused. */
@@ -52,11 +59,40 @@ const SAFE_ID = /^[A-Za-z0-9_-]{1,100}$/;
 
 class Refused extends Error {
   readonly reason: OpRefusal;
-  constructor(reason: OpRefusal) {
+  /** A fixed code for one `auth_log` row, written after the transaction rolled back (absent: no row). */
+  readonly detail: string | undefined;
+  constructor(reason: OpRefusal, detail?: string) {
     super(reason);
     this.name = 'Refused';
     this.reason = reason;
+    this.detail = detail;
   }
+}
+
+/**
+ * Users and devices keep GLOBAL ids (migration 019 step 5), so an id may already exist under another surau. Such a
+ * row is never touched from this surau: `foreign_id`. A `'*'` row (a Pentadbir MAXCOM, an ops device) is
+ * foreign to a site, whose feed may never carry one up (the cloud alone holds them); a box or a device op may touch
+ * one, under the checks `verifyDeviceOp` already made.
+ */
+function foreignRow(db: DatabaseSync, table: 'users' | 'devices', id: string, surauId: string, fromSite: boolean): boolean {
+  const row = db.prepare(`SELECT surau_id FROM ${table} WHERE id = ?`).get(id);
+  if (row === undefined) return false;
+  const owner = String(row.surau_id);
+  if (owner === surauId) return false;
+  return !(owner === '*' && !fromSite);
+}
+
+/** Is the sending site the surau's primary box (the only source of plain-series ID numbers)? */
+function siteIsPrimary(db: DatabaseSync, boxId: string | undefined): boolean {
+  if (boxId === undefined) return false;
+  const r = db.prepare('SELECT role FROM sites WHERE box_id = ? AND revoked_at IS NULL').get(boxId);
+  return r !== undefined && r.role === 'primary';
+}
+
+/** Cloud: keep, accept or assign the ID of a row an entry just touched; a number another record holds falls back to a cloud-series one. */
+function settleEntryNo(db: DatabaseSync, kind: 'user' | 'device', id: string, surauId: string, incoming: { no: number; src: 'b' | 'c' } | null, primary: boolean): void {
+  if (settleIncomingNo(db, { kind, id, surauId }, incoming, primary) === 'id_taken') settleIncomingNo(db, { kind, id, surauId }, null, false);
 }
 
 type Current = { rev: string; editedAt: string; deviceId: string | null; deletedAt: string | null; revokedAt: string | null };
@@ -64,18 +100,18 @@ type Current = { rev: string; editedAt: string; deviceId: string | null; deleted
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
 /** The stored revision of an entity, with a fallback for rows written before migration 008 stamped them. */
-function currentOf(db: DatabaseSync, entity: string, id: string): Current | null {
+function currentOf(db: DatabaseSync, entity: string, id: string, surauId: string): Current | null {
   let row: Record<string, unknown> | undefined;
   let fallbackAt = '';
   let deletedAt: string | null = null;
   let revokedAt: string | null = null;
   if (entity.startsWith('content:')) {
-    row = db.prepare('SELECT rev, edited_at, updated_at, deleted_at FROM content_items WHERE kind = ? AND id = ?').get(entity.slice(8), id);
+    row = db.prepare('SELECT rev, edited_at, updated_at, deleted_at FROM content_items WHERE surau_id = ? AND kind = ? AND id = ?').get(surauId, entity.slice(8), id);
     if (row === undefined) return null;
     fallbackAt = String(row.updated_at);
     deletedAt = str(row.deleted_at);
   } else if (entity === 'settings') {
-    row = db.prepare('SELECT rev, edited_at, updated_at FROM settings WHERE feature = ?').get(id);
+    row = db.prepare('SELECT rev, edited_at, updated_at FROM settings WHERE surau_id = ? AND feature = ?').get(surauId, id);
     if (row === undefined) return null;
     fallbackAt = String(row.updated_at);
   } else if (entity === 'user') {
@@ -88,11 +124,11 @@ function currentOf(db: DatabaseSync, entity: string, id: string): Current | null
     fallbackAt = String(row.enrolled_at);
     revokedAt = str(row.revoked_at);
   } else if (entity === 'finance:fund' || entity === 'finance:perihal') {
-    row = db.prepare(`SELECT rev, edited_at, updated_at FROM ${entity === 'finance:fund' ? 'finance_funds' : 'finance_perihal'} WHERE id = ?`).get(id);
+    row = db.prepare(`SELECT rev, edited_at, updated_at FROM ${entity === 'finance:fund' ? 'finance_funds' : 'finance_perihal'} WHERE surau_id = ? AND id = ?`).get(surauId, id);
     if (row === undefined) return null;
     fallbackAt = String(row.updated_at);
   } else if (entity === 'finance:month') {
-    row = db.prepare('SELECT rev, edited_at, updated_at FROM finance_months WHERE ym = ?').get(id);
+    row = db.prepare('SELECT rev, edited_at, updated_at FROM finance_months WHERE surau_id = ? AND ym = ?').get(surauId, id);
     if (row === undefined) return null;
     fallbackAt = String(row.updated_at);
   } else {
@@ -106,14 +142,14 @@ function currentOf(db: DatabaseSync, entity: string, id: string): Current | null
 const LOG_ENTITY: Record<string, string> = { user: 'users', device: 'devices' };
 
 /** Who made the edit that currently holds an entity: the latest change_log row, with the user's name. */
-function winnerOf(db: DatabaseSync, entity: string, id: string, current: Current): OpResult['winner'] {
+function winnerOf(db: DatabaseSync, entity: string, id: string, current: Current, surauId: string): OpResult['winner'] {
   const row = db
     .prepare(
       `SELECT c.actor, c.edited_at, c.at, u.name AS user_name
          FROM change_log c LEFT JOIN users u ON c.actor = 'user:' || u.id
-        WHERE c.entity = ? AND c.entity_id = ? ORDER BY c.id DESC LIMIT 1`,
+        WHERE c.surau_id IN (?, ?) AND c.entity = ? AND c.entity_id = ? ORDER BY c.id DESC LIMIT 1`,
     )
-    .get(LOG_ENTITY[entity] ?? entity, id);
+    .get(surauId, LOG_ENTITY[entity] !== undefined ? '*' : surauId, LOG_ENTITY[entity] ?? entity, id);
   if (row === undefined) return { actor: 'local', userName: null, editedAt: current.editedAt };
   return {
     actor: String(row.actor),
@@ -125,6 +161,7 @@ function winnerOf(db: DatabaseSync, entity: string, id: string, current: Current
 /** Remember the op's first answer: `result` is the status it got, `winner` who beat it when superseded. */
 function record(
   db: DatabaseSync,
+  surauId: string,
   opId: string,
   deviceId: string,
   status: string,
@@ -134,12 +171,12 @@ function record(
   winner: OpResult['winner'] = null,
 ): void {
   db.prepare(
-    'INSERT INTO applied_ops (op_id, device_id, status, rev, applied_at, result_status, winner_json) VALUES (?, ?, ?, ?, ?, ?, ?)',
-  ).run(opId, deviceId, status, rev, now, result, winner === null ? null : JSON.stringify(winner));
+    'INSERT INTO applied_ops (surau_id, op_id, device_id, status, rev, applied_at, result_status, winner_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(surauId, opId, deviceId, status, rev, now, result, winner === null ? null : JSON.stringify(winner));
 }
 
-function appliedBefore(db: DatabaseSync, opId: string): { rev: string | null; result: string; winner: OpResult['winner'] } | null {
-  const row = db.prepare('SELECT rev, result_status, winner_json FROM applied_ops WHERE op_id = ?').get(opId);
+function appliedBefore(db: DatabaseSync, surauId: string, opId: string): { rev: string | null; result: string; winner: OpResult['winner'] } | null {
+  const row = db.prepare('SELECT rev, result_status, winner_json FROM applied_ops WHERE surau_id = ? AND op_id = ?').get(surauId, opId);
   if (row === undefined) return null;
   let winner: OpResult['winner'] = null;
   if (typeof row.winner_json === 'string') {
@@ -242,13 +279,14 @@ export function applyOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx): OpResu
   try {
     const editedAt = clampedEditedAt(op.editedAt, ctx.now);
     return tx(db, () => {
-      const seen = appliedBefore(db, op.opId);
+      const seen = appliedBefore(db, ctx.surauId, op.opId);
       if (seen !== null) return replayOf(op.opId, seen);
 
       if (op.kind === 'asset.put') {
         const { mime, buf } = decodeAsset(op.payload);
-        const meta = putAsset(db, ctx.dataDir, buf, mime, ctx.actor);
-        record(db, op.opId, op.deviceId, meta.created ? 'applied' : 'duplicate', meta.id, nowIso);
+        // counted against the surau's cloud storage limit (decision 24); full: 413, refused `too_large` on the wire
+        const meta = putSurauAsset(db, ctx.dataDir, buf, mime, ctx.actor, ctx.surauId);
+        record(db, ctx.surauId, op.opId, op.deviceId, meta.created ? 'applied' : 'duplicate', meta.id, nowIso);
         return { opId: op.opId, status: meta.created ? 'applied' : 'duplicate', rev: meta.id, reason: null, winner: null };
       }
 
@@ -263,8 +301,8 @@ export function applyOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx): OpResu
         if (Number(sent?.n ?? 0) >= AUDIT_MAX_PER_DAY) throw new Refused('too_many');
         const rev = newRev(editedAt, op.deviceId);
         const meta: ChangeMeta = { deviceId: op.deviceId, origin: ctx.origin, opId: op.opId, editedAt, rev, syncedAt: nowIso };
-        logChange(db, ctx.actor, 'recording/deleted', note.sessionId, undefined, note, meta);
-        record(db, op.opId, op.deviceId, 'applied', rev, nowIso);
+        logChange(db, ctx.actor, 'recording/deleted', note.sessionId, undefined, note, meta, ctx.surauId);
+        record(db, ctx.surauId, op.opId, op.deviceId, 'applied', rev, nowIso);
         return { opId: op.opId, status: 'applied', rev, reason: null, winner: null };
       }
 
@@ -274,23 +312,27 @@ export function applyOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx): OpResu
         if (op.entityId === 'appLock') throw new Refused('live_only');
       }
       if (op.kind === 'user.put' && !SAFE_ID.test(op.entityId)) throw new Refused('invalid');
+      // a user or device of another surau does not exist for this one
+      if (op.kind === 'user.put' && foreignRow(db, 'users', op.entityId, ctx.surauId, false)) throw new Refused('invalid', 'foreign_id');
+      if (op.kind === 'device.revoke' && foreignRow(db, 'devices', op.entityId, ctx.surauId, false)) throw new Refused('invalid', 'foreign_id');
 
       if (op.kind === 'settings.put') {
         // Settings merge field by field inside the store; the op lands if any field was newer.
         const rev = newRev(editedAt, op.deviceId);
         const meta: ChangeMeta = { deviceId: op.deviceId, origin: ctx.origin, opId: op.opId, editedAt, rev, syncedAt: nowIso };
-        const put = putFeatureIn(db, op.entityId as never, op.payload, ctx.actor, op.deviceId, meta);
+        const put = putFeatureIn(db, op.entityId as never, op.payload, ctx.actor, op.deviceId, meta, undefined, ctx.surauId);
         if (put.applied) {
-          record(db, op.opId, op.deviceId, 'applied', rev, nowIso);
-          return { opId: op.opId, status: 'applied', rev, reason: null, winner: null };
+          record(db, ctx.surauId, op.opId, op.deviceId, 'applied', rev, nowIso);
+          // A field that lost to a newer stored stamp is named, so the app can show a Konflik card for it.
+          return { opId: op.opId, status: 'applied', rev, reason: null, winner: null, ...(put.skipped.length > 0 ? { skipped: put.skipped } : {}) };
         }
-        const cur = currentOf(db, 'settings', op.entityId)!;
-        const winner = winnerOf(db, 'settings', op.entityId, cur);
-        record(db, op.opId, op.deviceId, 'superseded', cur.rev, nowIso, 'superseded', winner);
+        const cur = currentOf(db, 'settings', op.entityId, ctx.surauId)!;
+        const winner = winnerOf(db, 'settings', op.entityId, cur, ctx.surauId);
+        record(db, ctx.surauId, op.opId, op.deviceId, 'superseded', cur.rev, nowIso, 'superseded', winner);
         return { opId: op.opId, status: 'superseded', rev: cur.rev, reason: null, winner };
       }
 
-      const current = currentOf(db, op.entity, op.entityId);
+      const current = currentOf(db, op.entity, op.entityId, ctx.surauId);
       if (op.kind === 'device.revoke' && current === null) throw new Refused('invalid');
       const verdict = decide({ kind: op.kind, current, op: { editedAt, deviceId: op.deviceId } });
 
@@ -298,22 +340,25 @@ export function applyOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx): OpResu
         const cur = current!;
         // A delete of something already deleted, a revoke of something already revoked: the end state holds.
         if (verdict.reason === 'already_revoked' || (op.kind === 'content.delete' && verdict.reason === 'tombstoned')) {
-          record(db, op.opId, op.deviceId, verdict.reason, cur.rev, nowIso);
+          record(db, ctx.surauId, op.opId, op.deviceId, verdict.reason, cur.rev, nowIso);
           return { opId: op.opId, status: 'applied', rev: cur.rev, reason: null, winner: null };
         }
-        const winner = winnerOf(db, op.entity, op.entityId, cur);
-        record(db, op.opId, op.deviceId, 'superseded', cur.rev, nowIso, 'superseded', winner);
+        const winner = winnerOf(db, op.entity, op.entityId, cur, ctx.surauId);
+        record(db, ctx.surauId, op.opId, op.deviceId, 'superseded', cur.rev, nowIso, 'superseded', winner);
         return { opId: op.opId, status: 'superseded', rev: cur.rev, reason: null, winner };
       }
 
       const rev = newRev(editedAt, op.deviceId);
       const meta: ChangeMeta = { deviceId: op.deviceId, origin: ctx.origin, opId: op.opId, editedAt, rev, syncedAt: nowIso };
       writeOp(db, op, ctx, meta, nowIso);
-      record(db, op.opId, op.deviceId, 'applied', rev, nowIso);
+      record(db, ctx.surauId, op.opId, op.deviceId, 'applied', rev, nowIso);
       return { opId: op.opId, status: 'applied', rev, reason: null, winner: null };
     });
   } catch (error) {
-    if (error instanceof Refused) return refused(op, error.reason);
+    if (error instanceof Refused) {
+      if (error.detail !== undefined) logSyncRefusal(db, ctx.now, { userId: op.userId, deviceId: op.deviceId }, error.detail);
+      return refused(op, error.reason);
+    }
     if (error instanceof AssetError) return refused(op, error.status === 413 ? 'too_large' : 'invalid');
     if (error instanceof FinanceError || error instanceof PhotoError || error instanceof FinanceRefusal) {
       const [reason, detail] = financeRefusal(error);
@@ -341,13 +386,13 @@ function writeOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx, meta: ChangeMe
       if (!plain(op.payload)) throw new Refused('invalid');
       const kind = op.entity.slice(8);
       if (!isContentKind(kind)) throw new Refused('invalid');
-      putItemIn(db, kind, { ...op.payload, id: op.entityId }, ctx.actor, meta);
+      putItemIn(db, kind, { ...op.payload, id: op.entityId }, ctx.actor, meta, ctx.surauId);
       return;
     }
     case 'content.delete': {
       const kind = op.entity.slice(8);
       if (!isContentKind(kind)) throw new Refused('invalid');
-      deleteItemIn(db, kind, op.entityId, ctx.actor, meta);
+      deleteItemIn(db, kind, op.entityId, ctx.actor, meta, ctx.surauId);
       return;
     }
     case 'settings.put':
@@ -360,11 +405,13 @@ function writeOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx, meta: ChangeMe
       const active = typeof p.active === 'boolean' ? p.active : existing?.active ?? true;
       const name = p.name ?? existing?.name;
       const roles = p.roles ?? existing?.roles;
-      putUserSynced(db, op.entityId, { name: name as string, roles: roles as never, active }, ctx.actor, meta);
+      putUserSynced(db, op.entityId, { name: name as string, roles: roles as never, active }, ctx.actor, meta, ctx.surauId);
+      // A user first seen by the cloud through a phone's op gets a cloud-series ID (an ID is allocated, never sent by a phone).
+      if (ctx.role === 'cloud') settleIncomingNo(db, { kind: 'user', id: op.entityId, surauId: userSurau(db, op.entityId) }, null, false);
       return;
     }
     case 'device.revoke':
-      if (revokeDeviceRow(db, op.entityId, ctx.actor, nowIso, meta)) bumpVersion(db);
+      if (revokeDeviceRow(db, op.entityId, ctx.actor, nowIso, meta)) bumpVersion(db, ctx.surauId);
       return;
     default:
       throw new Refused('invalid');
@@ -392,6 +439,8 @@ function financeRefusal(error: FinanceError | PhotoError | FinanceRefusal): [OpR
   if (error.code === 'month_closed') return ['month_closed', 'apply_finance_month_closed'];
   if (error.code === 'fund_archived') return ['fund_archived', 'apply_finance_fund_archived'];
   if (error.code === 'entry_exists') return ['invalid', 'apply_finance_entry_exists'];
+  if (error.code === 'opening_exists') return ['invalid', 'apply_finance_opening_exists'];
+  if (error.code === 'already_voided') return ['invalid', 'apply_finance_already_voided'];
   return ['invalid', 'apply_finance_invalid'];
 }
 
@@ -410,8 +459,8 @@ function pickKeys(from: Record<string, unknown>, keys: readonly string[]): Recor
  * (a reopen) is already there; `open` wins over `closed` only when its edit time is later than the close.
  * `same` = the end state already holds; the cloud never invents either state.
  */
-function monthVerdict(db: DatabaseSync, ym: string, status: 'open' | 'closed', editedAt: string): 'apply' | 'same' | 'superseded' {
-  const cur = db.prepare('SELECT status, edited_at FROM finance_months WHERE ym = ?').get(ym);
+function monthVerdict(db: DatabaseSync, surauId: string, ym: string, status: 'open' | 'closed', editedAt: string): 'apply' | 'same' | 'superseded' {
+  const cur = db.prepare('SELECT status, edited_at FROM finance_months WHERE surau_id = ? AND ym = ?').get(surauId, ym);
   const curStatus = cur === undefined ? 'open' : String(cur.status);
   const curAt = cur === undefined ? null : Date.parse(String(cur.edited_at));
   const at = Date.parse(editedAt);
@@ -427,14 +476,14 @@ function monthVerdict(db: DatabaseSync, ym: string, status: 'open' | 'closed', e
 function financeOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx, editedAt: string, nowIso: string): OpResult {
   const rev = newRev(editedAt, op.deviceId);
   const meta: ChangeMeta = { deviceId: op.deviceId, origin: ctx.origin, opId: op.opId, editedAt, rev, syncedAt: nowIso };
-  const fctx = { now: ctx.now, role: ctx.role ?? 'cloud', ...(ctx.surauId !== undefined ? { surauId: ctx.surauId } : {}) };
+  const fctx = { now: ctx.now, role: ctx.role ?? 'cloud', surauId: ctx.surauId };
   const applied = (): OpResult => {
-    record(db, op.opId, op.deviceId, 'applied', rev, nowIso);
+    record(db, ctx.surauId, op.opId, op.deviceId, 'applied', rev, nowIso);
     return { opId: op.opId, status: 'applied', rev, reason: null, winner: null };
   };
   const superseded = (cur: Current): OpResult => {
-    const winner = winnerOf(db, op.entity, op.entityId, cur);
-    record(db, op.opId, op.deviceId, 'superseded', cur.rev, nowIso, 'superseded', winner);
+    const winner = winnerOf(db, op.entity, op.entityId, cur, ctx.surauId);
+    record(db, ctx.surauId, op.opId, op.deviceId, 'superseded', cur.rev, nowIso, 'superseded', winner);
     return { opId: op.opId, status: 'superseded', rev: cur.rev, reason: null, winner };
   };
 
@@ -443,7 +492,7 @@ function financeOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx, editedAt: st
       if (!plain(op.payload) || !SAFE_ID.test(op.entityId)) throw new Refused('invalid');
       // A ledger row is never overwritten. An id that exists already is a retry (`duplicate`) when the body is the
       // one stored, and refused otherwise; appendEntryIn judges which and writes nothing in either case.
-      const had = entryRow(db, op.entityId) !== null;
+      const had = entryRow(db, op.entityId, ctx.surauId) !== null;
       try {
         appendEntryIn(db, { ...op.payload, id: op.entityId }, ctx.actor, fctx, meta);
       } catch (error) {
@@ -451,29 +500,29 @@ function financeOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx, editedAt: st
         throw error;
       }
       if (had) {
-        record(db, op.opId, op.deviceId, 'duplicate', null, nowIso);
+        record(db, ctx.surauId, op.opId, op.deviceId, 'duplicate', null, nowIso);
         return { opId: op.opId, status: 'duplicate', rev: null, reason: null, winner: null };
       }
       return applied();
     }
     case 'finance.lookup.put': {
       if (!plain(op.payload) || !SAFE_ID.test(op.entityId)) throw new Refused('invalid');
-      const current = currentOf(db, op.entity, op.entityId);
+      const current = currentOf(db, op.entity, op.entityId, ctx.surauId);
       const verdict = decide({ kind: 'content.put', current, op: { editedAt, deviceId: op.deviceId } });
       if (!verdict.apply) return superseded(current!);
-      if (op.entity === 'finance:fund') putFundIn(db, op.entityId, op.payload, ctx.actor, meta);
-      else putPerihalIn(db, op.entityId, op.payload, ctx.actor, meta);
+      if (op.entity === 'finance:fund') putFundIn(db, op.entityId, op.payload, ctx.actor, meta, ctx.surauId);
+      else putPerihalIn(db, op.entityId, op.payload, ctx.actor, meta, undefined, ctx.surauId);
       return applied();
     }
     case 'finance.month.put': {
       if (!plain(op.payload) || !FINANCE_YM.test(op.entityId)) throw new Refused('invalid');
       const status = op.payload.status;
       if (Object.keys(op.payload).some((k) => k !== 'status') || (status !== 'open' && status !== 'closed')) throw new Refused('invalid');
-      const verdict = monthVerdict(db, op.entityId, status, editedAt);
-      if (verdict === 'superseded') return superseded(currentOf(db, op.entity, op.entityId)!);
+      const verdict = monthVerdict(db, ctx.surauId, op.entityId, status, editedAt);
+      if (verdict === 'superseded') return superseded(currentOf(db, op.entity, op.entityId, ctx.surauId)!);
       if (verdict === 'apply') {
         const freeze = ctx.freezeReport;
-        putMonthIn(db, op.entityId, { status }, ctx.actor, { ...fctx, ...(freeze ? { freeze: (m: string) => freeze(db, m, ctx.now) } : {}) }, meta);
+        putMonthIn(db, op.entityId, { status }, ctx.actor, { ...fctx, ...(freeze ? { freeze: (m: string) => freeze(db, m, ctx.now, ctx.surauId) } : {}) }, meta);
       }
       return applied();
     }
@@ -487,7 +536,7 @@ function financeOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx, editedAt: st
       if (buf.length > MAX_PHOTO_BYTES) throw new Refused('too_large');
       // The entity id IS the hash of the bytes: a photo can only ever be stored under its own name.
       if (createHash('sha256').update(buf).digest('hex') !== op.entityId) throw new Refused('invalid');
-      putPhoto(db, ctx.dataDir, buf, p.entryId, ctx.actor, ctx.now, meta);
+      putPhoto(db, ctx.dataDir, buf, p.entryId, ctx.actor, ctx.now, meta, ctx.surauId);
       return applied();
     }
     default:
@@ -504,39 +553,41 @@ function financeEntry(
   const after = e.after;
   if (!plain(after)) return bad;
   if ((e.entity === 'finance:entry' || e.entity === 'finance:fund' || e.entity === 'finance:perihal') && !SAFE_ID.test(e.entityId)) return bad;
-  const fctx = { now: ctx.now, role: ctx.role ?? 'cloud', ...(ctx.surauId !== undefined ? { surauId: ctx.surauId } : {}) };
+  const fctx = { now: ctx.now, role: ctx.role ?? 'cloud', surauId: ctx.surauId };
   try {
     switch (e.entity) {
       case 'finance:entry': {
         if (after.id !== e.entityId) return bad;
-        const existing = entryRow(db, e.entityId);
+        const existing = entryRow(db, e.entityId, ctx.surauId);
         if (existing !== null) {
           // A ledger row is never rewritten by replication; the only thing that may arrive late is its display number.
           const ref = typeof after.refNo === 'string' ? after.refNo : null;
-          if (existing.refNo === null && ref !== null && fillRefNoFrom(db, e.entityId, ref, e.actor, meta)) return { status: 'applied', reason: null };
+          if (existing.refNo === null && ref !== null && fillRefNoFrom(db, e.entityId, ref, e.actor, meta, ctx.surauId)) return { status: 'applied', reason: null };
           return { status: 'duplicate', reason: null };
         }
         insertReplicatedEntry(db, after, e.entityId, e.actor, fctx, meta);
         // the op id may already be on record (the row was refused once before it arrived)
-        if (e.opId !== null && appliedBefore(db, e.opId) === null) return done('applied');
+        if (e.opId !== null && appliedBefore(db, ctx.surauId, e.opId) === null) return done('applied');
         return { status: 'applied', reason: null };
       }
       case 'finance:fund':
       case 'finance:perihal': {
-        const current = currentOf(db, e.entity, e.entityId);
+        const current = currentOf(db, e.entity, e.entityId, ctx.surauId);
         const verdict = decide({ kind: 'content.put', current, op: { editedAt, deviceId: entryDevice } });
         if (!verdict.apply) return { status: 'superseded', reason: null };
-        if (e.entity === 'finance:fund') putFundIn(db, e.entityId, pickKeys(after, FUND_KEYS), e.actor, meta);
-        else putPerihalIn(db, e.entityId, pickKeys(after, PERIHAL_KEYS), e.actor, meta, after.system === 'penceramah' ? { system: 'penceramah' } : undefined);
+        if (e.entity === 'finance:fund') putFundIn(db, e.entityId, pickKeys(after, FUND_KEYS), e.actor, meta, ctx.surauId);
+        else putPerihalIn(db, e.entityId, pickKeys(after, PERIHAL_KEYS), e.actor, meta, after.system === 'penceramah' ? { system: 'penceramah' } : undefined, ctx.surauId);
         return done('applied');
       }
       case 'finance:month': {
+        // the other side's note that an entry reached a month it had closed: its own history, never a close or reopen
+        if (plain(after.lateEntry)) return { status: 'duplicate', reason: null };
         const status = after.status;
         if (!FINANCE_YM.test(e.entityId) || (status !== 'open' && status !== 'closed')) return bad;
         // a frozen report that is present must be the shape freezeReport makes, for this month; anything else is refused
         const rep = after.report;
         if (status === 'closed' && rep !== undefined && rep !== null && (!isMonthReport(rep) || rep.ym !== e.entityId)) return bad;
-        const verdict = monthVerdict(db, e.entityId, status, editedAt);
+        const verdict = monthVerdict(db, ctx.surauId, e.entityId, status, editedAt);
         if (verdict === 'superseded') return { status: 'superseded', reason: null };
         if (verdict === 'same') return { status: 'duplicate', reason: null };
         const frozen = status === 'closed' && isMonthReport(rep) ? JSON.stringify(rep) : null;
@@ -547,13 +598,21 @@ function financeEntry(
         const mime = after.mime; const bytes = after.bytes; const entryId = after.entryId;
         if (!PHOTO_ID_RE.test(e.entityId) || mime !== 'image/jpeg' || typeof entryId !== 'string' || !SAFE_ID.test(entryId)) return bad;
         if (typeof bytes !== 'number' || !Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_PHOTO_BYTES) return bad;
-        if (photoMeta(db, e.entityId) !== null) return { status: 'duplicate', reason: null };
-        // Metadata only: the bytes come by their own route and flip `present` when they arrive.
-        const present = existsSync(join(photosDirOf(ctx.dataDir), `${e.entityId}.jpg`)) ? 1 : 0;
+        if (photoMeta(db, e.entityId, ctx.surauId) !== null) return { status: 'duplicate', reason: null };
+        // A photo hash another surau holds is never registered here (Plan 14 section 5): the name alone would hand
+        // this surau that surau's file. Refused `foreign_id` (the site route logs `site_apply_foreign_id`).
+        if (db.prepare('SELECT 1 AS x FROM finance_photos WHERE id = ? AND surau_id <> ?').get(e.entityId, ctx.surauId) !== undefined) {
+          return { status: 'refused', reason: 'foreign_id' };
+        }
+        // Metadata only: the bytes come by their own route and flip `present` when they arrive. On a box a file
+        // already on disk is its own surau's; on the cloud a file is never this surau's until it sends the bytes
+        // itself (the bytes route checks their hash), so a file left by anyone else is never granted by its name.
+        const onDisk = existsSync(join(photosDirOf(ctx.dataDir), `${e.entityId}.jpg`));
+        const present = onDisk && ctx.role === 'box' ? 1 : 0;
         db.prepare(
           'INSERT INTO finance_photos (surau_id, id, entry_id, mime, bytes, created_at, created_by, present) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        ).run(ctx.surauId ?? DEFAULT_SURAU_ID, e.entityId, entryId, 'image/jpeg', bytes, ctx.now.toISOString(), e.actor, present);
-        logChange(db, e.actor, 'finance:photo', e.entityId, undefined, { entryId, mime: 'image/jpeg', bytes }, meta);
+        ).run(ctx.surauId, e.entityId, entryId, 'image/jpeg', bytes, ctx.now.toISOString(), e.actor, present);
+        logChange(db, e.actor, 'finance:photo', e.entityId, undefined, { entryId, mime: 'image/jpeg', bytes }, meta, ctx.surauId);
         return done('applied');
       }
       default:
@@ -567,8 +626,11 @@ function financeEntry(
 
 export interface EntryResult {
   status: OpStatus;
-  /** `device_key_mismatch`: an enrolment names an existing device id with a different key (sync never replaces a key). */
-  reason: OpRefusal | 'device_key_mismatch' | null;
+  /**
+   * `device_key_mismatch`: an enrolment names an existing device id with a different key (sync never replaces a key).
+   * `foreign_id`: a user or device id that exists under another surau (never touched from this one).
+   */
+  reason: OpRefusal | 'device_key_mismatch' | 'foreign_id' | null;
 }
 
 const DEV_REVOKED_PREFIX = 'dev_revoked/';
@@ -619,16 +681,16 @@ export function applyFeedEntry(db: DatabaseSync, e: FeedEntry, ctx: ApplyCtx): E
   try {
     return tx(db, () => {
       // A finance entry decides for itself (it may still be owed its display number), so the op id shortcut skips it.
-      if (e.entity !== 'finance:entry' && e.opId !== null && appliedBefore(db, e.opId) !== null) return { status: 'duplicate', reason: null };
+      if (e.entity !== 'finance:entry' && e.opId !== null && appliedBefore(db, ctx.surauId, e.opId) !== null) return { status: 'duplicate', reason: null };
       const done = (status: OpStatus): EntryResult => {
-        if (status === 'applied' && e.opId !== null) record(db, e.opId, e.deviceId ?? '', 'applied', meta.rev ?? e.rev, nowIso);
+        if (status === 'applied' && e.opId !== null) record(db, ctx.surauId, e.opId, e.deviceId ?? '', 'applied', meta.rev ?? e.rev, nowIso);
         return { status, reason: null };
       };
 
       if (e.entity.startsWith('finance:')) return financeEntry(db, e, ctx, meta, editedAt, entryDevice, done);
 
       if (e.entity.startsWith('prayer:')) {
-        const r = applyPrayerEntry(db, e, meta, ctx.now);
+        const r = applyPrayerEntry(db, e, meta, ctx.now, ctx.surauId);
         return r.status === 'applied' ? done('applied') : { status: r.status, reason: r.reason };
       }
 
@@ -637,12 +699,12 @@ export function applyFeedEntry(db: DatabaseSync, e: FeedEntry, ctx: ApplyCtx): E
         if (!isContentKind(kind)) return { status: 'refused', reason: 'invalid' };
         const isDelete = e.after === null;
         if (!isDelete && !plain(e.after)) return { status: 'refused', reason: 'invalid' };
-        const current = currentOf(db, e.entity, e.entityId);
+        const current = currentOf(db, e.entity, e.entityId, ctx.surauId);
         const verdict = decide({ kind: isDelete ? 'content.delete' : 'content.put', current, op: { editedAt, deviceId: entryDevice } });
         if (!verdict.apply) return { status: 'superseded', reason: null };
         // A delete of an entity this side never saw still writes the tombstone.
-        if (isDelete) deleteItemIn(db, kind, e.entityId, e.actor, meta);
-        else putItemIn(db, kind, { ...(e.after as Record<string, unknown>), id: e.entityId }, e.actor, meta);
+        if (isDelete) deleteItemIn(db, kind, e.entityId, e.actor, meta, ctx.surauId);
+        else putItemIn(db, kind, { ...(e.after as Record<string, unknown>), id: e.entityId }, e.actor, meta, ctx.surauId);
         return done('applied');
       }
 
@@ -656,7 +718,7 @@ export function applyFeedEntry(db: DatabaseSync, e: FeedEntry, ctx: ApplyCtx): E
           if (fieldStamps === null) return { status: 'refused', reason: 'invalid' };
         }
         // Field by field: a field lands only when its stamp is newer than the stored one.
-        const put = putFeatureIn(db, e.entityId, e.after, e.actor, e.deviceId ?? undefined, meta, { fieldStamps });
+        const put = putFeatureIn(db, e.entityId, e.after, e.actor, e.deviceId ?? undefined, meta, { fieldStamps }, ctx.surauId);
         return put.applied ? done('applied') : { status: 'superseded', reason: null };
       }
 
@@ -669,11 +731,21 @@ export function applyFeedEntry(db: DatabaseSync, e: FeedEntry, ctx: ApplyCtx): E
         if (fromSite && (existing?.roles.includes('superadmin') === true || (Array.isArray(after.roles) && after.roles.includes('superadmin')))) {
           return refuseSuperadmin(e.entityId, e.deviceId);
         }
-        const current = currentOf(db, 'user', e.entityId);
+        // Sokongan MAXCOM is made by the cloud CLI alone too (operator decision 20): a site never plants a `'*'` user.
+        if (fromSite && Array.isArray(after.roles) && after.roles.some((r) => OPS_ROLES.includes(r as never))) return refuseSuperadmin(e.entityId, e.deviceId);
+        if (foreignRow(db, 'users', e.entityId, ctx.surauId, fromSite)) return { status: 'refused', reason: 'foreign_id' };
+        const current = currentOf(db, 'user', e.entityId, ctx.surauId);
         const verdict = decide({ kind: 'user.put', current, op: { editedAt, deviceId: entryDevice } });
         if (!verdict.apply) return { status: 'superseded', reason: null };
         const active = typeof after.active === 'boolean' ? after.active : existing?.active ?? true;
-        putUserSynced(db, e.entityId, { name: after.name as string, roles: after.roles as never, active }, e.actor, meta);
+        // The ID: only the cloud settles one, and only from a site (a box never takes a number from an entry).
+        const incoming = ctx.role === 'cloud' && fromSite ? incomingNo(after.no, after.noSrc) : null;
+        const primary = ctx.role === 'cloud' && fromSite && siteIsPrimary(db, ctx.siteBoxId);
+        if (existing === undefined && incoming !== null && incoming.src === 'b' && primary && numberTaken(db, ctx.surauId, 'user', 'b', incoming.no)) {
+          return { status: 'refused', reason: 'id_taken' };
+        }
+        putUserSynced(db, e.entityId, { name: after.name as string, roles: after.roles as never, active, ...(typeof after.deleted === 'boolean' ? { deleted: after.deleted } : {}), ...(typeof after.phone === 'string' ? { phone: after.phone } : {}) }, e.actor, meta, ctx.surauId);
+        if (ctx.role === 'cloud') settleEntryNo(db, 'user', e.entityId, userSurau(db, e.entityId), incoming, primary);
         return done('applied');
       }
 
@@ -681,7 +753,7 @@ export function applyFeedEntry(db: DatabaseSync, e: FeedEntry, ctx: ApplyCtx): E
         const after = plain(e.after) ? e.after : null;
         if (after === null || !SAFE_ID.test(e.entityId)) return { status: 'refused', reason: 'invalid' };
         const key = plain(after.publicJwk) ? after.publicJwk : null;
-        const current = currentOf(db, 'device', e.entityId);
+        const current = currentOf(db, 'device', e.entityId, ctx.surauId);
 
         if (current === null) {
           if (key === null) {
@@ -690,16 +762,33 @@ export function applyFeedEntry(db: DatabaseSync, e: FeedEntry, ctx: ApplyCtx): E
             return { status: 'refused', reason: 'device_unknown' };
           }
           if (ctx.acceptDeviceEnrolment !== true) return { status: 'refused', reason: 'device_unknown' };
+          // the home box is the sending site's; an entry naming any other box is refused (verifySiteEntry already does)
+          if (after.boxId !== undefined && after.boxId !== ctx.siteBoxId) {
+            logSyncRefusal(db, ctx.now, { userId: after.userId, deviceId: e.entityId }, 'box_mismatch');
+            return { status: 'refused', reason: 'invalid' };
+          }
           if (revokedEarly(db, e.entityId)) return { status: 'duplicate', reason: null };
           // Nothing about a Pentadbir MAXCOM comes from a site: its devices are enrolled on the cloud alone.
           if (ownerIsSuperadmin(String(after.userId))) return refuseSuperadmin(after.userId, e.entityId);
+          // a device is enrolled for a user of the sending site's own surau only
+          if (foreignRow(db, 'users', String(after.userId), ctx.surauId, fromSite)) return { status: 'refused', reason: 'foreign_id' };
+          // The box's number for a device the cloud has not seen is refused when another device of the surau holds it.
+          const devNo = ctx.role === 'cloud' ? incomingNo(after.no, after.noSrc) : null;
+          if (devNo !== null && devNo.src === 'b' && siteIsPrimary(db, ctx.siteBoxId) && numberTaken(db, ctx.surauId, 'device', 'b', devNo.no)) {
+            return { status: 'refused', reason: 'id_taken' };
+          }
           try {
             enrolDeviceSynced(
               db,
               { id: e.entityId, userId: String(after.userId), name: String(after.name ?? ''), platform: String(after.platform), publicJwk: key, enrolledAt: String(after.enrolledAt) },
               e.actor,
               meta,
+              ctx.siteBoxId ?? null,
+              ctx.surauId,
             );
+            if (ctx.role === 'cloud') {
+              settleEntryNo(db, 'device', e.entityId, deviceSurau(db, e.entityId), incomingNo(after.no, after.noSrc), siteIsPrimary(db, ctx.siteBoxId));
+            }
           } catch (error) {
             if (error instanceof AuthError) {
               logSyncRefusal(db, ctx.now, { userId: after.userId, deviceId: e.entityId }, error.code === 'user_not_found' ? 'enrol_user_unknown' : 'enrol_invalid');
@@ -708,14 +797,17 @@ export function applyFeedEntry(db: DatabaseSync, e: FeedEntry, ctx: ApplyCtx): E
             throw error;
           }
           // an entry that says both "enrolled" and "revoked" leaves the device revoked
-          if (after.revoked === true && revokeDeviceRow(db, e.entityId, e.actor, nowIso, meta)) bumpVersion(db);
+          if (after.revoked === true && revokeDeviceRow(db, e.entityId, e.actor, nowIso, meta)) bumpVersion(db, ctx.surauId);
           return done('applied');
         }
 
         if (fromSite) {
           const owner = db.prepare('SELECT user_id FROM devices WHERE id = ?').get(e.entityId);
           if (owner !== undefined && ownerIsSuperadmin(String(owner.user_id))) return refuseSuperadmin(owner.user_id, e.entityId);
+          // nor a device of a Sokongan MAXCOM (decision 21), wherever it was enrolled
+          if (owner !== undefined && foreignRow(db, 'users', String(owner.user_id), ctx.surauId, fromSite)) return { status: 'refused', reason: 'foreign_id' };
         }
+        if (foreignRow(db, 'devices', e.entityId, ctx.surauId, fromSite)) return { status: 'refused', reason: 'foreign_id' };
         if (key !== null) {
           // A key is never replaced by sync (a re-enrolment makes a new id).
           const stored = getDeviceWithKey(db, e.entityId)?.publicJwk;
@@ -725,10 +817,22 @@ export function applyFeedEntry(db: DatabaseSync, e: FeedEntry, ctx: ApplyCtx): E
             return { status: 'refused', reason: 'device_key_mismatch' };
           }
         }
-        if (after.revoked !== true) return { status: 'duplicate', reason: null };
+        if (ctx.role === 'cloud') settleEntryNo(db, 'device', e.entityId, deviceSurau(db, e.entityId), incomingNo(after.no, after.noSrc), siteIsPrimary(db, ctx.siteBoxId));
+        if (after.revoked !== true) {
+          // A rename: the one change of a live device that travels besides its revocation (no new op kind).
+          const stored = db.prepare('SELECT name, revoked_at FROM devices WHERE id = ?').get(e.entityId);
+          if (stored !== undefined && stored.revoked_at === null && typeof after.name === 'string') {
+            const clean = cleanNameText(after.name);
+            if (clean !== null && clean !== stored.name && decide({ kind: 'content.put', current, op: { editedAt, deviceId: entryDevice } }).apply) {
+              renameDeviceRows(db, e.entityId, clean, e.actor, meta);
+              return done('applied');
+            }
+          }
+          return { status: 'duplicate', reason: null };
+        }
         const verdict = decide({ kind: 'device.revoke', current, op: { editedAt, deviceId: entryDevice } });
         if (!verdict.apply) return { status: 'duplicate', reason: null };
-        if (revokeDeviceRow(db, e.entityId, e.actor, nowIso, meta)) bumpVersion(db);
+        if (revokeDeviceRow(db, e.entityId, e.actor, nowIso, meta)) bumpVersion(db, ctx.surauId);
         return done('applied');
       }
 

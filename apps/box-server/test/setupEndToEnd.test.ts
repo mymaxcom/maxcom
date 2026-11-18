@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { afterAll, describe, expect, it } from 'vitest';
 import { makeFakeBundle, type FakeBundle } from './helpers/fakeBundle.ts';
+import { must } from './helpers/must.ts';
 
 const isWin = process.platform === 'win32';
 const setupDir = fileURLToPath(new URL('../../../scripts/setup/', import.meta.url));
@@ -253,7 +254,7 @@ describe.runIf(isWin)('box install, restart, upgrade, switch back, migrate and u
       expect(readFileSync(join(root, 'previous.txt'), 'utf8').trim()).toBe('2026.11.1');
       const pre = readdirSync(backups).filter((n) => n.startsWith('pre-2026.11.2-'));
       expect(pre.length, `backups: ${readdirSync(backups).join(', ')}`).toBe(1);
-      expect(sha(join(backups, pre[0], 'surau.db'))).toBe(dbHash);
+      expect(sha(join(backups, must(pre[0], 'pre-upgrade backup'), 'surau.db'))).toBe(dbHash);
       expect(sha(dbFile)).toBe(dbHash);
       launcher = startLauncher(root, fakeProgramData);
       await waitHealth(port, 30, '2026.11.2');

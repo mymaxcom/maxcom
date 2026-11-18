@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
+import 's_ar.dart';
 import 's_en.dart';
 import 's_ms.dart';
 
@@ -93,6 +94,7 @@ abstract class S {
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
+    Locale('ar'),
     Locale('en'),
     Locale('ms'),
   ];
@@ -196,7 +198,7 @@ abstract class S {
   /// No description provided for @navSettings.
   ///
   /// In ms, this message translates to:
-  /// **'Tetapan'**
+  /// **'Konfigurasi'**
   String get navSettings;
 
   /// No description provided for @navContent.
@@ -286,7 +288,7 @@ abstract class S {
   /// No description provided for @settingsTitle.
   ///
   /// In ms, this message translates to:
-  /// **'Tetapan'**
+  /// **'Konfigurasi'**
   String get settingsTitle;
 
   /// No description provided for @enrolTitle.
@@ -1062,6 +1064,60 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Lihat apa yang dipaparkan di TV surau sekarang.'**
   String get previewShortcutHint;
+
+  /// No description provided for @dashAttention.
+  ///
+  /// In ms, this message translates to:
+  /// **'Perlu perhatian'**
+  String get dashAttention;
+
+  /// No description provided for @dashPrayerDaysLeft.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data waktu solat tinggal {n} hari'**
+  String dashPrayerDaysLeft(int n);
+
+  /// No description provided for @dashPrayerNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada data waktu solat'**
+  String get dashPrayerNone;
+
+  /// No description provided for @dashLockedUsers.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} pengguna dikunci'**
+  String dashLockedUsers(int n);
+
+  /// No description provided for @dashLockedHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka kunci mereka di Pengguna & peranti.'**
+  String get dashLockedHint;
+
+  /// No description provided for @dashOnTv.
+  ///
+  /// In ms, this message translates to:
+  /// **'Di skrin TV sekarang'**
+  String get dashOnTv;
+
+  /// No description provided for @dashSeeTv.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lihat skrin TV'**
+  String get dashSeeTv;
+
+  /// No description provided for @dashSystem.
+  ///
+  /// In ms, this message translates to:
+  /// **'Butiran sistem'**
+  String get dashSystem;
+
+  /// No description provided for @dashAppVersion.
+  ///
+  /// In ms, this message translates to:
+  /// **'Versi aplikasi'**
+  String get dashAppVersion;
 
   /// No description provided for @comingBody.
   ///
@@ -2248,8 +2304,26 @@ abstract class S {
   /// No description provided for @roleMediaHint.
   ///
   /// In ms, this message translates to:
-  /// **'Kandungan, poster dan siaran langsung'**
+  /// **'Kandungan dan poster'**
   String get roleMediaHint;
+
+  /// No description provided for @roleLive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran Langsung'**
+  String get roleLive;
+
+  /// No description provided for @roleLiveHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Membuka menu Siaran langsung dan tetapannya: kamera luaran, sumber audio, skrin, YouTube dan rakaman'**
+  String get roleLiveHint;
+
+  /// No description provided for @usersMediaNoLiveHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranan Media tidak lagi boleh membuat siaran langsung. Beri peranan Siaran Langsung kepada pengguna yang perlu.'**
+  String get usersMediaNoLiveHint;
 
   /// No description provided for @roleAjkHint.
   ///
@@ -2344,7 +2418,7 @@ abstract class S {
   /// No description provided for @userDeactivateHint.
   ///
   /// In ms, this message translates to:
-  /// **'{name} tidak lagi dapat buka kunci aplikasi ini.'**
+  /// **'Semua peranti dan kod {name} dipadam. Nama kekal dalam log dan rekod kewangan.'**
   String userDeactivateHint(String name);
 
   /// No description provided for @userDeactivateTitle.
@@ -2404,7 +2478,7 @@ abstract class S {
   /// No description provided for @enrolQrCodeLabel.
   ///
   /// In ms, this message translates to:
-  /// **'Atau taip kod ini'**
+  /// **'Kod semakan'**
   String get enrolQrCodeLabel;
 
   /// No description provided for @enrolQrExpiresIn.
@@ -2458,13 +2532,13 @@ abstract class S {
   /// No description provided for @devicesRevoke.
   ///
   /// In ms, this message translates to:
-  /// **'Batalkan'**
+  /// **'Padam'**
   String get devicesRevoke;
 
   /// No description provided for @devicesRevokeTitle.
   ///
   /// In ms, this message translates to:
-  /// **'Batalkan {name}?'**
+  /// **'Padam {name}?'**
   String devicesRevokeTitle(String name);
 
   /// No description provided for @devicesRevokeBody.
@@ -2476,13 +2550,13 @@ abstract class S {
   /// No description provided for @devicesRevoked.
   ///
   /// In ms, this message translates to:
-  /// **'Dibatalkan'**
+  /// **'Dipadam'**
   String get devicesRevoked;
 
   /// No description provided for @devicesRevokedToast.
   ///
   /// In ms, this message translates to:
-  /// **'{name} dibatalkan.'**
+  /// **'{name} dipadam.'**
   String devicesRevokedToast(String name);
 
   /// No description provided for @devicesKioskGroup.
@@ -2722,7 +2796,7 @@ abstract class S {
   /// No description provided for @auditEntitySettings.
   ///
   /// In ms, this message translates to:
-  /// **'Tetapan'**
+  /// **'Konfigurasi'**
   String get auditEntitySettings;
 
   /// No description provided for @auditEntityContent.
@@ -4438,7 +4512,7 @@ abstract class S {
   /// No description provided for @appLockOffHint.
   ///
   /// In ms, this message translates to:
-  /// **'Sesiapa yang memegang peranti ini boleh membuka MAXCOM. Pentadbir boleh menghidupkan kunci di Tetapan.'**
+  /// **'Sesiapa yang memegang peranti ini boleh membuka MAXCOM. Pentadbir boleh menghidupkan kunci di Konfigurasi.'**
   String get appLockOffHint;
 
   /// No description provided for @appLockEnrolHint.
@@ -4584,6 +4658,54 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Konflik: {n}'**
   String syncConflicts(int n);
+
+  /// No description provided for @linkCloudConnected.
+  ///
+  /// In ms, this message translates to:
+  /// **'Awan MAXCOM: bersambung'**
+  String get linkCloudConnected;
+
+  /// No description provided for @linkCloudConnecting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Awan MAXCOM: sedang menyambung'**
+  String get linkCloudConnecting;
+
+  /// No description provided for @linkCloudSyncing.
+  ///
+  /// In ms, this message translates to:
+  /// **'Awan MAXCOM: sedang menghantar perubahan'**
+  String get linkCloudSyncing;
+
+  /// No description provided for @linkCloudDisconnected.
+  ///
+  /// In ms, this message translates to:
+  /// **'Awan MAXCOM: tidak bersambung'**
+  String get linkCloudDisconnected;
+
+  /// No description provided for @linkBoxConnected.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM di surau: bersambung'**
+  String get linkBoxConnected;
+
+  /// No description provided for @linkBoxConnecting.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM di surau: sedang menyambung'**
+  String get linkBoxConnecting;
+
+  /// No description provided for @linkBoxSyncing.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM di surau: sedang menghantar perubahan'**
+  String get linkBoxSyncing;
+
+  /// No description provided for @linkBoxDisconnected.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM di surau: tidak dapat dihubungi'**
+  String get linkBoxDisconnected;
 
   /// No description provided for @syncNow.
   ///
@@ -4768,7 +4890,7 @@ abstract class S {
   /// No description provided for @conflictEntitySettings.
   ///
   /// In ms, this message translates to:
-  /// **'Tetapan'**
+  /// **'Konfigurasi'**
   String get conflictEntitySettings;
 
   /// No description provided for @conflictEntityUser.
@@ -4942,7 +5064,7 @@ abstract class S {
   /// No description provided for @devicesEnrolViaCloud.
   ///
   /// In ms, this message translates to:
-  /// **'Anda disambungkan melalui awan. Kod QR dibuat oleh awan dan boleh diimbas dari rumah.'**
+  /// **'Anda di luar rangkaian surau. Kod QR hanya boleh dibuat di Wi-Fi surau.'**
   String get devicesEnrolViaCloud;
 
   /// No description provided for @navUpload.
@@ -5527,6 +5649,30 @@ abstract class S {
   /// **'Cari tetapan, contoh: azan'**
   String get settingsSearchHint;
 
+  /// No description provided for @settingsWhyGroup.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kumpulan: {name}'**
+  String settingsWhyGroup(String name);
+
+  /// No description provided for @settingsWhyField.
+  ///
+  /// In ms, this message translates to:
+  /// **'Medan: {name}'**
+  String settingsWhyField(String name);
+
+  /// No description provided for @settingsWhyChoice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan: {name}'**
+  String settingsWhyChoice(String name);
+
+  /// No description provided for @settingsWhyKeyword.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kata kunci: {name}'**
+  String settingsWhyKeyword(String name);
+
   /// No description provided for @settingsSearchFound.
   ///
   /// In ms, this message translates to:
@@ -5776,7 +5922,7 @@ abstract class S {
   /// No description provided for @setupConfirmHint.
   ///
   /// In ms, this message translates to:
-  /// **'Pastikan nama surau betul. Anda boleh mengubahnya di Tetapan kemudian.'**
+  /// **'Pastikan nama surau betul. Anda boleh mengubahnya di Konfigurasi kemudian.'**
   String get setupConfirmHint;
 
   /// No description provided for @setupFingerprintHint.
@@ -6142,7 +6288,7 @@ abstract class S {
   /// No description provided for @devicesBoxRowHint.
   ///
   /// In ms, this message translates to:
-  /// **'Pelayan dan skrin di surau. Tidak boleh dibatalkan.'**
+  /// **'Skrin utama di surau. Sentiasa ada, tidak boleh dipadam.'**
   String get devicesBoxRowHint;
 
   /// No description provided for @devicesAwayBanner.
@@ -6562,7 +6708,7 @@ abstract class S {
   /// No description provided for @hadisListHelp.
   ///
   /// In ms, this message translates to:
-  /// **'Susunan ini ialah susunan giliran di TV bila sumber Kedua-dua. Tetapan sumber dan giliran di Tetapan, Hadis. Suis menyembunyikan hadis dari TV tetapi kekal tersimpan; Buang memadamnya dari senarai MAXCOM.'**
+  /// **'Susunan ini ialah susunan giliran di TV bila sumber Kedua-dua. Tetapan sumber dan giliran di Konfigurasi, Hadis. Suis menyembunyikan hadis dari TV tetapi kekal tersimpan; Buang memadamnya dari senarai MAXCOM.'**
   String get hadisListHelp;
 
   /// No description provided for @hadisNearFull.
@@ -6970,7 +7116,7 @@ abstract class S {
   /// No description provided for @hadisArabicHidden.
   ///
   /// In ms, this message translates to:
-  /// **'Teks Arab disembunyikan dalam pratonton ini. Tetapan TV di Tetapan, Hadis.'**
+  /// **'Teks Arab disembunyikan dalam pratonton ini. Tetapan TV di Konfigurasi, Hadis.'**
   String get hadisArabicHidden;
 
   /// No description provided for @hadisDetails.
@@ -10216,13 +10362,13 @@ abstract class S {
   /// No description provided for @themeSizeNote.
   ///
   /// In ms, this message translates to:
-  /// **'Skala di atas saiz asas; saiz asas hadis dan ayat dipilih di Tetapan. S ialah saiz sekarang, tiada saiz lebih kecil supaya jelas dari 3 meter.'**
+  /// **'Skala di atas saiz asas; saiz asas hadis dan ayat dipilih di Konfigurasi. S ialah saiz sekarang, tiada saiz lebih kecil supaya jelas dari 3 meter.'**
   String get themeSizeNote;
 
   /// No description provided for @themeBgNote.
   ///
   /// In ms, this message translates to:
-  /// **'Ikut tema: gambar latar di Tetapan digunakan (atau gambar tema yang dimuat naik).'**
+  /// **'Ikut tema: gambar latar di Konfigurasi digunakan (atau gambar tema yang dimuat naik).'**
   String get themeBgNote;
 
   /// No description provided for @themeAlign.
@@ -10692,6 +10838,3414 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Tema dipadam'**
   String get themeDeleted;
+
+  /// No description provided for @valRequired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Wajib diisi'**
+  String get valRequired;
+
+  /// No description provided for @valTooLong.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terlalu panjang (paling banyak {max} aksara)'**
+  String valTooLong(int max);
+
+  /// No description provided for @valNoSpaces.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak boleh ada ruang atau aksara kawalan'**
+  String get valNoSpaces;
+
+  /// No description provided for @valWebAddress.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti alamat web yang sah'**
+  String get valWebAddress;
+
+  /// No description provided for @valStartHttps.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti bermula dengan https://'**
+  String get valStartHttps;
+
+  /// No description provided for @valNoUserInfo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak boleh ada nama pengguna atau kata laluan'**
+  String get valNoUserInfo;
+
+  /// No description provided for @valNoFragment.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak boleh ada bahagian #'**
+  String get valNoFragment;
+
+  /// No description provided for @valPublicAddress.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti alamat internet awam (bukan setempat atau peribadi)'**
+  String get valPublicAddress;
+
+  /// No description provided for @valRectShape.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti objek {shape}'**
+  String valRectShape(String shape);
+
+  /// No description provided for @valUnknownField.
+  ///
+  /// In ms, this message translates to:
+  /// **'Medan tidak dikenali'**
+  String get valUnknownField;
+
+  /// No description provided for @valRectNumbers.
+  ///
+  /// In ms, this message translates to:
+  /// **'x, y, w dan h mesti nombor'**
+  String get valRectNumbers;
+
+  /// No description provided for @valCropInside.
+  ///
+  /// In ms, this message translates to:
+  /// **'Petak potongan mesti berada dalam gambar'**
+  String get valCropInside;
+
+  /// No description provided for @valImageIdBad.
+  ///
+  /// In ms, this message translates to:
+  /// **'Id gambar tidak sah'**
+  String get valImageIdBad;
+
+  /// No description provided for @valSquareLogoOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Petak segi empat hanya untuk logo'**
+  String get valSquareLogoOnly;
+
+  /// No description provided for @valBgChoice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Latar mesti keep, remove atau card'**
+  String get valBgChoice;
+
+  /// No description provided for @valRotateChoice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Putaran mesti 0, 90, 180 atau 270'**
+  String get valRotateChoice;
+
+  /// No description provided for @valBool.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti hidup atau mati'**
+  String get valBool;
+
+  /// No description provided for @valOneOf.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti salah satu daripada: {list}'**
+  String valOneOf(String list);
+
+  /// No description provided for @valWholeNumber.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti nombor bulat {min} hingga {max}'**
+  String valWholeNumber(int min, int max);
+
+  /// No description provided for @valMustText.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti teks'**
+  String get valMustText;
+
+  /// No description provided for @valMustWhat.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti {what}'**
+  String valMustWhat(String what);
+
+  /// No description provided for @valWhatPlain.
+  ///
+  /// In ms, this message translates to:
+  /// **'teks biasa'**
+  String get valWhatPlain;
+
+  /// No description provided for @valWhatPlainNoHtml.
+  ///
+  /// In ms, this message translates to:
+  /// **'teks biasa tanpa aksara HTML'**
+  String get valWhatPlainNoHtml;
+
+  /// No description provided for @valWhatPhone.
+  ///
+  /// In ms, this message translates to:
+  /// **'nombor telefon seperti 012-345 6789'**
+  String get valWhatPhone;
+
+  /// No description provided for @valWhatEmail.
+  ///
+  /// In ms, this message translates to:
+  /// **'alamat e-mel seperti nama@contoh.my'**
+  String get valWhatEmail;
+
+  /// No description provided for @valWhatHttps.
+  ///
+  /// In ms, this message translates to:
+  /// **'alamat https://'**
+  String get valWhatHttps;
+
+  /// No description provided for @valWhatValid.
+  ///
+  /// In ms, this message translates to:
+  /// **'sah'**
+  String get valWhatValid;
+
+  /// No description provided for @valDecimal.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti nombor {min} hingga {max} dengan paling banyak 4 titik perpuluhan, atau kosong'**
+  String valDecimal(int min, int max);
+
+  /// No description provided for @valColourHex.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tulis # diikuti 6 aksara, contoh #F6E7B8'**
+  String get valColourHex;
+
+  /// No description provided for @valAudioFile.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti fail audio yang sah'**
+  String get valAudioFile;
+
+  /// No description provided for @valTimeValid.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti masa yang sah'**
+  String get valTimeValid;
+
+  /// No description provided for @valTextOrEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti teks atau kosong'**
+  String get valTextOrEmpty;
+
+  /// No description provided for @valTextList.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti senarai teks'**
+  String get valTextList;
+
+  /// No description provided for @valItemMax.
+  ///
+  /// In ms, this message translates to:
+  /// **'Item mesti paling banyak {max} aksara'**
+  String valItemMax(int max);
+
+  /// No description provided for @valSourceOrder.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti senaraikan official, calc dan file sekali sahaja'**
+  String get valSourceOrder;
+
+  /// No description provided for @valMaxImages.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paling banyak {max} gambar'**
+  String valMaxImages(int max);
+
+  /// No description provided for @valImageNames.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar mesti nama sedia ada (a-z, 0-9, -) atau /uploads/<nama fail>'**
+  String get valImageNames;
+
+  /// No description provided for @valUnsupported.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan ini tidak disokong'**
+  String get valUnsupported;
+
+  /// No description provided for @valMustObject.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti objek'**
+  String get valMustObject;
+
+  /// No description provided for @valUnknownSetting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan tidak dikenali'**
+  String get valUnknownSetting;
+
+  /// No description provided for @valSurahAyat.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} ada {ayat} ayat'**
+  String valSurahAyat(String name, int ayat);
+
+  /// No description provided for @valAyatOrder.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ayat dari mesti sebelum atau sama dengan Ayat hingga'**
+  String get valAyatOrder;
+
+  /// No description provided for @valAyatMax.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paling banyak 5 ayat sekali paparan'**
+  String get valAyatMax;
+
+  /// No description provided for @valUnknownFeature.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ciri tidak dikenali'**
+  String get valUnknownFeature;
+
+  /// No description provided for @valSettingsObject.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan mesti objek'**
+  String get valSettingsObject;
+
+  /// No description provided for @valAlwaysOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} sentiasa hidup dan tidak boleh dimatikan'**
+  String valAlwaysOn(String name);
+
+  /// No description provided for @valFromBeforeTo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tarikh mula mesti sebelum tarikh tamat'**
+  String get valFromBeforeTo;
+
+  /// No description provided for @valDate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti tarikh yang sah'**
+  String get valDate;
+
+  /// No description provided for @valTimeHm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti masa yang sah (JJ:MM)'**
+  String get valTimeHm;
+
+  /// No description provided for @valDateTime.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti tarikh dan masa yang sah'**
+  String get valDateTime;
+
+  /// No description provided for @valPickDays.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih sekurang-kurangnya satu hari'**
+  String get valPickDays;
+
+  /// No description provided for @valPickTz.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih zon waktu daripada senarai'**
+  String get valPickTz;
+
+  /// No description provided for @valUnknownKind.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jenis kandungan tidak dikenali'**
+  String get valUnknownKind;
+
+  /// No description provided for @valItemObject.
+  ///
+  /// In ms, this message translates to:
+  /// **'Item mesti objek'**
+  String get valItemObject;
+
+  /// No description provided for @valImageBad.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar tidak sah'**
+  String get valImageBad;
+
+  /// No description provided for @valFitBad.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paparan gambar tidak sah'**
+  String get valFitBad;
+
+  /// No description provided for @valChoiceBad.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan tidak sah'**
+  String get valChoiceBad;
+
+  /// No description provided for @valColourLike.
+  ///
+  /// In ms, this message translates to:
+  /// **'Warna mesti seperti #12AB34'**
+  String get valColourLike;
+
+  /// No description provided for @valFontBad.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fon tidak sah'**
+  String get valFontBad;
+
+  /// No description provided for @valSizeChoice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Saiz mesti S, M, L atau XL'**
+  String get valSizeChoice;
+
+  /// No description provided for @valValueUnknown.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nilai tidak dikenali'**
+  String get valValueUnknown;
+
+  /// No description provided for @kindHintSeries.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod siri untuk kuliah bersambung (pilihan)'**
+  String get kindHintSeries;
+
+  /// No description provided for @kindHintPhone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Untuk AJK sahaja, tidak dipaparkan di TV'**
+  String get kindHintPhone;
+
+  /// No description provided for @kindDescPengumuman.
+  ///
+  /// In ms, this message translates to:
+  /// **'Makluman kepada jemaah untuk tempoh tertentu.'**
+  String get kindDescPengumuman;
+
+  /// No description provided for @kindDescHadis.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hadis pilihan untuk kad hadis di TV.'**
+  String get kindDescHadis;
+
+  /// No description provided for @errorRequestFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Permintaan gagal'**
+  String get errorRequestFailed;
+
+  /// No description provided for @errorFeatureNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ciri tidak dijumpai'**
+  String get errorFeatureNotFound;
+
+  /// No description provided for @tvLangNeedsUpdate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kemas kini MAX Kiosk Server untuk pilihan ini'**
+  String get tvLangNeedsUpdate;
+
+  /// No description provided for @prayerErrNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dijumpai'**
+  String get prayerErrNotFound;
+
+  /// No description provided for @prayerErrRateLimited.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terlalu banyak carian. Cuba lagi sebentar lagi'**
+  String get prayerErrRateLimited;
+
+  /// No description provided for @prayerErrOffline.
+  ///
+  /// In ms, this message translates to:
+  /// **'Carian lokasi perlukan sambungan internet pada MAXCOM'**
+  String get prayerErrOffline;
+
+  /// No description provided for @prayerErrUpstream.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sumber waktu solat tidak menjawab. Cuba lagi nanti'**
+  String get prayerErrUpstream;
+
+  /// No description provided for @prayerErrZonesUpstream.
+  ///
+  /// In ms, this message translates to:
+  /// **'Senarai zon tidak dapat dimuat turun sekarang. Cuba lagi nanti'**
+  String get prayerErrZonesUpstream;
+
+  /// No description provided for @prayerErrConflict.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tindakan ini tidak boleh dibuat lagi'**
+  String get prayerErrConflict;
+
+  /// No description provided for @prayerErrTooLarge.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail terlalu besar. Pilih fail yang lebih kecil'**
+  String get prayerErrTooLarge;
+
+  /// No description provided for @prayerErrBadType.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jenis fail tidak disokong'**
+  String get prayerErrBadType;
+
+  /// No description provided for @prayerErrUnavailable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Perkhidmatan tidak tersedia buat masa ini'**
+  String get prayerErrUnavailable;
+
+  /// No description provided for @prayerErrInvalidData.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data tidak sah'**
+  String get prayerErrInvalidData;
+
+  /// No description provided for @liveSignInFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log masuk YouTube tidak berjaya. Cuba lagi.'**
+  String get liveSignInFailed;
+
+  /// No description provided for @liveStartFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran tidak dapat dimulakan'**
+  String get liveStartFailed;
+
+  /// No description provided for @liveOtherDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'peranti lain'**
+  String get liveOtherDevice;
+
+  /// No description provided for @liveRateText.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terlalu banyak cubaan mula siaran. Cuba lagi sebentar lagi.'**
+  String get liveRateText;
+
+  /// No description provided for @liveWarnYoutubeNotSignedIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube belum dilog masuk di MAXCOM. Siaran ke skrin surau berjalan.'**
+  String get liveWarnYoutubeNotSignedIn;
+
+  /// No description provided for @liveWarnYoutubeOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube dimatikan oleh pentadbir'**
+  String get liveWarnYoutubeOff;
+
+  /// No description provided for @liveWarnYoutubeQuota.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kuota YouTube hari ini telah habis.'**
+  String get liveWarnYoutubeQuota;
+
+  /// No description provided for @liveWarnYoutubeReauth.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log masuk YouTube perlu diperbaharui.'**
+  String get liveWarnYoutubeReauth;
+
+  /// No description provided for @liveWarnYoutubeForbidden.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube menolak permintaan.'**
+  String get liveWarnYoutubeForbidden;
+
+  /// No description provided for @liveWarnCloudUnreachable.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: awan tidak dapat dihubungi'**
+  String get liveWarnCloudUnreachable;
+
+  /// No description provided for @liveCamUnreachable.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name}, tidak dapat dihubungi'**
+  String liveCamUnreachable(String name);
+
+  /// No description provided for @liveCamReady.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name}, sedia'**
+  String liveCamReady(String name);
+
+  /// No description provided for @liveExtBoxPullNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Di iPad, MAXCOM yang menarik gambar dan audio dari {camera} dan menghantar pratonton ke iPad ini. Siaran yang digabungkan di MAXCOM sampai ke skrin surau dan YouTube 1 hingga 2 saat lewat.'**
+  String liveExtBoxPullNote(String camera);
+
+  /// No description provided for @liveExtControllerOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Audio kamera sahaja. iPad ini mengawal siaran dan memaparkan pratonton; ia tidak menghantar bunyi.'**
+  String get liveExtControllerOnly;
+
+  /// No description provided for @liveExtScreenLock.
+  ///
+  /// In ms, this message translates to:
+  /// **'Letak iPad dekat penceramah dan kekalkan skrin terbuka. Mengunci skrin akan menghentikan mikrofon.'**
+  String get liveExtScreenLock;
+
+  /// No description provided for @liveExtRecordingFallback.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman tidak dibuat apabila iPad mengawal Kamera luaran. Salinan siaran ada di YouTube.'**
+  String get liveExtRecordingFallback;
+
+  /// No description provided for @liveExtSourceName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mikrofon iPad'**
+  String get liveExtSourceName;
+
+  /// No description provided for @liveExtMicLostCamera.
+  ///
+  /// In ms, this message translates to:
+  /// **'{source} terputus. Siaran diteruskan dengan audio kamera.'**
+  String liveExtMicLostCamera(String source);
+
+  /// No description provided for @liveExtMicLostSilent.
+  ///
+  /// In ms, this message translates to:
+  /// **'{source} terputus. Siaran diteruskan tanpa bunyi.'**
+  String liveExtMicLostSilent(String source);
+
+  /// No description provided for @liveExtMicLostHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mikrofon disambung semula secara automatik dan diselaraskan sebelum dicampur semula. Kekalkan skrin iPad terbuka.'**
+  String get liveExtMicLostHint;
+
+  /// No description provided for @liveExtMicRefused.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mikrofon iPad tidak dapat dibuka. Siaran diteruskan dengan audio kamera.'**
+  String get liveExtMicRefused;
+
+  /// No description provided for @liveExtChipRealign.
+  ///
+  /// In ms, this message translates to:
+  /// **'Diselaraskan semula bila kembali'**
+  String get liveExtChipRealign;
+
+  /// No description provided for @liveExtChipOnStart.
+  ///
+  /// In ms, this message translates to:
+  /// **'Diselaraskan bila siaran bermula'**
+  String get liveExtChipOnStart;
+
+  /// No description provided for @liveExtChipAligned.
+  ///
+  /// In ms, this message translates to:
+  /// **'Selaras'**
+  String get liveExtChipAligned;
+
+  /// No description provided for @liveExtChipNotAligned.
+  ///
+  /// In ms, this message translates to:
+  /// **'Belum selaras'**
+  String get liveExtChipNotAligned;
+
+  /// No description provided for @liveExtChipManual.
+  ///
+  /// In ms, this message translates to:
+  /// **'Imbangan masa audio'**
+  String get liveExtChipManual;
+
+  /// No description provided for @liveExtChipAligning.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sedang diselaraskan'**
+  String get liveExtChipAligning;
+
+  /// No description provided for @liveExtAlignFailedCamera.
+  ///
+  /// In ms, this message translates to:
+  /// **'Penyelarasan automatik belum berjaya, jadi {source} belum dicampur supaya suara tidak kedengaran berganda. Pastikan ada suara di dalam surau dan kamera boleh mendengarnya.'**
+  String liveExtAlignFailedCamera(String source);
+
+  /// No description provided for @liveExtAlignFailedSilent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Penyelarasan automatik belum berjaya. Bunyi mungkin tidak selari dengan gambar.'**
+  String get liveExtAlignFailedSilent;
+
+  /// No description provided for @liveExtUseMicOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Guna {source} sahaja'**
+  String liveExtUseMicOnly(String source);
+
+  /// No description provided for @liveExtCameraNoAudioMic.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera ini tiada audio. {source} digunakan bersendirian. Tetapkan \'Imbangan masa audio\' dengan \'Uji tepukan\'.'**
+  String liveExtCameraNoAudioMic(String source);
+
+  /// No description provided for @liveExtCameraNoAudioAlone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera ini tiada audio. Tekan \'Tambah audio\' untuk memilih mikrofon, atau siaran tiada bunyi.'**
+  String get liveExtCameraNoAudioAlone;
+
+  /// No description provided for @liveExtAllMuted.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semua sumber audio disenyapkan. Siaran tiada bunyi.'**
+  String get liveExtAllMuted;
+
+  /// No description provided for @liveExtPreviewRetry.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pratonton terputus. Menyambung semula...'**
+  String get liveExtPreviewRetry;
+
+  /// No description provided for @liveOnlyEnrol.
+  ///
+  /// In ms, this message translates to:
+  /// **'Daftar peranti baharu'**
+  String get liveOnlyEnrol;
+
+  /// No description provided for @liveOnlyRevoke.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam peranti'**
+  String get liveOnlyRevoke;
+
+  /// No description provided for @liveOnlyRevokeWhy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir mesti nampak peranti berjaya dipadam'**
+  String get liveOnlyRevokeWhy;
+
+  /// No description provided for @liveOnlyAddUser.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tambah pengguna'**
+  String get liveOnlyAddUser;
+
+  /// No description provided for @liveOnlyResetPin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapkan semula PIN'**
+  String get liveOnlyResetPin;
+
+  /// No description provided for @liveOnlyAppLock.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kunci aplikasi'**
+  String get liveOnlyAppLock;
+
+  /// No description provided for @liveOnlyPairDisplay.
+  ///
+  /// In ms, this message translates to:
+  /// **'Luluskan pasangan paparan'**
+  String get liveOnlyPairDisplay;
+
+  /// No description provided for @liveOnlyYoutubeSign.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log masuk dan log keluar YouTube'**
+  String get liveOnlyYoutubeSign;
+
+  /// No description provided for @liveOnlyLive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran langsung'**
+  String get liveOnlyLive;
+
+  /// No description provided for @liveOnlyPrayerOps.
+  ///
+  /// In ms, this message translates to:
+  /// **'Import, pembetulan dan carian waktu solat'**
+  String get liveOnlyPrayerOps;
+
+  /// No description provided for @liveOnlyPrayerData.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data waktu solat'**
+  String get liveOnlyPrayerData;
+
+  /// No description provided for @liveOnlyIslamic.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kandungan Islam'**
+  String get liveOnlyIslamic;
+
+  /// No description provided for @liveOnlyAnalyse.
+  ///
+  /// In ms, this message translates to:
+  /// **'Analisis gambar'**
+  String get liveOnlyAnalyse;
+
+  /// No description provided for @liveOnlyUploadRecording.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik rakaman ke YouTube'**
+  String get liveOnlyUploadRecording;
+
+  /// No description provided for @liveOnlySyncNow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Selaraskan sekarang'**
+  String get liveOnlySyncNow;
+
+  /// No description provided for @liveOnlyChangePin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar PIN'**
+  String get liveOnlyChangePin;
+
+  /// No description provided for @liveOnlyReportPdf.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat turun PDF laporan'**
+  String get liveOnlyReportPdf;
+
+  /// No description provided for @liveOnlyCountPhoto.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lihat foto helaian kiraan'**
+  String get liveOnlyCountPhoto;
+
+  /// No description provided for @liveOnlyReportShared.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rekod perkongsian laporan'**
+  String get liveOnlyReportShared;
+
+  /// No description provided for @liveOnlyFinanceAudit.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sejarah audit kewangan'**
+  String get liveOnlyFinanceAudit;
+
+  /// No description provided for @hadisGradeNoteSahih.
+  ///
+  /// In ms, this message translates to:
+  /// **'Darjat tertinggi'**
+  String get hadisGradeNoteSahih;
+
+  /// No description provided for @hadisGradeNoteHasan.
+  ///
+  /// In ms, this message translates to:
+  /// **'Diterima sebagai hujah'**
+  String get hadisGradeNoteHasan;
+
+  /// No description provided for @hadisGradeNoteHasanLi.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hasan kerana sokongan riwayat lain'**
+  String get hadisGradeNoteHasanLi;
+
+  /// No description provided for @hadisGradeNoteDhaif.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lemah; tidak dipaparkan'**
+  String get hadisGradeNoteDhaif;
+
+  /// No description provided for @hadisGradeNoteMaudhu.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak sekali-kali dipaparkan'**
+  String get hadisGradeNoteMaudhu;
+
+  /// No description provided for @valWhatThemeName.
+  ///
+  /// In ms, this message translates to:
+  /// **'nama tema (a-z, 0-9, sempang, paling banyak 32 aksara)'**
+  String get valWhatThemeName;
+
+  /// No description provided for @valWhatReciter.
+  ///
+  /// In ms, this message translates to:
+  /// **'nama folder qari'**
+  String get valWhatReciter;
+
+  /// No description provided for @valWhatCountry.
+  ///
+  /// In ms, this message translates to:
+  /// **'kod negara dua huruf seperti MY'**
+  String get valWhatCountry;
+
+  /// No description provided for @valWhatTimezone.
+  ///
+  /// In ms, this message translates to:
+  /// **'zon waktu seperti Asia/Kuala_Lumpur'**
+  String get valWhatTimezone;
+
+  /// No description provided for @valWhatZone.
+  ///
+  /// In ms, this message translates to:
+  /// **'kod zon seperti SGR01'**
+  String get valWhatZone;
+
+  /// No description provided for @valWhatImageOrEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'id gambar atau kosong'**
+  String get valWhatImageOrEmpty;
+
+  /// No description provided for @valWhatFundOrEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'id tabung atau kosong'**
+  String get valWhatFundOrEmpty;
+
+  /// No description provided for @valWhatDateOrEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'tarikh YYYY-MM-DD atau kosong'**
+  String get valWhatDateOrEmpty;
+
+  /// No description provided for @kindDescPenceramah.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ustaz dan ustazah yang menyampaikan kuliah.'**
+  String get kindDescPenceramah;
+
+  /// No description provided for @kindDescKitab.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kitab yang dibaca dalam kuliah.'**
+  String get kindDescKitab;
+
+  /// No description provided for @kindDescKuliah.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jadual kuliah yang dipaparkan di TV.'**
+  String get kindDescKuliah;
+
+  /// No description provided for @kindDescTicker.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ayat pendek yang bergerak di bawah skrin.'**
+  String get kindDescTicker;
+
+  /// No description provided for @kindDescPoster.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar penuh skrin yang bergilir di TV.'**
+  String get kindDescPoster;
+
+  /// No description provided for @kindDescProgramKhas.
+  ///
+  /// In ms, this message translates to:
+  /// **'Majlis dan program yang akan datang.'**
+  String get kindDescProgramKhas;
+
+  /// No description provided for @kindDescTakwim.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tarikh penting dalam kalendar surau.'**
+  String get kindDescTakwim;
+
+  /// No description provided for @kindDescWorldTime.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jam bandar lain yang dipaparkan di TV.'**
+  String get kindDescWorldTime;
+
+  /// No description provided for @kindDescPetugas.
+  ///
+  /// In ms, this message translates to:
+  /// **'Imam, bilal dan AJK yang bertugas.'**
+  String get kindDescPetugas;
+
+  /// No description provided for @kindDescTugasan.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siapa bertugas pada hari mana.'**
+  String get kindDescTugasan;
+
+  /// No description provided for @kindDescZikir.
+  ///
+  /// In ms, this message translates to:
+  /// **'Zikir selepas solat, dalam susunan bacaan.'**
+  String get kindDescZikir;
+
+  /// No description provided for @kindDescTilawahSlot.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bacaan Al-Quran yang dimainkan sebelum waktu solat.'**
+  String get kindDescTilawahSlot;
+
+  /// No description provided for @hadisGradeNoteSahihLi.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sahih kerana sokongan riwayat lain'**
+  String get hadisGradeNoteSahihLi;
+
+  /// No description provided for @trustRootMissing.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sijil akar tiada. Daftar semula'**
+  String get trustRootMissing;
+
+  /// No description provided for @trustRootInvalid.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sijil akar tidak sah'**
+  String get trustRootInvalid;
+
+  /// No description provided for @trustRootMismatch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sijil akar tidak sepadan'**
+  String get trustRootMismatch;
+
+  /// No description provided for @trustCloudFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sambungan selamat ke awan MAXCOM gagal.'**
+  String get trustCloudFailed;
+
+  /// No description provided for @trustBadQr.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod QR pendaftaran tidak sah'**
+  String get trustBadQr;
+
+  /// No description provided for @trustRootFetch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sijil akar tidak dapat diambil dari MAXCOM'**
+  String get trustRootFetch;
+
+  /// No description provided for @trustNoHttps.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM ini belum ada sijil HTTPS'**
+  String get trustNoHttps;
+
+  /// No description provided for @imageNotReadable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail ini bukan gambar yang boleh dibaca. Pilih fail JPEG, PNG atau WebP.'**
+  String get imageNotReadable;
+
+  /// No description provided for @errcWrongPin.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN salah'**
+  String get errcWrongPin;
+
+  /// No description provided for @errcLocked.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN dikunci. Cuba lagi dalam {minutes} minit.'**
+  String errcLocked(int minutes);
+
+  /// No description provided for @errcUnlockFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka kunci tidak berjaya. Cuba lagi.'**
+  String get errcUnlockFailed;
+
+  /// No description provided for @errcPinPolicy.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN mestilah 6 digit dan tidak mudah diteka'**
+  String get errcPinPolicy;
+
+  /// No description provided for @errcPinExists.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN sudah ditetapkan untuk pengguna ini'**
+  String get errcPinExists;
+
+  /// No description provided for @errcPinRequired.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN diperlukan'**
+  String get errcPinRequired;
+
+  /// No description provided for @errcPinMissing.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN belum ditetapkan'**
+  String get errcPinMissing;
+
+  /// No description provided for @errcAppLockOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kunci aplikasi tidak dihidupkan'**
+  String get errcAppLockOff;
+
+  /// No description provided for @errcSuspended.
+  ///
+  /// In ms, this message translates to:
+  /// **'Surau ini digantung buat sementara'**
+  String get errcSuspended;
+
+  /// No description provided for @errcBadEnrolCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod pendaftaran tidak sah atau sudah digunakan'**
+  String get errcBadEnrolCode;
+
+  /// No description provided for @errcOpsAppRequired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gunakan aplikasi MAXCOM Ops untuk akaun ini'**
+  String get errcOpsAppRequired;
+
+  /// No description provided for @errcOpsCliOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pendaftaran ini dibuat melalui awan MAXCOM sahaja'**
+  String get errcOpsCliOnly;
+
+  /// No description provided for @errcNotOpsUser.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengguna ini tiada peranan MAXCOM Ops'**
+  String get errcNotOpsUser;
+
+  /// No description provided for @errcOpsDeviceLimit.
+  ///
+  /// In ms, this message translates to:
+  /// **'Had pendaftaran MAXCOM Ops bagi pengguna ini telah dicapai'**
+  String get errcOpsDeviceLimit;
+
+  /// No description provided for @errcNotOpsDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti ini bukan untuk MAXCOM Ops'**
+  String get errcNotOpsDevice;
+
+  /// No description provided for @errcBadRequest.
+  ///
+  /// In ms, this message translates to:
+  /// **'Permintaan tidak sah'**
+  String get errcBadRequest;
+
+  /// No description provided for @errcBadName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama tidak sah'**
+  String get errcBadName;
+
+  /// No description provided for @errcBadRoles.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranan tidak sah'**
+  String get errcBadRoles;
+
+  /// No description provided for @errcBadTtl.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tempoh kod tidak sah'**
+  String get errcBadTtl;
+
+  /// No description provided for @errcBadDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti tidak sah'**
+  String get errcBadDevice;
+
+  /// No description provided for @errcBadChoice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan tidak sah'**
+  String get errcBadChoice;
+
+  /// No description provided for @errcUserNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengguna tidak dijumpai'**
+  String get errcUserNotFound;
+
+  /// No description provided for @errcDeviceNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti tidak dijumpai'**
+  String get errcDeviceNotFound;
+
+  /// No description provided for @errcNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dijumpai'**
+  String get errcNotFound;
+
+  /// No description provided for @errcPairGone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pasangan skrin ini sudah tamat atau telah digunakan'**
+  String get errcPairGone;
+
+  /// No description provided for @errcBadPairCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod pasangan tidak betul'**
+  String get errcBadPairCode;
+
+  /// No description provided for @errcKuliahNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kuliah tidak ditemui'**
+  String get errcKuliahNotFound;
+
+  /// No description provided for @errcUploadNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik tidak ditemui'**
+  String get errcUploadNotFound;
+
+  /// No description provided for @errcLastAdmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti ada sekurang-kurangnya seorang Pentadbir yang aktif'**
+  String get errcLastAdmin;
+
+  /// No description provided for @errcLastSuperadmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti ada sekurang-kurangnya seorang Pentadbir MAXCOM yang aktif'**
+  String get errcLastSuperadmin;
+
+  /// No description provided for @errcLastAdminDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Daftarkan peranti Pentadbir lain dahulu'**
+  String get errcLastAdminDevice;
+
+  /// No description provided for @errcRefMismatch.
+  ///
+  /// In ms, this message translates to:
+  /// **'ID pengguna tidak sepadan. Buka semula halaman pengguna dan cuba lagi'**
+  String get errcRefMismatch;
+
+  /// No description provided for @errcOwnAccount.
+  ///
+  /// In ms, this message translates to:
+  /// **'Anda tidak boleh memadam akaun sendiri'**
+  String get errcOwnAccount;
+
+  /// No description provided for @errcPhoneRequired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon diperlukan'**
+  String get errcPhoneRequired;
+
+  /// No description provided for @errcBadPhone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon tidak sah'**
+  String get errcBadPhone;
+
+  /// No description provided for @errcPhoneTaken.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon ini sudah digunakan oleh pengguna lain'**
+  String get errcPhoneTaken;
+
+  /// No description provided for @errcSuperadminCliOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranan ini hanya boleh diurus melalui CLI MAXCOM'**
+  String get errcSuperadminCliOnly;
+
+  /// No description provided for @errcSuperadminCloudOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Urus Pentadbir MAXCOM melalui awan MAXCOM'**
+  String get errcSuperadminCloudOnly;
+
+  /// No description provided for @errcSuperadminExists.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir MAXCOM sudah wujud'**
+  String get errcSuperadminExists;
+
+  /// No description provided for @errcBoxOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod peranti mesti dibuat di surau. Gunakan telefon Pentadbir Surau pada Wi-Fi surau.'**
+  String get errcBoxOnly;
+
+  /// No description provided for @errcNotEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'Surau ini masih ada data dan tidak boleh dipadam'**
+  String get errcNotEmpty;
+
+  /// No description provided for @errcModuleOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Modul ini tidak dihidupkan'**
+  String get errcModuleOff;
+
+  /// No description provided for @errcLiveBusy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran langsung sedang berjalan. Cuba selepas siaran tamat.'**
+  String get errcLiveBusy;
+
+  /// No description provided for @errcBadAddress.
+  ///
+  /// In ms, this message translates to:
+  /// **'Alamat kamera tidak sah'**
+  String get errcBadAddress;
+
+  /// No description provided for @errcUnknownVideo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video itu bukan salah satu siaran surau ini'**
+  String get errcUnknownVideo;
+
+  /// No description provided for @ra4StopNotYet.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran belum berhenti. Cuba lagi.'**
+  String get ra4StopNotYet;
+
+  /// No description provided for @ra4StopRetry.
+  ///
+  /// In ms, this message translates to:
+  /// **'Cuba lagi'**
+  String get ra4StopRetry;
+
+  /// No description provided for @ra4EndedByBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran ditamatkan oleh MAXCOM.'**
+  String get ra4EndedByBox;
+
+  /// No description provided for @ra4StillLive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran masih berjalan. Buka Siaran langsung untuk menghentikannya.'**
+  String get ra4StillLive;
+
+  /// No description provided for @ra4CameraName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera luaran'**
+  String get ra4CameraName;
+
+  /// No description provided for @ra4CameraStoppedByIpad.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera dihentikan oleh iPad. Buka semula skrin ini.'**
+  String get ra4CameraStoppedByIpad;
+
+  /// No description provided for @ra4CamNotRtsp.
+  ///
+  /// In ms, this message translates to:
+  /// **'Alamat mesti bermula dengan rtsp://'**
+  String get ra4CamNotRtsp;
+
+  /// No description provided for @ra4CamNotIpv4.
+  ///
+  /// In ms, this message translates to:
+  /// **'Guna alamat IPv4 kamera di rangkaian surau (contoh 10.168.1.20), bukan nama.'**
+  String get ra4CamNotIpv4;
+
+  /// No description provided for @ra4CamNotPrivate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Alamat mesti dalam rangkaian persendirian (10.x.x.x, 172.16 hingga 172.31 atau 10.168.x.x).'**
+  String get ra4CamNotPrivate;
+
+  /// No description provided for @ra4CamIsBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Alamat ini ialah MAXCOM sendiri. Masukkan alamat kamera.'**
+  String get ra4CamIsBox;
+
+  /// No description provided for @ra4CamBadPort.
+  ///
+  /// In ms, this message translates to:
+  /// **'Port mesti nombor dari 1 hingga 65535.'**
+  String get ra4CamBadPort;
+
+  /// No description provided for @ra4CamBadLogin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama pengguna atau kata laluan dalam alamat ada aksara yang mesti dikodkan (tulis @ sebagai %40).'**
+  String get ra4CamBadLogin;
+
+  /// No description provided for @ra4CamBadPath.
+  ///
+  /// In ms, this message translates to:
+  /// **'Laluan alamat ada aksara yang tidak dibenarkan (ruang, tanda petik atau #).'**
+  String get ra4CamBadPath;
+
+  /// No description provided for @ra4CamTooLong.
+  ///
+  /// In ms, this message translates to:
+  /// **'Alamat terlalu panjang (paling banyak 400 aksara).'**
+  String get ra4CamTooLong;
+
+  /// No description provided for @errcUnusable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Input audio ini tidak boleh digunakan'**
+  String get errcUnusable;
+
+  /// No description provided for @errcCameraError.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera tidak dapat diproses'**
+  String get errcCameraError;
+
+  /// No description provided for @errcCameraNotConfigured.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera belum ditetapkan'**
+  String get errcCameraNotConfigured;
+
+  /// No description provided for @errcUnavailable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Perkhidmatan tidak tersedia sekarang. Cuba lagi nanti.'**
+  String get errcUnavailable;
+
+  /// No description provided for @errcBadClaim.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pendaftaran MAXCOM tidak sah'**
+  String get errcBadClaim;
+
+  /// No description provided for @errcWorkerUnreachable.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM tidak dapat menyemak pendaftaran sekarang. Cuba lagi.'**
+  String get errcWorkerUnreachable;
+
+  /// No description provided for @errcClaimPending.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu kelulusan MAXCOM'**
+  String get errcClaimPending;
+
+  /// No description provided for @errcBoxRevoked.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM ini telah dibatalkan oleh awan'**
+  String get errcBoxRevoked;
+
+  /// No description provided for @errcYoutubeQuota.
+  ///
+  /// In ms, this message translates to:
+  /// **'Had harian YouTube telah dicapai. Cuba lagi esok.'**
+  String get errcYoutubeQuota;
+
+  /// No description provided for @errcYoutubeReauthorise.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log masuk YouTube perlu dibuat semula'**
+  String get errcYoutubeReauthorise;
+
+  /// No description provided for @errcYoutubeNotConfigured.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube belum disediakan'**
+  String get errcYoutubeNotConfigured;
+
+  /// No description provided for @errcYoutubeForbidden.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube menolak tindakan ini'**
+  String get errcYoutubeForbidden;
+
+  /// No description provided for @errcYoutubeNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video YouTube tidak ditemui'**
+  String get errcYoutubeNotFound;
+
+  /// No description provided for @errcYoutubeNetwork.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dapat menghubungi YouTube. Cuba lagi.'**
+  String get errcYoutubeNetwork;
+
+  /// No description provided for @errcCatchupOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik rakaman ke YouTube tidak dihidupkan'**
+  String get errcCatchupOff;
+
+  /// No description provided for @errcVideoMismatch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video tidak sepadan dengan muat naik ini'**
+  String get errcVideoMismatch;
+
+  /// No description provided for @errcUploadExpired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik ini sudah tamat tempoh'**
+  String get errcUploadExpired;
+
+  /// No description provided for @errcTooManyUploads.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terlalu banyak muat naik sedang berjalan'**
+  String get errcTooManyUploads;
+
+  /// No description provided for @errcUnknownLiveVideo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran langsung itu tidak dikenali'**
+  String get errcUnknownLiveVideo;
+
+  /// No description provided for @errcThemeGone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semakan sudah tamat tempoh. Semak fail sekali lagi.'**
+  String get errcThemeGone;
+
+  /// No description provided for @errcThemeInUse.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema ini sedang digunakan. Pilih tema lain dahulu.'**
+  String get errcThemeInUse;
+
+  /// No description provided for @errcThemeBuiltIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema bawaan MAXCOM tidak boleh dipadam'**
+  String get errcThemeBuiltIn;
+
+  /// No description provided for @errcContentInUse.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masih digunakan oleh {count} kuliah akan datang'**
+  String errcContentInUse(int count);
+
+  /// No description provided for @errcAssetMissing.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar itu tidak lagi ada'**
+  String get errcAssetMissing;
+
+  /// No description provided for @errcHadisFull.
+  ///
+  /// In ms, this message translates to:
+  /// **'Had hadis sudah dicapai'**
+  String get errcHadisFull;
+
+  /// No description provided for @errcEntryExists.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rekod ini sudah wujud'**
+  String get errcEntryExists;
+
+  /// No description provided for @errcUncertain.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semak sama ada tindakan itu sudah berlaku'**
+  String get errcUncertain;
+
+  /// No description provided for @liveOnlyThemeCheck.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semak fail tema'**
+  String get liveOnlyThemeCheck;
+
+  /// No description provided for @liveOnlyThemeInstall.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pasang tema'**
+  String get liveOnlyThemeInstall;
+
+  /// No description provided for @liveOnlyThemeDelete.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam tema'**
+  String get liveOnlyThemeDelete;
+
+  /// No description provided for @liveOnlyRecoveryCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buat kod pemulihan'**
+  String get liveOnlyRecoveryCode;
+
+  /// No description provided for @liveOnlyLeave.
+  ///
+  /// In ms, this message translates to:
+  /// **'Keluar dari surau'**
+  String get liveOnlyLeave;
+
+  /// No description provided for @liveOnlyLogout.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log keluar'**
+  String get liveOnlyLogout;
+
+  /// No description provided for @errcSurauNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Surau tidak dijumpai'**
+  String get errcSurauNotFound;
+
+  /// No description provided for @errcSurauRequired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Surau belum dipilih'**
+  String get errcSurauRequired;
+
+  /// No description provided for @errcNotRegistered.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM ini belum mendaftar atau pendaftarannya sudah tamat'**
+  String get errcNotRegistered;
+
+  /// No description provided for @errcCodeMismatch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod tuntutan tidak sepadan dengan pendaftaran ini'**
+  String get errcCodeMismatch;
+
+  /// No description provided for @errcNoWorker.
+  ///
+  /// In ms, this message translates to:
+  /// **'Perkhidmatan MAXCOM belum ditetapkan pada awan ini'**
+  String get errcNoWorker;
+
+  /// No description provided for @errcWorker.
+  ///
+  /// In ms, this message translates to:
+  /// **'Perkhidmatan MAXCOM tidak dapat dihubungi atau menolak permintaan'**
+  String get errcWorker;
+
+  /// No description provided for @errcNotLinked.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM ini sudah dibatalkan'**
+  String get errcNotLinked;
+
+  /// No description provided for @errcBadBoxName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama MAXCOM mestilah 1 hingga 60 aksara'**
+  String get errcBadBoxName;
+
+  /// No description provided for @errcNotSupport.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengguna ini bukan pengguna Sokongan MAXCOM'**
+  String get errcNotSupport;
+
+  /// No description provided for @errcEsolatUnreachable.
+  ///
+  /// In ms, this message translates to:
+  /// **'e-Solat tidak dapat dihubungi sekarang. Cuba lagi.'**
+  String get errcEsolatUnreachable;
+
+  /// No description provided for @errcAlreadyLinked.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM ini sudah dipautkan atau diluluskan. Guna Batalkan, bukan Tolak.'**
+  String get errcAlreadyLinked;
+
+  /// No description provided for @errcEsolatNoRecord.
+  ///
+  /// In ms, this message translates to:
+  /// **'e-Solat belum menerbitkan waktu solat {year} untuk zon {zone}. Cuba lagi nanti atau import fail CSV.'**
+  String errcEsolatNoRecord(int year, String zone);
+
+  /// No description provided for @errcCsvYearMismatch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail ini bukan untuk tahun {year} ({from} hingga {to})'**
+  String errcCsvYearMismatch(int year, String from, String to);
+
+  /// No description provided for @errcNoOfficialSource.
+  ///
+  /// In ms, this message translates to:
+  /// **'Negara ini tiada sumber rasmi. Gunakan fail atau kiraan.'**
+  String get errcNoOfficialSource;
+
+  /// No description provided for @errcUndoBlocked.
+  ///
+  /// In ms, this message translates to:
+  /// **'Import ini tidak boleh dibatalkan kerana hari {date} telah diganti atau dibetulkan pada {by}'**
+  String errcUndoBlocked(String date, String by);
+
+  /// No description provided for @ra2Month1.
+  ///
+  /// In ms, this message translates to:
+  /// **'Januari'**
+  String get ra2Month1;
+
+  /// No description provided for @ra2Month2.
+  ///
+  /// In ms, this message translates to:
+  /// **'Februari'**
+  String get ra2Month2;
+
+  /// No description provided for @ra2Month3.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mac'**
+  String get ra2Month3;
+
+  /// No description provided for @ra2Month4.
+  ///
+  /// In ms, this message translates to:
+  /// **'April'**
+  String get ra2Month4;
+
+  /// No description provided for @ra2Month5.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mei'**
+  String get ra2Month5;
+
+  /// No description provided for @ra2Month6.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jun'**
+  String get ra2Month6;
+
+  /// No description provided for @ra2Month7.
+  ///
+  /// In ms, this message translates to:
+  /// **'Julai'**
+  String get ra2Month7;
+
+  /// No description provided for @ra2Month8.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ogos'**
+  String get ra2Month8;
+
+  /// No description provided for @ra2Month9.
+  ///
+  /// In ms, this message translates to:
+  /// **'September'**
+  String get ra2Month9;
+
+  /// No description provided for @ra2Month10.
+  ///
+  /// In ms, this message translates to:
+  /// **'Oktober'**
+  String get ra2Month10;
+
+  /// No description provided for @ra2Month11.
+  ///
+  /// In ms, this message translates to:
+  /// **'November'**
+  String get ra2Month11;
+
+  /// No description provided for @ra2Month12.
+  ///
+  /// In ms, this message translates to:
+  /// **'Disember'**
+  String get ra2Month12;
+
+  /// No description provided for @ra2MonthShort1.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jan'**
+  String get ra2MonthShort1;
+
+  /// No description provided for @ra2MonthShort2.
+  ///
+  /// In ms, this message translates to:
+  /// **'Feb'**
+  String get ra2MonthShort2;
+
+  /// No description provided for @ra2MonthShort3.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mac'**
+  String get ra2MonthShort3;
+
+  /// No description provided for @ra2MonthShort4.
+  ///
+  /// In ms, this message translates to:
+  /// **'Apr'**
+  String get ra2MonthShort4;
+
+  /// No description provided for @ra2MonthShort5.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mei'**
+  String get ra2MonthShort5;
+
+  /// No description provided for @ra2MonthShort6.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jun'**
+  String get ra2MonthShort6;
+
+  /// No description provided for @ra2MonthShort7.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jul'**
+  String get ra2MonthShort7;
+
+  /// No description provided for @ra2MonthShort8.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ogos'**
+  String get ra2MonthShort8;
+
+  /// No description provided for @ra2MonthShort9.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sep'**
+  String get ra2MonthShort9;
+
+  /// No description provided for @ra2MonthShort10.
+  ///
+  /// In ms, this message translates to:
+  /// **'Okt'**
+  String get ra2MonthShort10;
+
+  /// No description provided for @ra2MonthShort11.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nov'**
+  String get ra2MonthShort11;
+
+  /// No description provided for @ra2MonthShort12.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dis'**
+  String get ra2MonthShort12;
+
+  /// No description provided for @ra2Weekday1.
+  ///
+  /// In ms, this message translates to:
+  /// **'Isnin'**
+  String get ra2Weekday1;
+
+  /// No description provided for @ra2Weekday2.
+  ///
+  /// In ms, this message translates to:
+  /// **'Selasa'**
+  String get ra2Weekday2;
+
+  /// No description provided for @ra2Weekday3.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rabu'**
+  String get ra2Weekday3;
+
+  /// No description provided for @ra2Weekday4.
+  ///
+  /// In ms, this message translates to:
+  /// **'Khamis'**
+  String get ra2Weekday4;
+
+  /// No description provided for @ra2Weekday5.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jumaat'**
+  String get ra2Weekday5;
+
+  /// No description provided for @ra2Weekday6.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sabtu'**
+  String get ra2Weekday6;
+
+  /// No description provided for @ra2Weekday7.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ahad'**
+  String get ra2Weekday7;
+
+  /// No description provided for @ra2WeekdayShort1.
+  ///
+  /// In ms, this message translates to:
+  /// **'Isn'**
+  String get ra2WeekdayShort1;
+
+  /// No description provided for @ra2WeekdayShort2.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sel'**
+  String get ra2WeekdayShort2;
+
+  /// No description provided for @ra2WeekdayShort3.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rab'**
+  String get ra2WeekdayShort3;
+
+  /// No description provided for @ra2WeekdayShort4.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kha'**
+  String get ra2WeekdayShort4;
+
+  /// No description provided for @ra2WeekdayShort5.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jum'**
+  String get ra2WeekdayShort5;
+
+  /// No description provided for @ra2WeekdayShort6.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sab'**
+  String get ra2WeekdayShort6;
+
+  /// No description provided for @ra2WeekdayShort7.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ahd'**
+  String get ra2WeekdayShort7;
+
+  /// No description provided for @ra2PrayerImsak.
+  ///
+  /// In ms, this message translates to:
+  /// **'Imsak'**
+  String get ra2PrayerImsak;
+
+  /// No description provided for @ra2PrayerSubuh.
+  ///
+  /// In ms, this message translates to:
+  /// **'Subuh'**
+  String get ra2PrayerSubuh;
+
+  /// No description provided for @ra2PrayerSyuruk.
+  ///
+  /// In ms, this message translates to:
+  /// **'Syuruk'**
+  String get ra2PrayerSyuruk;
+
+  /// No description provided for @ra2PrayerZohor.
+  ///
+  /// In ms, this message translates to:
+  /// **'Zohor'**
+  String get ra2PrayerZohor;
+
+  /// No description provided for @ra2PrayerAsar.
+  ///
+  /// In ms, this message translates to:
+  /// **'Asar'**
+  String get ra2PrayerAsar;
+
+  /// No description provided for @ra2PrayerMaghrib.
+  ///
+  /// In ms, this message translates to:
+  /// **'Maghrib'**
+  String get ra2PrayerMaghrib;
+
+  /// No description provided for @ra2PrayerIsyak.
+  ///
+  /// In ms, this message translates to:
+  /// **'Isyak'**
+  String get ra2PrayerIsyak;
+
+  /// No description provided for @ra2PrayerDhuha.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dhuha'**
+  String get ra2PrayerDhuha;
+
+  /// No description provided for @ra2MethodMwl.
+  ///
+  /// In ms, this message translates to:
+  /// **'Liga Dunia Islam'**
+  String get ra2MethodMwl;
+
+  /// No description provided for @ra2MethodEgyptian.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesir'**
+  String get ra2MethodEgyptian;
+
+  /// No description provided for @ra2MethodKarachi.
+  ///
+  /// In ms, this message translates to:
+  /// **'Karachi'**
+  String get ra2MethodKarachi;
+
+  /// No description provided for @ra2MethodUmmAlQura.
+  ///
+  /// In ms, this message translates to:
+  /// **'Umm al-Qura'**
+  String get ra2MethodUmmAlQura;
+
+  /// No description provided for @ra2MethodDubai.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dubai'**
+  String get ra2MethodDubai;
+
+  /// No description provided for @ra2MethodQatar.
+  ///
+  /// In ms, this message translates to:
+  /// **'Qatar'**
+  String get ra2MethodQatar;
+
+  /// No description provided for @ra2MethodKuwait.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kuwait'**
+  String get ra2MethodKuwait;
+
+  /// No description provided for @ra2MethodMoonsighting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jawatankuasa Moonsighting'**
+  String get ra2MethodMoonsighting;
+
+  /// No description provided for @ra2MethodSingapore.
+  ///
+  /// In ms, this message translates to:
+  /// **'Singapura'**
+  String get ra2MethodSingapore;
+
+  /// No description provided for @ra2MethodTehran.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tehran'**
+  String get ra2MethodTehran;
+
+  /// No description provided for @ra2MethodTurkey.
+  ///
+  /// In ms, this message translates to:
+  /// **'Turki (Diyanet)'**
+  String get ra2MethodTurkey;
+
+  /// No description provided for @ra2MethodNorthAmerica.
+  ///
+  /// In ms, this message translates to:
+  /// **'Amerika Utara (ISNA)'**
+  String get ra2MethodNorthAmerica;
+
+  /// No description provided for @ra2MethodJakim.
+  ///
+  /// In ms, this message translates to:
+  /// **'JAKIM 18/18'**
+  String get ra2MethodJakim;
+
+  /// No description provided for @ra2MethodKemenag.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kemenag Indonesia 20/18'**
+  String get ra2MethodKemenag;
+
+  /// No description provided for @ra2MethodUoif.
+  ///
+  /// In ms, this message translates to:
+  /// **'UOIF Perancis 12/12'**
+  String get ra2MethodUoif;
+
+  /// No description provided for @ra2MethodMorocco.
+  ///
+  /// In ms, this message translates to:
+  /// **'Maghribi 19/17'**
+  String get ra2MethodMorocco;
+
+  /// No description provided for @ra2MethodAlgeria.
+  ///
+  /// In ms, this message translates to:
+  /// **'Algeria 18/17'**
+  String get ra2MethodAlgeria;
+
+  /// No description provided for @ra2MethodRussia.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rusia 16/15'**
+  String get ra2MethodRussia;
+
+  /// No description provided for @ra2WarnNoDataToday.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada data waktu solat untuk hari ini'**
+  String get ra2WarnNoDataToday;
+
+  /// No description provided for @ra2WarnNotLocated.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lokasi surau belum ditetapkan; waktu solat tidak dapat dikira'**
+  String get ra2WarnNotLocated;
+
+  /// No description provided for @ra2WarnEmergencyToday.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hari ini guna kiraan sementara'**
+  String get ra2WarnEmergencyToday;
+
+  /// No description provided for @ra2WarnZoneNoDataFetch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada data untuk zon ini; MAXCOM akan memuat turun'**
+  String get ra2WarnZoneNoDataFetch;
+
+  /// No description provided for @ra2WarnZoneNoDataManual.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada data untuk zon ini; muat naik data atau hidupkan muat turun automatik'**
+  String get ra2WarnZoneNoDataManual;
+
+  /// No description provided for @ra2FieldDate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tarikh'**
+  String get ra2FieldDate;
+
+  /// No description provided for @ra2RowMissingColumn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lajur {field} tiada'**
+  String ra2RowMissingColumn(String field);
+
+  /// No description provided for @ra2RowMasjidOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lajur {field} untuk masjid sahaja'**
+  String ra2RowMasjidOnly(String field);
+
+  /// No description provided for @ra2RowEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'{field} kosong'**
+  String ra2RowEmpty(String field);
+
+  /// No description provided for @ra2RowInvalid.
+  ///
+  /// In ms, this message translates to:
+  /// **'{field} tidak sah'**
+  String ra2RowInvalid(String field);
+
+  /// No description provided for @ra2RowOutOfRange.
+  ///
+  /// In ms, this message translates to:
+  /// **'{field} di luar had'**
+  String ra2RowOutOfRange(String field);
+
+  /// No description provided for @ra2RowDuplicate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tarikh berulang'**
+  String get ra2RowDuplicate;
+
+  /// No description provided for @ra2RowBeforeMidnight.
+  ///
+  /// In ms, this message translates to:
+  /// **'Imsak terbitan jatuh sebelum tengah malam'**
+  String get ra2RowBeforeMidnight;
+
+  /// No description provided for @ra2RowOrder.
+  ///
+  /// In ms, this message translates to:
+  /// **'Waktu tidak mengikut turutan'**
+  String get ra2RowOrder;
+
+  /// No description provided for @ra2RowNoRows.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada baris waktu solat dalam fail'**
+  String get ra2RowNoRows;
+
+  /// No description provided for @ra2RowTooMany.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terlalu banyak baris dalam fail'**
+  String get ra2RowTooMany;
+
+  /// No description provided for @ra2RowGap.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ada tarikh yang tiada sebelum baris ini'**
+  String get ra2RowGap;
+
+  /// No description provided for @ra2CsvRecorded.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dicatat dalam Rekod import; boleh dibatalkan di sana.'**
+  String get ra2CsvRecorded;
+
+  /// No description provided for @ra2NoOfficialCard.
+  ///
+  /// In ms, this message translates to:
+  /// **'Negara ini tiada sumber rasmi. Muat naik fail atau guna kiraan.'**
+  String get ra2NoOfficialCard;
+
+  /// No description provided for @valRange.
+  ///
+  /// In ms, this message translates to:
+  /// **'{min} hingga {max}'**
+  String valRange(int min, int max);
+
+  /// No description provided for @contentRefDeleted.
+  ///
+  /// In ms, this message translates to:
+  /// **'{what} dipadam'**
+  String contentRefDeleted(String what);
+
+  /// No description provided for @contentInUseDates.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tarikh: {dates}'**
+  String contentInUseDates(String dates);
+
+  /// No description provided for @errcAlreadyVoided.
+  ///
+  /// In ms, this message translates to:
+  /// **'Catatan ini sudah dibatalkan'**
+  String get errcAlreadyVoided;
+
+  /// No description provided for @errcOpeningExists.
+  ///
+  /// In ms, this message translates to:
+  /// **'Baki awal tabung ini sudah ada'**
+  String get errcOpeningExists;
+
+  /// No description provided for @errcOpeningFundFixed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Baki awal tidak boleh dipindahkan ke tabung lain'**
+  String get errcOpeningFundFixed;
+
+  /// No description provided for @ra3MonthNames.
+  ///
+  /// In ms, this message translates to:
+  /// **'Januari|Februari|Mac|April|Mei|Jun|Julai|Ogos|September|Oktober|November|Disember'**
+  String get ra3MonthNames;
+
+  /// No description provided for @ra3LateEntries.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} rekod masuk selepas bulan ini ditutup'**
+  String ra3LateEntries(int n);
+
+  /// No description provided for @ra3AskAdminClose.
+  ///
+  /// In ms, this message translates to:
+  /// **'Minta Pentadbir menutup bulan ini'**
+  String get ra3AskAdminClose;
+
+  /// No description provided for @ra3ClosedMonthToday.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bulan kuliah ini sudah ditutup. Bayaran dicatat pada tarikh hari ini.'**
+  String get ra3ClosedMonthToday;
+
+  /// No description provided for @ra3DateClosedNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bulan yang sudah ditutup tidak boleh dipilih.'**
+  String get ra3DateClosedNote;
+
+  /// No description provided for @ra3LateEntriesShow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lihat rekod'**
+  String get ra3LateEntriesShow;
+
+  /// No description provided for @ra5CodeUnknown.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod tidak dikenali'**
+  String get ra5CodeUnknown;
+
+  /// No description provided for @ra5CodeUnknownBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semak kod yang ditaip, atau minta Pentadbir menjana kod baharu.'**
+  String get ra5CodeUnknownBody;
+
+  /// No description provided for @ra5CodeInvalid.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ini bukan kod pendaftaran MAXCOM. Imbas semula kod QR atau tampal seluruh teksnya.'**
+  String get ra5CodeInvalid;
+
+  /// No description provided for @ra5UnlockTooMany.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terlalu banyak percubaan. Cuba lagi dalam {minutes} minit'**
+  String ra5UnlockTooMany(int minutes);
+
+  /// No description provided for @ra5OfflineClosed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kunci luar talian ditutup. Sambung ke MAXCOM untuk membuka.'**
+  String get ra5OfflineClosed;
+
+  /// No description provided for @ra5RoleSupport.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sokongan MAXCOM'**
+  String get ra5RoleSupport;
+
+  /// No description provided for @ra5ListSeparator.
+  ///
+  /// In ms, this message translates to:
+  /// **', '**
+  String get ra5ListSeparator;
+
+  /// No description provided for @ra5SealCheckFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN tidak dapat disemak sekarang. Sambung ke MAXCOM dan cuba lagi.'**
+  String get ra5SealCheckFailed;
+
+  /// No description provided for @ra5LeaveHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Keluar dari surau ialah satu-satunya cara memadam peranti ini. Pentadbir terakhir mesti mendaftar peranti Pentadbir lain dahulu.'**
+  String get ra5LeaveHint;
+
+  /// No description provided for @ra6SyncErrorChip.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ralat penyelarasan'**
+  String get ra6SyncErrorChip;
+
+  /// No description provided for @ra6SyncErrorShort.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ralat'**
+  String get ra6SyncErrorShort;
+
+  /// No description provided for @ra6RefusedMonthClosed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditolak: bulan sudah ditutup'**
+  String get ra6RefusedMonthClosed;
+
+  /// No description provided for @ra6RefusedFundArchived.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditolak: tabung telah diarkibkan'**
+  String get ra6RefusedFundArchived;
+
+  /// No description provided for @ra6RefusedAlreadyVoided.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditolak: catatan sudah dibatalkan'**
+  String get ra6RefusedAlreadyVoided;
+
+  /// No description provided for @ra6RefusedOpeningExists.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditolak: baki permulaan sudah ada'**
+  String get ra6RefusedOpeningExists;
+
+  /// No description provided for @ra6RefusedBlobMissing.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar tidak lagi ada pada peranti ini'**
+  String get ra6RefusedBlobMissing;
+
+  /// No description provided for @ra6RefusedUserInactive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditolak: pengguna tidak aktif'**
+  String get ra6RefusedUserInactive;
+
+  /// No description provided for @ra6RefusedLastAdmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditolak: mesti ada sekurang-kurangnya seorang Pentadbir'**
+  String get ra6RefusedLastAdmin;
+
+  /// No description provided for @ra6Rejected.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditolak'**
+  String get ra6Rejected;
+
+  /// No description provided for @ra6CopyDetails.
+  ///
+  /// In ms, this message translates to:
+  /// **'Salin butiran'**
+  String get ra6CopyDetails;
+
+  /// No description provided for @ra6DetailsCopied.
+  ///
+  /// In ms, this message translates to:
+  /// **'Butiran disalin'**
+  String get ra6DetailsCopied;
+
+  /// No description provided for @ra6ConflictPartial.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sebahagian tetapan tidak disimpan kerana ada perubahan yang lebih baharu: {names}'**
+  String ra6ConflictPartial(String names);
+
+  /// No description provided for @ra6ConflictEntityFinance.
+  ///
+  /// In ms, this message translates to:
+  /// **'Catatan kewangan'**
+  String get ra6ConflictEntityFinance;
+
+  /// No description provided for @ra6SettingsSavedQueued.
+  ///
+  /// In ms, this message translates to:
+  /// **'Disimpan di peranti ini, menunggu penyelarasan'**
+  String get ra6SettingsSavedQueued;
+
+  /// No description provided for @ra6AppLockNeedsBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Perlukan sambungan ke MAXCOM'**
+  String get ra6AppLockNeedsBox;
+
+  /// No description provided for @ra6RangeTo.
+  ///
+  /// In ms, this message translates to:
+  /// **'{min} hingga {max}'**
+  String ra6RangeTo(String min, String max);
+
+  /// No description provided for @ra6FeatureNeeds.
+  ///
+  /// In ms, this message translates to:
+  /// **'Perlu {name} dihidupkan dahulu'**
+  String ra6FeatureNeeds(String name);
+
+  /// No description provided for @ra6TplLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Label kuliah'**
+  String get ra6TplLabel;
+
+  /// No description provided for @ra6TplSpeaker.
+  ///
+  /// In ms, this message translates to:
+  /// **'Penceramah'**
+  String get ra6TplSpeaker;
+
+  /// No description provided for @ra6TplTopic.
+  ///
+  /// In ms, this message translates to:
+  /// **'Topik'**
+  String get ra6TplTopic;
+
+  /// No description provided for @ra6TplBook.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kitab'**
+  String get ra6TplBook;
+
+  /// No description provided for @ra6TplSurau.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama surau'**
+  String get ra6TplSurau;
+
+  /// No description provided for @ra6TplDate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tarikh'**
+  String get ra6TplDate;
+
+  /// No description provided for @ra6TplTime.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masa'**
+  String get ra6TplTime;
+
+  /// No description provided for @ra6LiveBadge.
+  ///
+  /// In ms, this message translates to:
+  /// **'LANGSUNG'**
+  String get ra6LiveBadge;
+
+  /// No description provided for @ra6LinkCloudError.
+  ///
+  /// In ms, this message translates to:
+  /// **'Awan MAXCOM: ralat penyelarasan'**
+  String get ra6LinkCloudError;
+
+  /// No description provided for @ra6LinkBoxError.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM di surau: ralat'**
+  String get ra6LinkBoxError;
+
+  /// No description provided for @liveNoticeShare.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kongsi pautan siaran'**
+  String get liveNoticeShare;
+
+  /// No description provided for @liveNoticeTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Makluman siaran langsung'**
+  String get liveNoticeTitle;
+
+  /// No description provided for @liveNoticeEditHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semak dan ubah teks sebelum dikongsi.'**
+  String get liveNoticeEditHint;
+
+  /// No description provided for @liveNoticeToOne.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hantar kepada seorang'**
+  String get liveNoticeToOne;
+
+  /// No description provided for @liveNoticeReset.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembalikan teks asal'**
+  String get liveNoticeReset;
+
+  /// No description provided for @liveNoticePickTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hantar kepada siapa?'**
+  String get liveNoticePickTitle;
+
+  /// No description provided for @liveNoticePickSearch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Cari nama'**
+  String get liveNoticePickSearch;
+
+  /// No description provided for @liveNoticePickEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada pengguna dijumpai.'**
+  String get liveNoticePickEmpty;
+
+  /// No description provided for @liveNoticeStarted.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran sudah bermula. Kongsi pautan kepada AJK dan jemaah.'**
+  String get liveNoticeStarted;
+
+  /// No description provided for @liveNoticeShareGo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kongsi'**
+  String get liveNoticeShareGo;
+
+  /// No description provided for @liveNoticeCopied.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teks disalin. Tampalkan di WhatsApp.'**
+  String get liveNoticeCopied;
+
+  /// No description provided for @liveNoticeShareFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teks tidak dapat dikongsi.'**
+  String get liveNoticeShareFailed;
+
+  /// No description provided for @waOpensTo.
+  ///
+  /// In ms, this message translates to:
+  /// **'WhatsApp dibuka terus ke {number}'**
+  String waOpensTo(String number);
+
+  /// No description provided for @liveNoticeOpenGo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka WhatsApp'**
+  String get liveNoticeOpenGo;
+
+  /// No description provided for @liveNoticeWhatsAppFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'WhatsApp tidak dapat dibuka.'**
+  String get liveNoticeWhatsAppFailed;
+
+  /// No description provided for @peopleNeedsUpdate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kemas kini MAX Kiosk Server untuk fungsi ini'**
+  String get peopleNeedsUpdate;
+
+  /// No description provided for @peopleFlagsBoxOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Status aktif ditunjukkan apabila anda di Wi-Fi surau.'**
+  String get peopleFlagsBoxOnly;
+
+  /// No description provided for @peopleNeedsAction.
+  ///
+  /// In ms, this message translates to:
+  /// **'Perlu tindakan'**
+  String get peopleNeedsAction;
+
+  /// No description provided for @peopleNoAdminPhone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada Pentadbir mempunyai telefon yang aktif. Daftarkan telefon Pentadbir.'**
+  String get peopleNoAdminPhone;
+
+  /// No description provided for @peopleActiveToday.
+  ///
+  /// In ms, this message translates to:
+  /// **'aktif hari ini'**
+  String get peopleActiveToday;
+
+  /// No description provided for @peopleActiveYesterday.
+  ///
+  /// In ms, this message translates to:
+  /// **'aktif semalam'**
+  String get peopleActiveYesterday;
+
+  /// No description provided for @peopleActiveDaysAgo.
+  ///
+  /// In ms, this message translates to:
+  /// **'aktif {n} hari lalu'**
+  String peopleActiveDaysAgo(int n);
+
+  /// No description provided for @peopleUnusedDays.
+  ///
+  /// In ms, this message translates to:
+  /// **'tidak digunakan {n} hari'**
+  String peopleUnusedDays(int n);
+
+  /// No description provided for @peopleInactiveBadge.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak aktif'**
+  String get peopleInactiveBadge;
+
+  /// No description provided for @usersAllActive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semua pengguna aktif ({n})'**
+  String usersAllActive(int n);
+
+  /// No description provided for @usersDeviceCount.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n, plural, =0{Belum ada peranti} other{{n} peranti}}'**
+  String usersDeviceCount(int n);
+
+  /// No description provided for @usersNoDeviceYet.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditambah {n} hari lalu, belum daftar telefon'**
+  String usersNoDeviceYet(int n);
+
+  /// No description provided for @usersQrButton.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod QR'**
+  String get usersQrButton;
+
+  /// No description provided for @usersUnlock.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka kunci'**
+  String get usersUnlock;
+
+  /// No description provided for @usersUnlocked.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN {name} dibuka. PIN tidak berubah.'**
+  String usersUnlocked(String name);
+
+  /// No description provided for @usersLockedUntil.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN dikunci sehingga {time}. Kunci tamat sendiri, atau buka sekarang.'**
+  String usersLockedUntil(String time);
+
+  /// No description provided for @usersSuggestDeactivate.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} tidak menggunakan aplikasi lebih 90 hari. Nyahaktifkan?'**
+  String usersSuggestDeactivate(String name);
+
+  /// No description provided for @usersDeactivatedFold.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dinyahaktifkan ({n})'**
+  String usersDeactivatedFold(int n);
+
+  /// No description provided for @usersDeactivatedHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak boleh buka kunci. Nama kekal dalam rekod lama.'**
+  String get usersDeactivatedHint;
+
+  /// No description provided for @usersDeactivatedOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dinyahaktifkan {date}'**
+  String usersDeactivatedOn(String date);
+
+  /// No description provided for @usersAutoDeleteIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n, plural, =0{Dipadam automatik hari ini} =1{Dipadam automatik dalam 1 hari} other{Dipadam automatik dalam {n} hari}}'**
+  String usersAutoDeleteIn(int n);
+
+  /// No description provided for @usersActivate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Aktifkan semula'**
+  String get usersActivate;
+
+  /// No description provided for @usersActivated.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} diaktifkan semula. Daftar telefon dengan kod QR baharu.'**
+  String usersActivated(String name);
+
+  /// No description provided for @usersRecoveryFold.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod pemulihan'**
+  String get usersRecoveryFold;
+
+  /// No description provided for @usersRecoveryHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Untuk masuk semula jika semua telefon Pentadbir hilang'**
+  String get usersRecoveryHint;
+
+  /// No description provided for @usersRolesFold.
+  ///
+  /// In ms, this message translates to:
+  /// **'Apa setiap peranan boleh buat'**
+  String get usersRolesFold;
+
+  /// No description provided for @usersHintDismiss.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tutup'**
+  String get usersHintDismiss;
+
+  /// No description provided for @userRename.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar nama'**
+  String get userRename;
+
+  /// No description provided for @userRenameTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar nama'**
+  String get userRenameTitle;
+
+  /// No description provided for @userRenameBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama baharu dipakai mulai sekarang di aplikasi dan senarai.'**
+  String get userRenameBody;
+
+  /// No description provided for @userRenameHistory.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rekod lama tidak berubah. Log perubahan dan kewangan terus menunjukkan nama yang dipakai pada masa itu.'**
+  String get userRenameHistory;
+
+  /// No description provided for @userRenameSave.
+  ///
+  /// In ms, this message translates to:
+  /// **'Simpan nama'**
+  String get userRenameSave;
+
+  /// No description provided for @userRenamed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama ditukar kepada {name}.'**
+  String userRenamed(String name);
+
+  /// No description provided for @userNameTaken.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sudah ada pengguna bernama {name}. Simpan juga?'**
+  String userNameTaken(String name);
+
+  /// No description provided for @nameInvalid.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama mesti 1 hingga 80 aksara'**
+  String get nameInvalid;
+
+  /// No description provided for @userDevicesOf.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti {name} ({n})'**
+  String userDevicesOf(String name, int n);
+
+  /// No description provided for @userAddedBy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditambah {date} oleh {name}'**
+  String userAddedBy(String date, String name);
+
+  /// No description provided for @deviceEdit.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ubah'**
+  String get deviceEdit;
+
+  /// No description provided for @deviceNameLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama peranti'**
+  String get deviceNameLabel;
+
+  /// No description provided for @deviceNameHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Contoh: Telefon Ustaz Ahmad, iPad meja bendahari'**
+  String get deviceNameHint;
+
+  /// No description provided for @deviceRenameHistory.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log perubahan lama kekal dengan nama lama peranti ini.'**
+  String get deviceRenameHistory;
+
+  /// No description provided for @deviceRenamed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama peranti disimpan.'**
+  String get deviceRenamed;
+
+  /// No description provided for @deviceOwnedBy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Milik {name}. {platform}, didaftarkan {date}'**
+  String deviceOwnedBy(String name, String platform, String date);
+
+  /// No description provided for @deviceRemoveThis.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam peranti ini'**
+  String get deviceRemoveThis;
+
+  /// No description provided for @deviceRemoveHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti ini tidak lagi boleh membuka aplikasi. Untuk guna semula, daftar dengan kod QR baharu.'**
+  String get deviceRemoveHint;
+
+  /// No description provided for @devicesUnusedCard.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} peranti tidak digunakan lebih 60 hari'**
+  String devicesUnusedCard(int n);
+
+  /// No description provided for @devicesUnusedHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rekod lama kekal. Pemiliknya boleh mendaftar semula dengan kod QR baharu.'**
+  String get devicesUnusedHint;
+
+  /// No description provided for @devicesRemoveAll.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam semua'**
+  String get devicesRemoveAll;
+
+  /// No description provided for @devicesRemoveAllConfirm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam {n} peranti yang tidak digunakan?'**
+  String devicesRemoveAllConfirm(int n);
+
+  /// No description provided for @devicesRemovedSome.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} dipadam, {m} dilangkau'**
+  String devicesRemovedSome(int n, int m);
+
+  /// No description provided for @devicesSkipOwn.
+  ///
+  /// In ms, this message translates to:
+  /// **'peranti ini sendiri'**
+  String get devicesSkipOwn;
+
+  /// No description provided for @devicesSkipInUse.
+  ///
+  /// In ms, this message translates to:
+  /// **'baru digunakan'**
+  String get devicesSkipInUse;
+
+  /// No description provided for @devicesSkipLastAdmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'telefon Pentadbir terakhir'**
+  String get devicesSkipLastAdmin;
+
+  /// No description provided for @devicesLastAdmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Daftar peranti Pentadbir lain dahulu'**
+  String get devicesLastAdmin;
+
+  /// No description provided for @devicesOpenCodes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod belum digunakan ({n})'**
+  String devicesOpenCodes(int n);
+
+  /// No description provided for @devicesCodeExpiresIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'{device}, tamat dalam {n} minit'**
+  String devicesCodeExpiresIn(String device, int n);
+
+  /// No description provided for @devicesEndCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tamatkan kod'**
+  String get devicesEndCode;
+
+  /// No description provided for @devicesCodeEnded.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod ditamatkan.'**
+  String get devicesCodeEnded;
+
+  /// No description provided for @devicesRemovedNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti yang dipadam hilang dari senarai serta-merta. Catatannya kekal dalam Log perubahan.'**
+  String get devicesRemovedNote;
+
+  /// No description provided for @tvBoxTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM di surau'**
+  String get tvBoxTitle;
+
+  /// No description provided for @tvExtraScreens.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin tambahan ({n})'**
+  String tvExtraScreens(int n);
+
+  /// No description provided for @tvPairedSeen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dipadankan {date}, dilihat {ago}'**
+  String tvPairedSeen(String date, String ago);
+
+  /// No description provided for @tvNotSeenDays.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dilihat {n} hari'**
+  String tvNotSeenDays(int n);
+
+  /// No description provided for @tvPairNew.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padankan skrin baharu'**
+  String get tvPairNew;
+
+  /// No description provided for @tvNoneWaiting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada skrin sedang menunggu.'**
+  String get tvNoneWaiting;
+
+  /// No description provided for @tvOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hidup'**
+  String get tvOn;
+
+  /// No description provided for @devicesSkipTv.
+  ///
+  /// In ms, this message translates to:
+  /// **'skrin TV'**
+  String get devicesSkipTv;
+
+  /// No description provided for @devicesSkipGone.
+  ///
+  /// In ms, this message translates to:
+  /// **'sudah tiada'**
+  String get devicesSkipGone;
+
+  /// No description provided for @tvPaired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dipadankan {date}'**
+  String tvPaired(String date);
+
+  /// No description provided for @tvSeenNow.
+  ///
+  /// In ms, this message translates to:
+  /// **'baru tadi'**
+  String get tvSeenNow;
+
+  /// No description provided for @tvSeenMinutes.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} minit lalu'**
+  String tvSeenMinutes(int n);
+
+  /// No description provided for @tvSeenHours.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} jam lalu'**
+  String tvSeenHours(int n);
+
+  /// No description provided for @tvSeenDays.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} hari lalu'**
+  String tvSeenDays(int n);
+
+  /// No description provided for @addStep.
+  ///
+  /// In ms, this message translates to:
+  /// **'Langkah {n} daripada 3'**
+  String addStep(int n);
+
+  /// No description provided for @addWhatRole.
+  ///
+  /// In ms, this message translates to:
+  /// **'Apa yang dia akan buat?'**
+  String get addWhatRole;
+
+  /// No description provided for @addNameHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama yang AJK lain kenal. Boleh ditukar kemudian.'**
+  String get addNameHint;
+
+  /// No description provided for @addRoleAjk.
+  ///
+  /// In ms, this message translates to:
+  /// **'Melihat sahaja: waktu solat, kandungan, kewangan'**
+  String get addRoleAjk;
+
+  /// No description provided for @addRoleBendahari.
+  ///
+  /// In ms, this message translates to:
+  /// **'Merekod derma dan perbelanjaan'**
+  String get addRoleBendahari;
+
+  /// No description provided for @addRoleMedia.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengumuman dan poster di skrin TV'**
+  String get addRoleMedia;
+
+  /// No description provided for @addRoleLive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran langsung dan rakaman'**
+  String get addRoleLive;
+
+  /// No description provided for @addRoleAdmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semua, termasuk pengguna dan peranti'**
+  String get addRoleAdmin;
+
+  /// No description provided for @addDeviceSummary.
+  ///
+  /// In ms, this message translates to:
+  /// **'{device}, kod sah {n} minit'**
+  String addDeviceSummary(String device, int n);
+
+  /// No description provided for @addChangeDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar nama peranti atau tempoh'**
+  String get addChangeDevice;
+
+  /// No description provided for @addDefaultDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Telefon {name}'**
+  String addDefaultDevice(String name);
+
+  /// No description provided for @addSaveAndQr.
+  ///
+  /// In ms, this message translates to:
+  /// **'Simpan dan buat kod QR'**
+  String get addSaveAndQr;
+
+  /// No description provided for @addSavedNoQr.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} disimpan. Buat kod QR apabila anda di Wi-Fi surau.'**
+  String addSavedNoQr(String name);
+
+  /// No description provided for @addScanTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} imbas kod ini dengan aplikasi MAXCOM'**
+  String addScanTitle(String name);
+
+  /// No description provided for @addShare.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kongsi'**
+  String get addShare;
+
+  /// No description provided for @addShareConfirmTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hantar kepada {name} sahaja'**
+  String addShareConfirmTitle(String name);
+
+  /// No description provided for @addShareConfirmBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bukan ke kumpulan. Sesiapa yang memegang kod ini di Wi-Fi surau boleh masuk sebagai {name} sehingga kod digunakan.'**
+  String addShareConfirmBody(String name);
+
+  /// No description provided for @addShareText.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jemputan MAXCOM untuk {name} di {surau}. Sah {n} minit dan sekali guna. Di Wi-Fi surau, buka aplikasi MAXCOM, pilih \"Masukkan kod secara manual\" dan tampal teks di bawah. Jangan kongsi dengan orang lain.'**
+  String addShareText(String name, String surau, int n);
+
+  /// No description provided for @addShareAdminInPerson.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod untuk Pentadbir mesti diimbas di depan anda semasa kunci aplikasi dimatikan.'**
+  String get addShareAdminInPerson;
+
+  /// No description provided for @addShareUnavailable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kongsi tidak tersedia pada MAXCOM ini. Tunjukkan kod QR.'**
+  String get addShareUnavailable;
+
+  /// No description provided for @addLockOffHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kunci aplikasi dimatikan. Hidupkan di Konfigurasi untuk keselamatan lebih.'**
+  String get addLockOffHint;
+
+  /// No description provided for @addWaiting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu {name} mendaftar'**
+  String addWaiting(String name);
+
+  /// No description provided for @addEndCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tamatkan kod ini'**
+  String get addEndCode;
+
+  /// No description provided for @addDoneTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} sudah masuk'**
+  String addDoneTitle(String name);
+
+  /// No description provided for @addDoneBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dia boleh guna aplikasi sebagai {roles} mulai sekarang.'**
+  String addDoneBody(String roles);
+
+  /// No description provided for @addDoneDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'{platform}, didaftarkan {time}'**
+  String addDoneDevice(String platform, String time);
+
+  /// No description provided for @addNotTheirs.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bukan telefon {name}? Padam peranti ini'**
+  String addNotTheirs(String name);
+
+  /// No description provided for @addReuseWarning.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod ini cuba digunakan lagi {n} kali selepas itu.'**
+  String addReuseWarning(int n);
+
+  /// No description provided for @addAnother.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tambah pengguna lain'**
+  String get addAnother;
+
+  /// No description provided for @addBackToList.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembali ke senarai'**
+  String get addBackToList;
+
+  /// No description provided for @thisDeviceRename.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar nama peranti ini'**
+  String get thisDeviceRename;
+
+  /// No description provided for @liveOnlyRename.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar nama peranti'**
+  String get liveOnlyRename;
+
+  /// No description provided for @liveOnlyUnlock.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka kunci PIN'**
+  String get liveOnlyUnlock;
+
+  /// No description provided for @liveOnlyCodes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Urus kod pendaftaran'**
+  String get liveOnlyCodes;
+
+  /// No description provided for @liveOnlyActivity.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lihat status aktif'**
+  String get liveOnlyActivity;
+
+  /// No description provided for @liveOnlyDeleteUser.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam pengguna'**
+  String get liveOnlyDeleteUser;
+
+  /// No description provided for @liveOnlyRestoreUser.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pulihkan pengguna'**
+  String get liveOnlyRestoreUser;
+
+  /// No description provided for @liveOnlyPhone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar nombor telefon'**
+  String get liveOnlyPhone;
+
+  /// No description provided for @idLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'ID'**
+  String get idLabel;
+
+  /// No description provided for @idPending.
+  ///
+  /// In ms, this message translates to:
+  /// **'ID belum ada'**
+  String get idPending;
+
+  /// No description provided for @searchNameOrId.
+  ///
+  /// In ms, this message translates to:
+  /// **'Cari nama atau ID'**
+  String get searchNameOrId;
+
+  /// No description provided for @userDelete.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam pengguna'**
+  String get userDelete;
+
+  /// No description provided for @userDeleteTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam {name}?'**
+  String userDeleteTitle(String name);
+
+  /// No description provided for @userDeleteBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} ({ref}) tidak lagi boleh masuk dan hilang dari semua senarai. Semua perantinya dipadam. Log perubahan dan rekod kewangan kekal dengan nama dan ID ini.'**
+  String userDeleteBody(String name, String ref);
+
+  /// No description provided for @userDeleted.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} dipadam.'**
+  String userDeleted(String name);
+
+  /// No description provided for @userDeleteSelf.
+  ///
+  /// In ms, this message translates to:
+  /// **'Anda tidak boleh memadam akaun sendiri'**
+  String get userDeleteSelf;
+
+  /// No description provided for @userDeleteLastAdmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mesti ada sekurang-kurangnya seorang Pentadbir aktif'**
+  String get userDeleteLastAdmin;
+
+  /// No description provided for @userRestore.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pulihkan'**
+  String get userRestore;
+
+  /// No description provided for @userRestored.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} dipulihkan sebagai dinyahaktifkan. Aktifkan semula dan daftar telefon dengan kod QR baharu.'**
+  String userRestored(String name);
+
+  /// No description provided for @auditUserDeleted.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengguna dipadam'**
+  String get auditUserDeleted;
+
+  /// No description provided for @auditDeviceDeleted.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti dipadam'**
+  String get auditDeviceDeleted;
+
+  /// No description provided for @auditPhoneChanged.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon ditukar'**
+  String get auditPhoneChanged;
+
+  /// No description provided for @autoCleanNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti yang tidak digunakan 180 hari dan pengguna yang dinyahaktifkan 365 hari dipadam secara automatik. Sejarah kekal.'**
+  String get autoCleanNote;
+
+  /// No description provided for @autoCleanSoon.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dipadam automatik dalam {n} hari'**
+  String autoCleanSoon(int n);
+
+  /// No description provided for @phoneLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon'**
+  String get phoneLabel;
+
+  /// No description provided for @phoneHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Contoh: 012-000 0000'**
+  String get phoneHint;
+
+  /// No description provided for @phoneRequired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon diperlukan'**
+  String get phoneRequired;
+
+  /// No description provided for @phoneInvalid.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon tidak sah. Untuk nombor luar negara, mulakan dengan + dan kod negara.'**
+  String get phoneInvalid;
+
+  /// No description provided for @phoneTaken.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor ini sudah digunakan oleh pengguna lain ({ref}).'**
+  String phoneTaken(String ref);
+
+  /// No description provided for @phoneNeeded.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon diperlukan'**
+  String get phoneNeeded;
+
+  /// No description provided for @phoneFill.
+  ///
+  /// In ms, this message translates to:
+  /// **'Isi nombor'**
+  String get phoneFill;
+
+  /// No description provided for @phoneDuplicate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon sama dengan pengguna lain'**
+  String get phoneDuplicate;
+
+  /// No description provided for @phoneSaved.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon disimpan.'**
+  String get phoneSaved;
+
+  /// No description provided for @phoneEdit.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar nombor'**
+  String get phoneEdit;
+
+  /// No description provided for @phonePrivate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hanya Pentadbir dan orang itu sendiri boleh melihat nombor ini.'**
+  String get phonePrivate;
+
+  /// No description provided for @waTo.
+  ///
+  /// In ms, this message translates to:
+  /// **'WhatsApp kepada {name}'**
+  String waTo(String name);
+
+  /// No description provided for @waUnavailable.
+  ///
+  /// In ms, this message translates to:
+  /// **'WhatsApp tidak dapat dibuka. Guna Kongsi.'**
+  String get waUnavailable;
+
+  /// No description provided for @waUnavailablePage.
+  ///
+  /// In ms, this message translates to:
+  /// **'WhatsApp tidak tersedia pada telefon ini.'**
+  String get waUnavailablePage;
+
+  /// No description provided for @shareContinue.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teruskan'**
+  String get shareContinue;
+
+  /// No description provided for @userRestoreTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pulihkan {name}?'**
+  String userRestoreTitle(String name);
+
+  /// No description provided for @userRestoreBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} ({ref}) kembali ke senarai sebagai dinyahaktifkan, tanpa peranti. Aktifkan semula dan daftar telefon dengan kod QR baharu.'**
+  String userRestoreBody(String name, String ref);
+
+  /// No description provided for @phoneSave.
+  ///
+  /// In ms, this message translates to:
+  /// **'Simpan'**
+  String get phoneSave;
+
+  /// No description provided for @userDeleteHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Orang ini hilang dari senarai dan tidak lagi boleh masuk. Sejarah kekal. Boleh dipulihkan dari Log perubahan.'**
+  String get userDeleteHint;
+
+  /// No description provided for @a6Other.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lain-lain'**
+  String get a6Other;
+
+  /// No description provided for @needsBoth.
+  ///
+  /// In ms, this message translates to:
+  /// **'{first} dan {second}'**
+  String needsBoth(String first, String second);
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {
@@ -10704,7 +14258,7 @@ class _SDelegate extends LocalizationsDelegate<S> {
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['en', 'ms'].contains(locale.languageCode);
+      <String>['ar', 'en', 'ms'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_SDelegate old) => false;
@@ -10713,6 +14267,8 @@ class _SDelegate extends LocalizationsDelegate<S> {
 S lookupS(Locale locale) {
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
+    case 'ar':
+      return SAr();
     case 'en':
       return SEn();
     case 'ms':

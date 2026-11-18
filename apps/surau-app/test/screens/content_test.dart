@@ -14,7 +14,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/providers.dart';
+import 'package:surau_app/content/kinds.dart' show dateWords;
+import 'package:surau_app/l10n/s_lookup.dart';
 import 'package:surau_app/content/adjusted_picture.dart' show AssetPicture;
 import 'package:surau_app/content/image_adjust.dart' show CropEditor;
 
@@ -587,5 +590,133 @@ void main() {
     final h = await openContent(tester, '/content/zzz');
     expect(h.location, '/content/zzz');
     expect(find.text('Rekod tidak dijumpai.'), findsOneWidget);
+  });
+
+  // ---- Release 2026.11.12, RA1 ----
+
+  Future<ShellHarness> openIn(
+    WidgetTester tester,
+    AppLang lang,
+    String path, {
+    void Function(ShellHarness h)? setUp,
+  }) async {
+    final h = await pumpShell(
+      tester,
+      roles: const ['admin'],
+      overrides: [appLangStoreProvider.overrideWithValue(MemoryAppLangStore(lang))],
+    );
+    setUp?.call(h);
+    h.router.go(path);
+    await settle(tester);
+    return h;
+  }
+
+  for (final lang in AppLang.values) {
+    testWidgets('[C3] a refused delete (content_in_use) reads from the catalogue in ${lang.name}, with the dates', (tester) async {
+      final h = await openIn(tester, lang, '/content/penceramah');
+      h.handlers['DELETE /api/content/penceramah/p1'] = (r) async => jsonResponse(409, {
+        'errors': ['penceramah is still used by 2 kuliah item(s)'],
+        'code': 'content_in_use',
+        'detail': {
+          'kind': 'penceramah',
+          'count': 2,
+          'items': [
+            {'id': 'c1', 'date': '2026-11-20', 'label': 'Kuliah Maghrib'},
+            {'id': 'c9', 'date': '2026-11-22', 'label': 'Kuliah Subuh'},
+          ],
+        },
+      });
+      final t = sFor(lang);
+      await tester.tap(find.byKey(const ValueKey('delete-p1')));
+      await settle(tester);
+      await tester.tap(find.byType(FilledButton).last);
+      await settle(tester);
+      expect(find.textContaining(t.errcContentInUse(2)), findsOneWidget);
+      expect(find.textContaining('refers'), findsNothing);
+      expect(find.textContaining('still used by 2'), findsNothing);
+      final dates = '${dateWords('2026-11-20', lang, weekday: false)}${lang == AppLang.ar ? '، ' : ', '}${dateWords('2026-11-22', lang, weekday: false)}';
+      expect(find.textContaining(dates), findsOneWidget);
+    });
+  }
+
+  testWidgets('[C3] a kuliah whose speaker was deleted says so, not "unknown"', (tester) async {
+    final h = await openIn(tester, AppLang.ms, '/content/kuliah', setUp: (h) {
+      h.content['kuliah']![2] = {...h.content['kuliah']![2], 'penceramahId': 'gone'};
+    });
+    expect(find.textContaining('Penceramah dipadam'), findsOneWidget);
+    expect(find.textContaining('tidak diketahui'), findsNothing);
+    expect(h.location, '/content/kuliah');
+  });
+
+  testWidgets('[C3] asset_missing and hadis_full also come from the catalogue', (tester) async {
+    final h = await openIn(tester, AppLang.en, '/content/kuliah/c1');
+    h.handlers['PUT /api/content/kuliah/c1'] = (r) async => jsonResponse(409, {
+      'errors': ['pictureAssetId refers to an asset this surau does not hold'],
+      'code': 'asset_missing',
+    });
+    await tester.enterText(field('label'), 'Kuliah Maghrib Khas');
+    await settle(tester);
+    await reveal(tester, save);
+    await tester.tap(save);
+    await settle(tester);
+    expect(find.text(sFor(AppLang.en).errcAssetMissing), findsOneWidget);
+  });
+
+  testWidgets('[C7] the kuliah form has no Siri field and an item with seriesId saves with it untouched', (tester) async {
+    final h = await openIn(tester, AppLang.ms, '/content/kuliah/c1', setUp: (h) {
+      h.content['kuliah']![0] = {...h.content['kuliah']![0], 'seriesId': 'siri-riyadh'};
+    });
+    expect(field('seriesId'), findsNothing);
+    expect(find.text('Siri'), findsNothing);
+    expect(find.textContaining('Kod siri'), findsNothing);
+    await tester.enterText(field('label'), 'Kuliah Maghrib Khas');
+    await settle(tester);
+    await reveal(tester, save);
+    await tester.tap(save);
+    await settle(tester);
+    final put = h.box.byPath('/api/content/kuliah/c1')!;
+    expect(put.method, 'PUT');
+    expect(jsonDecode(put.body)['seriesId'], 'siri-riyadh');
+  });
+
+  testWidgets('[C5] a stored Asia/Brunei world clock opens, shows its zone and saves unchanged', (tester) async {
+    final h = await openIn(tester, AppLang.ms, '/content/worldTime/z9', setUp: (h) {
+      h.content['worldTime']!.add({
+        'id': 'z9',
+        'updatedAt': '2026-11-03T09:00:00.000Z',
+        'updatedBy': 'user:u1',
+        'city': 'Bandar Seri Begawan',
+        'tz': 'Asia/Brunei',
+        'order': 3,
+      });
+    });
+    expect(find.textContaining('Asia/Brunei'), findsWidgets);
+    expect(find.textContaining('Pilih zon waktu daripada senarai'), findsNothing);
+    await tester.enterText(field('city'), 'Bandar Seri Begawan B');
+    await settle(tester);
+    await reveal(tester, save);
+    expect(saveEnabled(tester), isTrue);
+    await tester.tap(save);
+    await settle(tester);
+    expect(jsonDecode(h.box.byPath('/api/content/worldTime/z9')!.body)['tz'], 'Asia/Brunei');
+  });
+
+  testWidgets('[C8] the number hint and the zone city names follow the language', (tester) async {
+    await openIn(tester, AppLang.en, '/content/worldTime/new');
+    expect(find.text('0 to 1000000'), findsOneWidget);
+    expect(find.text('0 hingga 1000000'), findsNothing);
+    await tester.tap(field('tz'));
+    await settle(tester);
+    expect(find.textContaining('Singapore ('), findsOneWidget);
+    expect(find.textContaining('Singapura'), findsNothing);
+  });
+
+  testWidgets('[C9] the editor and the list lay out from the start edge in Arabic', (tester) async {
+    await openIn(tester, AppLang.ar, '/content/kuliah');
+    final row = tester.getTopLeft(find.byKey(const ValueKey('item-c1')));
+    final title = tester.getTopRight(find.text('Kuliah Maghrib'));
+    expect(Directionality.of(tester.element(find.text('Kuliah Maghrib'))), TextDirection.rtl);
+    // The title starts at the right edge (start) of the row, not the left.
+    expect(title.dx, greaterThan(row.dx + 200));
   });
 }

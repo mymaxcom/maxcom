@@ -64,9 +64,10 @@ describe('screenIdOf with the shown card', () => {
     expect(screenIdOf(normal, false, null)).toBe('biasa');
     expect(screenIdOf(normal, false)).toBe('biasa');
   });
-  it('a card without a catalog screen is biasa', () => {
-    expect(screenIdOf(normal, false, 'worldTimes')).toBe('biasa');
-    expect(screenIdOf(normal, false, 'tugasan')).toBe('biasa');
+  it('the two shell cards without a catalog screen take their own stage ids', () => {
+    expect(screenIdOf(normal, false, 'worldTimes')).toBe('waktu-dunia');
+    expect(screenIdOf(normal, false, 'tugasan')).toBe('tugasan');
+    expect(screenIdOf(normal, false, null)).toBe('biasa');
   });
   it('live and prayer phases ignore the card', () => {
     expect(screenIdOf(normal, true, 'posters')).toBe('live');
@@ -93,12 +94,13 @@ describe('the stage', () => {
     expect(stage(p).getAttribute('data-screen')).toBe('poster');
   });
 
-  it('a card with no catalog id (worldTimes, tugasan) leaves the stage on biasa and nothing throws', async () => {
-    for (const f of ['worldTimes', 'tugasan'] as const) {
+  it('a card with no catalog id (worldTimes, tugasan) puts the stage on its shell id and nothing throws', async () => {
+    for (const [f, id] of [['worldTimes', 'waktu-dunia'], ['tugasan', 'tugasan']] as const) {
       const r = showApp(f);
       await act(async () => { await Promise.resolve(); });
       expect(r.container.querySelector(`[data-card="${f}"]`), f).toBeTruthy();
-      expect(stage(r).getAttribute('data-screen'), f).toBe('biasa');
+      expect(stage(r).getAttribute('data-screen'), f).toBe(id);
+      expect(stage(r).getAttribute('data-kind'), f).toBe('content');
       cleanup();
     }
   });

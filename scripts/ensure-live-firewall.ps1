@@ -1,12 +1,13 @@
 <#
 .SYNOPSIS
-  MAXCOM: make sure the two live media firewall rules exist and are exactly right. Windows PowerShell 5.1.
+  MAXCOM: make sure the three live media firewall rules exist and are exactly right. Windows PowerShell 5.1.
 
 .DESCRIPTION
-  Keeps two inbound UDP rules, on every network profile (Windows may call the Wi-Fi Private or Public),
+  Keeps three inbound UDP rules, on every network profile (Windows may call the Wi-Fi Private or Public),
   open to the local subnet only:
     "MAXCOM Live WebRTC"  UDP 8189  (WebRTC / ICE)
     "MAXCOM Live SRT"     UDP 8890  (SRT, the phone's stream)
+    "MAXCOM Live RTP"     UDP 8000-8001  (RTP and RTCP of the external camera over UDP transport)
   A rule that is already exactly right is left alone; a missing or different one is deleted by name and
   added again. Nothing else is changed or written. Changing the firewall needs an elevated process, so
   without an administrator window the script exits 1 with a message and touches nothing.
@@ -16,11 +17,13 @@
 
 .PARAMETER WebrtcPort  UDP port of MAXCOM Live WebRTC (default 8189).
 .PARAMETER SrtPort     UDP port of MAXCOM Live SRT (default 8890).
+.PARAMETER RtpPorts    UDP ports of MAXCOM Live RTP: the RTP and RTCP pair (default 8000-8001).
 #>
 [CmdletBinding()]
 param(
   [int]$WebrtcPort = 8189,
-  [int]$SrtPort = 8890
+  [int]$SrtPort = 8890,
+  [ValidatePattern('^[0-9]{1,5}(-[0-9]{1,5})?$')][string]$RtpPorts = '8000-8001'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,7 +37,7 @@ if (-not $admin) {
 
 # True when the existing rule(s) of this name are exactly the wanted one (one copy, enabled, inbound, UDP,
 # the port, allow, every profile, local subnet). An unreadable answer counts as "different": the rule is re-made.
-function Test-RuleExact([string]$Name, [int]$Port) {
+function Test-RuleExact([string]$Name, [string]$Port) {
   $text = (& netsh advfirewall firewall show rule name="$Name" verbose) | Out-String
   if ($LASTEXITCODE -ne 0) { return $false }
   $blocks = @($text -split '(?m)^\s*Rule Name:' | Where-Object { $_ -match 'Enabled:' })
@@ -46,7 +49,7 @@ function Test-RuleExact([string]$Name, [int]$Port) {
   return $true
 }
 
-function Set-LiveRule([string]$Name, [int]$Port) {
+function Set-LiveRule([string]$Name, [string]$Port) {
   if (Test-RuleExact $Name $Port) {
     Write-Host "OK      $Name (UDP $Port) already set."
     return
@@ -59,4 +62,5 @@ function Set-LiveRule([string]$Name, [int]$Port) {
 
 Set-LiveRule 'MAXCOM Live WebRTC' $WebrtcPort
 Set-LiveRule 'MAXCOM Live SRT' $SrtPort
+Set-LiveRule 'MAXCOM Live RTP' $RtpPorts
 exit 0

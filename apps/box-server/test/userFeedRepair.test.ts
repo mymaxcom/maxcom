@@ -39,7 +39,7 @@ function readerCopy(db: DatabaseSync, userId: string): Record<string, unknown> {
 describe('user records in the change feed', () => {
   it('an enrolment that sets a PIN logs the full user, not a nameless fragment', () => {
     const db = freshDb();
-    const u = createUser(db, { name: 'Demo Kandungan', roles: ['admin'] }, 'local');
+    const u = createUser(db, { name: 'Demo Kandungan', roles: ['admin'] }, 'local', 'sdm');
     const { code } = beginEnrolment(db, { userId: u.id, deviceName: 'Telefon' }, 'local');
     completeEnrolment(db, { code, publicJwk: jwk(), platform: 'android', pin: '482915' }, '10.0.0.5');
 
@@ -50,10 +50,10 @@ describe('user records in the change feed', () => {
 
   it('migration 018 re-logs the full record for a user whose latest entry lacks a name, once', () => {
     const db = freshDb();
-    const broken = createUser(db, { name: 'Pentadbir Surau', roles: ['admin'] }, 'local');
-    const fine = createUser(db, { name: 'Bendahari', roles: ['treasurer'] }, 'local');
+    const broken = createUser(db, { name: 'Pentadbir Surau', roles: ['admin'] }, 'local', 'sdm');
+    const fine = createUser(db, { name: 'Bendahari', roles: ['treasurer'] }, 'local', 'sdm');
     // what boxes before 2026.11.5 logged at a PIN-setting enrolment
-    logChange(db, `user:${broken.id}`, 'users', broken.id, { id: broken.id, hasPin: false }, { id: broken.id, hasPin: true, pinChanged: true });
+    logChange(db, `user:${broken.id}`, 'users', broken.id, { id: broken.id, hasPin: false }, { id: broken.id, hasPin: true, pinChanged: true }, undefined, 'sdm');
     const countFine = () =>
       Number(db.prepare("SELECT COUNT(*) AS n FROM change_log WHERE entity_id = ?").get(fine.id)?.n);
     const before = countFine();

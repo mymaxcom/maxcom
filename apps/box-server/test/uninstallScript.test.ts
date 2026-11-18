@@ -51,7 +51,7 @@ describe('uninstall.ps1, switch-release.ps1, Buang MAXCOM.cmd (static)', () => {
 
   it('names the tasks and rules exactly and asks the plan questions in BM', () => {
     const u = readFileSync(uninstallPs1, 'utf8');
-    for (const n of ['MAXCOM Kiosk', 'MAXCOM Box', 'MaxcomCertRenew', 'MAXCOM Live Firewall', 'MAXCOM Live WebRTC', 'MAXCOM Live SRT', 'MAXCOM Box HTTPS']) {
+    for (const n of ['MAXCOM Kiosk', 'MAXCOM Box', 'MaxcomCertRenew', 'MAXCOM Live Firewall', 'MAXCOM Live WebRTC', 'MAXCOM Live SRT', 'MAXCOM Live RTP', 'MAXCOM Box HTTPS']) {
       expect(u).toContain(`'${n}'`);
     }
     expect(u).toContain('Buang perisian MAX Kiosk Server dari PC ini? Data surau DIKEKALKAN. (y/t)');

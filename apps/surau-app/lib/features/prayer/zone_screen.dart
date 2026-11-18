@@ -17,6 +17,8 @@ import '../../screens/widgets/pieces.dart';
 import '../settings_repository.dart';
 import '../shell/permissions.dart';
 import 'location_screen.dart';
+import 'prayer_names.dart';
+import '../labels.dart' show appLangOfS;
 import 'prayer_repository.dart';
 import 'widgets/coordinate_fields.dart';
 import 'widgets/country_picker.dart';
@@ -116,7 +118,8 @@ class _ZoneScreenState extends ConsumerState<ZoneScreen> {
         _busy = false;
         _pending = null;
         if (warnings is List && warnings.isNotEmpty) {
-          _saveWarning = '${warnings.first}';
+          final lines = warningLines(s, [for (final w in warnings) '$w'], warningsOf(all));
+          _saveWarning = lines.first;
         } else {
           _note = s.zonSaved(code);
         }
@@ -162,7 +165,7 @@ class _ZoneScreenState extends ConsumerState<ZoneScreen> {
     final t = DateTime.tryParse(iso);
     if (t == null) return iso;
     final local = deps.toLocal(t);
-    return '${shortDateMs(isoDate(local))}, ${timeOfDayWords(local)}';
+    return '${shortDate(S.of(context), isoDate(local))}, ${timeOfDayWords(local, lang: appLangOfS(S.of(context)))}';
   }
 
   @override
@@ -202,6 +205,7 @@ class _ZoneScreenState extends ConsumerState<ZoneScreen> {
     final lon = location['longitude'];
     final city = (location['city'] as String? ?? '').trim();
     final place = lat is num && lon is num ? '${formatCoordinate(lat)}, ${formatCoordinate(lon)}' : s.zonNoCoordinates;
+    // lang-ok: the zone list's own sentence from the box (no code yet; it is BM until the box sends one)
     final warning = _list?.warning;
     return SurauTheme.page(
       children: [

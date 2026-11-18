@@ -5,14 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { writeTarGz } from './helpers/fakeBundle';
+import { writeTarGz } from './helpers/fakeBundle.ts';
+import { must } from './helpers/must.ts';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const script = join(repoRoot, 'scripts', 'setup', 'build-setup.ps1');
 const psm = join(repoRoot, 'scripts', 'setup', 'MaxcomSetup.psm1');
 const realPins = join(repoRoot, 'scripts', 'release-pins.json');
 const win = process.platform === 'win32';
-const VERSION = (JSON.parse(readFileSync(join(repoRoot, 'versions.json'), 'utf8')) as Record<string, string>)['kiosk-server-windows'];
+const VERSION = must((JSON.parse(readFileSync(join(repoRoot, 'versions.json'), 'utf8')) as Record<string, string>)['kiosk-server-windows'], 'kiosk-server-windows version');
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -123,18 +124,19 @@ describe('build-setup.ps1 (static)', () => {
 
 describe('release-pins.json (real file, as committed)', () => {
   const pins = JSON.parse(readFileSync(realPins, 'utf8')) as Record<string, { version: string; url: string; licence: string; sha256: string }>;
+  const pin = (n: string) => must(pins[n], `pin ${n}`);
   it('pins a versioned BtbN GPL ffmpeg build (relay.ts re-encodes with libx264)', () => {
-    expect(pins.ffmpeg.url).toMatch(/^https:\/\/github\.com\/BtbN\/FFmpeg-Builds\/releases\/download\/autobuild-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}\//);
-    expect(pins.ffmpeg.url).toContain('-win64-gpl-');
-    expect(pins.ffmpeg.url).not.toContain('latest');
-    expect(pins.ffmpeg.url).toContain(pins.ffmpeg.version);
-    expect(pins.ffmpeg.licence).toContain('GPL');
+    expect(pin('ffmpeg').url).toMatch(/^https:\/\/github\.com\/BtbN\/FFmpeg-Builds\/releases\/download\/autobuild-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}\//);
+    expect(pin('ffmpeg').url).toContain('-win64-gpl-');
+    expect(pin('ffmpeg').url).not.toContain('latest');
+    expect(pin('ffmpeg').url).toContain(pin('ffmpeg').version);
+    expect(pin('ffmpeg').licence).toContain('GPL');
   });
   it('has a 64-char lowercase hex sha256 and an https url for every pin', () => {
     expect(Object.keys(pins).sort()).toEqual(['ffmpeg', 'mediamtx', 'node']);
     for (const n of Object.keys(pins)) {
-      expect(pins[n].sha256, n).toMatch(/^[0-9a-f]{64}$/);
-      expect(pins[n].url, n).toMatch(/^https:\/\//);
+      expect(pin(n).sha256, n).toMatch(/^[0-9a-f]{64}$/);
+      expect(pin(n).url, n).toMatch(/^https:\/\//);
     }
   });
 });
@@ -142,7 +144,7 @@ describe('release-pins.json (real file, as committed)', () => {
 /** Temp copy of the real pins with every sha256 blanked. */
 function blankedPins(root: string): string {
   const p = JSON.parse(readFileSync(realPins, 'utf8')) as Record<string, { sha256: string }>;
-  for (const n of Object.keys(p)) p[n].sha256 = '';
+  for (const n of Object.keys(p)) must(p[n], `pin ${n}`).sha256 = '';
   const file = join(root, 'pins-blank.json');
   writeFileSync(file, JSON.stringify(p, null, 2));
   return file;
@@ -205,8 +207,8 @@ describe.runIf(win)('build-setup.ps1 (run)', () => {
 
   it('refuses a non-https pin, a release.json of another version and a missing release archive', () => {
     const f = fixture();
-    const pins = JSON.parse(readFileSync(f.pinsFile, 'utf8'));
-    pins.ffmpeg.url = 'http://example.invalid/x/ffmpeg-n1.0-win64-gpl-1.0.zip';
+    const pins = JSON.parse(readFileSync(f.pinsFile, 'utf8')) as Record<string, { url: string }>;
+    must(pins['ffmpeg'], 'ffmpeg pin').url = 'http://example.invalid/x/ffmpeg-n1.0-win64-gpl-1.0.zip';
     const p2 = join(f.root, 'pins-http.json');
     writeFileSync(p2, JSON.stringify(pins));
     expect(build(args(f).map((a) => (a === f.pinsFile ? p2 : a))).out).toContain('https://');

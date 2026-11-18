@@ -50,13 +50,13 @@ function parseDay(json: unknown): PrayerDay | null {
   }
 }
 
-function load(db: DatabaseSync, settings: Settings, from: string, to: string): Loaded {
+function load(db: DatabaseSync, settings: Settings, from: string, to: string, surauId: string): Loaded {
   const official = new Map<string, PrayerDay>();
   const officialNear = new Map<string, PrayerDay>();
   const zone = String(settings.zone.zone);
   if (hasOfficialSource(settings.location.country) && ZONE.test(zone)) {
-    for (const r of db.prepare('SELECT json FROM prayer_days WHERE zone = ? AND date >= ? AND date <= ?')
-      .all(zone, addDays(from, -HIJRI_NEAR_DAYS), addDays(to, HIJRI_NEAR_DAYS))) {
+    for (const r of db.prepare('SELECT json FROM prayer_days WHERE surau_id = ? AND zone = ? AND date >= ? AND date <= ?')
+      .all(surauId, zone, addDays(from, -HIJRI_NEAR_DAYS), addDays(to, HIJRI_NEAR_DAYS))) {
       const d = parseDay(r.json);
       if (!d) continue;
       officialNear.set(d.date, d);
@@ -66,17 +66,17 @@ function load(db: DatabaseSync, settings: Settings, from: string, to: string): L
   const file = new Map<string, PrayerDay>();
   for (const r of db
     .prepare(
-      `SELECT f.json AS json FROM prayer_file_days f JOIN prayer_imports i ON i.id = f.import_id
-       WHERE i.undone_at IS NULL AND f.date >= ? AND f.date <= ?`,
+      `SELECT f.json AS json FROM prayer_file_days f JOIN prayer_imports i ON i.surau_id = f.surau_id AND i.id = f.import_id
+       WHERE f.surau_id = ? AND i.undone_at IS NULL AND f.date >= ? AND f.date <= ?`,
     )
-    .all(from, to)) {
+    .all(surauId, from, to)) {
     const d = parseDay(r.json);
     if (d) file.set(d.date, d);
   }
   const corrections = new Map<string, CorrectionRow[]>();
   for (const r of db
-    .prepare('SELECT date, prayer, time, reason, official_at_correction FROM prayer_corrections WHERE date >= ? AND date <= ? ORDER BY date, prayer')
-    .all(from, to)) {
+    .prepare('SELECT date, prayer, time, reason, official_at_correction FROM prayer_corrections WHERE surau_id = ? AND date >= ? AND date <= ? ORDER BY date, prayer')
+    .all(surauId, from, to)) {
     const row: CorrectionRow = {
       date: String(r.date), prayer: String(r.prayer) as PrayerName, time: String(r.time), reason: String(r.reason),
       officialAtCorrection: typeof r.official_at_correction === 'string' ? r.official_at_correction : null,
@@ -182,8 +182,8 @@ function finish(l: Loaded, settings: Settings, date: string, shifts: Map<string,
 }
 
 /** Every date from `from` to `to` (inclusive) that has a day in some source; a date with none is left out. */
-export function resolveDays(db: DatabaseSync, settings: Settings, from: string, to: string): ResolvedDay[] {
-  const l = load(db, settings, from, to);
+export function resolveDays(db: DatabaseSync, settings: Settings, from: string, to: string, surauId: string): ResolvedDay[] {
+  const l = load(db, settings, from, to, surauId);
   const out: ResolvedDay[] = [];
   const n = daysBetween(from, to);
   const shifts = new Map<string, number>();
@@ -198,8 +198,8 @@ export function resolveDays(db: DatabaseSync, settings: Settings, from: string, 
  * Per date, the corrected prayers whose official time now differs from the one stored when the correction was made.
  * The correction still wins; this only lets the app say so. A correction with no stored official time is never flagged.
  */
-export function officialChangedDays(db: DatabaseSync, settings: Settings, from: string, to: string): Map<string, PrayerName[]> {
-  const l = load(db, settings, from, to);
+export function officialChangedDays(db: DatabaseSync, settings: Settings, from: string, to: string, surauId: string): Map<string, PrayerName[]> {
+  const l = load(db, settings, from, to, surauId);
   const out = new Map<string, PrayerName[]>();
   for (const [date, rows] of l.corrections) {
     const now = l.official.get(date);
@@ -212,8 +212,8 @@ export function officialChangedDays(db: DatabaseSync, settings: Settings, from: 
   return out;
 }
 
-export function resolveDay(db: DatabaseSync, settings: Settings, date: string): ResolvedDay | null {
-  return finish(load(db, settings, date, date), settings, date);
+export function resolveDay(db: DatabaseSync, settings: Settings, date: string, surauId: string): ResolvedDay | null {
+  return finish(load(db, settings, date, date, surauId), settings, date);
 }
 
 export interface CrossCheck {
@@ -239,8 +239,8 @@ function median(list: number[]): number {
  * adjustment to make the calculation agree). Corrections are deliberate and left out; a calc day has
  * nothing to compare. Needs a located surau.
  */
-export function crossCheck(db: DatabaseSync, settings: Settings, from: string, to: string): CrossCheck {
-  const l = load(db, settings, from, to);
+export function crossCheck(db: DatabaseSync, settings: Settings, from: string, to: string, surauId: string): CrossCheck {
+  const l = load(db, settings, from, to, surauId);
   const out: CrossCheck = { flagged: [], maxDiff: zeroes(), medianDiff: zeroes(), compared: 0 };
   const per: Record<PrayerName, number[]> = { imsak: [], subuh: [], syuruk: [], zohor: [], asar: [], maghrib: [], isyak: [] };
   const n = daysBetween(from, to);
@@ -286,3 +286,4 @@ export function sourceLine(settings: Settings, day: ResolvedDay, lang: 'ms' | 'e
   if (day.corrected.length > 0) line += ms ? ' dan pembetulan' : ' and corrections';
   return line;
 }
+

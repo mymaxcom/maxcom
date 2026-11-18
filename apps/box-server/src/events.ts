@@ -1,46 +1,58 @@
 import type { KioskLive } from '@surau/core';
 
+type VersionListener = (version: number, surauId: string) => void;
+type LiveListener = (live: KioskLive, surauId: string) => void;
+
+/** A listener with an optional surau filter: `null` hears every event, an id hears only that surau's. */
+interface Scoped<T> {
+  fn: T;
+  surauId: string | null;
+}
+
 export interface ChangeBus {
-  emit(version: number): void;
-  on(fn: (version: number) => void): () => void;
+  /** Emit a change for one surau . */
+  emit(version: number, surauId: string): void;
+  /** Subscribe to version events; pass a surauId to hear only that surau's events. */
+  on(fn: VersionListener, surauId?: string): () => void;
   /** Live state changes (start, stop, ingest ready flips, audio setting), beside the version events. */
-  emitLive(live: KioskLive): void;
-  onLive(fn: (live: KioskLive) => void): () => void;
+  emitLive(live: KioskLive, surauId: string): void;
+  /** Subscribe to live events; pass a surauId to hear only that surau's events. */
+  onLive(fn: LiveListener, surauId?: string): () => void;
 }
 
 /** Fan-out of change notifications (settings and prayer-data writes, live state) to SSE clients. */
 export function createChangeBus(): ChangeBus {
-  const listeners = new Set<(version: number) => void>();
-  const liveListeners = new Set<(live: KioskLive) => void>();
-  return {
-    emit(version: number): void {
-      for (const fn of [...listeners]) {
-        try {
-          fn(version);
-        } catch {
-          // A broken listener must not prevent the others from notifying.
-        }
+  const listeners = new Set<Scoped<VersionListener>>();
+  const liveListeners = new Set<Scoped<LiveListener>>();
+  const deliver = <T>(scoped: Set<Scoped<T>>, surauId: string, call: (fn: T) => void): void => {
+    for (const { fn, surauId: filter } of [...scoped]) {
+      if (filter !== null && filter !== surauId) continue;
+      try {
+        call(fn);
+      } catch {
+        // A broken listener must not prevent the others from notifying.
       }
+    }
+  };
+  return {
+    emit(version: number, surauId: string): void {
+      deliver(listeners, surauId, (fn) => fn(version, surauId));
     },
-    on(fn: (version: number) => void): () => void {
-      listeners.add(fn);
+    on(fn: VersionListener, surauId?: string): () => void {
+      const item: Scoped<VersionListener> = { fn, surauId: surauId ?? null };
+      listeners.add(item);
       return () => {
-        listeners.delete(fn);
+        listeners.delete(item);
       };
     },
-    emitLive(live: KioskLive): void {
-      for (const fn of [...liveListeners]) {
-        try {
-          fn(live);
-        } catch {
-          // Same rule as above.
-        }
-      }
+    emitLive(live: KioskLive, surauId: string): void {
+      deliver(liveListeners, surauId, (fn) => fn(live, surauId));
     },
-    onLive(fn: (live: KioskLive) => void): () => void {
-      liveListeners.add(fn);
+    onLive(fn: LiveListener, surauId?: string): () => void {
+      const item: Scoped<LiveListener> = { fn, surauId: surauId ?? null };
+      liveListeners.add(item);
       return () => {
-        liveListeners.delete(fn);
+        liveListeners.delete(item);
       };
     },
   };

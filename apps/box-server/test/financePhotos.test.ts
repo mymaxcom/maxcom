@@ -35,7 +35,7 @@ async function rig() {
   const treasurer = await loginAs(app, 'treasurer');
   const ajk = await loginAs(app, 'ajk');
   const admin = await loginAs(app, 'admin');
-  putFeature(app.surau.db, 'finance', { enabled: true }, 'test');
+  putFeature(app.surau.db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
   return { app, dir, treasurer, ajk, admin };
 }
 

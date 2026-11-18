@@ -6,7 +6,10 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.graphics.Color
+import android.graphics.SurfaceTexture
 import android.hardware.display.DisplayManager
+import android.media.MediaFormat
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
@@ -22,15 +25,21 @@ import android.view.Surface
 import android.util.Log
 import android.view.TextureView
 import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.gl.render.filters.`object`.TextObjectFilterRender
+import com.pedro.encoder.input.sources.OrientationConfig
 import com.pedro.encoder.input.sources.OrientationForced
+import com.pedro.encoder.input.sources.audio.AudioSource
 import com.pedro.encoder.input.sources.audio.MicrophoneSource
 import com.pedro.encoder.input.sources.video.Camera2Source
+import com.pedro.encoder.input.sources.video.VideoSource
 import com.pedro.encoder.input.video.CameraHelper
+import com.pedro.library.view.GlStreamInterface
 import com.pedro.library.multiple.MultiStream
 import com.pedro.library.multiple.MultiType
 import com.pedro.library.base.recording.RecordController
 import com.pedro.encoder.utils.ViewPort
 import com.pedro.encoder.utils.gl.AspectRatioMode
+import com.pedro.encoder.utils.gl.TranslateTo
 import com.pedro.library.util.streamclient.SrtStreamClient
 import java.io.File
 import java.text.SimpleDateFormat
@@ -208,6 +217,12 @@ class LiveEngine private constructor(private val app: Context) {
         private const val STOP_RECORD_BATTERY_PERCENT = 5
         private const val LOW_STORAGE_BYTES = 1_500L * 1024 * 1024
         private const val STOP_RECORD_STORAGE_BYTES = 300L * 1024 * 1024
+        // The engine's audio rate; the aligner works at 16 kHz and searches up to 4 s of lag (the camera is late by
+        // 0.3 to 1 s, plus the headroom the unit may carry).
+        private const val AUDIO_RATE = 48_000
+        private const val ALIGN_RATE = 16_000
+        private const val ALIGN_MAX_LAG_MS = 4_000
+        private const val METER_MS = 250L
     }
 
     fun interface Sink { fun send(event: Map<String, Any?>) }
@@ -235,6 +250,30 @@ class LiveEngine private constructor(private val app: Context) {
     private var displayListenerOn = false
     private val guard = OrientationGuard()
     private var lastOrientationLine: String? = null
+
+    // ---- sources (plan rev 4: phone camera, or the external camera the phone pulls) ----
+    @Volatile private var videoKind = VideoKind.PHONE
+    private var mixCfg = AudioMixCfg.default(VideoKind.PHONE)
+    private var userMuted = false
+    private var restorePhoneOrientation = false
+    // Held in memory only for the session; never logged, never written (it may carry the camera login).
+    private var extCam: ExternalCamera? = null
+    @Volatile private var rtspVideo: RtspVideoSource? = null
+    private var rtspAudio: RtspAudioSource? = null
+    private var mixedAudio: MixedAudioSource? = null
+    private var aligner: AudioAligner? = null
+    private var appliedMicEnabled: Boolean? = null
+    @Volatile private var camW = 0
+    @Volatile private var camH = 0
+    private var lostFilter: TextObjectFilterRender? = null
+    private var liveStartedEpochMs = 0L
+    private var endedByCamera = false
+    private val camSilence = SilenceTracker()
+    private val micSilence = SilenceTracker()
+    // clap test (fallback for a camera with no audio track)
+    private var clapCapturing = false
+    private var clapSavedOffset = 0
+    private var clapReplay: ClapReplay? = null
 
     var prepared = false; private set
     var live = false; private set
@@ -307,30 +346,98 @@ class LiveEngine private constructor(private val app: Context) {
         return out
     }
 
+    /** The two sources of one picture kind, built fresh (RootEncoder releases the old ones on a change). */
+    private class Built(val video: VideoSource, val audio: AudioSource)
+
+    /**
+     * Builds the sources for [spec]. The phone camera is today's `Camera2Source` + `MicrophoneSource`; the external
+     * camera is `RtspVideoSource` + `MixedAudioSource` (camera sound as the reference, the phone microphone added
+     * through the aligner). Nothing is live until [commitSources]; a failure before it leaves the old sources as they were.
+     */
+    private fun buildSources(spec: SourceSpec): Built {
+        if (spec.video == VideoKind.PHONE) {
+            val cam = Camera2Source(app)
+            val mc = MicrophoneSource()
+            return Built(cam, mc)
+        }
+        val ext = spec.camera ?: throw IllegalArgumentException("camera_source_missing")
+        val audio = RtspAudioSource(AUDIO_RATE)
+        val al = AudioAligner(ALIGN_RATE, ALIGN_MAX_LAG_MS)
+        val mixed = MixedAudioSource(audio, al, ALIGN_RATE)
+        val holder = arrayOfNulls<RtspVideoSource>(1)
+        val video = RtspVideoSource(
+            url = ext.url, user = null, password = null, mode = ext.transport, audio = audio,
+            sinkFactory = { surface, w, h -> SizingSink(surface, w, h) { holder[0] } },
+        )
+        holder[0] = video
+        video.onLinkState = { st -> main.post { onCameraLink(video, st) } }
+        mixed.onAlignChange = { _, _ -> main.post { emitAudio() } }
+        mixed.setManualOffsetMs(spec.avOffsetMs)
+        pendingExternal = ExternalParts(video, audio, mixed, al, ext)
+        return Built(video, mixed)
+    }
+
+    private class ExternalParts(
+        val video: RtspVideoSource,
+        val audio: RtspAudioSource,
+        val mixed: MixedAudioSource,
+        val aligner: AudioAligner,
+        val camera: ExternalCamera,
+    )
+
+    private var pendingExternal: ExternalParts? = null
+
+    /** Takes the sources just built (and, for a switch, just handed to the stream) as the live ones. */
+    private fun commitSources(spec: SourceSpec, built: Built) {
+        videoKind = spec.video
+        mixCfg = spec.mix
+        if (spec.video == VideoKind.PHONE) {
+            camera = built.video as Camera2Source
+            mic = built.audio as MicrophoneSource
+            rtspVideo = null; rtspAudio = null; mixedAudio = null; aligner = null; extCam = null
+            camW = 0; camH = 0
+        } else {
+            val p = pendingExternal ?: return
+            camera = null; mic = null
+            rtspVideo = p.video; rtspAudio = p.audio; mixedAudio = p.mixed; aligner = p.aligner; extCam = p.camera
+            camW = 0; camH = 0
+            camSilence.reset(); micSilence.reset()
+        }
+        pendingExternal = null
+        appliedMicEnabled = null
+    }
+
     /** Builds the capture and encoders. Returns null on success or a reason code. */
-    fun prepare(front: Boolean, width: Int, height: Int, fps: Int): String? {
+    fun prepare(front: Boolean, width: Int, height: Int, fps: Int, spec: SourceSpec? = null): String? {
         if (live || stopping) return null // a running session is kept as it is
         teardown()
         frontCamera = front
+        val sp = spec ?: SourceSpec(VideoKind.PHONE, null, AudioMixCfg.default(VideoKind.PHONE))
+        if (sp.video == VideoKind.EXTERNAL && sp.camera == null) return "camera_source_missing"
         return try {
-            val cam = Camera2Source(app)
-            val mc = MicrophoneSource()
+            val built = buildSources(sp)
             val kiosk = Leg("kiosk")
             val yt = Leg("youtube")
-            val ms = MultiStream(app, arrayOf<ConnectChecker>(yt), null, arrayOf<ConnectChecker>(kiosk), null, cam, mc)
+            val ms = MultiStream(app, arrayOf<ConnectChecker>(yt), null, arrayOf<ConnectChecker>(kiosk), null, built.video, built.audio)
             ms.getStreamClient(MultiType.SRT, 0).setReTries(Int.MAX_VALUE)
             ms.getStreamClient(MultiType.RTMP, 0).setReTries(Int.MAX_VALUE)
             ms.setFpsListener { f -> this.fps = f }
             // Always an upright 16:9 encoder (width x height as given, never swapped).
             val rotation = LiveLogic.PREPARE_ROTATION
             val okVideo = ms.prepareVideo(width, height, 2_500_000, fps, 2, rotation)
-            val okAudio = ms.prepareAudio(48_000, false, 128_000)
+            val okAudio = ms.prepareAudio(AUDIO_RATE, false, 128_000)
             if (!okVideo || !okAudio) {
                 ms.release()
+                pendingExternal = null
                 return "encoder_unsupported"
             }
-            if (front != (cam.getCameraFacing() == CameraHelper.Facing.FRONT)) cam.switchCamera()
-            camera = cam; mic = mc; stream = ms
+            val cam = built.video as? Camera2Source
+            if (cam != null && front != (cam.getCameraFacing() == CameraHelper.Facing.FRONT)) cam.switchCamera()
+            commitSources(sp, built)
+            stream = ms
+            Diag.log("source_prepare", "video=${sp.video.wire} transport=${sp.camera?.transport?.name?.lowercase() ?: "-"}")
+            applyMixSettings()
+            if (videoKind == VideoKind.EXTERNAL) main.postDelayed(meterTick, METER_MS)
             prepared = true
             // RootEncoder's own handling: it turns the picture upright in its
             // camera pass (forceOrientation NONE follows the display rotation,
@@ -421,6 +528,18 @@ class LiveEngine private constructor(private val app: Context) {
         if (!guard.allows()) return
         try {
             val gl = stream?.getGlInterface() ?: return
+            if (videoKind == VideoKind.EXTERNAL) {
+                applyExternalFraming(gl)
+                return
+            }
+            if (restorePhoneOrientation) {
+                // Back from the external camera: the camera pass follows the device again.
+                restorePhoneOrientation = false
+                gl.autoHandleOrientation = true
+                gl.setCameraOrientation(CameraHelper.getCameraOrientation(app))
+                gl.setPreviewViewPort(null)
+                gl.setAspectRatioMode(AspectRatioMode.Fill)
+            }
             val dm = app.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
             val display = dm.getDisplay(Display.DEFAULT_DISPLAY)
             val deg = LiveLogic.displayDegrees(display?.rotation ?: Surface.ROTATION_0)
@@ -441,6 +560,33 @@ class LiveEngine private constructor(private val app: Context) {
             }
         } catch (e: Exception) {
             Log.w(TAG, "orientation failed: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /**
+     * The external camera's picture is upright already, so the device's turn must not rotate or crop it: no auto
+     * orientation, landscape, camera rotation 0. A camera that is not 16:9 is kept in its own shape in the
+     * SurfaceTexture (see [SizingSink]) and shown undistorted by a viewport that leaves bars (stream and preview), the
+     * same mechanism the portrait crop uses the other way round. Never throws.
+     */
+    private fun applyExternalFraming(gl: GlStreamInterface) {
+        try {
+            gl.autoHandleOrientation = false
+            gl.setOrientationConfig(OrientationConfig(0, false, OrientationForced.LANDSCAPE))
+            gl.setIsPortrait(false)
+            gl.setAspectRatioMode(AspectRatioMode.Fill)
+            val enc = SourceLogic.letterbox(camW, camH, LiveLogic.STREAM_WIDTH, LiveLogic.STREAM_HEIGHT)
+            gl.setStreamViewPort(enc?.let { ViewPort(it[0], it[1], it[2], it[3]) })
+            val v = previewView
+            val pv = if (v != null) SourceLogic.letterbox(camW, camH, v.width, v.height) else null
+            gl.setPreviewViewPort(pv?.let { ViewPort(it[0], it[1], it[2], it[3]) })
+            val line = "orientation external cam=${camW}x$camH letterbox=${enc != null}"
+            if (line != lastOrientationLine) {
+                lastOrientationLine = line
+                Diag.log("orientation", "external=true cam=${camW}x$camH letterbox=${enc != null}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "external framing failed: ${e.javaClass.simpleName}")
         }
     }
 
@@ -487,12 +633,21 @@ class LiveEngine private constructor(private val app: Context) {
     private fun teardown() {
         guard.close()
         unwatchDisplay()
+        main.removeCallbacks(meterTick)
+        clapReplay?.stop()
+        clapReplay = null
+        main.removeCallbacks(clapFinish)
+        clapCapturing = false
         val s = stream
         if (s != null) {
             try { if (previewing) s.stopPreview(true) } catch (_: RuntimeException) {}
             try { s.release() } catch (_: RuntimeException) {}
         }
         stream = null; camera = null; mic = null; prepared = false; previewing = false
+        // The camera address and its sources go with the session; nothing of it is kept.
+        rtspVideo = null; rtspAudio = null; mixedAudio = null; aligner = null; extCam = null; pendingExternal = null
+        lostFilter = null; camW = 0; camH = 0; endedByCamera = false
+        videoKind = VideoKind.PHONE
     }
 
     // ---- start and stop ----
@@ -511,6 +666,8 @@ class LiveEngine private constructor(private val app: Context) {
         live = true
         Diag.log("live_start", "kiosk=${srt != null} youtube=${rtmpsUrl != null} record=${record != null}")
         startedAt = SystemClock.elapsedRealtime()
+        liveStartedEpochMs = System.currentTimeMillis()
+        endedByCamera = false
         warnings.clear(); recordError = null; recordHalted = false; publishedBytes = 0; segmentIndex = 0
         val begun = Date()
         liveDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(begun)
@@ -540,6 +697,11 @@ class LiveEngine private constructor(private val app: Context) {
         }
         phase("live")
         main.postDelayed(tick, 2000)
+        if (videoKind == VideoKind.EXTERNAL) {
+            // the meter loop runs from prepare; make sure it is on (a stop never ends it while prepared)
+            main.removeCallbacks(meterTick)
+            main.postDelayed(meterTick, METER_MS)
+        }
         return null
     }
 
@@ -679,7 +841,399 @@ class LiveEngine private constructor(private val app: Context) {
         main.post { applyFraming() }
     }
 
-    fun setMuted(muted: Boolean) { if (muted) mic?.mute() else mic?.unMute() }
+    /** Today's mute (phone camera with its microphone). With "Mic-in pada kotak" added it stays unmuted, see [SourceLogic]. */
+    fun setMuted(muted: Boolean) {
+        userMuted = muted
+        applyMixSettings()
+    }
+
+    // ---- the external camera and the audio mix (plan 4.5) ----
+
+    /**
+     * Applies the mix to the sources: the phone mixer for the external camera, `MicrophoneSource` mute for the phone
+     * camera. The added microphone is switched only when that changes (adding it starts a new alignment search).
+     */
+    private fun applyMixSettings() {
+        val mixed = mixedAudio
+        if (videoKind == VideoKind.EXTERNAL && mixed != null) {
+            val hasAudio = rtspAudio?.let { if (it.formatKnown) it.hasAudio else true } ?: true
+            val ms = SourceLogic.mixSettings(mixCfg, hasAudio)
+            applyCameraVolume(ms)
+            mixed.setMicVolume(ms.micVolume)
+            if (appliedMicEnabled != ms.micEnabled) {
+                appliedMicEnabled = ms.micEnabled
+                mixed.setMicEnabled(ms.micEnabled)
+            }
+        } else {
+            mic?.let { if (SourceLogic.effectiveMuted(userMuted, mixCfg)) it.mute() else it.unMute() }
+        }
+    }
+
+    private fun applyCameraVolume(ms: MixSettings) {
+        val mixed = mixedAudio ?: return
+        val lost = rtspVideo?.linkState == CameraLinkState.LOST
+        val aligned = mixed.mixer?.micAligned ?: false
+        mixed.setCameraVolume(SourceLogic.effectiveCameraVolume(ms.cameraVolume, lost, ms.micEnabled, aligned))
+    }
+
+    /** A volume, add or remove of the microphone, or Mic-in change during the live. Null on success or a reason code. */
+    fun setAudioMix(cfg: AudioMixCfg): String? {
+        if (stream == null) return "not_prepared"
+        mixCfg = cfg
+        applyMixSettings()
+        Diag.log(
+            "audio_mix",
+            "video=${videoKind.wire} cam=${cfg.camera.volume} mic=${cfg.deviceMic.enabled}/${cfg.deviceMic.volume} " +
+                "boxin=${cfg.boxInput.enabled}",
+        )
+        emitAudio()
+        return null
+    }
+
+    /** The fixed offset ("Imbangan masa audio"), used only while the camera has no audio track. */
+    fun setAvOffsetMs(ms: Int) {
+        mixedAudio?.setManualOffsetMs(ClapPlan.clampOffset(ms))
+    }
+
+    /**
+     * Changes the picture source, also during the live (no restart: [com.pedro.library.base.StreamBase.changeVideoSource]
+     * and `changeAudioSource` swap the sources on the running encoder, so the SRT session, the YouTube leg and the
+     * recording carry on). The sound follows in the same step: to the phone camera the microphone alone with no delay
+     * (today's flow); back to the external camera the camera sound returns and the mix is restored after the new lock.
+     * Null on success or a reason code.
+     */
+    fun setSource(spec: SourceSpec): String? {
+        val s = stream ?: return "not_prepared"
+        if (stopping) return "stopping"
+        if (clapCapturing) return "clap_busy"
+        val same = spec.video == videoKind &&
+            (spec.video == VideoKind.PHONE || (extCam?.url == spec.camera?.url && extCam?.transport == spec.camera?.transport))
+        if (same) {
+            mixCfg = spec.mix
+            applyMixSettings()
+            setAvOffsetMs(spec.avOffsetMs)
+            emitAudio()
+            return null
+        }
+        if (spec.video == VideoKind.EXTERNAL && spec.camera == null) return "camera_source_missing"
+        stopClap()
+        return try {
+            Diag.log("source_switch", "to=${spec.video.wire} live=$live")
+            val built = buildSources(spec)
+            val cam = built.video as? Camera2Source
+            if (cam != null && frontCamera != (cam.getCameraFacing() == CameraHelper.Facing.FRONT)) cam.switchCamera()
+            // Picture first, then the sound, back to back on the main thread. The old sources are released by the stream.
+            val oldSpec = SourceSpec(videoKind, extCam, mixCfg, mixedAudio?.manualOffsetMs ?: 0)
+            try {
+                s.changeVideoSource(built.video)
+            } catch (e: RuntimeException) {
+                releaseQuietly(built.video); releaseQuietly(built.audio) // nothing of the new pair is attached
+                throw e
+            }
+            try {
+                s.changeAudioSource(built.audio)
+            } catch (e: RuntimeException) {
+                // The stream now holds the new picture but still the old sound: put the old kind back so the engine
+                // fields and the stream agree, and release the new sound that was never attached.
+                releaseQuietly(built.audio)
+                rollbackSources(s, oldSpec)
+                throw e
+            }
+            if (spec.video == VideoKind.PHONE) restorePhoneOrientation = true
+            commitSources(spec, built)
+            setLostOverlay(false) // the new source starts connecting, the old one's message goes
+            applyMixSettings()
+            setAvOffsetMs(spec.avOffsetMs)
+            main.removeCallbacks(meterTick)
+            if (spec.video == VideoKind.EXTERNAL) main.postDelayed(meterTick, METER_MS)
+            lastOrientationLine = null
+            applyFraming()
+            main.post { emitAudio() }
+            null
+        } catch (e: IllegalArgumentException) {
+            Diag.error("source_switch_failed", e)
+            pendingExternal = null
+            "switch_failed"
+        } catch (e: RuntimeException) {
+            Diag.error("source_switch_failed", e)
+            pendingExternal = null
+            "switch_failed"
+        }
+    }
+
+    private fun releaseQuietly(v: VideoSource) {
+        try { v.stop() } catch (_: Exception) {}
+        try { v.release() } catch (_: Exception) {}
+    }
+
+    private fun releaseQuietly(a: AudioSource) {
+        try { a.stop() } catch (_: Exception) {}
+        try { a.release() } catch (_: Exception) {}
+    }
+
+    /** Swaps freshly built sources of the previous kind back into the stream after a half-done switch. */
+    private fun rollbackSources(s: MultiStream, old: SourceSpec) {
+        pendingExternal = null
+        try {
+            val b = buildSources(old)
+            try {
+                s.changeVideoSource(b.video)
+                s.changeAudioSource(b.audio)
+            } catch (e: RuntimeException) {
+                releaseQuietly(b.video); releaseQuietly(b.audio)
+                throw e
+            }
+            commitSources(old, b)
+            Diag.log("source_switch_rolled_back", "to=${old.video.wire}")
+        } catch (e: RuntimeException) {
+            Diag.error("source_rollback_failed", e)
+        }
+    }
+
+    /** The camera link changed (supervisor thread, posted to main): the message in the picture, the sound rules. */
+    private fun onCameraLink(source: RtspVideoSource, st: CameraLinkState) {
+        if (source !== rtspVideo) return
+        Diag.log("camera_link", "state=${SourceLogic.linkWire(st)} transport=${source.transportInUse?.name?.lowercase() ?: "-"}")
+        setLostOverlay(st == CameraLinkState.LOST)
+        applyMixSettings()
+        emitAudio()
+    }
+
+    /**
+     * Draws "Siaran akan bersambung sebentar lagi" over the held last picture while the camera is lost (4.5 item 6),
+     * in the stream and in the preview; removes it when the camera returns. The picture itself is the last frame the
+     * decoder left in the SurfaceTexture.
+     */
+    private fun setLostOverlay(on: Boolean) {
+        val gl = stream?.getGlInterface() ?: return
+        try {
+            if (on && lostFilter == null) {
+                val f = TextObjectFilterRender()
+                f.setText(SourceLogic.LOST_MESSAGE, 26f, Color.WHITE)
+                f.setPosition(TranslateTo.BOTTOM)
+                gl.addFilter(f)
+                lostFilter = f
+            } else if (!on) {
+                lostFilter?.let { gl.removeFilter(it) }
+                lostFilter = null
+            }
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "lost overlay failed: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /** The camera picture size became known (or changed): keep its shape, then frame it. Main thread. */
+    private fun onCameraSize(w: Int, h: Int) {
+        if (videoKind != VideoKind.EXTERNAL || (w == camW && h == camH)) return
+        camW = w
+        camH = h
+        lastOrientationLine = null
+        applyFraming()
+    }
+
+    /**
+     * Decoder sink that first learns the camera's own picture size from the SPS and gives the SurfaceTexture that size
+     * (K1 note: its default buffer is the engine size, which would stretch a camera that is not 16:9), then decodes onto
+     * the same surface. When the size cannot be read the picture is stretched as K1 delivers it (cosmetic only).
+     */
+    private inner class SizingSink(
+        private val surface: Surface,
+        private val w: Int,
+        private val h: Int,
+        private val owner: () -> RtspVideoSource?,
+    ) : VideoSink {
+        // configure/stop run on the supervisor thread, the main thread may stop it too
+        @Volatile private var inner: VideoSink? = null
+
+        override fun configure(mime: String, sps: ByteArray?, pps: ByteArray?, vps: ByteArray?) {
+            inner?.stop()
+            val size = SpsSize.parse(sps, mime == MediaFormat.MIMETYPE_VIDEO_HEVC)
+            val cw = size?.first ?: w
+            val ch = size?.second ?: h
+            if (size != null) {
+                try {
+                    owner()?.surfaceTexture?.setDefaultBufferSize(cw, ch)
+                } catch (_: Exception) {
+                }
+            }
+            main.post { onCameraSize(size?.first ?: 0, size?.second ?: 0) }
+            val s = LibVideoSink(surface, cw, ch)
+            inner = s
+            s.configure(mime, sps, pps, vps)
+        }
+
+        override fun push(data: ByteArray, off: Int, len: Int, tsMs: Long) {
+            inner?.push(data, off, len, tsMs)
+        }
+
+        override fun stop() {
+            inner?.stop()
+            inner = null
+        }
+    }
+
+    // ---- meters, alignment state and the 10 minute stop ----
+
+    private val meterTick = object : Runnable {
+        override fun run() {
+            if (videoKind != VideoKind.EXTERNAL || stream == null) return
+            // The microphone may have been aligned since the last look: the camera volume rule depends on it.
+            applyCameraVolume(SourceLogic.mixSettings(mixCfg, rtspAudio?.let { if (it.formatKnown) it.hasAudio else true } ?: true))
+            emitAudio()
+            checkCameraLost()
+            main.postDelayed(this, METER_MS)
+        }
+    }
+
+    private fun checkCameraLost() {
+        val v = rtspVideo ?: return
+        if (!live || stopping || endedByCamera) return
+        val base = SourceLogic.lostBase(v.lostSinceMs, liveStartedEpochMs)
+        if (!SourceLogic.lostExpired(base, System.currentTimeMillis())) return
+        endedByCamera = true
+        Diag.log("camera_lost_stop")
+        emit(mapOf("type" to "ended", "reason" to SourceLogic.ENDED_CAMERA_LOST))
+        stopAsync { try { LiveService.stop(app) } catch (_: RuntimeException) {} }
+    }
+
+    /** One `audio` event: a row per source with its level and state, the mixed level, the camera link. */
+    private fun emitAudio() {
+        if (videoKind != VideoKind.EXTERNAL) return
+        val mixed = mixedAudio ?: return
+        val now = SystemClock.elapsedRealtime()
+        val v = rtspVideo
+        val a = rtspAudio
+        val link = v?.linkState ?: CameraLinkState.IDLE
+        val known = a?.formatKnown == true
+        val hasAudio: Boolean? = if (known) a?.hasAudio else null
+        val lv = mixed.levels
+        val camSilent = camSilence.update(lv.camera, now)
+        val micSilent = micSilence.update(lv.mic, now)
+        val rows = mutableListOf<Map<String, Any?>>()
+        rows += SourceLogic.sourceRow(
+            "camera", mixCfg.camera.enabled && hasAudio != false, mixCfg.camera.volume, lv.camera,
+            SourceLogic.sourceState(link == CameraLinkState.LOST, camSilent || hasAudio == false),
+        )
+        val al = aligner
+        if (mixCfg.deviceMic.enabled && al != null) {
+            rows += SourceLogic.sourceRow(
+                "deviceMic", true, mixCfg.deviceMic.volume, lv.mic,
+                SourceLogic.sourceState(mixed.micFailed, micSilent),
+                SourceLogic.alignInfo(mixed.mixer?.alignState ?: al.state, mixed.mixer?.delayMs ?: al.delayMs, al.residualMs),
+            )
+        }
+        val camera = SourceLogic.cameraStatus(
+            link, hasAudio, SourceLogic.lostSeconds(v?.lostSinceMs ?: 0L, System.currentTimeMillis()),
+            v?.transportInUse, camW, camH,
+        )
+        emit(SourceLogic.audioEvent(rows, lv.mixed, camera, mixed.micFailed))
+    }
+
+    // ---- clap test (a camera with no audio track only) ----
+
+    private fun clapFile(): File? {
+        val dir = File(app.cacheDir, "clap")
+        if (!dir.exists() && !dir.mkdirs()) return null
+        return File(dir, "clap.mp4")
+    }
+
+    private fun clap(state: String) = emit(mapOf("type" to "clap", "state" to state))
+
+    private val clapFinish = Runnable {
+        val s = stream
+        if (!clapCapturing || s == null) return@Runnable
+        try {
+            recordExec.submit { s.stopRecord() }.get(StopSequence.STOP_RECORD_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (e: Exception) {
+            Diag.error("clap_stop_failed", e)
+        }
+        clapCapturing = false
+        mixedAudio?.setManualOffsetMs(clapSavedOffset)
+        val ok = clapFile()?.let { it.exists() && it.length() > 0 } == true
+        clap(if (ok) "ready" else "failed")
+    }
+
+    /**
+     * Records about five seconds of the camera picture and the phone microphone with the offset at 0. Only for a camera
+     * that has no audio track, a microphone that is added, not during a live. Null on success or a reason code.
+     */
+    fun clapCapture(): String? {
+        val s = stream ?: return "not_prepared"
+        if (live || stopping || clapCapturing) return "clap_busy"
+        if (videoKind != VideoKind.EXTERNAL) return "clap_unavailable"
+        val a = rtspAudio
+        if (a == null || !a.formatKnown || a.hasAudio) return "camera_has_audio"
+        if (!mixCfg.deviceMic.enabled) return "mic_not_added"
+        if (rtspVideo?.linkState != CameraLinkState.PLAYING) return "camera_not_playing"
+        val file = clapFile() ?: return "clap_failed"
+        stopClap()
+        file.delete()
+        clapSavedOffset = mixedAudio?.manualOffsetMs ?: 0
+        mixedAudio?.setManualOffsetMs(0)
+        return try {
+            s.startRecord(file.absolutePath, null, object : RecordController.Listener {
+                override fun onStatusChange(status: RecordController.Status) {}
+                override fun onError(e: Exception?) {
+                    main.post {
+                        // The capture is over: give the manual offset back and drop the pending finish.
+                        main.removeCallbacks(clapFinish)
+                        clapCapturing = false
+                        mixedAudio?.setManualOffsetMs(clapSavedOffset)
+                        clap("failed")
+                    }
+                }
+            })
+            clapCapturing = true
+            clap("capturing")
+            main.postDelayed(clapFinish, ClapPlan.CAPTURE_MS)
+            null
+        } catch (e: Exception) {
+            mixedAudio?.setManualOffsetMs(clapSavedOffset)
+            "clap_failed"
+        }
+    }
+
+    /** Plays the captured clip in a loop with the sound [offsetMs] after the picture (in the preview). */
+    fun clapReplay(offsetMs: Int): String? {
+        val s = stream ?: return "not_prepared"
+        if (live || stopping || clapCapturing) return "clap_busy"
+        val file = clapFile()?.takeIf { it.exists() && it.length() > 0 } ?: return "clap_missing"
+        val texture = previewView?.takeIf { it.isAvailable }?.surfaceTexture ?: return "clap_no_preview"
+        val r = clapReplay
+        if (r != null && r.playing) {
+            r.setOffset(offsetMs)
+            return null
+        }
+        // The engine's own preview gives the surface up while the clip plays; stopClap() takes it back.
+        try { if (previewing) s.stopPreview(true) } catch (_: RuntimeException) {}
+        previewing = false
+        val player = ClapReplay(file, main)
+        if (!player.start(texture, offsetMs)) {
+            attachPreviewIfReady()
+            return "clap_failed"
+        }
+        clapReplay = player
+        clap("replaying")
+        return null
+    }
+
+    /** The stepper moved during a replay. */
+    fun clapOffset(offsetMs: Int) {
+        clapReplay?.setOffset(offsetMs)
+    }
+
+    /** Ends the replay and gives the preview back. */
+    fun clapStop() {
+        stopClap()
+    }
+
+    private fun stopClap() {
+        val r = clapReplay ?: return
+        r.stop()
+        clapReplay = null
+        if (stream != null && !stopping) attachPreviewIfReady()
+        clap("idle")
+    }
 
     fun release() {
         guard.close()

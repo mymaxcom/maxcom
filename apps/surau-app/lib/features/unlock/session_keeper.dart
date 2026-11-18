@@ -7,7 +7,9 @@
 //   box, else the cloud. On success the real session replaces the offline
 //   one, the sync engine starts, pushes the outbox and pulls.
 // * Cloud session: the same loop probes the box alone; when it answers, the
-//   app unlocks there silently and switches.
+//   app unlocks there silently and switches. In the MAXCOM Ops build the
+//   enrolled box IS the cloud, so a cloud session is final: no loop, no
+//   box-return unlock.
 // * A 401 on a live session: one silent unlock before giving up.
 //
 // A server that refuses the person (revoked, PIN changed, lock turned on)
@@ -21,6 +23,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../box/box_client.dart';
 import '../../box/locator.dart';
+import '../../ops/ops_build.dart' show kOpsBuild;
 import '../../store/local_store.dart';
 import '../../sync/sync_providers.dart';
 import '../../sync/transport.dart';
@@ -42,6 +45,7 @@ class SessionKeeper {
     required this.onRefused,
     required this.onUnavailable,
     Timer Function(Duration, void Function())? schedule,
+    this.ops = kOpsBuild,
     this.steps = const [
       Duration(seconds: 15),
       Duration(seconds: 30),
@@ -62,6 +66,10 @@ class SessionKeeper {
 
   /// A live session ended (401) and no base answers.
   final Future<void> Function() onUnavailable;
+
+  /// MAXCOM Ops build: the enrolled box is the cloud, so a cloud session
+  /// has no box to return to and gets no loop (it stays idle).
+  final bool ops;
 
   /// Waits between tries; the last repeats.
   final List<Duration> steps;
@@ -90,7 +98,7 @@ class SessionKeeper {
         ? _Mode.idle
         : session.offline
         ? _Mode.offline
-        : session.via == SessionDto.viaCloud
+        : session.via == SessionDto.viaCloud && !ops
         ? _Mode.cloud
         : _Mode.idle;
     if (next == _mode) return;
@@ -170,7 +178,7 @@ class SessionKeeper {
   }
 
   static bool _transient(UnlockFailure e) =>
-      e is UnlockNotVerified || e is UnlockBiometricFailed;
+      e is UnlockNotVerified || e is UnlockBiometricFailed || e is UnlockTooMany;
 
   void _later(Duration d) {
     if (_dead || _paused || _mode == _Mode.idle) return;
@@ -221,14 +229,85 @@ class SessionKeeper {
 // ---- wiring ----
 
 /// The PIN the person typed in this run, for silent unlocks. Memory only;
-/// forgotten whenever the session ends.
+/// forgotten whenever the session ends, and (with the app lock on) dropped at
+/// the server's own limits: [idleLimit] without the person using the app and
+/// [totalLimit] after the unlock, so a phone left for hours asks for the PIN
+/// or the fingerprint again instead of opening by itself.
 class PinMemory {
-  String? value;
+  PinMemory({DateTime Function()? now}) : _now = now ?? DateTime.now;
 
-  void clear() => value = null;
+  /// Without use (the app in front and touched, or resumed from the
+  /// background) before the PIN is dropped.
+  static const Duration idleLimit = Duration(hours: 2);
+
+  /// After the unlock, whatever the use.
+  static const Duration totalLimit = Duration(hours: 12);
+
+  final DateTime Function() _now;
+  String? _value;
+  DateTime? _since;
+  DateTime? _last;
+
+  bool get _expired {
+    final since = _since;
+    final last = _last;
+    if (since == null || last == null) return false;
+    final t = _now();
+    return t.difference(last) >= idleLimit ||
+        t.difference(since) >= totalLimit;
+  }
+
+  /// The PIN for a silent unlock, or null (none typed, or it expired).
+  String? get value {
+    if (_value != null && _expired) clear();
+    return _value;
+  }
+
+  /// A PIN the box just accepted: the clocks start now.
+  set value(String? pin) {
+    _value = pin;
+    _since = _last = pin == null ? null : _now();
+  }
+
+  /// The person changed their PIN: the new one replaces the old, the clocks
+  /// are not restarted (it is not a new unlock).
+  void replace(String pin) {
+    if (_value == null) return;
+    _value = pin;
+  }
+
+  /// The person used the app (or came back to it): the idle clock restarts,
+  /// unless the PIN had already expired.
+  void touch() {
+    if (_value == null) return;
+    if (_expired) {
+      clear();
+    } else {
+      _last = _now();
+    }
+  }
+
+  void clear() {
+    _value = null;
+    _since = _last = null;
+  }
 }
 
-final pinMemoryProvider = Provider<PinMemory>((ref) => PinMemory());
+final pinMemoryProvider = Provider<PinMemory>(
+  (ref) => PinMemory(now: ref.read(appDepsProvider).now),
+);
+
+/// K2: the box said `device_revoked`. The local copy and the offline vault
+/// are wiped and a flag keeps the offline door shut. Never throws: a store
+/// that is already gone is as good as wiped.
+Future<void> wipeRevokedCopy(Future<LocalStore?> Function() store) async {
+  try {
+    final st = await store();
+    if (st != null) await wipeForRevocation(st);
+  } on Object {
+    // nothing to wipe
+  }
+}
 
 /// A refusal to show on the unlock screen (the server's words), set when a
 /// silent unlock was refused; the screen shows it once and clears it.
@@ -267,24 +346,38 @@ final sessionKeeperProvider = Provider<SessionKeeper>((ref) {
 
   Future<SessionDto> attempt({required bool boxOnly}) async {
     final box = ref.read(enrolledBoxProvider);
-    if (box == null) throw const BoxUnreachable('tidak berdaftar');
+    if (box == null) throw const BoxUnreachable('tidak berdaftar'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     final BoxLocator? locator = boxOnly
         ? directLocatorFor(ref, box)
         : ref.read(baseLocatorProvider);
     if (locator == null) throw const BoxUnreachable('tiada pangkalan');
     final pin = ref.read(pinMemoryProvider).value;
     if (pin == null && ref.read(effectiveLockProvider)) throw const NeedsPin();
-    final out = await unlockAtLocated(
-      locator: locator,
-      box: box,
-      clientFor: (base) => deps.enrolledClient(boxAt(box, base)),
-      key: deps.key,
-      biometric: deps.biometric,
-      tokens: ref.read(sessionTokensProvider),
-      pin: pin,
-      noPin: pin == null,
-      onAppLock: (on) => ref.read(enrolledBoxProvider.notifier).setAppLock(on),
-    );
+    final ({Located at, SessionDto session}) out;
+    try {
+      out = await unlockAtLocated(
+        locator: locator,
+        box: box,
+        clientFor: (base) => deps.enrolledClient(boxAt(box, base)),
+        key: deps.key,
+        biometric: deps.biometric,
+        tokens: ref.read(sessionTokensProvider),
+        pin: pin,
+        noPin: pin == null,
+        onAppLock: (on) => ref.read(enrolledBoxProvider.notifier).setAppLock(on),
+      );
+    } on UnlockRevoked catch (e) {
+      // The box cancelled this phone: its copy goes, and it never opens offline (K2).
+      if (e.deviceGone && ref.mounted) {
+        ref.read(revokedProvider.notifier).set();
+        await wipeRevokedCopy(() => ref.read(localStoreProvider.future));
+      }
+      rethrow;
+    } on UnlockLocked {
+      // A server 423 for this person closes the offline door (A4).
+      await (await readOfflineVault(ref))?.closeOffline();
+      rethrow;
+    }
     return out.session;
   }
 

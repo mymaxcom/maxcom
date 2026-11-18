@@ -171,11 +171,14 @@ export interface ListedAudio {
   createdAt: string;
 }
 
-/** The stored MP3 files, newest first, at most [MAX_LISTED_ASSETS] (for the first-azan picker). Ids and sizes only. */
-export function listAudioAssets(db: DatabaseSync): { assets: ListedAudio[]; truncated: boolean } {
+/** Limits a listing to the assets one surau holds (the cloud, Plan 14 section 3.1); bound to the holder's id. */
+const HELD_BY = ' AND id IN (SELECT asset_id FROM surau_assets WHERE surau_id = ?)';
+
+/** The stored MP3 files (of `holder` only, when given), newest first, at most [MAX_LISTED_ASSETS] (for the first-azan picker). Ids and sizes only. */
+export function listAudioAssets(db: DatabaseSync, holder: string | null = null): { assets: ListedAudio[]; truncated: boolean } {
   const rows = db
-    .prepare("SELECT id, bytes, created_at FROM assets WHERE mime = 'audio/mpeg' ORDER BY created_at DESC, id DESC LIMIT ?")
-    .all(MAX_LISTED_ASSETS + 1);
+    .prepare(`SELECT id, bytes, created_at FROM assets WHERE mime = 'audio/mpeg'${holder === null ? '' : HELD_BY} ORDER BY created_at DESC, id DESC LIMIT ?`)
+    .all(...(holder === null ? [] : [holder]), MAX_LISTED_ASSETS + 1);
   const assets = rows.slice(0, MAX_LISTED_ASSETS).map((r) => ({ id: String(r.id), bytes: Number(r.bytes), createdAt: String(r.created_at) }));
   return { assets, truncated: rows.length > MAX_LISTED_ASSETS };
 }
@@ -193,14 +196,14 @@ export interface ListedImage {
  * (derived assets) are left out, so only the originals show. `truncated` is true when more
  * than the cap exist. No paths, no file names, no audio.
  */
-export function listImageAssets(db: DatabaseSync): { assets: ListedImage[]; truncated: boolean } {
+export function listImageAssets(db: DatabaseSync, holder: string | null = null): { assets: ListedImage[]; truncated: boolean } {
   const rows = db
     .prepare(
       `SELECT id, width, height, bytes, created_at FROM assets
-       WHERE mime LIKE 'image/%' AND id NOT IN (SELECT derived_id FROM asset_derivatives)
+       WHERE mime LIKE 'image/%' AND id NOT IN (SELECT derived_id FROM asset_derivatives)${holder === null ? '' : HELD_BY}
        ORDER BY created_at DESC, id DESC LIMIT ?`,
     )
-    .all(MAX_LISTED_ASSETS + 1);
+    .all(...(holder === null ? [] : [holder]), MAX_LISTED_ASSETS + 1);
   const assets = rows.slice(0, MAX_LISTED_ASSETS).map((r) => ({
     id: String(r.id),
     width: r.width === null ? null : Number(r.width),

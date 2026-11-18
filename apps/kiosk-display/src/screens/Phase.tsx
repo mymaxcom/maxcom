@@ -1,6 +1,6 @@
 import type { KioskView } from '../data/kiosk.ts';
 import { fmtGregorian, fmtPrayerTime, prayerLabel } from '../format.ts';
-import { surauNameOf, t } from '../i18n.ts';
+import { silentPhoneText, surauNameOf, t } from '../i18n.ts';
 import type { Lang } from '../i18n.ts';
 import { Clock } from '../ui/Clock.tsx';
 import { Countdown } from '../ui/Countdown.tsx';
@@ -82,7 +82,7 @@ export function Phase({ view, lang }: PhaseProps) {
       centre = (
         <div class="phase__calm">
           <h1 class="phase__title">{t('solatNow', lang)}</h1>
-          <p class="phase__sub">{String(settings.solatScreen.message ?? '')}</p>
+          <p class="phase__sub">{silentPhoneText(settings.solatScreen.message, lang)}</p>
         </div>
       );
       break;
@@ -114,7 +114,7 @@ export function Phase({ view, lang }: PhaseProps) {
       centre = (
         <div class="phase__calm">
           <h1 class="phase__title">{t('tarawih', lang)}</h1>
-          <p class="phase__sub">{String(settings.solatScreen.message ?? '')}</p>
+          <p class="phase__sub">{silentPhoneText(settings.solatScreen.message, lang)}</p>
         </div>
       );
       break;

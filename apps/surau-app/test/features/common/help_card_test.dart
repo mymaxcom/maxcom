@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/app/theme.dart';
 import 'package:surau_app/features/common/help_card.dart';
+import 'package:surau_app/features/common/ltr.dart';
+import 'package:surau_app/features/common/roles.dart';
 import 'package:surau_app/features/common/surau_info.dart';
 import 'package:surau_app/l10n/generated/s.dart';
 
@@ -41,7 +43,7 @@ void main() {
     );
     expect(find.text('Perlukan bantuan?'), findsOneWidget);
     expect(find.text('Hubungi Encik Hafiz'), findsOneWidget);
-    expect(find.text('012-345 6789'), findsOneWidget);
+    expect(find.text(ltr('012-345 6789')), findsOneWidget);
 
     await tester.tap(find.text('Telefon'));
     await tester.tap(find.text('WhatsApp'));
@@ -164,6 +166,41 @@ void main() {
         find.byWidget(w),
         matchesGoldenFile('help_card_phone.png'),
       );
+    });
+
+    testWidgets('[A12] the phone number is a left-to-right value in Arabic too', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SurauTheme.light(),
+          locale: const Locale('ar'),
+          localizationsDelegates: S.localizationsDelegates,
+          supportedLocales: S.supportedLocales,
+          home: Scaffold(body: HelpCard(contact: full, openUrl: FakeOpener().call)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(LtrText), findsOneWidget);
+      expect(tester.widget<LtrText>(find.byType(LtrText)).text, '012-345 6789');
+    });
+
+    testWidgets('[A12] the role support has a label, and lists join with the language comma', (tester) async {
+      late S ms;
+      late S ar;
+      Widget probe(Locale l, void Function(S) take) => MaterialApp(
+        locale: l,
+        localizationsDelegates: S.localizationsDelegates,
+        supportedLocales: S.supportedLocales,
+        home: Builder(builder: (c) {
+          take(S.of(c));
+          return const SizedBox();
+        }),
+      );
+      await tester.pumpWidget(probe(const Locale('ms'), (s) => ms = s));
+      await tester.pumpWidget(probe(const Locale('ar'), (s) => ar = s));
+      expect(roleLabel(ms, 'support'), 'Sokongan MAXCOM');
+      expect(roleLabel(ar, 'support'), isNot('support'));
+      expect(rolesSentence(ms, ['admin', 'treasurer', 'media']), 'Pentadbir, Bendahari dan Media');
+      expect(rolesSentence(ar, ['admin', 'treasurer', 'media']), contains('، '));
     });
 
     testWidgets('help_card_glass', (tester) async {

@@ -40,8 +40,8 @@ function byEdit(a: FinanceEntry, b: FinanceEntry): number {
 interface State { fund: string; amount: number; voided: boolean }
 
 function step(s: State, c: FinanceEntry): State {
-  if (c.correctionKind === 'amount') return { fund: s.fund, amount: c.amountSen, voided: false };
-  if (c.correctionKind === 'fund' && c.toFundId) return { fund: c.toFundId, amount: s.amount, voided: false };
+  if (c.correctionKind === 'amount') return { fund: s.fund, amount: c.amountSen, voided: s.voided };
+  if (c.correctionKind === 'fund' && c.toFundId) return { fund: c.toFundId, amount: s.amount, voided: s.voided };
   if (c.correctionKind === 'void') return { fund: s.fund, amount: s.amount, voided: true };
   return s;
 }

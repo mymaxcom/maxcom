@@ -11,10 +11,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../box/box_client.dart';
-import '../../features/shell/box_gateway.dart';
+import '../../features/common/error_text.dart';
+import '../../features/shell/connection_icons.dart' show LinkGlyph, LinkKind, LinkState;
 import '../../features/shell/read_cache.dart';
 import '../../l10n/generated/s.dart';
-import '../../sync/sync_engine.dart' show AssetTooLarge;
 
 typedef JsonRead = Read<Map<String, dynamic>>?;
 
@@ -85,7 +85,10 @@ class BoxReadView extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 28),
       child: Column(
         children: [
-          const Icon(Icons.cloud_off_rounded, size: 36, color: SurauColors.outline),
+          if (error is BoxUnreachable)
+            const LinkGlyph(kind: LinkKind.box, state: LinkState.disconnected, size: 36, onDark: false)
+          else
+            const Icon(Icons.cloud_off_rounded, size: 36, color: SurauColors.outline),
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center, style: text.bodyLarge),
           const SizedBox(height: 12),
@@ -100,18 +103,6 @@ class BoxReadView extends ConsumerWidget {
   }
 }
 
-/// What a failed write means in the person's words. The box's own BM
-/// message is kept wherever it has one; 403 and 429 get the app's.
-String writeErrorText(S s, Object error) {
-  if (error is OfflineWriteRefused) return OfflineWriteRefused.message;
-  if (error is LiveOnly) return s.liveOnlyNeedsConnection;
-  if (error is AssetTooLarge) return s.assetTooLarge;
-  if (error is SessionExpired) return s.errorSessionExpired;
-  if (error is BoxError) {
-    if (error.status == 403) return s.errorForbidden;
-    if (error.status == 429) return s.errorTooMany;
-    return error.message;
-  }
-  if (error is BoxUnreachable) return s.errorBoxUnreachable;
-  return s.errorUnknown;
-}
+/// What a failed write means in the person's words: the app's own text for
+/// the box's reason code, else the box's sentence. See [errorText].
+String writeErrorText(S s, Object error) => errorText(s, error);

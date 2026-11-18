@@ -36,6 +36,10 @@ class FakeSyncServer {
   int? failStatus;
   Map<String, String> failHeaders = const {};
   bool away = false;
+
+  /// When set, `/api/sync/changes` answers this status with this body.
+  int? changesStatus;
+  Map<String, dynamic> changesBody = const {};
   int snapshotCalls = 0;
   int changesCalls = 0;
 
@@ -67,6 +71,8 @@ class FakeSyncServer {
         });
       case '/api/sync/changes':
         changesCalls++;
+        final cs = changesStatus;
+        if (cs != null) return jsonResponse(cs, changesBody);
         return jsonResponse(200, {
           'entries': entries,
           'next': null,

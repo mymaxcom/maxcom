@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -62,9 +63,9 @@ export function checkBoxName(raw: unknown): string {
 /** Writes `meta.box_name` and a change_log row. The caller owns the transaction when `inTx` is true. */
 export function setBoxNameIn(db: DatabaseSync, boxId: string, name: string, actor: string): void {
   const before = boxName(db, boxId);
-  db.prepare("INSERT INTO meta (key, value) VALUES ('box_name', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(name);
-  logChange(db, actor, 'box', boxId, { name: before }, { name });
-  bumpVersion(db);
+  db.prepare("INSERT INTO meta (key, value) VALUES ('box_name', ?) ON CONFLICT(surau_id, key) DO UPDATE SET value = excluded.value").run(name);
+  logChange(db, actor, 'box', boxId, { name: before }, { name }, undefined, LOCAL_SURAU_ID);
+  bumpVersion(db, LOCAL_SURAU_ID);
 }
 
 export function setBoxName(db: DatabaseSync, boxId: string, rawName: unknown, actor: string): string {

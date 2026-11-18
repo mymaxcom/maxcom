@@ -40,9 +40,9 @@ function deepMerge(base: Plain, patch: Plain, prefix = ''): Plain {
   return out;
 }
 
-function readStored(db: DatabaseSync): Stored {
+function readStored(db: DatabaseSync, surauId: string): Stored {
   const out: Stored = {};
-  const rows = db.prepare('SELECT feature, json FROM settings').all();
+  const rows = db.prepare('SELECT feature, json FROM settings WHERE surau_id = ?').all(surauId);
   for (const row of rows) {
     const feature = row.feature;
     const json = row.json;
@@ -57,8 +57,8 @@ function readStored(db: DatabaseSync): Stored {
   return out;
 }
 
-function readFeatureRow(db: DatabaseSync, key: FeatureKey): Plain | undefined {
-  const row = db.prepare('SELECT json FROM settings WHERE feature = ?').get(key);
+function readFeatureRow(db: DatabaseSync, key: FeatureKey, surauId: string): Plain | undefined {
+  const row = db.prepare('SELECT json FROM settings WHERE surau_id = ? AND feature = ?').get(surauId, key);
   if (row === undefined || typeof row.json !== 'string') return undefined;
   try {
     const parsed: unknown = JSON.parse(row.json);
@@ -68,21 +68,21 @@ function readFeatureRow(db: DatabaseSync, key: FeatureKey): Plain | undefined {
   }
 }
 
-export function getSettings(db: DatabaseSync): Settings {
-  return resolveSettings(readStored(db));
+export function getSettings(db: DatabaseSync, surauId: string): Settings {
+  return resolveSettings(readStored(db, surauId));
 }
 
-export function getVersion(db: DatabaseSync): number {
-  const row = db.prepare('SELECT value FROM meta WHERE key = ?').get('version');
+export function getVersion(db: DatabaseSync, surauId: string): number {
+  const row = db.prepare('SELECT value FROM meta WHERE surau_id = ? AND key = ?').get(surauId, 'version');
   const value = row !== undefined && typeof row.value === 'string' ? Number(row.value) : 0;
   return Number.isFinite(value) ? Math.trunc(value) : 0;
 }
 
-export function bumpVersion(db: DatabaseSync): number {
-  const next = getVersion(db) + 1;
+export function bumpVersion(db: DatabaseSync, surauId: string): number {
+  const next = getVersion(db, surauId) + 1;
   db.prepare(
-    'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-  ).run('version', String(next));
+    'INSERT INTO meta (surau_id, key, value) VALUES (?, ?, ?) ON CONFLICT(surau_id, key) DO UPDATE SET value = excluded.value',
+  ).run(surauId, 'version', String(next));
   return next;
 }
 
@@ -130,8 +130,8 @@ const beats = (a: FieldStamp, b: FieldStamp): boolean =>
   decide({ kind: 'settings.put', current: { rev: '', editedAt: b.editedAt, deviceId: b.deviceId, deletedAt: null }, op: a }).apply;
 
 /** The stamps of a stored row, with every field the row holds covered (a field without a stamp takes the row's own). */
-export function readFieldStamps(db: DatabaseSync, key: string): FieldStamps {
-  const row = db.prepare('SELECT json, rev, edited_at, updated_at, field_stamps FROM settings WHERE feature = ?').get(key);
+export function readFieldStamps(db: DatabaseSync, key: string, surauId: string): FieldStamps {
+  const row = db.prepare('SELECT json, rev, edited_at, updated_at, field_stamps FROM settings WHERE surau_id = ? AND feature = ?').get(surauId, key);
   if (row === undefined) return {};
   const fallback: FieldStamp = {
     editedAt: typeof row.edited_at === 'string' ? row.edited_at : String(row.updated_at),
@@ -205,6 +205,8 @@ function withoutUnchanged(patch: unknown, stored: Plain | undefined): unknown {
 export interface PutFeatureResult {
   /** False only when a synced edit had fields and none of them was newer than what the row holds. */
   applied: boolean;
+  /** Field paths of a synced edit that lost to a newer stored stamp (the rest of the edit landed). */
+  skipped: string[];
 }
 
 /**
@@ -219,13 +221,14 @@ export function putFeatureIn(
   key: FeatureKey,
   patch: unknown,
   actor: string,
-  deviceId?: string,
-  meta?: ChangeMeta,
-  opts?: { fieldStamps?: FieldStamps },
+  deviceId: string | undefined,
+  meta: ChangeMeta | undefined,
+  opts: { fieldStamps?: FieldStamps } | undefined,
+  surauId: string,
 ): PutFeatureResult {
   if (!isFeatureKey(key)) throw new SettingsError([`unknown feature ${String(key)}`]);
 
-  const before = readFeatureRow(db, key);
+  const before = readFeatureRow(db, key, surauId);
   // Only what the edit CHANGES is held to the rules: an old stored value (a longer template, a wider range than the
   // rules allow today) must not block a save or a replicated full row that leaves it as it is. Unknown keys and
   // wrong types are never "unchanged", so the shape is still checked. The cross-field rule needs the stored row and
@@ -244,18 +247,19 @@ export function putFeatureIn(
   const synced = meta?.rev !== undefined;
   const mine: FieldStamp = { editedAt, deviceId: device ?? 'local' };
 
-  const stamps = readFieldStamps(db, key);
+  const stamps = readFieldStamps(db, key, surauId);
   const incoming = patch as Plain;
   const leaves = leafPaths(incoming);
 
   const taken: Plain = {};
   const next: FieldStamps = { ...stamps };
   let landed = 0;
+  const skipped: string[] = [];
   for (const path of leaves) {
     const cur = stamps[path];
     let stamp = opts?.fieldStamps?.[path] ?? mine;
     if (cur !== undefined && !beats(stamp, cur)) {
-      if (synced) continue;
+      if (synced) { skipped.push(path); continue; }
       // A local write must beat the stamp it replaces, or the other side would later refuse it.
       stamp = { editedAt: new Date(Math.max(Date.parse(cur.editedAt), Date.parse(editedAt)) + 1).toISOString(), deviceId: stamp.deviceId };
     }
@@ -263,7 +267,7 @@ export function putFeatureIn(
     next[path] = stamp;
     landed += 1;
   }
-  if (landed === 0) return { applied: leaves.length === 0 };
+  if (landed === 0) return { applied: leaves.length === 0, skipped };
 
   // The row's own edit stamp is the newest of its fields; the rev is the caller's when the caller's edit is it.
   let top: FieldStamp = Object.values(next)[0]!;
@@ -285,14 +289,14 @@ export function putFeatureIn(
   const unchanged = before === undefined ? Object.keys(merged).length === 0 : JSON.stringify(before) === afterJson;
   if (unchanged) {
     if (before !== undefined && synced) {
-      db.prepare('UPDATE settings SET rev = ?, edited_at = ?, origin = ?, field_stamps = ? WHERE feature = ?').run(rev, top.editedAt, origin, stampsJson, key);
+      db.prepare('UPDATE settings SET rev = ?, edited_at = ?, origin = ?, field_stamps = ? WHERE surau_id = ? AND feature = ?').run(rev, top.editedAt, origin, stampsJson, surauId, key);
     }
-    return { applied: true };
+    return { applied: true, skipped };
   }
 
   db.prepare(
-    `INSERT INTO settings (feature, json, updated_at, updated_by, rev, edited_at, origin, field_stamps) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(feature) DO UPDATE SET
+    `INSERT INTO settings (surau_id, feature, json, updated_at, updated_by, rev, edited_at, origin, field_stamps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(surau_id, feature) DO UPDATE SET
        json = excluded.json,
        updated_at = excluded.updated_at,
        updated_by = excluded.updated_by,
@@ -300,12 +304,13 @@ export function putFeatureIn(
        edited_at = excluded.edited_at,
        origin = excluded.origin,
        field_stamps = excluded.field_stamps`,
-  ).run(key, afterJson, now, actor, rev, top.editedAt, origin, stampsJson);
+  ).run(surauId, key, afterJson, now, actor, rev, top.editedAt, origin, stampsJson);
 
   db.prepare(
-    `INSERT INTO change_log (at, actor, entity, entity_id, before_json, after_json, device_id, origin, op_id, edited_at, synced_at, rev, stamps_json)
-     VALUES (?, ?, 'settings', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json, device_id, origin, op_id, edited_at, synced_at, rev, stamps_json)
+     VALUES (?, ?, ?, 'settings', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
+    surauId,
     now,
     actor,
     key,
@@ -320,20 +325,20 @@ export function putFeatureIn(
     stampsJson,
   );
 
-  bumpVersion(db);
-  return { applied: true };
+  bumpVersion(db, surauId);
+  return { applied: true, skipped };
 }
 
-export function putFeature(db: DatabaseSync, key: FeatureKey, patch: unknown, actor: string, deviceId?: string): Settings {
+export function putFeature(db: DatabaseSync, key: FeatureKey, patch: unknown, actor: string, deviceId: string | undefined, surauId: string): Settings {
   db.exec('BEGIN IMMEDIATE');
   try {
-    putFeatureIn(db, key, patch, actor, deviceId);
+    putFeatureIn(db, key, patch, actor, deviceId, undefined, undefined, surauId);
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
     throw error;
   }
-  return getSettings(db);
+  return getSettings(db, surauId);
 }
 
 export interface SurauPublicInfo {
@@ -353,8 +358,8 @@ export interface SurauPublicInfo {
 }
 
 /** The public identity + help contact: only these fields, empty ones omitted, `help` omitted when all empty. */
-export function surauPublicInfo(db: DatabaseSync, at: Date = new Date()): SurauPublicInfo {
-  const settings = getSettings(db);
+export function surauPublicInfo(db: DatabaseSync, at: Date = new Date(), surauId: string): SurauPublicInfo {
+  const settings = getSettings(db, surauId);
   const i = settings.surauInfo;
   const tz = tzOf(settings);
   const out: SurauPublicInfo = {

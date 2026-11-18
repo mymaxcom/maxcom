@@ -96,15 +96,15 @@ describe('openDb', () => {
 describe('prayerStore', () => {
   it('imports the fixture and counts inserted then replaced', () => {
     const db = newDb();
-    expect(importDays(db, 'SGR01', fixtureDays, 'tester')).toEqual({ inserted: 365, replaced: 0 });
-    expect(importDays(db, 'SGR01', fixtureDays, 'tester')).toEqual({ inserted: 0, replaced: 365 });
+    expect(importDays(db, 'SGR01', fixtureDays, 'tester', undefined, undefined, 'sdm')).toEqual({ inserted: 365, replaced: 0 });
+    expect(importDays(db, 'SGR01', fixtureDays, 'tester', undefined, undefined, 'sdm')).toEqual({ inserted: 0, replaced: 365 });
   });
 
   it('reads an inclusive ordered date range', () => {
     const db = newDb();
-    importDays(db, 'SGR01', fixtureDays, 'tester');
+    importDays(db, 'SGR01', fixtureDays, 'tester', undefined, undefined, 'sdm');
 
-    const rows = getDays(db, 'SGR01', '2026-11-03', '2026-11-04');
+    const rows = getDays(db, 'SGR01', '2026-11-03', '2026-11-04', 'sdm');
     const expected = fixtureDays.filter((d) => d.date === '2026-11-03' || d.date === '2026-11-04');
     expect(rows).toEqual(expected);
     expect(rows.map((r) => r.date)).toEqual(['2026-11-03', '2026-11-04']);
@@ -112,13 +112,13 @@ describe('prayerStore', () => {
 
   it('counts rows from a date', () => {
     const db = newDb();
-    importDays(db, 'SGR01', fixtureDays, 'tester');
-    expect(countDaysFrom(db, 'SGR01', '2026-11-03')).toBe(59);
+    importDays(db, 'SGR01', fixtureDays, 'tester', undefined, undefined, 'sdm');
+    expect(countDaysFrom(db, 'SGR01', '2026-11-03', 'sdm')).toBe(59);
   });
 
   it('writes one change_log row per non-empty import', () => {
     const db = newDb();
-    importDays(db, 'SGR01', fixtureDays, 'tester');
+    importDays(db, 'SGR01', fixtureDays, 'tester', undefined, undefined, 'sdm');
 
     // One summary row (the audit view) and, since Plan 13, its feed twin carrying the days of each year.
     const rows = changeRows(db);
@@ -133,21 +133,21 @@ describe('prayerStore', () => {
 
   it('ignores an empty import without a log row', () => {
     const db = newDb();
-    expect(importDays(db, 'SGR01', [], 'tester')).toEqual({ inserted: 0, replaced: 0 });
+    expect(importDays(db, 'SGR01', [], 'tester', undefined, undefined, 'sdm')).toEqual({ inserted: 0, replaced: 0 });
     expect(changeRows(db)).toHaveLength(0);
-    expect(getVersion(db)).toBe(0);
+    expect(getVersion(db, 'sdm')).toBe(0);
   });
 
   it('rejects a bad zone', () => {
     const db = newDb();
-    expect(() => importDays(db, 'x', fixtureDays, 'tester')).toThrow();
+    expect(() => importDays(db, 'x', fixtureDays, 'tester', undefined, undefined, 'sdm')).toThrow();
   });
 });
 
 describe('settingsStore', () => {
   it('partially updates a feature and keeps defaults', () => {
     const db = newDb();
-    const settings = putFeature(db, 'iqamahCountdown', { minutes: { isnin: { asar: 12 } } }, 'tester');
+    const settings = putFeature(db, 'iqamahCountdown', { minutes: { isnin: { asar: 12 } } }, 'tester', undefined, 'sdm');
 
     expect(settings.iqamahCountdown.minutes.isnin.asar).toBe(12);
     expect(settings.iqamahCountdown.minutes.isnin.subuh).toBe(12);
@@ -161,55 +161,55 @@ describe('settingsStore', () => {
 
   it('rejects an invalid patch and changes nothing', () => {
     const db = newDb();
-    putFeature(db, 'iqamahCountdown', { minutes: { isnin: { asar: 12 } } }, 'tester');
+    putFeature(db, 'iqamahCountdown', { minutes: { isnin: { asar: 12 } } }, 'tester', undefined, 'sdm');
 
-    const before = getSettings(db);
-    const version = getVersion(db);
+    const before = getSettings(db, 'sdm');
+    const version = getVersion(db, 'sdm');
     const logCount = changeRows(db).length;
 
     let error: unknown;
     try {
-      putFeature(db, 'iqamahCountdown', { minutes: { isnin: { asar: -1 } } }, 'tester');
+      putFeature(db, 'iqamahCountdown', { minutes: { isnin: { asar: -1 } } }, 'tester', undefined, 'sdm');
     } catch (e) {
       error = e;
     }
     expect(error).toBeInstanceOf(SettingsError);
     expect((error as SettingsError).errors.length).toBeGreaterThan(0);
 
-    expect(getSettings(db)).toEqual(before);
-    expect(getVersion(db)).toBe(version);
+    expect(getSettings(db, 'sdm')).toEqual(before);
+    expect(getVersion(db, 'sdm')).toBe(version);
     expect(changeRows(db)).toHaveLength(logCount);
   });
 
   it('rejects disabling a locked feature', () => {
     const db = newDb();
-    expect(() => putFeature(db, 'clock', { enabled: false }, 't')).toThrow(SettingsError);
+    expect(() => putFeature(db, 'clock', { enabled: false }, 't', undefined, 'sdm')).toThrow(SettingsError);
   });
 
   it('an empty or unchanged PUT does not write, log or bump the version', () => {
     const db = newDb();
-    putFeature(db, 'hijriDate', { adjustDays: 1 }, 'tester');
-    const version = getVersion(db);
+    putFeature(db, 'hijriDate', { adjustDays: 1 }, 'tester', undefined, 'sdm');
+    const version = getVersion(db, 'sdm');
     const logCount = changeRows(db).length;
 
-    putFeature(db, 'hijriDate', {}, 'tester');
-    putFeature(db, 'hijriDate', { adjustDays: 1 }, 'tester');
-    putFeature(db, 'ticker', {}, 'tester');
+    putFeature(db, 'hijriDate', {}, 'tester', undefined, 'sdm');
+    putFeature(db, 'hijriDate', { adjustDays: 1 }, 'tester', undefined, 'sdm');
+    putFeature(db, 'ticker', {}, 'tester', undefined, 'sdm');
 
-    expect(getVersion(db)).toBe(version);
+    expect(getVersion(db, 'sdm')).toBe(version);
     expect(changeRows(db)).toHaveLength(logCount);
     expect(db.prepare("SELECT COUNT(*) AS n FROM settings WHERE feature = 'ticker'").get()).toMatchObject({ n: 0 });
   });
 
   it('bumps the version on import and on a valid update', () => {
     const db = newDb();
-    expect(getVersion(db)).toBe(0);
+    expect(getVersion(db, 'sdm')).toBe(0);
 
-    importDays(db, 'SGR01', fixtureDays, 'tester');
-    expect(getVersion(db)).toBe(1);
+    importDays(db, 'SGR01', fixtureDays, 'tester', undefined, undefined, 'sdm');
+    expect(getVersion(db, 'sdm')).toBe(1);
 
-    putFeature(db, 'hijriDate', { adjustDays: 1 }, 'tester');
-    expect(getVersion(db)).toBe(2);
+    putFeature(db, 'hijriDate', { adjustDays: 1 }, 'tester', undefined, 'sdm');
+    expect(getVersion(db, 'sdm')).toBe(2);
   });
 });
 

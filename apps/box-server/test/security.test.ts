@@ -91,7 +91,7 @@ function make(opts: Partial<AppOptions> = {}, keep = false): Ctx {
   const app = buildApp(dbPath, { now: () => clock.t, dataDir, staticDir, ...opts });
   if (!keep) apps.push(app);
   // The probes here are about the PIN path, which only exists while the app lock is on (off by default).
-  putFeature(app.surau.db, 'appLock', { enabled: true }, 'test');
+  putFeature(app.surau.db, 'appLock', { enabled: true }, 'test', undefined, 'sdm');
   const boxKey = readFileSync(join(dataDir, 'secret', 'box.key'));
   return { app, dir, dataDir, dbPath, staticDir, clock, boxKey };
 }
@@ -164,7 +164,7 @@ function dbState(app: FastifyInstance): string {
 async function newDevice(app: FastifyInstance, roles: Role[] = ['admin'], pin = TEST_PIN) {
   const n = ++ipCounter;
   const { db, boxId } = app.surau;
-  const user = createUser(db, { name: `Sec ${n}`, roles }, 'test');
+  const user = createUser(db, { name: `Sec ${n}`, roles }, 'test', 'sdm');
   const { code } = beginEnrolment(db, { userId: user.id, deviceName: `Peranti ${n}` }, 'test');
   const keys = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const jwk = await webcrypto.subtle.exportKey('jwk', keys.publicKey);
@@ -525,7 +525,8 @@ describe('2 role matrix: every identity against every table entry', () => {
   it('loopback is only a kiosk when plain, unproxied and not cross-site', async () => {
     const base = { url: '/api/kiosk/bundle', remoteAddress: '127.0.0.1' };
     expect((await call(c.app, base)).status).toBe(200);
-    for (const h of <Record<string, string>[]>[{ 'x-forwarded-for': '10.168.1.5' }, { forwarded: 'for=1.2.3.4' }, { 'x-real-ip': '1.2.3.4' }, { via: '1.1 proxy' }, { 'x-forwarded-proto': 'https' }, { 'x-forwarded-host': 'evil' }, { 'sec-fetch-site': 'cross-site' }]) {
+    const hs: Array<Record<string, string>> = [{ 'x-forwarded-for': '10.168.1.5' }, { forwarded: 'for=1.2.3.4' }, { 'x-real-ip': '1.2.3.4' }, { via: '1.1 proxy' }, { 'x-forwarded-proto': 'https' }, { 'x-forwarded-host': 'evil' }, { 'sec-fetch-site': 'cross-site' }];
+    for (const h of hs) {
       const r = await call(c.app, { ...base, headers: h });
       expect(r.status, JSON.stringify(h)).toBe(401);
     }

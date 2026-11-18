@@ -128,8 +128,19 @@
 .stage[data-template='minimal'] .pengumuman__title { font-weight: 700; font-size: calc(3.4rem * var(--fit, 1) * var(--scale, 1)); margin-bottom: 1.1rem; }
 .stage[data-template='minimal'] .pengumuman__body { color: #33403d; font-size: calc(2rem * var(--fit, 1) * var(--scale, 1)); line-height: 1.4; }
 .stage[data-template='minimal'] .card .sep { background: #a7b2af; }
-.stage[data-template='minimal'] :is(.tabung__col, .card--tabung-manual .tabung__col) { background: #f4f6f5; border-color: #e3e7e5; }
-.stage[data-template='minimal'] .tabung__bar { background: #e3e7e5; }
+/* Tabung (mockup tabung-r1 frame H): hairline dividers between the funds, no boxes. */
+.stage[data-template='minimal'][data-kind='content'] .tabung {
+  --tb-amt: #0e1412; --tb-muted: var(--muted); --tb-on-acc: #ffffff;
+  --tb-row-bg: transparent; --tb-row-border: 0; --tb-track: #e3ebe8; --tb-fill: var(--accent); --tb-dot: #d3d8d6;
+  --tb-hair: var(--hair); --tb-hot-bg: #eef6f3;
+}
+.stage[data-template='minimal'][data-kind='content'] .tabung__rows { gap: 0; }
+.stage[data-template='minimal'][data-kind='content'] .tabung__row { border-radius: 0; border-bottom: 1px solid var(--hair); padding-left: 0.21rem; padding-right: 0.21rem; }
+.stage[data-template='minimal'][data-kind='content'] .tabung__row:last-child { border-bottom: 0; }
+.stage[data-template='minimal'][data-kind='content'] .tabung__row.is-hot { border: 0.1rem solid var(--accent); border-radius: 0.83rem; padding-left: 1.46rem; padding-right: 1.46rem; }
+.stage[data-template='minimal'][data-kind='content'] :is(.tabung__fhero, .tabung__mini, .tabung__total) { border: 1px solid var(--hair); }
+.stage[data-template='minimal'][data-kind='content'] .tabung__qr { background-image: none; }
+.stage[data-template='minimal'][data-kind='content'] .tabung__qrbox { box-shadow: none; border: 1px solid #e1e2de; }
 /* The thin row of times. */
 .stage[data-template='minimal'] .pbar {
   height: 7rem;
@@ -220,28 +231,6 @@
 /* Hadis: the Arabic and the Malay keep their clamp height, so a text taller than the narrower card overflows
    the body and the card's own fit (useFit) shrinks it, instead of a squeezed clamp box cutting a line in half. */
 .stage[data-template='minimal'] .hadis__body > * { flex-shrink: 0; }
-/* Tugasan in the portrait panel and the Minimalis column: the days stack, one under the other. */
-.stage[data-template='minimal'] .tugasan__days.cols-2,
-.stage[data-template='minimal'] .tugasan__days.cols-3 { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 0.9rem; }
-/* Each stacked day shows only the role rows that fit whole (a row that does not fit wraps out of sight). */
-.stage[data-template='minimal'] .tugasan__day { min-height: 0; }
-.stage[data-template='minimal'] .tugasan__rows { flex: 1 1 0; flex-wrap: wrap; align-content: flex-start; }
-.stage[data-template='minimal'] .tugasan__row { width: 100%; }
-.stage[data-template='minimal'] .tugasan__day + .tugasan__day { border-left: 0; padding-left: 0; border-top: 1px solid rgb(var(--accent-rgb) / 0.28); padding-top: 0.8rem; }
-.stage[data-template='minimal'] .tugasan__days.cols-3 .tugasan__name { font-size: 1.5rem; }
-.stage[data-template='minimal'] .wt__grid.is-two-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.stage[data-template='minimal'] .wt__grid.is-two-rows .wt__time { font-size: 2.9rem; }
-/* Takwim in the narrow column: a slimmer days block, and the title wraps to two lines instead of one cut line. */
-.stage[data-template='minimal'] .takwim__days { width: 7.6rem; }
-.stage[data-template='minimal'] .takwim__row { gap: 1.1rem; }
-.stage[data-template='minimal'] .takwim__title {
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow-wrap: anywhere;
-  line-height: 1.18;
-}
 /* Minimalis: a white page; the picture is a clean panel with a hairline, the clock stays thin. */
 .stage[data-template='minimal'] {
   --live-pad-top: 2rem;
@@ -366,8 +355,8 @@
 .stage[data-template='minimal'][data-kind='content'] .eyebrow { letter-spacing: 0; text-transform: none; font-weight: 600; }
 .stage[data-template='minimal'][data-kind='content'] .kul-facts span { letter-spacing: 0; text-transform: none; font-weight: 600; }
 .stage[data-template='minimal'][data-kind='content'] :is(.card__tag, .tabung__name, .takwim__days small, .ayat__mode) { letter-spacing: 0; text-transform: none; }
-/* The calendar on the full-width content screen keeps the full days block (theme round 2, maximise the screen). */
-.stage[data-template='minimal'][data-kind='content'] .takwim__days { width: 13rem; }
+/* The duty roles and the city names in the same quiet sentence case (the roster and world clock screens, 2026-11-17). */
+.stage[data-template='minimal'][data-kind='content'] :is(.tugasan__role, .wt__city) { letter-spacing: 0; text-transform: none; }
 .stage[data-template='minimal'][data-kind='content'] .kul-photo { border-width: 0; }
 .stage[data-template='minimal'][data-kind='content'] .kul-facts span { color: var(--muted); opacity: 1; }
 .stage[data-template='minimal'][data-kind='content'] .hadis-src { color: var(--muted); }

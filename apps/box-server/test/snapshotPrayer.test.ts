@@ -15,6 +15,7 @@ import { applyImport, parseCsvRows, parseTemplateRows, snapshotImports } from '.
 import { runCloudLink } from '../src/cli/cloudLink.ts';
 import { snapshot } from '../src/sync/feed.ts';
 import { issueLinkCode } from '../src/sync/sites.ts';
+import { ensureSurau } from './support/surauRow.ts';
 import { loadSyncKey } from '../src/sync/syncKey.ts';
 import { buildCloud, CLOUD_URL } from './support/fakeCloud.ts';
 import type { TestCloud } from './support/fakeCloud.ts';
@@ -55,7 +56,7 @@ async function makePair(): Promise<Pair> {
   hook.fetch = worker.fetch;
   const pair: Pair = { box, boxDir, cloud, hook };
   pairs.push(pair);
-  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau Ujian' });
+  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau Ujian', target: { surauId: ensureSurau(cloud.app.surau.db) } });
   expect(await runCloudLink(['--data', boxDir, '--db', join(boxDir, 'box.db'), 'link', CLOUD_URL, code], { out: () => undefined, err: () => undefined }, worker.fetch)).toBe(0);
   worker.setSecret(boxId, loadSyncKey(boxDir)!.wakeSecret);
   return pair;
@@ -71,9 +72,9 @@ function cloudPrayer(): NonNullable<Snapshot['prayer']> {
   extraDirs.push(d);
   const src = openDb(join(d, 'src.db'));
   extraDbs.push(src);
-  importDays(src, 'SGR01', official, 'system:auto-prayer-fetch', undefined);
-  applyImport(src, ke(), { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: fileDays(range('2026-12-01', 10)), overlap: 'replace' }, 'user:t', undefined, T('2026-01-01T01:00:00Z'));
-  putCorrection(src, { date: '2026-11-26', prayer: 'asar', time: '16:25', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-01-02T01:00:00Z'));
+  importDays(src, 'SGR01', official, 'system:auto-prayer-fetch', undefined, undefined, 'sdm');
+  applyImport(src, ke(), { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: fileDays(range('2026-12-01', 10)), overlap: 'replace' }, 'user:t', undefined, T('2026-01-01T01:00:00Z'), 'sdm');
+  putCorrection(src, { date: '2026-11-26', prayer: 'asar', time: '16:25', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-01-02T01:00:00Z'), undefined, undefined, 'sdm');
   return snapshot(src, { users: true, devices: true }, { boxId: 'x', now: T('2026-01-03T00:00:00Z') }).prayer!;
 }
 
@@ -109,8 +110,8 @@ describe('Plan 13 gap 1: a snapshot carries the prayer data', () => {
 
   it('a newer local correction survives; an older local one is replaced', async () => {
     const p = await makePair();
-    putCorrection(dbOf(p), { date: '2026-11-26', prayer: 'asar', time: '16:40', reason: 'Ubah tempatan' }, 'user:t', undefined, new Date());
-    putCorrection(dbOf(p), { date: '2026-05-01', prayer: 'zohor', time: '13:00', reason: 'Lama sekali' }, 'user:t', undefined, T('2025-01-01T00:00:00Z'));
+    putCorrection(dbOf(p), { date: '2026-11-26', prayer: 'asar', time: '16:40', reason: 'Ubah tempatan' }, 'user:t', undefined, new Date(), undefined, undefined, 'sdm');
+    putCorrection(dbOf(p), { date: '2026-05-01', prayer: 'zohor', time: '13:00', reason: 'Lama sekali' }, 'user:t', undefined, T('2025-01-01T00:00:00Z'), undefined, undefined, 'sdm');
     const prayer = cloudPrayer();
     (prayer.corrections as Array<Record<string, unknown>>).push({ date: '2026-05-01', prayer: 'zohor', time: '13:05', reason: 'Dari awan', officialAtCorrection: null, editedAt: '2026-01-02T01:00:00.000Z', rev: '2026-01-02T01:00:00.000Z|cloud' });
     await runWithSnapshot(p, prayer);
@@ -120,8 +121,8 @@ describe('Plan 13 gap 1: a snapshot carries the prayer data', () => {
 
   it('a local correction the snapshot lacks is removed unless it is newer than the snapshot', async () => {
     const p = await makePair();
-    putCorrection(dbOf(p), { date: '2026-04-01', prayer: 'subuh', time: '05:10', reason: 'Lama sekali' }, 'user:t', undefined, T('2025-01-01T00:00:00Z'));
-    putCorrection(dbOf(p), { date: '2026-04-02', prayer: 'subuh', time: '05:11', reason: 'Baru sahaja' }, 'user:t', undefined, new Date(Date.now() + 3_600_000));
+    putCorrection(dbOf(p), { date: '2026-04-01', prayer: 'subuh', time: '05:10', reason: 'Lama sekali' }, 'user:t', undefined, T('2025-01-01T00:00:00Z'), undefined, undefined, 'sdm');
+    putCorrection(dbOf(p), { date: '2026-04-02', prayer: 'subuh', time: '05:11', reason: 'Baru sahaja' }, 'user:t', undefined, new Date(Date.now() + 3_600_000), undefined, undefined, 'sdm');
     await runWithSnapshot(p, cloudPrayer());
     expect(count(dbOf(p), "SELECT COUNT(*) AS n FROM prayer_corrections WHERE date = '2026-04-01'")).toBe(0);
     expect(count(dbOf(p), "SELECT COUNT(*) AS n FROM prayer_corrections WHERE date = '2026-04-02'")).toBe(1);
@@ -162,9 +163,9 @@ describe('gate 13 item 5: snapshots keep the newest', () => {
     for (let i = 0; i < 201; i++) {
       const day = new Date(Date.UTC(2026, 11, 1) + i * 86_400_000).toISOString().slice(0, 10);
       const at = new Date(Date.UTC(2026, 0, 1) + i * 60_000);
-      ids.push(applyImport(db, ke(), { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: fileDays([day]), overlap: 'replace' }, 'user:t', undefined, at).id);
+      ids.push(applyImport(db, ke(), { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: fileDays([day]), overlap: 'replace' }, 'user:t', undefined, at, 'sdm').id);
     }
-    const got = snapshotImports(db).map((x) => x.record.id);
+    const got = snapshotImports(db, 'sdm').map((x) => x.record.id);
     expect(got).toHaveLength(200);
     expect(got).toEqual(ids.slice(1));
   });

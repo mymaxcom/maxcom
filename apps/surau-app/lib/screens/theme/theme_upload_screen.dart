@@ -161,7 +161,7 @@ class _ThemeUploadScreenState extends ConsumerState<ThemeUploadScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = e is SettingsSaveError ? e.message : writeErrorText(s, e);
+        _error = e is SettingsSaveError ? e.text(s) : writeErrorText(s, e);
       });
     }
   }
@@ -209,7 +209,7 @@ class _ThemeUploadScreenState extends ConsumerState<ThemeUploadScreen> {
         if (_error != null) ...[ErrorLine(_error!), const SizedBox(height: 12)],
         if (_problem != null) ...[ErrorLine(_problem!), const SizedBox(height: 12)],
         Align(
-          alignment: Alignment.centerLeft,
+          alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton.icon(
             key: const ValueKey('theme-upload-pick'),
             onPressed: checking ? null : _pick,
@@ -288,7 +288,7 @@ class _ThemeUploadScreenState extends ConsumerState<ThemeUploadScreen> {
           _issueList(r.errors),
           const SizedBox(height: 8),
           Align(
-            alignment: Alignment.centerRight,
+            alignment: AlignmentDirectional.centerEnd,
             child: FilledButton(
               key: const ValueKey('theme-upload-close'),
               onPressed: () => context.go(AppRoutes.settingsThemes),

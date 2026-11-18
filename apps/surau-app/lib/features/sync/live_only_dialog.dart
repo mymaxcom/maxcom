@@ -9,12 +9,13 @@ import '../../app/theme.dart';
 import '../../l10n/generated/s.dart';
 import '../../sync/live_only.dart';
 
-/// The BM label of the live-only action at [path] (any method), as
-/// `live_only.dart` lists it; null when the path is not in the list.
-String? liveOnlyLabelFor(String path) {
+/// The label of the live-only action at [path] (any method) in the
+/// language of [s], as `live_only.dart` lists it; null when the path is not
+/// in the list.
+String? liveOnlyLabelFor(String path, S s) {
   final p = path.split('?').first;
   for (final e in liveOnlyList) {
-    if (e.pattern.hasMatch(p)) return e.label;
+    if (e.pattern.hasMatch(p)) return e.label(s);
   }
   return null;
 }
@@ -39,7 +40,7 @@ Future<bool> showLiveOnlyIf(
 }) async {
   if (error is! LiveOnly) return false;
   final action =
-      liveOnlyLabelFor(error.path) ??
+      liveOnlyLabelFor(error.path, S.of(context)) ??
       fallbackAction ??
       S.of(context).liveOnlyNeedsConnection;
   await showLiveOnlyDialog(context, action: action);

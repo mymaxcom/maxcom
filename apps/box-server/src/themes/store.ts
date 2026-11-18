@@ -6,6 +6,7 @@ import { isBuiltInTheme, SCREEN_IDS, THEME_BUNDLE_FORMAT, THEME_CONTRACT } from 
 import type { InstalledPack } from '@surau/core';
 import { AssetError, deletePackAsset, getAssetPath, putAsset } from '../assets/store.ts';
 import { getSettings, putFeature, SettingsError } from '../settingsStore.ts';
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { rewriteUrls, scopePackCss } from './cssCheck.ts';
 import { isReservedName, issue, PACK_MIME, ThemeError } from './packFormat.ts';
 import type { PackFiles, ThemeIssue } from './packFormat.ts';
@@ -35,6 +36,8 @@ export interface ThemeStoreDeps {
   /** Test hooks: a counter called each time a synced pack is checked, and a smaller allowance for all extracted packs. */
   onValidate?: () => void;
   extractedMaxBytes?: number;
+  /** Cloud: many surau, so the extracted-bytes allowance and the problems memo are per surau. Default 'box'. */
+  role?: 'box' | 'cloud';
 }
 
 /** A refusal that is not about the file's content: the staged copy is gone, the theme is in use, built in or unknown. */
@@ -55,7 +58,7 @@ export interface ThemeStore {
   /** Removes the record (a removal marker, so it syncs); the surau's styles[name] are kept. Throws ThemeStoreError. */
   remove(name: string, actor: string, deviceId?: string): void;
   /** The folder of an installed pack's current file (its hash is the URL segment), extracting it from its asset first when missing (a pack that arrived by sync). Null when the record or the asset is missing or the pack fails this box's validator. */
-  ensureExtracted(name: string): Promise<{ dir: string; version: number; hash: string } | null>;
+  ensureExtracted(name: string, surauId?: string): Promise<{ dir: string; version: number; hash: string } | null>;
   stagedDir(stagedId: string): string | null;
   /** Why an installed pack cannot be served here, for the app: null when fine. */
   problemOf(name: string): Promise<ThemeIssue | null>;
@@ -116,9 +119,12 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
   const root = themesDirOf(dataDir);
   const stagedRoot = join(root, '.staged');
   const staged = new Map<string, Staged>();
+  const cloudRole = deps.role === 'cloud';
   const problems = new Map<string, { assetId: string; version: number; issue: ThemeIssue }>();
+  /** The problems memo key: the name on a box, surau + name on the cloud (one surau's bad pack never hides another's). */
+  const problemKey = (name: string, surauId: string): string => (cloudRole ? `${surauId}/${name}` : name);
 
-  const installedPacks = (): Record<string, InstalledPack> => getSettings(db).themeStyle.packs;
+  const installedPacks = (surauId: string = LOCAL_SURAU_ID): Record<string, InstalledPack> => getSettings(db, surauId).themeStyle.packs;
 
   /** Everything is written to a temporary folder and renamed, so a half-extracted pack is never served. */
   function extractTo(final: string, files: PackFiles, base: string): void {
@@ -151,6 +157,7 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
 
   function startUpClean(): void {
     if (!existsSync(root)) return;
+    if (cloudRole) return; // the cloud keeps the packs of every surau; only a box prunes by its own one surau's records
     rmSync(stagedRoot, { recursive: true, force: true });
     const packs = installedPacks();
     for (const entry of readdirSync(root)) {
@@ -192,15 +199,22 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
 
   const extractedCap = deps.extractedMaxBytes ?? MAX_EXTRACTED_BYTES;
   /** Would this pack, added to the packs of the other themes already on the disk, stay within the allowance for all extracted packs? */
-  function extractedFits(files: PackFiles, name: string): boolean {
+  function extractedFits(files: PackFiles, name: string, surauId: string = LOCAL_SURAU_ID): boolean {
     let add = 0;
     for (const img of files.images.values()) add += img.data.length;
     for (const c of files.css.values()) add += c.length * 2;
     let used = 0;
     try {
-      for (const entry of readdirSync(root)) {
-        if (entry.startsWith('.') || entry === name) continue;
-        used += dirBytes(join(root, entry));
+      if (cloudRole) {
+        // only this surau's own installed packs count (folders are shared by name, so the current address of each)
+        for (const [n, rec] of Object.entries(installedPacks(surauId))) {
+          if (n !== name) used += dirBytes(dirOf(n, hashOf(rec.assetId)));
+        }
+      } else {
+        for (const entry of readdirSync(root)) {
+          if (entry.startsWith('.') || entry === name) continue;
+          used += dirBytes(join(root, entry));
+        }
       }
     } catch {
       used = 0;
@@ -216,13 +230,14 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
 
   const inflight = new Map<string, Promise<{ dir: string; version: number; hash: string } | null>>();
 
-  async function extractNow(name: string): Promise<{ dir: string; version: number; hash: string } | null> {
-    const packs = installedPacks();
+  async function extractNow(name: string, surauId: string): Promise<{ dir: string; version: number; hash: string } | null> {
+    const packs = installedPacks(surauId);
     const rec = Object.prototype.hasOwnProperty.call(packs, name) ? packs[name] : undefined;
     if (rec === undefined) return null;
     const hash = hashOf(rec.assetId);
     const dir = dirOf(name, hash);
-    const known = problems.get(name);
+    const pkey = problemKey(name, surauId);
+    const known = problems.get(pkey);
     if (known !== undefined && known.assetId === rec.assetId && known.version === rec.version) return null;
     if (existsSync(join(dir, 'bundle.css'))) return { dir, version: rec.version, hash };
 
@@ -232,7 +247,7 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
     let buf: Buffer;
     try { buf = readFileSync(asset.path); } catch { return null; }
     const remember = (i: ThemeIssue): null => {
-      problems.set(name, { assetId: rec.assetId, version: rec.version, issue: i });
+      problems.set(pkey, { assetId: rec.assetId, version: rec.version, issue: i });
       return null;
     };
     if (sha256(buf) !== rec.assetId) {
@@ -245,11 +260,11 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
       return remember(issue('bad_theme_json', 'theme.json', null,
         'theme.json tidak sah: nama atau versi tidak sepadan dengan rekod tema.', 'theme.json is not valid: the name or version does not match the theme record.'));
     }
-    if (!extractedFits(files, name)) {
+    if (!extractedFits(files, name, surauId)) {
       return remember(issue('storage_full', null, null, 'Ruang tema penuh. Padam tema yang tidak digunakan.', 'The theme space is full. Delete a theme that is not used.'));
     }
     // the installed record may have changed while the pictures were being checked
-    const now = installedPacks();
+    const now = installedPacks(surauId);
     if (!Object.prototype.hasOwnProperty.call(now, name) || now[name]!.assetId !== rec.assetId) return null;
     extractTo(dir, files, `/themes/${name}/${hash}/`);
     return { dir, version: rec.version, hash };
@@ -334,7 +349,7 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
         fonts: [], screens: report.screens, images: report.images, defaults: m.defaults,
       };
       try {
-        putFeature(db, 'themeStyle', { packs: { [m.name]: record } }, actor, deviceId);
+        putFeature(db, 'themeStyle', { packs: { [m.name]: record } }, actor, deviceId, LOCAL_SURAU_ID);
       } catch (error) {
         undo();
         if (error instanceof SettingsError) {
@@ -356,22 +371,25 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
       }
       const packs = installedPacks();
       if (!Object.prototype.hasOwnProperty.call(packs, name)) throw new ThemeStoreError('not_found', 'No such theme.');
-      if (getSettings(db).kioskTemplate.templateId === name) {
+      if (getSettings(db, LOCAL_SURAU_ID).kioskTemplate.templateId === name) {
         throw new ThemeStoreError('in_use', 'This theme is in use. Choose another theme first.');
       }
       const assetId = packs[name]!.assetId;
-      putFeature(db, 'themeStyle', { packs: { [name]: { removed: true } } }, actor, deviceId);
+      putFeature(db, 'themeStyle', { packs: { [name]: { removed: true } } }, actor, deviceId, LOCAL_SURAU_ID);
       problems.delete(name);
       rmSync(join(root, name), { recursive: true, force: true });
       dropAssetIfUnused(assetId);
     },
 
-    ensureExtracted(name) {
-      // One check at a time per theme: requests that arrive together share it.
-      const running = inflight.get(name);
+    ensureExtracted(name, surauId = LOCAL_SURAU_ID) {
+      // One check at a time per theme (and surau, on the cloud): requests that arrive together share it.
+      // The key is the folder (name and address), so two suraus holding the same file never race on one folder.
+      const rec0 = installedPacks(surauId)[name];
+      const key = rec0 === undefined || !Object.prototype.hasOwnProperty.call(installedPacks(surauId), name) ? `${surauId}/${name}` : `${name}/${hashOf(rec0.assetId)}`;
+      const running = inflight.get(key);
       if (running !== undefined) return running;
-      const p = extractNow(name).finally(() => { inflight.delete(name); });
-      inflight.set(name, p);
+      const p = extractNow(name, surauId).finally(() => { inflight.delete(key); });
+      inflight.set(key, p);
       return p;
     },
 

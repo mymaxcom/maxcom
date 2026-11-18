@@ -277,7 +277,7 @@ class SetupClient {
     try {
       final out = await gateway.post('/api/recovery/code', <String, Object>{});
       final c = out['recoveryCode'];
-      if (c is! String) throw const BoxError(500, 'Jawapan tidak sah');
+      if (c is! String) throw const BoxError(500, 'Jawapan tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
       return c;
     } on BoxError catch (e) {
       throw _setupFailure(e) ?? e;

@@ -170,3 +170,18 @@ describe('syurukWarning.beep', () => {
     expect(st(D, warn, undefined, resolveSettings({ syurukWarning: { enabled: false, beep: true } } as never))).toMatchObject({ beep: null });
   });
 });
+
+describe('[G-Q7] a wrapped Maghrib or Isyak belongs to the next day', () => {
+  const wrapDay = { ...days.find((d) => d.date === '2026-06-20')!, date: '2026-06-20', times: { imsak: '04:30', subuh: '04:40', syuruk: '06:10', zohor: '13:10', asar: '16:30', maghrib: '23:50', isyak: '00:20' } };
+  const wrapDays = [wrapDay, { ...wrapDay, date: '2026-06-21', times: { imsak: '04:30', subuh: '04:40', syuruk: '06:10', zohor: '13:10', asar: '16:30', maghrib: '19:50', isyak: '21:00' } }];
+  const at = (hhmm: string, date = '2026-06-20') => computeKioskState(klInstant(date, hhmm), wrapDays, s);
+  it('[G-Q7] after Maghrib the next prayer is that Isyak, on the following morning', () => {
+    expect(at('23:55').next).toMatchObject({ name: 'isyak', at: klInstant('2026-06-21', '00:20') });
+    expect(at('20:00').next).toMatchObject({ name: 'maghrib', at: klInstant('2026-06-20', '23:50') });
+  });
+  it('[G-Q7] the Isyak phases run in order after midnight and never early in the morning', () => {
+    expect(at('00:10').phase).toBe('normal');
+    expect(at('23:45').phase).toBe('azanCountdown');
+    expect(at('00:20:30', '2026-06-21')).toMatchObject({ phase: 'masukWaktu', prayer: 'isyak' });
+  });
+});

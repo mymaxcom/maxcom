@@ -11,7 +11,9 @@ import '../../app/theme.dart';
 import '../../features/common/time_words.dart';
 import '../../l10n/generated/s.dart';
 import '../../screens/widgets/pieces.dart';
+import '../labels.dart' show appLangOfS;
 import 'location_screen.dart';
+import 'prayer_names.dart';
 import 'prayer_repository.dart';
 
 class ImportRecordsScreen extends ConsumerStatefulWidget {
@@ -71,7 +73,7 @@ class _ImportRecordsScreenState extends ConsumerState<ImportRecordsScreen> {
     final t = iso == null ? null : DateTime.tryParse(iso);
     if (t == null) return '-';
     final local = ref.read(appDepsProvider).toLocal(t);
-    return '${shortDateMs(isoDate(local))}, ${timeOfDayWords(local)}';
+    return '${shortDate(S.of(context), isoDate(local))}, ${timeOfDayWords(local, lang: appLangOfS(S.of(context)))}';
   }
 
   String _overlap(S s, String? v) => switch (v) {
@@ -114,12 +116,12 @@ class _ImportRecordsScreenState extends ConsumerState<ImportRecordsScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: Text(s.rekBlockedTitle),
-            content: Text(e.message),
+            content: Text(e.text(S.of(context))),
             actions: [FilledButton(onPressed: () => Navigator.of(context).pop(), child: Text(s.rekBlockedOk))],
           ),
         );
       } else {
-        setState(() => _error = e.message);
+        setState(() => _error = e.text(S.of(context)));
       }
     } catch (e) {
       if (!mounted) return;
@@ -183,7 +185,7 @@ class _ImportRecordsScreenState extends ConsumerState<ImportRecordsScreen> {
                 const SizedBox(width: 8),
                 undone
                     ? StateChip(
-                        label: s.rekStateUndone(shortDateMs(isoDate(ref.read(appDepsProvider).toLocal(DateTime.parse(r.undoneAt!))))),
+                        label: s.rekStateUndone(shortDate(s, isoDate(ref.read(appDepsProvider).toLocal(DateTime.parse(r.undoneAt!))))),
                         background: SurauColors.paperDeep,
                         foreground: SurauColors.muted,
                       )
@@ -197,7 +199,7 @@ class _ImportRecordsScreenState extends ConsumerState<ImportRecordsScreen> {
               children: [
                 field(s.rekSha, (r.sha256 ?? '').padRight(8).substring(0, 8)),
                 field(s.rekRows, '${r.rows}'),
-                field(s.rekRange, s.rekRangeValue(shortDateMs(r.dateFrom ?? ''), shortDateMs(r.dateTo ?? ''))),
+                field(s.rekRange, s.rekRangeValue(shortDate(s, r.dateFrom ?? ''), shortDate(s, r.dateTo ?? ''))),
                 field(s.rekOverlap, _overlap(s, r.overlap)),
                 field(s.rekWho, _who(r)),
                 field(s.rekWhen, _when(r.createdAt)),
@@ -206,7 +208,7 @@ class _ImportRecordsScreenState extends ConsumerState<ImportRecordsScreen> {
             if (!undone) ...[
               const SizedBox(height: 12),
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: OutlinedButton.icon(
                   key: ValueKey('rek-undo-${r.id}'),
                   onPressed: _undoing == null ? () => _undo(r) : null,

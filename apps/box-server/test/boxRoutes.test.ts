@@ -209,9 +209,10 @@ describe('GET /api/kiosk/cloud and PUT /api/box/name', () => {
 });
 
 describe('cloud role', () => {
-  it('answers 404 on every box-screen route, even anonymous', async () => {
+  it('answers 404 on every box-screen route but the minimal /api/box/info, even anonymous', async () => {
     const { app } = make({ role: 'cloud', tls: null });
-    for (const url of ['/api/box/info', '/api/box/state', '/api/box/netcheck']) {
+    expect((await get(app, '/api/box/info', LAN)).statusCode).toBe(200);
+    for (const url of ['/api/box/state', '/api/box/netcheck']) {
       expect((await get(app, url, LAN)).statusCode, url).toBe(404);
     }
     expect((await app.inject({ method: 'PUT', url: '/api/box/name', remoteAddress: LAN, payload: {} })).statusCode).toBe(404);

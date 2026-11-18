@@ -20,7 +20,7 @@ enum ScannedKind { enrol, setup, recovery, probe, unknown }
 
 /// The scanned text is not a valid, correctly signed box QR.
 class BoxQrInvalid implements Exception {
-  const BoxQrInvalid([this.message = 'Kod QR tidak sah']);
+  const BoxQrInvalid([this.message = 'Kod QR tidak sah']); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
 
   final String message;
 

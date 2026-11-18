@@ -32,7 +32,12 @@ export class FakeWorker {
   /** When true, admin calls fail like a network error. */
   adminDown = false;
   /** Everything not handled here goes to the cloud app. */
-  constructor(private readonly upstream: typeof fetch, private readonly now: () => number = Date.now) {}
+  private readonly upstream: typeof fetch;
+  private readonly now: () => number;
+  constructor(upstream: typeof fetch, now: () => number = Date.now) {
+    this.upstream = upstream;
+    this.now = now;
+  }
 
   setSecret(boxId: string, secret: string): void {
     this.secrets.set(boxId, secret);

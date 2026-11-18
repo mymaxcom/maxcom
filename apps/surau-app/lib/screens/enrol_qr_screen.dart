@@ -1,7 +1,9 @@
 // Daftar peranti: the admin names the person's new device, the box makes
 // a one-time code (`POST /api/enrol/begin`) and this page shows it as the
 // QR the person scans on their own phone or iPad, with the code in large
-// letters for typing, how long it is still good for, `Salin kod`, and
+// letters as a check value ("Kod semakan"), how long it is still good for,
+// `Salin kod` (the whole `surau1:` text the manual field accepts, the share
+// form when the box made one, never the 12 characters alone), and
 // the certificate fingerprint behind the same collapsed `Butiran teknikal`
 // the enrolling person has on their screen (operator rule 2026-11-04: no
 // certificate wording on normal screens; the fingerprint lives only inside
@@ -23,6 +25,7 @@ import '../features/setup/setup_providers.dart';
 import '../features/sync/live_only_dialog.dart';
 import '../box/wire.dart';
 import '../features/common/help_card.dart' show DetailRow, TechnicalDetails;
+import '../features/common/ltr.dart';
 import '../features/enrol/enrol_flow.dart';
 import '../l10n/generated/s.dart';
 import 'users_screen.dart';
@@ -66,19 +69,6 @@ class EnrolQrScreen extends StatelessWidget {
   }
 }
 
-/// `POST /api/enrol/begin`'s answer.
-class _Invitation {
-  const _Invitation({
-    required this.code,
-    required this.expiresAt,
-    required this.payload,
-  });
-
-  final String code;
-  final DateTime expiresAt;
-  final String payload;
-}
-
 class _EnrolQrBody extends ConsumerStatefulWidget {
   const _EnrolQrBody({required this.user});
 
@@ -93,7 +83,7 @@ class _EnrolQrBodyState extends ConsumerState<_EnrolQrBody> {
   String? _nameError;
   String? _error;
   bool _busy = false;
-  _Invitation? _invitation;
+  InvitationDto? _invitation;
 
   /// Always opens at 10: a longer code is a deliberate choice each time.
   int _ttl = 10;
@@ -130,11 +120,7 @@ class _EnrolQrBodyState extends ConsumerState<_EnrolQrBody> {
         'ttlMinutes': _ttl,
       });
       if (!mounted) return;
-      final inv = _Invitation(
-        code: out['code'] as String,
-        expiresAt: DateTime.parse(out['expiresAt'] as String),
-        payload: out['payload'] as String,
-      );
+      final inv = InvitationDto.fromJson(out);
       setState(() {
         _busy = false;
         _invitation = inv;
@@ -177,9 +163,12 @@ class _EnrolQrBodyState extends ConsumerState<_EnrolQrBody> {
     });
   }
 
+  /// The text the enrolling phone's manual field accepts (audit correction:
+  /// the 12-character code alone cannot be typed anywhere).
   Future<void> _copy() async {
     final s = S.of(context);
-    await Clipboard.setData(ClipboardData(text: _invitation!.code));
+    final inv = _invitation!;
+    await Clipboard.setData(ClipboardData(text: inv.sharePayload ?? inv.payload));
     if (!mounted) return;
     toast(context, s.enrolQrCopied);
   }
@@ -308,7 +297,7 @@ class _EnrolQrBodyState extends ConsumerState<_EnrolQrBody> {
           LayoutBuilder(
             builder: (context, constraints) {
               final wide = constraints.maxWidth >= 620;
-              final qr = _QrCard(
+              final qr = EnrolQrCard(
                 invitation: inv,
                 countdown: _countdown,
                 expired: _expired,
@@ -348,33 +337,51 @@ class _EnrolQrBodyState extends ConsumerState<_EnrolQrBody> {
   }
 }
 
-/// The QR on white with the countdown under it, then the code in big
-/// letters and `Salin kod`.
-class _QrCard extends StatelessWidget {
-  const _QrCard({
+/// The QR on white with the countdown under it, then the 12-character check
+/// value ("Kod semakan") and, when [onCopy] is given, `Salin kod`. [title]
+/// sits above the QR (the Tambah pengguna flow names the person there);
+/// [qrSize] is 240 on the Daftar peranti page and 176 in the flow, so the
+/// buttons under it still fit on a phone. The QR, the countdown and the code
+/// stay left to right in Arabic.
+class EnrolQrCard extends StatelessWidget {
+  const EnrolQrCard({
+    super.key,
     required this.invitation,
     required this.countdown,
     required this.expired,
-    required this.onCopy,
+    this.onCopy,
+    this.title,
+    this.qrSize = 240,
   });
 
-  final _Invitation invitation;
+  final InvitationDto invitation;
   final String countdown;
   final bool expired;
-  final VoidCallback onCopy;
+  final VoidCallback? onCopy;
+  final String? title;
+  final double qrSize;
 
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
+    final heading = title;
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
         child: Column(
           children: [
+            if (heading != null) ...[
+              Text(
+                heading,
+                textAlign: TextAlign.center,
+                style: text.titleMedium!.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+            ],
             Opacity(
               opacity: expired ? 0.25 : 1,
-              child: InvitationQr(data: invitation.payload),
+              child: InvitationQr(data: invitation.payload, size: qrSize),
             ),
             const SizedBox(height: 14),
             Container(
@@ -393,7 +400,7 @@ class _QrCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    s.enrolQrExpiresIn(countdown),
+                    s.enrolQrExpiresIn(ltr(countdown)),
                     style: text.labelMedium!.copyWith(
                       color: expired ? SurauColors.dangerInk : SurauColors.ink,
                       fontFeatures: const [FontFeature.tabularFigures()],
@@ -407,19 +414,23 @@ class _QrCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               invitation.code,
+              key: const ValueKey('enrol-qr-code'),
               textAlign: TextAlign.center,
+              textDirection: TextDirection.ltr,
               style: text.headlineMedium!.copyWith(
                 letterSpacing: 1,
                 color: expired ? SurauColors.muted : SurauColors.text,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: expired ? null : onCopy,
-              icon: const Icon(Icons.copy_rounded),
-              label: Text(s.enrolQrCopy),
-            ),
+            if (onCopy != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: expired ? null : onCopy,
+                icon: const Icon(Icons.copy_rounded),
+                label: Text(s.enrolQrCopy),
+              ),
+            ],
           ],
         ),
       ),
@@ -428,17 +439,19 @@ class _QrCard extends StatelessWidget {
 }
 
 /// The payload string verbatim as a QR (error correction M, the kiosk's
-/// glass on white), 240 px square. [data] is readable, for the tests.
+/// glass on white), [size] logical px square (240 unless given). [data] is
+/// readable, for the tests.
 class InvitationQr extends StatelessWidget {
-  const InvitationQr({super.key, required this.data});
+  const InvitationQr({super.key, required this.data, this.size = 240});
 
   final String data;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return QrImageView(
       data: data,
-      size: 240,
+      size: size,
       padding: EdgeInsets.zero,
       errorCorrectionLevel: QrErrorCorrectLevel.M,
       backgroundColor: Colors.white,

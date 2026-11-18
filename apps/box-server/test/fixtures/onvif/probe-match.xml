@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://www.w3.org/2003/05/soap-envelope" xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" xmlns:dn="http://www.onvif.org/ver10/network/wsdl">
+<SOAP-ENV:Header><wsa:MessageID>uuid:1b2c3d4e-0000-4000-8000-00000000cafe</wsa:MessageID><wsa:RelatesTo>{{RELATES}}</wsa:RelatesTo><wsa:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa:To><wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</wsa:Action></SOAP-ENV:Header>
+<SOAP-ENV:Body><d:ProbeMatches><d:ProbeMatch><wsa:EndpointReference><wsa:Address>urn:uuid:0e1f2a3b-0000-4000-8000-000000000001</wsa:Address></wsa:EndpointReference>
+<d:Types>dn:NetworkVideoTransmitter tds:Device</d:Types>
+<d:Scopes>onvif://www.onvif.org/type/video_encoder onvif://www.onvif.org/hardware/IPC-X100 onvif://www.onvif.org/name/{{NAME}} onvif://www.onvif.org/location/country/malaysia</d:Scopes>
+<d:XAddrs>{{XADDRS}}</d:XAddrs><d:MetadataVersion>1</d:MetadataVersion></d:ProbeMatch></d:ProbeMatches></SOAP-ENV:Body></SOAP-ENV:Envelope>

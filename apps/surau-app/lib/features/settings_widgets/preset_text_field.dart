@@ -18,6 +18,7 @@ class PresetTextField extends StatefulWidget {
     required this.onChanged,
     this.error,
     this.readOnly = false,
+    this.english = false,
   });
 
   final String path;
@@ -27,6 +28,9 @@ class PresetTextField extends StatefulWidget {
   final void Function(Object? value) onChanged;
   final String? error;
   final bool readOnly;
+
+  /// The TV speaks English: offer the English sentences.
+  final bool english;
 
   @override
   State<PresetTextField> createState() => _PresetTextFieldState();
@@ -64,7 +68,7 @@ class _PresetTextFieldState extends State<PresetTextField> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final (i, p) in widget.meta.presets.indexed)
+              for (final (i, p) in (widget.english && widget.meta.presetsEn.isNotEmpty ? widget.meta.presetsEn : widget.meta.presets).indexed)
                 ChoiceChip(
                   key: ValueKey('preset-$i'),
                   label: Text(p),

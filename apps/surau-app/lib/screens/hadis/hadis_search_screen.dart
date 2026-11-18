@@ -580,7 +580,7 @@ class _SearchBox extends StatelessWidget {
     return Opacity(
       opacity: enabled ? 1 : 0.5,
       child: Container(
-        padding: const EdgeInsets.only(left: 14, right: 8),
+        padding: const EdgeInsetsDirectional.only(start: 14, end: 8),
         constraints: const BoxConstraints(minHeight: 56),
         decoration: BoxDecoration(
           color: enabled ? SurauColors.card : SurauColors.paper,
@@ -772,10 +772,10 @@ class _HadisResultRow extends StatelessWidget {
       decoration: selected
           ? const BoxDecoration(
               color: Color(0xFFF1F8F6),
-              border: Border(left: BorderSide(color: SurauColors.teal, width: 4)),
+              border: BorderDirectional(start: BorderSide(color: SurauColors.teal, width: 4)),
             )
           : null,
-      padding: EdgeInsets.fromLTRB(selected ? 10 : 14, 13, 14, 13),
+      padding: EdgeInsetsDirectional.fromSTEB(selected ? 10 : 14, 13, 14, 13),
       child: Row(
         children: [
           Container(

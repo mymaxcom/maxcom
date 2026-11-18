@@ -1,8 +1,10 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { LOCAL_SURAU_ID } from '../src/tenant.ts';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
+import { SHELL_ONLY_SCREEN_IDS } from '@surau/core';
 import { buildApp } from '../src/app.ts';
 import { getSettings, putFeature } from '../src/settingsStore.ts';
 import { PACK_MIME } from '../src/themes/packFormat.ts';
@@ -32,7 +34,7 @@ async function setup(): Promise<{ app: FastifyInstance; dir: string; admin: Logi
   const z = zip({ 'theme.json': json({ version: 3 }), 'theme.css': '.stage{--accent:#0a0}', 'images/kuliah.jpg': jpeg(8, 8) });
   const c = await app.inject({ method: 'POST', url: '/api/themes/check', headers: { ...login.headers, 'content-type': PACK_MIME }, payload: z });
   await app.inject({ method: 'POST', url: '/api/themes/install', headers: login.headers, payload: { stagedId: c.json().stagedId } });
-  putFeature(app.surau.db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'test');
+  putFeature(app.surau.db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'test', undefined, LOCAL_SURAU_ID);
   return { app, dir, admin: login.headers };
 }
 
@@ -85,6 +87,16 @@ describe('theme health reports', () => {
     expect((await app.inject({ method: 'POST', url: '/api/kiosk/theme-health', headers: { 'content-type': 'text/plain' }, payload: 'x' })).statusCode).toBeGreaterThanOrEqual(400);
   });
 
+  it('accepts a report from the shell-only stage screens (tugasan, waktu-dunia), stored and read back', async () => {
+    const { app } = await setup();
+    expect([...SHELL_ONLY_SCREEN_IDS]).toEqual(['tugasan', 'waktu-dunia']);
+    for (const screen of SHELL_ONLY_SCREEN_IDS) expect(parseHealthBody(report({ screen })), screen).not.toBeNull();
+    expect((await post(app, report({ screen: 'tugasan' }))).statusCode).toBe(204);
+    expect(activeThemeHealth(app.surau.db)).toMatchObject({ ok: false, screen: 'tugasan', failed: ['clock'] });
+    const good = parseHealthBody(report({ screen: 'waktu-dunia', ok: true, failed: [] }))!;
+    expect(recordThemeHealth(app.surau.db, good, new Date(), 'tv-2')).toBe(true);
+  });
+
   it('a report for a theme or version that is not installed changes nothing', async () => {
     const { app, admin } = await setup();
     expect((await post(app, report({ theme: 'tiada-tema' }))).statusCode).toBe(204);
@@ -99,12 +111,12 @@ describe('theme health reports', () => {
 
   it('a report is accepted only for the theme this box shows now: any other is dropped and never recorded', async () => {
     const { app, admin } = await setup();
-    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'creative' }, 'test');
+    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'creative' }, 'test', undefined, LOCAL_SURAU_ID);
     // the installed theme is not the one in use: a report for it changes nothing, and uses none of the allowance
     expect((await post(app, report())).statusCode).toBe(204);
     expect((await post(app, report())).statusCode).toBe(204);
     expect(app.surau.db.prepare("SELECT value FROM sync_state WHERE key = 'theme_health_json'").get()).toBeUndefined();
-    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'test');
+    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'test', undefined, LOCAL_SURAU_ID);
     expect((await app.inject({ method: 'GET', url: '/api/health', headers: admin })).json().themeOk).toBe(true);
     // a display that is told to show another uploaded theme cannot make a report about this one count
     expect((await post(app, report({ theme: 'hijau-siti', version: 3 }))).statusCode).toBe(204);
@@ -130,11 +142,11 @@ describe('theme health reports', () => {
   it('only the theme in use counts', async () => {
     const { app, admin } = await setup();
     await post(app, report());
-    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'creative' }, 'test');
+    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'creative' }, 'test', undefined, LOCAL_SURAU_ID);
     const h = (await app.inject({ method: 'GET', url: '/api/health', headers: admin })).json();
     expect(h.themeOk).toBe(true);
     expect(h.themeHealth).toBeNull();
-    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'test');
+    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'test', undefined, LOCAL_SURAU_ID);
     expect((await app.inject({ method: 'GET', url: '/api/health', headers: admin })).json().themeOk).toBe(false);
   });
 
@@ -144,7 +156,7 @@ describe('theme health reports', () => {
     const z = zip({ 'theme.json': json({ version: 4 }), 'theme.css': '.stage{--accent:#0a0}' });
     const c = await app.inject({ method: 'POST', url: '/api/themes/check', headers: { ...admin, 'content-type': PACK_MIME }, payload: z });
     await app.inject({ method: 'POST', url: '/api/themes/install', headers: admin, payload: { stagedId: c.json().stagedId } });
-    expect(getSettings(app.surau.db).themeStyle.packs['hijau-siti']!.version).toBe(4);
+    expect(getSettings(app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']!.version).toBe(4);
     const h = (await app.inject({ method: 'GET', url: '/api/health', headers: admin })).json();
     expect(h.themeOk).toBe(true);
     expect(h.themeHealth).toBeNull();

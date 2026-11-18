@@ -65,7 +65,7 @@ async function rig(o: { cloudSignedIn?: boolean; linked?: boolean } = {}): Promi
     const keys = generateSyncKeyPair();
     saveSyncKey(h.dataDir, { ...keys, cloudUrl: CLOUD_URL, siteToken: site.token, wakeSecret: 'wake-secret-1', linkedAt: '2026-11-05T00:00:00.000Z' });
   }
-  putFeature(h.app.surau.db, 'liveYoutube', { enabled: true, privacy: 'unlisted' }, 'test');
+  putFeature(h.app.surau.db, 'liveYoutube', { enabled: true, privacy: 'unlisted' }, 'test', undefined, 'sdm');
   const logs: string[] = [];
   for (const m of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     vi.spyOn(console, m).mockImplementation((...a: unknown[]) => void logs.push(a.map(String).join(' ')));
@@ -108,20 +108,20 @@ function everythingOnTheBox(r: Rig): string {
 describe('the box leg over the cloud', () => {
   it('a live start creates the broadcast on the cloud; the key is in the start answer and nowhere on the box', async () => {
     const r = await rig();
-    const media = await loginAs(r.h.app, 'media');
-    const res = await start(r, media.headers);
+    const liveUser = await loginAs(r.h.app, 'live');
+    const res = await start(r, liveUser.headers);
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.warnings).toBeUndefined();
     expect(body.youtube).toEqual({ via: 'device', ingest: null, key: null, state: 'starting' });
-    expect(await ytSettled(r.h.app, media.headers)).toEqual({ state: 'ready', ingest: 'rtmps://a.rtmps.youtube.com:443/live2', key: FAKE_STREAM_KEY });
+    expect(await ytSettled(r.h.app, liveUser.headers)).toEqual({ state: 'ready', ingest: 'rtmps://a.rtmps.youtube.com:443/live2', key: FAKE_STREAM_KEY });
     expect(r.h.app.liveSessions!.status().warnings).toEqual([]);
     // Google was reached by the cloud only, with the kuliah's text
     const ins = r.g.calls.find((c) => c.path === '/youtube/v3/liveBroadcasts' && c.method === 'POST')!;
     expect((ins.json!.snippet as { title: string }).title).toBe('Kuliah Maghrib: Ustaz Ahmad Fauzi');
     expect(r.cloud.app.surau.db.prepare("SELECT COUNT(*) AS n FROM change_log WHERE entity = 'youtube/broadcast'").get()!.n).toBe(1);
     // the stream key never reached a box table, file or log (and not the status the app polls)
-    const status = await r.h.app.inject({ method: 'GET', url: '/api/live/status', headers: media.headers, remoteAddress: '10.168.1.40' });
+    const status = await r.h.app.inject({ method: 'GET', url: '/api/live/status', headers: liveUser.headers, remoteAddress: '10.168.1.40' });
     expect(everythingOnTheBox(r)).not.toContain(FAKE_STREAM_KEY);
     expect(status.body).not.toContain(FAKE_STREAM_KEY);
     expect(r.logs.join('\n')).not.toContain(FAKE_STREAM_KEY);
@@ -130,10 +130,10 @@ describe('the box leg over the cloud', () => {
 
   it('the Live status follows the cloud: broadcast id, watch address, signed-in', async () => {
     const r = await rig();
-    const media = await loginAs(r.h.app, 'media');
-    await start(r, media.headers);
-    await ytSettled(r.h.app, media.headers);
-    const read = async () => (await r.h.app.inject({ method: 'GET', url: '/api/live/status', headers: media.headers, remoteAddress: '10.168.1.40' })).json().youtube;
+    const liveUser = await loginAs(r.h.app, 'live');
+    await start(r, liveUser.headers);
+    await ytSettled(r.h.app, liveUser.headers);
+    const read = async () => (await r.h.app.inject({ method: 'GET', url: '/api/live/status', headers: liveUser.headers, remoteAddress: '10.168.1.40' })).json().youtube;
     // the first read asks the cloud in the background; the next ones carry its answer
     let y = await read();
     for (let i = 0; i < 100 && y.channelTitle === null; i++) {
@@ -145,10 +145,10 @@ describe('the box leg over the cloud', () => {
 
   it('stop reaches the cloud, which completes the broadcast', async () => {
     const r = await rig();
-    const media = await loginAs(r.h.app, 'media');
-    await start(r, media.headers);
-    await ytSettled(r.h.app, media.headers);
-    const stop = await r.h.app.inject({ method: 'POST', url: '/api/live/stop', headers: media.headers, payload: {}, remoteAddress: '10.168.1.40' });
+    const liveUser = await loginAs(r.h.app, 'live');
+    await start(r, liveUser.headers);
+    await ytSettled(r.h.app, liveUser.headers);
+    const stop = await r.h.app.inject({ method: 'POST', url: '/api/live/stop', headers: liveUser.headers, payload: {}, remoteAddress: '10.168.1.40' });
     expect(stop.json()).toEqual({ stopped: true });
     await r.h.app.liveSessions!.settled();
     const tr = r.g.calls.find((c) => c.path === '/youtube/v3/liveBroadcasts/transition')!;
@@ -161,19 +161,19 @@ describe('the box leg over the cloud', () => {
     r.hook.impl = (async () => {
       throw new TypeError('fetch failed');
     }) as typeof fetch;
-    const media = await loginAs(r.h.app, 'media');
+    const liveUser = await loginAs(r.h.app, 'live');
     const t0 = Date.now();
-    const res = await start(r, media.headers);
+    const res = await start(r, liveUser.headers);
     expect(res.statusCode).toBe(200);
     expect(Date.now() - t0).toBeLessThan(6500);
     const body = res.json();
     expect(body.youtube).toMatchObject({ state: 'starting' });
-    expect((await ytSettled(r.h.app, media.headers)).state).toBe('failed');
+    expect((await ytSettled(r.h.app, liveUser.headers)).state).toBe('failed');
     expect(r.h.app.liveSessions!.status().warnings).toEqual(['cloud_unreachable']);
     expect(body.session).toMatchObject({ outputs: { kiosk: true, youtube: true } });
     expect(r.g.calls.some((c) => c.path === '/youtube/v3/liveBroadcasts')).toBe(false);
     // the app sees why
-    const read = async () => (await r.h.app.inject({ method: 'GET', url: '/api/live/status', headers: media.headers, remoteAddress: '10.168.1.40' })).json();
+    const read = async () => (await r.h.app.inject({ method: 'GET', url: '/api/live/status', headers: liveUser.headers, remoteAddress: '10.168.1.40' })).json();
     let st = await read();
     for (let i = 0; i < 100 && st.youtube.lastError !== 'cloud_unreachable'; i++) {
       await new Promise((res) => setTimeout(res, 20));
@@ -197,33 +197,33 @@ describe('the box leg over the cloud', () => {
 
   it('the cloud signed out: the start carries youtube_reauthorise', async () => {
     const r = await rig({ cloudSignedIn: false });
-    const media = await loginAs(r.h.app, 'media');
-    const res = await start(r, media.headers);
+    const liveUser = await loginAs(r.h.app, 'live');
+    const res = await start(r, liveUser.headers);
     expect(res.statusCode).toBe(200);
-    expect((await ytSettled(r.h.app, media.headers)).state).toBe('failed');
+    expect((await ytSettled(r.h.app, liveUser.headers)).state).toBe('failed');
     expect(r.h.app.liveSessions!.status().warnings).toEqual(['youtube_reauthorise']);
   });
 
   it('a revoked site key counts as unreachable, never as a crash', async () => {
     const r = await rig();
     r.cloud.app.surau.db.prepare('UPDATE sites SET revoked_at = ?').run('2026-11-05T00:00:00.000Z');
-    const media = await loginAs(r.h.app, 'media');
-    const res = await start(r, media.headers);
+    const liveUser = await loginAs(r.h.app, 'live');
+    const res = await start(r, liveUser.headers);
     expect(res.statusCode).toBe(200);
-    await ytSettled(r.h.app, media.headers);
+    await ytSettled(r.h.app, liveUser.headers);
     expect(r.h.app.liveSessions!.status().warnings).toEqual(['cloud_unreachable']);
   });
 
   it('cloudSync switched off, or a box never linked: the local service is used and the cloud is not asked', async () => {
     const off = await rig();
-    putFeature(off.h.app.surau.db, 'cloudSync', { enabled: false }, 'test');
-    const m1 = await loginAs(off.h.app, 'media');
+    putFeature(off.h.app.surau.db, 'cloudSync', { enabled: false }, 'test', undefined, 'sdm');
+    const m1 = await loginAs(off.h.app, 'live');
     const r1 = await start(off, m1.headers);
     expect(r1.json().warnings).toEqual(['youtube_not_signed_in']);
     expect(off.g.calls.some((c) => c.path === '/youtube/v3/liveBroadcasts')).toBe(false);
 
     const unlinked = await rig({ linked: false });
-    const m2 = await loginAs(unlinked.h.app, 'media');
+    const m2 = await loginAs(unlinked.h.app, 'live');
     const r2 = await start(unlinked, m2.headers);
     expect(r2.json().warnings).toEqual(['youtube_not_signed_in']);
     expect(unlinked.g.calls.some((c) => c.path === '/youtube/v3/liveBroadcasts')).toBe(false);
@@ -234,8 +234,8 @@ describe('the remote leg on its own', () => {
   it('a complete that fails is retried and reaches the cloud when it is back', async () => {
     const r = await rig();
     const db = r.h.app.surau.db;
-    const media = await loginAs(r.h.app, 'media');
-    await start(r, media.headers);
+    const liveUser = await loginAs(r.h.app, 'live');
+    await start(r, liveUser.headers);
     const leg = new RemoteYoutubeLeg({ db, dataDir: r.h.dataDir, now: () => new Date(), fetchImpl: ((i: Parameters<typeof fetch>[0], n?: RequestInit) => r.hook.impl(i, n)) as typeof fetch, retryMs: [20, 20, 20] });
     const good = r.hook.impl;
     r.hook.impl = (async () => {

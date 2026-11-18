@@ -194,6 +194,28 @@ void main() {
     expect(h.box.saved.single.$2, {'figure': 'month', 'showTarget': false});
   });
 
+  testWidgets('the Kad tabung editor has the featured switch, off by default, saved as featured', (tester) async {
+    final h = await seeded();
+    addTearDown(h.dispose);
+    await tester.pumpWidget(h.app(const FundsScreen()));
+    await settle(tester);
+
+    final sw = find.byKey(const Key('finr-card-featured'));
+    await reveal(tester, sw);
+    expect(find.descendant(of: sw, matching: find.text('Tonjolkan tabung pertama')), findsOneWidget);
+    expect(tester.widget<SwitchListTile>(sw).value, isFalse);
+    await tester.tap(sw);
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(sw).value, isTrue);
+    await reveal(tester, find.byKey(const Key('finr-card-save')));
+    await tester.tap(find.byKey(const Key('finr-card-save')));
+    await settle(tester);
+
+    expect(h.box.saved, hasLength(1));
+    expect(h.box.saved.single.$1, 'tabungCard');
+    expect(h.box.saved.single.$2, {'featured': true});
+  });
+
   testWidgets('system perihal Penceramah is locked; another can be renamed', (tester) async {
     final h = await seeded();
     addTearDown(h.dispose);

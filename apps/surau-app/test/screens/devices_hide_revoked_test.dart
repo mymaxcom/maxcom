@@ -1,7 +1,8 @@
-// Peranti: a cancelled device or paired screen is never listed (operator
-// rule 2026-11-06). After `Batalkan` it leaves the list at once, even
-// before the box's next answer; a revoked row from the store or the box is
-// never drawn; with nothing left the empty state reads right.
+// Peranti and Skrin TV: a deleted device or paired screen is never listed
+// (operator rule 2026-11-06). After "Padam peranti ini" (the device sheet) it
+// leaves the list at once, even before the box's next answer; a revoked row
+// from the store or the box is never drawn; with nothing left the empty state
+// reads right.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,30 +15,22 @@ Map<String, Object?> dev(
   String platform = 'android',
   bool revoked = false,
   String userId = 'u1',
-}) => {
-  'id': id,
-  'userId': userId,
-  'name': name,
-  'platform': platform,
-  'revoked': revoked,
-};
+}) => {'id': id, 'userId': userId, 'name': name, 'platform': platform, 'revoked': revoked};
 
-Future<ShellHarness> open(
-  WidgetTester tester,
-  List<Map<String, Object?>> devices,
-) async {
+Future<ShellHarness> open(WidgetTester tester, List<Map<String, Object?>> devices, {String path = '/devices'}) async {
   final h = await pumpShell(tester, roles: const ['admin']);
   h.devices = devices;
-  h.router.go('/devices');
+  h.router.go(path);
   await settle(tester);
   return h;
 }
 
 Future<void> cancel(WidgetTester tester, String id, String name) async {
-  final row = find.byKey(ValueKey('device-$id'));
-  await tester.tap(find.descendant(of: row, matching: find.text('Batalkan')));
+  await tester.tap(find.byKey(ValueKey('device-$id')));
   await settle(tester);
-  await tester.tap(find.widgetWithText(FilledButton, 'Batalkan'));
+  await tester.tap(find.byKey(const ValueKey('device-sheet-remove')));
+  await settle(tester);
+  await tester.tap(find.widgetWithText(FilledButton, 'Padam'));
   await settle(tester);
 }
 
@@ -50,21 +43,23 @@ void main() {
     ]);
     expect(find.byKey(const ValueKey('device-a')), findsOneWidget);
     expect(find.byKey(const ValueKey('device-b')), findsOneWidget);
-    expect(find.byKey(const ValueKey('device-c')), findsOneWidget);
+    expect(find.byKey(const ValueKey('device-c')), findsNothing, reason: 'a TV screen is on Skrin TV');
 
     // The fake box does not change its list on revoke: only the optimistic
     // removal can make the row go.
     await cancel(tester, 'b', 'iPad B');
     expect(h.box.byPath('/api/devices/b/revoke')?.method, 'POST');
-    expect(find.text('iPad B dibatalkan.'), findsOneWidget);
+    expect(find.text('iPad B dipadam.'), findsOneWidget);
     expect(find.byKey(const ValueKey('device-b')), findsNothing);
     expect(find.byKey(const ValueKey('device-a')), findsOneWidget);
-    expect(find.byKey(const ValueKey('device-c')), findsOneWidget);
-    expect(find.text('Dibatalkan'), findsNothing);
+    expect(find.text('Dipadam'), findsNothing);
 
+    h.router.go('/pairing');
+    await settle(tester);
+    expect(find.byKey(const ValueKey('device-c')), findsOneWidget);
     await cancel(tester, 'c', 'Skrin C');
+    expect(h.box.byPath('/api/devices/c/revoke')?.method, 'POST');
     expect(find.byKey(const ValueKey('device-c')), findsNothing);
-    expect(find.byKey(const ValueKey('device-a')), findsOneWidget);
   });
 
   testWidgets('a revoked device or screen from the box or store is never shown', (tester) async {
@@ -75,8 +70,17 @@ void main() {
     ]);
     expect(find.byKey(const ValueKey('device-a')), findsOneWidget);
     expect(find.text('Telefon lama'), findsNothing);
+    expect(find.text('Dipadam'), findsNothing);
+  });
+
+  testWidgets('a revoked screen is never shown on Skrin TV', (tester) async {
+    final h = await open(tester, [
+      dev('tv', 'Skrin baru', platform: 'kiosk'),
+      dev('tv-old', 'Skrin lama', platform: 'kiosk', revoked: true),
+    ], path: '/pairing');
+    expect(h.location, '/pairing');
+    expect(find.byKey(const ValueKey('device-tv')), findsOneWidget);
     expect(find.text('Skrin lama'), findsNothing);
-    expect(find.text('Dibatalkan'), findsNothing);
     expect(find.byKey(const ValueKey('device-tv-old')), findsNothing);
   });
 

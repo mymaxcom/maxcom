@@ -12,6 +12,7 @@ import { createPrayerAutoFetch } from '../src/prayerAutoFetch.ts';
 import { countDaysFrom, getDays, importDays } from '../src/prayerStore.ts';
 import { getSettings, getVersion, putFeature } from '../src/settingsStore.ts';
 import { withAdmin } from './authHelpers.ts';
+import { ensureSurau } from './support/surauRow.ts';
 
 const AT = klInstant('2026-11-03', '12:00');
 const TIMES: PrayerDay['times'] = {
@@ -80,7 +81,7 @@ afterEach(async () => {
 });
 
 function runner(db: DatabaseSync, fake: Fake, extra: Partial<Parameters<typeof createPrayerAutoFetch>[0]> = {}) {
-  return createPrayerAutoFetch({ db, now: () => AT, fetchImpl: fake.impl, ...extra });
+  return createPrayerAutoFetch({ db, now: () => AT, fetchImpl: fake.impl, surauIds: () => ['sdm'], ...extra });
 }
 const auditRows = (db: DatabaseSync) =>
   db.prepare("SELECT actor, after_json FROM change_log WHERE entity = 'prayer_days' ORDER BY id").all();
@@ -89,44 +90,44 @@ describe('automatic prayer-data fetch', () => {
   it('fetches the current year when it has no data from today, and fills only dates from today', async () => {
     const db = newDb();
     const fake = fakeEsolat((y) => okYear(y));
-    const out = await runner(db, fake).runOnce();
+    const out = await runner(db, fake).runOnce('sdm');
     expect(fake.bodies).toEqual(['datestart=2026-01-01&dateend=2026-12-31']);
     expect(out).toMatchObject({ ran: true, ok: true, added: 59 });
-    expect(countDaysFrom(db, 'SGR01', '2026-11-03')).toBe(59);
-    expect(getDays(db, 'SGR01', '2026-01-01', '2026-11-02')).toHaveLength(0);
+    expect(countDaysFrom(db, 'SGR01', '2026-11-03', 'sdm')).toBe(59);
+    expect(getDays(db, 'SGR01', '2026-01-01', '2026-11-02', 'sdm')).toHaveLength(0);
   });
 
   it('picks the next year when the current year is full from today', async () => {
     const db = newDb();
-    importDays(db, 'SGR01', yearDays(2026), 'tester');
+    importDays(db, 'SGR01', yearDays(2026), 'tester', undefined, undefined, 'sdm');
     // 59 days ahead is below 60, so the run proceeds and asks for 2027
     const fake = fakeEsolat((y) => okYear(y));
-    const out = await runner(db, fake).runOnce();
+    const out = await runner(db, fake).runOnce('sdm');
     expect(fake.bodies).toEqual(['datestart=2027-01-01&dateend=2027-12-31']);
     expect(out).toMatchObject({ ran: true, ok: true, added: 365 });
   });
 
   it('does not fetch at 60 days ahead or more', async () => {
     const db = newDb();
-    importDays(db, 'SGR01', yearDays(2026).concat(yearDays(2027).slice(0, 5)), 'tester');
-    expect(countDaysFrom(db, 'SGR01', '2026-11-03')).toBe(64);
+    importDays(db, 'SGR01', yearDays(2026).concat(yearDays(2027).slice(0, 5)), 'tester', undefined, undefined, 'sdm');
+    expect(countDaysFrom(db, 'SGR01', '2026-11-03', 'sdm')).toBe(64);
     const fake = fakeEsolat((y) => okYear(y));
     const r = runner(db, fake);
-    expect(await r.runOnce()).toMatchObject({ ran: false });
+    expect(await r.runOnce('sdm')).toMatchObject({ ran: false });
     expect(fake.calls).toHaveLength(0);
-    expect(r.status().lastAttemptAt).toBeNull();
+    expect(r.status('sdm').lastAttemptAt).toBeNull();
   });
 
   it('NO_RECORD: no rows, attempt recorded, no throw, tries again next run', async () => {
     const db = newDb();
     const fake = fakeEsolat(() => noRecord());
     const r = runner(db, fake);
-    const out = await r.runOnce();
+    const out = await r.runOnce('sdm');
     expect(out).toMatchObject({ ran: true, ok: false });
-    expect(countDaysFrom(db, 'SGR01', '2026-01-01')).toBe(0);
-    expect(r.status()).toMatchObject({ enabled: true, lastAttemptAt: AT.toISOString(), lastOk: false });
-    expect(r.status().lastError).toMatch(/not published/);
-    await r.runOnce();
+    expect(countDaysFrom(db, 'SGR01', '2026-01-01', 'sdm')).toBe(0);
+    expect(r.status('sdm')).toMatchObject({ enabled: true, lastAttemptAt: AT.toISOString(), lastOk: false });
+    expect(r.status('sdm').lastError).toMatch(/not published/);
+    await r.runOnce('sdm');
     expect(fake.calls).toHaveLength(2);
     expect(auditRows(db)).toHaveLength(0);
   });
@@ -135,29 +136,29 @@ describe('automatic prayer-data fetch', () => {
     const db = newDb();
     const fake = fakeEsolat(() => new Error('connect ECONNREFUSED https://www.e-solat.gov.my/index.php?r=x&token=SECRET'));
     const r = runner(db, fake);
-    await expect(r.runOnce()).resolves.toMatchObject({ ran: true, ok: false });
-    expect(r.status().lastOk).toBe(false);
-    expect(JSON.stringify(r.status())).not.toMatch(/SECRET|https?:/);
-    expect(countDaysFrom(db, 'SGR01', '2026-01-01')).toBe(0);
+    await expect(r.runOnce('sdm')).resolves.toMatchObject({ ran: true, ok: false });
+    expect(r.status('sdm').lastOk).toBe(false);
+    expect(JSON.stringify(r.status('sdm'))).not.toMatch(/SECRET|https?:/);
+    expect(countDaysFrom(db, 'SGR01', '2026-01-01', 'sdm')).toBe(0);
   });
 
   it('never overwrites a date that already has times', async () => {
     const db = newDb();
     const manual: PrayerDay[] = [{ ...yearDays(2026)[307]!, times: { ...TIMES, subuh: '05:55' } }];
     expect(manual[0]!.date).toBe('2026-11-04');
-    importDays(db, 'SGR01', manual, 'user:manual');
+    importDays(db, 'SGR01', manual, 'user:manual', undefined, undefined, 'sdm');
     const fake = fakeEsolat((y) => okYear(y));
-    const out = await runner(db, fake).runOnce();
+    const out = await runner(db, fake).runOnce('sdm');
     expect(out).toMatchObject({ added: 58 });
-    expect(getDays(db, 'SGR01', '2026-11-04', '2026-11-04')[0]!.times.subuh).toBe('05:55');
-    expect(countDaysFrom(db, 'SGR01', '2026-11-03')).toBe(59);
+    expect(getDays(db, 'SGR01', '2026-11-04', '2026-11-04', 'sdm')[0]!.times.subuh).toBe('05:55');
+    expect(countDaysFrom(db, 'SGR01', '2026-11-03', 'sdm')).toBe(59);
   });
 
   it('writes one audit entry when days were added, none when nothing was', async () => {
     const db = newDb();
     const fake = fakeEsolat((y) => okYear(y));
     const r = runner(db, fake);
-    await r.runOnce();
+    await r.runOnce('sdm');
     const rows = auditRows(db);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.actor).toBe('system:auto-prayer-fetch');
@@ -168,58 +169,70 @@ describe('automatic prayer-data fetch', () => {
     // present now (58), so the run is a no-op or targets 2027; make 2027 return the same days to
     // prove a no-add run writes nothing.
     const fakeNoop = fakeEsolat((y) => (y === 2026 ? okYear(2026) : noRecord()));
-    const v = getVersion(db);
-    await runner(db, fakeNoop).runOnce();
+    const v = getVersion(db, 'sdm');
+    await runner(db, fakeNoop).runOnce('sdm');
     expect(auditRows(db)).toHaveLength(1);
-    expect(getVersion(db)).toBe(v);
+    expect(getVersion(db, 'sdm')).toBe(v);
   });
 
   it('does nothing when the setting is off', async () => {
     const db = newDb();
-    putFeature(db, 'zone', { autoFetch: false }, 'tester');
+    putFeature(db, 'zone', { autoFetch: false }, 'tester', undefined, 'sdm');
     const fake = fakeEsolat((y) => okYear(y));
     const r = runner(db, fake);
-    expect(await r.runOnce()).toMatchObject({ ran: false });
+    expect(await r.runOnce('sdm')).toMatchObject({ ran: false });
     expect(fake.calls).toHaveLength(0);
-    expect(r.status().enabled).toBe(false);
+    expect(r.status('sdm').enabled).toBe(false);
   });
 
   it('does nothing when no zone is set', async () => {
     const db = newDb();
     const fake = fakeEsolat((y) => okYear(y));
-    const base = getSettings(db);
+    const base = getSettings(db, 'sdm');
     const r = runner(db, fake, {
       readSettings: () => ({ ...base, zone: { ...base.zone, zone: '' } }),
     });
-    expect(await r.runOnce()).toMatchObject({ ran: false });
+    expect(await r.runOnce('sdm')).toMatchObject({ ran: false });
     expect(fake.calls).toHaveLength(0);
   });
 
   it('uses the configured e-Solat address and source name', async () => {
     const db = newDb();
-    putFeature(db, 'dataSources', { esolat: { name: 'Sumber Lain', url: 'https://api.example.my/takwim' } }, 'tester');
+    putFeature(db, 'dataSources', { esolat: { name: 'Sumber Lain', url: 'https://api.example.my/takwim' } }, 'tester', undefined, 'sdm');
     const fake = fakeEsolat((y) => okYear(y));
-    await runner(db, fake).runOnce();
+    await runner(db, fake).runOnce('sdm');
     expect(fake.calls[0]).toBe('https://api.example.my/takwim?period=duration&zone=SGR01');
     expect(String(auditRows(db)[0]!.after_json)).toContain('Sumber Lain');
+  });
+
+  it('counts the year per surau: surau A full in a zone does not stop surau B (same zone, empty) fetching', async () => {
+    const db = newDb();
+    importDays(db, 'SGR01', yearDays(2026).concat(yearDays(2027)), 'tester', undefined, undefined, 'a1');
+    const fake = fakeEsolat((y) => okYear(y));
+    const r = createPrayerAutoFetch({ db, now: () => AT, fetchImpl: fake.impl, surauIds: () => ['a1', 'b1'] });
+    expect(await r.runOnce('a1')).toMatchObject({ ran: false });
+    expect(fake.calls).toHaveLength(0);
+    const out = await r.runOnce('b1');
+    expect(out).toMatchObject({ ran: true, ok: true, added: 59, year: 2026 });
+    expect(countDaysFrom(db, 'SGR01', '2026-11-03', 'b1')).toBe(59);
   });
 });
 
 describe('importDays insertOnly', () => {
   it('keeps existing dates and counts only inserts', () => {
     const db = newDb();
-    importDays(db, 'SGR01', [{ ...yearDays(2026)[0]!, times: { ...TIMES, subuh: '05:11' } }], 'a');
-    const r = importDays(db, 'SGR01', yearDays(2026).slice(0, 3), 'b', undefined, { insertOnly: true });
+    importDays(db, 'SGR01', [{ ...yearDays(2026)[0]!, times: { ...TIMES, subuh: '05:11' } }], 'a', undefined, undefined, 'sdm');
+    const r = importDays(db, 'SGR01', yearDays(2026).slice(0, 3), 'b', undefined, { insertOnly: true }, 'sdm');
     expect(r).toEqual({ inserted: 2, replaced: 0 });
-    expect(getDays(db, 'SGR01', '2026-01-01', '2026-01-01')[0]!.times.subuh).toBe('05:11');
+    expect(getDays(db, 'SGR01', '2026-01-01', '2026-01-01', 'sdm')[0]!.times.subuh).toBe('05:11');
   });
 
   it('writes nothing and does not bump the version when all dates exist', () => {
     const db = newDb();
-    importDays(db, 'SGR01', yearDays(2026).slice(0, 3), 'a');
-    const v = getVersion(db);
-    expect(importDays(db, 'SGR01', yearDays(2026).slice(0, 3), 'b', undefined, { insertOnly: true })).toEqual({ inserted: 0, replaced: 0 });
-    expect(getVersion(db)).toBe(v);
+    importDays(db, 'SGR01', yearDays(2026).slice(0, 3), 'a', undefined, undefined, 'sdm');
+    const v = getVersion(db, 'sdm');
+    expect(importDays(db, 'SGR01', yearDays(2026).slice(0, 3), 'b', undefined, { insertOnly: true }, 'sdm')).toEqual({ inserted: 0, replaced: 0 });
+    expect(getVersion(db, 'sdm')).toBe(v);
     expect(auditRows(db)).toHaveLength(1);
   });
 });
@@ -264,5 +277,46 @@ describe('wiring in buildApp', () => {
     });
     expect((await post()).json()).toMatchObject({ inserted: 365, replaced: 0 });
     expect((await post()).json()).toMatchObject({ inserted: 0, replaced: 365 });
+  });
+});
+
+describe('[P9] the auto-fetch state belongs to the zone it was for', () => {
+  it('[P9] a zone change resets the state (no old OK or failed shown for the new zone)', async () => {
+    const db = newDb();
+    const fake = fakeEsolat(() => noRecord());
+    const r = runner(db, fake);
+    expect(await r.runOnce('sdm')).toMatchObject({ ran: true, ok: false });
+    expect(r.status('sdm')).toMatchObject({ lastOk: false });
+    putFeature(db, 'zone', { zone: 'SGR02' }, 'tester', undefined, 'sdm');
+    const st = r.status('sdm');
+    expect(st.lastOk).toBeNull();
+    expect(st.lastAttemptAt).toBeNull();
+    expect(st.lastError).toBeUndefined();
+    expect(st.zone).toBe('SGR02');
+  });
+});
+
+describe('[P10] box and cloud do not both fetch one surau', () => {
+  it('[P10] a cloud with a linked box and the box both fetch one zone-year: the cloud leaves a surau with an unrevoked linked box alone', async () => {
+    const fake = fakeEsolat((y) => okYear(y));
+    const app = buildApp(tempPath(), {
+      now: () => AT, fetchImpl: fake.impl, role: 'cloud', boxId: 'c'.repeat(16), autoPrayerFetch: { firstDelayMs: 10, intervalMs: 3_600_000 },
+    });
+    apps.push(app);
+    const db = app.surau.db;
+    for (const id of ['surau-a', 'surau-b', 'surau-c']) ensureSurau(db, id, `Surau ${id}`);
+    const site = (surau: string, box: string, revoked: string | null): void => {
+      db.prepare("INSERT INTO sites (surau_id, box_id, name, linked_at, revoked_at) VALUES (?, ?, 'Kotak', '2026-11-01T00:00:00.000Z', ?)").run(surau, box, revoked);
+    };
+    site('surau-a', 'a'.repeat(16), null);
+    site('surau-c', 'b'.repeat(16), '2026-11-02T00:00:00.000Z');
+    const exchanged = (surau: string): number =>
+      Number(db.prepare("SELECT COUNT(*) AS n FROM change_log WHERE entity = 'prayer:official' AND surau_id = ?").get(surau)?.n ?? 0);
+    for (let i = 0; i < 150 && (exchanged('surau-b') === 0 || exchanged('surau-c') === 0); i++) await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(exchanged('surau-b')).toBeGreaterThan(0);
+    expect(exchanged('surau-c')).toBeGreaterThan(0);
+    expect(countDaysFrom(db, 'SGR01', '2026-11-03', 'surau-a')).toBe(0);
+    expect(exchanged('surau-a')).toBe(0);
   });
 });

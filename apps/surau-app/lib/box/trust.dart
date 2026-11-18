@@ -22,7 +22,7 @@ import 'trust_platform_io.dart'
     if (dart.library.js_interop) 'trust_platform_web.dart'
     as platform;
 
-export '../features/enrol/enrol_flow.dart' show TrustError;
+export '../features/enrol/enrol_flow.dart' show TrustError, TrustKind;
 
 /// Lower-case hex sha256 of [bytes].
 String sha256Hex(Uint8List bytes) {
@@ -52,25 +52,35 @@ bool usesPublicTls(EnrolledBox b) {
   final cloud = b.cloud;
   if (cloud == null) return false;
   final box = b.box;
-  if (box.scheme != 'https' || cloud.scheme != 'https') return false;
-  if (box.host.isEmpty || box.host != cloud.host) return false;
-  if (box.port != cloud.port) return false;
-  return box.host == _publicCloudDomain ||
-      box.host.endsWith('.$_publicCloudDomain');
+  if (!isPublicCloudOrigin(box) || !isPublicCloudOrigin(cloud)) return false;
+  return box.host == cloud.host && box.port == cloud.port;
+}
+
+/// True when [origin] is https on [_publicCloudDomain] or a subdomain of it:
+/// the only place the system roots may decide trust.
+bool isPublicCloudOrigin(Uri origin) {
+  if (origin.scheme != 'https' || origin.host.isEmpty) return false;
+  return origin.host == _publicCloudDomain ||
+      origin.host.endsWith('.$_publicCloudDomain');
 }
 
 class TrustStore {
   TrustStore({
     this.connect = const Duration(seconds: 8),
     this.read = const Duration(seconds: 10),
+    http.Client Function(Duration connect)? systemClient,
     BoxRoutes? routes,
-  }) : routes = routes ?? BoxRoutes();
+  }) : _systemClient = systemClient ?? platform.createSystemClient,
+       routes = routes ?? BoxRoutes();
 
   /// Where the boxes' local names point right now (see [BoxRoutes]).
   final BoxRoutes routes;
 
   final Duration connect;
   final Duration read;
+
+  /// Builds the system-trust client (tests inject a mock).
+  final http.Client Function(Duration connect) _systemClient;
 
   /// True where the app pins the CA itself (Android); false where the
   /// browser's trust store decides (web).
@@ -87,14 +97,14 @@ class TrustStore {
     // Where the app pins the CA there is no unpinned client: without the
     // CA the system roots would decide who the box is.
     if (pinsCa && caDer == null) {
-      throw const TrustError('Sijil akar tiada. Daftar semula');
+      throw TrustError.of(TrustKind.rootMissing);
     }
     try {
       return platform.createClient(caDer, connect, addressOf: addressOf ?? routes.addressOf);
     } on TrustError {
       rethrow;
     } on Object {
-      throw const TrustError('Sijil akar tidak sah');
+      throw TrustError.of(TrustKind.rootInvalid);
     }
   }
 
@@ -111,7 +121,7 @@ class TrustStore {
       read: read,
     );
     if (sha256Hex(der) != want) {
-      throw const TrustError('Sijil akar tidak sepadan');
+      throw TrustError.of(TrustKind.rootMismatch);
     }
     return der;
   }
@@ -146,6 +156,22 @@ class TrustStore {
     return platform.fetchPinnedLeaf(b.box, der, connect: connect, read: read);
   }
 
+  /// A system-trust [BoxClient] for the public MAXCOM cloud, for the ops
+  /// enrolment (no CA exists before it). Throws [TrustError] for any origin
+  /// that is not https on the public cloud domain: there is no unpinned client
+  /// for any other host.
+  BoxClient publicCloudClient(Uri origin) {
+    if (!isPublicCloudOrigin(origin)) {
+      throw TrustError.of(TrustKind.cloudFailed);
+    }
+    return BoxClient(
+      origin,
+      _systemClient(connect),
+      connect: connect,
+      read: read,
+    );
+  }
+
   /// A [BoxClient] for an enrolled box, pinned to the CA kept at enrolment.
   /// Throws [TrustError] when the pinned CA is missing (the app was
   /// enrolled elsewhere or its storage was cleared): the user must enrol
@@ -166,7 +192,7 @@ class TrustStore {
     if (usesPublicTls(b)) {
       return BoxClient(
         b.box,
-        platform.createSystemClient(connect),
+        _systemClient(connect),
         connect: connect,
         read: read,
       );
@@ -175,11 +201,11 @@ class TrustStore {
     Uint8List? der;
     if (pinsCa) {
       if (sha == null) {
-        throw const TrustError('Sijil akar tiada. Daftar semula');
+        throw TrustError.of(TrustKind.rootMissing);
       }
       der = await cas.loadCaDer(sha);
       if (der == null) {
-        throw const TrustError('Sijil akar tiada. Daftar semula');
+        throw TrustError.of(TrustKind.rootMissing);
       }
     }
     final probe = candidateHost != null && candidateIp != null
@@ -217,7 +243,7 @@ class PinnedEnrolTrust implements EnrolTrust {
     _pending = null;
     if (!_trust.pinsCa) return;
     if (caSha256 == null) {
-      throw const TrustError('Kod QR pendaftaran tidak sah');
+      throw TrustError.of(TrustKind.badQr);
     }
     final der = await _trust.fetchAndCheckRootCa(box, caSha256);
     // Prove the bytes are a usable certificate before anything is used.
@@ -243,4 +269,8 @@ class PinnedEnrolTrust implements EnrolTrust {
     connect: _trust.connect,
     read: _trust.read,
   );
+
+  /// The `clientFor` of the ops enrolment: the public cloud over system trust
+  /// (no QR was scanned, so there is no pending CA). Other origins are refused.
+  BoxClient publicCloudClient(Uri origin) => _trust.publicCloudClient(origin);
 }

@@ -7,6 +7,34 @@ feature can be switched on or off.
 *MAXCOM ialah perisian percuma untuk surau, masjid dan musalla: paparan waktu solat, kuliah, pengumuman dan
 kandungan Islam, dengan aplikasi pentadbir untuk telefon dan iPad. Berfungsi tanpa internet.*
 
+## MAXCOM R2 (2026.11.12)
+
+MAXCOM R2 is the current release: a free, open source system for surau and masjid, used under its licence
+(CC BY-NC-SA 4.0, see "Licence" below). Downloads: [mymaxcom.my](https://mymaxcom.my) or the
+[Releases](https://github.com/mymaxcom/maxcom/releases) of this repository.
+
+What is new in R2:
+
+- **Major security audit.** A thorough security and reliability audit, with many improvements that protect
+  surau data, user accounts and live broadcasts.
+- **MAX Admin Client in three languages.** Bahasa Melayu, English and Arabic (right to left), chosen per phone.
+  The TV screen language follows the surau location (BM in Malaysia, English elsewhere) and can be changed in
+  Konfigurasi.
+- **Many video and audio sources for live broadcasts.** An external IP camera (picture with its own sound),
+  extra sound sources mixed in with their own volume (phone or iPad microphone, Mic-in on the Windows box),
+  automatic alignment, a clap test for cameras without sound, and camera search on the network.
+- **UI/UX and themes.** A new dashboard with cloud and box status icons, Tetapan renamed Konfigurasi with
+  search and folding groups, full-screen posters, full-screen Tugasan, Waktu Dunia, Takwim, Pengumuman and
+  Hadis with larger text, six built-in themes including Arabic Art. Users and devices get a unique ID, rename,
+  delete and restore, and a three-step add-user flow with WhatsApp sharing. A live notice can be shared on
+  WhatsApp with the YouTube link.
+- **Kewangan module revamp.** A new Tabung screen on the TV (any number of funds, pages, an "All funds"
+  summary, a "New" highlight, an option to feature the first fund) and more reliable records (cash payments
+  always save, closed months are protected, late entries are flagged, months and amounts in every language).
+
+Upgrading: update the MAX Admin Client and the MAX Kiosk Server together. After upgrading, sign in to YouTube
+once more from the app, and the Pentadbir adds phone numbers for existing users.
+
 ## Products
 
 | Product | Folder | What it is |

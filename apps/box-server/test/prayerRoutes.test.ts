@@ -36,7 +36,7 @@ interface Bundle { zone: string; days: { date: string; times: Record<string, str
 describe('GET /api/kiosk/bundle', () => {
   it('for the pilot copy carries the same times as before, now with the source, and no coordinates are needed', async () => {
     const app = makeApp();
-    importDays(app.surau.db, 'SGR01', official, 'tester');
+    importDays(app.surau.db, 'SGR01', official, 'tester', undefined, undefined, 'sdm');
     const r = await app.inject({ method: 'GET', url: '/api/kiosk/bundle' });
     expect(r.statusCode).toBe(200);
     const b = r.json() as Bundle;
@@ -58,7 +58,7 @@ describe('GET /api/kiosk/bundle', () => {
 
   it('shows a correction, and removing it restores the official time', async () => {
     const app = makeApp();
-    importDays(app.surau.db, 'SGR01', official, 'tester');
+    importDays(app.surau.db, 'SGR01', official, 'tester', undefined, undefined, 'sdm');
     const admin = await loginAs(app, 'admin');
     const put = await app.inject({
       method: 'PUT', url: '/api/prayer/corrections/2026-11-26/asar', headers: admin.headers,
@@ -78,8 +78,8 @@ describe('GET /api/kiosk/bundle', () => {
 
   it('an Africa/Nairobi surau gets calculated days in Nairobi time with the footer and no emergency', async () => {
     const app = makeApp();
-    putFeature(app.surau.db, 'location', { country: 'KE', timezone: 'Africa/Nairobi', latitude: -1.2921, longitude: 36.8219, city: 'Nairobi' }, 'tester');
-    putFeature(app.surau.db, 'prayerSources', { sourceOrder: ['file', 'calc', 'official'] }, 'tester');
+    putFeature(app.surau.db, 'location', { country: 'KE', timezone: 'Africa/Nairobi', latitude: -1.2921, longitude: 36.8219, city: 'Nairobi' }, 'tester', undefined, 'sdm');
+    putFeature(app.surau.db, 'prayerSources', { sourceOrder: ['file', 'calc', 'official'] }, 'tester', undefined, 'sdm');
     const b = (await app.inject({ method: 'GET', url: '/api/kiosk/bundle' })).json() as Bundle;
     expect(b.days.every((d) => d.source === 'calc' && !d.emergency)).toBe(true);
     expect(b.prayer).toMatchObject({
@@ -96,7 +96,7 @@ describe('prayer routes and who may call them', () => {
 
   it('GET /api/prayer/days: every role may read, an anonymous LAN caller and the kiosk may not', async () => {
     const app = makeApp();
-    importDays(app.surau.db, 'SGR01', official, 'tester');
+    importDays(app.surau.db, 'SGR01', official, 'tester', undefined, undefined, 'sdm');
     const l = await logins(app);
     const ok = await app.inject({ method: 'GET', url: '/api/prayer/days?from=2026-11-01&to=2026-11-05', headers: l.ajk.headers });
     expect(ok.statusCode).toBe(200);
@@ -112,7 +112,7 @@ describe('prayer routes and who may call them', () => {
 
   it('GET /api/prayer/days flags a corrected prayer whose official time moved since the correction', async () => {
     const app = makeApp();
-    importDays(app.surau.db, 'SGR01', official, 'tester');
+    importDays(app.surau.db, 'SGR01', official, 'tester', undefined, undefined, 'sdm');
     const { admin } = await logins(app);
     const put = await app.inject({
       method: 'PUT', url: '/api/prayer/corrections/2026-11-26/asar', headers: admin.headers,
@@ -129,7 +129,7 @@ describe('prayer routes and who may call them', () => {
     expect((await get()).officialChanged).toEqual([]);
     // JAKIM re-downloaded with a different asar: the correction stays and is flagged.
     const moved = official.map((d) => (d.date === '2026-11-26' ? { ...d, times: { ...d.times, asar: '16:40' } } : d));
-    importDays(app.surau.db, 'SGR01', moved, 'tester');
+    importDays(app.surau.db, 'SGR01', moved, 'tester', undefined, undefined, 'sdm');
     const after = await get();
     expect(after.corrected).toEqual(['asar']);
     expect(after.officialChanged).toEqual(['asar']);
@@ -169,7 +169,7 @@ describe('prayer routes and who may call them', () => {
 
   it('corrections: admin 200, media 403, a bad time or a one letter reason 400, an unknown prayer 404, an out of order time 400', async () => {
     const app = makeApp();
-    importDays(app.surau.db, 'SGR01', official, 'tester');
+    importDays(app.surau.db, 'SGR01', official, 'tester', undefined, undefined, 'sdm');
     const l = await logins(app);
     const url = '/api/prayer/corrections/2026-11-26/asar';
     const payload = { time: '16:25', reason: 'Ikut takwim masjid' };
@@ -194,7 +194,7 @@ describe('prayer routes and who may call them', () => {
   it('GET /api/prayer/status: today, source, counts and warnings; a calculated day in Malaysia warns', async () => {
     const app = makeApp();
     const { admin } = await logins(app);
-    importDays(app.surau.db, 'SGR01', official.filter((d) => d.date <= '2026-11-30'), 'tester');
+    importDays(app.surau.db, 'SGR01', official.filter((d) => d.date <= '2026-11-30'), 'tester', undefined, undefined, 'sdm');
     let s = (await app.inject({ method: 'GET', url: '/api/prayer/status', headers: admin.headers })).json();
     expect(s).toMatchObject({
       country: 'MY', hasOfficial: true, zone: 'SGR01', located: false, order: ['official', 'calc', 'file'],
@@ -207,20 +207,20 @@ describe('prayer routes and who may call them', () => {
     expect(s.daysAhead.official).toBe(28);
 
     // today without any official day, but located: the calculation fills it and it is an emergency in Malaysia
-    putFeature(app.surau.db, 'location', { latitude: 3.07, longitude: 101.52 }, 'tester');
-    putFeature(app.surau.db, 'zone', { zone: 'JHR02' }, 'tester');
+    putFeature(app.surau.db, 'location', { latitude: 3.07, longitude: 101.52 }, 'tester', undefined, 'sdm');
+    putFeature(app.surau.db, 'zone', { zone: 'JHR02' }, 'tester', undefined, 'sdm');
     s = (await app.inject({ method: 'GET', url: '/api/prayer/status', headers: admin.headers })).json();
     expect(s.today).toMatchObject({ source: 'calc', emergency: true });
     expect(s.warnings).toContain('Hari ini guna kiraan sementara');
     const health = (await app.inject({ method: 'GET', url: '/api/health', headers: admin.headers })).json();
     expect(health.prayer.warnings).toContain('Hari ini guna kiraan sementara');
-    expect(health.daysAhead).toBe(health.prayer.daysAhead.resolved);
+    expect(health.daysAhead).toBe(health.prayer.daysAhead.official + health.prayer.daysAhead.file);
   });
 
   it('GET /api/health keeps daysAhead as the pilot knew it when nothing is located', async () => {
     const app = makeApp();
     const { admin } = await logins(app);
-    importDays(app.surau.db, 'SGR01', official, 'tester');
+    importDays(app.surau.db, 'SGR01', official, 'tester', undefined, undefined, 'sdm');
     const health = (await app.inject({ method: 'GET', url: '/api/health', headers: admin.headers })).json();
     // from 2026-11-03 to 2026-12-31
     expect(health.daysAhead).toBe(59);
@@ -233,7 +233,7 @@ describe('prayer routes and who may call them', () => {
     const none = await app.inject({ method: 'GET', url: '/api/prayer/calc/preview?date=2026-11-09', headers: ajk.headers });
     expect(none.statusCode).toBe(200);
     expect(none.json()).toBeNull();
-    putFeature(app.surau.db, 'location', { latitude: 3.07, longitude: 101.52 }, 'tester');
+    putFeature(app.surau.db, 'location', { latitude: 3.07, longitude: 101.52 }, 'tester', undefined, 'sdm');
     const day = (await app.inject({ method: 'GET', url: '/api/prayer/calc/preview?date=2026-11-09', headers: ajk.headers })).json();
     expect(day.date).toBe('2026-11-09');
     expect(Object.keys(day.times)).toHaveLength(7);
@@ -258,12 +258,193 @@ describe('automatic fetch only for a country with an official source', () => {
     const app = makeApp();
     let calls = 0;
     const fetchImpl = (async () => { calls++; throw new Error('no network in tests'); }) as unknown as typeof fetch;
-    const mk = (): ReturnType<typeof createPrayerAutoFetch> => createPrayerAutoFetch({ db: app.surau.db, now: () => AT, fetchImpl });
-    expect(await mk().runOnce()).toMatchObject({ ran: true, ok: false });
+    const mk = (): ReturnType<typeof createPrayerAutoFetch> => createPrayerAutoFetch({ db: app.surau.db, now: () => AT, fetchImpl, surauIds: () => ['sdm'] });
+    expect(await mk().runOnce('sdm')).toMatchObject({ ran: true, ok: false });
     expect(calls).toBeGreaterThan(0);
     calls = 0;
-    putFeature(app.surau.db, 'location', { country: 'KE', timezone: 'Africa/Nairobi' }, 'tester');
-    expect(await mk().runOnce()).toEqual({ ran: false });
+    putFeature(app.surau.db, 'location', { country: 'KE', timezone: 'Africa/Nairobi' }, 'tester', undefined, 'sdm');
+    expect(await mk().runOnce('sdm')).toEqual({ ran: false });
     expect(calls).toBe(0);
+  });
+});
+
+describe('[P1] the health count of days ahead', () => {
+  it('[P1] a Malaysian surau with coordinates and 20 official days reports daysAhead 20; abroad reports the resolved count', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    putFeature(app.surau.db, 'location', { latitude: 3.07, longitude: 101.52 }, 'tester', undefined, 'sdm');
+    importDays(app.surau.db, 'SGR01', official.filter((d) => d.date >= '2026-11-03' && d.date <= '2026-11-22'), 'tester', undefined, undefined, 'sdm');
+    const health = (await app.inject({ method: 'GET', url: '/api/health', headers: admin.headers })).json();
+    expect(health.daysAhead).toBe(20);
+    expect(health.prayer.daysAhead).toMatchObject({ official: 20, file: 0 });
+    expect(health.prayer.daysAhead.resolved).toBeGreaterThan(300);
+    expect(health.prayer.daysAhead.calc).toBe(health.prayer.daysAhead.resolved - 20);
+
+    putFeature(app.surau.db, 'location', { country: 'KE', timezone: 'Africa/Nairobi', latitude: -1.2921, longitude: 36.8219, city: 'Nairobi' }, 'tester', undefined, 'sdm');
+    const abroad = (await app.inject({ method: 'GET', url: '/api/health', headers: admin.headers })).json();
+    expect(abroad.daysAhead).toBe(abroad.prayer.daysAhead.resolved);
+    expect(abroad.daysAhead).toBeGreaterThan(300);
+  });
+});
+
+describe('[P3] the official CSV is checked against its year and can be undone', () => {
+  const load = (app: FastifyInstance, headers: object, year?: number) =>
+    app.inject({ method: 'POST', url: '/api/prayer/import', headers: headers as never, payload: { zone: 'SGR01', csv, ...(year === undefined ? {} : { year }) } });
+  const count = (app: FastifyInstance): number => Number(app.surau.db.prepare("SELECT COUNT(*) AS n FROM prayer_days WHERE zone = 'SGR01'").get()?.n);
+
+  it('[P3] a 2026 CSV sent with year 2027 is 400 csv_year_mismatch and nothing changes', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    const r = await load(app, admin.headers, 2027);
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toMatchObject({ code: 'csv_year_mismatch', detail: { year: 2027, from: '2026-01-01', to: '2026-12-31' } });
+    expect(count(app)).toBe(0);
+    expect((await app.inject({ method: 'GET', url: '/api/prayer/imports', headers: admin.headers })).json().imports).toEqual([]);
+  });
+
+  it('[P3] a good load is in the import records and undo restores the previous days', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    const day = official.find((d) => d.date === '2026-11-03')!;
+    importDays(app.surau.db, 'SGR01', [{ ...day, times: { ...day.times, subuh: '05:11' } }], 'tester', undefined, undefined, 'sdm');
+    const r = await load(app, admin.headers, 2026);
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ inserted: 364, replaced: 1 });
+    const list = (await app.inject({ method: 'GET', url: '/api/prayer/imports', headers: admin.headers })).json().imports;
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ kind: 'official-csv', dateFrom: '2026-01-01', dateTo: '2026-12-31', rows: 365, undoneAt: null });
+    expect(count(app)).toBe(365);
+    const undo = await app.inject({ method: 'POST', url: `/api/prayer/imports/${list[0].id}/undo`, headers: admin.headers });
+    expect(undo.statusCode).toBe(200);
+    expect(count(app)).toBe(1);
+    const row = app.surau.db.prepare("SELECT json FROM prayer_days WHERE zone = 'SGR01' AND date = '2026-11-03'").get();
+    expect(JSON.parse(String(row?.json)).times.subuh).toBe('05:11');
+    const again = await app.inject({ method: 'POST', url: `/api/prayer/imports/${list[0].id}/undo`, headers: admin.headers });
+    expect(again.statusCode).toBe(409);
+  });
+
+  it('[P3] an undo of an earlier load is blocked while a later load covers its days (undo_blocked)', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    expect((await load(app, admin.headers, 2026)).statusCode).toBe(200);
+    expect((await load(app, admin.headers, 2026)).statusCode).toBe(200);
+    const list = (await app.inject({ method: 'GET', url: '/api/prayer/imports', headers: admin.headers })).json().imports as Array<{ id: string }>;
+    const older = list[1]!;
+    const r = await app.inject({ method: 'POST', url: `/api/prayer/imports/${older.id}/undo`, headers: admin.headers });
+    expect(r.statusCode).toBe(409);
+    expect(r.json()).toMatchObject({ code: 'undo_blocked', detail: { date: '2026-01-01' } });
+    expect(typeof r.json().detail.by).toBe('string');
+  });
+});
+
+describe('[P5] prayer refusals and warnings carry codes', () => {
+  const failing = (kind: 'network' | 'norecord'): typeof fetch => (async () => {
+    if (kind === 'network') throw new Error('connect ECONNREFUSED');
+    return new Response(JSON.stringify({ status: 'NO_RECORD!', prayerTime: { data: [] } }));
+  }) as unknown as typeof fetch;
+  const appWith = (fetchImpl: typeof fetch): FastifyInstance => {
+    const d = mkdtempSync(join(tmpdir(), 'surau-prayer-'));
+    dirs.push(d);
+    const app = buildApp(join(d, 'test.db'), { now: () => AT, fetchImpl });
+    apps.push(app);
+    return app;
+  };
+
+  it('[P5] no data today: the status warning has its code', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    const bare = (await app.inject({ method: 'GET', url: '/api/prayer/status', headers: admin.headers })).json();
+    expect(bare.warningCodes).toContainEqual({ code: 'not_located', detail: {} });
+    putFeature(app.surau.db, 'location', { latitude: 89.9, longitude: 0 }, 'tester', undefined, 'sdm');
+    const s = (await app.inject({ method: 'GET', url: '/api/prayer/status', headers: admin.headers })).json();
+    expect(s.warnings).toContain('Tiada data waktu solat untuk hari ini');
+    expect(s.warningCodes).toContainEqual({ code: 'no_data_today', detail: {} });
+  });
+
+  it('[P5] a zone with no data: the settings answer has code zone_no_data with its detail', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    const r = await app.inject({ method: 'PUT', url: '/api/settings/zone', headers: admin.headers, payload: { zone: 'JHR02' } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().warningCodes).toEqual([{ code: 'zone_no_data', detail: { willFetch: false } }]);
+  });
+
+  it('[P5] e-Solat down is 502 esolat_unreachable; an unpublished year is 502 esolat_no_record', async () => {
+    const down = appWith(failing('network'));
+    const a = await loginAs(down, 'admin');
+    const r1 = await down.inject({ method: 'POST', url: '/api/prayer/import', headers: a.headers, payload: { zone: 'SGR01', year: 2027, source: 'esolat' } });
+    expect(r1.statusCode).toBe(502);
+    expect(r1.json()).toMatchObject({ code: 'esolat_unreachable' });
+    expect(r1.json().errors).toHaveLength(1);
+    const none = appWith(failing('norecord'));
+    const b = await loginAs(none, 'admin');
+    const r2 = await none.inject({ method: 'POST', url: '/api/prayer/import', headers: b.headers, payload: { zone: 'SGR01', year: 2027, source: 'esolat' } });
+    expect(r2.statusCode).toBe(502);
+    expect(r2.json()).toMatchObject({ code: 'esolat_no_record', detail: { year: 2027, zone: 'SGR01' } });
+  });
+
+  it('[P5] a bad file row has code import_row_invalid with row, field and reason', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    const text = 'tarikh,imsak,subuh,syuruk,dhuha,zohor,asar,maghrib,isyak,nota\n2026-11-03,04:40,04:50,06:00,,12:12,xx:yy,18:20,19:30,';
+    const dry = await app.inject({ method: 'POST', url: '/api/prayer/import/file', headers: admin.headers, payload: { kind: 'csv', name: 'a.csv', dryRun: true, overlap: 'replace', text } });
+    expect(dry.statusCode).toBe(200);
+    expect(dry.json().errors[0]).toMatchObject({ row: 2, code: 'import_row_invalid', field: 'asar', reason: 'invalid' });
+    const apply = await app.inject({ method: 'POST', url: '/api/prayer/import/file', headers: admin.headers, payload: { kind: 'csv', name: 'a.csv', dryRun: false, overlap: 'replace', text, expectSha256: dry.json().sha256 } });
+    expect(apply.statusCode).toBe(400);
+    expect(apply.json()).toMatchObject({ code: 'import_row_invalid', detail: { row: 2, field: 'asar', reason: 'invalid' } });
+  });
+
+  it('[P5] the countries list accepts lang=ar and names them in Arabic', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    const ar = new Intl.DisplayNames(['ar'], { type: 'region' });
+    const list = (await app.inject({ method: 'GET', url: '/api/prayer/countries?lang=ar', headers: admin.headers })).json() as Array<{ code: string; name: string }>;
+    expect(list.find((c) => c.code === 'MY')!.name).toBe(ar.of('MY'));
+    const ms = (await app.inject({ method: 'GET', url: '/api/prayer/countries', headers: admin.headers })).json() as Array<{ code: string; name: string }>;
+    expect(ms.find((c) => c.code === 'MY')!.name).not.toBe(ar.of('MY'));
+  });
+});
+
+describe('[P7] a country without an official source is not offered JAKIM actions', () => {
+  it('[P7] fetch, the official hint and a pasted official CSV are 409 no_official_source for a UK surau', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    putFeature(app.surau.db, 'location', { country: 'GB', timezone: 'Europe/London', latitude: 51.5, longitude: -0.12, city: 'London' }, 'tester', undefined, 'sdm');
+    const fetched = await app.inject({ method: 'POST', url: '/api/prayer/import', headers: admin.headers, payload: { zone: 'SGR01', year: 2026, source: 'esolat' } });
+    expect(fetched.statusCode).toBe(409);
+    expect(fetched.json()).toMatchObject({ code: 'no_official_source' });
+    const pasted = await app.inject({ method: 'POST', url: '/api/prayer/import', headers: admin.headers, payload: { zone: 'SGR01', csv, year: 2026 } });
+    expect(pasted.statusCode).toBe(409);
+    expect(pasted.json()).toMatchObject({ code: 'no_official_source' });
+    const hint = await app.inject({ method: 'POST', url: '/api/prayer/import/file', headers: admin.headers, payload: { kind: 'csv', name: 'e.csv', dryRun: true, overlap: 'replace', text: csv } });
+    expect(hint.statusCode).toBe(409);
+    expect(hint.json()).toMatchObject({ code: 'no_official_source' });
+    expect(Number(app.surau.db.prepare('SELECT COUNT(*) AS n FROM prayer_days').get()?.n)).toBe(0);
+  });
+});
+
+describe('[P8] the new-zone warning follows the auto-fetch state', () => {
+  const put = (app: FastifyInstance, headers: object, body: object) => app.inject({ method: 'PUT', url: '/api/settings/zone', headers: headers as never, payload: body });
+
+  it('[P8] zone_no_data carries willFetch false when auto-fetch is off and the sentence does not promise a download', async () => {
+    const app = makeApp();
+    const admin = await loginAs(app, 'admin');
+    const r = await put(app, admin.headers, { zone: 'JHR02' });
+    expect(r.json().warningCodes).toEqual([{ code: 'zone_no_data', detail: { willFetch: false } }]);
+    expect(r.json().warnings.join(' ')).not.toMatch(/akan memuat turun/);
+  });
+
+  it('[P8] willFetch is true when the box fetches by itself, false when the surau turned auto-fetch off', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'surau-prayer-'));
+    dirs.push(d);
+    const app = buildApp(join(d, 'test.db'), { now: () => AT, autoPrayerFetch: { firstDelayMs: 3_600_000 }, fetchImpl: (async () => { throw new Error('offline'); }) as unknown as typeof fetch });
+    apps.push(app);
+    const admin = await loginAs(app, 'admin');
+    const on = await put(app, admin.headers, { zone: 'JHR02' });
+    expect(on.json().warningCodes).toEqual([{ code: 'zone_no_data', detail: { willFetch: true } }]);
+    expect(on.json().warnings.join(' ')).toMatch(/akan memuat turun/);
+    const off = await put(app, admin.headers, { zone: 'JHR03', autoFetch: false });
+    expect(off.json().warningCodes).toEqual([{ code: 'zone_no_data', detail: { willFetch: false } }]);
   });
 });

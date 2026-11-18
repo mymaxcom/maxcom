@@ -147,6 +147,8 @@ export interface YoutubeAuthDeps {
   fetchImpl: typeof fetch;
   now: () => Date;
   timeoutMs?: number;
+  /** Token file name under the secret folder (default `youtube-token.json`). */
+  tokenFile?: string;
 }
 
 /** Device-code sign-in and the access token for the box's YouTube channel. */
@@ -165,7 +167,7 @@ export class YoutubeAuth {
   constructor(deps: YoutubeAuthDeps) {
     this.d = deps;
     this.timeoutMs = deps.timeoutMs ?? 10_000;
-    this.store = new TokenStore(deps.dataDir);
+    this.store = new TokenStore(deps.dataDir, deps.tokenFile);
     this.clientPath = join(secretDir(deps.dataDir), 'youtube-client.json');
     this.tokens = this.store.load();
   }

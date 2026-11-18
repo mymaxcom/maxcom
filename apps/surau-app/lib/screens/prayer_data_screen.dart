@@ -18,6 +18,7 @@ import '../features/csv_file_pick.dart';
 import '../features/data_sources.dart';
 import '../features/prayer/day_sheet.dart';
 import '../features/prayer/location_screen.dart';
+import '../features/prayer/prayer_names.dart';
 import '../features/prayer/prayer_repository.dart';
 import '../features/prayer/widgets/country_picker.dart';
 import '../features/prayer/widgets/month_grid.dart';
@@ -61,6 +62,9 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
   String? _working;
   String? _error;
   (int inserted, int replaced)? _result;
+
+  /// The box recorded the last load in Rekod import (a pasted e-Solat file).
+  bool _recorded = false;
 
   /// The year the admin picked; null follows the default.
   int? _pickedYear;
@@ -124,7 +128,7 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
       if (!mounted) return;
       setState(() {
         _gridLoading = false;
-        _gridError = e is PrayerError ? e.message : s.pdLoadFailed;
+        _gridError = e is PrayerError ? e.text(s) : s.pdLoadFailed;
       });
     }
   }
@@ -152,7 +156,7 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
       case 'official':
         final year = int.tryParse(today.date.substring(0, 4));
         final y = _status!.officialYears.where((e) => e.year == year).firstOrNull;
-        return y?.fetchedAt == null ? t.pdSourceOfficial : t.pdSourceOfficialOn(shortDateMs(y!.fetchedAt!));
+        return y?.fetchedAt == null ? t.pdSourceOfficial : t.pdSourceOfficialOn(shortDate(t, y!.fetchedAt!));
       case 'file':
         return t.pdSourceFile;
       default:
@@ -161,6 +165,7 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
   }
 
   List<Widget> _gridSection(S t, TextTheme text) {
+    final rtl = Directionality.of(context) == TextDirection.rtl;
     final month = _shownMonth;
     final flags = _flagsOf(_month);
     final flaggedCount = _month?.crossCheck.flagged.length ?? 0;
@@ -215,13 +220,13 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
             IconButton(
               key: const ValueKey('pd-prev'),
               tooltip: t.pdPrevMonth,
-              icon: const Icon(Icons.chevron_left_rounded),
+              icon: Icon(rtl ? Icons.chevron_right_rounded : Icons.chevron_left_rounded),
               color: SurauColors.teal,
               onPressed: () => _stepMonth(-1),
             ),
             Expanded(
               child: Text(
-                '${monthsLongMs[month.month - 1]} ${month.year}',
+                '${monthLong(t, month.month)} ${month.year}',
                 textAlign: TextAlign.center,
                 style: text.titleMedium,
               ),
@@ -229,7 +234,7 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
             IconButton(
               key: const ValueKey('pd-next'),
               tooltip: t.pdNextMonth,
-              icon: const Icon(Icons.chevron_right_rounded),
+              icon: Icon(rtl ? Icons.chevron_left_rounded : Icons.chevron_right_rounded),
               color: SurauColors.teal,
               onPressed: () => _stepMonth(1),
             ),
@@ -282,7 +287,7 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
       key: ValueKey(key),
       leading: Icon(icon),
       title: Text(label),
-      trailing: const Icon(Icons.chevron_right_rounded),
+      trailing: Icon(Directionality.of(context) == TextDirection.rtl ? Icons.chevron_left_rounded : Icons.chevron_right_rounded),
       onTap: () => context.go(route),
     );
     return RowsCard(
@@ -330,6 +335,7 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
       _working = workingText;
       _error = null;
       _result = null;
+      _recorded = false;
     });
     try {
       final out = await gateway.post(prayerImportPath, body);
@@ -340,6 +346,7 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
           (out['inserted'] as num?)?.toInt() ?? 0,
           (out['replaced'] as num?)?.toInt() ?? 0,
         );
+        _recorded = out['id'] is String && (out['id'] as String).isNotEmpty;
       });
       await ref.read(healthProvider.notifier).refresh();
       await _reloadGrid();
@@ -358,7 +365,7 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
     final csv = await picker(context);
     if (csv == null || !mounted) return;
     await _import(
-      {'zone': zone, 'csv': csv},
+      {'zone': zone, 'csv': csv, 'year': year},
       t.prayerDataWorkingUpload,
       year: year,
       replaces: replaces,
@@ -379,7 +386,6 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
     final s = S.of(context);
     final t = S.of(context);
     final text = Theme.of(context).textTheme;
-    final deps = ref.watch(appDepsProvider);
     // The page can open before the signed-in connection is ready.
     ref.listen(prayerRepositoryProvider, (prev, next) {
       if (prev == null && next != null) _reloadGrid();
@@ -387,16 +393,16 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
     final health = ref.watch(healthProvider).value?.value;
     final settings = ref.watch(settingsProvider).value?.value;
     final zone = zoneOf(settings);
-    final days = health?.daysAhead;
+    // The box's own count of days it has data for (official and file days,
+    // not calculated ones); the health figure until the status is read.
+    final days = _status?.coverage ?? health?.daysAhead;
     final low = days != null && days > 0 && days < prayerDaysLow;
-    final today = deps.toLocal(deps.now());
-    final year =
-        _pickedYear ?? defaultPrayerYear(daysAhead: days, today: today);
-    final replaces = replacesExistingData(
-      year: year,
-      daysAhead: days,
-      today: today,
-    );
+    // The box's date, never the phone's: around 1 January they can differ.
+    final today = DateTime.parse(_todayIso);
+    final officialDays = _status?.officialDaysByYear;
+    final year = _pickedYear ?? defaultPrayerYear(officialDays: officialDays, today: today);
+    final replaces = replacesExistingData(year: year, officialDays: officialDays);
+    final hasOfficial = _status?.hasOfficial ?? true;
     final none = noDataThisYear(days);
     final canAct = zone != null && _working == null;
     final esolat = dataSourceName(settings, 'esolat');
@@ -467,7 +473,7 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
               ),
             ),
           ),
-          for (final w in _status?.warnings ?? const <String>[]) ...[
+          for (final w in _status?.warningTexts(t) ?? const <String>[]) ...[
             const SizedBox(height: 10),
             InfoBox(tone: InfoTone.gold, icon: Icons.warning_amber_rounded, child: Text(w)),
           ],
@@ -494,7 +500,9 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
           if (_result != null) ...[
             DoneLine(
               t.prayerDataResultTitle,
-              detail: t.prayerDataResult(_result!.$1, _result!.$2),
+              detail: _recorded
+                  ? '${t.prayerDataResult(_result!.$1, _result!.$2)} ${t.ra2CsvRecorded}'
+                  : t.prayerDataResult(_result!.$1, _result!.$2),
             ),
             const SizedBox(height: 16),
           ],
@@ -503,6 +511,15 @@ class _PrayerDataScreenState extends ConsumerState<PrayerDataScreen> {
             const SizedBox(height: 16),
           ],
           SectionLabel(t.prayerDataUpdateTitle),
+          if (!hasOfficial)
+            Card(
+              key: const ValueKey('pd-no-official'),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(t.ra2NoOfficialCard, style: text.bodyMedium),
+              ),
+            )
+          else
           Card(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),

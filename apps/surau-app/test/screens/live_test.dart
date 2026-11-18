@@ -3,6 +3,8 @@
 // toggle, the reasons YouTube is off, a retrying leg, the stop confirm
 // and summary, and the six goldens at the three sizes.
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,7 +48,7 @@ void _isyakTonight(ShellHarness h) {
 
 Future<_Live> _open(
   WidgetTester tester, {
-  List<String> roles = const ['media'],
+  List<String> roles = const ['live'],
   LiveBoxStatus box = _signedIn,
   bool tonight = true,
 }) async {
@@ -67,6 +69,16 @@ Future<_Live> _open(
 
 Finder get _start => find.byKey(const ValueKey('live-start'));
 Finder get _stop => find.byKey(const ValueKey('live-stop'));
+/// Opens the idle section [key] (`video`, `audio`, `out`, `set`) when it is folded.
+Future<void> _openSection(WidgetTester tester, String key) async {
+  final body = find.byKey(ValueKey('live-section-$key'));
+  await reveal(tester, body);
+  final head = find.byKey(ValueKey('live-section-$key-head'));
+  await tester.ensureVisible(head);
+  await tester.tap(head);
+  await settle(tester);
+}
+
 Finder get _youtubeSwitch => find.descendant(
   of: find.byKey(const ValueKey('live-youtube')),
   matching: find.byType(Switch),
@@ -92,7 +104,67 @@ const _noVideo =
     'Video belum sampai ke MAXCOM. Semak Wi-Fi telefon dan komputer MAXCOM '
     'berada pada rangkaian yang sama.';
 
+class _RetryProbe extends LiveBoxNotifier {
+  _RetryProbe(super.initial);
+
+  int retries = 0;
+
+  @override
+  Future<void> retryStop() async => retries++;
+}
+
 void main() {
+  testWidgets('[L2] a live-only role sees Stop for its own live that has not '
+      'stopped on the box, and no "another device" notice', (tester) async {
+    final probe = _RetryProbe(
+      _signedIn.copyWith(
+        sessionId: 's1',
+        stopFailed: true,
+        notice: 'Siaran belum berhenti. Cuba lagi.',
+      ),
+    );
+    final pub = FakePublisher();
+    final h = await pumpShell(
+      tester,
+      roles: const ['live'],
+      overrides: [
+        livePublisherProvider.overrideWithValue(pub),
+        liveBoxProvider.overrideWith(() => probe),
+      ],
+    );
+    h.router.go('/live');
+    await settle(tester);
+    final retry = find.byKey(const ValueKey('live-stop-retry'));
+    expect(retry, findsOneWidget);
+    expect(find.byKey(const ValueKey('live-other-device')), findsNothing);
+    expect(find.text('Siaran belum berhenti. Cuba lagi.'), findsWidgets);
+    await tester.ensureVisible(retry);
+    await tester.tap(retry);
+    await settle(tester);
+    expect(probe.retries, 1);
+  });
+
+  test('[L5] catch-up files the recording under the publisher\'s own session '
+      'id and never guesses the newest unsaved file', () {
+    expect(
+      catchUpSessionId(web: true, publisherSession: 's-mine', boxSession: 'box1'),
+      's-mine',
+    );
+    expect(
+      catchUpSessionId(web: true, publisherSession: null, boxSession: 'box1'),
+      isNull,
+      reason: 'no guess from an older unsaved file',
+    );
+    expect(
+      catchUpSessionId(web: false, publisherSession: 's-mine', boxSession: 'box1'),
+      'box1',
+    );
+    expect(
+      File('lib/features/live/live_screen.dart').readAsStringSync(),
+      isNot(contains('_latestRecordingSession')),
+    );
+  });
+
   testWidgets('media_ports_blocked shows the firewall banner and the screen '
       'stays usable', (tester) async {
     final t = await _open(
@@ -182,6 +254,7 @@ void main() {
 
   testWidgets('YouTube toggled off is not sent', (tester) async {
     final t = await _open(tester);
+    await _openSection(tester, 'out');
     await tester.tap(_youtubeSwitch);
     await settle(tester);
     await tester.tap(_start);
@@ -191,6 +264,7 @@ void main() {
 
   testWidgets('no internet disables YouTube with the reason', (tester) async {
     final t = await _open(tester, box: _signedIn.copyWith(internet: false));
+    await _openSection(tester, 'out');
     expect(find.text('Tiada internet: YouTube dimatikan'), findsOneWidget);
     expect(tester.widget<Switch>(_youtubeSwitch).onChanged, isNull);
     await tester.tap(_start);
@@ -198,13 +272,16 @@ void main() {
     expect(t.pub.started.last.outputs.youtube, isFalse);
   });
 
-  testWidgets('YouTube not signed in: an AJK media asks the admin', (
+  testWidgets('YouTube not signed in: the Siaran Langsung role signs in itself, not the admin', (
     tester,
   ) async {
     await _open(tester, box: const LiveBoxStatus());
-    expect(find.text('Minta Pentadbir log masuk YouTube'), findsOneWidget);
+    await _openSection(tester, 'out');
+    expect(find.text('Log masuk YouTube dahulu'), findsOneWidget);
+    expect(find.text('Minta Pentadbir log masuk YouTube'), findsNothing);
     expect(tester.widget<Switch>(_youtubeSwitch).onChanged, isNull);
-    expect(find.byKey(const ValueKey('live-youtube-account')), findsNothing);
+    await reveal(tester, find.byKey(const ValueKey('live-youtube-account')));
+    expect(find.byKey(const ValueKey('live-youtube-account')), findsOneWidget);
   });
 
   testWidgets('an admin signs in to YouTube with the device code', (
@@ -215,6 +292,7 @@ void main() {
       roles: const ['admin'],
       box: const LiveBoxStatus(),
     );
+    await _openSection(tester, 'out');
     expect(find.text('Log masuk YouTube dahulu'), findsOneWidget);
     await reveal(tester, find.text('Log masuk YouTube'));
     await tester.tap(find.text('Log masuk YouTube'));
@@ -826,6 +904,127 @@ void main() {
       );
       expect(find.text('Rakaman belum disimpan'), findsOneWidget);
       await expectGoldens(tester, t.h.app, 'live_recordings_pending');
+    });
+  });
+
+  group('[PP-L1] the live notice button', () {
+    const watch = 'https://www.youtube.com/watch?v=AAAAAAAAAAA';
+    Finder banner() => find.byKey(const ValueKey('live-notice-banner'));
+    Finder share() => find.byKey(const ValueKey('live-notice-share'));
+
+    // A tall window builds the whole list, so "absent" means absent and not just off screen.
+    Future<void> tall(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(700, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await settle(tester);
+    }
+
+    testWidgets('[PP-L1] a YouTube live shows the button and a banner once per live session', (tester) async {
+      final t = await _open(tester, box: _signedIn.copyWith(watchUrl: watch, sessionId: 's1'));
+      await tall(tester);
+      expect(share(), findsNothing, reason: 'not before the live');
+      t.pub.emit(_running());
+      await settle(tester);
+      t.unfold(); // a starting live folds the screen by itself
+      await settle(tester);
+      expect(share(), findsOneWidget);
+      expect(banner(), findsOneWidget);
+      expect(find.text('Siaran sudah bermula. Kongsi pautan kepada AJK dan jemaah.'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('live-notice-banner-close')));
+      await settle(tester);
+      expect(banner(), findsNothing);
+      expect(share(), findsOneWidget, reason: 'the button stays for the whole live');
+      // the same session never brings the banner back; a new session does
+      t.box.set(_signedIn.copyWith(watchUrl: watch, sessionId: 's1', youtubeSeconds: 10));
+      await settle(tester);
+      expect(banner(), findsNothing);
+      t.box.set(_signedIn.copyWith(watchUrl: watch, sessionId: 's2'));
+      await settle(tester);
+      expect(banner(), findsOneWidget);
+    });
+
+    testWidgets('[PP-L1] the banner button opens the sheet with the public link only', (tester) async {
+      final t = await _open(tester, box: _signedIn.copyWith(watchUrl: watch, sessionId: 's1'));
+      await tall(tester);
+      t.pub.emit(_running());
+      await settle(tester);
+      t.unfold(); // a starting live folds the screen by itself
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('live-notice-banner-share')));
+      await settle(tester);
+      final field = tester.widget<TextField>(find.byKey(const ValueKey('live-notice-field')));
+      final text = field.controller!.text;
+      expect(text, contains('https://www.youtube.com/live/AAAAAAAAAAA'));
+      expect(text, isNot(contains('youtu.be')));
+      expect(text, isNot(contains('watch?v=')));
+      expect(banner(), findsNothing, reason: 'used once');
+      expect(share(), findsOneWidget);
+    });
+
+    testWidgets('[PP-L1] a live without YouTube has no button and no banner', (tester) async {
+      final t = await _open(tester, box: _signedIn.copyWith(sessionId: 's1'));
+      await tall(tester);
+      t.pub.emit(_running(youtube: OutputState.up));
+      await settle(tester);
+      expect(share(), findsNothing);
+      expect(banner(), findsNothing);
+    });
+
+    testWidgets('[PP-L1] a watch link that is not a YouTube link gives no button', (tester) async {
+      for (final bad in [
+        'https://evil.example/watch?v=AAAAAAAAAAA',
+        'http://192.0.2.10/live/AAAAAAAAAAA',
+        'rtmp://a.rtmp.youtube.com/live2/AAAAAAAAAAA',
+        'https://www.youtube.com/watch?v=short',
+      ]) {
+        final t = await _open(tester, box: _signedIn.copyWith(watchUrl: bad, sessionId: 's1'));
+      await tall(tester);
+        t.pub.emit(_running());
+        await settle(tester);
+        expect(share(), findsNothing, reason: bad);
+        expect(banner(), findsNothing, reason: bad);
+      }
+    });
+
+    testWidgets('[PP-L1] the end-of-live summary offers the notice beside the watch button', (tester) async {
+      final t = await _open(tester, box: _signedIn.copyWith(watchUrl: watch, sessionId: 's1', youtubeSeconds: 2810));
+      t.pub.emit(_running(duration: 2843));
+      await settle(tester);
+      await tester.tap(_stop);
+      await settle(tester);
+      await tester.tap(find.text('Hentikan'));
+      await settle(tester);
+      expect(find.text('Siaran tamat'), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-summary-notice')), findsOneWidget);
+      expect(find.text('Lihat di YouTube'), findsOneWidget);
+    });
+
+    testWidgets('[PP-L1] a summary of a live without YouTube has no notice button', (tester) async {
+      final t = await _open(tester);
+      t.pub.emit(_running(duration: 2843));
+      await settle(tester);
+      await tester.tap(_stop);
+      await settle(tester);
+      await tester.tap(find.text('Hentikan'));
+      await settle(tester);
+      expect(find.text('Siaran tamat'), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-summary-notice')), findsNothing);
+    });
+
+    testWidgets('[PP-L1] a Pentadbir running the live also gets the button', (tester) async {
+      final t = await _open(
+        tester,
+        roles: const ['admin'],
+        box: _signedIn.copyWith(watchUrl: watch, sessionId: 's1'),
+      );
+      await tall(tester);
+      t.pub.emit(_running());
+      await settle(tester);
+      t.unfold(); // a starting live folds the screen by itself
+      await settle(tester);
+      expect(share(), findsOneWidget);
     });
   });
 }

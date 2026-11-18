@@ -1,19 +1,26 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { canonicalJson, gradeOf, isContentKind, newId, providerItemId, validateContent } from '@surau/core';
+import { HADIS_MAX_SAVED, canonicalJson, dateOf, gradeOf, isContentKind, newId, providerItemId, tzOf, validateContent } from '@surau/core';
 import type { ContentItemOf, ContentKind } from '@surau/core';
-import { bumpVersion } from '../settingsStore.ts';
+import { bumpVersion, getSettings } from '../settingsStore.ts';
+import { serverRoleOf } from '../auth/users.ts';
+import { surauHoldsAsset } from '../surau/storage.ts';
 import { revOf } from '../sync/meta.ts';
 import type { ChangeMeta } from '../sync/meta.ts';
 
 export class ContentError extends Error {
   readonly errors: string[];
   readonly status: 400 | 404 | 409;
+  /** A stable code the app maps to its own text; `errors[0]` stays the sentence for an older app. */
+  readonly code: string | undefined;
+  readonly detail: Record<string, unknown> | undefined;
 
-  constructor(status: 400 | 404 | 409, errors: string[]) {
+  constructor(status: 400 | 404 | 409, errors: string[], code?: string, detail?: Record<string, unknown>) {
     super(errors.length > 0 ? errors.join('; ') : 'invalid content');
     this.name = 'ContentError';
     this.errors = errors;
     this.status = status;
+    this.code = code;
+    this.detail = detail;
   }
 }
 
@@ -58,15 +65,16 @@ export function listItems<K extends ContentKind>(
   db: DatabaseSync,
   kind: K,
   opts: { includeDeleted?: boolean } = {},
+  surauId: string,
 ): ContentItemOf<K>[] {
   assertKind(kind);
   const rows = db
     .prepare(
       opts.includeDeleted === true
-        ? 'SELECT json FROM content_items WHERE kind = ? ORDER BY id'
-        : 'SELECT json FROM content_items WHERE kind = ? AND deleted_at IS NULL ORDER BY id',
+        ? 'SELECT json FROM content_items WHERE surau_id = ? AND kind = ? ORDER BY id'
+        : 'SELECT json FROM content_items WHERE surau_id = ? AND kind = ? AND deleted_at IS NULL ORDER BY id',
     )
-    .all(kind);
+    .all(surauId, kind);
   const out: ContentItemOf<K>[] = [];
   for (const row of rows) {
     const parsed = parseRow(row.json);
@@ -79,37 +87,52 @@ function readRow(
   db: DatabaseSync,
   kind: ContentKind,
   id: string,
+  surauId: string,
 ): { item: Plain; deleted: boolean } | undefined {
-  const row = db.prepare('SELECT json, deleted_at FROM content_items WHERE kind = ? AND id = ?').get(kind, id);
+  const row = db.prepare('SELECT json, deleted_at FROM content_items WHERE surau_id = ? AND kind = ? AND id = ?').get(surauId, kind, id);
   if (row === undefined) return undefined;
   const item = parseRow(row.json);
   if (item === null) return undefined;
   return { item, deleted: row.deleted_at !== null && row.deleted_at !== undefined };
 }
 
-export function getItem<K extends ContentKind>(db: DatabaseSync, kind: K, id: string): ContentItemOf<K> | null {
+export function getItem<K extends ContentKind>(
+  db: DatabaseSync,
+  kind: K,
+  id: string,
+  surauId: string,
+): ContentItemOf<K> | null {
   assertKind(kind);
-  const found = readRow(db, kind, id);
+  const found = readRow(db, kind, id, surauId);
   return found === undefined || found.deleted ? null : (found.item as unknown as ContentItemOf<K>);
 }
 
-function checkReferences(db: DatabaseSync, kind: ContentKind, item: Plain): void {
+function checkReferences(db: DatabaseSync, kind: ContentKind, item: Plain, surauId: string, stored?: Plain): void {
   const errors: string[] = [];
   for (const ref of ITEM_REFS[kind] ?? []) {
     const value = item[ref.field];
     if (typeof value !== 'string') continue;
-    if (getItem(db, ref.kind, value) === null) errors.push(`${ref.field} refers to a ${ref.kind} that does not exist`);
+    // a reference the saved item already holds is not asked again (the past kuliah of a deleted penceramah stays editable)
+    if (stored !== undefined && stored[ref.field] === value) continue;
+    if (getItem(db, ref.kind, value, surauId) === null) errors.push(`${ref.field} refers to a ${ref.kind} that does not exist`);
   }
   for (const field of ASSET_FIELDS) {
     const raw = item[field];
     // An image field is a plain asset id or an adjusted image { asset, ... }.
     const value = typeof raw === 'string' ? raw : typeof raw === 'object' && raw !== null ? (raw as { asset?: unknown }).asset : undefined;
     if (typeof value !== 'string') continue;
+    // On the cloud the asset must also be one this surau holds (`surau_assets`): another surau's hash is "missing".
     if (db.prepare('SELECT 1 AS ok FROM assets WHERE id = ?').get(value) === undefined) {
       errors.push(`${field} refers to an asset that does not exist`);
+    } else if (!surauHoldsAsset(db, serverRoleOf(db), surauId, value)) {
+      // the bytes are stored (another surau holds them) but this surau has not uploaded them
+      errors.push(`${field} refers to an asset this surau does not hold`);
     }
   }
-  if (errors.length > 0) throw new ContentError(409, errors);
+  if (errors.length > 0) {
+    const onlyAssets = errors.every((e) => e.includes('asset'));
+    throw new ContentError(409, errors, onlyAssets ? 'asset_missing' : undefined);
+  }
 }
 
 /** The fields of a hadis that HadeethEnc serves; only the box's own add and accept-update paths may write them. */
@@ -155,9 +178,10 @@ export function putItemIn<K extends ContentKind>(
   kind: K,
   item: unknown,
   actor: string,
-  meta?: ChangeMeta,
+  meta: ChangeMeta | undefined,
+  surauId: string,
 ): { item: ContentItemOf<K>; created: boolean } {
-  return writeItemIn(db, kind, item, actor, meta, false);
+  return writeItemIn(db, kind, item, actor, meta, false, surauId);
 }
 
 /**
@@ -165,13 +189,13 @@ export function putItemIn<K extends ContentKind>(
  * the stored provider fields are put back under it, so a toggle queued before a text update still lands on the
  * NEW text. A body with any other key is not a patch and meets the lock as before.
  */
-function hadisPatch(db: DatabaseSync, item: unknown): unknown {
+function hadisPatch(db: DatabaseSync, item: unknown, surauId: string): unknown {
   if (typeof item !== 'object' || item === null || Array.isArray(item)) return item;
   const body = item as Plain;
   if (Object.keys(body).some((k) => k !== 'id' && k !== 'shown' && k !== 'order')) return item;
   const id = body.id;
   if (typeof id !== 'string') return item;
-  const row = readRow(db, 'hadis', id);
+  const row = readRow(db, 'hadis', id, surauId);
   if (row === undefined || row.deleted || row.item.ext === undefined) return item;
   return {
     ...row.item,
@@ -187,9 +211,10 @@ function writeItemIn<K extends ContentKind>(
   actor: string,
   meta: ChangeMeta | undefined,
   providerWrite: boolean,
+  surauId: string,
 ): { item: ContentItemOf<K>; created: boolean } {
   assertKind(kind);
-  const result = validateContent(kind, kind === 'hadis' && !providerWrite && meta?.trusted !== true ? hadisPatch(db, item) : item);
+  const result = validateContent(kind, kind === 'hadis' && !providerWrite && meta?.trusted !== true ? hadisPatch(db, item, surauId) : item);
   if (!result.ok) throw new ContentError(400, result.errors);
 
   const value = { ...(result.value as Plain) };
@@ -203,16 +228,22 @@ function writeItemIn<K extends ContentKind>(
   value.updatedAt = editedAt;
   value.updatedBy = actor;
 
-  const before = readRow(db, kind, id);
+  const before = readRow(db, kind, id, surauId);
   if (kind === 'hadis') {
     guardProviderFields(value, id, before !== undefined && !before.deleted ? before.item : undefined, meta, providerWrite);
   }
-  if (meta?.trusted !== true) checkReferences(db, kind, value);
+  if (meta?.trusted !== true) checkReferences(db, kind, value, surauId, before !== undefined && !before.deleted ? (before.item as unknown as Plain) : undefined);
+  // One cap on every way of saving an own hadis (the provider route and a replicated write keep their own rules):
+  // a new hadis past the limit is refused, an edit of a saved one never is.
+  if (kind === 'hadis' && !providerWrite && meta?.rev === undefined && meta?.trusted !== true && (before === undefined || before.deleted)
+    && countLive(db, 'hadis', surauId) >= HADIS_MAX_SAVED) {
+    throw new ContentError(409, ['Senarai hadis sudah penuh'], 'hadis_full');
+  }
   const afterJson = JSON.stringify(value);
   db.prepare(
-    `INSERT INTO content_items (kind, id, json, updated_at, updated_by, deleted_at, rev, edited_at, origin)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
-     ON CONFLICT(kind, id) DO UPDATE SET
+    `INSERT INTO content_items (surau_id, kind, id, json, updated_at, updated_by, deleted_at, rev, edited_at, origin)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+     ON CONFLICT(surau_id, kind, id) DO UPDATE SET
        json = excluded.json,
        updated_at = excluded.updated_at,
        updated_by = excluded.updated_by,
@@ -220,12 +251,13 @@ function writeItemIn<K extends ContentKind>(
        rev = excluded.rev,
        edited_at = excluded.edited_at,
        origin = excluded.origin`,
-  ).run(kind, id, afterJson, editedAt, actor, rev, editedAt, origin);
+  ).run(surauId, kind, id, afterJson, editedAt, actor, rev, editedAt, origin);
   const beforeLive = before !== undefined && !before.deleted ? before.item : undefined;
   db.prepare(
-    `INSERT INTO change_log (at, actor, entity, entity_id, before_json, after_json, device_id, origin, op_id, edited_at, synced_at, rev)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json, device_id, origin, op_id, edited_at, synced_at, rev)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
+    surauId,
     now,
     actor,
     `content:${kind}`,
@@ -239,7 +271,7 @@ function writeItemIn<K extends ContentKind>(
     meta?.syncedAt ?? null,
     rev,
   );
-  bumpVersion(db);
+  bumpVersion(db, surauId);
   return { item: value as unknown as ContentItemOf<K>, created: beforeLive === undefined };
 }
 
@@ -248,7 +280,12 @@ function writeItemIn<K extends ContentKind>(
  * `accept-update`. The item must be a HadeethEnc hadis whose id is `hadeethenc-<provider id>`; the caller owns
  * the transaction. The flag is local to this module: sync code and routes cannot set it.
  */
-export function putProviderItemIn(db: DatabaseSync, item: unknown, actor: string): { item: ContentItemOf<'hadis'>; created: boolean } {
+export function putProviderItemIn(
+  db: DatabaseSync,
+  item: unknown,
+  actor: string,
+  surauId: string,
+): { item: ContentItemOf<'hadis'>; created: boolean } {
   const checked = validateContent('hadis', item);
   if (!checked.ok) throw new ContentError(400, checked.errors);
   const v = checked.value as Plain;
@@ -258,13 +295,18 @@ export function putProviderItemIn(db: DatabaseSync, item: unknown, actor: string
     (v.grade === undefined && v.shown !== false)) {
     throw new ContentError(400, ['not a HadeethEnc hadis']);
   }
-  return writeItemIn(db, 'hadis', item, actor, undefined, true);
+  return writeItemIn(db, 'hadis', item, actor, undefined, true, surauId);
 }
 
-export function putProviderItem(db: DatabaseSync, item: unknown, actor: string): { item: ContentItemOf<'hadis'>; created: boolean } {
+export function putProviderItem(
+  db: DatabaseSync,
+  item: unknown,
+  actor: string,
+  surauId: string,
+): { item: ContentItemOf<'hadis'>; created: boolean } {
   db.exec('BEGIN IMMEDIATE');
   try {
-    const out = putProviderItemIn(db, item, actor);
+    const out = putProviderItemIn(db, item, actor, surauId);
     db.exec('COMMIT');
     return out;
   } catch (error) {
@@ -274,9 +316,9 @@ export function putProviderItem(db: DatabaseSync, item: unknown, actor: string):
 }
 
 /** Number of live (not deleted) items of a kind. */
-export function countLive(db: DatabaseSync, kind: ContentKind): number {
+export function countLive(db: DatabaseSync, kind: ContentKind, surauId: string): number {
   assertKind(kind);
-  const row = db.prepare('SELECT COUNT(*) AS n FROM content_items WHERE kind = ? AND deleted_at IS NULL').get(kind);
+  const row = db.prepare('SELECT COUNT(*) AS n FROM content_items WHERE surau_id = ? AND kind = ? AND deleted_at IS NULL').get(surauId, kind);
   return Number(row?.n ?? 0);
 }
 
@@ -285,11 +327,12 @@ export function putItem<K extends ContentKind>(
   kind: K,
   item: unknown,
   actor: string,
-  meta?: ChangeMeta,
+  meta: ChangeMeta | undefined,
+  surauId: string,
 ): { item: ContentItemOf<K>; created: boolean } {
   db.exec('BEGIN IMMEDIATE');
   try {
-    const out = putItemIn(db, kind, item, actor, meta);
+    const out = putItemIn(db, kind, item, actor, meta, surauId);
     db.exec('COMMIT');
     return out;
   } catch (error) {
@@ -309,48 +352,65 @@ export function deleteItemIn(
   kind: ContentKind,
   id: string,
   actor: string,
-  meta?: ChangeMeta,
+  meta: ChangeMeta | undefined,
+  surauId: string,
 ): boolean {
   assertKind(kind);
   const now = new Date().toISOString();
   const editedAt = meta?.editedAt ?? now;
   const rev = revOf(editedAt, meta);
   const origin = meta?.origin ?? 'local';
-  const before = readRow(db, kind, id);
+  const before = readRow(db, kind, id, surauId);
   const synced = meta?.rev !== undefined;
   if (before !== undefined && before.deleted && !synced) return false;
   if (before === undefined && !synced) return false;
   if (before !== undefined && !before.deleted && meta?.trusted !== true) {
+    // Only a referrer of today or later blocks (a speaker of last year can go); a past kuliah then shows no speaker.
+    const today = dateOf(new Date(), tzOf(getSettings(db, surauId)));
     const blockers: string[] = [];
+    let detail: Record<string, unknown> | undefined;
     for (const ref of REFERRERS[kind] ?? []) {
-      const using = listItems(db, ref.kind).filter((other) => (other as unknown as Plain)[ref.field] === id);
-      if (using.length > 0) blockers.push(`${kind} is still used by ${using.length} ${ref.kind} item(s)`);
+      const using = (listItems(db, ref.kind, {}, surauId) as unknown as Plain[])
+        .filter((other) => other[ref.field] === id)
+        .filter((other) => typeof other.date !== 'string' || other.date >= today);
+      if (using.length === 0) continue;
+      blockers.push(`${kind} is still used by ${using.length} ${ref.kind} item(s)`);
+      detail ??= {
+        kind,
+        count: using.length,
+        items: using
+          .sort((a, b) => String(a.date ?? '').localeCompare(String(b.date ?? '')))
+          .slice(0, 5)
+          .map((o) => ({ id: String(o.id), date: String(o.date ?? ''), label: String(o.label ?? o.topic ?? o.role ?? '') })),
+      };
     }
-    if (blockers.length > 0) throw new ContentError(409, blockers);
+    if (blockers.length > 0) throw new ContentError(409, blockers, 'content_in_use', detail);
   }
 
   if (before === undefined) {
     if (!SAFE_ID.test(id)) throw new ContentError(400, ['id must be 1-100 letters, digits, - or _']);
     db.prepare(
-      `INSERT INTO content_items (kind, id, json, updated_at, updated_by, deleted_at, rev, edited_at, origin)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(kind, id) DO UPDATE SET deleted_at = excluded.deleted_at, updated_at = excluded.updated_at,
+      `INSERT INTO content_items (surau_id, kind, id, json, updated_at, updated_by, deleted_at, rev, edited_at, origin)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(surau_id, kind, id) DO UPDATE SET deleted_at = excluded.deleted_at, updated_at = excluded.updated_at,
          updated_by = excluded.updated_by, rev = excluded.rev, edited_at = excluded.edited_at, origin = excluded.origin`,
-    ).run(kind, id, JSON.stringify({ id }), editedAt, actor, editedAt, rev, editedAt, origin);
+    ).run(surauId, kind, id, JSON.stringify({ id }), editedAt, actor, editedAt, rev, editedAt, origin);
   } else {
     db.prepare(
-      'UPDATE content_items SET deleted_at = ?, updated_at = ?, updated_by = ?, rev = ?, edited_at = ?, origin = ? WHERE kind = ? AND id = ?',
-    ).run(editedAt, editedAt, actor, rev, editedAt, origin, kind, id);
+      'UPDATE content_items SET deleted_at = ?, updated_at = ?, updated_by = ?, rev = ?, edited_at = ?, origin = ? WHERE surau_id = ? AND kind = ? AND id = ?',
+    ).run(editedAt, editedAt, actor, rev, editedAt, origin, surauId, kind, id);
   }
   db.prepare(
-    `INSERT INTO change_log (at, actor, entity, entity_id, before_json, after_json, device_id, origin, op_id, edited_at, synced_at, rev)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json, device_id, origin, op_id, edited_at, synced_at, rev)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
+    surauId,
     now,
     actor,
     `content:${kind}`,
     id,
     before === undefined || before.deleted ? null : JSON.stringify(before.item),
+    null,
     meta?.deviceId ?? null,
     origin,
     meta?.opId ?? null,
@@ -358,15 +418,22 @@ export function deleteItemIn(
     meta?.syncedAt ?? null,
     rev,
   );
-  bumpVersion(db);
+  bumpVersion(db, surauId);
   return true;
 }
 
-export function deleteItem(db: DatabaseSync, kind: ContentKind, id: string, actor: string, meta?: ChangeMeta): boolean {
+export function deleteItem(
+  db: DatabaseSync,
+  kind: ContentKind,
+  id: string,
+  actor: string,
+  meta: ChangeMeta | undefined,
+  surauId: string,
+): boolean {
   assertKind(kind);
   db.exec('BEGIN IMMEDIATE');
   try {
-    const out = deleteItemIn(db, kind, id, actor, meta);
+    const out = deleteItemIn(db, kind, id, actor, meta, surauId);
     db.exec('COMMIT');
     return out;
   } catch (error) {

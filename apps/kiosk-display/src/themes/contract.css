@@ -157,11 +157,14 @@
   color: var(--accent);
 }
 
-/* ---- Poster (theme round 2, rules 1 and 3): the top row stays (brand, date line, chip, clock); the poster's frame
-   starts below it and takes everything down to the bottom edge (no strip, no ticker on this screen), over a blurred copy
-   of the poster that fills the stage. The picture is as large as the frame allows, its own proportions kept: PosterScreen
-   sets --poster-ar (width over height) once it has loaded, and the height is the smaller of the frame's height and
-   the frame's width over that ratio. 1 rem is 1 % of the stage width, so the frame is 100rem minus the side gutters. */
+/* ---- Poster (full height, operator 2026-11-17 "Option 2"): the frame is the whole stage, edge to edge, over a blurred
+   copy of the poster (.poster-fill) that fills the bands the picture leaves. No strip, no ticker on this screen. The
+   picture is always whole (never cropped or stretched) and as large as the stage allows: PosterScreen sets --poster-ar
+   (width over height) once it has loaded, and the height is the smaller of the stage height and the stage width
+   (100rem, 1 rem is 1 % of the stage width) over that ratio. So a portrait poster runs top to bottom, centred; a 16:9
+   poster fills every edge; a wider one runs side to side, centred vertically. The img box hugs the picture, so a theme
+   line on it sits on the picture's own edge. The top row (brand, date line, chip, clock) stays where it is, drawn over
+   the picture, readable through its text-shadow and a soft scrim behind the row (::after on the poster stage). */
 .stage[data-screen='poster'] .content { grid-area: auto; position: absolute; inset: 0; width: auto; margin: 0; z-index: 0; }
 .poster-stage { position: absolute; inset: 0; overflow: hidden; }
 .poster-fill {
@@ -173,21 +176,29 @@
 }
 .poster-frame {
   position: absolute;
-  top: 8.333rem;
-  bottom: 1.875rem;
-  left: 3.333rem;
-  right: 3.333rem;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .poster-frame img {
   display: block;
-  height: min(46.042rem, calc(93.333rem / var(--poster-ar, 0.707)));
+  height: min(100%, calc(100rem / var(--poster-ar, 0.707)));
   width: auto;
   max-width: 100%;
   object-fit: contain;
-  box-shadow: 0 1.563rem 4.167rem rgb(0 0 0 / 0.55);
+}
+/* The scrim behind the top row only, in the theme's own ground (--glass-rgb: dark in the dark themes, the light page in
+   Minimal and Old School, whose header text is dark), gone by 12.5rem so the rest of the poster is untouched. */
+.poster-stage::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 12.5rem;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgb(var(--glass-rgb) / 0.7) 0, rgb(var(--glass-rgb) / 0.35) 7.292rem, rgb(var(--glass-rgb) / 0) 12.5rem);
 }
 .stage[data-screen='poster'] .region-brand,
 .stage[data-screen='poster'] .region-clock.clock--compact { text-shadow: 0 0.104rem 0.938rem rgb(0 0 0 / 0.5); }

@@ -17,3 +17,5 @@ Install paths: `C:\dev\flutter`, `C:\dev\android-sdk`. User environment: `ANDROI
 Flutter config: web enabled, Windows desktop disabled, analytics off. Do not run `flutter upgrade`; the version is pinned in `.flutter-version`.
 
 Check: `powershell -File scripts/check-flutter.ps1` from the repo root (exit 0 when the installed Flutter matches the pin).
+
+Tests: a plain `flutter test` skips every ops test (they are `skip: !kOpsBuild`). Run `powershell -File apps/surau-app/tool/test-both.ps1 [paths]` to run the public build and the MAXCOM Ops build (`--dart-define=MAXCOM_OPS=true`) and to fail when the ops run skipped any ops test.

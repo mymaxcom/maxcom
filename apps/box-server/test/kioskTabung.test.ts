@@ -25,15 +25,15 @@ function rig() {
   dbs.push(db);
   const dir = mkdtempSync(join(tmpdir(), 'surau-tab-'));
   dirs.push(dir);
-  putFeature(db, 'finance', { enabled: true }, 'test');
-  putFeature(db, 'tabungCard', { enabled: true }, 'test');
-  ensureSeeded(db, 'test', T0);
-  const funds = listFunds(db);
-  const perIn = listPerihal(db).find((p) => p.direction === 'in')!.id;
-  const u = createUser(db, { name: 'Bendahari', roles: ['treasurer'] }, 'test').id;
+  putFeature(db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
+  putFeature(db, 'tabungCard', { enabled: true }, 'test', undefined, 'sdm');
+  ensureSeeded(db, 'test', T0, 'sdm');
+  const funds = listFunds(db, undefined, 'sdm');
+  const perIn = listPerihal(db, undefined, 'sdm').find((p) => p.direction === 'in')!.id;
+  const u = createUser(db, { name: 'Bendahari', roles: ['treasurer'] }, 'test', 'sdm').id;
   const put = (id: string, fundId: string, sen: number, date = '2026-11-06', when = T0, extra: Record<string, unknown> = {}) =>
-    appendEntry(db, { id, kind: 'in', entryDate: date, fundId, perihalId: perIn, amountSen: sen, method: 'bank', reference: 'FPX1', ...extra }, 'user:x', { now: when, role: 'box' });
-  const content = (now: Date) => buildKioskContent(db, dir, now, getSettings(db));
+    appendEntry(db, { id, kind: 'in', entryDate: date, fundId, perihalId: perIn, amountSen: sen, method: 'bank', reference: 'FPX1', ...extra }, 'user:x', { surauId: 'sdm', now: when, role: 'box' });
+  const content = (now: Date) => buildKioskContent(db, dir, now, getSettings(db, 'sdm'), 'sdm');
   return { db, funds, put, content, u };
 }
 
@@ -59,14 +59,14 @@ describe('kiosk tabung block', () => {
     expect(soon.rows[0]!.highlightUntil).toBe(at(20).toISOString());
     expect(soon.rows[1]!.highlightUntil).toBeNull();
     expect(r.content(at(30)).tabung!.rows[0]!.highlightUntil).toBeNull();
-    putFeature(r.db, 'tabungCard', { highlightSeconds: 0 }, 'test');
+    putFeature(r.db, 'tabungCard', { highlightSeconds: 0 }, 'test', undefined, 'sdm');
     expect(r.content(at(10)).tabung!.rows[0]!.highlightUntil).toBeNull();
   });
 
   it('a correction on the box lights the tabung too, and the figure follows the corrected amount', () => {
     const r = rig();
     r.put('e1', r.funds[0]!.id, 10000, '2026-11-06', at(0));
-    appendEntry(r.db, { id: 'c1', kind: 'adjust', entryDate: '2026-11-10', fundId: r.funds[0]!.id, correctsId: 'e1', correctionKind: 'amount', amountSen: 9000, reason: 'Salah taip jumlah: 90' }, 'user:x', { now: at(100), role: 'box' });
+    appendEntry(r.db, { id: 'c1', kind: 'adjust', entryDate: '2026-11-10', fundId: r.funds[0]!.id, correctsId: 'e1', correctionKind: 'amount', amountSen: 9000, reason: 'Salah taip jumlah: 90' }, 'user:x', { surauId: 'sdm', now: at(100), role: 'box' });
     const t = r.content(at(105)).tabung!;
     expect(t.rows[0]!.valueSen).toBe(9000);
     expect(t.rows[0]!.highlightUntil).toBe(at(120).toISOString());
@@ -78,16 +78,16 @@ describe('kiosk tabung block', () => {
     r.put('o1', f.id, 50000, '2026-10-30');
     r.put('e1', f.id, 3000, '2026-11-02');
     r.put('e2', f.id, 700, '2026-11-05');
-    appendEntry(r.db, { id: 'x1', kind: 'out', entryDate: '2026-11-06', fundId: f.id, perihalId: listPerihal(r.db).find((p) => p.label === 'Utiliti')!.id, amountSen: 200, method: 'bank', reference: 'FPX2' }, 'user:x', { now: T0, role: 'box' });
-    putFeature(r.db, 'tabungCard', { figure: 'month' }, 'test');
+    appendEntry(r.db, { id: 'x1', kind: 'out', entryDate: '2026-11-06', fundId: f.id, perihalId: listPerihal(r.db, undefined, 'sdm').find((p) => p.label === 'Utiliti')!.id, amountSen: 200, method: 'bank', reference: 'FPX2' }, 'user:x', { surauId: 'sdm', now: T0, role: 'box' });
+    putFeature(r.db, 'tabungCard', { figure: 'month' }, 'test', undefined, 'sdm');
     expect(r.content(at(60)).tabung!.rows[1]!.valueSen).toBe(3000 + 700 - 200);
-    putFeature(r.db, 'tabungCard', { figure: 'lastEntry' }, 'test');
+    putFeature(r.db, 'tabungCard', { figure: 'lastEntry' }, 'test', undefined, 'sdm');
     expect(r.content(at(60)).tabung!.rows[1]!.valueSen).toBe(700);
-    putFundIn(r.db, f.id, { name: f.name, public: true, jumaat: false, targetSen: 100000, sortOrder: f.sortOrder }, 'test');
-    putFeature(r.db, 'tabungCard', { figure: 'balance' }, 'test');
+    putFundIn(r.db, f.id, { name: f.name, public: true, jumaat: false, targetSen: 100000, sortOrder: f.sortOrder }, 'test', undefined, 'sdm');
+    putFeature(r.db, 'tabungCard', { figure: 'balance' }, 'test', undefined, 'sdm');
     const row = r.content(at(60)).tabung!.rows[1]!;
     expect(row).toMatchObject({ valueSen: 50000 + 3000 + 700 - 200, targetSen: 100000, subLabel: null });
-    putFeature(r.db, 'tabungCard', { showTarget: false }, 'test');
+    putFeature(r.db, 'tabungCard', { showTarget: false }, 'test', undefined, 'sdm');
     expect(r.content(at(60)).tabung!.rows[1]).toMatchObject({ targetSen: null, subLabel: 'Bulan ini' });
   });
 
@@ -96,7 +96,7 @@ describe('kiosk tabung block', () => {
       const r = rig();
       const f = r.funds[1]!;
       for (const id of order) r.put(id, f.id, id === 'b1' ? 700 : 300, '2026-11-05', T0);
-      putFeature(r.db, 'tabungCard', { figure: 'lastEntry' }, 'test');
+      putFeature(r.db, 'tabungCard', { figure: 'lastEntry' }, 'test', undefined, 'sdm');
       expect(r.content(at(60)).tabung!.rows[1]!.valueSen).toBe(700);
     }
   });
@@ -104,21 +104,74 @@ describe('kiosk tabung block', () => {
   it('finance off with typed rows gives the manual card; the card off gives null', () => {
     const r = rig();
     r.put('e1', r.funds[0]!.id, 100);
-    putFeature(r.db, 'finance', { enabled: false }, 'test');
-    putFeature(r.db, 'tabungCard', { manualTitle: 'Tabung Masjid', row1Label: 'Kutipan Jumaat 06/11/2026', row1Sen: 135680, row2Label: 'Derma Pembangunan', row2Sen: 2500000, row3Label: '   ' }, 'test');
+    putFeature(r.db, 'finance', { enabled: false }, 'test', undefined, 'sdm');
+    putFeature(r.db, 'tabungCard', { manualTitle: 'Tabung Masjid', row1Label: 'Kutipan Jumaat 06/11/2026', row1Sen: 135680, row2Label: 'Derma Pembangunan', row2Sen: 2500000, row3Label: '   ' }, 'test', undefined, 'sdm');
     const t = r.content(at(5)).tabung!;
     expect(t.manual).toBe(true);
     expect(t.title).toBe('Tabung Masjid');
     expect(t.rows.map((x) => [x.name, x.valueSen])).toEqual([['Kutipan Jumaat 06/11/2026', 135680], ['Derma Pembangunan', 2500000]]);
     expect(t.updatedAt).not.toBeNull();
-    putFeature(r.db, 'tabungCard', { enabled: false }, 'test');
+    putFeature(r.db, 'tabungCard', { enabled: false }, 'test', undefined, 'sdm');
     expect(r.content(at(5)).tabung).toBeNull();
   });
 
   it('only a 64-hex picture id becomes the QR', () => {
     const r = rig();
     expect(r.content(at(5)).tabung!.qrAssetId).toBeNull();
-    putFeature(r.db, 'tabungCard', { qrAssetId: 'd'.repeat(64) }, 'test');
+    putFeature(r.db, 'tabungCard', { qrAssetId: 'd'.repeat(64) }, 'test', undefined, 'sdm');
     expect(r.content(at(5)).tabung!.qrAssetId).toBe('d'.repeat(64));
+  });
+});
+
+describe('[F13] the Jumaat tabung line', () => {
+  it('[F13] shows the last Jumaat-perihal collection, not the last money in of any kind', () => {
+    const r = rig();
+    const per = (label: string) => listPerihal(r.db, undefined, 'sdm').find((p) => p.label === label)!.id;
+    const jumaat = r.funds[0]!.id;
+    r.put('e1', jumaat, 28000, '2026-11-06', T0, { perihalId: per('Kutipan solat Jumaat') });
+    r.put('e2', jumaat, 5000, '2026-11-08', T0, { perihalId: per('Peti derma') });
+    const row = r.content(at(3600)).tabung!.rows[0]!;
+    expect(row).toMatchObject({ subLabel: 'Kutipan Jumaat terakhir', subSen: 28000 });
+  });
+
+  it('[F13] with no Jumaat collection the line says "Kutipan terakhir" and shows the last money in', () => {
+    const r = rig();
+    const per = (label: string) => listPerihal(r.db, undefined, 'sdm').find((p) => p.label === label)!.id;
+    r.put('e2', r.funds[0]!.id, 5000, '2026-11-08', T0, { perihalId: per('Peti derma') });
+    expect(r.content(at(3600)).tabung!.rows[0]).toMatchObject({ subLabel: 'Kutipan terakhir', subSen: 5000 });
+  });
+});
+
+describe('[F13b] the tabung lines follow the TV language', () => {
+  const english = (db: DatabaseSync) => putFeature(db, 'language', { enabled: true, lang: 'en' }, 'test', undefined, 'sdm');
+  it('[F13b] an English TV gets English small lines; a BM TV keeps the Malay ones', () => {
+    const r = rig();
+    const per = (label: string) => listPerihal(r.db, undefined, 'sdm').find((p) => p.label === label)!.id;
+    r.put('e1', r.funds[0]!.id, 28000, '2026-11-06', T0, { perihalId: per('Kutipan solat Jumaat') });
+    r.put('e2', r.funds[1]!.id, 5000, '2026-11-08', T0, { perihalId: per('Peti derma') });
+    expect(r.content(at(3600)).tabung!.rows[0]).toMatchObject({ subLabel: 'Kutipan Jumaat terakhir' });
+    english(r.db);
+    const rows = r.content(at(3600)).tabung!.rows;
+    expect(rows[0]).toMatchObject({ subLabel: 'Last Friday collection', subSen: 28000 });
+    expect(rows[1]).toMatchObject({ subLabel: 'This month', subSen: 5000 });
+  });
+  it('[F13b] an English TV with no Jumaat collection says "Last collection"', () => {
+    const r = rig();
+    const per = (label: string) => listPerihal(r.db, undefined, 'sdm').find((p) => p.label === label)!.id;
+    r.put('e2', r.funds[0]!.id, 5000, '2026-11-08', T0, { perihalId: per('Peti derma') });
+    english(r.db);
+    expect(r.content(at(3600)).tabung!.rows[0]).toMatchObject({ subLabel: 'Last collection', subSen: 5000 });
+  });
+  it('[K9] the manual card title: default follows the TV language, the surau\'s own is never replaced', () => {
+    const r = rig();
+    putFeature(r.db, 'finance', { enabled: false }, 'test', undefined, 'sdm');
+    putFeature(r.db, 'tabungCard', { row1Label: 'Derma', row1Sen: 100 }, 'test', undefined, 'sdm');
+    expect(r.content(at(5)).tabung!.title).toBe('Tabung Surau');
+    english(r.db);
+    expect(r.content(at(5)).tabung!.title).toBe('Donation fund');
+    putFeature(r.db, 'tabungCard', { manualTitle: 'Tabung Surau' }, 'test', undefined, 'sdm');
+    expect(r.content(at(5)).tabung!.title).toBe('Donation fund');
+    putFeature(r.db, 'tabungCard', { manualTitle: 'Tabung Masjid' }, 'test', undefined, 'sdm');
+    expect(r.content(at(5)).tabung!.title).toBe('Tabung Masjid');
   });
 });

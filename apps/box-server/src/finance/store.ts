@@ -9,21 +9,24 @@ import {
   balances, effective, klDateOf, refLetter, validateEntryShape, validateLookup, validateMonth,
 } from '@surau/core';
 import type {
-  Counter, CorrectionKind, Denominations, EffectiveEntry, EntryKind, FinanceEntry, Fund, Method, MonthReport, MonthState, Perihal,
+  Counter, CorrectionKind, Denominations, EffectiveEntry, EntryKind, EntryNames, FinanceEntry, Fund, Method, MonthReport, MonthState, Perihal,
 } from '@surau/core';
 import { logChange, tx } from '../auth/users.ts';
 import { getUserRow } from '../auth/users.ts';
-import { bumpVersion, putFeatureIn } from '../settingsStore.ts';
+import { refOfRow } from '../auth/ids.ts';
+import { bumpVersion, getSettings, putFeatureIn } from '../settingsStore.ts';
 import { revOf } from '../sync/meta.ts';
 import type { ChangeMeta } from '../sync/meta.ts';
 import { getItem } from '../content/store.ts';
-import { DEFAULT_SURAU_ID } from '../sync/verify.ts';
+
+/** An offline entry is judged at its own edit day, but not further back than this. */
+const WINDOW_DAYS = 45;
 
 export type FinanceStatus = 400 | 404 | 409 | 413;
 export type FinanceCode =
   | 'invalid' | 'not_found' | 'entry_exists' | 'month_closed' | 'fund_archived' | 'perihal_archived' | 'name_taken'
   | 'balance_not_zero' | 'system_perihal' | 'kuliah_future' | 'kuliah_unknown' | 'counter_unknown' | 'month_order'
-  | 'correction_before_original' | 'later_month_closed';
+  | 'correction_before_original' | 'later_month_closed' | 'opening_exists' | 'already_voided' | 'opening_fund_fixed';
 
 export class FinanceError extends Error {
   status: FinanceStatus;
@@ -44,7 +47,7 @@ const YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 export interface AppendCtx {
   now: Date;
   role: 'box' | 'cloud';
-  surauId?: string;
+  surauId: string;
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -85,7 +88,73 @@ export function entryOf(r: Row): FinanceEntry {
     correctionKind: str(r.correction_kind) as CorrectionKind | null, toFundId: str(r.to_fund_id), reason: str(r.reason),
     refNo: str(r.ref_no), createdBy: String(r.created_by), deviceId: str(r.device_id), editedAt: String(r.edited_at),
     receivedAt: String(r.received_at), cloudReceivedAt: str(r.cloud_received_at),
+    names: jsonOf<EntryNames>(r.names_json),
   };
+}
+
+/** The names of the people and the device of an entry as of now, to be stored with it once. */
+export function entryNamesOf(db: DatabaseSync, createdBy: string, deviceId: string | null, counters: Counter[] | null): EntryNames {
+  // a Pentadbir MAXCOM (users.surau_id = '*') is never named in a surau's record, nor is a phone that belongs to one
+  const userName = (id: string): string | null => {
+    const u = getUserRow(db, id);
+    return u === undefined || u.surauId === '*' ? null : u.name;
+  };
+  const dev = deviceId === null ? undefined : db.prepare("SELECT name FROM devices WHERE id = ? AND surau_id <> '*' AND user_id NOT IN (SELECT id FROM users WHERE surau_id = '*')").get(deviceId);
+  const out: Record<string, string> = {};
+  for (const c of counters ?? []) {
+    if ('userId' in c) {
+      const n = userName(c.userId);
+      if (n !== null) out[c.userId] = n;
+    }
+  }
+  const names: EntryNames = { createdBy: userName(createdBy), device: dev !== undefined && typeof dev.name === 'string' ? dev.name : null, counters: out };
+  return { ...names, ...refsOf(db, createdBy, deviceId, Object.keys(out)) };
+}
+
+/** The IDs of the people and the device named in an entry (only the ones that exist and have one). */
+function refsOf(db: DatabaseSync, createdBy: string, deviceId: string | null, counterIds: string[]): Pick<EntryNames, 'createdByRef' | 'deviceRef' | 'counterRefs'> {
+  const userRef = (id: string): string | null => {
+    const r = db.prepare("SELECT no, no_src FROM users WHERE id = ? AND surau_id <> '*'").get(id);
+    return r === undefined ? null : refOfRow(r, 'user');
+  };
+  const d = deviceId === null ? undefined : db.prepare("SELECT no, no_src FROM devices WHERE id = ? AND surau_id <> '*' AND user_id NOT IN (SELECT id FROM users WHERE surau_id = '*')").get(deviceId);
+  const counterRefs: Record<string, string> = {};
+  for (const id of counterIds) {
+    const x = userRef(id);
+    if (x !== null) counterRefs[id] = x;
+  }
+  return { createdByRef: userRef(createdBy), deviceRef: d === undefined ? null : refOfRow(d, 'device'), counterRefs };
+}
+
+/** An entry whose stored names lack their IDs gets them by lookup (an ID never changes, so the lookup is as good as a stored value). */
+function withRefs(db: DatabaseSync, e: FinanceEntry): FinanceEntry {
+  const n = e.names;
+  if (n === null || n === undefined || (n.createdByRef !== undefined && n.deviceRef !== undefined && n.counterRefs !== undefined)) return e;
+  const found = refsOf(db, e.createdBy, e.deviceId, Object.keys(n.counters));
+  return { ...e, names: { ...n, createdByRef: n.createdByRef ?? found.createdByRef ?? null, deviceRef: n.deviceRef ?? found.deviceRef ?? null, counterRefs: { ...(found.counterRefs ?? {}), ...(n.counterRefs ?? {}) } } };
+}
+
+const NAME_MAX = 80;
+const nameOk = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= NAME_MAX && !/\p{Cc}/u.test(v);
+
+/** A sender's names when they are well formed (short strings, at most 20 counters, keys only the entry's own counters), else null. */
+function wellFormedNames(v: unknown, counters: Counter[] | null): EntryNames | null {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+  const n = v as { createdBy?: unknown; device?: unknown; counters?: unknown };
+  const one = (x: unknown): string | null | undefined => (x === null ? null : nameOk(x) ? x : undefined);
+  const createdBy = one(n.createdBy);
+  const device = one(n.device);
+  if (createdBy === undefined || device === undefined) return null;
+  if (typeof n.counters !== 'object' || n.counters === null || Array.isArray(n.counters)) return null;
+  const own = new Set((counters ?? []).flatMap((c) => ('userId' in c ? [c.userId] : [])));
+  const entries = Object.entries(n.counters as Record<string, unknown>);
+  if (entries.length > 20) return null;
+  const out: Record<string, string> = {};
+  for (const [k, val] of entries) {
+    if (!own.has(k) || !nameOk(val)) return null;
+    out[k] = val;
+  }
+  return { createdBy, device, counters: out };
 }
 
 function monthOf(r: Row): MonthState {
@@ -95,54 +164,52 @@ function monthOf(r: Row): MonthState {
   };
 }
 
-const surauOf = (ctx?: { surauId?: string }): string => ctx?.surauId ?? DEFAULT_SURAU_ID;
-
 // ---- lookups ----
 
-export function listFunds(db: DatabaseSync, opts: { includeArchived?: boolean } = {}): Fund[] {
+export function listFunds(db: DatabaseSync, opts: { includeArchived?: boolean } = {}, surauId: string): Fund[] {
   const rows = db.prepare(
-    `SELECT * FROM finance_funds ${opts.includeArchived ? '' : 'WHERE archived_at IS NULL'} ORDER BY sort_order, name, id`,
-  ).all();
+    `SELECT * FROM finance_funds WHERE surau_id = ? ${opts.includeArchived ? '' : 'AND archived_at IS NULL'} ORDER BY sort_order, name, id`,
+  ).all(surauId);
   return rows.map(fundOf);
 }
 
-export function getFund(db: DatabaseSync, id: string): Fund | null {
-  const r = db.prepare('SELECT * FROM finance_funds WHERE id = ?').get(id);
+export function getFund(db: DatabaseSync, id: string, surauId: string): Fund | null {
+  const r = db.prepare('SELECT * FROM finance_funds WHERE surau_id = ? AND id = ?').get(surauId, id);
   return r === undefined ? null : fundOf(r);
 }
 
-export function listPerihal(db: DatabaseSync, opts: { includeArchived?: boolean } = {}): Perihal[] {
+export function listPerihal(db: DatabaseSync, opts: { includeArchived?: boolean } = {}, surauId: string): Perihal[] {
   const rows = db.prepare(
-    `SELECT * FROM finance_perihal ${opts.includeArchived ? '' : 'WHERE archived_at IS NULL'} ORDER BY direction, sort_order, label, id`,
-  ).all();
+    `SELECT * FROM finance_perihal WHERE surau_id = ? ${opts.includeArchived ? '' : 'AND archived_at IS NULL'} ORDER BY direction, sort_order, label, id`,
+  ).all(surauId);
   return rows.map(perihalOf);
 }
 
-export function getPerihal(db: DatabaseSync, id: string): Perihal | null {
-  const r = db.prepare('SELECT * FROM finance_perihal WHERE id = ?').get(id);
+export function getPerihal(db: DatabaseSync, id: string, surauId: string): Perihal | null {
+  const r = db.prepare('SELECT * FROM finance_perihal WHERE surau_id = ? AND id = ?').get(surauId, id);
   return r === undefined ? null : perihalOf(r);
 }
 
 const nameKey = (s: string): string => s.trim().toLowerCase();
 
 /** Current balance of one fund from the ledger rows (corrections included). */
-export function fundBalance(db: DatabaseSync, fundId: string): number {
-  return balances(allEntries(db), [{ id: fundId }])[fundId] ?? 0;
+export function fundBalance(db: DatabaseSync, fundId: string, surauId: string): number {
+  return balances(allEntries(db, surauId), [{ id: fundId }])[fundId] ?? 0;
 }
 
-export function putFundIn(db: DatabaseSync, id: string, input: unknown, actor: string, meta?: ChangeMeta): Fund {
+export function putFundIn(db: DatabaseSync, id: string, input: unknown, actor: string, meta: ChangeMeta | undefined, surauId: string): Fund {
   if (!SAFE_ID.test(id)) throw new FinanceError(400, 'invalid', ['id must be 1-100 letters, digits, - or _']);
   const v = validateLookup('fund', input);
   if (!v.ok) throw new FinanceError(400, 'invalid', v.errors);
   const body = v.value;
-  const before = getFund(db, id);
+  const before = getFund(db, id, surauId);
   const trusted = meta?.trusted === true;
   if (!trusted && body.archivedAt === null) {
-    for (const f of listFunds(db)) {
+    for (const f of listFunds(db, {}, surauId)) {
       if (f.id !== id && nameKey(f.name) === nameKey(body.name)) throw new FinanceError(409, 'name_taken');
     }
   }
-  if (!trusted && body.archivedAt !== null && (before === null || before.archivedAt === null) && fundBalance(db, id) !== 0) {
+  if (!trusted && body.archivedAt !== null && (before === null || before.archivedAt === null) && fundBalance(db, id, surauId) !== 0) {
     throw new FinanceError(409, 'balance_not_zero');
   }
   const now = new Date().toISOString();
@@ -156,14 +223,14 @@ export function putFundIn(db: DatabaseSync, id: string, input: unknown, actor: s
   db.prepare(
     `INSERT INTO finance_funds (surau_id, id, name, public, target_sen, jumaat, sort_order, archived_at, updated_at, updated_by, rev, edited_at, origin)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET name = excluded.name, public = excluded.public, target_sen = excluded.target_sen,
+     ON CONFLICT(surau_id, id) DO UPDATE SET name = excluded.name, public = excluded.public, target_sen = excluded.target_sen,
        jumaat = excluded.jumaat, sort_order = excluded.sort_order, archived_at = excluded.archived_at,
        updated_at = excluded.updated_at, updated_by = excluded.updated_by, rev = excluded.rev,
        edited_at = excluded.edited_at, origin = excluded.origin`,
-  ).run(surauOf(), id, next.name, next.public ? 1 : 0, next.targetSen, next.jumaat ? 1 : 0, next.sortOrder, next.archivedAt,
+  ).run(surauId, id, next.name, next.public ? 1 : 0, next.targetSen, next.jumaat ? 1 : 0, next.sortOrder, next.archivedAt,
     now, actor, rev, editedAt, meta?.origin ?? 'local');
-  logChange(db, actor, 'finance:fund', id, before ?? undefined, next, meta);
-  bumpVersion(db);
+  logChange(db, actor, 'finance:fund', id, before ?? undefined, next, meta, surauId);
+  bumpVersion(db, surauId);
   return next;
 }
 
@@ -172,20 +239,21 @@ const sameFund = (a: Fund, b: Fund): boolean =>
   && a.sortOrder === b.sortOrder && a.archivedAt === b.archivedAt;
 
 export function putPerihalIn(
-  db: DatabaseSync, id: string, input: unknown, actor: string, meta?: ChangeMeta, opts?: { system?: 'penceramah' },
+  db: DatabaseSync, id: string, input: unknown, actor: string, meta: ChangeMeta | undefined, opts: { system?: 'penceramah' } | undefined,
+  surauId: string,
 ): Perihal {
   if (!SAFE_ID.test(id)) throw new FinanceError(400, 'invalid', ['id must be 1-100 letters, digits, - or _']);
   const v = validateLookup('perihal', input);
   if (!v.ok) throw new FinanceError(400, 'invalid', v.errors);
   const body = v.value;
-  const before = getPerihal(db, id);
+  const before = getPerihal(db, id, surauId);
   const trusted = meta?.trusted === true;
   if (before !== null && before.direction !== body.direction) throw new FinanceError(400, 'invalid', ['direction cannot change']);
   if (before !== null && before.system !== null && (before.label !== body.label || body.archivedAt !== null)) {
     throw new FinanceError(409, 'system_perihal');
   }
   if (!trusted && body.archivedAt === null) {
-    for (const p of listPerihal(db)) {
+    for (const p of listPerihal(db, {}, surauId)) {
       if (p.id !== id && p.direction === body.direction && nameKey(p.label) === nameKey(body.label)) throw new FinanceError(409, 'name_taken');
     }
   }
@@ -200,12 +268,12 @@ export function putPerihalIn(
   db.prepare(
     `INSERT INTO finance_perihal (surau_id, id, direction, label, system, sort_order, archived_at, updated_at, updated_by, rev, edited_at, origin)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET label = excluded.label, sort_order = excluded.sort_order, archived_at = excluded.archived_at,
+     ON CONFLICT(surau_id, id) DO UPDATE SET label = excluded.label, sort_order = excluded.sort_order, archived_at = excluded.archived_at,
        updated_at = excluded.updated_at, updated_by = excluded.updated_by, rev = excluded.rev,
        edited_at = excluded.edited_at, origin = excluded.origin`,
-  ).run(surauOf(), id, next.direction, next.label, next.system, next.sortOrder, next.archivedAt, now, actor, rev, editedAt, meta?.origin ?? 'local');
-  logChange(db, actor, 'finance:perihal', id, before ?? undefined, next, meta);
-  bumpVersion(db);
+  ).run(surauId, id, next.direction, next.label, next.system, next.sortOrder, next.archivedAt, now, actor, rev, editedAt, meta?.origin ?? 'local');
+  logChange(db, actor, 'finance:perihal', id, before ?? undefined, next, meta, surauId);
+  bumpVersion(db, surauId);
   return next;
 }
 
@@ -216,9 +284,9 @@ export const PENCERAMAH_PERIHAL_ID = 'perihal-penceramah';
  * The starting lists, written once when finance is first switched on. Idempotent: returns false when any fund
  * already exists. Sets the default penceramah tabung and the start date in the `finance` settings.
  */
-export function ensureSeeded(db: DatabaseSync, actor: string, now: Date): boolean {
+export function ensureSeeded(db: DatabaseSync, actor: string, now: Date, surauId: string): boolean {
   return tx(db, () => {
-    const has = db.prepare('SELECT 1 AS ok FROM finance_funds LIMIT 1').get();
+    const has = db.prepare('SELECT 1 AS ok FROM finance_funds WHERE surau_id = ? LIMIT 1').get(surauId);
     if (has !== undefined) return false;
     const id = (): string => `f${randomBytes(9).toString('hex')}`;
     const funds: [string, boolean, boolean][] = [
@@ -228,58 +296,60 @@ export function ensureSeeded(db: DatabaseSync, actor: string, now: Date): boolea
     funds.forEach(([name, pub, jumaat], i) => {
       const fid = id();
       if (jumaat) jumaatId = fid;
-      putFundIn(db, fid, { name, public: pub, jumaat, targetSen: null, sortOrder: i + 1, archivedAt: null }, actor);
+      putFundIn(db, fid, { name, public: pub, jumaat, targetSen: null, sortOrder: i + 1, archivedAt: null }, actor, undefined, surauId);
     });
     const ins = ['Kutipan solat Jumaat', 'Peti derma', 'Yuran khairat', 'Derma', 'Kutipan majlis'];
-    ins.forEach((label, i) => putPerihalIn(db, id(), { direction: 'in', label, sortOrder: i + 1, archivedAt: null }, actor));
+    ins.forEach((label, i) => putPerihalIn(db, id(), { direction: 'in', label, sortOrder: i + 1, archivedAt: null }, actor, undefined, undefined, surauId));
     const outs = ['Penceramah', 'Utiliti', 'Kebersihan', 'Penyelenggaraan', 'Khairat kematian', 'Pembangunan', 'Program dan majlis', 'Lain-lain'];
     outs.forEach((label, i) => {
       const pid = label === 'Penceramah' ? PENCERAMAH_PERIHAL_ID : id();
-      putPerihalIn(db, pid, { direction: 'out', label, sortOrder: i + 1, archivedAt: null }, actor, undefined, label === 'Penceramah' ? { system: 'penceramah' } : undefined);
+      putPerihalIn(db, pid, { direction: 'out', label, sortOrder: i + 1, archivedAt: null }, actor, undefined, label === 'Penceramah' ? { system: 'penceramah' } : undefined, surauId);
     });
-    putFeatureIn(db, 'finance', { penceramahFundId: jumaatId, startedOn: klDateOf(now) }, actor);
+    putFeatureIn(db, 'finance', { penceramahFundId: jumaatId, startedOn: klDateOf(now) }, actor, undefined, undefined, undefined, surauId);
     return true;
   });
 }
 
 // ---- ledger ----
 
-export function allEntries(db: DatabaseSync): FinanceEntry[] {
-  return db.prepare('SELECT * FROM finance_entries ORDER BY entry_date, edited_at, id').all().map(entryOf);
+export function allEntries(db: DatabaseSync, surauId: string): FinanceEntry[] {
+  return db.prepare('SELECT * FROM finance_entries WHERE surau_id = ? ORDER BY entry_date, edited_at, id').all(surauId).map((r) => withRefs(db, entryOf(r)));
 }
 
 export function listEntries(
-  db: DatabaseSync, opts: { ym?: string; fundId?: string; sinceEditedAt?: string; limit?: number } = {},
+  db: DatabaseSync, opts: { ym?: string; fundId?: string; sinceEditedAt?: string; limit?: number } = {}, surauId: string,
 ): FinanceEntry[] {
-  const where: string[] = [];
-  const args: (string | number)[] = [];
+  const where: string[] = ['surau_id = ?'];
+  const args: (string | number)[] = [surauId];
   if (opts.ym !== undefined) { where.push('substr(entry_date, 1, 7) = ?'); args.push(opts.ym); }
   if (opts.fundId !== undefined) { where.push('fund_id = ?'); args.push(opts.fundId); }
   if (opts.sinceEditedAt !== undefined) { where.push('edited_at > ?'); args.push(opts.sinceEditedAt); }
   const limit = Math.min(Math.max(1, Math.trunc(opts.limit ?? 500)), 5000);
-  const sql = `SELECT * FROM (SELECT * FROM finance_entries ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
+  const sql = `SELECT * FROM (SELECT * FROM finance_entries WHERE ${where.join(' AND ')}
     ORDER BY entry_date DESC, edited_at DESC, id DESC LIMIT ${limit}) ORDER BY entry_date, edited_at, id`;
-  return db.prepare(sql).all(...args).map(entryOf);
+  return db.prepare(sql).all(...args).map((r) => withRefs(db, entryOf(r)));
 }
 
-export function entryRow(db: DatabaseSync, id: string): FinanceEntry | null {
-  const r = db.prepare('SELECT * FROM finance_entries WHERE id = ?').get(id);
-  return r === undefined ? null : entryOf(r);
+export function entryRow(db: DatabaseSync, id: string, surauId: string): FinanceEntry | null {
+  const r = db.prepare('SELECT * FROM finance_entries WHERE surau_id = ? AND id = ?').get(surauId, id);
+  return r === undefined ? null : withRefs(db, entryOf(r));
 }
 
-export function getEntry(db: DatabaseSync, id: string): { entry: FinanceEntry; corrections: FinanceEntry[]; effective: EffectiveEntry } | null {
-  const entry = entryRow(db, id);
+export function getEntry(
+  db: DatabaseSync, id: string, surauId: string,
+): { entry: FinanceEntry; corrections: FinanceEntry[]; effective: EffectiveEntry } | null {
+  const entry = entryRow(db, id, surauId);
   if (entry === null) return null;
-  const corrections = db.prepare('SELECT * FROM finance_entries WHERE corrects_id = ?').all(id).map(entryOf);
+  const corrections = db.prepare('SELECT * FROM finance_entries WHERE surau_id = ? AND corrects_id = ?').all(surauId, id).map((r) => withRefs(db, entryOf(r)));
   const eff = effective([entry, ...corrections])[0];
   if (eff === undefined) return null; // the id belongs to a correction row, which has no chain of its own
   return { entry, corrections: eff.corrections, effective: eff };
 }
 
-export function financeCounts(db: DatabaseSync): { entries: number; funds: number } {
+export function financeCounts(db: DatabaseSync, surauId: string): { entries: number; funds: number } {
   return {
-    entries: num(db.prepare('SELECT COUNT(*) AS n FROM finance_entries').get()!.n),
-    funds: num(db.prepare('SELECT COUNT(*) AS n FROM finance_funds').get()!.n),
+    entries: num(db.prepare('SELECT COUNT(*) AS n FROM finance_entries WHERE surau_id = ?').get(surauId)!.n),
+    funds: num(db.prepare('SELECT COUNT(*) AS n FROM finance_funds WHERE surau_id = ?').get(surauId)!.n),
   };
 }
 
@@ -287,8 +357,8 @@ function nextRefNo(db: DatabaseSync, surauId: string, letter: string): string {
   db.prepare('INSERT INTO finance_counters (surau_id, letter, next) VALUES (?, ?, 1) ON CONFLICT(surau_id, letter) DO NOTHING').run(surauId, letter);
   let n = num(db.prepare('SELECT next FROM finance_counters WHERE surau_id = ? AND letter = ?').get(surauId, letter)!.next);
   // a number already on a row (pulled back from the cloud, or an old low counter) is never handed out again
-  const taken = db.prepare('SELECT 1 AS ok FROM finance_entries WHERE ref_no = ?');
-  while (taken.get(`${letter}-${String(n).padStart(4, '0')}`) !== undefined) n += 1;
+  const taken = db.prepare('SELECT 1 AS ok FROM finance_entries WHERE surau_id = ? AND ref_no = ?');
+  while (taken.get(surauId, `${letter}-${String(n).padStart(4, '0')}`) !== undefined) n += 1;
   db.prepare('UPDATE finance_counters SET next = ? WHERE surau_id = ? AND letter = ?').run(n + 1, surauId, letter);
   return `${letter}-${String(n).padStart(4, '0')}`;
 }
@@ -300,69 +370,91 @@ function raiseCounter(db: DatabaseSync, surauId: string, letter: string, n: numb
 }
 
 /** Fill a still-empty reference number (the cloud learns the box's number this way). False when already set or unknown. */
-export function setRefNoIfNull(db: DatabaseSync, id: string, refNo: string): boolean {
+export function setRefNoIfNull(db: DatabaseSync, id: string, refNo: string, surauId: string): boolean {
   if (!/^[KBPA]-\d{4,}$/.test(refNo)) return false;
-  const taken = db.prepare('SELECT 1 AS ok FROM finance_entries WHERE ref_no = ? AND id <> ?').get(refNo, id);
+  const taken = db.prepare('SELECT 1 AS ok FROM finance_entries WHERE surau_id = ? AND ref_no = ? AND id <> ?').get(surauId, refNo, id);
   if (taken !== undefined) return false;
-  const r = db.prepare('UPDATE finance_entries SET ref_no = ? WHERE id = ? AND ref_no IS NULL').run(refNo, id);
+  const r = db.prepare('UPDATE finance_entries SET ref_no = ? WHERE surau_id = ? AND id = ? AND ref_no IS NULL').run(refNo, surauId, id);
   return Number(r.changes) > 0;
 }
 
-export function setCloudReceived(db: DatabaseSync, id: string, iso: string): boolean {
-  const r = db.prepare('UPDATE finance_entries SET cloud_received_at = ? WHERE id = ? AND cloud_received_at IS NULL').run(iso, id);
+export function setCloudReceived(db: DatabaseSync, id: string, iso: string, surauId: string): boolean {
+  const r = db.prepare('UPDATE finance_entries SET cloud_received_at = ? WHERE surau_id = ? AND id = ? AND cloud_received_at IS NULL').run(iso, surauId, id);
   return Number(r.changes) > 0;
 }
 
 // ---- months ----
 
-export function listMonths(db: DatabaseSync): MonthState[] {
-  return db.prepare('SELECT * FROM finance_months ORDER BY ym').all().map(monthOf);
+/**
+ * Ids of the entries that were replicated into `ym` after it was closed here (since its latest close or reopen).
+ * They are read from the month's own history rows, so a snapshot that delivers old entries next to the close
+ * never counts them.
+ */
+export function lateEntryIds(db: DatabaseSync, ym: string, surauId: string): string[] {
+  const last = db.prepare(
+    "SELECT MAX(id) AS id FROM change_log WHERE surau_id = ? AND entity = 'finance:month' AND entity_id = ? AND json_extract(after_json, '$.lateEntry') IS NULL",
+  ).get(surauId, ym);
+  const since = typeof last?.id === 'number' || typeof last?.id === 'bigint' ? Number(last.id) : 0;
+  return db.prepare(
+    "SELECT json_extract(after_json, '$.lateEntry.id') AS eid FROM change_log WHERE surau_id = ? AND entity = 'finance:month' AND entity_id = ? AND id > ? AND json_extract(after_json, '$.lateEntry') IS NOT NULL ORDER BY id",
+  ).all(surauId, ym, since).map((r) => String(r.eid)).filter((id, i, a) => a.indexOf(id) === i);
 }
 
-export function monthStatus(db: DatabaseSync, ym: string): 'open' | 'closed' {
-  const r = db.prepare('SELECT status FROM finance_months WHERE ym = ?').get(ym);
+export function listMonths(db: DatabaseSync, surauId: string): MonthState[] {
+  return db.prepare('SELECT * FROM finance_months WHERE surau_id = ? ORDER BY ym').all(surauId).map(monthOf).map((m) => {
+    if (m.status !== 'closed') return m;
+    const late = lateEntryIds(db, m.ym, surauId);
+    return late.length === 0 ? m : { ...m, lateEntries: late };
+  });
+}
+
+export function monthStatus(db: DatabaseSync, ym: string, surauId: string): 'open' | 'closed' {
+  const r = db.prepare('SELECT status FROM finance_months WHERE surau_id = ? AND ym = ?').get(surauId, ym);
   return r !== undefined && r.status === 'closed' ? 'closed' : 'open';
 }
 
-export const isMonthClosed = (db: DatabaseSync, ym: string): boolean => monthStatus(db, ym) === 'closed';
+export const isMonthClosed = (db: DatabaseSync, ym: string, surauId: string): boolean => monthStatus(db, ym, surauId) === 'closed';
 
-export function monthReportJson(db: DatabaseSync, ym: string): string | null {
-  const r = db.prepare('SELECT report_json FROM finance_months WHERE ym = ?').get(ym);
+export function monthReportJson(db: DatabaseSync, ym: string, surauId: string): string | null {
+  const r = db.prepare('SELECT report_json FROM finance_months WHERE surau_id = ? AND ym = ?').get(surauId, ym);
   return r !== undefined && typeof r.report_json === 'string' ? r.report_json : null;
 }
 
 /** True when a month after `ym` is closed (months close and reopen in order on this side). */
-function laterMonthClosed(db: DatabaseSync, ym: string): boolean {
-  return db.prepare("SELECT 1 AS ok FROM finance_months WHERE ym > ? AND status = 'closed' LIMIT 1").get(ym) !== undefined;
+function laterMonthClosed(db: DatabaseSync, ym: string, surauId: string): boolean {
+  return db.prepare("SELECT 1 AS ok FROM finance_months WHERE surau_id = ? AND ym > ? AND status = 'closed' LIMIT 1").get(surauId, ym) !== undefined;
 }
 
 export interface MonthCtx {
   now: Date;
   role: 'box' | 'cloud';
-  surauId?: string;
+  surauId: string;
   /** Builds the frozen report JSON when a month is closed (Task 6). */
   freeze?: (ym: string) => string;
   /** Replication: the frozen report the other side made, stored as it is (no freeze here). */
   frozenJson?: string | null;
 }
 
-export function putMonthIn(db: DatabaseSync, ym: string, input: unknown, actor: string, ctx: MonthCtx, meta?: ChangeMeta): MonthState {
+export function putMonthIn(
+  db: DatabaseSync, ym: string, input: unknown, actor: string, ctx: MonthCtx, meta?: ChangeMeta,
+  surauId: string = ctx.surauId,
+): MonthState {
   const todayKl = klDateOf(ctx.now);
   const body = typeof input === 'object' && input !== null ? { ...(input as Record<string, unknown>), ym } : input;
   const v = validateMonth(body, { todayKl });
   if (!v.ok || !YM_RE.test(ym)) throw new FinanceError(400, 'invalid', v.ok ? ['ym must be YYYY-MM'] : v.errors);
   const status = v.value.status;
-  const cur = db.prepare('SELECT * FROM finance_months WHERE ym = ?').get(ym);
+  const cur = db.prepare('SELECT * FROM finance_months WHERE surau_id = ? AND ym = ?').get(surauId, ym);
   const before = cur === undefined ? null : monthOf(cur);
   if ((before?.status ?? 'open') === status) return before ?? { ym, status: 'open', closedAt: null, closedBy: null, report: null };
-  if (status === 'open' && meta?.trusted !== true && laterMonthClosed(db, ym)) {
+  if (status === 'open' && meta?.trusted !== true && laterMonthClosed(db, ym, surauId)) {
     throw new FinanceError(409, 'later_month_closed', ['Bulan terkemudian sudah dimuktamadkan: buka semula bulan itu dahulu']);
   }
   if (status === 'closed' && meta?.trusted !== true) {
     const start = `${ym}-01`;
-    const earlier = db.prepare('SELECT DISTINCT substr(entry_date, 1, 7) AS m FROM finance_entries WHERE entry_date < ?').all(start);
+    const earlier = db.prepare('SELECT DISTINCT substr(entry_date, 1, 7) AS m FROM finance_entries WHERE surau_id = ? AND entry_date < ?').all(surauId, start);
     for (const e of earlier) {
-      if (!isMonthClosed(db, String(e.m))) throw new FinanceError(409, 'month_order', ['close the earlier month first']);
+      if (!isMonthClosed(db, String(e.m), surauId)) throw new FinanceError(409, 'month_order', ['close the earlier month first']);
     }
   }
   const nowIso = ctx.now.toISOString();
@@ -379,9 +471,9 @@ export function putMonthIn(db: DatabaseSync, ym: string, input: unknown, actor: 
      ON CONFLICT(surau_id, ym) DO UPDATE SET status = excluded.status, closed_at = excluded.closed_at,
        closed_by = excluded.closed_by, report_json = excluded.report_json, updated_at = excluded.updated_at,
        rev = excluded.rev, edited_at = excluded.edited_at, origin = excluded.origin`,
-  ).run(surauOf(ctx), ym, status, next.closedAt, next.closedBy, report, nowIso, rev, editedAt, meta?.origin ?? 'local');
-  logChange(db, actor, 'finance:month', ym, before ?? undefined, next, meta);
-  bumpVersion(db);
+  ).run(surauId, ym, status, next.closedAt, next.closedBy, report, nowIso, rev, editedAt, meta?.origin ?? 'local');
+  logChange(db, actor, 'finance:month', ym, before ?? undefined, next, meta, surauId);
+  bumpVersion(db, surauId);
   return next;
 }
 
@@ -398,8 +490,8 @@ function sameAsStored(row: FinanceEntry, i: ReturnType<typeof shape>): boolean {
     && row.toFundId === i.toFundId && row.reason === i.reason && (row.kind === 'adjust' || row.fundId === i.fundId);
 }
 
-function shape(input: unknown, todayKl: string) {
-  const v = validateEntryShape(input, { todayKl });
+function shape(input: unknown, todayKl: string, windowKl?: string, startedOn?: string) {
+  const v = validateEntryShape(input, { todayKl, windowKl, startedOn });
   if (!v.ok) throw new FinanceError(400, 'invalid', v.errors);
   return v.value;
 }
@@ -411,22 +503,28 @@ function shape(input: unknown, todayKl: string) {
  */
 export function appendEntryIn(
   db: DatabaseSync, input: unknown, actor: string, ctx: AppendCtx, meta?: ChangeMeta,
+  surauId: string = ctx.surauId,
 ): FinanceEntry {
-  const surauId = surauOf(ctx);
   const todayKl = klDateOf(ctx.now);
   const rawId = typeof input === 'object' && input !== null ? (input as { id?: unknown }).id : undefined;
-  const existing = typeof rawId === 'string' && SAFE_ID.test(rawId) ? entryRow(db, rawId) : null;
+  const existing = typeof rawId === 'string' && SAFE_ID.test(rawId) ? entryRow(db, rawId, surauId) : null;
   if (existing !== null) {
     // A retry may arrive after the date window moved on: judge its shape as of the day it was entered.
     const i = shape(input, existing.entryDate);
     if (sameAsStored(existing, i)) return existing;
     throw new FinanceError(409, 'entry_exists');
   }
-  const i = shape(input, todayKl);
+  // The old end of the date window is judged at the day the entry was made (an offline phone syncs days later),
+  // never further back than 45 days before now and never after today.
+  const editedKl = meta?.editedAt === undefined || Number.isNaN(Date.parse(meta.editedAt)) ? todayKl : klDateOf(new Date(meta.editedAt));
+  const floorKl = klDateOf(new Date(ctx.now.getTime() - WINDOW_DAYS * 86_400_000));
+  const windowKl = editedKl > todayKl ? todayKl : editedKl < floorKl ? floorKl : editedKl;
+  const startedOn = String((getSettings(db, surauId).finance as unknown as { startedOn?: string } | undefined)?.startedOn ?? '');
+  const i = shape(input, todayKl, windowKl, startedOn);
   const errs: string[] = [];
 
   const fund = (id: string): Fund => {
-    const f = getFund(db, id);
+    const f = getFund(db, id, surauId);
     if (f === null) throw new FinanceError(400, 'invalid', ['unknown tabung']);
     if (f.archivedAt !== null) throw new FinanceError(409, 'fund_archived');
     return f;
@@ -439,7 +537,7 @@ export function appendEntryIn(
   let penceramahName: string | null = null;
 
   if (i.kind === 'adjust') {
-    const orig = entryRow(db, i.correctsId!);
+    const orig = entryRow(db, i.correctsId!, surauId);
     if (orig === null || orig.kind === 'adjust') throw new FinanceError(400, 'invalid', ['a correction must point at an original entry']);
     fundId = orig.fundId;
     // a correction is dated on or after the day of the entry it corrects
@@ -448,36 +546,48 @@ export function appendEntryIn(
     }
     // an amount or void correction changes what the original's tabung holds: not once that tabung is archived
     if (i.correctionKind === 'amount' || i.correctionKind === 'void') {
-      const atFund = getEntry(db, orig.id)?.effective.effFundId ?? orig.fundId;
-      if (getFund(db, atFund)?.archivedAt != null) {
+      const atFund = getEntry(db, orig.id, surauId)?.effective.effFundId ?? orig.fundId;
+      if (getFund(db, atFund, surauId)?.archivedAt != null) {
         throw new FinanceError(409, 'fund_archived', ['Tabung catatan asal sudah diarkibkan']);
       }
     }
     if (i.correctionKind === 'amount' && orig.kind !== 'opening' && i.amountSen <= 0) {
       throw new FinanceError(400, 'invalid', ['amountSen must be more than 0']);
     }
+    // a cancelled entry is final: moving it or cancelling it again would bring the money back or double the record
+    if ((i.correctionKind === 'fund' || i.correctionKind === 'void' || i.correctionKind === 'amount') && getEntry(db, orig.id, surauId)?.effective.voided === true) {
+      throw new FinanceError(409, 'already_voided', ['Catatan ini sudah dibatalkan']);
+    }
     if (i.correctionKind === 'fund') {
+      // an opening balance stays in its tabung: moving it would let a second one be entered in the first
+      if (orig.kind === 'opening') throw new FinanceError(409, 'opening_fund_fixed', ['Baki awal tidak boleh dipindahkan ke tabung lain']);
       fund(i.toFundId!);
-      const eff = getEntry(db, orig.id)?.effective;
+      const eff = getEntry(db, orig.id, surauId)?.effective;
       if (eff !== undefined && eff.effFundId === i.toFundId) throw new FinanceError(400, 'invalid', ['the entry is already in that tabung']);
     }
     perihalId = null;
   } else {
     fund(i.fundId);
+    if (i.kind === 'opening') {
+      // one opening balance per tabung: a second setup run must not double it (a cancelled one may be entered again)
+      for (const r of db.prepare("SELECT id FROM finance_entries WHERE surau_id = ? AND kind = 'opening' AND fund_id = ?").all(surauId, i.fundId)) {
+        if (getEntry(db, String(r.id), surauId)?.effective.voided !== true) throw new FinanceError(409, 'opening_exists', ['Baki awal tabung ini sudah ada']);
+      }
+    }
     if (i.kind === 'in' || i.kind === 'out') {
-      const p = getPerihal(db, i.perihalId!);
+      const p = getPerihal(db, i.perihalId!, surauId);
       if (p === null) throw new FinanceError(400, 'invalid', ['unknown perihal']);
       if (p.archivedAt !== null) throw new FinanceError(409, 'perihal_archived');
       if (p.direction !== i.kind) throw new FinanceError(400, 'invalid', ['perihal is for the other direction']);
       if (p.system === 'penceramah') {
         if (i.kind !== 'out') throw new FinanceError(400, 'invalid', ['penceramah is a payment perihal']);
         if (i.kuliahId === null) throw new FinanceError(400, 'invalid', ['a penceramah payment needs a kuliah']);
-        const k = getItem(db, 'kuliah', i.kuliahId);
+        const k = getItem(db, 'kuliah', i.kuliahId, surauId);
         if (k === null) throw new FinanceError(404, 'kuliah_unknown');
         if (k.date > todayKl) throw new FinanceError(409, 'kuliah_future');
         kuliahId = k.id;
         penceramahId = k.penceramahId;
-        penceramahName = getItem(db, 'penceramah', k.penceramahId)?.name ?? null;
+        penceramahName = getItem(db, 'penceramah', k.penceramahId, surauId)?.name ?? null;
       } else if (i.kuliahId !== null) {
         throw new FinanceError(400, 'invalid', ['only a penceramah payment is linked to a kuliah']);
       }
@@ -494,8 +604,8 @@ export function appendEntryIn(
     if (errs.length > 0) throw new FinanceError(400, 'counter_unknown', errs);
   }
 
-  if (isMonthClosed(db, i.entryDate.slice(0, 7))) throw new FinanceError(409, 'month_closed');
-  if (laterMonthClosed(db, i.entryDate.slice(0, 7))) {
+  if (isMonthClosed(db, i.entryDate.slice(0, 7), surauId)) throw new FinanceError(409, 'month_closed');
+  if (laterMonthClosed(db, i.entryDate.slice(0, 7), surauId)) {
     throw new FinanceError(409, 'later_month_closed', ['Bulan selepas ini sudah dimuktamadkan']);
   }
 
@@ -506,25 +616,29 @@ export function appendEntryIn(
   db.prepare(
     `INSERT INTO finance_entries (surau_id, id, kind, entry_date, fund_id, perihal_id, amount_sen, method, reference, note, payee,
        counters_json, denominations_json, photo_id, kuliah_id, penceramah_id, penceramah_name, corrects_id, correction_kind,
-       to_fund_id, reason, ref_no, created_by, device_id, edited_at, received_at, origin, op_id, rev)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       to_fund_id, reason, ref_no, created_by, device_id, edited_at, received_at, origin, op_id, rev, names_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     surauId, i.id, i.kind, i.entryDate, fundId, perihalId, i.amountSen, i.method, i.reference, i.note, i.payee,
     i.counters === null ? null : JSON.stringify(i.counters), i.denominations === null ? null : JSON.stringify(i.denominations),
     i.photoId, kuliahId, penceramahId, penceramahName, i.correctsId, i.correctionKind, i.toFundId, i.reason, refNo,
     actor.replace(USER_PREFIX, ''), meta?.deviceId ?? null, editedAt, nowIso, meta?.origin ?? 'local', meta?.opId ?? null, rev,
+    JSON.stringify(entryNamesOf(db, actor.replace(USER_PREFIX, ''), meta?.deviceId ?? null, i.counters)),
   );
-  const saved = entryRow(db, i.id)!;
-  logChange(db, actor, 'finance:entry', i.id, undefined, saved, meta);
-  bumpVersion(db);
+  const saved = entryRow(db, i.id, surauId)!;
+  logChange(db, actor, 'finance:entry', i.id, undefined, saved, meta, surauId);
+  bumpVersion(db, surauId);
   return saved;
 }
 
 const USER_PREFIX = /^user:/;
 
 
-export function appendEntry(db: DatabaseSync, input: unknown, actor: string, ctx: AppendCtx, meta?: ChangeMeta): FinanceEntry {
-  return tx(db, () => appendEntryIn(db, input, actor, ctx, meta));
+export function appendEntry(
+  db: DatabaseSync, input: unknown, actor: string, ctx: AppendCtx, meta?: ChangeMeta,
+  surauId: string = ctx.surauId,
+): FinanceEntry {
+  return tx(db, () => appendEntryIn(db, input, actor, ctx, meta, surauId));
 }
 
 // ---- replication ----
@@ -545,6 +659,7 @@ const REF_OK = /^[KBPA]-\d{4,}$/;
  */
 export function insertReplicatedEntry(
   db: DatabaseSync, after: Record<string, unknown>, id: string, actor: string, ctx: AppendCtx, meta: ChangeMeta,
+  surauId: string = ctx.surauId,
 ): FinanceEntry {
   const input: Record<string, unknown> = {};
   for (const k of INPUT_KEYS) if (after[k] !== undefined) input[k] = after[k];
@@ -555,7 +670,7 @@ export function insertReplicatedEntry(
   if (!v.ok || kind === '') throw new FinanceError(400, 'invalid', v.ok ? ['invalid'] : v.errors);
   const i = v.value;
   const need = (table: 'finance_funds' | 'finance_perihal' | 'finance_entries', key: string | null): void => {
-    if (key !== null && db.prepare(`SELECT 1 AS ok FROM ${table} WHERE id = ?`).get(key) === undefined) {
+    if (key !== null && db.prepare(`SELECT 1 AS ok FROM ${table} WHERE surau_id = ? AND id = ?`).get(surauId, key) === undefined) {
       throw new FinanceError(400, 'invalid', ['a row this entry points at is missing here']);
     }
   };
@@ -563,9 +678,8 @@ export function insertReplicatedEntry(
   need('finance_funds', i.toFundId);
   need('finance_perihal', i.perihalId);
   need('finance_entries', i.correctsId);
-  const surauId = surauOf(ctx);
   const incomingRef = typeof after.refNo === 'string' && REF_OK.test(after.refNo) ? after.refNo : null;
-  const taken = incomingRef !== null && db.prepare('SELECT 1 AS ok FROM finance_entries WHERE ref_no = ?').get(incomingRef) !== undefined;
+  const taken = incomingRef !== null && db.prepare('SELECT 1 AS ok FROM finance_entries WHERE surau_id = ? AND ref_no = ?').get(surauId, incomingRef) !== undefined;
   const refNo = incomingRef !== null && !taken ? incomingRef : ctx.role === 'box' ? nextRefNo(db, surauId, refLetter(i.kind)) : null;
   if (incomingRef !== null && refNo === incomingRef) raiseCounter(db, surauId, incomingRef.charAt(0), Number(incomingRef.slice(2)));
   const createdBy = typeof after.createdBy === 'string' && ACTOR_OK.test(after.createdBy) ? after.createdBy.replace(USER_PREFIX, '') : actor.replace(USER_PREFIX, '');
@@ -575,27 +689,37 @@ export function insertReplicatedEntry(
   db.prepare(
     `INSERT INTO finance_entries (surau_id, id, kind, entry_date, fund_id, perihal_id, amount_sen, method, reference, note, payee,
        counters_json, denominations_json, photo_id, kuliah_id, penceramah_id, penceramah_name, corrects_id, correction_kind,
-       to_fund_id, reason, ref_no, created_by, device_id, edited_at, received_at, origin, op_id, rev)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       to_fund_id, reason, ref_no, created_by, device_id, edited_at, received_at, origin, op_id, rev, names_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     surauId, i.id, i.kind, i.entryDate, i.fundId, i.perihalId, i.amountSen, i.method, i.reference, i.note, i.payee,
     i.counters === null ? null : JSON.stringify(i.counters), i.denominations === null ? null : JSON.stringify(i.denominations),
     i.photoId, i.kuliahId, i.penceramahId, i.penceramahName, i.correctsId, i.correctionKind, i.toFundId, i.reason, refNo,
     createdBy, deviceId, editedAt, nowIso, meta.origin ?? 'local', meta.opId ?? null, revOf(editedAt, meta),
+    JSON.stringify(wellFormedNames(after.names, i.counters) ?? entryNamesOf(db, createdBy, deviceId, i.counters)),
   );
-  const saved = entryRow(db, i.id)!;
-  logChange(db, actor, 'finance:entry', i.id, undefined, saved, meta);
-  bumpVersion(db);
+  const saved = entryRow(db, i.id, surauId)!;
+  logChange(db, actor, 'finance:entry', i.id, undefined, saved, meta, surauId);
+  // The entry exists on the other side, so it is kept even when its month was closed here; the month says so.
+  const ym = i.entryDate.slice(0, 7);
+  if (isMonthClosed(db, ym, surauId)) {
+    const { opId: _op, ...lateMeta } = meta;
+    void _op;
+    logChange(db, actor, 'finance:month', ym, undefined, { ym, lateEntry: { id: i.id, amountSen: i.amountSen } }, lateMeta, surauId);
+  }
+  bumpVersion(db, surauId);
   return saved;
 }
 
 /** A finance:entry feed entry for a row this side already has: only a missing display number is filled, and logged. */
-export function fillRefNoFrom(db: DatabaseSync, id: string, refNo: string, actor: string, meta: ChangeMeta): boolean {
-  if (!setRefNoIfNull(db, id, refNo)) return false;
+export function fillRefNoFrom(
+  db: DatabaseSync, id: string, refNo: string, actor: string, meta: ChangeMeta, surauId: string,
+): boolean {
+  if (!setRefNoIfNull(db, id, refNo, surauId)) return false;
   // the op id belongs to the row's first history entry (change_log.op_id is unique); this one only carries the number
   const { opId: _op, ...fillMeta } = meta;
   void _op;
-  logChange(db, actor, 'finance:entry', id, undefined, entryRow(db, id), fillMeta);
-  bumpVersion(db);
+  logChange(db, actor, 'finance:entry', id, undefined, entryRow(db, id, surauId), fillMeta, surauId);
+  bumpVersion(db, surauId);
   return true;
 }

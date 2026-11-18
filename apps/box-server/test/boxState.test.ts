@@ -36,12 +36,12 @@ describe('box state', () => {
   });
 
   it('an admin with no device is recovery / no_admin', () => {
-    createUser(db, { name: 'Ali', roles: ['admin'] }, 'test');
+    createUser(db, { name: 'Ali', roles: ['admin'] }, 'test', 'sdm');
     expect(boxState(db)).toEqual({ state: 'recovery', reason: 'no_admin' });
   });
 
   it('an enrolled android admin device is active; revoking it is recovery again', () => {
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test', 'sdm');
     const d = enrol(u.id, 'android', 1);
     expect(boxState(db).state).toBe('active');
     expect(activeAdminDeviceCount(db)).toBe(1);
@@ -50,17 +50,17 @@ describe('box state', () => {
   });
 
   it('a kiosk device alone does not count', () => {
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test', 'sdm');
     enrol(u.id, 'kiosk', 2);
     expect(activeAdminDeviceCount(db)).toBe(0);
     expect(boxState(db).state).toBe('recovery');
   });
 
   it('an AJK device does not make the box active; a deactivated admin does not count', () => {
-    const ajk = createUser(db, { name: 'Bakar', roles: ['ajk'] }, 'test');
+    const ajk = createUser(db, { name: 'Bakar', roles: ['ajk'] }, 'test', 'sdm');
     enrol(ajk.id, 'android', 3);
     expect(boxState(db).state).toBe('recovery');
-    const admin = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test');
+    const admin = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test', 'sdm');
     enrol(admin.id, 'android', 5);
     expect(boxState(db).state).toBe('active');
     db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(admin.id);
@@ -68,7 +68,7 @@ describe('box state', () => {
   });
 
   it('a superadmin device counts as an active Pentadbir', () => {
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test', 'sdm');
     enrol(u.id, 'android', 7);
     db.prepare('UPDATE users SET roles_json = ? WHERE id = ?').run(JSON.stringify(['superadmin']), u.id);
     expect(boxState(db).state).toBe('active');
@@ -77,7 +77,7 @@ describe('box state', () => {
   it('sync_state.suspended = 1 wins as locked, on an empty box too', () => {
     db.prepare("INSERT INTO sync_state (key, value) VALUES ('suspended', '1')").run();
     expect(boxState(db).state).toBe('locked');
-    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test');
+    const u = createUser(db, { name: 'Ali', roles: ['admin'] }, 'test', 'sdm');
     enrol(u.id, 'android', 9);
     expect(boxState(db).state).toBe('locked');
     db.prepare("DELETE FROM sync_state WHERE key = 'suspended'").run();

@@ -17,7 +17,7 @@ const newDb = (): DatabaseSync => { const d = mkdtempSync(join(tmpdir(), 'surau-
 afterEach(() => { for (const d of dbs.splice(0)) d.close(); for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 const T = (iso: string): Date => new Date(iso);
-const ctx = (): ApplyCtx => ({ now: T('2026-11-20T10:00:00Z'), origin: 'box:boxA', actor: 'system:sync', dataDir: tmpdir() });
+const ctx = (): ApplyCtx => ({ surauId: 'sdm', now: T('2026-11-20T10:00:00Z'), origin: 'box:boxA', actor: 'system:sync', dataDir: tmpdir() });
 const prayerOf = (db: DatabaseSync): FeedEntry[] => readFeed(db, 0, 5000, { users: true, devices: true }).entries.filter((e) => e.entity.startsWith('prayer:'));
 const importEntry = (db: DatabaseSync, id: string): FeedEntry => prayerOf(db).filter((e) => e.entity === 'prayer:import' && e.entityId === id).pop()!;
 const send = (to: DatabaseSync, entries: FeedEntry[]): string[] => entries.map((e) => applyFeedEntry(to, e, ctx()).status);
@@ -33,7 +33,7 @@ const fileDays = (dates: string[], zohor = '12:12'): PrayerDay[] => {
 const range = (from: string, n: number): string[] => Array.from({ length: n }, (_, i) => new Date(Date.parse(`${from}T00:00:00Z`) + i * 86_400_000).toISOString().slice(0, 10));
 const ke = (): Settings => resolveSettings({ location: { country: 'KE', timezone: 'Africa/Nairobi', latitude: -1.29, longitude: 36.82 }, prayerSources: { sourceOrder: ['file', 'calc', 'official'] } } as never);
 const imp = (db: DatabaseSync, name: string, dates: string[], zohor: string, at: string, overlap: 'replace' | 'keep' | 'fillEmpty' = 'replace') =>
-  applyImport(db, ke(), { kind: 'csv', fileName: name, sha256: name.charCodeAt(0).toString(16).padStart(2, '0').repeat(32), days: fileDays(dates, zohor), overlap }, 'user:t', undefined, T(at));
+  applyImport(db, ke(), { kind: 'csv', fileName: name, sha256: name.charCodeAt(0).toString(16).padStart(2, '0').repeat(32), days: fileDays(dates, zohor), overlap }, 'user:t', undefined, T(at), 'sdm');
 
 describe('gate 13 item 2: replicated imports converge', () => {
   it('X then Y and Y then X end identical, and undo restores the same on both', () => {
@@ -53,8 +53,8 @@ describe('gate 13 item 2: replicated imports converge', () => {
     expect(fileRows(a)).toEqual(fileRows(c));
     expect(fileRows(b)).toEqual(fileRows(c));
     // undoing Y gives X back on a side that applied in each order
-    expect(undoImport(c, y.id, 'user:t', undefined, T('2026-11-12T01:00:00Z'))).toMatchObject({ ok: true });
-    expect(undoImport(d, y.id, 'user:t', undefined, T('2026-11-12T01:00:00Z'))).toMatchObject({ ok: true });
+    expect(undoImport(c, y.id, 'user:t', undefined, T('2026-11-12T01:00:00Z'), 'sdm')).toMatchObject({ ok: true });
+    expect(undoImport(d, y.id, 'user:t', undefined, T('2026-11-12T01:00:00Z'), 'sdm')).toMatchObject({ ok: true });
     expect(fileRows(d)).toEqual(fileRows(c));
     const back = fileRows(c).find((r) => (r as { date: string }).date === '2026-12-15') as { import_id: string; json: { times: { zohor: string } } };
     expect(back.import_id).toBe(x.id);
@@ -99,13 +99,13 @@ describe('gate 13 item 3: existing official days reach the cloud', () => {
     rawInsert(box, 'SGR01', official());
     rawInsert(box, 'JHR02', official().slice(0, 3));
     expect(entries(box)).toEqual([]);
-    expect(backfillOfficialFeed(box, T('2026-11-20T00:00:00Z'))).toBe(3);
+    expect(backfillOfficialFeed(box, T('2026-11-20T00:00:00Z'), 'sdm')).toBe(3);
     const got = entries(box);
     expect(got.map((e) => e.entityId).sort()).toEqual(['JHR02:2026', 'SGR01:2026', 'SGR01:2027']);
     expect((got.find((e) => e.entityId === 'SGR01:2026')!.after as { days: unknown[] }).days).toHaveLength(12);
     expect((got.find((e) => e.entityId === 'SGR01:2027')!.after as { days: unknown[] }).days).toHaveLength(5);
     // a second start writes nothing
-    expect(backfillOfficialFeed(box, T('2026-11-21T00:00:00Z'))).toBe(0);
+    expect(backfillOfficialFeed(box, T('2026-11-21T00:00:00Z'), 'sdm')).toBe(0);
     expect(entries(box)).toHaveLength(3);
     // the cloud accepts them and holds the same days
     const cloud = newDb();
@@ -130,8 +130,8 @@ describe('gate 13 item 3: existing official days reach the cloud', () => {
   it('an insert-only fetch of a few days sends the full year', async () => {
     const { importDays } = await import('../src/prayerStore.ts');
     const box = newDb();
-    importDays(box, 'SGR01', official().slice(0, 5), 'tester');
-    importDays(box, 'SGR01', official().slice(0, 9), 'system:auto-prayer-fetch', undefined, { insertOnly: true });
+    importDays(box, 'SGR01', official().slice(0, 5), 'tester', undefined, undefined, 'sdm');
+    importDays(box, 'SGR01', official().slice(0, 9), 'system:auto-prayer-fetch', undefined, { insertOnly: true }, 'sdm');
     const second = entries(box)[1]!;
     expect((second.after as { days: unknown[] }).days).toHaveLength(9);
   });

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAXCOM: install MAX Kiosk Server on a Windows PC</title>
+<style>
+/* Theme author guide. Self-contained: system fonts only, nothing loaded from outside. */
+:root {
+  --ink: #17231f;
+  --muted: #4d5d57;
+  --line: #cfd9d5;
+  --bg: #ffffff;
+  --soft: #f2f6f4;
+  --brand: #0d6b57;
+  --code-bg: #eef3f1;
+}
+* { box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  margin: 0 auto;
+  padding: 1rem 1rem 4rem;
+  max-width: 62rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+}
+.kicker { margin: 0 0 0.25rem; color: var(--brand); font-weight: 700; letter-spacing: 0.02em; }
+h1 { margin: 0 0 0.75rem; font-size: 2rem; line-height: 1.2; }
+.lead { font-size: 1.1rem; color: var(--muted); }
+h2 { margin: 2.5rem 0 0.75rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--brand); font-size: 1.45rem; }
+h3 { margin: 1.5rem 0 0.5rem; font-size: 1.1rem; }
+p { margin: 0.6rem 0; }
+.promise { padding: 0.75rem 1rem; border-left: 4px solid var(--brand); background: var(--soft); font-weight: 600; }
+code, pre { font-family: Consolas, 'Courier New', monospace; font-size: 0.9em; }
+code { padding: 0.05em 0.3em; border-radius: 3px; background: var(--code-bg); overflow-wrap: anywhere; }
+pre { margin: 0.6rem 0; padding: 0.75rem 1rem; border: 1px solid var(--line); border-radius: 6px; background: var(--code-bg); white-space: pre-wrap; overflow-wrap: anywhere; }
+pre code { padding: 0; background: none; }
+.file-name { margin: 1rem 0 0.2rem; font-weight: 700; }
+.wrap { width: 100%; overflow-x: auto; }
+table { width: 100%; margin: 0.8rem 0; border-collapse: collapse; font-size: 0.92rem; }
+th, td { padding: 0.45rem 0.6rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+td.shot-cell { width: 42%; }
+img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; }
+.shot-missing { color: var(--muted); font-style: italic; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1rem; margin: 0.8rem 0; }
+.grid figure { margin: 0; }
+figcaption { margin-top: 0.3rem; font-size: 0.9rem; }
+.note { color: var(--muted); }
+@media (max-width: 40rem) {
+  body { padding: 0.75rem 1rem 3rem; }
+  h1 { font-size: 1.6rem; }
+  td.shot-cell { width: auto; }
+}
+
+/* Print: A4 with 18 mm margins, a new page for every section, no table row cut in two.
+   The footer line (guide name, contract and page number) is printed by the PDF step, not here. */
+@page { size: A4; margin: 18mm; }
+@media print {
+  html { font-size: 10.5pt; }
+  body { max-width: none; padding: 0; }
+  .cover { break-after: avoid; }
+  h2 { break-before: page; break-after: avoid; margin-top: 0; }
+  h2:first-of-type { break-before: auto; }
+  h3 { break-after: avoid; }
+  tr, figure, pre, .promise { break-inside: avoid; }
+  thead { display: table-header-group; }
+  table { font-size: 9pt; }
+  .wrap { overflow: visible; }
+  img { max-height: 90mm; width: auto; max-width: 100%; }
+  td.shot-cell { width: 40%; }
+  .grid { grid-template-columns: repeat(3, 1fr); }
+}
+/* A name that stands alone in a cell (an attribute, a class, a code) is not broken across two lines. */
+td > code:only-child { white-space: nowrap; overflow-wrap: normal; }
+
+/* R2 additions: guide footer, step lists, notes, and right-to-left (Arabic) layout. */
+.doc-foot { margin-top: 3rem; padding-top: 0.6rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.doc-foot b { color: var(--brand); }
+.pfoot { display: none; }
+ol.steps { padding-inline-start: 1.6rem; }
+ol.steps > li, ul > li { margin: 0.3rem 0; }
+.callout { padding: 0.65rem 1rem; border-inline-start: 4px solid var(--brand); background: var(--soft); border-radius: 4px; }
+kbd { font-family: Consolas, 'Courier New', monospace; font-size: 0.9em; padding: 0.05em 0.35em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; background: #fff; }
+.ltr, code, pre, kbd { direction: ltr; unicode-bidi: isolate; }
+pre { text-align: left; }
+@media print {
+  @page { margin: 18mm 18mm 20mm; }
+  .doc-foot { break-inside: avoid; }
+  .single h2 { break-before: auto; margin-top: 1.6rem; }
+}
+/* Arabic */
+html[dir=rtl] bdi:not(.ltr), html[dir=rtl] p > code, html[dir=rtl] li > code, html[dir=rtl] td code { white-space: nowrap; }
+html[dir=rtl] body { font-family: 'Amiri', 'Segoe UI', Tahoma, sans-serif; line-height: 1.75; }
+html[dir=rtl] .kicker { letter-spacing: 0; }
+html[dir=rtl] th, html[dir=rtl] td { text-align: right; }
+html[dir=rtl] .promise { border-left: 0; border-right: 4px solid var(--brand); }
+html[dir=rtl] code, html[dir=rtl] pre, html[dir=rtl] kbd { font-family: Consolas, 'Courier New', monospace; }
+html[dir=rtl] .ltr { font-family: 'Segoe UI', system-ui, Arial, sans-serif; }
+html[dir=rtl] ol, html[dir=rtl] ul { padding-left: 0; padding-right: 1.6rem; }
+@media print { html[dir=rtl] { font-size: 11.5pt; } html[dir=rtl] table { font-size: 9.5pt; } }
+</style>
+</head>
+<body class="single">
+<header class="cover">
+<p class="kicker">MAXCOM R2, Windows install guide</p>
+<h1>Install MAX Kiosk Server on a Windows PC</h1>
+<p class="lead">This guide is for musalla volunteers. MAX Kiosk Server is the same MAXCOM box software on Windows and on Android; on Windows the folder and the Start menu entry are still named MAXCOM. Time needed: about 20 minutes.</p>
+<p class="note">The installer and its console speak Malay. Its messages and answers are given below exactly as they appear, with the English meaning in brackets the first time.</p>
+</header>
+
+<section id="requirements">
+<h2>1. What you need</h2>
+<ul>
+<li>A Windows 10 or 11 PC (64-bit), 4 GB of RAM, 32 GB of free space.</li>
+<li>A TV or monitor for the musalla screen.</li>
+<li>The musalla Wi-Fi or cable network.</li>
+<li>A Windows administrator account (you will be asked to press Yes once).</li>
+</ul>
+</section>
+
+<section id="download">
+<h2>2. Download</h2>
+<p>The usual way is the <code>.exe</code> file. The <code>.zip</code> file is another way (see the end of section 3).</p>
+<ol class="steps">
+<li>Download <code>MAX-Kiosk-Server-Setup-&lt;version&gt;-windows.exe</code> from the MAXCOM site (mymaxcom.my). A <code>.sha256</code> file with the same name sits beside it.</li>
+<li>Check that the file is not damaged or changed. Open PowerShell in the Downloads folder and run:
+<pre><code>Get-FileHash .\MAX-Kiosk-Server-Setup-&lt;version&gt;-windows.exe -Algorithm SHA256</code></pre>
+Compare the <code>Hash</code> code it prints with the code in the <code>.sha256</code> file or the one published on the site. The two must be the same. If they differ, do not run the file; download it again.</li>
+</ol>
+</section>
+
+<section id="install">
+<h2>3. Install</h2>
+<ol class="steps">
+<li>Double-click the <code>.exe</code> file.</li>
+<li>Windows asks <code>Do you want to allow this app to make changes to your device?</code> (UAC). Press <code>Yes</code>. The installer needs administrator rights.</li>
+<li>The installer is not signed yet, so Windows SmartScreen may show <code>Windows protected your PC</code>. Press <code>Maklumat lanjut</code> (<code>More info</code>), then <code>Jalankan juga</code> (<code>Run anyway</code>). This step is needed only because the installer is not signed yet; go on only if the SHA-256 code from section 2 matched.</li>
+<li>Follow the installer windows (all in Malay). If an older MAXCOM box is on this PC, pick its data folder on the first page; if not, leave it empty and press <code>Seterusnya</code> (Next), then <code>Pasang</code> (Install).</li>
+<li>A console window opens. Answer the three questions in it:
+<ul>
+<li><code>Nama pendek surau</code> (short musalla name): the name of your musalla.</li>
+<li>The address of this PC on the musalla network: if there is more than one address, pick its number. Pick the address of the musalla Wi-Fi or cable network.</li>
+<li><code>Jenis skrin</code> (screen type): <code>khas</code> (a dedicated PC for the TV, the screen starts by itself), <code>kongsi</code> (a shared PC, the screen is opened from the Start menu only) or <code>tiada</code> (no screen).</li>
+</ul></li>
+<li>Wait. Each step prints one line that starts with <code>OK</code>. If there is a line <code>GAGAL:</code> (failed), read the reason, fix it, then run the <code>.exe</code> file again. The musalla data is not removed. Do not close the console window until it is done.</li>
+<li>The install is complete when you see <code>Pemasangan MAX Kiosk Server selesai.</code> (MAX Kiosk Server installation complete) followed by <code>Alamat kotak:</code> (box address) and the location of the root certificate file. The installer copies its temporary files to a special folder under <code>C:\ProgramData</code> that only administrators can open, and removes them when it finishes.</li>
+</ol>
+<h3>Another way: the zip file</h3>
+<p>If the <code>.exe</code> cannot be used on your PC, download <code>MAX-Kiosk-Server-Setup-&lt;version&gt;-windows.zip</code> and check its SHA-256 code the same way. Right-click the zip file, choose <code>Properties</code>, tick <code>Unblock</code>, press <code>OK</code>. Right-click again and choose <code>Extract All</code>. Open the new folder, right-click <code>Pasang MAXCOM</code> (Install MAXCOM), choose <code>Run as administrator</code> and press <code>Yes</code>. The questions and steps after that are the same as numbers 5 to 7 above.</p>
+<p>Installing again with the same answers is safe: steps that are already done print as <code>OK ... sudah siap</code> (already done).</p>
+</section>
+
+<section id="first-phone">
+<h2>4. Enrol the first phone</h2>
+<p>Scan the QR code on the screen with the MAXCOM app. On a phone or iPad that does not trust the box yet, first install the root certificate file named on the line <code>Fail sijil akar</code> (root certificate file).</p>
+</section>
+
+<section id="once">
+<h2>5. Settings to make once</h2>
+<p>Each of these settings is the musalla's choice. They are all made on the PC or the router, not by MAXCOM.</p>
+<ol class="steps">
+<li>Fixed IP address: on the musalla router, always give this PC the same address (DHCP reservation). If the address changes, phones cannot connect and the box certificate has to be made again.</li>
+<li>BIOS: set the PC to power on again when the electricity comes back (an option such as <code>AC Power Recovery</code> or <code>Restore on AC Power Loss</code>).</li>
+<li>Automatic sign-in for a dedicated PC: use an ordinary Windows account without administrator rights, just for the screen. Open <code>netplwiz</code> or use the Microsoft Autologon tool. Anyone who switches the PC on lands in that account, so that account must not have administrator rights. The MAXCOM box itself starts before anyone signs in.</li>
+<li>Windows Update active hours: set them outside prayer times so that the PC does not restart during the azan.</li>
+</ol>
+</section>
+
+<section id="check">
+<h2>6. Semak MAXCOM (Check MAXCOM)</h2>
+<p>Open the Start menu, the MAXCOM folder, and choose <code>Semak MAXCOM</code>. It only reads; it changes nothing. Use it after installing, after the PC restarts, or when there is a problem.</p>
+<ul>
+<li>An <code>OK</code> line means that check passed.</li>
+<li>A <code>GAGAL:</code> line means something is wrong; the text after it says what.</li>
+<li>A <code>LANGKAU</code> (skipped) line means that check was not run (for example the screen is not in <code>khas</code> mode).</li>
+<li>The last line <code>Semak MAXCOM: semua semakan yang dijalankan lulus.</code> (all checks that ran passed) means everything is fine.</li>
+</ul>
+</section>
+
+<section id="problems">
+<h2>7. If there is a problem</h2>
+<ul>
+<li>Blank screen: run <code>Semak MAXCOM</code>. From the Start menu, open <code>Skrin MAXCOM</code> (MAXCOM screen). In <code>khas</code> mode, sign out and sign in again.</li>
+<li>Phones cannot connect: the PC address has probably changed. Run <code>Semak MAXCOM</code> and look at the <code>health_https</code> line; set a fixed IP address (section 5, number 1), then run <code>Pasang MAXCOM</code> again and pick the right address.</li>
+<li>The live broadcast does not reach the TV: look at the <code>fw_webrtc</code>, <code>fw_srt</code> and <code>tools</code> lines in <code>Semak MAXCOM</code>.</li>
+<li>If it still fails, write to admin@mymaxcom.my and include the <code>GAGAL:</code> lines you see.</li>
+</ul>
+</section>
+
+<section id="migrate">
+<h2>8. Moving from an older box that was run by hand</h2>
+<p>Only for a musalla that already has a MAXCOM box run from a developer folder. Run <code>Pasang MAXCOM</code> with the option <code>-MigrateFrom &lt;old data folder&gt;</code>. The script shows the old box's processes and asks for permission before stopping them. The old folder is not changed. Do not start the old box again while this installed box is running.</p>
+</section>
+
+<section id="remove">
+<h2>9. Remove MAXCOM</h2>
+<p>Start menu, MAXCOM folder, <code>Buang MAXCOM</code> (Remove MAXCOM). The software, its tasks and its firewall rules are removed. The musalla data is kept: the line <code>KEKAL: data surau di ...</code> (kept: musalla data in ...) shows where it is (usually <code>C:\ProgramData\MAXCOM\data</code>), together with the backup copies in <code>C:\ProgramData\MAXCOM\backups</code>. The MAXCOM root certificate is also kept, so phones do not need to enrol again. The data is removed only if you run it with <code>-RemoveData</code> and type <code>BUANG DATA</code> when asked.</p>
+</section>
+
+<footer class="doc-foot"><span><b>MAXCOM R2 (2026.11.12)</b>, Windows install guide, mymaxcom.my</span><span>Licensed under CC BY-NC-SA 4.0</span></footer>
+</body>
+</html>

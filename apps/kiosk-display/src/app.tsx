@@ -50,7 +50,7 @@ import { usePackCss, usePackPicture } from './themes/packLoader.ts';
 import { useThemeHealth } from './themes/useThemeHealth.ts';
 import { createFailedPictures } from './themes/failedPictures.ts';
 import { effectiveShade, harakatOn, stageStyleFor, styleVars } from './themes/styleVars.ts';
-import { SCALE_FACTOR, sanitizeThemeStyles } from '@surau/core';
+import { SCALE_FACTOR, sanitizeThemeStyles, tvLanguage } from '@surau/core';
 import { ScaleContext } from './content/scale.ts';
 // After every component import, so the contract's rules follow styles.css and content.css and a template's rules follow the contract.
 import './themes/contract.css';
@@ -81,7 +81,7 @@ const LIGHT_GROUND: ReadonlySet<string> = new Set(['minimal', 'oldschool']);
 export function App() {
   const view = useKiosk();
   const { state, settings } = view;
-  const lang: Lang = settings.language.enabled && settings.language.lang === 'en' ? 'en' : 'ms';
+  const lang: Lang = tvLanguage(settings);
   const [measured, setMeasured] = useState<Tone | null>(null);
   const tone = resolveTone(measured, settings);
   // A preview is not a display of its own: it never pairs, and a thin ribbon says so.

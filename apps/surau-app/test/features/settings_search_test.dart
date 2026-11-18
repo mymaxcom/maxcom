@@ -2,6 +2,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/features/settings_search.dart';
+import 'package:surau_app/ops/ops_build.dart';
 
 void main() {
   const index = SettingsSearchIndex(
@@ -37,7 +38,14 @@ void main() {
     expect(run('   '), isEmpty);
   });
 
-  test('system values cannot be found by a surau admin, and can by a Pentadbir MAXCOM', () {
+  test('public build: system values cannot be found by anyone, a superadmin session included', () {
+    for (final q in ['kadar bit', 'amaran tiada video', 'sumber data', 'penyiaran youtube']) {
+      expect(run(q, superadmin).keys.where((k) => k == 'system' || k == 'dataSources' || k.startsWith('lj:')), isEmpty, reason: q);
+    }
+    expect(run('kadar bit', superadmin).containsKey('liveYoutube'), isFalse);
+  }, skip: kOpsBuild);
+
+  test('ops build: system values cannot be found by a surau admin, and can by a Pentadbir MAXCOM', () {
     expect(run('kadar bit').containsKey('liveYoutube'), isFalse);
     expect(run('kadar bit', superadmin)['liveYoutube'], 'Medan: Kadar bit maksimum (kbps)');
     expect(run('kadar bit', superadmin)['lj:liveYoutube'], 'Medan: Kadar bit maksimum (kbps)');
@@ -45,7 +53,7 @@ void main() {
     expect(run('amaran tiada video', superadmin)['system'], 'Medan: Amaran tiada video (saat)');
     expect(run('sumber data').containsKey('dataSources'), isFalse);
     expect(run('penyiaran youtube', superadmin).containsKey('lj:liveYoutube'), isTrue);
-  });
+  }, skip: !kOpsBuild);
 
   test('an extra row is found by its title and keyword', () {
     expect(run('giliran')['order'], 'Kata kunci: giliran');

@@ -1,8 +1,11 @@
-// The sync status chip (Plan 6 Task 9), top right of every page: synced,
+// The sync status chip (Plan 6 Task 9): synced,
 // edits waiting, offline (edits kept for later), the cloud waking, or synced
 // through the cloud, with a red count when an edit did not land. A tap opens
 // the sheet: which way the app is connected, the last sync, the last error
-// in BM, `Selaraskan sekarang` and `Lihat konflik`.
+// in BM, `Selaraskan sekarang` and `Lihat konflik`. Since the operator's
+// round 1 the top bar shows the MAXCOM cloud and box icons instead
+// (features/shell/connection_icons.dart, which opens this sheet); the chip
+// stays only in the sheet's own header.
 //
 // Hidden while there is no sync engine (not unlocked or no local store), so
 // a page never claims a state nobody is keeping.
@@ -13,22 +16,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/app_lang.dart';
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../l10n/generated/s.dart';
 import '../../sync/sync_engine.dart';
 import '../../sync/sync_providers.dart';
+import '../common/error_text.dart' show kErrorCodeTexts;
+import '../shell/connection_icons.dart' show isNetworkSyncError;
+import '../labels.dart' show monthWord, appLangOfS;
+import '../labels_content.dart' show monthWordsMs;
 import 'live_only_dialog.dart';
 import 'sync_actions.dart';
 
 /// Where the conflicts list lives (the router owns the route).
 const String conflictsRoute = '/sync/conflicts';
 
-enum SyncChipKind { synced, viaCloud, pending, offline, waking, running }
+enum SyncChipKind { synced, viaCloud, pending, offline, error, waking, running }
 
 /// The one state the chip shows for [v], most urgent first.
 SyncChipKind chipKindOf(SyncView v) {
   if (v.state == SyncState.waking) return SyncChipKind.waking;
+  if (v.state == SyncState.offline && !isNetworkSyncError(v.lastError)) {
+    return SyncChipKind.error;
+  }
   if (v.state == SyncState.offline || v.lastError == 'unreachable') {
     return SyncChipKind.offline;
   }
@@ -41,29 +52,14 @@ SyncChipKind chipKindOf(SyncView v) {
 String clockOf(DateTime local) =>
     '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
 
-const List<String> _monthsMs = [
-  'Jan',
-  'Feb',
-  'Mac',
-  'Apr',
-  'Mei',
-  'Jun',
-  'Jul',
-  'Ogos',
-  'Sep',
-  'Okt',
-  'Nov',
-  'Dis', //
-];
-
 /// `HH:mm` today, else `5 Nov 10:05`. Both in the reader's zone.
-String stampWords(DateTime local, {required DateTime today}) {
+String stampWords(DateTime local, {required DateTime today, AppLang lang = AppLang.ms}) {
   final same =
       local.year == today.year &&
       local.month == today.month &&
       local.day == today.day;
   if (same) return clockOf(local);
-  return '${local.day} ${_monthsMs[local.month - 1]} ${clockOf(local)}';
+  return '${local.day} ${monthWord(local.month, lang, ms: monthWordsMs[local.month - 1])} ${clockOf(local)}';
 }
 
 /// The engine's error code in the person's words; null for none.
@@ -74,7 +70,7 @@ String? syncErrorWords(S s, String? code) => switch (code) {
   'needs_unlock' => s.syncErrNeedsUnlock,
   'session_expired' => s.errorSessionExpired,
   'device_revoked' => s.syncDeviceRevoked,
-  _ => s.syncErrFailed,
+  _ => kErrorCodeTexts[code]?.call(s, const {}) ?? s.syncErrFailed,
 };
 
 class _ChipLook {
@@ -97,11 +93,7 @@ class _ChipLook {
 const Color _amberInk = Color(0xFF6B4A00);
 
 class SyncStatusChip extends ConsumerWidget {
-  const SyncStatusChip({super.key, this.compact, this.iconOnly = false});
-
-  /// Only the icon (and the conflicts count): a long page title on a phone
-  /// keeps its room. The words stay in the semantics label and the sheet.
-  final bool iconOnly;
+  const SyncStatusChip({super.key, this.compact});
 
   /// Short labels for a narrow app bar; null decides from the screen width.
   final bool? compact;
@@ -161,6 +153,16 @@ class SyncStatusChip extends ConsumerWidget {
           border: SurauColors.danger,
         ),
       ),
+      SyncChipKind.error => (
+        small ? s.ra6SyncErrorShort : s.ra6SyncErrorChip,
+        s.ra6SyncErrorChip,
+        const _ChipLook(
+          Icons.error_outline_rounded,
+          SurauColors.card,
+          SurauColors.danger,
+          border: SurauColors.danger,
+        ),
+      ),
       SyncChipKind.waking => (
         small ? s.syncWakingShort : s.syncWaking,
         s.syncWaking,
@@ -193,7 +195,7 @@ class SyncStatusChip extends ConsumerWidget {
       label: semantics,
       excludeSemantics: true,
       child: Padding(
-        padding: const EdgeInsets.only(left: 4, right: 12),
+        padding: const EdgeInsetsDirectional.only(start: 4, end: 12),
         child: ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: small ? 190 : 340,
@@ -227,20 +229,18 @@ class SyncStatusChip extends ConsumerWidget {
                       )
                     else
                       Icon(look.icon, size: 18, color: look.foreground),
-                    if (!iconOnly) ...[
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.labelMedium!.copyWith(
-                            color: look.foreground,
-                            fontWeight: FontWeight.w700,
-                          ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.labelMedium!.copyWith(
+                          color: look.foreground,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ],
+                    ),
                     if (v.conflicts > 0) ...[
                       const SizedBox(width: 8),
                       _Badge(count: v.conflicts),
@@ -331,6 +331,7 @@ class _SyncSheetState extends ConsumerState<SyncSheet> {
 
     final String connection = switch (kind) {
       SyncChipKind.offline => s.syncNoConnection,
+      SyncChipKind.error => s.ra6SyncErrorChip,
       SyncChipKind.waking => s.syncWaking,
       _ => switch (v.via) {
         'cloud' => s.syncViaCloud,
@@ -369,7 +370,7 @@ class _SyncSheetState extends ConsumerState<SyncSheet> {
                   label: s.syncLastSync,
                   value: last == null
                       ? s.syncNever
-                      : stampWords(deps.toLocal(last), today: today),
+                      : stampWords(deps.toLocal(last), today: today, lang: appLangOfS(s)),
                 ),
                 const Divider(),
                 _SheetRow(label: s.syncWaitingLabel, value: '${v.pendingOut}'),
@@ -455,71 +456,6 @@ class _SheetRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ---- the dashboard row ----
-
-/// `Penyelarasan` on the home page: the chip with the way the app is
-/// connected and the last sync under it; a tap opens the sheet.
-class SyncDashboardCard extends ConsumerWidget {
-  const SyncDashboardCard({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (ref.watch(syncActionsProvider) == null) return const SizedBox.shrink();
-    final s = S.of(context);
-    final text = Theme.of(context).textTheme;
-    final deps = ref.watch(appDepsProvider);
-    final v = ref.watch(syncViewProvider).value ?? SyncView.empty;
-    final last = v.lastSync;
-    final via = switch (v.via) {
-      'cloud' => s.syncViaCloud,
-      'box' => s.syncViaBox,
-      _ => null,
-    };
-    final when = last == null
-        ? s.syncNever
-        : stampWords(deps.toLocal(last), today: deps.toLocal(deps.now()));
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Card(
-        key: const ValueKey('sync-dashboard'),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(SurauTheme.radiusCard),
-          onTap: () => showSyncSheet(context),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.sync_rounded,
-                  color: SurauColors.teal,
-                  size: 28,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(s.syncSheetTitle, style: text.titleMedium),
-                      const SizedBox(height: 2),
-                      Text(
-                        [?via, '${s.syncLastSync} $when'].join('. '),
-                        style: text.bodyMedium!.copyWith(
-                          color: SurauColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SyncStatusChip(compact: true),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

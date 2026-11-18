@@ -12,6 +12,8 @@ import '../box/cloud_origin.dart';
 import '../box/locator.dart';
 import '../features/enrol/enrol_flow.dart' show EnrolledBox;
 import '../features/unlock/session_keeper.dart';
+import '../ops/fleet/fleet_providers.dart' show opsLocalDataClosedProvider;
+import '../ops/ops_build.dart';
 import '../store/local_store.dart';
 import 'cloud_wake.dart';
 import 'sync_engine.dart';
@@ -149,6 +151,9 @@ final syncEngineProvider = Provider<SyncEngine?>((ref) {
   final store = ref.watch(localStoreProvider).value;
   final session = ref.watch(sessionProvider);
   if (box == null || store == null || session == null) return null;
+  // Ops build: a MAXCOM cloud session has no surau of its own on this phone (the cloud answers `surau_required` to
+  // its sync), so the engine stays idle instead of retrying a refused call.
+  if (kOpsBuild && ref.watch(opsLocalDataClosedProvider)) return null;
   final tokens = ref.read(sessionTokensProvider);
   final locator = _locatorFor(ref, box);
   final wake = ref.read(cloudWakeProvider);
@@ -188,6 +193,8 @@ final syncEngineProvider = Provider<SyncEngine?>((ref) {
       if (ref.mounted) ref.read(sessionKeeperProvider).kick();
     },
     onWakeNeeded: () => wake?.wakeSoon(cloudOriginOf(box)),
+    // A copy made before the ID, phone and delete fields is rebuilt once.
+    snapshotFormat: kSnapshotFormat,
   );
   ref.onDispose(engine.dispose);
   unawaited(

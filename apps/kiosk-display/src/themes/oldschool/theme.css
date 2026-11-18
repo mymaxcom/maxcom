@@ -250,8 +250,22 @@
 .stage[data-template='oldschool'] .card .sep { background: var(--green); border-radius: 0; transform: rotate(45deg); }
 .stage[data-template='oldschool'] .pengumuman__title { font-size: calc(3.4rem * var(--fit, 1) * var(--scale, 1)); }
 .stage[data-template='oldschool'] .pengumuman__body { font-family: var(--serif); font-size: calc(2rem * var(--fit, 1) * var(--scale, 1)); line-height: 1.35; padding-bottom: 0.2em; }
-.stage[data-template='oldschool'] :is(.tabung__col, .card--tabung-manual .tabung__col) { background: rgb(122 31 43 / 0.05); border-color: rgb(122 31 43 / 0.18); }
-.stage[data-template='oldschool'] .tabung__bar { background: rgb(122 31 43 / 0.15); }
+/* Tabung (mockup tabung-r1 frame H): Amiri for the names and the title, the sans for the figures, ruled rows. */
+.stage[data-template='oldschool'][data-kind='content'] .tabung {
+  --tb-amt: var(--text); --tb-muted: var(--muted); --tb-row-bg: transparent; --tb-row-border: 0;
+  --tb-track: #eadcc0; --tb-fill: var(--green); --tb-pct: var(--green); --tb-ring: var(--green); --tb-dot: #d8c6a6;
+  --tb-hair: #e2d2b4; --tb-hot-bg: #f6ead2; --tb-nmfont: var(--serif); --tb-titlefont: var(--serif);
+  --tb-nmpad: 0.55em; /* Amiri reaches far above and below its line */
+}
+.stage[data-template='oldschool'][data-kind='content'] .tabung__title { font-size: calc(2.5rem * var(--scale, 1)); font-weight: 700; }
+.stage[data-template='oldschool'][data-kind='content'] .tabung__name { line-height: 1.12; }
+.stage[data-template='oldschool'][data-kind='content'] .tabung__rows { gap: 0; }
+.stage[data-template='oldschool'][data-kind='content'] .tabung__row { border-bottom: 1px solid #e2d2b4; padding-left: 0.31rem; padding-right: 0.31rem; }
+.stage[data-template='oldschool'][data-kind='content'] .tabung__row:last-child { border-bottom: 0; }
+.stage[data-template='oldschool'][data-kind='content'] .tabung__row.is-hot { border: 0.1rem solid var(--accent); }
+.stage[data-template='oldschool'][data-kind='content'] :is(.tabung__fhero, .tabung__mini, .tabung__total) { border: 1px solid #e2d2b4; }
+.stage[data-template='oldschool'][data-kind='content'] .tabung__qr { background-image: none; }
+.stage[data-template='oldschool'][data-kind='content'] .tabung__qrbox { box-shadow: none; border: 1px solid #b98a86; border-radius: 0.2rem; }
 /* No card: the right of the board becomes a clock plate. */
 .stage[data-template='oldschool'] .screen--main.is-idle {
   grid-template-rows: auto auto minmax(0, 1.15fr) minmax(0, 1fr) auto;
@@ -549,11 +563,9 @@
 .stage[data-template='oldschool'][data-kind='content'] .kul-facts span { color: var(--muted); opacity: 1; }
 .stage[data-template='oldschool'][data-kind='content'] .hadis-ms { font-family: var(--serif); font-size: calc(3.125rem * var(--tier, 1) * var(--scale, 1) * var(--fit, 1)); font-weight: 400; }
 .stage[data-template='oldschool'][data-kind='content'] .hadis-ar { color: #1e1510; }
+/* Takwim: the serif title keeps its taller line (above, so no glyph is cut) but the date line sits up under it, so three
+   events still keep their share of the height. */
+.stage[data-template='oldschool'][data-kind='content'] .card--takwim .takwim__title { margin-bottom: -0.22em; }
 .stage[data-template='oldschool'][data-screen='poster'] .poster-fill { filter: blur(2.604rem) saturate(0.5) brightness(1.15); opacity: 0.45; }
-.stage[data-template='oldschool'][data-screen='poster'] .poster-frame img {
-  border: 0.729rem solid #fffaf0;
-  transform: rotate(-1.2deg);
-  box-shadow: 0 0 0 1px var(--rule), 0 1.25rem 2.604rem rgb(80 50 20 / 0.3);
-}
 .stage[data-template='oldschool'][data-screen='poster'] .region-brand,
 .stage[data-template='oldschool'][data-screen='poster'] .region-clock.clock--compact { text-shadow: none; }

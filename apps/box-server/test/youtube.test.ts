@@ -166,7 +166,7 @@ describe('sign-in by device code', () => {
     expect(rows.map((x) => x.entity_id)).toEqual(['signin', 'signout']);
   });
 
-  it('only the administrator may sign in or out: AJK and Media get 403', async () => {
+  it('the administrator and the Siaran Langsung role may sign in or out; AJK and Media get 403', async () => {
     const r = await rig();
     for (const role of ['ajk', 'media'] as const) {
       const who = await loginAs(r.h.app, role);
@@ -176,9 +176,14 @@ describe('sign-in by device code', () => {
     }
     const admin = await loginAs(r.h.app, 'admin');
     expect((await inject(r, 'POST', '/api/live/youtube/signin', admin.headers)).statusCode).toBe(200);
+    // Siaran Langsung holds live:settings: sign-in, its poll and sign-out are open to it
+    const liveRole = await loginAs(r.h.app, 'live');
+    expect((await inject(r, 'POST', '/api/live/youtube/signin', liveRole.headers)).statusCode).toBe(200);
+    expect((await inject(r, 'POST', '/api/live/youtube/signin/poll', liveRole.headers)).statusCode).not.toBe(403);
+    expect((await inject(r, 'POST', '/api/live/youtube/signout', liveRole.headers)).statusCode).not.toBe(403);
     // the status is for the people who run the live
-    const media = await loginAs(r.h.app, 'media');
-    expect((await inject(r, 'GET', '/api/live/youtube/status', media.headers)).statusCode).toBe(200);
+    const liveUser = await loginAs(r.h.app, 'live');
+    expect((await inject(r, 'GET', '/api/live/youtube/status', liveUser.headers)).statusCode).toBe(200);
     expect((await r.h.app.inject({ method: 'GET', url: '/api/live/youtube/status', remoteAddress: LAN })).statusCode).toBe(401);
   });
 });
@@ -205,12 +210,12 @@ describe('Google HTTP is guarded', () => {
   it('a Google failure shows as a short reason, never the raw body', async () => {
     const r = await rig();
     await signIn(r);
-    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test');
+    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
     r.g.insertStatus = 403;
-    const media = await loginAs(r.h.app, 'media');
-    const res = await inject(r, 'POST', '/api/live/start', media.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
-    expect(await warningsOf(r, media.headers)).toEqual(['youtube_quota']);
-    const status = await inject(r, 'GET', '/api/live/status', media.headers);
+    const liveUser = await loginAs(r.h.app, 'live');
+    const res = await inject(r, 'POST', '/api/live/start', liveUser.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
+    expect(await warningsOf(r, liveUser.headers)).toEqual(['youtube_quota']);
+    const status = await inject(r, 'GET', '/api/live/status', liveUser.headers);
     expect(status.json().youtube).toMatchObject({ state: 'error', lastError: 'quota' });
     expect(status.body).not.toContain('quotaExceeded');
   });
@@ -220,14 +225,14 @@ describe('broadcast lifecycle from the kuliah', () => {
   it('creates a stream per session, a broadcast with the kuliah text and settings, binds, and the key stays out of everything', async () => {
     const r = await rig();
     await signIn(r);
-    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true, privacy: 'unlisted' }, 'test');
-    const media = await loginAs(r.h.app, 'media');
-    const res = await inject(r, 'POST', '/api/live/start', media.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
+    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true, privacy: 'unlisted' }, 'test', undefined, 'sdm');
+    const liveUser = await loginAs(r.h.app, 'live');
+    const res = await inject(r, 'POST', '/api/live/start', liveUser.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.warnings).toBeUndefined();
     expect(body.youtube).toEqual({ via: 'device', ingest: null, key: null, state: 'starting' });
-    expect(await ingestOf(r, media.headers)).toEqual({ state: 'ready', ingest: 'rtmps://a.rtmps.youtube.com:443/live2', key: FAKE_STREAM_KEY });
+    expect(await ingestOf(r, liveUser.headers)).toEqual({ state: 'ready', ingest: 'rtmps://a.rtmps.youtube.com:443/live2', key: FAKE_STREAM_KEY });
 
     const streamIns = r.g.calls.filter((c) => c.path === '/youtube/v3/liveStreams' && c.method === 'POST');
     expect(streamIns).toHaveLength(1);
@@ -244,26 +249,26 @@ describe('broadcast lifecycle from the kuliah', () => {
     expect(bind.query.get('streamId')).toBe('stream-1');
     expect(ins.headers.authorization).toBe('Bearer access-token-1');
 
-    const status = await inject(r, 'GET', '/api/live/status', media.headers);
+    const status = await inject(r, 'GET', '/api/live/status', liveUser.headers);
     expect(status.json().youtube).toMatchObject({ broadcastId: 'bc-1', watchUrl: 'https://youtu.be/bc-1', state: 'created', signedIn: true });
     const admin = await loginAs(r.h.app, 'admin');
     const health = await inject(r, 'GET', '/api/health', admin.headers);
-    await inject(r, 'POST', '/api/live/stop', media.headers, {});
+    await inject(r, 'POST', '/api/live/stop', liveUser.headers, {});
     for (const text of [changeLogText(r.h.app), status.body, health.body, r.logs.join('\n')]) expect(text).not.toContain(FAKE_STREAM_KEY);
     expect(readFileSync(r.tokenPath).includes(Buffer.from(FAKE_STREAM_KEY))).toBe(false);
 
     // a second session gets its OWN non-reusable stream and key (no permanent key on any phone)
-    const again = await inject(r, 'POST', '/api/live/start', media.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
-    expect((await ingestOf(r, media.headers)).key).not.toBe(FAKE_STREAM_KEY);
+    const again = await inject(r, 'POST', '/api/live/start', liveUser.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
+    expect((await ingestOf(r, liveUser.headers)).key).not.toBe(FAKE_STREAM_KEY);
     expect(r.g.calls.filter((c) => c.path === '/youtube/v3/liveStreams' && c.method === 'POST')).toHaveLength(2);
   });
 
   it('a kuliah-less live still gets a sensible title', async () => {
     const r = await rig();
     await signIn(r);
-    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test');
-    const media = await loginAs(r.h.app, 'media');
-    const res = await inject(r, 'POST', '/api/live/start', media.headers, startBody(r.h, { kuliahId: null, outputs: { kiosk: true, youtube: true } }));
+    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
+    const liveUser = await loginAs(r.h.app, 'live');
+    const res = await inject(r, 'POST', '/api/live/start', liveUser.headers, startBody(r.h, { kuliahId: null, outputs: { kiosk: true, youtube: true } }));
     expect(res.statusCode).toBe(200);
     const ins = r.g.calls.find((c) => c.path === '/youtube/v3/liveBroadcasts' && c.method === 'POST')!;
     expect((ins.json!.snippet as { title: string }).title.startsWith('Kuliah')).toBe(true);
@@ -272,17 +277,17 @@ describe('broadcast lifecycle from the kuliah', () => {
   it('stop completes the broadcast and tolerates redundantTransition', async () => {
     const r = await rig();
     await signIn(r);
-    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test');
-    const media = await loginAs(r.h.app, 'media');
-    await inject(r, 'POST', '/api/live/start', media.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
+    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
+    const liveUser = await loginAs(r.h.app, 'live');
+    await inject(r, 'POST', '/api/live/start', liveUser.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
     r.g.transitionError = 'redundantTransition';
-    const stop = await inject(r, 'POST', '/api/live/stop', media.headers, {});
+    const stop = await inject(r, 'POST', '/api/live/stop', liveUser.headers, {});
     expect(stop.json()).toEqual({ stopped: true });
     await r.h.app.liveSessions!.settled();
     const tr = r.g.calls.find((c) => c.path === '/youtube/v3/liveBroadcasts/transition')!;
     expect(tr.query.get('broadcastStatus')).toBe('complete');
     expect(tr.query.get('id')).toBe('bc-1');
-    expect((await inject(r, 'GET', '/api/live/status', media.headers)).json().youtube).toMatchObject({ state: 'complete', lastError: null });
+    expect((await inject(r, 'GET', '/api/live/status', liveUser.headers)).json().youtube).toMatchObject({ state: 'complete', lastError: null });
   });
 
   it('the health poll maps streamStatus and healthStatus while live', async () => {
@@ -304,10 +309,10 @@ describe('token refresh', () => {
   it('refreshes 60 s before expiry with the refresh token and uses the new access token', async () => {
     const r = await rig();
     await signIn(r);
-    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test');
+    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
     r.h.clock.t += 3600_000 - 30_000;
-    const media = await loginAs(r.h.app, 'media');
-    await inject(r, 'POST', '/api/live/start', media.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
+    const liveUser = await loginAs(r.h.app, 'live');
+    await inject(r, 'POST', '/api/live/start', liveUser.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
     const refresh = r.g.calls.filter((c) => c.path === '/token' && new URLSearchParams(c.body).get('grant_type') === 'refresh_token');
     expect(refresh).toHaveLength(1);
     expect(new URLSearchParams(refresh[0]!.body).get('refresh_token')).toBe(FAKE_REFRESH);
@@ -319,15 +324,15 @@ describe('token refresh', () => {
   it('invalid_grant marks the box for re-authorisation and is never retried', async () => {
     const r = await rig();
     const { admin } = await signIn(r);
-    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test');
+    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
     r.h.clock.t += 4000_000;
     r.g.refreshError = 'invalid_grant';
-    const media = await loginAs(r.h.app, 'media');
-    const first = await inject(r, 'POST', '/api/live/start', media.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
+    const liveUser = await loginAs(r.h.app, 'live');
+    const first = await inject(r, 'POST', '/api/live/start', liveUser.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
     void first;
-    expect(await warningsOf(r, media.headers)).toEqual(['youtube_reauthorise']);
-    await inject(r, 'POST', '/api/live/stop', media.headers, {});
-    const second = await inject(r, 'POST', '/api/live/start', media.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
+    expect(await warningsOf(r, liveUser.headers)).toEqual(['youtube_reauthorise']);
+    await inject(r, 'POST', '/api/live/stop', liveUser.headers, {});
+    const second = await inject(r, 'POST', '/api/live/start', liveUser.headers, startBody(r.h, { outputs: { kiosk: true, youtube: true } }));
     expect(second.json().warnings).toEqual(['youtube_not_signed_in']);
     const grants = r.g.calls.filter((c) => c.path === '/token' && new URLSearchParams(c.body).get('grant_type') === 'refresh_token');
     expect(grants).toHaveLength(1);
@@ -386,18 +391,18 @@ describe('A4/A5: broadcasts are never orphaned and phones never get a permanent 
   const ytBody = (r: Rig) => startBody(r.h, { outputs: { kiosk: true, youtube: true } });
   async function ready(r: Rig) {
     await signIn(r);
-    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test');
-    return loginAs(r.h.app, 'media');
+    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
+    return loginAs(r.h.app, 'live');
   }
   const deletes = (r: Rig, path: string) => r.g.calls.filter((c) => c.method === 'DELETE' && c.path === `/youtube/v3/${path}`);
 
   it('A4a: a failed bind deletes the new broadcast and its stream', async () => {
     const r = await rig();
-    const media = await ready(r);
+    const liveUser = await ready(r);
     r.g.bindStatus = 500;
-    const res = await inject(r, 'POST', '/api/live/start', media.headers, ytBody(r));
+    const res = await inject(r, 'POST', '/api/live/start', liveUser.headers, ytBody(r));
     expect(res.statusCode).toBe(200);
-    expect(await warningsOf(r, media.headers)).toEqual(['no_internet']);
+    expect(await warningsOf(r, liveUser.headers)).toEqual(['no_internet']);
     expect(deletes(r, 'liveBroadcasts')).toHaveLength(1);
     expect(r.g.broadcasts.size).toBe(0);
     expect(r.g.streams.size).toBe(0);
@@ -405,18 +410,18 @@ describe('A4/A5: broadcasts are never orphaned and phones never get a permanent 
 
   it('A4b: a broadcast that never went live is deleted at teardown, a live one is completed', async () => {
     const r = await rig();
-    const media = await ready(r);
+    const liveUser = await ready(r);
     r.g.lifeCycle = 'ready';
-    await inject(r, 'POST', '/api/live/start', media.headers, ytBody(r));
-    await inject(r, 'POST', '/api/live/stop', media.headers, {});
+    await inject(r, 'POST', '/api/live/start', liveUser.headers, ytBody(r));
+    await inject(r, 'POST', '/api/live/stop', liveUser.headers, {});
     await r.h.app.liveSessions!.settled();
     expect(r.g.count('/youtube/v3/liveBroadcasts/transition')).toBe(0);
     expect(deletes(r, 'liveBroadcasts')).toHaveLength(1);
     expect(r.g.broadcasts.size).toBe(0);
 
     r.g.lifeCycle = 'live';
-    await inject(r, 'POST', '/api/live/start', media.headers, ytBody(r));
-    await inject(r, 'POST', '/api/live/stop', media.headers, {});
+    await inject(r, 'POST', '/api/live/start', liveUser.headers, ytBody(r));
+    await inject(r, 'POST', '/api/live/stop', liveUser.headers, {});
     await r.h.app.liveSessions!.settled();
     expect(r.g.count('/youtube/v3/liveBroadcasts/transition')).toBe(1);
     expect(deletes(r, 'liveBroadcasts')).toHaveLength(1);
@@ -424,22 +429,22 @@ describe('A4/A5: broadcasts are never orphaned and phones never get a permanent 
 
   it('A4c: sign-out is refused with 409 live_busy while a session is open', async () => {
     const r = await rig();
-    const media = await ready(r);
+    const liveUser = await ready(r);
     const admin = await loginAs(r.h.app, 'admin');
-    await inject(r, 'POST', '/api/live/start', media.headers, ytBody(r));
+    await inject(r, 'POST', '/api/live/start', liveUser.headers, ytBody(r));
     const refused = await inject(r, 'POST', '/api/live/youtube/signout', admin.headers);
     expect(refused.statusCode).toBe(409);
     expect(refused.json().code).toBe('live_busy');
     expect(existsSync(r.tokenPath)).toBe(true);
-    await inject(r, 'POST', '/api/live/stop', media.headers, {});
+    await inject(r, 'POST', '/api/live/stop', liveUser.headers, {});
     await r.h.app.liveSessions!.settled();
     expect((await inject(r, 'POST', '/api/live/youtube/signout', admin.headers)).statusCode).toBe(200);
   });
 
   it('A4d: the open broadcast is written down (ids only) and ended at the next box start', async () => {
     const r = await rig();
-    const media = await ready(r);
-    await inject(r, 'POST', '/api/live/start', media.headers, ytBody(r));
+    const liveUser = await ready(r);
+    await inject(r, 'POST', '/api/live/start', liveUser.headers, ytBody(r));
     const file = join(r.h.dataDir, 'live', 'youtube-open.json');
     expect(existsSync(file)).toBe(true);
     const text = readFileSync(file, 'utf8');
@@ -467,17 +472,17 @@ describe('A4/A5: broadcasts are never orphaned and phones never get a permanent 
 
   it('A5: each session gets its own non-reusable stream and key; teardown deletes the stream', async () => {
     const r = await rig();
-    const media = await ready(r);
-    const one = await inject(r, 'POST', '/api/live/start', media.headers, ytBody(r));
+    const liveUser = await ready(r);
+    const one = await inject(r, 'POST', '/api/live/start', liveUser.headers, ytBody(r));
     void one;
-    const key1 = (await ingestOf(r, media.headers)).key as string;
+    const key1 = (await ingestOf(r, liveUser.headers)).key as string;
     expect(r.g.streams.get('stream-1')?.reusable).toBe(false);
-    await inject(r, 'POST', '/api/live/stop', media.headers, {});
+    await inject(r, 'POST', '/api/live/stop', liveUser.headers, {});
     await r.h.app.liveSessions!.settled();
     expect(r.g.streams.has('stream-1')).toBe(false);
-    const two = await inject(r, 'POST', '/api/live/start', media.headers, ytBody(r));
+    const two = await inject(r, 'POST', '/api/live/start', liveUser.headers, ytBody(r));
     void two;
-    const key2 = (await ingestOf(r, media.headers)).key as string;
+    const key2 = (await ingestOf(r, liveUser.headers)).key as string;
     expect(key2).not.toBe(key1);
     expect(r.g.streams.has('stream-2')).toBe(true);
     expect(r.g.streams.get('stream-2')?.reusable).toBe(false);

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { must } from './helpers/must.ts';
 
 const doctorPath = fileURLToPath(new URL('../../../scripts/setup/doctor.ps1', import.meta.url));
 const cmdPath = fileURLToPath(new URL('../../../scripts/setup/Semak MAXCOM.cmd', import.meta.url));
@@ -321,6 +322,7 @@ describe.runIf(isWin)('doctor.ps1 runs', () => {
     const mkc = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 120_000 });
     expect(mkc.status, `${mkc.stdout}${mkc.stderr}`).toBe(0);
     const results: Record<string, Check> = {};
+    const result = (name: string): Check => must(results[name], `cert_days result for ${name}`);
     for (const name of ['soon', 'past', 'far']) {
       const root = join(e.base, name, 'MAXCOM');
       const data = join(e.base, name, 'data');
@@ -331,12 +333,12 @@ describe.runIf(isWin)('doctor.ps1 runs', () => {
       const r = runDoctor(['-InstallRoot', root, '-Json']);
       results[name] = byId(parse(r.out), 'cert_days');
     }
-    expect(results.soon.state).toBe('ok');
-    expect(results.soon.text).toMatch(/AMARAN.*(19|20) hari/);
-    expect(results.past.state).toBe('fail');
-    expect(results.far.state).toBe('ok');
-    expect(results.far.text).not.toContain('AMARAN');
-    expect(results.far.text).toMatch(/\b(39[89]|400) hari/);
+    expect(result('soon').state).toBe('ok');
+    expect(result('soon').text).toMatch(/AMARAN.*(19|20) hari/);
+    expect(result('past').state).toBe('fail');
+    expect(result('far').state).toBe('ok');
+    expect(result('far').text).not.toContain('AMARAN');
+    expect(result('far').text).toMatch(/\b(39[89]|400) hari/);
   }, 240_000);
 
   it('changes nothing: the install and data trees are identical before and after', async () => {

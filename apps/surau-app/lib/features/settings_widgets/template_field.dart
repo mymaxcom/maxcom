@@ -9,23 +9,34 @@ import '../../l10n/generated/s.dart';
 import 'field_meta.dart';
 
 /// The placeholders the box fills (core `YOUTUBE_PLACEHOLDERS`).
-const List<(String, String)> youtubePlaceholders = [
-  ('label', 'Label kuliah'),
-  ('penceramah', 'Penceramah'),
-  ('topic', 'Topik'),
-  ('kitab', 'Kitab'),
-  ('surau', 'Nama surau'),
-  ('date', 'Tarikh'),
-  ('time', 'Masa'),
+const List<String> youtubePlaceholders = [
+  'label',
+  'penceramah',
+  'topic',
+  'kitab',
+  'surau',
+  'date',
+  'time',
 ];
 
+/// A placeholder's name in the app language.
+String placeholderName(S s, String key) => switch (key) {
+  'label' => s.ra6TplLabel,
+  'penceramah' => s.ra6TplSpeaker,
+  'topic' => s.ra6TplTopic,
+  'kitab' => s.ra6TplBook,
+  'surau' => s.ra6TplSurau,
+  'date' => s.ra6TplDate,
+  _ => s.ra6TplTime,
+};
+
 const Map<String, String> _sample = {
-  'label': 'Kuliah Maghrib',
+  'label': 'Kuliah Maghrib', // lang-ok: a sample kuliah the box fills in the TV language
   'penceramah': 'Ustaz Haji Ahmad Fauzi bin Ismail',
   'topic': 'Sifat 20: Wujud, Qidam dan Baqa',
   'kitab': 'Aqidatun Najin',
-  'surau': 'Surau D\'Waqaf',
-  'date': 'Sabtu, 7 November 2026',
+  'surau': 'Surau D\'Waqaf', // lang-ok: sample surau name
+  'date': 'Sabtu, 7 November 2026', // lang-ok: sample date, as above
   'time': '8:30 malam',
 };
 
@@ -128,7 +139,7 @@ class _TemplateFieldState extends State<TemplateField> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final (key, label) in youtubePlaceholders)
+                for (final key in youtubePlaceholders)
                   ActionChip(
                     key: ValueKey('placeholder-${widget.path}-$key'),
                     onPressed: () => _insert(key),
@@ -143,7 +154,7 @@ class _TemplateFieldState extends State<TemplateField> {
                             text: '{$key} ',
                             style: text.labelMedium!.copyWith(color: SurauColors.glass, fontWeight: FontWeight.w700),
                           ),
-                          TextSpan(text: label, style: text.labelMedium!.copyWith(color: SurauColors.teal)),
+                          TextSpan(text: placeholderName(s, key), style: text.labelMedium!.copyWith(color: SurauColors.teal)),
                         ],
                       ),
                     ),
@@ -197,6 +208,7 @@ class _YoutubeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final text = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(10),
@@ -223,7 +235,7 @@ class _YoutubeCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                   decoration: BoxDecoration(color: const Color(0xFFC4302B), borderRadius: BorderRadius.circular(3)),
-                  child: Text('LANGSUNG', style: text.labelSmall!.copyWith(color: Colors.white, fontSize: 9.5)),
+                  child: Text(s.ra6LiveBadge, style: text.labelSmall!.copyWith(color: Colors.white, fontSize: 9.5)),
                 ),
                 // The surau's own channel (the sample surau stands in for its name).
                 Text(

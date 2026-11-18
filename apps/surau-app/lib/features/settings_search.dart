@@ -1,10 +1,16 @@
-// The search behind the Tetapan list. Pure Dart: a query is matched, in
-// order, against each feature's title (BM and EN), group, field labels,
-// choice labels and keywords. A match that is not in the title says why, so
+// The search behind the Konfigurasi list. Pure Dart: a query is matched, in
+// order, against each feature's title (BM, EN and Arabic), group, field labels,
+// choice labels (the last three in the language of the app) and keywords. A match that is not in the title says why, so
 // the row can explain itself. MAXCOM system values are not searchable by
 // anyone who cannot see them.
 
-import 'labels_ms.dart';
+import '../app/app_lang.dart';
+import '../l10n/s_lookup.dart';
+import '../ops/ops_build.dart';
+import '../ops/registry_ops.g.dart';
+import '../ops/system_labels_ms.dart';
+import 'labels.dart';
+import 'labels_ms.dart' show settingLabelsMs, choiceLabelsMs;
 import 'registry.g.dart';
 import 'shell/permissions.dart';
 
@@ -52,7 +58,8 @@ class SettingsSearchIndex {
 
   /// Why [q] matches, or null when it does not; '' when the title matched.
   static String? _match(
-    String q, {
+    String q,
+    AppLang lang, {
     required List<String> titles,
     required String group,
     Iterable<String> fields = const [],
@@ -60,20 +67,22 @@ class SettingsSearchIndex {
     Iterable<String> keywords = const [],
   }) {
     if (_firstMatch(titles, q) != null) return '';
-    if (group.toLowerCase().contains(q)) return 'Kumpulan: $group';
+    final s = sFor(lang);
+    if (group.toLowerCase().contains(q)) return s.settingsWhyGroup(group);
     final field = _firstMatch(fields, q);
-    if (field != null) return 'Medan: $field';
+    if (field != null) return s.settingsWhyField(field);
     final choice = _firstMatch(choices, q);
-    if (choice != null) return 'Pilihan: $choice';
+    if (choice != null) return s.settingsWhyChoice(choice);
     final keyword = _firstMatch(keywords, q);
-    if (keyword != null) return 'Kata kunci: $keyword';
+    if (keyword != null) return s.settingsWhyKeyword(keyword);
     return null;
   }
 
-  List<SearchHit> search(String query, {required Set<String> roles}) {
+  List<SearchHit> search(String query, {required Set<String> roles, AppLang lang = AppLang.ms}) {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return const [];
-    final seesSystem = canSee(roles, 'system:read');
+    // The Lanjutan values exist only in the ops build (Plan 14 Task 25).
+    final seesSystem = kOpsBuild && canSee(roles, 'system:read');
     final hits = <SearchHit>[];
     void hit(String key, String? why) {
       if (why != null) hits.add(SearchHit(key, why.isEmpty ? null : why));
@@ -88,17 +97,19 @@ class SettingsSearchIndex {
         if (name == 'suspendedAt') return;
         if (!seesSystem && fieldMetaTable[f.key]?[path]?['scope'] == 'system') return;
         if (fieldMetaTable[f.key]?[path]?['hidden'] == true) return;
-        final label = settingLabelsMs[name];
-        if (label != null) fields.add(label);
-        choices.addAll(choiceLabelsMs[name]?.values ?? const []);
+        if (settingLabelsMs.containsKey(name)) fields.add(settingLabel(name, lang));
+        for (final v in choiceLabelsMs[name]?.keys ?? const <String>[]) {
+          choices.add(choiceLabel(name, v, lang));
+        }
       });
       final desc = featureDescTable[f.key];
       hit(
         f.key,
         _match(
           q,
-          titles: [f.labelMs, f.labelEn],
-          group: groupLabelsMs[f.group] ?? f.group,
+          lang,
+          titles: [f.labelMs, f.labelEn, f.labelAr],
+          group: kOpsBuild && f.group == 'lanjutan' ? lanjutanGroupTitleMs : groupLabel(f.group, lang),
           fields: fields,
           choices: choices,
           keywords: (desc?['keywords'] as List?)?.cast<String>() ?? const [],
@@ -106,22 +117,23 @@ class SettingsSearchIndex {
       );
     }
 
-    if (seesSystem) {
-      for (final r in lanjutanRows) {
+    if (kOpsBuild && seesSystem) {
+      for (final r in opsLanjutanRows) {
         hit(
           'lj:${r['feature']}',
           _match(
             q,
+            lang,
             titles: [r['labelMs'] as String, r['labelEn'] as String],
-            group: groupLabelsMs['lanjutan']!,
-            fields: [for (final n in (r['fields'] as List).cast<String>()) settingLabelMs(n)],
+            group: lanjutanGroupTitleMs,
+            fields: [for (final n in (r['fields'] as List).cast<String>()) settingLabel(n, lang)],
           ),
         );
       }
     }
 
     for (final x in extras) {
-      hit(x.key, _match(q, titles: [x.title], group: x.group, keywords: x.keywords));
+      hit(x.key, _match(q, lang, titles: [x.title], group: x.group, keywords: x.keywords));
     }
     return hits;
   }

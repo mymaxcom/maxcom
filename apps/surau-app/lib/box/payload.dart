@@ -61,7 +61,7 @@ class EnrolPayload {
   static const int maxIps = 8;
 
   static const String _prefix = 'surau1:';
-  static const String _bad = 'Kod QR pendaftaran tidak sah';
+  static const String _bad = 'Kod QR pendaftaran tidak sah'; // lang-ok: diagnostic exception text, not shown; screens map the error type to S
 
   static final RegExp _boxId = RegExp(r'^[0-9a-f]{16}$');
   static final RegExp _code = RegExp(

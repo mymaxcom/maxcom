@@ -5,14 +5,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/features/registry.g.dart';
 import 'package:surau_app/features/validate.dart' show featureByKey;
-import 'package:surau_app/screens/settings_list_screen.dart' show settingsOpenGroupsKey;
 
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
+import 'package:surau_app/ops/ops_build.dart';
 
 Finder k(String key) => find.byKey(ValueKey(key));
 
@@ -21,6 +20,12 @@ Future<ShellHarness> open(WidgetTester tester, String path, [List<String> roles 
   h.router.go(path);
   await settle(tester);
   return h;
+}
+
+/// Unfolds the Solat group (every group is folded when the app starts).
+Future<void> openSolat(WidgetTester tester) async {
+  await tester.tap(k('settings-group-solat'));
+  await settle(tester);
 }
 
 Map<String, Map<String, dynamic>> orderPuts(ShellHarness h) => {
@@ -179,10 +184,11 @@ void main() {
       final card = tester.getRect(k('lanjutan-card'));
       expect(card.top, lessThan(tester.view.physicalSize.height / tester.view.devicePixelRatio));
       expect(card.top, greaterThanOrEqualTo(0), reason: 'scrolled to the card');
-    });
+    }, skip: !kOpsBuild);
 
     testWidgets('imsakBeep is a switch on its row: one save with enabled, Disimpan', (tester) async {
       final h = await open(tester, '/settings');
+      await openSolat(tester);
       final sw = k('settings-switch-imsakBeep');
       await reveal(tester, sw);
       expect(tester.widget<Switch>(sw).value, isFalse);
@@ -197,6 +203,7 @@ void main() {
 
     testWidgets('prayerSequenceSafety has no chevron and goes nowhere; an AJK cannot flip a switch', (tester) async {
       final h = await open(tester, '/settings');
+      await openSolat(tester);
       final row = k('settings-row-prayerSequenceSafety');
       await reveal(tester, row);
       expect(find.descendant(of: row, matching: find.byIcon(Icons.chevron_right_rounded)), findsNothing);
@@ -205,27 +212,29 @@ void main() {
       expect(h.location, '/settings');
 
       await open(tester, '/settings', const ['ajk']);
+      await reveal(tester, k('settings-group-solat'));
+      final solat = k('settings-row-clock');
+      if (solat.evaluate().isEmpty) await openSolat(tester);
       await reveal(tester, k('settings-switch-imsakBeep'));
       expect(tester.widget<Switch>(k('settings-switch-imsakBeep')).onChanged, isNull);
       expect(k('settings-order'), findsNothing, reason: 'the order row is for settings:write');
     });
 
-    testWidgets('open groups are remembered across a rebuild of the screen', (tester) async {
+    testWidgets('groups start folded; an opened group stays open across a rebuild of the screen', (tester) async {
       final h = await open(tester, '/settings');
-      expect(k('settings-row-clock'), findsOneWidget, reason: 'Solat is open by default');
+      expect(k('settings-row-clock'), findsNothing, reason: 'every group folded at start');
       expect(k('settings-row-kuliahCard'), findsNothing);
       await reveal(tester, k('settings-group-kandungan'));
       await tester.tap(k('settings-group-kandungan'));
       await settle(tester);
-      final prefs = await SharedPreferences.getInstance();
-      expect(jsonDecode(prefs.getString(settingsOpenGroupsKey)!), containsAll(['solat', 'kandungan']));
 
       h.router.go('/settings/clock');
       await settle(tester);
       h.router.go('/settings');
       await settle(tester);
       await reveal(tester, k('settings-row-kuliahCard'));
-      expect(k('settings-row-kuliahCard'), findsOneWidget, reason: 'a fresh screen reads the choice back');
+      expect(k('settings-row-kuliahCard'), findsOneWidget, reason: 'a fresh screen keeps the group open');
+      expect(k('settings-row-clock'), findsNothing, reason: 'Solat was never opened');
     });
 
     testWidgets('the order row sits first in Kandungan and opens the screen', (tester) async {
@@ -253,7 +262,7 @@ void main() {
       expect(k('superadmin-device-lock'), findsOneWidget);
       expect(find.text('Kunci peranti ini'), findsOneWidget);
       await expectGoldens(tester, h.app, 'settings_applock_superadmin');
-    });
+    }, skip: !kOpsBuild);
 
     testWidgets('an old stored range of 20 verses is not flagged until a verse field is touched; the steppers then bring it inside the rule', (tester) async {
       final h = await pumpShell(tester, roles: const ['admin']);

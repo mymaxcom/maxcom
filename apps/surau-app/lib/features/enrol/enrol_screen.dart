@@ -19,7 +19,11 @@ import '../../box/box_qr.dart';
 import '../../box/payload.dart';
 import '../../box/setup_client.dart';
 import '../../l10n/generated/s.dart';
+import '../../ops/enrol/ops_enrol_screen.dart';
+import '../../ops/ops_build.dart';
 import '../../screens/widgets/pieces.dart' show confirmDialog;
+import '../common/device_name.dart';
+import '../common/error_text.dart';
 import '../common/contact_links.dart';
 import '../common/help_card.dart';
 import '../common/identity.dart';
@@ -103,6 +107,7 @@ Widget defaultScanner(
 class EnrolScreen extends StatefulWidget {
   const EnrolScreen({
     super.key,
+    this.actions = const [],
     required this.flow,
     required this.cameraAvailable,
     required this.onEnrolled,
@@ -118,6 +123,10 @@ class EnrolScreen extends StatefulWidget {
     this.now = DateTime.now,
     this.toLocal = _toLocal,
   });
+
+  /// The top bar's trailing widgets (the router puts the language switch
+  /// there; the screen itself needs no providers).
+  final List<Widget> actions;
 
   final EnrolFlow flow;
 
@@ -310,9 +319,11 @@ class _EnrolScreenState extends State<EnrolScreen> {
       });
       _loadLogo(payload.box);
       _loadBoxInfo(payload);
-    } on FormatException catch (e) {
+    } on FormatException {
+      // The text is not a MAXCOM invitation: the app's own sentence, in the
+      // language of the app (the exception's text is a diagnostic).
       setState(() {
-        _error = e.message;
+        _error = s.ra5CodeInvalid;
         _errorNeedsHelp = false;
       });
     } on EnrolExpired {
@@ -376,7 +387,7 @@ class _EnrolScreenState extends State<EnrolScreen> {
 
   Future<void> _enrol() async {
     final s = S.of(context);
-    final name = _nameCtl.text.trim();
+    final name = cleanDeviceName(_nameCtl.text);
     final hasPin = _hasPinAlready;
     String? nameError;
     String? pinError;
@@ -439,7 +450,7 @@ class _EnrolScreenState extends State<EnrolScreen> {
       if (_showAsCard(e)) return;
       setState(() {
         _busy = false;
-        _error = e.message;
+        _error = e.text(s);
         _errorNeedsHelp = true;
       });
     } on BoxUnreachable catch (e) {
@@ -455,7 +466,7 @@ class _EnrolScreenState extends State<EnrolScreen> {
       if (_showAsCard(e)) return;
       setState(() {
         _busy = false;
-        _error = e.message;
+        _error = errorText(s, e);
         _errorNeedsHelp = false;
       });
     } on StateError catch (e) {
@@ -496,7 +507,7 @@ class _EnrolScreenState extends State<EnrolScreen> {
   Widget build(BuildContext context) {
     final s = S.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(s.enrolTitle)),
+      appBar: AppBar(title: Text(s.enrolTitle), actions: widget.actions),
       body: switch (_view) {
         _View.capture => _buildCapture(context, s),
         _View.review => _buildReview(context, s),
@@ -621,6 +632,9 @@ class _EnrolScreenState extends State<EnrolScreen> {
           const SizedBox(height: 20),
           HelpCard(contact: _contact, openUrl: widget.openUrl),
         ],
+        // Plan 14 Task 26: the MAXCOM Ops build's own door; absent from the public binary.
+        if (kOpsBuild && widget.pairingUi)
+          OpsEnrolEntry(flow: widget.flow, onEnrolled: widget.onEnrolled),
       ],
     );
   }
@@ -708,7 +722,7 @@ class _EnrolScreenState extends State<EnrolScreen> {
           controller: _nameCtl,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.next,
-          maxLength: 40,
+          maxLength: maxDeviceNameLength,
           decoration: InputDecoration(
             labelText: s.enrolDeviceNameLabel,
             hintText: s.enrolDeviceNameHint,

@@ -18,7 +18,7 @@ export function TakwimCard({ view, lang, content }: CardProps) {
   return (
     <article class="card glass card--takwim" data-card="takwim">
       <span class="card__tag">{t('takwim', lang)}</span>
-      <ol class="takwim__list">
+      <ol class={`takwim__list n-${rows.length}`}>
         {rows.map((r) => {
           const n = daysBetween(today, r.date) ?? 0;
           return (

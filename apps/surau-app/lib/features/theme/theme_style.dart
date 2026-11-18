@@ -10,6 +10,8 @@
 // alone decides whether a translation shows. A stored one is still valid (an
 // older box or app may hold it) and is dropped when the entry is read.
 
+import '../../l10n/generated/s.dart';
+import '../../l10n/s_lookup.dart';
 import '../registry.g.dart';
 
 /// One screen's menu values (key to a JSON value: String or int).
@@ -33,38 +35,39 @@ bool _oneOf(Object? v, List<String> vals) => v is String && vals.contains(v);
 bool _intIn(Object? v, int min, int max) =>
     v is num && v == v.truncate() && v >= min && v <= max;
 
-/// Null when [value] is valid for [key]; else a Bahasa Malaysia reason. The
+/// Null when [value] is valid for [key]; else a reason in the app language ([s], BM when none is given). The
 /// same rules as core `styleValueError`.
-String? styleValueProblem(String key, Object value) {
+String? styleValueProblem(String key, Object value, [S? lang]) {
+  final s = lang ?? sBm;
   switch (key) {
     case 'bgImage':
-      return value is String && _asset64.hasMatch(value) ? null : 'Gambar tidak sah';
+      return value is String && _asset64.hasMatch(value) ? null : s.valImageBad;
     case 'bgFit':
-      return _oneOf(value, const ['penuh', 'regang', 'sederhana', 'kecil']) ? null : 'Paparan gambar tidak sah';
+      return _oneOf(value, const ['penuh', 'regang', 'sederhana', 'kecil']) ? null : s.valFitBad;
     case 'bgPos':
     case 'align':
-      return _oneOf(value, const ['kiri', 'tengah', 'kanan']) ? null : 'Pilihan tidak sah';
+      return _oneOf(value, const ['kiri', 'tengah', 'kanan']) ? null : s.valChoiceBad;
     case 'shade':
-      return _intIn(value, 0, 80) ? null : 'Mesti nombor bulat 0 hingga 80';
+      return _intIn(value, 0, 80) ? null : s.valWholeNumber(0, 80);
     case 'accent':
     case 'text':
     case 'harakat':
-      return value is String && _hex6.hasMatch(value) ? null : 'Warna mesti seperti #12AB34';
+      return value is String && _hex6.hasMatch(value) ? null : s.valColourLike;
     case 'font':
     case 'arFont':
-      return value is String && _fontId.hasMatch(value) ? null : 'Fon tidak sah';
+      return value is String && _fontId.hasMatch(value) ? null : s.valFontBad;
     case 'scale':
-      return _oneOf(value, const ['S', 'M', 'L', 'XL']) ? null : 'Saiz mesti S, M, L atau XL';
+      return _oneOf(value, const ['S', 'M', 'L', 'XL']) ? null : s.valSizeChoice;
     case 'arScale':
-      return _intIn(value, 100, 160) ? null : 'Mesti nombor bulat 100 hingga 160';
+      return _intIn(value, 100, 160) ? null : s.valWholeNumber(100, 160);
     case 'arLineHeight':
-      return _intIn(value, 16, 24) ? null : 'Mesti nombor bulat 16 hingga 24';
+      return _intIn(value, 16, 24) ? null : s.valWholeNumber(16, 24);
     case 'tarjamah':
-      return _oneOf(value, const ['bawah', 'sisi', 'sembunyi']) ? null : 'Pilihan tidak sah';
+      return _oneOf(value, const ['bawah', 'sisi', 'sembunyi']) ? null : s.valChoiceBad;
     case 'goldOutline':
-      return _oneOf(value, const ['on', 'off']) ? null : 'Pilihan tidak sah';
+      return _oneOf(value, const ['on', 'off']) ? null : s.valChoiceBad;
     default:
-      return 'Nilai tidak dikenali';
+      return s.valValueUnknown;
   }
 }
 

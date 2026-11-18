@@ -57,13 +57,13 @@ export interface HadisSlot {
  * hadis, one part per slot) and by the layout's own fit. Shared by the card and the content screens: null when the
  * hadis is gone. `ref` goes on the box whose overflow the fit measures.
  */
-export function useHadisSlot({ content, itemId, view, page, startedAt, durationSeconds }: CardProps): HadisSlot | null {
+export function useHadisSlot({ content, itemId, view, page, startedAt, durationSeconds }: CardProps, opts: { fitMax?: number } = {}): HadisSlot | null {
   const h = (itemId === null ? content.hadisToday[0] : content.hadisToday.find((x) => x.id === itemId)) ?? null;
   const settings = (view.settings?.hadis ?? {}) as Partial<HadisSettings>;
   const part = page ?? 0;
   // The text size (Ubah suai) is part of the key: a new size measures the fit again from the full size.
   const scale = useScale();
-  const { ref, fit, pages } = useFit<HTMLDivElement>(`${h?.id ?? ''}|${part}|${scale}`, { paged: true });
+  const { ref, fit, pages } = useFit<HTMLDivElement>(`${h?.id ?? ''}|${part}|${scale}`, { paged: true, max: opts.fitMax });
   if (!h) return null;
 
   const plan = hadisPlan(h, settings);

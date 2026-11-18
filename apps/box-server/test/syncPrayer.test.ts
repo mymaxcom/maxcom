@@ -25,7 +25,7 @@ const newDb = (): DatabaseSync => { const d = mkdtempSync(join(tmpdir(), 'surau-
 afterEach(() => { for (const d of dbs.splice(0)) d.close(); for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 const T = (iso: string): Date => new Date(iso);
-const ctx = (): ApplyCtx => ({ now: T('2026-11-20T10:00:00Z'), origin: 'box:boxA', actor: 'system:sync', dataDir: tmpdir() });
+const ctx = (): ApplyCtx => ({ surauId: 'sdm', now: T('2026-11-20T10:00:00Z'), origin: 'box:boxA', actor: 'system:sync', dataDir: tmpdir() });
 const feedOf = (db: DatabaseSync): FeedEntry[] => readFeed(db, 0, 5000, ALL).entries;
 const prayerOf = (db: DatabaseSync): FeedEntry[] => feedOf(db).filter((e) => e.entity.startsWith('prayer:'));
 const send = (to: DatabaseSync, entries: FeedEntry[]): string[] => entries.map((e) => applyFeedEntry(to, e, ctx()).status);
@@ -44,7 +44,7 @@ describe('prayer entities in the feed', () => {
   it('a JAKIM import is one prayer:official entry per year, and the other side ends with the same days', () => {
     const box = newDb();
     const cloud = newDb();
-    importDays(box, 'SGR01', official, 'system:auto-prayer-fetch');
+    importDays(box, 'SGR01', official, 'system:auto-prayer-fetch', undefined, undefined, 'sdm');
     const entries = prayerOf(box).filter((e) => e.entity === 'prayer:official');
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ entityId: 'SGR01:2026', origin: 'local' });
@@ -58,13 +58,13 @@ describe('prayer entities in the feed', () => {
     expect(Number(cloud.prepare('SELECT COUNT(*) AS n FROM change_log').get()!.n)).toBe(before);
     const echoed = feedOf(cloud).filter((e) => e.entity.startsWith('prayer:') && e.origin === 'local');
     expect(echoed).toEqual([]);
-    expect(resolveDays(cloud, resolveSettings({}), '2026-11-01', '2026-11-03').map((d) => d.source)).toEqual(['official', 'official', 'official']);
+    expect(resolveDays(cloud, resolveSettings({}), '2026-11-01', '2026-11-03', 'sdm').map((d) => d.source)).toEqual(['official', 'official', 'official']);
   });
 
   it('the auto fetch (insert only) sends the full stored year, not only the days it added', () => {
     const box = newDb();
-    importDays(box, 'SGR01', official.slice(0, 10), 'tester');
-    importDays(box, 'SGR01', official.slice(0, 20), 'system:auto-prayer-fetch', undefined, { insertOnly: true });
+    importDays(box, 'SGR01', official.slice(0, 10), 'tester', undefined, undefined, 'sdm');
+    importDays(box, 'SGR01', official.slice(0, 20), 'system:auto-prayer-fetch', undefined, { insertOnly: true }, 'sdm');
     const second = prayerOf(box).filter((e) => e.entity === 'prayer:official')[1]!;
     expect((second.after as { days: unknown[] }).days).toHaveLength(20);
   });
@@ -73,16 +73,16 @@ describe('prayer entities in the feed', () => {
     const box = newDb();
     const cloud = newDb();
     const s = ke();
-    const a = applyImport(box, s, { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: fileDays(range('2026-12-01', 31)), overlap: 'replace' }, 'user:t', undefined, T('2026-11-10T01:00:00Z'));
-    const b = applyImport(box, s, { kind: 'csv', fileName: 'b.csv', sha256: 'b'.repeat(64), days: fileDays(range('2026-12-20', 20), { zohor: '12:40' }), overlap: 'replace' }, 'user:t', undefined, T('2026-11-11T01:00:00Z'));
+    const a = applyImport(box, s, { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: fileDays(range('2026-12-01', 31)), overlap: 'replace' }, 'user:t', undefined, T('2026-11-10T01:00:00Z'), 'sdm');
+    const b = applyImport(box, s, { kind: 'csv', fileName: 'b.csv', sha256: 'b'.repeat(64), days: fileDays(range('2026-12-20', 20), { zohor: '12:40' }), overlap: 'replace' }, 'user:t', undefined, T('2026-11-11T01:00:00Z'), 'sdm');
     expect(send(cloud, prayerOf(box))).toEqual(['applied', 'applied']);
-    const view = (db: DatabaseSync) => resolveDays(db, s, '2026-12-01', '2027-01-10').map((d) => [d.date, d.source, d.times.zohor]);
+    const view = (db: DatabaseSync) => resolveDays(db, s, '2026-12-01', '2027-01-10', 'sdm').map((d) => [d.date, d.source, d.times.zohor]);
     expect(view(cloud)).toEqual(view(box));
     expect(view(cloud).find((r) => r[0] === '2026-12-25')![2]).toBe('12:40');
     expect(rowsOf(cloud, 'SELECT id, kind, file_name, sha256, rows, date_from, date_to, overlap, inserted, replaced, skipped FROM prayer_imports ORDER BY id'))
       .toEqual(rowsOf(box, 'SELECT id, kind, file_name, sha256, rows, date_from, date_to, overlap, inserted, replaced, skipped FROM prayer_imports ORDER BY id'));
 
-    expect(undoImport(box, b.id, 'user:t', undefined, T('2026-11-12T01:00:00Z'))).toEqual({ ok: true, restored: 20 });
+    expect(undoImport(box, b.id, 'user:t', undefined, T('2026-11-12T01:00:00Z'), 'sdm')).toEqual({ ok: true, restored: 20 });
     const all = prayerOf(box);
     const undoEntry = all[all.length - 1]!;
     expect(undoEntry).toMatchObject({ entity: 'prayer:import', entityId: b.id });
@@ -96,13 +96,13 @@ describe('prayer entities in the feed', () => {
   it('a correction and its removal round trip', () => {
     const box = newDb();
     const cloud = newDb();
-    importDays(box, 'SGR01', official.filter((d) => d.date === '2026-11-26'), 'tester');
-    putCorrection(box, { date: '2026-11-26', prayer: 'asar', time: '16:25', reason: 'Ikut takwim masjid' }, 'user:t', undefined, T('2026-11-10T01:00:00Z'), 'SGR01');
+    importDays(box, 'SGR01', official.filter((d) => d.date === '2026-11-26'), 'tester', undefined, undefined, 'sdm');
+    putCorrection(box, { date: '2026-11-26', prayer: 'asar', time: '16:25', reason: 'Ikut takwim masjid' }, 'user:t', undefined, T('2026-11-10T01:00:00Z'), 'SGR01', undefined, 'sdm');
     send(cloud, prayerOf(box));
     const read = (db: DatabaseSync) => rowsOf(db, 'SELECT date, prayer, time, reason, official_at_correction FROM prayer_corrections');
     expect(read(cloud)).toEqual(read(box));
     expect(read(cloud)).toHaveLength(1);
-    expect(removeCorrection(box, '2026-11-26', 'asar', 'user:t', undefined, T('2026-11-11T01:00:00Z'))).toBe(true);
+    expect(removeCorrection(box, '2026-11-26', 'asar', 'user:t', undefined, T('2026-11-11T01:00:00Z'), undefined, 'sdm')).toBe(true);
     const last = prayerOf(box).pop()!;
     expect(last.after).toBeNull();
     expect(send(cloud, [last])).toEqual(['applied']);
@@ -112,8 +112,8 @@ describe('prayer entities in the feed', () => {
   it('an older entry does not replace a newer one', () => {
     const box = newDb();
     const cloud = newDb();
-    putCorrection(cloud, { date: '2026-11-26', prayer: 'asar', time: '16:30', reason: 'Dari awan' }, 'user:c', undefined, T('2026-11-15T01:00:00Z'));
-    putCorrection(box, { date: '2026-11-26', prayer: 'asar', time: '16:25', reason: 'Dari kotak' }, 'user:b', undefined, T('2026-11-10T01:00:00Z'));
+    putCorrection(cloud, { date: '2026-11-26', prayer: 'asar', time: '16:30', reason: 'Dari awan' }, 'user:c', undefined, T('2026-11-15T01:00:00Z'), undefined, undefined, 'sdm');
+    putCorrection(box, { date: '2026-11-26', prayer: 'asar', time: '16:25', reason: 'Dari kotak' }, 'user:b', undefined, T('2026-11-10T01:00:00Z'), undefined, undefined, 'sdm');
     expect(send(cloud, prayerOf(box))).toEqual(['superseded']);
     expect(rowsOf(cloud, 'SELECT time FROM prayer_corrections')).toEqual([{ time: '16:30' }]);
   });
@@ -121,7 +121,7 @@ describe('prayer entities in the feed', () => {
   it('refuses bad payloads and applies nothing from them', () => {
     const box = newDb();
     const cloud = newDb();
-    importDays(box, 'SGR01', official.filter((d) => d.date >= '2026-11-01' && d.date <= '2026-11-05'), 'tester');
+    importDays(box, 'SGR01', official.filter((d) => d.date >= '2026-11-01' && d.date <= '2026-11-05'), 'tester', undefined, undefined, 'sdm');
     const good = prayerOf(box).find((e) => e.entity === 'prayer:official')!;
     const mut = (f: (a: Record<string, unknown> & { days: Record<string, unknown>[] }) => void): FeedEntry => {
       const a = JSON.parse(JSON.stringify(good.after)) as Record<string, unknown> & { days: Record<string, unknown>[] };
@@ -150,10 +150,10 @@ describe('prayer entities in the feed', () => {
 
   it('a calculated day is never in the feed or the snapshot, and the snapshot holds the stored data', () => {
     const box = newDb();
-    importDays(box, 'SGR01', official, 'tester');
-    importDays(box, 'SGR01', official.map((d) => ({ ...d, date: d.date.replace('2026', '2027') })), 'tester');
-    applyImport(box, ke(), { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: fileDays(range('2026-12-01', 5)), overlap: 'replace' }, 'user:t', undefined, T('2026-11-10T01:00:00Z'));
-    putCorrection(box, { date: '2026-11-26', prayer: 'asar', time: '16:25', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-11-10T01:00:00Z'));
+    importDays(box, 'SGR01', official, 'tester', undefined, undefined, 'sdm');
+    importDays(box, 'SGR01', official.map((d) => ({ ...d, date: d.date.replace('2026', '2027') })), 'tester', undefined, undefined, 'sdm');
+    applyImport(box, ke(), { kind: 'csv', fileName: 'a.csv', sha256: 'a'.repeat(64), days: fileDays(range('2026-12-01', 5)), overlap: 'replace' }, 'user:t', undefined, T('2026-11-10T01:00:00Z'), 'sdm');
+    putCorrection(box, { date: '2026-11-26', prayer: 'asar', time: '16:25', reason: 'Ikut takwim' }, 'user:t', undefined, T('2026-11-10T01:00:00Z'), undefined, undefined, 'sdm');
     const snap = snapshot(box, ALL, { boxId: 'b', now: T('2026-11-20T00:00:00Z') });
     expect(snap.prayer!.official.map((o) => `${o.zone}:${o.year}:${o.days.length}`)).toEqual(['SGR01:2026:365', 'SGR01:2027:365']);
     expect(snap.prayer!.imports).toHaveLength(1);

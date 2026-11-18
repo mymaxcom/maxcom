@@ -25,7 +25,7 @@ class WebCryptoDeviceKey implements DeviceKey {
     final s = (web.window.crypto as JSObject)['subtle'];
     if (s == null || s.isUndefinedOrNull) {
       throw StateError(
-          'Pelayar ini tidak membenarkan kunci peranti. Buka MAXCOM melalui HTTPS');
+          'Pelayar ini tidak membenarkan kunci peranti. Buka MAXCOM melalui HTTPS'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }
     return web.window.crypto.subtle;
   }
@@ -40,10 +40,10 @@ class WebCryptoDeviceKey implements DeviceKey {
       c.complete(req.result as web.IDBDatabase);
     }).toJS;
     req.onerror = ((web.Event _) {
-      c.completeError(StateError('IndexedDB tidak dapat dibuka'));
+      c.completeError(StateError('IndexedDB tidak dapat dibuka')); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }).toJS;
     req.onblocked = ((web.Event _) {
-      c.completeError(StateError('IndexedDB tidak dapat dibuka'));
+      c.completeError(StateError('IndexedDB tidak dapat dibuka')); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }).toJS;
     return c.future;
   }
@@ -59,9 +59,9 @@ class WebCryptoDeviceKey implements DeviceKey {
       final req = make(tx.objectStore(_storeName));
       tx.oncomplete = ((web.Event _) => c.complete(req.result)).toJS;
       tx.onerror = ((web.Event _) =>
-          c.completeError(StateError('IndexedDB gagal'))).toJS;
+          c.completeError(StateError('IndexedDB gagal'))).toJS; // lang-ok: diagnostic exception text, not shown; screens map the error type to S
       tx.onabort = ((web.Event _) =>
-          c.completeError(StateError('IndexedDB gagal'))).toJS;
+          c.completeError(StateError('IndexedDB gagal'))).toJS; // lang-ok: diagnostic exception text, not shown; screens map the error type to S
       return await c.future;
     } finally {
       db.close();
@@ -108,7 +108,7 @@ class WebCryptoDeviceKey implements DeviceKey {
     String field(String k) {
       final v = raw[k];
       if (v == null || !v.isA<JSString>()) {
-        throw StateError('Kunci awam tidak sah');
+        throw StateError('Kunci awam tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
       }
       return (v as JSString).toDart;
     }
@@ -121,7 +121,7 @@ class WebCryptoDeviceKey implements DeviceKey {
       'y': field('y'),
     };
     if (jwk['kty'] != 'EC' || jwk['crv'] != 'P-256') {
-      throw StateError('Kunci awam tidak sah');
+      throw StateError('Kunci awam tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }
     return jwk;
   }
@@ -143,7 +143,7 @@ class WebCryptoDeviceKey implements DeviceKey {
         .toDart;
     // WebCrypto already returns IEEE P1363 (r||s), 64 bytes for P-256.
     final bytes = Uint8List.fromList((out as JSArrayBuffer).toDart.asUint8List());
-    if (bytes.length != 64) throw StateError('Tandatangan tidak sah');
+    if (bytes.length != 64) throw StateError('Tandatangan tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     return bytes;
   }
 

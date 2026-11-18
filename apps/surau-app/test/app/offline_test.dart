@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:surau_app/features/shell/connection_icons.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/box/box_client.dart';
 import 'package:surau_app/features/shell/box_gateway.dart';
@@ -25,6 +26,11 @@ class _Reach implements ReachSink {
   @override
   void markDown(DateTime at) => _r = _r.failed(at);
 }
+
+/// The offline banner's glyph: the box (on paper, crossed), never the cloud.
+Finder _bannerGlyph() => find.byWidgetPredicate(
+  (w) => w is LinkGlyph && w.kind == LinkKind.box && w.state == LinkState.disconnected && !w.onDark,
+);
 
 void main() {
   group('BoxGateway', () {
@@ -127,7 +133,7 @@ void main() {
       final first = h.container.read(settingsProvider).value!;
       expect(first.stale, isFalse);
       expect(h.box.byPath('/api/settings'), isNotNull);
-      expect(find.byIcon(Icons.cloud_off_rounded), findsNothing);
+      expect(_bannerGlyph(), findsNothing);
 
       h.boxAway = true;
       h.container.invalidate(settingsProvider);
@@ -171,12 +177,12 @@ void main() {
       h.boxAway = true;
       await h.container.read(healthProvider.notifier).refresh();
       await settle(tester);
-      expect(find.byIcon(Icons.cloud_off_rounded), findsOneWidget);
+      expect(_bannerGlyph(), findsOneWidget);
 
       h.boxAway = false;
       await tester.tap(find.text('Cuba lagi'));
       await settle(tester);
-      expect(find.byIcon(Icons.cloud_off_rounded), findsNothing);
+      expect(_bannerGlyph(), findsNothing);
     });
 
     testWidgets(
@@ -184,6 +190,8 @@ void main() {
       (tester) async {
         final h = await pumpShell(tester, roles: const ['admin']);
         expect(h.location, '/');
+        await tester.tap(find.byKey(const ValueKey('dash-system-toggle')));
+        await settle(tester);
         expect(find.text('212 hari lagi'), findsOneWidget);
 
         h.healthStatus = 401;
@@ -208,8 +216,10 @@ void main() {
         }
         await settle(tester);
         expect(h.location, '/');
+        await tester.tap(find.byKey(const ValueKey('dash-system-toggle')));
+        await settle(tester);
         expect(find.text('212 hari lagi'), findsOneWidget);
-        expect(find.byIcon(Icons.cloud_off_rounded), findsOneWidget);
+        expect(_bannerGlyph(), findsOneWidget);
       },
     );
 

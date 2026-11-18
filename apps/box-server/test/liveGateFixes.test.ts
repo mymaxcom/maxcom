@@ -58,8 +58,8 @@ process.on('SIGTERM', () => process.exit(0));
 describe('A1: MediaMTX respawn with an open session', () => {
   it('sets the publisher user and the SRT passphrase again', async () => {
     const h = await make({ live: { monitorMs: 20, reprovisionMs: 20 }, spawn: { backoffBaseMs: 20, backoffMaxMs: 40 } });
-    const media = await loginAs(h.app, 'media');
-    const r = await post(h, '/api/live/start', media.headers, startBody(h));
+    const liveUser = await loginAs(h.app, 'live');
+    const r = await post(h, '/api/live/start', liveUser.headers, startBody(h));
     expect(r.statusCode).toBe(200);
     const id = r.json().session.id as string;
     const passphrase = r.json().ingest.srt.passphrase as string;
@@ -85,7 +85,7 @@ describe('A2: the kiosk path follows the audio leg', () => {
     writeFileSync(join(dir, 'stub-ffmpeg.cjs'), STUB);
     writeFileSync(join(dir, 'mode.json'), JSON.stringify({ mode }));
     const h = await make({ live: { monitorMs: 20 } });
-    putFeature(h.app.surau.db, 'liveOnKiosk', { audio: true }, 'test');
+    putFeature(h.app.surau.db, 'liveOnKiosk', { audio: true }, 'test', undefined, 'sdm');
     const events: KioskLive[] = [];
     const sessions = new LiveSessions({
       db: h.app.surau.db,
@@ -113,7 +113,7 @@ describe('A2: the kiosk path follows the audio leg', () => {
     expect(a.events.filter((e) => e.path === 'surau-kiosk').length).toBeGreaterThan(0);
     // the audio switched off: back to surau, announced
     const n = a.events.length;
-    putFeature(a.h.app.surau.db, 'liveOnKiosk', { audio: false }, 'test');
+    putFeature(a.h.app.surau.db, 'liveOnKiosk', { audio: false }, 'test', undefined, 'sdm');
     a.sessions.publishKiosk();
     expect(a.sessions.kioskPath()).toBe('surau');
     expect(a.events.length).toBeGreaterThan(n);
@@ -209,7 +209,7 @@ describe('A3: MediaMTX older than v1.21.0', () => {
 describe('A6: start limiter', () => {
   it('6 starts per device per hour and 12 per box; a reconnect is not counted', async () => {
     const h = await make();
-    const a = await loginAs(h.app, 'media');
+    const a = await loginAs(h.app, 'live');
     for (let i = 0; i < 6; i++) {
       const s = await post(h, '/api/live/start', a.headers, startBody(h));
       expect(s.statusCode, `start ${i}`).toBe(200);
@@ -224,13 +224,13 @@ describe('A6: start limiter', () => {
     expect(seventh.json()).toMatchObject({ code: 'live_rate', errors: ['Terlalu banyak cubaan mula siaran. Cuba lagi sebentar lagi.'] });
 
     // another device still has its own six, up to the box total of twelve
-    const b = await loginAs(h.app, 'media');
+    const b = await loginAs(h.app, 'live');
     for (let i = 0; i < 6; i++) {
       const s = await post(h, '/api/live/start', b.headers, startBody(h));
       expect(s.statusCode, `b start ${i}`).toBe(200);
       await post(h, '/api/live/stop', b.headers, {});
     }
-    const c = await loginAs(h.app, 'media');
+    const c = await loginAs(h.app, 'live');
     const over = await post(h, '/api/live/start', c.headers, startBody(h));
     expect(over.statusCode).toBe(429);
     expect(over.json().code).toBe('live_rate');
@@ -265,25 +265,25 @@ describe('A7: Q3, Q11 and the fallback title', () => {
       },
     });
     const h = await make({ live: { youtube: y, monitorMs: 20 } });
-    putFeature(h.app.surau.db, 'liveYoutube', { enabled: true }, 'test');
-    const media = await loginAs(h.app, 'media');
-    const first = await post(h, '/api/live/start', media.headers, startBody(h, { outputs: { kiosk: true, youtube: true } }));
+    putFeature(h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
+    const liveUser = await loginAs(h.app, 'live');
+    const first = await post(h, '/api/live/start', liveUser.headers, startBody(h, { outputs: { kiosk: true, youtube: true } }));
     expect(first.statusCode).toBe(500);
     expect(h.app.liveSessions.current()).toBeNull();
     await h.app.liveSessions.settled();
     expect((h.fake.global.authInternalUsers as Array<{ user: string }>).some((u) => u.user.startsWith('pub-'))).toBe(false);
     boom = false;
-    const second = await post(h, '/api/live/start', media.headers, startBody(h, { outputs: { kiosk: true, youtube: true } }));
+    const second = await post(h, '/api/live/start', liveUser.headers, startBody(h, { outputs: { kiosk: true, youtube: true } }));
     expect(second.statusCode).toBe(200);
   });
 
   it('Missed-1: the fallback title is cleaned like the templated one', async () => {
     const y = leg();
     const h = await make({ live: { youtube: y, monitorMs: 20 } });
-    putFeature(h.app.surau.db, 'liveYoutube', { enabled: true }, 'test');
-    putFeature(h.app.surau.db, 'surauInfo', { name: 'Surau – Al <Hidayah> → Utama' }, 'test');
-    const media = await loginAs(h.app, 'media');
-    const r = await post(h, '/api/live/start', media.headers, startBody(h, { kuliahId: null, outputs: { kiosk: true, youtube: true } }));
+    putFeature(h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
+    putFeature(h.app.surau.db, 'surauInfo', { name: 'Surau – Al <Hidayah> → Utama' }, 'test', undefined, 'sdm');
+    const liveUser = await loginAs(h.app, 'live');
+    const r = await post(h, '/api/live/start', liveUser.headers, startBody(h, { kuliahId: null, outputs: { kiosk: true, youtube: true } }));
     expect(r.statusCode).toBe(200);
     expect(y.titles).toHaveLength(1);
     expect(y.titles[0]).toBe('Kuliah Surau , Al Hidayah : Utama');

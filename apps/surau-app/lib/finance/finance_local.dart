@@ -150,12 +150,26 @@ class FinanceLocal {
     final funds = await this.funds();
     final bal = balances(entries, funds);
     final ym = todayKl.substring(0, 7);
+    // "Masuk / Keluar bulan ini" are the monthly report's own figures (as
+    // first posted; the report's corrections column carries the changes), so
+    // the home card and the report never disagree.
+    final month = monthReport(
+      MonthReportInput(
+        ym: ym,
+        entries: entries,
+        funds: await this.funds(includeArchived: true),
+        perihal: const [],
+        now: '',
+        syncedUntil: null,
+        status: 'open',
+      ),
+    ).totals;
     return FinanceSummary(
       funds: [for (final f in funds) FundBalance(f, bal[f.id] ?? 0)],
       ym: ym,
       monthStatus: await monthStatus(ym),
-      monthInSen: monthIn(entries, ym),
-      monthOutSen: monthOut(entries, ym),
+      monthInSen: month.inSen,
+      monthOutSen: month.outSen,
       entryCount: entries.length,
       pendingCount: pendingCount,
       unseenCorrections: unseenCorrections,
@@ -181,7 +195,10 @@ class FinanceLocal {
       if (m.ym == ym) state = m;
     }
     if (state != null && state.closed && state.report != null) {
-      return state.report!;
+      final late = {...state.lateEntries, ...state.report!.lateEntries};
+      return late.isEmpty
+          ? state.report!
+          : state.report!.withLateEntries(late.toList());
     }
     final entries = await allEntries();
     final titles = <String, String>{};

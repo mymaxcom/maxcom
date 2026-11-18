@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/box/box_client.dart';
+import 'package:surau_app/features/unlock/offline_vault.dart' show OfflineVault;
 import 'package:surau_app/store/local_store.dart';
 import 'package:surau_app/sync/canonical.dart';
 import 'package:surau_app/sync/outbox.dart';
@@ -363,12 +364,110 @@ void main() {
         );
       }
       final v = await engine.sync();
-      expect(await store.bytes(), 0);
+      expect(await store.list('content:pengumuman'), isEmpty);
+      expect(await store.list(OfflineVault.collection), hasLength(1), reason: 'only the revoked flag stays');
       expect(revoked, 1);
       expect(v.lastError, 'device_revoked');
       expect(SyncEngine.revokedMessage, 'Peranti ini telah dibatalkan');
       // The first refusal stops the batch loop; the engine is dead after.
       expect(delays, isEmpty);
+    });
+
+    test('[K2] a pull answered device_revoked wipes the store and the vault, and says so', () async {
+      await seed();
+      server.changesStatus = 401;
+      server.changesBody = {
+        'errors': ['Peranti telah dibatalkan'],
+        'code': 'device_revoked',
+      };
+      final v = await engine.sync();
+      expect(await store.getDoc('content:pengumuman', 'p1'), isNull);
+      expect(await OfflineVault(store: store, iterations: 1000, minIterations: 1000).isRevoked(), isTrue);
+      expect(revoked, 1);
+      expect(v.lastError, 'device_revoked');
+    });
+
+    test('[K2] an unreachable box wipes nothing', () async {
+      await seed();
+      transport.connectError = const BoxUnreachable('down');
+      await engine.sync();
+      expect(await store.getDoc('content:pengumuman', 'p1'), isNotNull);
+      expect(revoked, 0);
+    });
+
+    test('[K5] an applied settings edit with skipped fields leaves a Konflik card naming them', () async {
+      await seed();
+      await store.putDoc('settings', 'clock', {'_feature': 'clock', 'enabled': true, 'showSeconds': false});
+      server.verdict = (op) => {...server.applied(op), 'skipped': ['showSeconds']};
+      await engine.enqueue(
+        kind: 'settings.put',
+        entity: 'settings',
+        entityId: 'clock',
+        payload: {'showSeconds': true},
+      );
+      final v = await engine.sync();
+      final cards = await store.list(Collections.conflicts);
+      expect(cards, hasLength(1));
+      expect(cards.single['reason'], 'partial');
+      expect(cards.single['entity'], 'settings');
+      expect(cards.single['entityId'], 'clock');
+      expect(cards.single['skipped'], ['showSeconds']);
+      expect(v.conflicts, 1);
+      expect(await engine.outbox.count, 0, reason: 'the edit itself landed');
+    });
+
+    test('[K14] one applied settings edit pulls the changes feed and takes no snapshot', () async {
+      await seed();
+      await store.putDoc('settings', 'clock', {'_feature': 'clock', 'enabled': true, 'showSeconds': false});
+      await engine.enqueue(
+        kind: 'settings.put',
+        entity: 'settings',
+        entityId: 'clock',
+        payload: {'showSeconds': true},
+      );
+      await engine.sync();
+      expect(server.snapshotCalls, 0);
+      expect(server.changesCalls, greaterThan(0));
+    });
+
+    test('[K6] a refused finance entry keeps its tabung name, amount, date and reason', () async {
+      await seed();
+      await store.putDoc('finance:fund', 'f1', {'id': 'f1', 'name': 'Tabung Contoh'});
+      server.verdict = (op) => {
+        'opId': op['opId'],
+        'status': 'refused',
+        'rev': null,
+        'reason': 'month_closed',
+        'winner': null,
+      };
+      await engine.enqueue(
+        kind: 'finance.append',
+        entity: 'finance:entry',
+        entityId: 'e1',
+        payload: {'kind': 'in', 'fundId': 'f1', 'entryDate': '2026-10-05', 'amountSen': 12000, 'method': 'cash'},
+      );
+      await engine.sync();
+      final card = (await store.list(Collections.conflicts)).single;
+      expect(card['reason'], 'month_closed');
+      expect(card['fundName'], 'Tabung Contoh');
+      expect((card['mine'] as Map)['amountSen'], 12000);
+      expect(await store.getDoc('finance:entry', 'e1'), isNull, reason: 'the row does not exist on the box');
+    });
+
+    test('[K15] a refused user edit keeps the person name beside the id', () async {
+      await seed();
+      await store.putDoc(Collections.users, 'u9', {'id': 'u9', 'name': 'Aminah Contoh', 'roles': ['ajk']});
+      server.verdict = (op) => {
+        'opId': op['opId'],
+        'status': 'refused',
+        'rev': null,
+        'reason': 'last_admin',
+        'winner': null,
+      };
+      await engine.enqueue(kind: 'user.put', entity: 'user', entityId: 'u9', payload: {'roles': <String>[]});
+      await engine.sync();
+      final card = (await store.list(Collections.conflicts)).single;
+      expect(card['userName'], 'Aminah Contoh');
     });
 
     test('a pull with a tombstone deletes the local doc', () async {
@@ -518,6 +617,68 @@ void main() {
         expect(mine!['pending'], isTrue, reason: 'kept on top of the snapshot');
       },
     );
+  });
+
+  group('[PP-A1] the snapshot format', () {
+    SyncEngine versioned(int? format) => SyncEngine(
+      store: store,
+      key: key,
+      box: syncBox(),
+      transport: transport,
+      now: () => clock = clock.add(const Duration(seconds: 1)),
+      autoSync: false,
+      schedule: fakeTimer,
+      snapshotFormat: format,
+    );
+
+    test('[PP-A1] a copy made before the ID fields takes one fresh snapshot, then none', () async {
+      await seed();
+      server.snapshot = {
+        ...server.snapshot,
+        'seq': 9,
+        'users': [
+          {'id': 'u1', 'name': 'Ustaz Ahmad', 'ref': 'U-0001', 'no': 1, 'noSrc': 'b', 'phone': '+60120000001', 'deleted': false, 'active': true},
+        ],
+      };
+      final e = versioned(kSnapshotFormat);
+      addTearDown(e.dispose);
+      await e.sync();
+      expect(server.snapshotCalls, 1, reason: 'a cursor and no recorded format: rebuild once');
+      expect((await store.meta())[metaSnapshotFormatKey('box')], '$kSnapshotFormat');
+      final u = await store.getDoc('users', 'u1');
+      expect(u!['ref'], 'U-0001');
+      expect(u['phone'], '+60120000001');
+      await e.sync();
+      await e.sync();
+      expect(server.snapshotCalls, 1, reason: 'the next syncs read the feed');
+    });
+
+    test('[PP-A1] a waiting edit survives the rebuild', () async {
+      await seed();
+      final e = versioned(kSnapshotFormat);
+      addTearDown(e.dispose);
+      transport.connectError = const BoxUnreachable('down');
+      await e.enqueue(
+        kind: 'content.put',
+        entity: 'content:pengumuman',
+        entityId: 'mine',
+        payload: {'title': 'Dari rumah'},
+      );
+      await e.sync();
+      transport.connectError = null;
+      await e.sync();
+      expect(server.snapshotCalls, 1);
+      expect((await store.getDoc('content:pengumuman', 'mine'))!['title'], 'Dari rumah');
+    });
+
+    test('[PP-A1] with no format asked (every older test) nothing is rebuilt', () async {
+      await seed();
+      final e = versioned(null);
+      addTearDown(e.dispose);
+      await e.sync();
+      expect(server.snapshotCalls, 0);
+      expect((await store.meta()).containsKey(metaSnapshotFormatKey('box')), isFalse);
+    });
   });
 
   group('failure and waking', () {

@@ -55,13 +55,13 @@ export function validateCorrection(input: { date: unknown; prayer: unknown; time
 
 function logRow(
   db: DatabaseSync, at: string, actor: string, deviceId: string | undefined, id: string,
-  before: unknown, after: unknown, meta?: ChangeMeta,
+  before: unknown, after: unknown, meta: ChangeMeta | undefined, surauId: string,
 ): void {
   db.prepare(
-    `INSERT INTO change_log (at, actor, entity, entity_id, before_json, after_json, device_id, edited_at, rev, origin, synced_at)
-     VALUES (?, ?, 'prayer:correction', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json, device_id, edited_at, rev, origin, synced_at)
+     VALUES (?, ?, ?, 'prayer:correction', ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
-    at, actor, id,
+    surauId, at, actor, id,
     before === null ? null : JSON.stringify(before),
     after === null ? null : JSON.stringify(after),
     deviceId ?? null, at, meta?.rev ?? revOf(at, deviceId !== undefined ? { deviceId } : undefined),
@@ -69,8 +69,8 @@ function logRow(
   );
 }
 
-function rowOf(db: DatabaseSync, date: string, prayer: string): Record<string, unknown> | null {
-  const r = db.prepare('SELECT * FROM prayer_corrections WHERE date = ? AND prayer = ?').get(date, prayer);
+function rowOf(db: DatabaseSync, date: string, prayer: string, surauId: string): Record<string, unknown> | null {
+  const r = db.prepare('SELECT * FROM prayer_corrections WHERE surau_id = ? AND date = ? AND prayer = ?').get(surauId, date, prayer);
   if (!r) return null;
   return {
     date: r.date, prayer: r.prayer, time: r.time, reason: r.reason,
@@ -79,9 +79,9 @@ function rowOf(db: DatabaseSync, date: string, prayer: string): Record<string, u
 }
 
 /** The official time of one prayer on one date from any stored zone of the box's setting, for the later "official changed" flag. */
-function officialTime(db: DatabaseSync, zone: string | null, date: string, prayer: PrayerName): string | null {
+function officialTime(db: DatabaseSync, zone: string | null, date: string, prayer: PrayerName, surauId: string): string | null {
   if (zone === null) return null;
-  const r = db.prepare('SELECT json FROM prayer_days WHERE zone = ? AND date = ?').get(zone, date);
+  const r = db.prepare('SELECT json FROM prayer_days WHERE surau_id = ? AND zone = ? AND date = ?').get(surauId, zone, date);
   if (!r) return null;
   try {
     const t = (JSON.parse(String(r.json)) as { times?: Record<string, string> }).times?.[prayer];
@@ -104,11 +104,11 @@ export interface CorrectionOptions {
 /** Set or replace the correction of one prayer on one date. `zone` is the official zone to remember the original from. */
 export function putCorrection(
   db: DatabaseSync, input: CorrectionInput, actor: string, deviceId: string | undefined, now: Date, zone: string | null = null,
-  options: CorrectionOptions = {},
+  options: CorrectionOptions = {}, surauId: string,
 ): void {
   db.exec('BEGIN IMMEDIATE');
   try {
-    putCorrectionIn(db, input, actor, deviceId, now, zone, options);
+    putCorrectionIn(db, input, actor, deviceId, now, zone, options, surauId);
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
@@ -119,7 +119,7 @@ export function putCorrection(
 /** `putCorrection` inside a transaction the caller already holds. */
 export function putCorrectionIn(
   db: DatabaseSync, input: CorrectionInput, actor: string, deviceId: string | undefined, now: Date, zone: string | null = null,
-  options: CorrectionOptions = {},
+  options: CorrectionOptions = {}, surauId: string,
 ): void {
   const errors = validateCorrection(input);
   if (errors.length > 0) throw new CorrectionError(400, errors);
@@ -127,36 +127,36 @@ export function putCorrectionIn(
     // A replicated correction gets the same year window as a replicated day, and the table a ceiling.
     const y = Number(input.date.slice(0, 4));
     if (y < 2020 || y > 2100) throw new CorrectionError(400, ['date is outside 2020 to 2100']);
-    if (rowOf(db, input.date, input.prayer) === null && Number(db.prepare('SELECT COUNT(*) AS n FROM prayer_corrections').get()!.n) >= MAX_CORRECTION_ROWS) {
+    if (rowOf(db, input.date, input.prayer, surauId) === null && Number(db.prepare('SELECT COUNT(*) AS n FROM prayer_corrections WHERE surau_id = ?').get(surauId)!.n) >= MAX_CORRECTION_ROWS) {
       throw new CorrectionError(400, ['too many corrections']);
     }
   }
   const at = options.meta?.editedAt ?? now.toISOString();
-  const before = rowOf(db, input.date, input.prayer);
+  const before = rowOf(db, input.date, input.prayer, surauId);
   const original = options.officialAtCorrection !== undefined
     ? options.officialAtCorrection
-    : before !== null ? (before.officialAtCorrection as string | null) : officialTime(db, zone, input.date, input.prayer);
+    : before !== null ? (before.officialAtCorrection as string | null) : officialTime(db, zone, input.date, input.prayer, surauId);
   const rev = options.meta?.rev ?? revOf(at, deviceId !== undefined ? { deviceId } : undefined);
   db.prepare(
-    `INSERT INTO prayer_corrections (date, prayer, time, reason, official_at_correction, actor, device_id, created_at, rev, edited_at, origin, arrived_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(date, prayer) DO UPDATE SET time = excluded.time, reason = excluded.reason,
+    `INSERT INTO prayer_corrections (surau_id, date, prayer, time, reason, official_at_correction, actor, device_id, created_at, rev, edited_at, origin, arrived_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(surau_id, date, prayer) DO UPDATE SET time = excluded.time, reason = excluded.reason,
        official_at_correction = excluded.official_at_correction, actor = excluded.actor, device_id = excluded.device_id,
        created_at = excluded.created_at, rev = excluded.rev, edited_at = excluded.edited_at, origin = excluded.origin,
        arrived_at = excluded.arrived_at`,
-  ).run(input.date, input.prayer, input.time, input.reason.trim(), original, actor, deviceId ?? null, at, rev, at, options.meta?.origin ?? 'local', now.toISOString());
-  logRow(db, at, actor, deviceId, `${input.date}|${input.prayer}`, before, rowOf(db, input.date, input.prayer), options.meta);
-  bumpVersion(db);
+  ).run(surauId, input.date, input.prayer, input.time, input.reason.trim(), original, actor, deviceId ?? null, at, rev, at, options.meta?.origin ?? 'local', now.toISOString());
+  logRow(db, at, actor, deviceId, `${input.date}|${input.prayer}`, before, rowOf(db, input.date, input.prayer, surauId), options.meta, surauId);
+  bumpVersion(db, surauId);
 }
 
 /** Remove a correction; false when there was none. */
 export function removeCorrection(
   db: DatabaseSync, date: string, prayer: PrayerName, actor: string, deviceId: string | undefined, now: Date,
-  options: CorrectionOptions = {},
+  options: CorrectionOptions = {}, surauId: string,
 ): boolean {
   db.exec('BEGIN IMMEDIATE');
   try {
-    const removed = removeCorrectionIn(db, date, prayer, actor, deviceId, now, options);
+    const removed = removeCorrectionIn(db, date, prayer, actor, deviceId, now, options, surauId);
     db.exec('COMMIT');
     return removed;
   } catch (error) {
@@ -167,22 +167,22 @@ export function removeCorrection(
 
 export function removeCorrectionIn(
   db: DatabaseSync, date: string, prayer: PrayerName, actor: string, deviceId: string | undefined, now: Date,
-  options: CorrectionOptions = {},
+  options: CorrectionOptions = {}, surauId: string,
 ): boolean {
   if (!isRealDate(date) || !isPrayerName(prayer)) throw new CorrectionError(400, ['date or prayer is not valid']);
   const at = options.meta?.editedAt ?? now.toISOString();
-  const before = rowOf(db, date, prayer);
+  const before = rowOf(db, date, prayer, surauId);
   if (before === null) return false;
-  db.prepare('DELETE FROM prayer_corrections WHERE date = ? AND prayer = ?').run(date, prayer);
-  logRow(db, at, actor, deviceId, `${date}|${prayer}`, before, null, options.meta);
-  bumpVersion(db);
+  db.prepare('DELETE FROM prayer_corrections WHERE surau_id = ? AND date = ? AND prayer = ?').run(surauId, date, prayer);
+  logRow(db, at, actor, deviceId, `${date}|${prayer}`, before, null, options.meta, surauId);
+  bumpVersion(db, surauId);
   return true;
 }
 
-export function listCorrections(db: DatabaseSync, from: string, to: string): CorrectionRow[] {
+export function listCorrections(db: DatabaseSync, from: string, to: string, surauId: string): CorrectionRow[] {
   return db
-    .prepare('SELECT date, prayer, time, reason, official_at_correction FROM prayer_corrections WHERE date >= ? AND date <= ? ORDER BY date, prayer')
-    .all(from, to)
+    .prepare('SELECT date, prayer, time, reason, official_at_correction FROM prayer_corrections WHERE surau_id = ? AND date >= ? AND date <= ? ORDER BY date, prayer')
+    .all(surauId, from, to)
     .map((r) => ({
       date: String(r.date), prayer: String(r.prayer) as PrayerName, time: String(r.time), reason: String(r.reason),
       officialAtCorrection: typeof r.official_at_correction === 'string' ? r.official_at_correction : null,
@@ -190,10 +190,10 @@ export function listCorrections(db: DatabaseSync, from: string, to: string): Cor
 }
 
 /** Every correction with its edit stamp and writer, for a snapshot (the stamp is what a receiving box merges by). */
-export function snapshotCorrections(db: DatabaseSync): Array<CorrectionRow & { editedAt: string; rev: string; actor: string }> {
+export function snapshotCorrections(db: DatabaseSync, surauId: string): Array<CorrectionRow & { editedAt: string; rev: string; actor: string }> {
   return db
-    .prepare('SELECT date, prayer, time, reason, official_at_correction, actor, created_at, rev, edited_at FROM prayer_corrections ORDER BY date, prayer')
-    .all()
+    .prepare('SELECT date, prayer, time, reason, official_at_correction, actor, created_at, rev, edited_at FROM prayer_corrections WHERE surau_id = ? ORDER BY date, prayer')
+    .all(surauId)
     .map((r) => {
       const editedAt = typeof r.edited_at === 'string' ? r.edited_at : String(r.created_at);
       return {

@@ -103,22 +103,40 @@ class StateChip extends StatelessWidget {
     required this.label,
     required this.background,
     required this.foreground,
-  });
+  }) : tick = false;
+
+  /// "Hidup" and "Sentiasa hidup": green with a tick (operator round 1), the
+  /// theme's success colours (about 6.9:1).
+  const StateChip.on({super.key, required this.label})
+    : background = SurauColors.successSoft,
+      foreground = SurauColors.success,
+      tick = true;
 
   final String label;
   final Color background;
   final Color foreground;
+  final bool tick;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final words = Text(label, style: text.labelMedium!.copyWith(color: foreground));
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: EdgeInsetsDirectional.fromSTEB(tick ? 7 : 10, 5, 10, 5),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(SurauTheme.radiusChip),
       ),
-      child: Text(label, style: text.labelMedium!.copyWith(color: foreground)),
+      child: tick
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.check_rounded, size: 15, color: foreground),
+                const SizedBox(width: 4),
+                Flexible(child: words),
+              ],
+            )
+          : words,
     );
   }
 }

@@ -4,6 +4,7 @@ import type { FastifyRequest } from 'fastify';
 import { randomToken, sha256hex } from './crypto.ts';
 import type { KioskAuth } from './authz.ts';
 import { AuthError, MSG, logChange, revokeDeviceRow, tx } from './users.ts';
+import { assignNewNo } from './ids.ts';
 
 /** Name of the pairing cookie. */
 export const KIOSK_COOKIE = 'surau_kiosk';
@@ -80,6 +81,7 @@ export function approvePairing(
   approverId: string,
   actor: string,
   now: Date,
+  surauId: string,
 ): { deviceId: string; name: string; requesterIp: string | null; codeAgeSeconds: number } {
   const code = normalisePairCode(input.code);
   if (!/^[0-9]{6}$/.test(code)) throw new AuthError(404, 'bad_pair_code', MSG_BAD_PAIR_CODE);
@@ -93,8 +95,9 @@ export function approvePairing(
     }
     const deviceId = randomToken(12);
     db.prepare(
-      `INSERT INTO devices (id, user_id, name, platform, public_jwk, enrolled_at) VALUES (?, ?, ?, 'kiosk', NULL, ?)`,
-    ).run(deviceId, approverId, name, nowIso);
+      `INSERT INTO devices (id, user_id, name, platform, public_jwk, enrolled_at, surau_id) VALUES (?, ?, ?, 'kiosk', NULL, ?, ?)`,
+    ).run(deviceId, approverId, name, nowIso, surauId);
+    assignNewNo(db, 'device', deviceId, surauId);
     const upd = db
       .prepare('UPDATE kiosk_pairings SET approved_by = ?, device_id = ? WHERE code_hash = ? AND approved_by IS NULL')
       .run(approverId, deviceId, String(row.code_hash));
@@ -105,7 +108,7 @@ export function approvePairing(
       name,
       platform: 'kiosk',
       revoked: false,
-    });
+    }, undefined, surauId);
     return {
       deviceId,
       name,

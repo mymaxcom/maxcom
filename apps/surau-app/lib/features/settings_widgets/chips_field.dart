@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
 import '../../l10n/generated/s.dart';
-import '../labels_ms.dart';
+import '../labels.dart';
+import '../labels_ms.dart' show choiceHelpMs;
 import 'field_meta.dart';
 
 class ChipsField extends StatelessWidget {
@@ -37,6 +38,7 @@ class ChipsField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = appLangOf(context);
     final text = Theme.of(context).textTheme;
     final choices = meta.choices;
     final shown = [
@@ -57,7 +59,7 @@ class ChipsField extends StatelessWidget {
           for (final c in shown)
             ChoiceChip(
               key: ValueKey('setting-$path-$c'),
-              label: Text(choiceLabelMs(name, '$c')),
+              label: Text(choiceLabel(name, '$c', lang)),
               selected: '$c' == '$value',
               showCheckmark: false,
               onSelected: readOnly ? null : (_) => onChanged(c),
@@ -108,6 +110,7 @@ class ChoiceCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
+    final lang = appLangOf(context);
     final text = Theme.of(context).textTheme;
     final disabled = meta.disabledChoices;
     return FieldFrame(
@@ -120,8 +123,8 @@ class ChoiceCards extends StatelessWidget {
             if (i > 0) const SizedBox(height: 10),
             _Card(
               key: ValueKey('setting-$path-$c'),
-              title: choiceLabelMs(name, c),
-              sentence: choiceHelpMs[name]?[c],
+              title: choiceLabel(name, c, lang),
+              sentence: choiceHelp(name, c, lang),
               hint: disabled.contains(c) ? s.settingsComingSoon : null,
               selected: c == value,
               onTap: readOnly || disabled.contains(c) ? null : () => onChanged(c),

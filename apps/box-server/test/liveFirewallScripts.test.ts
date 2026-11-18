@@ -25,9 +25,11 @@ describe('ensure-live-firewall.ps1 (static)', () => {
     for (const ch of text) expect(ch.charCodeAt(0)).toBeLessThan(128);
   });
 
-  it('keeps exactly two UDP rules, every profile, local subnet only, no TCP and no other port', () => {
+  it('keeps exactly three UDP rules, every profile, local subnet only, no TCP and no other port', () => {
     expect(text).toContain('MAXCOM Live WebRTC');
     expect(text).toContain('MAXCOM Live SRT');
+    expect(text).toContain('MAXCOM Live RTP');
+    expect(text).toMatch(/\$RtpPorts\s*=\s*'8000-8001'/);
     expect(text).toMatch(/\[int\]\$WebrtcPort\s*=\s*8189/);
     expect(text).toMatch(/\[int\]\$SrtPort\s*=\s*8890/);
     expect(text).not.toMatch(/protocol=tcp/i);
@@ -36,7 +38,7 @@ describe('ensure-live-firewall.ps1 (static)', () => {
     expect(adds[0]).toMatch(/dir=in action=allow protocol=udp localport=\$Port profile=any remoteip=localsubnet/);
     expect(text).not.toMatch(/profile=(private|public|domain)/i);
     // the only port numbers in the file are the two defaults
-    const ports = (text.match(/\b\d{4,5}\b/g) ?? []).filter((n) => n !== '8189' && n !== '8890');
+    const ports = (text.match(/\b\d{4,5}\b/g) ?? []).filter((n) => !['8189', '8890', '8000', '8001'].includes(n));
     expect(ports).toEqual([]);
   });
 

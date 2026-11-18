@@ -35,7 +35,7 @@ class OrderList extends StatelessWidget {
             if (i > 0) const Divider(),
             Padding(
               key: ValueKey('order-row-${entries[i].id}'),
-              padding: const EdgeInsets.fromLTRB(16, 12, 6, 12),
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 6, 12),
               child: Row(
                 children: [
                   Container(

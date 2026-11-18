@@ -1,5 +1,8 @@
-// The Pentadbir MAXCOM in the app: the badge, the forced lock, the roles
-// editor's checkbox and the lock row of this device.
+// The Pentadbir MAXCOM in the ops build: the badge, the forced lock and the
+// lock row of this device. Plan 14 Task 25 moved these into lib/ops/; the
+// tests run under --dart-define=MAXCOM_OPS=true and are skipped in the public
+// build (public_build_test.dart covers that side). Granting the role has no
+// screen: the cloud CLI only.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -7,6 +10,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/app/theme.dart';
+import 'package:surau_app/ops/ops_build.dart';
 
 import '../../golden_sizes.dart';
 import 'harness.dart';
@@ -32,14 +36,14 @@ void main() {
     expect(find.byKey(const ValueKey('superadmin-badge')), findsOneWidget);
     await open(tester, const ['admin'], path: '/settings');
     expect(find.byKey(const ValueKey('superadmin-badge')), findsNothing);
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets('the rail carries the full badge on the iPad', (tester) async {
     await open(tester, const ['superadmin'], size: GoldenSize.ipadMiniLandscape);
     expect(find.text('Pentadbir MAXCOM'), findsWidgets);
     await open(tester, const ['admin'], size: GoldenSize.ipadMiniLandscape);
     expect(find.byKey(const ValueKey('superadmin-badge')), findsNothing);
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets('the shield in the app bar reads on the dark glass (gold, not teal)', (tester) async {
     await open(tester, const ['admin', 'superadmin'], path: '/settings');
@@ -48,7 +52,7 @@ void main() {
     );
     expect(icon.color, SurauColors.gold);
     expect(icon.color, isNot(SurauColors.teal));
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets('the narrow rail (iPad portrait) shows the role name whole, not cut to "Pent..."', (tester) async {
     await open(tester, const ['superadmin'], size: GoldenSize.ipadMiniPortrait);
@@ -70,40 +74,19 @@ void main() {
       expect(para.didExceedMaxLines, isFalse);
     }
     expect(find.descendant(of: badge, matching: find.text('Pentadbir MAXCOM')), findsOneWidget);
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets('the lock is on for a Pentadbir MAXCOM whatever the surau says, off for an admin', (tester) async {
     final h = await open(tester, const ['superadmin']);
     expect(h.container.read(isSuperadminProvider), isTrue);
     expect(h.container.read(appLockProvider), isTrue);
     expect(h.container.read(effectiveLockProvider), isTrue);
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets('this device: the always-on lock row for a Pentadbir MAXCOM only', (tester) async {
     await open(tester, const ['superadmin'], path: '/this-device');
     expect(find.byKey(const ValueKey('this-device-lock-always')), findsOneWidget);
     await open(tester, const ['admin'], path: '/this-device');
     expect(find.byKey(const ValueKey('this-device-lock-always')), findsNothing);
-  });
-
-  testWidgets('the roles editor: no Pentadbir MAXCOM box at a box, even for a superadmin; present on the cloud gateway', (tester) async {
-    await open(tester, const ['superadmin'], path: '/users/new');
-    expect(find.text('Pentadbir MAXCOM'), findsNothing);
-    expect(find.text('Pentadbir'), findsWidgets);
-    await open(
-      tester,
-      const ['superadmin'],
-      path: '/users/new',
-      overrides: [isCloudGatewayProvider.overrideWithValue(true)],
-    );
-    expect(find.text('Pentadbir MAXCOM'), findsWidgets);
-    // an admin on the cloud lacks superadmin:manage
-    await open(
-      tester,
-      const ['admin'],
-      path: '/users/new',
-      overrides: [isCloudGatewayProvider.overrideWithValue(true)],
-    );
-    expect(find.text('Pentadbir MAXCOM'), findsNothing);
-  });
+  }, skip: !kOpsBuild);
 }

@@ -75,15 +75,28 @@ function parse24h(s: unknown): string {
   return `${pad(h)}:${pad(min)}`;
 }
 
-/** Null if the day's seven times are strictly increasing (HH:mm compare), else a message naming the pair. */
+const minutesOf = (t: string): number => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+/** A time past midnight must still be before this (minutes into the next day): Isyak at 00:14 yes, Isyak at 03:00 or 14:00 no. */
+const LATEST_WRAPPED_MIN = 3 * 60;
+
+/**
+ * Null if the day's seven times are in order (HH:mm), else a message naming the pair. Maghrib and Isyak may fall
+ * after midnight (a high-latitude summer): the order is then compared with one +1440 wrap, at most once a day,
+ * and only at Maghrib or Isyak. Every earlier prayer must be strictly later than the one before it.
+ */
 export function checkPrayerDay(day: PrayerDay): string | null {
+  let wrapped = false;
   for (let i = 1; i < PRAYERS.length; i++) {
     const a = PRAYERS[i - 1]!;
     const b = PRAYERS[i]!;
     const ta = day.times?.[a];
     const tb = day.times?.[b];
     if (typeof ta !== 'string' || typeof tb !== 'string') return `${a}/${b} time missing`;
-    if (!(ta < tb)) return `prayer times out of order: ${a} ${ta} is not before ${b} ${tb}`;
+    if (!wrapped && ta < tb) continue;
+    const mayWrap = !wrapped && (b === 'maghrib' || b === 'isyak') && minutesOf(tb) < LATEST_WRAPPED_MIN;
+    if (wrapped && minutesOf(ta) < minutesOf(tb) && minutesOf(tb) < LATEST_WRAPPED_MIN) continue;
+    if (mayWrap) { wrapped = true; continue; }
+    return `prayer times out of order: ${a} ${ta} is not before ${b} ${tb}`;
   }
   return null;
 }

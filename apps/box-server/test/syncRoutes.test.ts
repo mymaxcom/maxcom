@@ -13,8 +13,10 @@ import { revokeDevice } from '../src/auth/devices.ts';
 import { resolveSession } from '../src/auth/sessions.ts';
 import { setRoles } from '../src/auth/users.ts';
 import { createChangeBus } from '../src/events.ts';
+import { putItem } from '../src/content/store.ts';
 import { getVersion } from '../src/settingsStore.ts';
 import { createSyncService, registerSyncRoutes, SYNC_BODY_LIMIT } from '../src/sync/routes.ts';
+import { LOCAL_SURAU_ID } from '../src/tenant.ts';
 import { loginAs } from './authHelpers.ts';
 import type { Login } from './authHelpers.ts';
 import { newOpId, signOp } from './support/signOp.ts';
@@ -61,13 +63,13 @@ describe('POST /api/sync/ops from a device session', () => {
     const app = makeApp();
     const admin = await loginAs(app, 'admin');
     const ops = await batch(app, admin, [put('p1'), put('p2'), put('p3')]);
-    const v0 = getVersion(app.surau.db);
+    const v0 = getVersion(app.surau.db, 'sdm');
     const r = await postOps(app, admin, ops);
     expect(r.statusCode).toBe(200);
     const body = r.json() as { results: OpResult[]; seq: number };
     expect(body.results.map((x) => x.status)).toEqual(['applied', 'applied', 'applied']);
     expect(body.results.map((x) => x.opId)).toEqual(ops.map((o) => o.opId));
-    expect(getVersion(app.surau.db)).toBeGreaterThan(v0);
+    expect(getVersion(app.surau.db, 'sdm')).toBeGreaterThan(v0);
     expect(body.seq).toBeGreaterThan(0);
     expect((await app.inject({ method: 'GET', url: '/api/content/penceramah/p2', headers: admin.headers })).json().item.name).toBe('Ustaz');
     const logs = contentChanges(app);
@@ -131,7 +133,7 @@ describe('POST /api/sync/ops from a device session', () => {
       db: app.surau.db, boxId: app.surau.boxId, dataDir: tempDir(), now: () => AT, limiters: createLimiters(), bus: createChangeBus(),
     });
     const before = contentChanges(app);
-    const out = service.processDeviceOps(ctx, ops, '10.1.1.1');
+    const out = service.processDeviceOps(ctx, ops, '10.1.1.1', LOCAL_SURAU_ID);
     expect(out.results.map((x) => x.reason)).toEqual(Array(5).fill('device_revoked'));
     expect(out.results.every((x) => x.status === 'refused')).toBe(true);
     expect(out.changed).toBe(false);
@@ -243,8 +245,10 @@ describe('POST /api/sync/ops from a device session', () => {
     const bare = Fastify({ logger: false });
     apps.push(bare);
     bare.decorateRequest('auth', null);
+    bare.decorateRequest('tenant', null);
     bare.addHook('onRequest', async (request) => {
       request.auth = resolveSession(app.surau.db, admin.token, AT);
+      request.tenant = { surauId: 'sdm' };
     });
     registerSyncRoutes(bare, {
       db: app.surau.db, boxId: app.surau.boxId, dataDir: tempDir(), now: () => AT, limiters: createLimiters(), bus,
@@ -253,13 +257,33 @@ describe('POST /api/sync/ops from a device session', () => {
     const r = await bare.inject({ method: 'POST', url: '/api/sync/ops', payload: { ops } });
     expect(r.statusCode).toBe(200);
     expect(seen).toHaveLength(1);
-    expect(seen[0]).toBe(getVersion(app.surau.db));
+    expect(seen[0]).toBe(getVersion(app.surau.db, 'sdm'));
     await bare.inject({ method: 'POST', url: '/api/sync/ops', payload: { ops } });
     expect(seen).toHaveLength(1);
   });
 });
 
 describe('snapshot and changes', () => {
+  it('[C2] a penceramah phone reaches only roles that may edit content (snapshot and changes)', async () => {
+    const app = makeApp();
+    putItem(app.surau.db, 'penceramah', { id: 'p1', name: 'Ustaz Contoh', phone: '+60 12-000 0011' }, 'test', undefined, LOCAL_SURAU_ID);
+    for (const [role, sees] of [['ajk', false], ['live', false], ['media', true], ['admin', true]] as const) {
+      const who = await loginAs(app, role);
+      const snap = await app.inject({ method: 'GET', url: '/api/sync/snapshot', headers: who.headers });
+      const p = (snap.json().content.penceramah as { id: string; phone?: string }[]).find((x) => x.id === 'p1');
+      expect(p, `${role} snapshot has the speaker`).toBeDefined();
+      expect(p!.phone !== undefined, `${role} snapshot phone`).toBe(sees);
+      const feed = await app.inject({ method: 'GET', url: '/api/sync/changes?since=0', headers: who.headers });
+      const e = (feed.json().entries as { entity: string; after: { phone?: string } | null }[]).find((x) => x.entity === 'content:penceramah');
+      expect(e, `${role} feed has the speaker`).toBeDefined();
+      expect(e!.after?.phone !== undefined, `${role} feed phone`).toBe(sees);
+      if (!sees) {
+        expect(snap.body).not.toContain('000 0011');
+        expect(feed.body).not.toContain('000 0011');
+      }
+    }
+  });
+
   it('snapshot: AJK has no users or devices; Pentadbir has users and devices, never a pin or key', async () => {
     const app = makeApp();
     const admin = await loginAs(app, 'admin');
@@ -391,11 +415,11 @@ describe('site identity', () => {
       editedAt: '2026-11-03T03:00:00.000Z', syncedAt: '2026-11-03T03:00:01.000Z', actor: 'user:u1', deviceId: 'dev1',
       origin: 'app', opId, after: { id: 'p1', name: 'Dari kotak' },
     };
-    const v0 = getVersion(app.surau.db);
+    const v0 = getVersion(app.surau.db, 'sdm');
     const r1 = await app.inject({ method: 'POST', url: '/api/sync/ops', headers: site.headers, payload: { entries: [entry] } });
     expect(r1.statusCode).toBe(200);
     expect(r1.json()).toMatchObject({ applied: 1, duplicate: 0, refused: 0 });
-    expect(getVersion(app.surau.db)).toBeGreaterThan(v0);
+    expect(getVersion(app.surau.db, 'sdm')).toBeGreaterThan(v0);
     const row = app.surau.db.prepare('SELECT origin, op_id FROM change_log WHERE op_id = ?').get(opId);
     expect(row).toMatchObject({ origin: 'app' });
     const r2 = await app.inject({ method: 'POST', url: '/api/sync/ops', headers: site.headers, payload: { entries: [entry] } });
@@ -483,6 +507,7 @@ describe('hook wiring', () => {
     const bare = Fastify({ logger: false });
     apps.push(bare);
     bare.decorateRequest('auth', null);
+    bare.decorateRequest('tenant', null);
     bare.addHook('onRequest', authHook({ db: app.surau.db, now: () => AT, limiters: createLimiters() }));
     registerSyncRoutes(bare, {
       db: app.surau.db, boxId: app.surau.boxId, dataDir: tempDir(), now: () => AT, limiters: createLimiters(), bus: createChangeBus(),

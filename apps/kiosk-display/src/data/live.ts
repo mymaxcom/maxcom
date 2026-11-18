@@ -46,6 +46,7 @@ export function parseKioskLive(v: unknown): (KioskLive & { path?: string }) | nu
     kuliah,
     audio: o.audio === true,
     volume,
+    ...(o.waiting === true ? { waiting: true } : {}),
     ...(o.path === 'surau' || o.path === 'surau-kiosk' ? { path: o.path } : {}),
   };
 }

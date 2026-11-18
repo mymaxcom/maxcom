@@ -130,7 +130,7 @@ describe('verifyDeviceOp', () => {
     const app = makeApp();
     const server = { boxId: app.surau.boxId };
     const who: Record<string, Login> = {};
-    for (const r of ['admin', 'treasurer', 'media', 'ajk'] as Role[]) who[r] = await loginAs(app, r);
+    for (const r of ['admin', 'treasurer', 'media', 'live', 'ajk'] as Role[]) who[r] = await loginAs(app, r);
     const kinds: Record<string, OpInput> = {
       'content.put': CONTENT,
       'content.delete': { kind: 'content.delete', entity: 'content:penceramah', entityId: 'p1', payload: null },
@@ -147,7 +147,7 @@ describe('verifyDeviceOp', () => {
       'settings.put': ['admin'],
       'user.put': ['admin'],
       'device.revoke': ['admin'],
-      'audit.put': ['admin', 'media'],
+      'audit.put': ['admin', 'live'],
     };
     for (const [kind, input] of Object.entries(kinds)) {
       expect(OP_PERMISSIONS[kind as keyof typeof OP_PERMISSIONS].length).toBeGreaterThan(0);
@@ -205,5 +205,37 @@ describe('verifySiteEntry', () => {
     expect(verifySiteEntry(site, {}, { ...entry, actor: 'x y\n' })).toMatchObject({ ok: false, detail: 'bad_shape' });
     expect(verifySiteEntry(site, {}, { ...entry, opId: 'nope' })).toMatchObject({ ok: false, detail: 'bad_shape' });
     expect(verifySiteEntry(site, {}, null)).toMatchObject({ ok: false });
+  });
+});
+
+describe('settings.put by Siaran Langsung', () => {
+  const put = (entityId: string, payload: unknown): OpInput => ({ kind: 'settings.put', entity: 'settings', entityId, payload });
+
+  it('a live user may put the live features, and nothing else', async () => {
+    const app = makeApp();
+    const server = { boxId: app.surau.boxId };
+    const live = await loginAs(app, 'live');
+    for (const f of ['liveOnKiosk', 'liveYoutube', 'recording', 'liveCamera']) {
+      const r = verifyDeviceOp(app.surau.db, await signOp(live, app.surau.boxId, put(f, {})), AT, server);
+      expect(r.ok, f).toBe(true);
+      if (r.ok) expect(r.permissions).toEqual(['live:settings']);
+    }
+    for (const f of ['clock', 'hijriDate', 'surauInfo']) {
+      const r = verifyDeviceOp(app.surau.db, await signOp(live, app.surau.boxId, put(f, {})), AT, server);
+      expect(r, f).toMatchObject({ ok: false, reason: 'forbidden' });
+    }
+  });
+
+  it('a media user may put neither a live feature nor another one; admin may put both', async () => {
+    const app = makeApp();
+    const server = { boxId: app.surau.boxId };
+    const media = await loginAs(app, 'media');
+    const admin = await loginAs(app, 'admin');
+    for (const f of ['liveCamera', 'recording', 'clock']) {
+      expect(verifyDeviceOp(app.surau.db, await signOp(media, app.surau.boxId, put(f, {})), AT, server), f).toMatchObject({ ok: false, reason: 'forbidden' });
+      const r = verifyDeviceOp(app.surau.db, await signOp(admin, app.surau.boxId, put(f, {})), AT, server);
+      expect(r.ok, f).toBe(true);
+      if (r.ok) expect(r.permissions).toEqual(['settings:write']);
+    }
   });
 });

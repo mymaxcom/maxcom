@@ -54,7 +54,7 @@ export function KuliahScreen({ view, lang, content, itemId, onRendered }: CardPr
   if (!k) return null;
 
   const day = kuliahDayOf(k.date, today, lang);
-  const photo = settings.penceramahPhoto.enabled ? assetSrc(k.penceramah.photoAssetId) : null;
+  const photo = settings.penceramahPhoto.enabled ? assetSrc(k.penceramah?.photoAssetId) : null;
   const facts: Array<[string, string]> = [[t('factTime', lang), fmtTimeOfDay(k.time, lang, timeFormat)]];
   if (k.slot !== 'lain') facts.push([t('factAfter', lang), t('factAfterPrayer', lang, { prayer: prayerLabel(k.slot, lang) })]);
   const kitab = k.kitab;
@@ -82,7 +82,7 @@ export function KuliahScreen({ view, lang, content, itemId, onRendered }: CardPr
           <span class="kul-day-date">{day.date}</span>
         </div>
         <div class="kul-label">{k.label}</div>
-        <div class="kul-name">{k.penceramah.name}</div>
+        {k.penceramah ? <div class="kul-name">{k.penceramah.name}</div> : null}
         {k.topic ? <div class="kul-topic">{k.topic}</div> : null}
         <div class="kul-facts">
           {facts.map(([key, v]) => (

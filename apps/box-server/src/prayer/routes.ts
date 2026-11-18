@@ -1,3 +1,4 @@
+import { reqSurau } from '../reqSurau.ts';
 import type { FastifyInstance } from 'fastify';
 import { checkPrayerDay, COUNTRIES, countryDefaults, dateOf, hasOfficialSource, tzOf } from '@surau/core';
 import type { PrayerName, Settings } from '@surau/core';
@@ -10,7 +11,7 @@ import { CorrectionError, isPrayerName, isRealDate, putCorrection, removeCorrect
 import type { PrayerDeps } from './index.ts';
 import { addDays, crossCheck, daysBetween, officialChangedDays, PRAYER_NAMES, resolveDay, resolveDays } from './resolve.ts';
 import type { CrossCheck } from './resolve.ts';
-import { zoneWarning } from './zones.ts';
+import { zoneWarning, zonesFetchedAt } from './zones.ts';
 
 /** How far ahead the status counts days. */
 export const STATUS_HORIZON_DAYS = 400;
@@ -26,39 +27,43 @@ export interface PrayerStatus {
   located: boolean;
   order: string[];
   today: { date: string; source: string; emergency: boolean } | null;
-  daysAhead: { resolved: number; official: number; file: number };
+  daysAhead: { resolved: number; official: number; file: number; calc: number };
   official: { zone: string; years: { year: number; days: number; fetchedAt: string | null }[] };
   zones: { fetchedAt: string | null; count: number; selectedKnown: boolean; warning: string | null };
   autoFetch: ReturnType<PrayerDeps['autoFetch']['status']>;
   warnings: string[];
+  /** The stable codes of the warnings that have one, with their parameters (the app words them in its own language). */
+  warningCodes: Array<{ code: string; detail: Record<string, unknown> }>;
 }
 
-function zoneInfo(deps: Pick<PrayerDeps, 'db'>, settings: Settings): PrayerStatus['zones'] {
+function zoneInfo(deps: Pick<PrayerDeps, 'db'>, settings: Settings, surauId: string): PrayerStatus['zones'] {
   const { db } = deps;
   const count = Number(db.prepare('SELECT COUNT(*) AS n FROM jakim_zones WHERE removed_at IS NULL').get()?.n ?? 0);
-  const meta = db.prepare("SELECT value FROM meta WHERE key = 'jakimZones.fetchedAt'").get();
-  const newest = db.prepare('SELECT MAX(fetched_at) AS at FROM jakim_zones').get();
-  const fetchedAt = typeof meta?.value === 'string' ? meta.value : typeof newest?.at === 'string' ? newest.at : null;
+  const fetchedAt = zonesFetchedAt(db, surauId);
   const row = db.prepare('SELECT removed_at FROM jakim_zones WHERE code = ?').get(String(settings.zone.zone));
-  return { fetchedAt, count, selectedKnown: row !== undefined && row.removed_at === null, warning: zoneWarning(db, settings) };
+  return { fetchedAt, count, selectedKnown: row !== undefined && row.removed_at === null, warning: zoneWarning(db, settings, surauId) };
 }
 
 /** The one status block: the prayer routes, `/api/health` and the app all read this. */
-export function prayerStatus(deps: Pick<PrayerDeps, 'db' | 'now' | 'autoFetch'>, settings: Settings = getSettings(deps.db)): PrayerStatus {
+export function prayerStatus(deps: Pick<PrayerDeps, 'db' | 'now' | 'autoFetch'>, surauId: string, settings: Settings = getSettings(deps.db, surauId)): PrayerStatus {
   const { db } = deps;
   const tz = tzOf(settings);
   const today = dateOf(deps.now(), tz);
   const country = settings.location.country;
-  const days = resolveDays(db, settings, today, addDays(today, STATUS_HORIZON_DAYS - 1));
+  const days = resolveDays(db, settings, today, addDays(today, STATUS_HORIZON_DAYS - 1), surauId);
   const todayDay = days.find((d) => d.date === today) ?? null;
   const zone = String(settings.zone.zone);
   const years = hasOfficialSource(country)
-    ? officialYears(db, zone).map((y) => ({ year: y.year, days: y.days.length, fetchedAt: y.fetchedAt }))
+    ? officialYears(db, zone, surauId).map((y) => ({ year: y.year, days: y.days.length, fetchedAt: y.fetchedAt }))
     : [];
-  const zones = zoneInfo(deps, settings);
+  const zones = zoneInfo(deps, settings, surauId);
   const warnings: string[] = [];
-  if (todayDay === null) warnings.push(located(settings) ? 'Tiada data waktu solat untuk hari ini' : 'Lokasi surau belum ditetapkan; waktu solat tidak dapat dikira');
-  else if (todayDay.emergency) warnings.push('Hari ini guna kiraan sementara');
+  const warningCodes: PrayerStatus['warningCodes'] = [];
+  if (todayDay === null) {
+    warnings.push(located(settings) ? 'Tiada data waktu solat untuk hari ini' : 'Lokasi surau belum ditetapkan; waktu solat tidak dapat dikira');
+    warningCodes.push({ code: located(settings) ? 'no_data_today' : 'not_located', detail: {} });
+  }
+  else if (todayDay.emergency) { warnings.push('Hari ini guna kiraan sementara'); warningCodes.push({ code: 'emergency_today', detail: {} }); }
   if (zones.warning !== null) warnings.push(zones.warning);
   return {
     country,
@@ -72,11 +77,13 @@ export function prayerStatus(deps: Pick<PrayerDeps, 'db' | 'now' | 'autoFetch'>,
       resolved: days.length,
       official: days.filter((d) => d.source === 'official').length,
       file: days.filter((d) => d.source === 'file').length,
+      calc: days.filter((d) => d.source === 'calc').length,
     },
     official: { zone, years },
     zones,
-    autoFetch: deps.autoFetch.status(),
+    autoFetch: deps.autoFetch.status(surauId),
     warnings,
+    warningCodes,
   };
 }
 
@@ -106,15 +113,15 @@ export function registerPrayerCoreRoutes(app: FastifyInstance, deps: PrayerDeps)
   const { db, now, bus } = deps;
 
   app.get('/api/prayer/days', async (request, reply) => {
-    const settings = getSettings(db);
+    const settings = getSettings(db, reqSurau(request));
     const tz = tzOf(settings);
     const r = rangeOf(request.query, tz, now());
     if ('error' in r) return reply.code(400).send({ errors: [r.error] });
-    const cross = settings.prayerSources.crossCheck && located(settings) ? crossCheck(db, settings, r.from, r.to) : emptyCross();
+    const cross = settings.prayerSources.crossCheck && located(settings) ? crossCheck(db, settings, r.from, r.to, reqSurau(request)) : emptyCross();
     reply.header('Cache-Control', 'no-store');
-    const changed = officialChangedDays(db, settings, r.from, r.to);
+    const changed = officialChangedDays(db, settings, r.from, r.to, reqSurau(request));
     return {
-      days: resolveDays(db, settings, r.from, r.to).map((d) => ({ ...d, officialChanged: changed.get(d.date) ?? [] })),
+      days: resolveDays(db, settings, r.from, r.to, reqSurau(request)).map((d) => ({ ...d, officialChanged: changed.get(d.date) ?? [] })),
       crossCheck: cross,
       sources: {
         order: [...(settings.prayerSources.sourceOrder as string[])],
@@ -127,13 +134,13 @@ export function registerPrayerCoreRoutes(app: FastifyInstance, deps: PrayerDeps)
     };
   });
 
-  app.get('/api/prayer/status', async (_request, reply) => {
+  app.get('/api/prayer/status', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    return prayerStatus(deps);
+    return prayerStatus(deps, reqSurau(request));
   });
 
   app.get('/api/prayer/calc/preview', async (request, reply) => {
-    const settings = getSettings(db);
+    const settings = getSettings(db, reqSurau(request));
     const q = isPlain(request.query) ? request.query : {};
     const date = typeof q.date === 'string' ? q.date : dateOf(now(), tzOf(settings));
     if (!isRealDate(date)) return reply.code(400).send({ errors: ['date must be a real date like 2026-11-26'] });
@@ -155,7 +162,7 @@ export function registerPrayerCoreRoutes(app: FastifyInstance, deps: PrayerDeps)
 
   app.get('/api/prayer/countries', async (request, reply) => {
     const q = isPlain(request.query) ? request.query : {};
-    const lang = q.lang === 'en' ? 'en' : 'ms';
+    const lang = q.lang === 'en' ? 'en' : q.lang === 'ar' ? 'ar' : 'ms';
     const names = new Intl.DisplayNames([lang], { type: 'region' });
     reply.header('Cache-Control', 'max-age=86400');
     return COUNTRIES.map((c) => {
@@ -170,30 +177,30 @@ export function registerPrayerCoreRoutes(app: FastifyInstance, deps: PrayerDeps)
     if (!isPrayerName(prayer)) return reply.code(404).send({ errors: [`unknown prayer ${prayer}`] });
     const body = isPlain(request.body) ? request.body : {};
     const input = { date, prayer, time: body.time, reason: body.reason };
-    const settings = getSettings(db);
+    const settings = getSettings(db, reqSurau(request));
     try {
       // The corrected day must still be in order; a day with no times yet has nothing to compare with.
-      const current = isRealDate(date) && typeof body.time === 'string' ? resolveDay(db, settings, date) : null;
+      const current = isRealDate(date) && typeof body.time === 'string' ? resolveDay(db, settings, date, reqSurau(request)) : null;
       if (current !== null && typeof body.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(body.time)) {
         const bad = checkPrayerDay({ ...current, times: { ...current.times, [prayer]: body.time } });
         if (bad !== null) return reply.code(400).send({ errors: [bad] });
       }
       putCorrection(db, input as { date: string; prayer: PrayerName; time: string; reason: string }, actorOf(request), deviceOf(request), now(),
-        hasOfficialSource(settings.location.country) ? String(settings.zone.zone) : null);
+        hasOfficialSource(settings.location.country) ? String(settings.zone.zone) : null, undefined, reqSurau(request));
     } catch (error) {
       if (error instanceof CorrectionError) return reply.code(error.status).send({ errors: error.errors });
       throw error;
     }
-    bus.emit(getVersion(db));
-    return { ok: true, day: resolveDay(db, settings, date) };
+    bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
+    return { ok: true, day: resolveDay(db, settings, date, reqSurau(request)) };
   });
 
   app.delete('/api/prayer/corrections/:date/:prayer', async (request, reply) => {
     const { date, prayer } = request.params as { date: string; prayer: string };
     if (!isPrayerName(prayer) || !PRAYER_NAMES.includes(prayer)) return reply.code(404).send({ errors: [`unknown prayer ${prayer}`] });
     if (!isRealDate(date)) return reply.code(400).send({ errors: ['date must be a real date like 2026-11-26'] });
-    const removed = removeCorrection(db, date, prayer, actorOf(request), deviceOf(request), now());
-    if (removed) bus.emit(getVersion(db));
-    return { ok: true, removed, day: resolveDay(db, getSettings(db), date) };
+    const removed = removeCorrection(db, date, prayer, actorOf(request), deviceOf(request), now(), undefined, reqSurau(request));
+    if (removed) bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
+    return { ok: true, removed, day: resolveDay(db, getSettings(db, reqSurau(request)), date, reqSurau(request)) };
   });
 }

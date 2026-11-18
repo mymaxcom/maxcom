@@ -48,4 +48,20 @@ class ShareChannelTest {
         assertEquals("other", ShareArgs.classOf("org.telegram.messenger"))
         assertEquals("other", ShareArgs.classOf(null))
     }
+
+    @Test
+    fun aTextOfAtMost4096CharactersPasses() {
+        assertTrue(ShareArgs.textOk("Ikuti kuliah"))
+        assertTrue(ShareArgs.textOk("x".repeat(4096)))
+        assertFalse(ShareArgs.textOk("x".repeat(4097)))
+        assertFalse(ShareArgs.textOk(""))
+        assertFalse(ShareArgs.textOk(null))
+    }
+
+    @Test
+    fun aSubjectIsOptionalAndShort() {
+        assertTrue(ShareArgs.subjectOk(null))
+        assertTrue(ShareArgs.subjectOk("x".repeat(200)))
+        assertFalse(ShareArgs.subjectOk("x".repeat(201)))
+    }
 }

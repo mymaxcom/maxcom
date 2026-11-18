@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../common/device_name.dart';
 import '../../app/theme.dart';
 import '../../box/box_client.dart';
 import '../../box/box_qr.dart';
@@ -21,6 +22,7 @@ enum _Step { loading, found, form, confirm, pin, working, code, done, failed }
 class SetupScreen extends StatefulWidget {
   const SetupScreen({
     super.key,
+    this.actions = const [],
     required this.flow,
     required this.qrText,
     required this.defaultPhoneName,
@@ -29,6 +31,10 @@ class SetupScreen extends StatefulWidget {
     required this.onScanAnother,
     this.toLocal = _local,
   });
+
+  /// The top bar's trailing widgets (the router puts the language switch
+  /// there; the screen itself needs no providers).
+  final List<Widget> actions;
 
   final SetupFlow flow;
 
@@ -128,7 +134,7 @@ class _SetupScreenState extends State<SetupScreen> {
         _inspection!,
         surauName: _surau.text,
         adminName: _admin.text,
-        deviceName: _phone.text,
+        deviceName: cleanDeviceName(_phone.text),
         boxName: _box.text,
         pin: _pin.text,
       );
@@ -172,7 +178,7 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget build(BuildContext context) {
     final s = S.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(s.setupSubmit)),
+      appBar: AppBar(title: Text(s.setupSubmit), actions: widget.actions),
       body: SurauTheme.page(children: [_body(context, s)]),
     );
   }

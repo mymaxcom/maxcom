@@ -58,12 +58,12 @@ async function rig(o: { signedIn?: boolean; wrap?: (f: typeof fetch) => typeof f
     expect(done.json()).toMatchObject({ state: 'signed_in', signedIn: true });
   }
   const { db } = app.surau;
-  const pen = putItem(db, 'penceramah', { name: 'Ustaz Ahmad Fauzi' }, 'test');
+  const pen = putItem(db, 'penceramah', { name: 'Ustaz Ahmad Fauzi' }, 'test', undefined, 'sdm');
   const kuliah = putItem(
     db,
     'kuliah',
     { date: '2026-11-05', slot: 'maghrib', time: '19:15', label: 'Kuliah Maghrib', penceramahId: pen.item.id, topic: 'Bab Solat', status: 'aktif' },
-    'test',
+    'test', undefined, 'sdm',
   );
   return { cloud, app, g, up, clock, site: insertSite(db, { boxId: 'boxid0001' }), kuliahId: kuliah.item.id, logs };
 }
@@ -82,9 +82,9 @@ function leakText(r: Rig): string {
 describe('upload sessions for the catch-up', () => {
   it('begin as Media opens a resumable session with the kuliah title and the privacy from settings', async () => {
     const r = await rig();
-    putFeature(r.app.surau.db, 'liveYoutube', { enabled: true, privacy: 'private' }, 'test');
-    const media = await loginAs(r.app, 'media');
-    const res = await begin(r, media.headers);
+    putFeature(r.app.surau.db, 'liveYoutube', { enabled: true, privacy: 'private' }, 'test', undefined, 'sdm');
+    const liveUser = await loginAs(r.app, 'live');
+    const res = await begin(r, liveUser.headers);
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.uploadUri).toBe(`https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=${FAKE_UPLOAD_ID}`);
@@ -107,9 +107,9 @@ describe('upload sessions for the catch-up', () => {
 
     // bookkeeping without the URI, and no token or upload id anywhere
     const row = r.app.surau.db.prepare('SELECT * FROM uploads WHERE id = ?').get(body.uploadId)!;
-    expect(row).toMatchObject({ state: 'open', kuliah_id: r.kuliahId, device_id: media.deviceId, bytes: 123_456_789 });
+    expect(row).toMatchObject({ state: 'open', kuliah_id: r.kuliahId, device_id: liveUser.deviceId, bytes: 123_456_789 });
     const log = r.app.surau.db.prepare("SELECT * FROM change_log WHERE entity = 'youtube/upload'").get()!;
-    expect(JSON.parse(String(log.after_json))).toEqual({ uploadId: body.uploadId, kuliahId: r.kuliahId, deviceId: media.deviceId, bytes: 123_456_789 });
+    expect(JSON.parse(String(log.after_json))).toEqual({ uploadId: body.uploadId, kuliahId: r.kuliahId, deviceId: liveUser.deviceId, bytes: 123_456_789 });
     const text = leakText(r);
     expect(text).not.toContain(FAKE_UPLOAD_ID);
     expect(text).not.toContain('upload_id');
@@ -119,16 +119,16 @@ describe('upload sessions for the catch-up', () => {
 
   it('a part appends the Bahagian suffix and stays within 100 characters', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
-    const res = await begin(r, media.headers, { part: { index: 2, count: 4 } });
+    const liveUser = await loginAs(r.app, 'live');
+    const res = await begin(r, liveUser.headers, { part: { index: 2, count: 4 } });
     expect(res.statusCode).toBe(200);
     expect(res.json().title).toBe('Kuliah Maghrib: Ustaz Ahmad Fauzi (Bahagian 2 daripada 4)');
     expect((r.up.sessions[0]!.json!.snippet as { title: string }).title).toBe('Kuliah Maghrib: Ustaz Ahmad Fauzi (Bahagian 2 daripada 4)');
 
     const longName = 'Ustaz ' + 'X'.repeat(90);
-    const pen = putItem(r.app.surau.db, 'penceramah', { name: longName }, 'test');
-    const k2 = putItem(r.app.surau.db, 'kuliah', { date: '2026-11-05', slot: 'maghrib', time: '19:15', label: 'Kuliah', penceramahId: pen.item.id, topic: 'T', status: 'aktif' }, 'test');
-    const long = await begin(r, media.headers, { kuliahId: k2.item.id, part: { index: 1, count: 3 } });
+    const pen = putItem(r.app.surau.db, 'penceramah', { name: longName }, 'test', undefined, 'sdm');
+    const k2 = putItem(r.app.surau.db, 'kuliah', { date: '2026-11-05', slot: 'maghrib', time: '19:15', label: 'Kuliah', penceramahId: pen.item.id, topic: 'T', status: 'aktif' }, 'test', undefined, 'sdm');
+    const long = await begin(r, liveUser.headers, { kuliahId: k2.item.id, part: { index: 1, count: 3 } });
     expect(long.statusCode).toBe(200);
     expect(Array.from(long.json().title as string).length).toBeLessThanOrEqual(100);
     expect(long.json().title.endsWith(' (Bahagian 1 daripada 3)')).toBe(true);
@@ -136,15 +136,15 @@ describe('upload sessions for the catch-up', () => {
 
   it('a kuliah-less upload gets a sensible title; an unknown kuliah is 404; bad bodies are 400', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
-    const none = await begin(r, media.headers, { kuliahId: null });
+    const liveUser = await loginAs(r.app, 'live');
+    const none = await begin(r, liveUser.headers, { kuliahId: null });
     expect(none.statusCode).toBe(200);
     expect(String(none.json().title).startsWith('Kuliah')).toBe(true);
-    expect((await begin(r, media.headers, { kuliahId: 'nope' })).statusCode).toBe(404);
+    expect((await begin(r, liveUser.headers, { kuliahId: 'nope' })).statusCode).toBe(404);
     for (const bad of [{ bytes: 0 }, { bytes: -5 }, { bytes: 'x' }, { part: { index: 0, count: 2 } }, { part: { index: 3, count: 2 } }, { part: 'x' }, { replaceLiveVideoId: 5 }, { kuliahId: 7 }]) {
-      expect((await begin(r, media.headers, bad)).statusCode, JSON.stringify(bad)).toBe(400);
+      expect((await begin(r, liveUser.headers, bad)).statusCode, JSON.stringify(bad)).toBe(400);
     }
-    expect((await post(r, '/api/youtube/upload/begin', media.headers, {})).statusCode).toBe(400);
+    expect((await post(r, '/api/youtube/upload/begin', liveUser.headers, {})).statusCode).toBe(400);
   });
 
   it('AJK is 403; a site token is 403 on begin and 200 on the status route; a user session cannot use the site routes', async () => {
@@ -169,9 +169,9 @@ describe('upload sessions for the catch-up', () => {
 
   it('the catch-up feature switched off answers 409 and calls nothing', async () => {
     const r = await rig();
-    putFeature(r.app.surau.db, 'youtubeCatchUp', { enabled: false }, 'test');
-    const media = await loginAs(r.app, 'media');
-    const res = await begin(r, media.headers);
+    putFeature(r.app.surau.db, 'youtubeCatchUp', { enabled: false }, 'test', undefined, 'sdm');
+    const liveUser = await loginAs(r.app, 'live');
+    const res = await begin(r, liveUser.headers);
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('catchup_off');
     expect(r.up.sessions).toHaveLength(0);
@@ -179,8 +179,8 @@ describe('upload sessions for the catch-up', () => {
 
   it('signed out on the cloud is 503 youtube_reauthorise', async () => {
     const r = await rig({ signedIn: false });
-    const media = await loginAs(r.app, 'media');
-    const res = await begin(r, media.headers);
+    const liveUser = await loginAs(r.app, 'live');
+    const res = await begin(r, liveUser.headers);
     expect(res.statusCode).toBe(503);
     expect(res.json().code).toBe('youtube_reauthorise');
     expect(r.up.sessions).toHaveLength(0);
@@ -189,9 +189,9 @@ describe('upload sessions for the catch-up', () => {
   it('quotaExceeded and uploadLimitExceeded become 429 youtube_quota with a future ISO resetsAt', async () => {
     for (const keyword of ['quotaExceeded', 'uploadLimitExceeded']) {
       const r = await rig();
-      const media = await loginAs(r.app, 'media');
+      const liveUser = await loginAs(r.app, 'live');
       r.up.sessionError = keyword;
-      const res = await begin(r, media.headers);
+      const res = await begin(r, liveUser.headers);
       expect(res.statusCode, keyword).toBe(429);
       expect(res.json().code).toBe('youtube_quota');
       const at = new Date(res.json().resetsAt as string);
@@ -213,8 +213,8 @@ describe('upload sessions for the catch-up', () => {
           return f(i, n);
         }) as typeof fetch,
     });
-    const media = await loginAs(r.app, 'media');
-    const res = await begin(r, media.headers);
+    const liveUser = await loginAs(r.app, 'live');
+    const res = await begin(r, liveUser.headers);
     expect(res.statusCode).toBe(502);
     expect(res.body).not.toContain('evil.example');
     expect(r.app.surau.db.prepare('SELECT COUNT(*) AS n FROM uploads').get()!.n).toBe(0);
@@ -234,10 +234,10 @@ describe('done, set-private and the quota counter', () => {
   it('done with replaceLiveVideoId sets the live video private exactly once, even when done is repeated', async () => {
     const r = await rig();
     const live = await liveVideo(r);
-    const media = await loginAs(r.app, 'media');
-    const b = await begin(r, media.headers, { replaceLiveVideoId: live });
+    const liveUser = await loginAs(r.app, 'live');
+    const b = await begin(r, liveUser.headers, { replaceLiveVideoId: live });
     expect(b.statusCode).toBe(200);
-    const done = await post(r, '/api/youtube/upload/done', media.headers, { uploadId: b.json().uploadId, videoId: 'NEWvideo123' });
+    const done = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: b.json().uploadId, videoId: 'NEWvideo123' });
     expect(done.statusCode).toBe(200);
     expect(done.json()).toMatchObject({ uploadId: b.json().uploadId, state: 'done', replaced: true });
     expect(r.up.updates).toHaveLength(1);
@@ -250,7 +250,7 @@ describe('done, set-private and the quota counter', () => {
     expect(row).toMatchObject({ state: 'done', video_id: 'NEWvideo123' });
     expect(r.app.surau.db.prepare("SELECT COUNT(*) AS n FROM change_log WHERE entity = 'youtube/replaceLive'").get()!.n).toBe(1);
 
-    const again = await post(r, '/api/youtube/upload/done', media.headers, { uploadId: b.json().uploadId, videoId: 'NEWvideo123' });
+    const again = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: b.json().uploadId, videoId: 'NEWvideo123' });
     expect(again.statusCode).toBe(200);
     expect(r.up.updates).toHaveLength(1);
   });
@@ -258,22 +258,22 @@ describe('done, set-private and the quota counter', () => {
   it('a failed set-private does not fail done and is retried by a repeated done', async () => {
     const r = await rig();
     const live = await liveVideo(r);
-    const media = await loginAs(r.app, 'media');
-    const b = await begin(r, media.headers, { replaceLiveVideoId: live });
+    const liveUser = await loginAs(r.app, 'live');
+    const b = await begin(r, liveUser.headers, { replaceLiveVideoId: live });
     r.up.updateStatus = 500;
-    const done = await post(r, '/api/youtube/upload/done', media.headers, { uploadId: b.json().uploadId, videoId: 'NEWvideo123' });
+    const done = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: b.json().uploadId, videoId: 'NEWvideo123' });
     expect(done.statusCode).toBe(200);
     expect(done.json()).toMatchObject({ state: 'done', replaced: false });
     r.up.updateStatus = 200;
-    const retry = await post(r, '/api/youtube/upload/done', media.headers, { uploadId: b.json().uploadId, videoId: 'NEWvideo123' });
+    const retry = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: b.json().uploadId, videoId: 'NEWvideo123' });
     expect(retry.json()).toMatchObject({ replaced: true });
     expect(r.up.updates.filter((x) => x.json && (x.json.status as { privacyStatus: string }).privacyStatus === 'private')).toHaveLength(2);
   });
 
   it('only a video the cloud itself broadcast can be replaced', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
-    const res = await begin(r, media.headers, { replaceLiveVideoId: 'someOtherVid1' });
+    const liveUser = await loginAs(r.app, 'live');
+    const res = await begin(r, liveUser.headers, { replaceLiveVideoId: 'someOtherVid1' });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('unknown_live_video');
     expect(r.up.sessions).toHaveLength(0);
@@ -281,35 +281,35 @@ describe('done, set-private and the quota counter', () => {
 
   it('done is checked: unknown id, other device, bad video id, conflicting video id', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
-    const other = await loginAs(r.app, 'media');
-    const b = await begin(r, media.headers);
+    const liveUser = await loginAs(r.app, 'live');
+    const other = await loginAs(r.app, 'live');
+    const b = await begin(r, liveUser.headers);
     const id = b.json().uploadId as string;
-    expect((await post(r, '/api/youtube/upload/done', media.headers, { uploadId: 'nope', videoId: 'NEWvideo123' })).statusCode).toBe(404);
+    expect((await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: 'nope', videoId: 'NEWvideo123' })).statusCode).toBe(404);
     expect((await post(r, '/api/youtube/upload/done', other.headers, { uploadId: id, videoId: 'NEWvideo123' })).statusCode).toBe(404);
     for (const videoId of ['', 'a b', 'x'.repeat(40), 5]) {
-      expect((await post(r, '/api/youtube/upload/done', media.headers, { uploadId: id, videoId })).statusCode, String(videoId)).toBe(400);
+      expect((await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: id, videoId })).statusCode, String(videoId)).toBe(400);
     }
-    expect((await post(r, '/api/youtube/upload/done', media.headers, { uploadId: id, videoId: 'NEWvideo123' })).statusCode).toBe(200);
-    expect((await post(r, '/api/youtube/upload/done', media.headers, { uploadId: id, videoId: 'OTHERvideo99' })).statusCode).toBe(409);
+    expect((await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: id, videoId: 'NEWvideo123' })).statusCode).toBe(200);
+    expect((await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: id, videoId: 'OTHERvideo99' })).statusCode).toBe(409);
     expect(r.up.updates).toHaveLength(0);
   });
 
   it('quota counts only the rows since the last midnight Pacific', async () => {
     const r = await rig();
     const { db } = r.app.surau;
-    const media = await loginAs(r.app, 'media');
+    const liveUser = await loginAs(r.app, 'live');
     // clock: 2026-11-05 11:00 UTC = 03:00 PST; the window opened 2026-11-05T08:00:00Z
     const ins = db.prepare("INSERT INTO uploads (id, device_id, state, created_at) VALUES (?, 'd', 'done', ?)");
     ins.run('old1', '2026-11-05T07:59:00.000Z');
     ins.run('old2', '2026-11-04T12:00:00.000Z');
     ins.run('today1', '2026-11-05T08:01:00.000Z');
     ins.run('today2', '2026-11-05T10:00:00.000Z');
-    const q = await r.app.inject({ method: 'GET', url: '/api/youtube/quota', headers: media.headers });
+    const q = await r.app.inject({ method: 'GET', url: '/api/youtube/quota', headers: liveUser.headers });
     expect(q.statusCode).toBe(200);
     expect(q.json()).toEqual({ uploadsToday: 2, uploadLimit: 100, resetsAt: '2026-11-06T08:00:00.000Z' });
-    await begin(r, media.headers);
-    expect((await r.app.inject({ method: 'GET', url: '/api/youtube/quota', headers: media.headers })).json().uploadsToday).toBe(3);
+    await begin(r, liveUser.headers);
+    expect((await r.app.inject({ method: 'GET', url: '/api/youtube/quota', headers: liveUser.headers })).json().uploadsToday).toBe(3);
   });
 
   it('the Pacific window follows daylight saving', () => {
@@ -391,19 +391,19 @@ describe('on a box', () => {
 const BC = { sessionId: 'sess1', meta: { title: 'Kuliah Maghrib', description: 'Bab Solat', privacy: 'unlisted' } };
 
 describe('S3: done checks the video is one this upload created', () => {
-  async function liveAndBegin(r: Rig): Promise<{ live: string; media: Awaited<ReturnType<typeof loginAs>>; uploadId: string }> {
+  async function liveAndBegin(r: Rig): Promise<{ live: string; liveUser: Awaited<ReturnType<typeof loginAs>>; uploadId: string }> {
     const live = (await post(r, '/api/cloud/youtube/broadcast', r.site.headers, BC)).json().broadcastId as string;
-    const media = await loginAs(r.app, 'media');
-    const b = await begin(r, media.headers, { replaceLiveVideoId: live });
+    const liveUser = await loginAs(r.app, 'live');
+    const b = await begin(r, liveUser.headers, { replaceLiveVideoId: live });
     expect(b.statusCode).toBe(200);
-    return { live, media, uploadId: b.json().uploadId as string };
+    return { live, liveUser, uploadId: b.json().uploadId as string };
   }
 
   it('a made-up id (Google has no such video) is 400 unknown_video and the live video stays public', async () => {
     const r = await rig();
-    const { media, uploadId } = await liveAndBegin(r);
+    const { liveUser, uploadId } = await liveAndBegin(r);
     r.up.videos.GHOSTvideo1 = { exists: false };
-    const res = await post(r, '/api/youtube/upload/done', media.headers, { uploadId, videoId: 'GHOSTvideo1' });
+    const res = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId, videoId: 'GHOSTvideo1' });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('unknown_video');
     expect(r.up.updates).toHaveLength(0);
@@ -412,17 +412,17 @@ describe('S3: done checks the video is one this upload created', () => {
 
   it('a video published before this upload began, or on another channel, is refused', async () => {
     const r = await rig();
-    const { media, uploadId } = await liveAndBegin(r);
+    const { liveUser, uploadId } = await liveAndBegin(r);
     r.up.videos.OLDvideo0001 = { publishedAt: new Date(r.clock.t - 3 * 3_600_000).toISOString() };
     r.up.videos.FOREIGNvid01 = { channelId: 'UC-someone-else' };
     for (const videoId of ['OLDvideo0001', 'FOREIGNvid01']) {
-      const res = await post(r, '/api/youtube/upload/done', media.headers, { uploadId, videoId });
+      const res = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId, videoId });
       expect(res.statusCode, videoId).toBe(400);
       expect(res.json().code).toBe('unknown_video');
     }
     expect(r.up.updates).toHaveLength(0);
     // the real upload then goes through
-    const ok = await post(r, '/api/youtube/upload/done', media.headers, { uploadId, videoId: 'NEWvideo123' });
+    const ok = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId, videoId: 'NEWvideo123' });
     expect(ok.statusCode).toBe(200);
     expect(ok.json().replaced).toBe(true);
     expect(r.up.updates).toHaveLength(1);
@@ -430,28 +430,28 @@ describe('S3: done checks the video is one this upload created', () => {
 
   it('one video id cannot close two uploads', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
-    const a = (await begin(r, media.headers)).json().uploadId as string;
-    const b = (await begin(r, media.headers)).json().uploadId as string;
-    expect((await post(r, '/api/youtube/upload/done', media.headers, { uploadId: a, videoId: 'NEWvideo123' })).statusCode).toBe(200);
-    const dup = await post(r, '/api/youtube/upload/done', media.headers, { uploadId: b, videoId: 'NEWvideo123' });
+    const liveUser = await loginAs(r.app, 'live');
+    const a = (await begin(r, liveUser.headers)).json().uploadId as string;
+    const b = (await begin(r, liveUser.headers)).json().uploadId as string;
+    expect((await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: a, videoId: 'NEWvideo123' })).statusCode).toBe(200);
+    const dup = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: b, videoId: 'NEWvideo123' });
     expect(dup.statusCode).toBe(400);
     expect(dup.json().code).toBe('unknown_video');
   });
 
   it('a stale replace claim (older than 10 minutes) is cleared so a later done retries; a fresh one is respected', async () => {
     const r = await rig();
-    const { media, uploadId } = await liveAndBegin(r);
-    expect((await post(r, '/api/youtube/upload/done', media.headers, { uploadId, videoId: 'NEWvideo123' })).statusCode).toBe(200);
+    const { liveUser, uploadId } = await liveAndBegin(r);
+    expect((await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId, videoId: 'NEWvideo123' })).statusCode).toBe(200);
     expect(r.up.updates).toHaveLength(1);
     const { db } = r.app.surau;
     // a crash left the claim behind: nobody finished the set-private
     db.prepare('UPDATE uploads SET replaced_at = ? WHERE id = ?').run(`claim@${new Date(r.clock.t - 60_000).toISOString()}`, uploadId);
-    const fresh = await post(r, '/api/youtube/upload/done', media.headers, { uploadId, videoId: 'NEWvideo123' });
+    const fresh = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId, videoId: 'NEWvideo123' });
     expect(fresh.json().replaced).toBe(false);
     expect(r.up.updates).toHaveLength(1);
     db.prepare('UPDATE uploads SET replaced_at = ? WHERE id = ?').run(`claim@${new Date(r.clock.t - 11 * 60_000).toISOString()}`, uploadId);
-    const stale = await post(r, '/api/youtube/upload/done', media.headers, { uploadId, videoId: 'NEWvideo123' });
+    const stale = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId, videoId: 'NEWvideo123' });
     expect(stale.json().replaced).toBe(true);
     expect(r.up.updates).toHaveLength(2);
   });
@@ -460,43 +460,43 @@ describe('S3: done checks the video is one this upload created', () => {
 describe('S2: begin enforces the daily limit and a per-device cap', () => {
   it('100 uploads today: 429 youtube_quota with resetsAt, and Google is not called', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
+    const liveUser = await loginAs(r.app, 'live');
     const ins = r.app.surau.db.prepare("INSERT INTO uploads (id, device_id, state, created_at) VALUES (?, 'd', 'done', ?)");
     for (let i = 0; i < 100; i++) ins.run(`u${i}`, '2026-11-05T09:00:00.000Z');
-    const res = await begin(r, media.headers);
+    const res = await begin(r, liveUser.headers);
     expect(res.statusCode).toBe(429);
     expect(res.json()).toMatchObject({ code: 'youtube_quota', resetsAt: '2026-11-06T08:00:00.000Z' });
     expect(r.up.sessions).toHaveLength(0);
     // yesterday's rows do not count
     r.app.surau.db.prepare("UPDATE uploads SET created_at = '2026-11-04T09:00:00.000Z' WHERE id = 'u0'").run();
-    expect((await begin(r, media.headers)).statusCode).toBe(200);
+    expect((await begin(r, liveUser.headers)).statusCode).toBe(200);
   });
 
   it('10 open uploads on one device: 409 too_many_uploads; another device is unaffected', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
-    const other = await loginAs(r.app, 'media');
-    for (let i = 0; i < 10; i++) expect((await begin(r, media.headers)).statusCode).toBe(200);
-    const res = await begin(r, media.headers);
+    const liveUser = await loginAs(r.app, 'live');
+    const other = await loginAs(r.app, 'live');
+    for (let i = 0; i < 10; i++) expect((await begin(r, liveUser.headers)).statusCode).toBe(200);
+    const res = await begin(r, liveUser.headers);
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('too_many_uploads');
     expect(r.up.sessions).toHaveLength(10);
     expect((await begin(r, other.headers)).statusCode).toBe(200);
     // finishing one frees a place
-    const id = r.app.surau.db.prepare("SELECT id FROM uploads WHERE device_id = ? AND state = 'open' LIMIT 1").get(media.deviceId)!.id as string;
-    expect((await post(r, '/api/youtube/upload/done', media.headers, { uploadId: id, videoId: 'NEWvideo123' })).statusCode).toBe(200);
-    expect((await begin(r, media.headers)).statusCode).toBe(200);
+    const id = r.app.surau.db.prepare("SELECT id FROM uploads WHERE device_id = ? AND state = 'open' LIMIT 1").get(liveUser.deviceId)!.id as string;
+    expect((await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: id, videoId: 'NEWvideo123' })).statusCode).toBe(200);
+    expect((await begin(r, liveUser.headers)).statusCode).toBe(200);
   });
 
   it('open rows older than 7 days expire (they neither count against the cap nor can be finished)', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
+    const liveUser = await loginAs(r.app, 'live');
     const { db } = r.app.surau;
     const ins = db.prepare("INSERT INTO uploads (id, device_id, state, created_at) VALUES (?, ?, 'open', ?)");
-    for (let i = 0; i < 10; i++) ins.run(`old${i}`, media.deviceId, new Date(r.clock.t - 8 * 86_400_000).toISOString());
-    expect((await begin(r, media.headers)).statusCode).toBe(200);
+    for (let i = 0; i < 10; i++) ins.run(`old${i}`, liveUser.deviceId, new Date(r.clock.t - 8 * 86_400_000).toISOString());
+    expect((await begin(r, liveUser.headers)).statusCode).toBe(200);
     expect(db.prepare("SELECT COUNT(*) AS n FROM uploads WHERE state = 'expired'").get()!.n).toBe(10);
-    const done = await post(r, '/api/youtube/upload/done', media.headers, { uploadId: 'old0', videoId: 'NEWvideo123' });
+    const done = await post(r, '/api/youtube/upload/done', liveUser.headers, { uploadId: 'old0', videoId: 'NEWvideo123' });
     expect(done.statusCode).toBe(409);
     expect(done.json().code).toBe('upload_expired');
   });
@@ -542,7 +542,7 @@ describe('Q-M2: the broadcast call is idempotent per site and session', () => {
     const r = await rig();
     const one = (await post(r, '/api/cloud/youtube/broadcast', r.site.headers, BC)).json();
     const two = (await post(r, '/api/cloud/youtube/broadcast', r.site.headers, { ...BC, sessionId: 'sess2' })).json();
-    const file = join(r.cloud.dir, 'live', 'youtube-open.json');
+    const file = join(r.cloud.dir, 'live', 'youtube-open-sdm.json');
     expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).broadcasts)).toHaveLength(2);
     expect((await post(r, '/api/cloud/youtube/complete', r.site.headers, { broadcastId: one.broadcastId })).statusCode).toBe(200);
     const left = JSON.parse(readFileSync(file, 'utf8')).broadcasts as Record<string, { broadcastId: string }>;
@@ -567,7 +567,7 @@ describe('S8: complete only for broadcasts this cloud made for that site', () =>
 
 describe('S7: the cloud never completes a broadcast at boot', () => {
   const svcOf = (r: Rig, role: 'box' | 'cloud', now: () => Date = r.clock.now) =>
-    createYoutubeService({ db: r.app.surau.db, dataDir: r.cloud.dir, fetchImpl: r.up.fetchImpl, now, role });
+    createYoutubeService({ db: r.app.surau.db, dataDir: r.cloud.dir, fetchImpl: r.up.fetchImpl, now, role, surauId: 'sdm', tokenFile: 'youtube-token-sdm.json', openFile: 'youtube-open-sdm.json' });
   const ends = (r: Rig) => r.g.count('/youtube/v3/liveBroadcasts/transition') + r.g.calls.filter((c) => c.method === 'DELETE').length;
 
   it('a cloud restart during a live leaves the broadcast live (service level); a later box complete still ends it', async () => {
@@ -578,13 +578,13 @@ describe('S7: the cloud never completes a broadcast at boot', () => {
     await restarted.recover();
     expect(ends(r)).toBe(0);
     expect(r.g.broadcasts.has(made.broadcastId)).toBe(true);
-    expect(existsSync(join(r.cloud.dir, 'live', 'youtube-open.json'))).toBe(true);
+    expect(existsSync(join(r.cloud.dir, 'live', 'youtube-open-sdm.json'))).toBe(true);
     expect(restarted.status()).toMatchObject({ broadcastId: made.broadcastId });
     await restarted.complete(made.broadcastId);
     expect(r.g.count('/youtube/v3/liveBroadcasts/transition')).toBe(1);
     // the stream it had is deleted too (the id came from the open record, not from memory)
     expect(r.g.streams.size).toBe(0);
-    expect(existsSync(join(r.cloud.dir, 'live', 'youtube-open.json'))).toBe(false);
+    expect(existsSync(join(r.cloud.dir, 'live', 'youtube-open-sdm.json'))).toBe(false);
     restarted.shutdown();
   });
 
@@ -618,14 +618,14 @@ describe('S7: the cloud never completes a broadcast at boot', () => {
     expect(await svc.sweepOrphans()).toBe(1);
     expect(r.g.count('/youtube/v3/liveBroadcasts/transition')).toBe(1);
     expect(r.g.broadcasts.has(made.broadcastId)).toBe(true);
-    expect(existsSync(join(r.cloud.dir, 'live', 'youtube-open.json'))).toBe(false);
+    expect(existsSync(join(r.cloud.dir, 'live', 'youtube-open-sdm.json'))).toBe(false);
     svc.shutdown();
   });
 
   it('the status route counts as the box being there', async () => {
     const r = await rig();
     await post(r, '/api/cloud/youtube/broadcast', r.site.headers, BC);
-    const file = join(r.cloud.dir, 'live', 'youtube-open.json');
+    const file = join(r.cloud.dir, 'live', 'youtube-open-sdm.json');
     const seen = () => Object.values(JSON.parse(readFileSync(file, 'utf8')).broadcasts as Record<string, { seenAt: string }>)[0]!.seenAt;
     const t0 = seen();
     r.clock.t += 20 * 60_000;
@@ -637,7 +637,7 @@ describe('S7: the cloud never completes a broadcast at boot', () => {
     const r = await rig();
     await post(r, '/api/cloud/youtube/broadcast', r.site.headers, BC);
     r.g.lifeCycle = 'live';
-    writeFileSync(join(r.cloud.dir, 'live', 'youtube-open.json'), JSON.stringify({ broadcastId: 'bc-1', streamId: 'stream-1' }));
+    writeFileSync(join(r.cloud.dir, 'live', 'youtube-open-sdm.json'), JSON.stringify({ broadcastId: 'bc-1', streamId: 'stream-1' }));
     const svc = svcOf(r, 'box');
     await svc.recover();
     expect(r.g.count('/youtube/v3/liveBroadcasts/transition')).toBe(1);

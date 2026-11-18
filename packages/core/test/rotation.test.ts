@@ -99,14 +99,17 @@ describe('buildRotation', () => {
     expect(shown('2026-11-05', '20:34')).toBe(true);
     expect(shown('2026-11-05', '20:36')).toBe(false);
   });
-  it('pengumuman by window, priority then from, capped at maxItems', () => {
+  it('[C1] pengumuman by window, Segera (3) first then Penting (2) then Biasa (1), then from; capped at maxItems', () => {
     const mk = (id: string, priority: 1 | 2 | 3, from: string, to = '2026-11-30') => ({ ...base, id, title: id, body: 'b', from, to, priority });
     const c = content({
-      pengumuman: [mk('c', 2, '2026-11-02'), mk('a', 1, '2026-11-03'), mk('b', 2, '2026-11-01'), mk('old', 1, '2026-10-01', '2026-10-31'), mk('future', 1, '2026-11-04')],
+      pengumuman: [mk('c', 2, '2026-11-02'), mk('a', 1, '2026-11-03'), mk('b', 2, '2026-11-01'), mk('u', 3, '2026-11-03'), mk('old', 3, '2026-10-01', '2026-10-31'), mk('future', 3, '2026-11-04')],
     });
-    expect(buildRotation(c, s, now).filter((x) => x.feature === 'pengumuman').map((x) => x.itemId)).toEqual(['a', 'b', 'c']);
+    expect(buildRotation(c, s, now).filter((x) => x.feature === 'pengumuman').map((x) => x.itemId)).toEqual(['u', 'b', 'c', 'a']);
     const cap = resolveSettings({ pengumuman: { maxItems: 2 } });
-    expect(buildRotation(c, cap, now).filter((x) => x.feature === 'pengumuman').map((x) => x.itemId)).toEqual(['a', 'b']);
+    expect(buildRotation(c, cap, now).filter((x) => x.feature === 'pengumuman').map((x) => x.itemId)).toEqual(['u', 'b']);
+    // one of each, two slots: the urgent one is never the one dropped
+    const three = content({ pengumuman: [mk('one', 1, '2026-11-01'), mk('two', 2, '2026-11-01'), mk('three', 3, '2026-11-03')] });
+    expect(buildRotation(three, cap, now).filter((x) => x.feature === 'pengumuman').map((x) => x.itemId)).toEqual(['three', 'two']);
   });
   it('kuliah within daysAhead; past and far excluded; a window with only a batal kuliah still gets the slot', () => {
     const k = (id: string, date: string, status: 'aktif' | 'batal' = 'aktif') => ({ ...kuliah, id, date, status });

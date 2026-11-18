@@ -812,6 +812,45 @@ void main() {
     );
   });
 
+  group('[F2] late entries', () {
+    test('[F2] a late-entry note keeps the month closed and names the entry', () async {
+      await store.putDoc(Collections.financeMonths, '2026-10', {
+        'id': '2026-10',
+        'ym': '2026-10',
+        'status': 'closed',
+        'closedAt': '2026-11-02T03:00:00.000Z',
+      });
+      server.seq = 1;
+      server.entries = [
+        {
+          'seq': 1,
+          'entity': 'finance:month',
+          'entityId': '2026-10',
+          'rev': '2026-11-10T03:05:00.000Z|dev-9',
+          'editedAt': '2026-11-10T03:05:00.000Z',
+          'opId': null,
+          'after': {
+            'ym': '2026-10',
+            'lateEntry': {'id': 'late1', 'amountSen': 1800},
+          },
+        },
+      ];
+      await engine.sync();
+      expect(await repo.monthClosed('2026-10'), isTrue);
+      expect(await repo.lateEntryIds('2026-10'), ['late1']);
+    });
+
+    test('[F2] a snapshot month row with lateEntries names them', () async {
+      await store.putDoc(Collections.financeMonths, '2026-10', {
+        'id': '2026-10',
+        'ym': '2026-10',
+        'status': 'closed',
+        'lateEntries': ['a1', 'a2'],
+      });
+      expect(await repo.lateEntryIds('2026-10'), ['a1', 'a2']);
+    });
+  });
+
   group('live-only and the gateway', () {
     test('the PDF, the stored photo, the share record and the audit need a connection', () {
       expect(isLiveOnly('GET', '/api/finance/report/2026-10.pdf'), isTrue);

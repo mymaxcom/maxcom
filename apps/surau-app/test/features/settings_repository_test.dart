@@ -2,12 +2,16 @@
 // only changed keys, reset to defaults, typed errors, and the offline
 // refusal (`Cuba lagi di surau`, no request sent).
 
+import 'dart:async';
 import 'dart:convert';
+
+import 'dart:ui' show Locale;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:surau_app/box/box_client.dart';
 import 'package:surau_app/features/registry.g.dart';
+import 'package:surau_app/l10n/generated/s.dart';
 import 'package:surau_app/features/settings_repository.dart';
 import 'package:surau_app/features/shell/box_gateway.dart';
 import 'package:surau_app/features/shell/read_cache.dart';
@@ -184,6 +188,51 @@ void main() {
     });
   });
 
+  test('[K3] resetting liveYoutube as a surau Pentadbir sends no system field', () async {
+    final rig = _Rig((r) async => jsonResponse(200, _allSettings()));
+    await rig.repo.resetToDefaults('liveYoutube');
+    final body = jsonDecode(rig.box.seen.single.body) as Map<String, dynamic>;
+    expect(body.containsKey('relayVideo'), isFalse);
+    expect(body.containsKey('maxBitrateKbps'), isFalse);
+    expect(body.containsKey('relayFrom'), isFalse, reason: 'a hidden field');
+    expect(body['titleTemplate'], isNotNull);
+    await rig.repo.resetToDefaults('tilawah');
+    final tilawah = jsonDecode(rig.box.seen.last.body) as Map<String, dynamic>;
+    expect(tilawah.containsKey('cacheMaxMb'), isFalse);
+    expect(tilawah.containsKey('reciter'), isTrue);
+  });
+
+  test('[K3] the Pentadbir MAXCOM (system:write) resets the system fields too', () async {
+    final rig = _Rig((r) async => jsonResponse(200, _allSettings()));
+    await rig.repo.resetToDefaults('liveYoutube', includeSystem: true);
+    final body = jsonDecode(rig.box.seen.single.body) as Map<String, dynamic>;
+    expect(body.containsKey('relayVideo'), isTrue);
+    expect(body.containsKey('maxBitrateKbps'), isTrue);
+  });
+
+  test('[K11] a 400 with a known code is worded from the code, in the app language', () async {
+    final rig = _Rig((r) async => jsonResponse(400, {'errors': ['Pilihan tidak sah'], 'code': 'bad_choice'}));
+    try {
+      await rig.repo.save('liveYoutube', {'titleTemplate': 'x'});
+      fail('expected a refusal');
+    } on SettingsSaveError catch (e) {
+      expect(e.kind, SettingsFailure.invalid);
+      final en = await S.delegate.load(const Locale('en'));
+      final ms = await S.delegate.load(const Locale('ms'));
+      expect(e.text(en), en.errcBadChoice);
+      expect(e.text(ms), ms.errcBadChoice);
+    }
+  });
+
+  test('[K8] without a local copy, a write that was sent and timed out is Uncertain, not "try again"', () async {
+    final rig = _Rig((r) async => throw TimeoutException('no answer'));
+    await expectLater(
+      rig.gateway.post('/api/users', {'name': 'Aminah'}),
+      throwsA(isA<Uncertain>().having((e) => e.path, 'path', '/api/users')),
+    );
+    expect(rig.box.seen, hasLength(1), reason: 'sent once');
+  });
+
   test('reset of an unknown feature is not found and sends nothing', () async {
     final rig = _Rig((r) async => jsonResponse(200, _allSettings()));
     await expectLater(
@@ -252,6 +301,69 @@ void main() {
             ),
       ),
     );
+  });
+
+  group('an older box refusing the TV language choice', () {
+    test('lang auto refused naming language.lang gives the update message', () async {
+      final rig = _Rig(
+        (r) async => jsonResponse(400, {
+          'errors': ['language.lang must be one of ms, en'],
+        }),
+      );
+      await expectLater(
+        rig.repo.save('language', {'lang': 'auto'}),
+        throwsA(
+          isA<SettingsSaveError>()
+              .having((e) => e.kind, 'kind', SettingsFailure.invalid)
+              .having((e) => e.msg, 'msg', SettingsMsg.tvLangNeedsUpdate)
+              .having((e) => e.message, 'bm', 'Kemas kini MAX Kiosk Server untuk pilihan ini')
+              .having((e) => e.text(lookupS(const Locale('en'))), 'en', 'Update MAX Kiosk Server to use this choice')
+              .having((e) => e.text(lookupS(const Locale('ar'))), 'ar', contains('MAX Kiosk Server')),
+        ),
+      );
+    });
+
+    test('any other 400 keeps the box message', () async {
+      final rig = _Rig(
+        (r) async => jsonResponse(400, {
+          'errors': ['name must be text'],
+        }),
+      );
+      await expectLater(
+        rig.repo.save('language', {'lang': 'auto'}),
+        throwsA(
+          isA<SettingsSaveError>()
+              .having((e) => e.msg, 'msg', isNull)
+              .having((e) => e.message, 'message', 'name must be text'),
+        ),
+      );
+      final rig2 = _Rig(
+        (r) async => jsonResponse(400, {
+          'errors': ['language.lang must be one of ms, en'],
+        }),
+      );
+      await expectLater(
+        rig2.repo.save('language', {'lang': 'xx'}),
+        throwsA(
+          isA<SettingsSaveError>()
+              .having((e) => e.message, 'message', 'language.lang must be one of ms, en'),
+        ),
+      );
+    });
+
+    test('403 and 404 read in the app language too', () async {
+      final rig = _Rig((r) async => jsonResponse(403, {'errors': ['x']}));
+      await expectLater(
+        rig.repo.save('clock', {'showSeconds': true}),
+        throwsA(
+          isA<SettingsSaveError>().having(
+            (e) => e.text(lookupS(const Locale('en'))),
+            'en',
+            isNot('Tiada kebenaran untuk tindakan ini'),
+          ),
+        ),
+      );
+    });
   });
 
   test('401 on save is SessionExpired and clears the session', () async {

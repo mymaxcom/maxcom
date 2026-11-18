@@ -67,6 +67,23 @@ void main() {
   late int unavailable;
   late SessionKeeper keeper;
 
+  SessionKeeper build({required bool ops}) => SessionKeeper(
+    attempt: ({required boxOnly}) async {
+      asked.add(boxOnly);
+      final a = answers.removeAt(0);
+      if (a is SessionDto) return a;
+      throw a;
+    },
+    onConnected: (s) {
+      connected.add(s);
+      keeper.follow(s);
+    },
+    onRefused: refused.add,
+    onUnavailable: () async => unavailable++,
+    schedule: clock.schedule,
+    ops: ops,
+  );
+
   setUp(() {
     clock = _Clock();
     asked = [];
@@ -74,21 +91,7 @@ void main() {
     connected = [];
     refused = [];
     unavailable = 0;
-    keeper = SessionKeeper(
-      attempt: ({required boxOnly}) async {
-        asked.add(boxOnly);
-        final a = answers.removeAt(0);
-        if (a is SessionDto) return a;
-        throw a;
-      },
-      onConnected: (s) {
-        connected.add(s);
-        keeper.follow(s);
-      },
-      onRefused: refused.add,
-      onUnavailable: () async => unavailable++,
-      schedule: clock.schedule,
-    );
+    keeper = build(ops: false);
   });
 
   test('offline: tries after 15 s, backs off to 2 min, then connects', () async {
@@ -219,6 +222,33 @@ void main() {
       await keeper.expired();
       await pumpEventQueue();
       expect(connected.single.via, 'box');
+    });
+  });
+
+  group('ops build', () {
+    setUp(() {
+      keeper = build(ops: true);
+    });
+
+    test('a cloud session is final: no loop, no try on resume', () async {
+      keeper.follow(_at('cloud'));
+      await pumpEventQueue();
+      expect(asked, isEmpty);
+      expect(clock.timers, isEmpty, reason: 'the enrolled box is the cloud');
+      keeper.pause();
+      keeper.resume();
+      await pumpEventQueue();
+      expect(asked, isEmpty);
+    });
+
+    test('an offline session still gets its loop and ends on a cloud session',
+        () async {
+      keeper.follow(_offline);
+      expect(clock.next, const Duration(seconds: 15));
+      answers.add(_at('cloud'));
+      await clock.fire();
+      expect(connected.single.via, 'cloud');
+      expect(clock.timers, isEmpty, reason: 'a live cloud session is final');
     });
   });
 }

@@ -35,7 +35,8 @@ function content(): KioskContent {
     posters: [{ ...base, id: 'po1', title: 'Poster 1', assetId: POSTER, days: ['umum'], order: 1 }],
     programKhas: [], takwim: [], hadisToday: [],
     worldTimes: [{ ...base, id: 'w1', city: 'Makkah', tz: 'Asia/Riyadh' } as never],
-    tugasan: [], ayat: { today: null, tomorrow: null }, zikir: [], tilawah: { slots: [], available: {} },
+    tugasan: [{ ...base, id: 'g1', date: '2026-11-03', role: 'imam', petugasId: 'x1', petugas: { name: 'Haji Rosli Hamid' } } as never],
+    ayat: { today: null, tomorrow: null }, zikir: [], tilawah: { slots: [], available: {} },
     credits: { translation: 't', font: 'f', audio: 'a' },
   } as KioskContent;
 }
@@ -79,12 +80,18 @@ describe('stage kinds and the content shell', () => {
     expect(r.container.querySelector('.deco')).toBeTruthy();
   });
 
-  it('worldTimes keeps the full layout; no content is the full layout too', async () => {
-    const r = showWithCard('worldTimes');
-    await flush();
-    expect(stage(r).getAttribute('data-kind')).toBe('full');
-    expect(r.container.querySelector('.ident')).toBeTruthy();
-    cleanup();
+  it('worldTimes and tugasan take the content shell (operator 2026-11-17); no content is the full layout', async () => {
+    for (const [f, id] of [['worldTimes', 'waktu-dunia'], ['tugasan', 'tugasan']] as const) {
+      const r = showWithCard(f);
+      await flush();
+      expect(stage(r).getAttribute('data-kind'), f).toBe('content');
+      expect(stage(r).getAttribute('data-screen'), f).toBe(id);
+      expect(r.container.querySelector('.ident'), f).toBeNull();
+      expect(r.container.querySelector('.shell-top'), f).toBeTruthy();
+      // a text screen: the compact prayer strip stays (theme round 2, rule 1)
+      expect(r.container.querySelector('.strip--compact'), f).toBeTruthy();
+      cleanup();
+    }
     const idle = showWithCard(null);
     await flush();
     expect(stage(idle).getAttribute('data-kind')).toBe('full');

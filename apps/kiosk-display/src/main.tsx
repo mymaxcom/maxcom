@@ -10,7 +10,11 @@ const preview = isPreview();
 if (preview) installPreviewListener();
 
 const root = document.getElementById('app');
-if (root) render(<App />, root);
+if (root) {
+  // The boot text in index.html (BM, small English and Arabic) is the first paint; the program replaces it here.
+  root.textContent = '';
+  render(<App />, root);
+}
 installCursorIdle();
 
 // Self-healing for the unattended TV: production only (inert in Vitest and the dev server).

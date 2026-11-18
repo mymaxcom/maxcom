@@ -4,9 +4,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Surau D'Waqaf</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #06302b; }
+      /* First paint, before the program has loaded and before any surau setting is known: nobody can act on it, so BM
+         at normal size with a small English and a small Arabic line (the program replaces it when it starts). */
+      #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #f4f1e8; font-family: 'Plus Jakarta Sans', 'Segoe UI', Roboto, Arial, sans-serif; text-align: center; }
+      #boot .boot-ms { font-size: 4vmin; font-weight: 600; }
+      #boot .boot-en, #boot .boot-ar { font-size: 2.8vmin; opacity: 0.7; margin-top: 1vmin; }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div id="boot" data-testid="boot">
+        <div class="boot-ms" lang="ms" dir="ltr">Memuatkan MAXCOM</div>
+        <div class="boot-en" lang="en" dir="ltr">Loading MAXCOM</div>
+        <div class="boot-ar" lang="ar" dir="rtl">جارٍ تحميل MAXCOM</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

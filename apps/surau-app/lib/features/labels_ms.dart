@@ -1,7 +1,8 @@
 // Plain-language labels for every setting name in the feature registry
 // (the key of a leaf in a feature's defaults, nested names included), and
-// the group headings. Bahasa Malaysia first; the English map is for the
-// `language` feature later. No dashes or arrows in the text.
+// the group headings, in Bahasa Malaysia and English (the Arabic maps are in
+// labels_ar.dart; labels.dart picks one by AppLang). No dashes or arrows in
+// the text.
 
 /// Headings of the settings list, by registry group.
 const Map<String, String> groupLabelsMs = {
@@ -15,7 +16,6 @@ const Map<String, String> groupLabelsMs = {
   'jemaah': 'Jemaah',
   'awan': 'Awan',
   'keselamatan': 'Keselamatan',
-  'lanjutan': 'Lanjutan',
 };
 
 /// Group order in the list.
@@ -30,7 +30,6 @@ const List<String> groupOrder = [
   'jemaah',
   'awan',
   'keselamatan',
-  'lanjutan',
 ];
 
 /// A sentence under a feature's switch on its settings page, by feature
@@ -48,6 +47,11 @@ const Map<String, String> featureHelpMs = {
 };
 
 const Map<String, String> settingLabelsMs = {
+  // liveCamera (the Kamera luaran form draws its own rows; these name the leaves)
+  'transport': 'Pengangkutan',
+  'avOffsetMs': 'Imbangan masa audio',
+  'deviceMic': 'Mikrofon peranti',
+  'boxInput': 'Mic-in pada kotak',
   // days and prayers (WeekTable and minutesBefore cells)
   'ahad': 'Ahad',
   'isnin': 'Isnin',
@@ -111,7 +115,7 @@ const Map<String, String> settingLabelsMs = {
   'images': 'Gambar latar',
   'rotate': 'Tukar gambar',
   'override': 'Warna teks',
-  'lang': 'Bahasa',
+  'lang': 'Bahasa skrin TV',
   'mode': 'Orientasi',
   'templateId': 'Templat',
   'styles': 'Gaya tema',
@@ -158,6 +162,7 @@ const Map<String, String> settingLabelsMs = {
   'highlightSeconds': 'Serlahkan tabung selepas catatan (saat)',
   'showTarget': 'Tunjuk bar sasaran',
   'qrAssetId': 'Kod QR DuitNow',
+  'featured': 'Tonjolkan tabung pertama',
   'manualTitle': 'Tajuk kad',
   'row1Label': 'Baris 1',
   'row1Sen': 'Baris 1 jumlah (sen)',
@@ -219,9 +224,12 @@ const Map<String, String> sourceLeafLabelsEn = {
 String sourceLeafLabelMs(String name) =>
     sourceLeafLabelsMs[name] ?? settingLabelMs(name);
 
-/// English labels for the same names (used when the `language` feature is
-/// English).
+/// English labels for the same names.
 const Map<String, String> settingLabelsEn = {
+  'transport': 'Transport',
+  'avOffsetMs': 'Audio timing offset',
+  'deviceMic': 'Device microphone',
+  'boxInput': 'Box microphone input',
   'ahad': 'Sunday',
   'isnin': 'Monday',
   'selasa': 'Tuesday',
@@ -282,7 +290,7 @@ const Map<String, String> settingLabelsEn = {
   'images': 'Background images',
   'rotate': 'Change image',
   'override': 'Text colour',
-  'lang': 'Language',
+  'lang': 'TV screen language',
   'mode': 'Orientation',
   'templateId': 'Template',
   'styles': 'Theme styles',
@@ -326,6 +334,7 @@ const Map<String, String> settingLabelsEn = {
   'highlightSeconds': 'Highlight a tabung after an entry (seconds)',
   'showTarget': 'Show target bar',
   'qrAssetId': 'DuitNow QR code',
+  'featured': 'Feature the first fund',
   'manualTitle': 'Card title',
   'row1Label': 'Row 1',
   'row1Sen': 'Row 1 amount (sen)',
@@ -371,9 +380,10 @@ String settingLabelMs(String name) => settingLabelsMs[name] ?? name;
 
 /// BM names of the choices of an enum setting, by setting name then value.
 const Map<String, Map<String, String>> choiceLabelsMs = {
+  'transport': {'auto': 'Automatik', 'tcp': 'TCP', 'udp': 'UDP'},
   'timeFormat': {'12h': '12 jam', '24h': '24 jam'},
   'switchAt': {'maghrib': 'Waktu Maghrib', 'midnight': 'Tengah malam'},
-  'lang': {'ms': 'Bahasa Melayu', 'en': 'English'},
+  'lang': {'auto': 'Ikut lokasi', 'ms': 'Bahasa Melayu', 'en': 'English'},
   'mode': {'landscape': 'Mendatar', 'portrait': 'Menegak'},
   // The theme names are one English name in every language (spec 6.10.2).
   'templateId': {
@@ -475,12 +485,6 @@ const Map<String, Map<String, String>> choiceLabelsMs = {
   },
 };
 
-/// The line under each Lanjutan deep link in the list, by feature key.
-const Map<String, String> lanjutanRowHintMs = {
-  'liveYoutube': 'Cara video disalurkan (siaran dari pelayar) dan kadar bit maksimum.',
-  'tilawah': 'Had ruang cakera MAXCOM untuk audio tilawah.',
-};
-
 /// A sentence under a setting, by setting name (BM).
 const Map<String, String> settingHelpMs = {
   'keepOnDevice':
@@ -507,15 +511,125 @@ const Map<String, String> settingHelpMs = {
       'Peranti yang tidak diselaraskan lebih lama dari ini perlu dimuat semula sepenuhnya.',
   'dirtyCheckSeconds':
       'Lebih kerap, perubahan dari rumah sampai lebih cepat, tetapi awan lebih kerap dibangunkan.',
+  'lang':
+      'Bahasa skrin TV, bukan bahasa aplikasi di telefon. Ikut lokasi: BM di '
+      'Malaysia, Inggeris di negara lain.',
 };
 
-/// A sentence under each choice, for the settings drawn as cards.
+/// A sentence under each choice, for the settings drawn as cards (BM).
 const Map<String, Map<String, String>> choiceHelpMs = {
   'relayFrom': {
     'box': 'Telefon hantar gambar ke MAXCOM di surau; MAXCOM yang siarkan ke YouTube.',
     'phone':
         'Telefon siarkan sendiri ke YouTube, untuk MAXCOM yang lemah atau '
         'internet surau yang perlahan.',
+  },
+};
+
+/// English names of the choices of an enum setting, by setting name then value.
+const Map<String, Map<String, String>> choiceLabelsEn = {
+  'transport': {'auto': 'Automatic', 'tcp': 'TCP', 'udp': 'UDP'},
+  'timeFormat': {'12h': '12 hours', '24h': '24 hours'},
+  'switchAt': {'maghrib': 'At Maghrib', 'midnight': 'At midnight'},
+  'lang': {'auto': 'Follow location', 'ms': 'Bahasa Melayu', 'en': 'English'},
+  'mode': {'landscape': 'Landscape', 'portrait': 'Portrait'},
+  // The theme names are one English name in every language (spec 6.10.2).
+  'templateId': {
+    'default': 'Default',
+    'colourful': 'Colourful',
+    'creative': 'Creative',
+    'oldschool': 'Old School',
+    'minimal': 'Minimal',
+    'arabic': 'Arabic Art',
+  },
+  'rotate': {
+    'daily': 'Every day',
+    'hourly': 'Every hour',
+    'off': 'No change',
+  },
+  'pick': {
+    'daily': 'Every day',
+    'random': 'Random',
+    'manual': 'Choose yourself',
+  },
+  'source': {
+    'own': 'Own list',
+    'hadeethenc': 'HadeethEnc',
+    'both': 'Both',
+  },
+  'mix': {
+    'list': 'Follow the list',
+    'alternate': 'Alternate',
+    'random': 'Random',
+  },
+  'changeEvery': {'day': 'One set a day', 'card': 'Every display'},
+  'fontSize': {
+    'auto': 'Auto by length',
+    's': 'Small',
+    'm': 'Medium',
+    'l': 'Large',
+  },
+  'speed': {'slow': 'Slow', 'normal': 'Normal', 'fast': 'Fast'},
+  'shape': {'round': 'Round', 'square': 'Square'},
+  'textSize': {'s': 'Small', 'm': 'Medium', 'l': 'Large'},
+  'kind': {'surau': 'Surau', 'masjid': 'Masjid'},
+  'method': {
+    'auto': 'Auto (by country)',
+    'mwl': 'Muslim World League',
+    'egyptian': 'Egyptian General Authority',
+    'karachi': 'University of Islamic Sciences, Karachi',
+    'ummAlQura': 'Umm al-Qura, Makkah',
+    'dubai': 'Dubai',
+    'qatar': 'Qatar',
+    'kuwait': 'Kuwait',
+    'moonsighting': 'Moonsighting Committee',
+    'singapore': 'Singapore',
+    'tehran': 'Tehran',
+    'turkey': 'Turkey (Diyanet)',
+    'northAmerica': 'North America (ISNA)',
+    'jakim': 'JAKIM 18/18',
+    'kemenag': 'Kemenag Indonesia 20/18',
+    'uoif': 'UOIF France 12/12',
+    'morocco': 'Morocco 19/17',
+    'algeria': 'Algeria 18/17',
+    'russia': 'Russia 16/15',
+  },
+  'madhab': {'auto': 'Auto (by country)', 'shafi': 'Shafi', 'hanafi': 'Hanafi'},
+  'highLatitude': {
+    'auto': 'Auto',
+    'middleOfNight': 'Middle of the night',
+    'seventhOfNight': 'One seventh of the night',
+    'twilightAngle': 'Twilight angle',
+  },
+  'fit': {'cover': 'Fill the screen', 'contain': 'Fit without cropping'},
+  'figure': {'balance': 'Balance', 'month': 'This month', 'lastEntry': 'Last entry'},
+  'privacy': {
+    'public': 'Public',
+    'unlisted': 'Unlisted',
+    'private': 'Private',
+  },
+  'relayFrom': {'box': 'MAXCOM (default)', 'phone': 'Phone directly'},
+  'relayVideo': {'copy': 'Copy as is', 'reencode': 'Re-encode'},
+  'cacheMaxMb': {'100': '100 MB', '300': '300 MB (default)', '500': '500 MB', '1000': '1 GB'},
+  'syncHistoryDays': {'180': '180 days (default)', '365': '365 days'},
+  'dirtyCheckSeconds': {
+    '60': '1 minute',
+    '120': '2 minutes (default)',
+    '300': '5 minutes',
+    '600': '10 minutes',
+    '900': '15 minutes',
+  },
+  'keepDays': {
+    '0': 'Delete at once',
+    '1': '1 day',
+    '3': '3 days',
+    '7': '7 days',
+    '30': '30 days',
+  },
+  'replaceGappyLive': {
+    'ask': 'Ask first',
+    'never': 'Do not replace',
+    'always': 'Always replace',
   },
 };
 
@@ -547,9 +661,46 @@ const Map<String, String> settingHelpEn = {
       'A device that has not synced for longer than this must reload everything.',
   'dirtyCheckSeconds':
       'More often means changes from home arrive sooner, but the cloud is woken more often.',
-  'fontSize': 'The base text size. Text size in Ubah suai adds a scale on top of it.',
-  'textSize': 'The base text size. Text size in Ubah suai adds a scale on top of it.',
+  'fontSize': 'The base text size. Text size in Customise adds a scale on top of it.',
+  'textSize': 'The base text size. Text size in Customise adds a scale on top of it.',
+  'lang':
+      'The language of the TV screen, not of the app on the phone. Follow location: '
+      'BM in Malaysia, English in other countries.',
 };
 
-/// The sentence under a setting in the language of the app: the English one when [en] and there is one, else the BM one.
-String? settingHelpFor(String name, {required bool en}) => (en ? settingHelpEn[name] : null) ?? settingHelpMs[name];
+/// English sentence under each choice.
+const Map<String, Map<String, String>> choiceHelpEn = {
+  'relayFrom': {
+    'box': 'The phone sends the picture to MAXCOM at the surau; MAXCOM streams to YouTube.',
+    'phone':
+        'The phone streams to YouTube itself, for a weak MAXCOM or a slow surau '
+        'internet.',
+  },
+};
+
+/// Headings of the settings list, in English.
+const Map<String, String> groupLabelsEn = {
+  'solat': 'Prayer',
+  'skrin': 'Screen',
+  'kandungan': 'Content',
+  'quran': 'Quran',
+  'audio': 'Audio',
+  'live': 'Live broadcast',
+  'kewangan': 'Finance',
+  'jemaah': 'Congregation',
+  'awan': 'Cloud',
+  'keselamatan': 'Security',
+};
+
+/// The sentence under a feature's switch, in English.
+const Map<String, String> featureHelpEn = {
+  'finance':
+      'Finance data is kept and is not deleted when switched off. Switch it on again '
+      'to see the entries and reports.',
+  'appLock':
+      'When off (the default), MAXCOM opens straight away with the lock of the '
+      'registered device: anyone holding that device can get in. Switch it on if a '
+      'device is shared, or MAXCOM is opened in a browser on a shared iPad or '
+      'computer. When on, each user is asked to set a PIN at the next opening; a '
+      'fingerprint can be used on Android.',
+};

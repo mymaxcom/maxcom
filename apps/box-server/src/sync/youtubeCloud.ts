@@ -1,3 +1,4 @@
+import { reqSurau } from '../reqSurau.ts';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { cleanYoutubeText, youtubeMetaFor } from '@surau/core';
@@ -31,6 +32,8 @@ export interface YoutubeCloudDeps {
   now: () => Date;
   /** The cloud's YouTube service; null when the cloud has no data folder (unit tests). */
   youtube: YoutubeService | null;
+  /** One service per surau (L1): the cloud keeps one Google sign-in for each. When absent `youtube` serves every request. */
+  youtubeFor?: (surauId: string) => YoutubeService | null;
 }
 
 export const UPLOAD_LIMIT_PER_DAY = 100;
@@ -148,24 +151,27 @@ function parsePart(v: unknown): { index: number; count: number } | null | 'bad' 
 }
 
 /** The kuliah's YouTube text (the same as a live of that kuliah gets), or a plain fallback. */
-function metaFor(db: DatabaseSync, kuliahId: string | null, now: Date): YoutubeMeta | 'not_found' {
-  const settings = getSettings(db);
+function metaFor(db: DatabaseSync, kuliahId: string | null, now: Date, surauId: string): YoutubeMeta | 'not_found' {
+  const settings = getSettings(db, surauId);
   const surauName = settings.surauInfo.name.trim();
   const fallback: YoutubeMeta = { title: cut(cleanYoutubeText(`Kuliah ${surauName}`).trim(), TITLE_MAX).trim(), description: '', privacy: settings.liveYoutube.privacy };
   if (kuliahId === null) return fallback;
-  const k = getItem(db, 'kuliah', kuliahId);
+  const k = getItem(db, 'kuliah', kuliahId, surauId);
   if (k === null) return 'not_found';
-  const p = getItem(db, 'penceramah', k.penceramahId);
+  const p = getItem(db, 'penceramah', k.penceramahId, surauId);
   if (p === null) return { ...fallback, title: cut(cleanYoutubeText(k.label ?? fallback.title).trim() || fallback.title, TITLE_MAX) };
-  const kitab = k.kitabId !== undefined ? getItem(db, 'kitab', k.kitabId) : null;
+  const kitab = k.kitabId !== undefined ? getItem(db, 'kitab', k.kitabId, surauId) : null;
   return youtubeMetaFor({ kuliah: k, penceramah: p, kitab, surauName, settings: settings.liveYoutube, now });
 }
 
 // ---- routes -----------------------------------------------------------------------------------------------
 
-export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCloudDeps): void {
+export function registerYoutubeCloudRoutes(
+  app: FastifyInstance,
+  deps: YoutubeCloudDeps,
+): void {
   const { db, now } = deps;
-  const yt = deps.youtube;
+  const ytFor = (surauId: string): YoutubeService | null => (deps.youtubeFor !== undefined ? deps.youtubeFor(surauId) : deps.youtube);
 
   const notFound = (reply: FastifyReply): FastifyReply => reply.code(404).header('Cache-Control', 'no-store').send({ errors: [MSG.notFoundRoute] });
   // on a box these routes exist in the table but not in fact: only the cloud holds the Google token
@@ -184,6 +190,7 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
   // ---- the box leg -------------------------------------------------------------------------------------
 
   app.post('/api/cloud/youtube/broadcast', gate, async (request, reply) => {
+    const surauId = reqSurau(request);
     const site = siteOnly(request, reply);
     if (site === null) return reply;
     const b = body(request);
@@ -193,6 +200,7 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
     // the box composed the text; the cloud still cleans it (no angle brackets, dashes or arrows reach YouTube)
     const title = cut(cleanYoutubeText(meta.title).trim(), TITLE_MAX).trim();
     if (title === '') return bad(reply);
+    const yt = ytFor(surauId);
     if (yt === null) return sendYoutubeFailure(reply, new YoutubeError('not_configured'), now);
     if (!yt.signedIn()) return sendYoutubeFailure(reply, new YoutubeError('reauthorise'), now);
     try {
@@ -202,7 +210,7 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
         meta: { title, description: cut(cleanYoutubeText(meta.description), DESCRIPTION_MAX), privacy: meta.privacy as VideoPrivacy },
       });
       // ids only: the stream key is in the answer and nowhere else
-      logChange(db, `site:${site.boxId}`, 'youtube/broadcast', made.broadcastId, null, { sessionId: b.sessionId, broadcastId: made.broadcastId });
+      logChange(db, `site:${site.boxId}`, 'youtube/broadcast', made.broadcastId, null, { sessionId: b.sessionId, broadcastId: made.broadcastId }, undefined, surauId);
       return reply.header('Cache-Control', 'no-store').send({ broadcastId: made.broadcastId, watchUrl: made.watchUrl, key: made.key });
     } catch (error) {
       return sendYoutubeFailure(reply, error, now);
@@ -210,12 +218,14 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
   });
 
   app.post('/api/cloud/youtube/complete', gate, async (request, reply) => {
+    const surauId = reqSurau(request);
     const site = siteOnly(request, reply);
     if (site === null) return reply;
     const id = body(request).broadcastId;
     if (typeof id !== 'string' || id === '' || id.length > 64) return bad(reply);
     // only a broadcast this cloud made for this very site: no site can end another's (or a person's own) live
-    if (db.prepare("SELECT 1 AS x FROM change_log WHERE entity = 'youtube/broadcast' AND entity_id = ? AND actor = ?").get(id, `site:${site.boxId}`) === undefined) return notFound(reply);
+    if (db.prepare("SELECT 1 AS x FROM change_log WHERE surau_id = ? AND entity = 'youtube/broadcast' AND entity_id = ? AND actor = ?").get(surauId, id, `site:${site.boxId}`) === undefined) return notFound(reply);
+    const yt = ytFor(surauId);
     if (yt === null) return sendYoutubeFailure(reply, new YoutubeError('not_configured'), now);
     try {
       await yt.complete(id);
@@ -226,8 +236,10 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
   });
 
   app.get('/api/cloud/youtube/status', gate, async (request, reply) => {
+    const surauId = reqSurau(request);
     const site = siteOnly(request, reply);
     if (site === null) return reply;
+    const yt = ytFor(surauId);
     reply.header('Cache-Control', 'no-store');
     // the box asking is the sign that its live is still going (the orphan sweep leaves it alone)
     yt?.touch(`${site.boxId}/`);
@@ -241,6 +253,7 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
   const deviceOnly = (request: FastifyRequest): string | null => deviceOf(request) ?? null;
 
   app.post('/api/youtube/upload/begin', gate, async (request, reply) => {
+    const surauId = reqSurau(request);
     reply.header('Cache-Control', 'no-store');
     const deviceId = deviceOnly(request);
     if (deviceId === null) return reply.code(403).send({ errors: ['Tidak dibenarkan'] });
@@ -254,37 +267,38 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
     const replace = b.replaceLiveVideoId === undefined ? null : b.replaceLiveVideoId;
     if (replace !== null && (typeof replace !== 'string' || !ID_RE.test(replace))) return bad(reply);
 
-    if (getSettings(db).youtubeCatchUp.enabled !== true) return reply.code(409).send({ errors: [MSG.catchupOff], code: 'catchup_off' });
+    if (getSettings(db, surauId).youtubeCatchUp.enabled !== true) return reply.code(409).send({ errors: [MSG.catchupOff], code: 'catchup_off' });
+    const yt = ytFor(surauId);
     if (yt === null) return sendYoutubeFailure(reply, new YoutubeError('not_configured'), now);
     // only a video this cloud broadcast itself can be replaced: no device can make another video private
-    if (replace !== null && db.prepare("SELECT 1 AS x FROM change_log WHERE entity = 'youtube/broadcast' AND entity_id = ?").get(replace) === undefined) {
+    if (replace !== null && db.prepare("SELECT 1 AS x FROM change_log WHERE surau_id = ? AND entity = 'youtube/broadcast' AND entity_id = ?").get(surauId, replace) === undefined) {
       return reply.code(400).send({ errors: [MSG.unknownLive], code: 'unknown_live_video' });
     }
-    const meta = metaFor(db, kuliahId as string | null, now());
+    const meta = metaFor(db, kuliahId as string | null, now(), surauId);
     if (meta === 'not_found') return reply.code(404).send({ errors: ['Kuliah tidak ditemui'], code: 'kuliah_not_found' });
 
     // an open session older than the 7 days Google keeps it is dead: it stops counting and cannot be finished
     const t0 = now();
-    db.prepare("UPDATE uploads SET state = 'expired' WHERE state = 'open' AND created_at < ?").run(new Date(t0.getTime() - UPLOAD_OPEN_MS).toISOString());
+    db.prepare("UPDATE uploads SET state = 'expired' WHERE surau_id = ? AND state = 'open' AND created_at < ?").run(surauId, new Date(t0.getTime() - UPLOAD_OPEN_MS).toISOString());
     // the channel's daily upload limit, before Google is asked (the same count the quota route shows)
     const win = pacificWindow(t0);
-    if (Number(db.prepare('SELECT COUNT(*) AS n FROM uploads WHERE created_at >= ?').get(win.since)?.n ?? 0) >= UPLOAD_LIMIT_PER_DAY) {
+    if (Number(db.prepare('SELECT COUNT(*) AS n FROM uploads WHERE surau_id = ? AND created_at >= ?').get(surauId, win.since)?.n ?? 0) >= UPLOAD_LIMIT_PER_DAY) {
       return sendYoutubeFailure(reply, new YoutubeError('quota'), now);
     }
-    if (Number(db.prepare("SELECT COUNT(*) AS n FROM uploads WHERE device_id = ? AND state = 'open'").get(deviceId)?.n ?? 0) >= OPEN_UPLOADS_PER_DEVICE) {
+    if (Number(db.prepare("SELECT COUNT(*) AS n FROM uploads WHERE surau_id = ? AND device_id = ? AND state = 'open'").get(surauId, deviceId)?.n ?? 0) >= OPEN_UPLOADS_PER_DEVICE) {
       return reply.code(409).send({ errors: [MSG.tooManyUploads], code: 'too_many_uploads' });
     }
     if (!yt.signedIn()) return sendYoutubeFailure(reply, new YoutubeError('reauthorise'), now);
 
     const title = titleWithPart(meta.title, part);
     try {
-      const session = await yt.createResumableUpload({ ...meta, title }, getSettings(db).liveYoutube.privacy, bytes);
+      const session = await yt.createResumableUpload({ ...meta, title }, getSettings(db, surauId).liveYoutube.privacy, bytes);
       const uploadId = `up_${randomToken(12)}`;
       db.prepare(
-        `INSERT INTO uploads (id, kuliah_id, device_id, state, bytes, created_at, replace_video_id) VALUES (?, ?, ?, 'open', ?, ?, ?)`,
-      ).run(uploadId, kuliahId as string | null, deviceId, bytes, now().toISOString(), replace);
+        `INSERT INTO uploads (surau_id, id, kuliah_id, device_id, state, bytes, created_at, replace_video_id) VALUES (?, ?, ?, ?, 'open', ?, ?, ?)`,
+      ).run(surauId, uploadId, kuliahId as string | null, deviceId, bytes, now().toISOString(), replace);
       // the history knows who and how much, never the session address
-      logChange(db, actorOf(request), 'youtube/upload', uploadId, null, { uploadId, kuliahId: kuliahId as string | null, deviceId, bytes }, { deviceId });
+      logChange(db, actorOf(request), 'youtube/upload', uploadId, null, { uploadId, kuliahId: kuliahId as string | null, deviceId, bytes }, { deviceId }, surauId);
       return reply.send({ uploadId, uploadUri: session.uploadUri, expiresAt: session.expiresAt, title });
     } catch (error) {
       return sendYoutubeFailure(reply, error, now);
@@ -292,20 +306,22 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
   });
 
   app.post('/api/youtube/upload/done', gate, async (request, reply) => {
+    const surauId = reqSurau(request);
     reply.header('Cache-Control', 'no-store');
     const deviceId = deviceOnly(request);
     if (deviceId === null) return reply.code(403).send({ errors: ['Tidak dibenarkan'] });
     const b = body(request);
     if (typeof b.uploadId !== 'string' || b.uploadId === '' || b.uploadId.length > 64) return bad(reply);
     if (typeof b.videoId !== 'string' || !ID_RE.test(b.videoId)) return bad(reply);
-    const row = db.prepare('SELECT * FROM uploads WHERE id = ?').get(b.uploadId);
+    const row = db.prepare('SELECT * FROM uploads WHERE surau_id = ? AND id = ?').get(surauId, b.uploadId);
     // another device's upload does not exist for this one
     if (row === undefined || row.device_id !== deviceId) return reply.code(404).send({ errors: ['Muat naik tidak ditemui'], code: 'upload_not_found' });
     if (row.state === 'done' && row.video_id !== b.videoId) return reply.code(409).send({ errors: [MSG.badRequest], code: 'video_mismatch' });
     if (row.state === 'expired') return reply.code(409).send({ errors: [MSG.uploadExpired], code: 'upload_expired' });
     if (row.state === 'open') {
       // the id is the device's word: it must be a video this very upload made, on this channel, after `begin`
-      if (db.prepare('SELECT 1 AS x FROM uploads WHERE video_id = ? AND id <> ?').get(b.videoId, b.uploadId) !== undefined) return bad(reply, 'unknown_video');
+      if (db.prepare('SELECT 1 AS x FROM uploads WHERE surau_id = ? AND video_id = ? AND id <> ?').get(surauId, b.videoId, b.uploadId) !== undefined) return bad(reply, 'unknown_video');
+      const yt = ytFor(surauId);
       if (yt === null) return sendYoutubeFailure(reply, new YoutubeError('not_configured'), now);
       try {
         const o = await yt.videoOrigin(b.videoId);
@@ -316,7 +332,7 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
       } catch (error) {
         return sendYoutubeFailure(reply, error, now);
       }
-      db.prepare("UPDATE uploads SET state = 'done', video_id = ?, finished_at = ? WHERE id = ? AND state = 'open'").run(b.videoId, now().toISOString(), b.uploadId);
+      db.prepare("UPDATE uploads SET state = 'done', video_id = ?, finished_at = ? WHERE surau_id = ? AND id = ? AND state = 'open'").run(b.videoId, now().toISOString(), surauId, b.uploadId);
     }
 
     // set the gappy live private, once. The claim marker keeps a repeated or concurrent `done` from doing it twice.
@@ -324,24 +340,26 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
     const live = typeof row.replace_video_id === 'string' ? row.replace_video_id : null;
     if (live !== null) {
       // a claim left by a crashed `done` (older than 10 minutes, or the bare old marker) is taken over
-      db.prepare("UPDATE uploads SET replaced_at = NULL WHERE id = ? AND (replaced_at = 'claim' OR (replaced_at LIKE 'claim@%' AND substr(replaced_at, 7) < ?))").run(
+      db.prepare("UPDATE uploads SET replaced_at = NULL WHERE surau_id = ? AND id = ? AND (replaced_at = 'claim' OR (replaced_at LIKE 'claim@%' AND substr(replaced_at, 7) < ?))").run(
+        surauId,
         b.uploadId,
         new Date(now().getTime() - CLAIM_STALE_MS).toISOString(),
       );
-      const claim = db.prepare('UPDATE uploads SET replaced_at = ? WHERE id = ? AND replaced_at IS NULL').run(`claim@${now().toISOString()}`, b.uploadId);
+      const claim = db.prepare('UPDATE uploads SET replaced_at = ? WHERE surau_id = ? AND id = ? AND replaced_at IS NULL').run(`claim@${now().toISOString()}`, surauId, b.uploadId);
       if (Number(claim.changes) === 1) {
         try {
+          const yt = ytFor(surauId);
           if (yt === null) throw new YoutubeError('not_configured');
           await yt.setPrivacy(live, 'private');
-          db.prepare('UPDATE uploads SET replaced_at = ? WHERE id = ?').run(now().toISOString(), b.uploadId);
-          logChange(db, actorOf(request), 'youtube/replaceLive', live, null, { uploadId: b.uploadId, videoId: live, newVideoId: b.videoId }, { deviceId });
+          db.prepare('UPDATE uploads SET replaced_at = ? WHERE surau_id = ? AND id = ?').run(now().toISOString(), surauId, b.uploadId);
+          logChange(db, actorOf(request), 'youtube/replaceLive', live, null, { uploadId: b.uploadId, videoId: live, newVideoId: b.videoId }, { deviceId }, surauId);
           replaced = true;
         } catch {
           // the upload itself is done and must not be uploaded again: the next `done` retries this step
-          db.prepare("UPDATE uploads SET replaced_at = NULL WHERE id = ? AND replaced_at LIKE 'claim%'").run(b.uploadId);
+          db.prepare("UPDATE uploads SET replaced_at = NULL WHERE surau_id = ? AND id = ? AND replaced_at LIKE 'claim%'").run(surauId, b.uploadId);
         }
       } else {
-        const now2 = db.prepare('SELECT replaced_at FROM uploads WHERE id = ?').get(b.uploadId);
+        const now2 = db.prepare('SELECT replaced_at FROM uploads WHERE surau_id = ? AND id = ?').get(surauId, b.uploadId);
         replaced = typeof now2?.replaced_at === 'string' && !now2.replaced_at.startsWith('claim');
       }
     }
@@ -354,13 +372,21 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
    * same route answers from the box's own YouTube service (no role gate: the app asks whichever it reaches).
    */
   app.post('/api/youtube/verify', async (request, reply) => {
+    const surauId = reqSurau(request);
     reply.header('Cache-Control', 'no-store');
     const ids = body(request).videoIds;
     if (!Array.isArray(ids) || ids.length < 1 || ids.length > VERIFY_MAX_IDS) return bad(reply);
     if (!ids.every((x) => typeof x === 'string' && ID_RE.test(x))) return bad(reply);
     const unique = Array.from(new Set(ids as string[]));
+    const yt = ytFor(surauId);
     if (yt === null) return sendYoutubeFailure(reply, new YoutubeError('not_configured'), now);
     if (!yt.signedIn()) return sendYoutubeFailure(reply, new YoutubeError('reauthorise'), now);
+    // on the cloud only a video this surau logged (a live its sites broadcast, an upload of its devices) may be
+    // asked about: one surau cannot learn the state of another's videos
+    if (deps.role === 'cloud') {
+      const mine = db.prepare("SELECT 1 AS x FROM change_log WHERE surau_id = ? AND entity = 'youtube/broadcast' AND entity_id = ? UNION ALL SELECT 1 FROM uploads WHERE surau_id = ? AND video_id = ? LIMIT 1");
+      if (!unique.every((id) => mine.get(surauId, id, surauId, id) !== undefined)) return bad(reply, 'unknown_video');
+    }
     try {
       const found = new Map((await yt.videosStatus(unique)).map((v) => [v.videoId, v]));
       return reply.send({ results: (ids as string[]).map((id) => found.get(id)!) });
@@ -369,10 +395,11 @@ export function registerYoutubeCloudRoutes(app: FastifyInstance, deps: YoutubeCl
     }
   });
 
-  app.get('/api/youtube/quota', gate, async (_request, reply) => {
+  app.get('/api/youtube/quota', gate, async (request, reply) => {
+    const surauId = reqSurau(request);
     reply.header('Cache-Control', 'no-store');
     const w = pacificWindow(now());
-    const n = db.prepare('SELECT COUNT(*) AS n FROM uploads WHERE created_at >= ?').get(w.since)?.n;
+    const n = db.prepare('SELECT COUNT(*) AS n FROM uploads WHERE surau_id = ? AND created_at >= ?').get(surauId, w.since)?.n;
     return { uploadsToday: Number(n ?? 0), uploadLimit: UPLOAD_LIMIT_PER_DAY, resetsAt: w.resetsAt };
   });
 }

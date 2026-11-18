@@ -1,0 +1,26 @@
+{
+  "format": [
+    { "kind": "user", "src": "b", "no": 1, "short": "U-0001", "global": "surau-contoh/U-0001" },
+    { "kind": "device", "src": "c", "no": 12, "short": "D-C0012", "global": "surau-contoh/D-C0012" },
+    { "kind": "user", "src": "b", "no": 12345, "short": "U-12345", "global": "surau-contoh/U-12345" },
+    { "kind": "user", "src": "c", "no": 3, "short": "U-C0003", "global": "surau-contoh/U-C0003" },
+    { "kind": "device", "src": "b", "no": 9999, "short": "D-9999", "global": "surau-contoh/D-9999" }
+  ],
+  "parse": [
+    { "text": "u1", "surauId": null, "kind": "user", "src": "b", "no": 1 },
+    { "text": "U-0001", "surauId": null, "kind": "user", "src": "b", "no": 1 },
+    { "text": "u-c12", "surauId": null, "kind": "user", "src": "c", "no": 12 },
+    { "text": "D 7", "surauId": null, "kind": "device", "src": "b", "no": 7 },
+    { "text": "surau-contoh/U-0003", "surauId": "surau-contoh", "kind": "user", "src": "b", "no": 3 },
+    { "text": "  d-c0042 ", "surauId": null, "kind": "device", "src": "c", "no": 42 },
+    { "text": "12", "surauId": null, "kind": null, "src": "b", "no": 12 },
+    { "text": "c12", "surauId": null, "kind": null, "src": "c", "no": 12 },
+    { "text": "U-0", "null": true },
+    { "text": "X-1", "null": true },
+    { "text": "U-1a", "null": true },
+    { "text": "", "null": true },
+    { "text": "U-", "null": true },
+    { "text": "A/U-1", "null": true },
+    { "text": "U-1234567890", "null": true }
+  ]
+}

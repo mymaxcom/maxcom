@@ -233,7 +233,7 @@ describe('group 3: browsing pages in SQL', () => {
 describe('group 3: PUT /api/hadis/order', () => {
   const seedItems = async (c: Ctx): Promise<void> => {
     for (const id of ['66512', '66513']) await add(c, id);
-    putItem(c.app.surau.db, 'hadis', { id: 'own-a', textMs: 'Sendiri', source: 'Riwayat Muslim', order: 9000 }, 'test');
+    putItem(c.app.surau.db, 'hadis', { id: 'own-a', textMs: 'Sendiri', source: 'Riwayat Muslim', order: 9000 }, 'test', undefined, 'sdm');
   };
   const rows = (c: Ctx): number => Number(c.app.surau.db.prepare("SELECT COUNT(*) AS n FROM change_log WHERE entity = 'content:hadis'").get()?.n);
 
@@ -246,7 +246,7 @@ describe('group 3: PUT /api/hadis/order', () => {
     expect(r.json().code).toBe('order_stale');
     expect(r.json().errors[0]).toMatch(/senarai/i);
     expect(rows(c)).toBe(before);
-    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512')?.order).toBe(1000);
+    expect(getItem(c.app.surau.db, 'hadis', 'hadeethenc-66512', 'sdm')?.order).toBe(1000);
   });
 
   it('the full set renumbers; rows whose order did not change are not written', async () => {
@@ -254,19 +254,19 @@ describe('group 3: PUT /api/hadis/order', () => {
     await seedItems(c);
     // current orders: 66512=1000, 66513=2000, own-a=9000. New list keeps 66512 first.
     const before = rows(c);
-    const v = getVersion(c.app.surau.db);
+    const v = getVersion(c.app.surau.db, 'sdm');
     const r = await put(c, ['hadeethenc-66512', 'own-a', 'hadeethenc-66513']);
     expect(r.statusCode).toBe(200);
     expect(r.json().count).toBe(3);
     expect(rows(c) - before).toBe(2); // 66512 stays at 1000
-    expect(getVersion(c.app.surau.db)).toBeGreaterThan(v);
+    expect(getVersion(c.app.surau.db, 'sdm')).toBeGreaterThan(v);
     const again = await put(c, ['hadeethenc-66512', 'own-a', 'hadeethenc-66513']);
     expect(again.statusCode).toBe(200);
     expect(rows(c) - before).toBe(2);
-    expect(getVersion(c.app.surau.db)).toBeGreaterThan(v);
-    const v2 = getVersion(c.app.surau.db);
+    expect(getVersion(c.app.surau.db, 'sdm')).toBeGreaterThan(v);
+    const v2 = getVersion(c.app.surau.db, 'sdm');
     await put(c, ['hadeethenc-66512', 'own-a', 'hadeethenc-66513']);
-    expect(getVersion(c.app.surau.db)).toBe(v2);
+    expect(getVersion(c.app.surau.db, 'sdm')).toBe(v2);
   });
 
   it('a deleted hadis is not part of the set', async () => {

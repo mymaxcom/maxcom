@@ -45,22 +45,22 @@
       "balances": { "f1": 0, "f2": 100000 }
     },
     {
-      "name": "5 void then a new amount un-voids",
+      "name": "5 void then a new amount stays voided",
       "entries": [
         { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 50000, "editedAt": "2026-10-02T04:00:00.000Z" },
         { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a1", "correctionKind": "void", "amountSen": 0, "reason": "Batal dahulu sebab silap", "editedAt": "2026-10-04T04:00:00.000Z" },
         { "id": "c2", "kind": "adjust", "entryDate": "2026-10-05", "fundId": "f1", "correctsId": "a1", "correctionKind": "amount", "amountSen": 40000, "reason": "Kiraan semula: 400", "editedAt": "2026-10-05T04:00:00.000Z" }
       ],
-      "balances": { "f1": 40000, "f2": 0 }
+      "balances": { "f1": 0, "f2": 0 }
     },
     {
-      "name": "6 void then a tabung change un-voids",
+      "name": "6 void then a tabung change stays voided",
       "entries": [
         { "id": "a1", "kind": "in", "entryDate": "2026-10-02", "fundId": "f1", "amountSen": 50000, "editedAt": "2026-10-02T04:00:00.000Z" },
         { "id": "c1", "kind": "adjust", "entryDate": "2026-10-04", "fundId": "f1", "correctsId": "a1", "correctionKind": "void", "amountSen": 0, "reason": "Batal dahulu sebab silap", "editedAt": "2026-10-04T04:00:00.000Z" },
         { "id": "c2", "kind": "adjust", "entryDate": "2026-10-05", "fundId": "f1", "correctsId": "a1", "correctionKind": "fund", "toFundId": "f2", "amountSen": 0, "reason": "Salah tabung: masuk Am", "editedAt": "2026-10-05T04:00:00.000Z" }
       ],
-      "balances": { "f1": 0, "f2": 50000 }
+      "balances": { "f1": 0, "f2": 0 }
     },
     {
       "name": "7 amount then a later void stays voided",

@@ -105,7 +105,13 @@ class FakePrayerRepo implements PrayerRepository {
   Future<PrayerStatus> status() async => status_;
 
   @override
-  Future<List<CountryInfo>> countries({String lang = 'ms'}) async => countriesList;
+  Future<List<CountryInfo>> countries({String lang = 'ms'}) async {
+    countryLangs.add(lang);
+    return countriesList;
+  }
+
+  /// The `lang` of each countries request.
+  final List<String> countryLangs = [];
 
   /// Longitudes asked about, as (country, lon).
   final List<(String, double)> timezoneAsks = [];
@@ -266,6 +272,7 @@ Future<PrayerApp> pumpPrayer(
   List<String> roles = const ['admin'],
   void Function(ShellHarness h)? setup,
   GoldenSize size = GoldenSize.phone,
+  Locale locale = defaultLocale,
 }) async {
   final fake = repo ?? FakePrayerRepo();
   final h = ShellHarness(
@@ -292,7 +299,7 @@ Future<PrayerApp> pumpPrayer(
     child: MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: SurauTheme.light(),
-      locale: defaultLocale,
+      locale: locale,
       localizationsDelegates: S.localizationsDelegates,
       supportedLocales: S.supportedLocales,
       home: AppShell(location: location, child: screen),

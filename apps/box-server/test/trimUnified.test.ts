@@ -23,8 +23,8 @@ function newDb(): DatabaseSync {
 
 /** A penceramah created 400 days ago and deleted `days` ago: a tombstone of that age with its last log row. */
 function tombstone(db: DatabaseSync, id: string, days: number): void {
-  putItem(db, 'penceramah', { id, name: id }, 'local', { editedAt: ago(400), syncedAt: ago(400) });
-  deleteItem(db, 'penceramah', id, 'local', { editedAt: ago(days), syncedAt: ago(days) });
+  putItem(db, 'penceramah', { id, name: id }, 'local', { editedAt: ago(400), syncedAt: ago(400) }, 'sdm');
+  deleteItem(db, 'penceramah', id, 'local', { editedAt: ago(days), syncedAt: ago(days) }, 'sdm');
   // history rows carry the age of the edit
   db.exec("UPDATE change_log SET at = edited_at WHERE entity LIKE 'content:%'");
 }
@@ -44,10 +44,10 @@ describe('one retention window from system.syncHistoryDays', () => {
   it('reads 180 by default, 365 when set, always 365 on the cloud', () => {
     const db = newDb();
     expect(retentionDays(db, 'box')).toBe(180);
-    putFeature(db, 'system', { syncHistoryDays: 365 }, 'test');
+    putFeature(db, 'system', { syncHistoryDays: 365 }, 'test', undefined, 'sdm');
     expect(retentionDays(db, 'box')).toBe(365);
     expect(retentionDays(db, 'cloud')).toBe(365);
-    putFeature(db, 'system', { syncHistoryDays: 180 }, 'test');
+    putFeature(db, 'system', { syncHistoryDays: 180 }, 'test', undefined, 'sdm');
     expect(retentionDays(db, 'box')).toBe(180);
     expect(retentionDays(db, 'cloud')).toBe(365);
   });
@@ -66,7 +66,7 @@ describe('one retention window from system.syncHistoryDays', () => {
 
   it('365 days: both survive at 300 days, and a tombstone past 365 goes', () => {
     const db = newDb();
-    putFeature(db, 'system', { syncHistoryDays: 365 }, 'test');
+    putFeature(db, 'system', { syncHistoryDays: 365 }, 'test', undefined, 'sdm');
     tombstone(db, 'mid', 300);
     tombstone(db, 'ancient', 366);
     expect(inSnapshot(db, 'mid', 'box')).toBe(true);
@@ -79,7 +79,7 @@ describe('one retention window from system.syncHistoryDays', () => {
 
   it('the cloud keeps a 300-day tombstone whatever the setting says', () => {
     const db = newDb();
-    putFeature(db, 'system', { syncHistoryDays: 180 }, 'test');
+    putFeature(db, 'system', { syncHistoryDays: 180 }, 'test', undefined, 'sdm');
     tombstone(db, 'mid', 300);
     expect(inSnapshot(db, 'mid', 'cloud')).toBe(true);
     trimChangeLog(db, 'cloud', NOW);
@@ -88,16 +88,16 @@ describe('one retention window from system.syncHistoryDays', () => {
 
   it('ordinary history is trimmed by the same window: a 200-day-old older version goes on a box at 180, stays at 365', () => {
     const at180 = newDb();
-    putItem(at180, 'penceramah', { id: 'p', name: 'v1' }, 'local', { editedAt: ago(200), syncedAt: ago(200) });
-    putItem(at180, 'penceramah', { id: 'p', name: 'v2' }, 'local', { editedAt: ago(5), syncedAt: ago(5) });
+    putItem(at180, 'penceramah', { id: 'p', name: 'v1' }, 'local', { editedAt: ago(200), syncedAt: ago(200) }, 'sdm');
+    putItem(at180, 'penceramah', { id: 'p', name: 'v2' }, 'local', { editedAt: ago(5), syncedAt: ago(5) }, 'sdm');
     at180.exec("UPDATE change_log SET at = edited_at WHERE entity LIKE 'content:%'");
     allPushed(at180);
     expect(trimChangeLog(at180, 'box', NOW).removed).toBe(1);
 
     const at365 = newDb();
-    putFeature(at365, 'system', { syncHistoryDays: 365 }, 'test');
-    putItem(at365, 'penceramah', { id: 'p', name: 'v1' }, 'local', { editedAt: ago(200), syncedAt: ago(200) });
-    putItem(at365, 'penceramah', { id: 'p', name: 'v2' }, 'local', { editedAt: ago(5), syncedAt: ago(5) });
+    putFeature(at365, 'system', { syncHistoryDays: 365 }, 'test', undefined, 'sdm');
+    putItem(at365, 'penceramah', { id: 'p', name: 'v1' }, 'local', { editedAt: ago(200), syncedAt: ago(200) }, 'sdm');
+    putItem(at365, 'penceramah', { id: 'p', name: 'v2' }, 'local', { editedAt: ago(5), syncedAt: ago(5) }, 'sdm');
     at365.exec("UPDATE change_log SET at = edited_at WHERE entity LIKE 'content:%'");
     allPushed(at365);
     expect(trimChangeLog(at365, 'box', NOW).removed).toBe(0);

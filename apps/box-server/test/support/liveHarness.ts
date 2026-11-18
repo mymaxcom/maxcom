@@ -80,12 +80,12 @@ export async function startLiveHarness(o: HarnessOptions = {}): Promise<LiveHarn
   if (o.noTools !== true && app.liveRuntime !== null) await until(() => app.liveRuntime?.supervisor?.status().running === true);
 
   const { db } = app.surau;
-  const pen = putItem(db, 'penceramah', { name: 'Ustaz Ahmad Fauzi' }, 'test');
+  const pen = putItem(db, 'penceramah', { name: 'Ustaz Ahmad Fauzi' }, 'test', undefined, 'sdm');
   const kuliah = putItem(
     db,
     'kuliah',
     { date: '2026-11-05', slot: 'maghrib', time: '19:15', label: 'Kuliah Maghrib', penceramahId: pen.item.id, topic: 'Bab Solat', status: 'aktif' },
-    'test',
+    'test', undefined, 'sdm',
   );
   return {
     app,

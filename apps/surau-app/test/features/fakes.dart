@@ -266,9 +266,12 @@ EnrolledBox fixtureBox({
 class FakeOpener {
   final List<Uri> opened = [];
 
+  /// What the phone answers: false plays an app that cannot open the link.
+  bool result = true;
+
   Future<bool> call(Uri uri) async {
     opened.add(uri);
-    return true;
+    return result;
   }
 }
 

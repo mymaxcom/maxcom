@@ -29,6 +29,11 @@ tools/live/
 auto.crt
 auto.key
 
+# Plan 14 Task 24: private MAXCOM Ops build output (never in the repo)
+secret/
+ops-builds/
+MAXCOM-Ops-*
+
 # Flutter golden failure output (generated on a failed run)
 apps/surau-app/test/goldens/failures/
 

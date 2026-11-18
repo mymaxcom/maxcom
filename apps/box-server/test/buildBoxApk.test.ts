@@ -5,14 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
+import { must } from './helpers/must.ts';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const script = join(repoRoot, 'scripts', 'android', 'build-box-apk.ps1');
 const releaseScript = join(repoRoot, 'scripts', 'build-release.ps1');
 const win = process.platform === 'win32';
 const versions = JSON.parse(readFileSync(join(repoRoot, 'versions.json'), 'utf8')) as Record<string, string>;
-const apkVersion = versions['kiosk-server-android'];
-const winVersion = versions['kiosk-server-windows'];
+const apkVersion = must(versions['kiosk-server-android'], 'kiosk-server-android version');
+const winVersion = must(versions['kiosk-server-windows'], 'kiosk-server-windows version');
 
 const work = mkdtempSync(join(tmpdir(), 'maxcom-bapk-'));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
@@ -126,7 +127,8 @@ describe.runIf(win)('build-box-apk.ps1 (run)', () => {
     const archiveSha = sha(archive);
     const cases = join(work, 'cases.ps1');
     const result = join(work, 'cases.json');
-    let res: Record<string, string[]>;
+    type ApkKey = 'good' | 'changedByte' | 'extraSo' | 'secondAbi' | 'missingSo' | 'wrongArchive' | 'wrongReleaseSha' | 'emptyPin' | 'badPin';
+    let res: Record<ApkKey, string[]>;
 
     it('runs all cases', () => {
       const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
@@ -178,8 +180,23 @@ ConvertTo-Json -InputObject $out -Depth 4 | Set-Content -LiteralPath ${q(result)
       );
       const r = ps(['-File', cases], 120_000);
       expect(r.status, r.out).toBe(0);
-      res = JSON.parse(readFileSync(result, 'utf8').replace(/^﻿/, ''));
-      for (const k of Object.keys(res)) if (!Array.isArray(res[k])) res[k] = res[k] == null ? [] : [res[k] as unknown as string];
+      const raw = JSON.parse(readFileSync(result, 'utf8').replace(/^﻿/, '')) as Partial<Record<ApkKey, string[] | string | null>>;
+      // PowerShell writes a one-item array as a bare string and an empty one as null
+      const list = (k: ApkKey): string[] => {
+        const v = raw[k];
+        return Array.isArray(v) ? v : v == null ? [] : [v];
+      };
+      res = {
+        good: list('good'),
+        changedByte: list('changedByte'),
+        extraSo: list('extraSo'),
+        secondAbi: list('secondAbi'),
+        missingSo: list('missingSo'),
+        wrongArchive: list('wrongArchive'),
+        wrongReleaseSha: list('wrongReleaseSha'),
+        emptyPin: list('emptyPin'),
+        badPin: list('badPin'),
+      };
     });
     it('passes a faithful APK', () => expect(res.good).toEqual([]));
     it('fails on a changed byte', () => expect(res.changedByte.join('|')).toMatch(/sha256 berubah untuk lib\/armeabi-v7a\/liba\.so/));

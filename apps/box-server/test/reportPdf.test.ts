@@ -131,8 +131,8 @@ describe('report routes', () => {
     const admin = await loginAs(app, 'admin');
     const treasurer = await loginAs(app, 'treasurer');
     const ajk = await loginAs(app, 'ajk');
-    putFeature(app.surau.db, 'finance', { enabled: true }, 'test');
-    putFeature(app.surau.db, 'surauInfo', { name: 'Surau D\'Waqaf' }, 'test');
+    putFeature(app.surau.db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
+    putFeature(app.surau.db, 'surauInfo', { name: 'Surau D\'Waqaf' }, 'test', undefined, 'sdm');
     const funds = (await app.inject({ method: 'GET', url: '/api/finance/funds', headers: treasurer.headers })).json().funds as { id: string }[];
     const perIn = ((await app.inject({ method: 'GET', url: '/api/finance/perihal', headers: treasurer.headers })).json().perihal as { id: string; direction: string }[]).find((p) => p.direction === 'in')!.id;
     await app.inject({

@@ -29,6 +29,7 @@ import type { Shown } from './screenId.ts';
 import { SourceFooter } from '../ui/SourceFooter.tsx';
 import { visibleNextOf } from '../ui/visibleNext.ts';
 import { ContentShell } from './ContentShell.tsx';
+import { shellOnlyScreenOf } from './screenId.ts';
 
 export interface MainProps {
   view: KioskView;
@@ -149,8 +150,9 @@ export function Main({ view, lang, onScreen, forceShell = false }: MainProps) {
     onScreen?.(reported);
   }, [reported, onScreen]);
   useLayoutEffect(() => () => onScreen?.(null), [onScreen]);
-  // The shell takes the stage for every card that has a catalog screen, for the zikir overlay, and for a forced preview.
-  const shell = zikirOn || (shownFeature !== null && screenOfCard(shownFeature) !== null) || forceShell;
+  // The shell takes the stage for every card that has a catalog screen, for the duty roster and the world clocks (shell
+  // screens without a catalog entry), for the zikir overlay, and for a forced preview.
+  const shell = zikirOn || (shownFeature !== null && (screenOfCard(shownFeature) !== null || shellOnlyScreenOf(shownFeature) !== null)) || forceShell;
   // Rule 1: no prayer strip on the poster, pengumuman, programme and tabung screens (the zikir overlay keeps it).
   const strip = !(shell && !zikirOn && shownFeature !== null && NO_STRIP.has(shownFeature));
   const name = surauNameOf(settings, lang);

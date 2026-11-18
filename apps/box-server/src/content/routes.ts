@@ -1,3 +1,4 @@
+import { reqSurau } from '../reqSurau.ts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DatabaseSync } from 'node:sqlite';
 import type { ChangeBus } from '../events.ts';
@@ -32,7 +33,13 @@ function forReader<T>(request: FastifyRequest, kind: string, item: T): T {
 }
 
 function fail(reply: FastifyReply, error: unknown): FastifyReply {
-  if (error instanceof ContentError) return reply.code(error.status).send({ errors: error.errors });
+  if (error instanceof ContentError) {
+    return reply.code(error.status).send({
+      errors: error.errors,
+      ...(error.code !== undefined ? { code: error.code } : {}),
+      ...(error.detail !== undefined ? { detail: error.detail } : {}),
+    });
+  }
   throw error;
 }
 
@@ -42,13 +49,13 @@ export function registerContentRoutes(app: FastifyInstance, deps: ContentRouteDe
   app.get('/api/content/:kind', async (request, reply) => {
     const { kind } = request.params as { kind: string };
     if (!isContentKind(kind)) return reply.code(404).send({ errors: [`unknown content kind ${kind}`] });
-    return { items: listItems(db, kind).map((item) => forReader(request, kind, item)) };
+    return { items: listItems(db, kind, undefined, reqSurau(request)).map((item) => forReader(request, kind, item)) };
   });
 
   app.get('/api/content/:kind/:id', async (request, reply) => {
     const { kind, id } = request.params as { kind: string; id: string };
     if (!isContentKind(kind)) return reply.code(404).send({ errors: [`unknown content kind ${kind}`] });
-    const item = getItem(db, kind, id);
+    const item = getItem(db, kind, id, reqSurau(request));
     if (item === null) return reply.code(404).send({ errors: [`${kind} ${id} not found`] });
     return { item: forReader(request, kind, item) };
   });
@@ -66,7 +73,7 @@ export function registerContentRoutes(app: FastifyInstance, deps: ContentRouteDe
         const ref = (checked.value as Record<string, unknown>)[field] as ImageRef | undefined;
         if (ref === undefined) continue;
         try {
-          deriveImage(db, dataDir, slot, ref);
+          deriveImage(db, dataDir, slot, ref, undefined, reqSurau(request));
         } catch (error) {
           if (error instanceof ImageAdjustError && error.missing) continue;
           if (error instanceof AssetError) return reply.code(error.status).send({ errors: error.errors });
@@ -76,8 +83,8 @@ export function registerContentRoutes(app: FastifyInstance, deps: ContentRouteDe
       }
     }
     try {
-      const result = putItem(db, kind, { ...body, id }, deps.actorOf(request));
-      bus.emit(getVersion(db));
+      const result = putItem(db, kind, { ...body, id }, deps.actorOf(request), undefined, reqSurau(request));
+      bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
       return reply.code(result.created ? 201 : 200).send({ item: result.item });
     } catch (error) {
       return fail(reply, error);
@@ -88,10 +95,10 @@ export function registerContentRoutes(app: FastifyInstance, deps: ContentRouteDe
     const { kind, id } = request.params as { kind: string; id: string };
     if (!isContentKind(kind)) return reply.code(404).send({ errors: [`unknown content kind ${kind}`] });
     try {
-      if (!deleteItem(db, kind, id, deps.actorOf(request))) {
+      if (!deleteItem(db, kind, id, deps.actorOf(request), undefined, reqSurau(request))) {
         return reply.code(404).send({ errors: [`${kind} ${id} not found`] });
       }
-      bus.emit(getVersion(db));
+      bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
       return reply.code(204).send();
     } catch (error) {
       return fail(reply, error);

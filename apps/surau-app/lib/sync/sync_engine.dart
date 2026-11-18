@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart' show compute;
 import '../box/box_client.dart';
 import '../box/device_key.dart';
 import '../features/enrol/enrol_flow.dart' show EnrolledBox;
+import '../features/unlock/offline_vault.dart' show wipeForRevocation;
 import '../finance/finance_models.dart';
 import '../finance/ledger.dart' show maxPhotoBytes;
 import '../store/local_store.dart';
@@ -152,6 +153,19 @@ const String _metaLastSync = 'lastSync';
 const String _metaVia = 'via';
 const String _metaSurauId = 'surauId';
 
+/// The shape of what a snapshot stores in the local copy. 2 (release
+/// 2026.11.12, Peranti and Pengguna): people and devices carry their ID
+/// (`ref`, `no`, `noSrc`), a phone number (a Pentadbir's copy), `deleted` and
+/// `createdAt`. A copy made by an older app has none of them and its change
+/// feed would never bring them (the feed only carries what changes). Raise
+/// this number whenever the local copy must be rebuilt from the server once
+/// after an update: every base whose last snapshot had another format takes
+/// a fresh snapshot on its next sync (queued edits are kept on top).
+const int kSnapshotFormat = 2;
+
+/// Meta key, per base: `snapshotFormat@box`, `snapshotFormat@cloud`.
+String metaSnapshotFormatKey(String via) => 'snapshotFormat@$via';
+
 /// `surauId` of a box that never said otherwise (core's DEFAULT_SURAU_ID).
 const String defaultSurauId = 'sdm';
 
@@ -187,12 +201,17 @@ class SyncEngine {
       Duration(minutes: 5),
     ],
     this.batchSize = 50,
+    this.snapshotFormat,
   }) : now = now ?? DateTime.now,
        _ulid = ulid ?? UlidGenerator(now: now),
        _schedule = schedule ?? ((d, f) => Timer(d, f)),
        outbox = Outbox(store);
 
   final LocalStore store;
+
+  /// The format of the local copy this build needs (see [kSnapshotFormat]);
+  /// null (tests) does not check it.
+  final int? snapshotFormat;
   final DeviceKey key;
   final EnrolledBox box;
   final SyncTransport transport;
@@ -708,7 +727,11 @@ class SyncEngine {
           return await _run(round + 1);
         }
       }
-    } on SessionExpired {
+    } on SessionExpired catch (e) {
+      if (e.code == _revokedCode) {
+        await _wipeRevoked();
+        return _view;
+      }
       onSessionExpired?.call();
       _emit(
         _view.copyWith(lastError: 'session_expired', state: SyncState.idle),
@@ -716,6 +739,11 @@ class SyncEngine {
     } on BoxUnreachable {
       _fail('unreachable');
     } on BoxError catch (e) {
+      if (e.code == _revokedCode) {
+        // Any answer that says "revoked" ends this copy; "unreachable" never does.
+        await _wipeRevoked();
+        return _view;
+      }
       if (e.status == 503) {
         _emit(_view.copyWith(lastError: null, state: SyncState.waking));
         onWakeNeeded?.call();
@@ -771,7 +799,11 @@ class SyncEngine {
           token: link.token,
           read: picture ? pictureReadTimeout : null,
         );
-      } on SessionExpired {
+      } on SessionExpired catch (e) {
+        if (e.code == _revokedCode) {
+          await _wipeRevoked();
+          return false;
+        }
         onSessionExpired?.call();
         _emit(
           _view.copyWith(lastError: 'session_expired', state: SyncState.idle),
@@ -874,11 +906,10 @@ class SyncEngine {
       await outbox.remove(op.opId);
       if (doc != null && coll != null) {
         if (mine) {
-          if (op.kind == 'settings.put') {
-            // The box merges settings per field: its copy may hold fields I
-            // did not touch. Take the server's doc on this run's pull.
-            await store.setMeta(metaNeedsSnapshot, '1');
-          }
+          // A settings edit is merged per field on the box, so its row may
+          // hold fields I did not touch: this run's changes pull brings that
+          // row. No snapshot (it would re-download content, users and
+          // finance for one saved switch) (K14).
           if (op.kind == 'content.delete') {
             await store.deleteDoc(coll, op.entityId);
           } else {
@@ -891,6 +922,22 @@ class SyncEngine {
         } else if (doc['pending'] == true && r.rev != null) {
           await store.putDoc(coll, op.entityId, {...doc, '_serverRev': r.rev});
         }
+      }
+      if (op.kind == 'settings.put' && r.skipped.isNotEmpty) {
+        // Part of the edit lost to a newer stored field: say which (K5).
+        final p = op.payload;
+        await store.putDoc(Collections.conflicts, op.opId, {
+          'opId': op.opId,
+          'kind': op.kind,
+          'entity': op.entity,
+          'entityId': op.entityId,
+          'reason': 'partial',
+          'skipped': r.skipped,
+          'mine': p is Map<String, dynamic> ? _withoutBytes(p) : p,
+          'winner': null,
+          'editedAt': op.editedAt,
+          'at': _iso(now()),
+        });
       }
       return false;
     }
@@ -924,6 +971,7 @@ class SyncEngine {
       'winner': r.winner?.toJson(),
       'editedAt': op.editedAt,
       'at': _iso(now()),
+      ...await _subjectOf(op, doc),
     });
     if (mine && coll != null) {
       if (op.kind == 'finance.append' || op.kind == 'finance.photo.put') {
@@ -942,15 +990,42 @@ class SyncEngine {
     return false;
   }
 
+  /// The words a Konflik card needs that the payload alone does not carry,
+  /// kept with the card so it reads the same offline: a finance entry's tabung
+  /// name, a person's name (K6, K15).
+  Future<Map<String, dynamic>> _subjectOf(
+    OutboxOp op,
+    Map<String, dynamic>? local,
+  ) async {
+    final p = op.payload;
+    if (op.entity == 'finance:entry' && p is Map<String, dynamic>) {
+      final id = p['fundId'];
+      final fund = id is String
+          ? await store.getDoc(Collections.financeFunds, id)
+          : null;
+      final name = fund?['name'];
+      return {if (name is String) 'fundName': name};
+    }
+    if (op.entity == 'user') {
+      final name = local?['name'] ?? (p is Map ? p['name'] : null);
+      return {if (name is String) 'userName': name};
+    }
+    return const {};
+  }
+
   Map<String, dynamic> _withoutBytes(Map<String, dynamic> p) => {
     for (final e in p.entries)
       if (e.key != 'bytesBase64') e.key: e.value,
   };
 
+  static const String _revokedCode = 'device_revoked';
+
   Future<void> _wipeRevoked() async {
     _dead = true;
     _retry?.cancel();
-    await store.wipe();
+    // The local copy and the offline vault go, and a flag keeps the offline
+    // door shut on this copy (K2).
+    await wipeForRevocation(store);
     _emit(const SyncView(lastError: 'device_revoked', state: SyncState.idle));
     onRevoked?.call();
   }
@@ -977,7 +1052,12 @@ class SyncEngine {
   Future<bool> _pull(SyncLink link) async {
     final meta = await store.meta();
     final seqText = _cursorFor(meta, link.via);
-    var needSnapshot = seqText == null || meta[metaNeedsSnapshot] == '1';
+    final wantFormat = snapshotFormat;
+    var needSnapshot =
+        seqText == null ||
+        meta[metaNeedsSnapshot] == '1' ||
+        (wantFormat != null &&
+            meta[metaSnapshotFormatKey(link.via)] != '$wantFormat');
     var changed = false;
     if (!needSnapshot) {
       try {
@@ -1058,6 +1138,22 @@ class SyncEngine {
       }
       final after = e.after;
       Map<String, dynamic>? doc;
+      if (e.entity == 'finance:month' &&
+          after is Map<String, dynamic> &&
+          after['lateEntry'] is Map) {
+        // The other side's note that an entry reached a month it had closed:
+        // the month stays as it is and gains the entry's id.
+        if (local == null) continue;
+        final late = (after['lateEntry'] as Map)['id'];
+        final have = [
+          for (final x in (local['lateEntries'] as List? ?? const []))
+            if (x is String) x,
+        ];
+        if (late is String && !have.contains(late)) have.add(late);
+        (staged[coll] ??= {})[e.entityId] = {...local, 'lateEntries': have};
+        changed = true;
+        continue;
+      }
       if (after == null ||
           (after is Map<String, dynamic> &&
               e.entity.startsWith('content:') &&
@@ -1184,6 +1280,9 @@ class SyncEngine {
       await store.putAll(Collections.surauInfo, {'info': info});
     }
     await _saveCursor(via, (snap['seq'] as num?)?.toInt() ?? 0);
+    if (snapshotFormat != null) {
+      await store.setMeta(metaSnapshotFormatKey(via), '$snapshotFormat');
+    }
     if (snap['surauId'] is String) {
       await store.setMeta(_metaSurauId, snap['surauId'] as String);
     }

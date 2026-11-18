@@ -5,12 +5,13 @@ import {
   FEATURES, OP_MESSAGE_PREFIX, canonicalJson, decide, isoInstantMs, newRev, opDigest, opMessage, sha256Hex,
   validateFeatureSettings, resolveSettings,
 } from '../src/index.ts';
-import type { MergeInput, SyncOp } from '../src/index.ts';
+import type { DeviceEntryAfter, MergeInput, SyncOp } from '../src/index.ts';
 
 interface Vectors {
   canonical: { name: string; inputJson: string; canonical: string; sha256Hex: string }[];
   merge: { name: string; input: MergeInput; apply: boolean; reason: string }[];
   ops: { name: string; op: SyncOp; canonicalWithoutSig: string; digest: string; messageText: string; messageHex: string }[];
+  deviceFeed: { name: string; after: unknown; canonical: string; sha256Hex: string }[];
 }
 const vectors = JSON.parse(
   readFileSync(new URL('./fixtures/sync-vectors.json', import.meta.url), 'utf8'),
@@ -40,6 +41,21 @@ describe('sync vectors', () => {
       expect(hex(opMessage(rest))).toBe(v.messageHex);
       expect(new TextDecoder().decode(opMessage(rest))).toBe(v.messageText);
       expect(v.messageText).toBe(['surau-op', v.op.boxId, v.op.deviceId, v.op.opId, v.digest].join('\n'));
+    });
+  }
+});
+
+describe('device feed vectors', () => {
+  it('pins one home-box entry', () => {
+    expect(vectors.deviceFeed).toHaveLength(1);
+  });
+  for (const v of vectors.deviceFeed) {
+    it(`${v.name}: canonical and hash`, () => {
+      const after = v.after as DeviceEntryAfter;
+      expect(canonicalJson(after)).toBe(v.canonical);
+      expect(sha256Hex(utf8(v.canonical))).toBe(v.sha256Hex);
+      expect(createHash('sha256').update(v.canonical, 'utf8').digest('hex')).toBe(v.sha256Hex);
+      expect(after.boxId, 'home box id').toMatch(/^[0-9a-f]{16}$/);
     });
   }
 });
@@ -142,8 +158,8 @@ describe('decide', () => {
 
 describe('cloud features', () => {
   const byKey = (k: string) => FEATURES.find((f) => f.key === k)!;
-  it('registry has 54 features in 11 groups', () => {
-    expect(FEATURES).toHaveLength(54);
+  it('registry has 55 features in 11 groups', () => {
+    expect(FEATURES).toHaveLength(55);
     expect(new Set(FEATURES.map((f) => f.group)).size).toBe(11);
     expect(byKey('cloudSync').group).toBe('lanjutan');
     expect(byKey('youtubeCatchUp').group).toBe('awan');

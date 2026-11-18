@@ -18,16 +18,16 @@ class SoftwareDeviceKey implements DeviceKey {
     if (privateJwk['kty'] != 'EC' ||
         privateJwk['crv'] != 'P-256' ||
         d is! String) {
-      throw const FormatException('JWK peribadi tidak sah');
+      throw const FormatException('JWK peribadi tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }
     final dBytes = unB64url(d);
-    if (dBytes.length != 32) throw const FormatException('JWK peribadi tidak sah');
+    if (dBytes.length != 32) throw const FormatException('JWK peribadi tidak sah'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     final dInt = _toBigInt(dBytes);
     final pub = _p256.G * dInt;
     final jwk = _jwkOf(pub!);
     final claimed = {'x': privateJwk['x'], 'y': privateJwk['y']};
     if (claimed['x'] != jwk['x'] || claimed['y'] != jwk['y']) {
-      throw const FormatException('JWK peribadi tidak sepadan');
+      throw const FormatException('JWK peribadi tidak sepadan'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
     }
     return SoftwareDeviceKey._(dInt, jwk);
   }

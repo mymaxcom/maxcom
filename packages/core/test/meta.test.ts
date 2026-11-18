@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FEATURES } from '../src/features/registry.ts';
 import { resolveSettings, validateFeatureSettings } from '../src/features/settings.ts';
 import {
-  FEATURE_DESC, FIELD_META, HIDDEN_FEATURES, LANJUTAN_ROWS, ORDERED_FEATURES, SYSTEM_FEATURES, fieldMeta, isSystemField,
+  FEATURE_DESC, FEATURE_REQUIRES, FIELD_META, HIDDEN_FEATURES, LANJUTAN_ROWS, ORDERED_FEATURES, SYSTEM_FEATURES, fieldMeta, isSystemField,
   patchNeedsSystemWrite,
 } from '../src/features/meta.ts';
 import type { FeatureKey } from '../src/features/registry.ts';
@@ -21,7 +21,41 @@ describe('field metadata', () => {
   it('autoTone.override is hidden: the accent has one control, Ubah suai Warna aksen', () => {
     expect(fieldMeta('autoTone', 'override')?.hidden).toBe(true);
     const hidden = Object.entries(FIELD_META).flatMap(([f, t]) => Object.entries(t!).filter(([, m]) => m.hidden).map(([p]) => `${f}.${p}`));
-    expect(hidden.sort()).toEqual(['autoTone.override', 'liveYoutube.relayFrom', 'pengumuman.daysAhead', 'programKhas.daysAhead']);
+    expect(hidden.sort()).toEqual([
+      'autoTone.override', 'liveYoutube.relayFrom', 'pengumuman.daysAhead', 'programKhas.daysAhead', 'system.suspendedAt', 'themeStyle.enabled',
+    ]);
+  });
+  it('[K17] settings nothing reads are hidden yet still validate, so old data loads', () => {
+    for (const [f, p] of [['system', 'suspendedAt'], ['pengumuman', 'daysAhead'], ['programKhas', 'daysAhead'], ['autoTone', 'override'], ['themeStyle', 'enabled']] as const) {
+      expect(fieldMeta(f, p)?.hidden, `${f}.${p}`).toBe(true);
+    }
+    expect(validateFeatureSettings('system', { suspendedAt: null }).ok).toBe(true);
+    expect(validateFeatureSettings('system', { suspendedAt: '2026-11-01T00:00:00.000Z' }).ok).toBe(true);
+    expect(validateFeatureSettings('pengumuman', { daysAhead: 7 }).ok).toBe(true);
+    expect(validateFeatureSettings('programKhas', { daysAhead: 7 }).ok).toBe(true);
+    expect(validateFeatureSettings('autoTone', { override: '#112233' }).ok).toBe(true);
+    expect(validateFeatureSettings('themeStyle', { enabled: true }).ok).toBe(true);
+  });
+  it('[K10] kad tabung manual fields are dimmed while finance is on, the live-only ones while it is off', () => {
+    for (const p of ['manualTitle', 'row1Label', 'row1Sen', 'row2Label', 'row2Sen', 'row3Label', 'row3Sen']) {
+      expect(fieldMeta('tabungCard', p)?.disabledWhen, p).toMatchObject({ feature: 'finance', field: 'enabled', equals: true });
+    }
+    for (const p of ['showTarget', 'highlightSeconds']) {
+      expect(fieldMeta('tabungCard', p)?.disabledWhen, p).toMatchObject({ feature: 'finance', field: 'enabled', equals: false });
+    }
+    for (const t of Object.values(FIELD_META.tabungCard ?? {})) {
+      if (t.disabledWhen) expect(t.disabledWhen.noteMs && t.disabledWhen.noteEn && t.disabledWhen.noteAr).toBeTruthy();
+    }
+  });
+  it('[L4] live on YouTube needs the broadcast on the TV', () => {
+    expect(FEATURE_REQUIRES.liveYoutube).toEqual({ requires: 'liveOnKiosk' });
+  });
+  it('[K9] the TV texts written in BM start empty and the presets carry English', () => {
+    expect(resolveSettings({}).solatScreen.message).toBe('');
+    expect(resolveSettings({}).tabungCard.manualTitle).toBe('');
+    expect(validateFeatureSettings('solatScreen', { message: '' }).ok).toBe(true);
+    const m = fieldMeta('solatScreen', 'message');
+    expect(m?.presetsEn?.length).toBe(m?.presets?.length);
   });
   it('hides the dead daysAhead windows, locks the local calculation on and caps the takwim rows at 3', () => {
     // A notice and a special programme show by their own dates: nothing reads the window, so it is not offered.
@@ -40,7 +74,7 @@ describe('field metadata', () => {
     for (const [feature, table] of Object.entries(FIELD_META)) {
       const f = BY.get(feature as FeatureKey);
       expect(f, feature).toBeDefined();
-      for (const path of Object.keys(table!)) expect(leafAt(f!.defaults, path), `${feature}.${path}`).toBe(true);
+      for (const path of Object.keys(table!)) expect(path === 'enabled' || leafAt(f!.defaults, path), `${feature}.${path}`).toBe(true);
     }
   });
   it('every slider spans exactly the range its rule accepts, so an old stored value is shown and kept', () => {
@@ -119,7 +153,9 @@ describe('feature descriptions', () => {
       expect(d, f.key).toBeDefined();
       expect(d.ms.length, f.key).toBeGreaterThan(5);
       expect(d.en.length, f.key).toBeGreaterThan(5);
-      for (const text of [d.ms, d.en, ...d.keywords]) {
+      expect(d.ar.length, f.key).toBeGreaterThan(5);
+      expect(f.labelAr.length, f.key).toBeGreaterThan(1);
+      for (const text of [d.ms, d.en, d.ar, f.labelAr, ...d.keywords]) {
         expect(text).not.toMatch(/kotak/i);
         expect(text).not.toMatch(/[‒-―←-⇿≈]/);
       }

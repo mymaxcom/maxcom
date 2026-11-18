@@ -10,7 +10,9 @@ import { corsOriginsFrom, parseRole } from '../src/main.ts';
 import { readFeed } from '../src/sync/feed.ts';
 import { generateSyncKeyPair } from '../src/sync/syncKey.ts';
 import { issueLinkCode, revokeSite } from '../src/sync/sites.ts';
+import { ensureSurau } from './support/surauRow.ts';
 import { issueEnrolmentLines } from '../src/cli/bootstrap.ts';
+import { issueOpsEnrolment } from '../src/auth/opsDevice.ts';
 import { createUser, listUsers } from '../src/auth/users.ts';
 import { trimChangeLog } from '../src/sync/trim.ts';
 import { putFeature } from '../src/settingsStore.ts';
@@ -46,7 +48,7 @@ function plainBox(): FastifyInstance {
 }
 
 const sitesDeps = (c: TestCloud, now: () => Date = () => new Date()) => ({ db: c.app.surau.db, now });
-const code = (c: TestCloud, now?: () => Date): string => issueLinkCode(sitesDeps(c, now), { boxId: BOX, name: 'Surau D\'Waqaf' }).code;
+const code = (c: TestCloud, now?: () => Date): string => issueLinkCode(sitesDeps(c, now), { boxId: BOX, name: 'Surau D\'Waqaf', target: { surauId: ensureSurau(c.app.surau.db) } }).code;
 
 async function link(c: TestCloud, linkCode: string, over: Record<string, unknown> = {}, ip = freshIp()) {
   return c.app.inject({
@@ -88,7 +90,7 @@ describe('cloud role', () => {
     ]);
     expect(dump).not.toContain(body.siteToken);
     expect(dump).not.toContain(body.wakeSecret);
-    expect(String(db.prepare("SELECT after_json FROM change_log WHERE entity = 'site'").get()?.after_json)).toContain('"link"');
+    expect(String(db.prepare("SELECT after_json FROM change_log WHERE entity = 'site' ORDER BY id DESC").get()?.after_json)).toContain('"link"');
 
     const auth = { authorization: `Bearer ${body.siteToken}` };
     expect((await c.app.inject({ method: 'GET', url: '/api/sync/snapshot', headers: auth })).statusCode).toBe(200);
@@ -222,7 +224,7 @@ describe('change history trim (180 days on a box, 365 on the cloud)', () => {
     const c = cloud();
     const db = c.app.surau.db;
     const put = (id: string, name: string, days: number): void => {
-      putItem(db, 'penceramah', { id, name }, 'local', { editedAt: ago(days), syncedAt: ago(days) });
+      putItem(db, 'penceramah', { id, name }, 'local', { editedAt: ago(days), syncedAt: ago(days) }, 'sdm');
       // the history row carries the age of the edit
       db.exec("UPDATE change_log SET at = edited_at WHERE entity LIKE 'content:%'");
     };
@@ -291,23 +293,23 @@ describe('enrolment payload and enrolment on the cloud', () => {
     const admin = await loginAs(box, 'admin');
     let n = 0;
     const begin = async (): Promise<Record<string, unknown>> => {
-      const u = createUser(box.surau.db, { name: `Ahli ${++n}`, roles: ['ajk'] }, 'test');
+      const u = createUser(box.surau.db, { name: `Ahli ${++n}`, roles: ['ajk'] }, 'test', 'sdm');
       return decode((await box.inject({ method: 'POST', url: '/api/enrol/begin', headers: admin.headers, payload: { userId: u.id, deviceName: 'Telefon' } })).json().payload);
     };
     expect(await begin()).not.toHaveProperty('cloud');
     const db = box.surau.db;
-    putFeature(db, 'cloudSync', { cloudUrl: 'https://203.0.113.9/awan' }, 'test');
+    putFeature(db, 'cloudSync', { cloudUrl: 'https://203.0.113.9/awan' }, 'test', undefined, 'sdm');
     expect(await begin()).not.toHaveProperty('cloud'); // not linked yet
     db.prepare("INSERT INTO sync_state (key, value) VALUES ('linked', '1')").run();
     // the synced setting never names the cloud (gate S5): only the linked address does
     expect(await begin()).not.toHaveProperty('cloud');
     db.prepare("INSERT INTO sync_state (key, value) VALUES ('cloud_url', 'https://203.0.113.9')").run();
     expect(await begin()).toMatchObject({ cloud: 'https://203.0.113.9' });
-    const other = createUser(db, { name: 'Pengguna CLI', roles: ['ajk'] }, 'test');
-    const user = listUsers(db).find((u) => u.id === other.id)!;
+    const other = createUser(db, { name: 'Pengguna CLI', roles: ['ajk'] }, 'test', 'sdm');
+    const user = listUsers(db, 'sdm').find((u) => u.id === other.id)!;
     const lines = issueEnrolmentLines(db, user, 'https://10.168.1.14:8443', mkdtempSync(join(tmpdir(), 'surau-cli-')), 'x');
     expect(decode(lines.find((l) => l.startsWith('Teks kod QR: '))!.slice('Teks kod QR: '.length))).toMatchObject({ cloud: 'https://203.0.113.9' });
-    putFeature(db, 'cloudSync', { cloudUrl: '' }, 'test');
+    putFeature(db, 'cloudSync', { cloudUrl: '' }, 'test', undefined, 'sdm');
     db.prepare("DELETE FROM sync_state WHERE key = 'linked'").run();
     expect(await begin()).not.toHaveProperty('cloud');
   });
@@ -316,19 +318,20 @@ describe('enrolment payload and enrolment on the cloud', () => {
     const c = cloud();
     const admin = await loginAs(c.app, 'admin');
     const ops = await loginAs(c.app, 'superadmin');
-    const fresh = createUser(c.app.surau.db, { name: 'Ahli baharu', roles: ['ajk'] }, 'test');
+    const fresh = createUser(c.app.surau.db, { name: 'Ahli baharu', roles: ['ajk'] }, 'test', 'sdm');
     for (const who of [admin, ops]) {
       const res = await c.app.inject({ method: 'POST', url: '/api/enrol/begin', headers: who.headers, payload: { userId: fresh.id, deviceName: 'Telefon rumah' } });
       expect(res.statusCode).toBe(409);
       expect(res.body).toContain('box_only');
     }
-    // an ops/support person (superadmin) may still be enrolled on the cloud
+    // an ops/support person gets no code from a route either (Plan 14: ops_cli_only, codes come from the CLI)
     const own = await c.app.inject({ method: 'POST', url: '/api/enrol/begin', headers: ops.headers, payload: { userId: ops.userId, deviceName: 'Telefon ops' } });
-    expect(own.statusCode).toBe(200);
+    expect(own.statusCode).toBe(403);
+    expect(own.body).toContain('ops_cli_only');
     // the box itself still makes codes for the same admin role
     const box = plainBox();
     const boxAdmin = await loginAs(box, 'admin');
-    const boxUser = createUser(box.surau.db, { name: 'Ahli kotak', roles: ['ajk'] }, 'test');
+    const boxUser = createUser(box.surau.db, { name: 'Ahli kotak', roles: ['ajk'] }, 'test', 'sdm');
     expect((await box.inject({ method: 'POST', url: '/api/enrol/begin', headers: boxAdmin.headers, payload: { userId: boxUser.id, deviceName: 'Telefon' } })).statusCode).toBe(200);
   });
 
@@ -336,14 +339,15 @@ describe('enrolment payload and enrolment on the cloud', () => {
     const c = cloud();
     const admin = await loginAs(c.app, 'superadmin');
     const ajk = await loginAs(c.app, 'ajk');
-    const fresh = createUser(c.app.surau.db, { name: 'Ops baharu', roles: ['ajk'] }, 'test');
+    const fresh = createUser(c.app.surau.db, { name: 'Ops baharu', roles: ['ajk'] }, 'test', 'sdm');
     c.app.surau.db.prepare('UPDATE users SET roles_json = ? WHERE id = ?').run(JSON.stringify(['superadmin']), fresh.id);
+    // the route refuses an ops target (ops_cli_only); the cloud CLI issues the code (issueOpsEnrolment)
     const res = await c.app.inject({ method: 'POST', url: '/api/enrol/begin', headers: admin.headers, payload: { userId: fresh.id, deviceName: 'Telefon rumah' } });
-    expect(res.statusCode).toBe(200);
-    const { code, payload } = res.json();
-    expect(decode(payload)).toMatchObject({ code, boxId: BOX });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toContain('ops_cli_only');
+    const { code } = issueOpsEnrolment(c.app.surau.db, { userId: fresh.id, deviceName: 'Telefon rumah' }, 'cli');
     const complete = (ip: string) =>
-      c.app.inject({ method: 'POST', url: '/api/enrol/complete', remoteAddress: ip, payload: { code, publicJwk: generateSyncKeyPair().publicJwk, platform: 'web', pin: '482916' } });
+      c.app.inject({ method: 'POST', url: '/api/enrol/complete', remoteAddress: ip, payload: { code, publicJwk: generateSyncKeyPair().publicJwk, platform: 'web', pin: '482916', client: 'ops' } });
     expect((await complete(freshIp())).statusCode).toBe(200);
     expect((await complete(freshIp())).statusCode).not.toBe(200);
     // a plain AJK session may not issue codes

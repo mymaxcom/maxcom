@@ -63,10 +63,26 @@ void main() {
       expect(find.byKey(const ValueKey('join-error-scan')), findsOneWidget);
     });
 
-    testWidgets('a used code', (t) async {
-      await show(t, const BoxError(401, 'x', code: 'bad_enrol_code'));
+    testWidgets('[A10] a used code', (t) async {
+      await show(t, const BoxError(401, 'x', code: 'enrol_code_used'));
       expect(find.text('Kod sudah digunakan'), findsOneWidget);
       expect(find.textContaining('maklumkan kepada Pentadbir'), findsOneWidget);
+    });
+
+    testWidgets('[A10] an expired code never says "used" or "tell the Pentadbir"', (t) async {
+      await show(t, const BoxError(401, 'x', code: 'enrol_code_expired'));
+      expect(find.text('Kod sudah tamat'), findsOneWidget);
+      expect(find.textContaining('maklumkan kepada Pentadbir'), findsNothing);
+      expect(find.text('Kod sudah digunakan'), findsNothing);
+    });
+
+    testWidgets('[A10] an unknown code, and an older box that sends one code for all three', (t) async {
+      for (final code in ['enrol_code_unknown', 'bad_enrol_code']) {
+        await show(t, BoxError(401, 'x', code: code));
+        expect(find.text('Kod tidak dikenali'), findsOneWidget, reason: code);
+        expect(find.textContaining('maklumkan kepada Pentadbir'), findsNothing, reason: code);
+        expect(find.text('Kod sudah digunakan'), findsNothing, reason: code);
+      }
     });
 
     testWidgets('a phone already in another surau names that surau and offers to leave it', (t) async {
@@ -225,7 +241,7 @@ void main() {
           initialCode: fixturePayload(exp: fixtureExpToday, appLock: false),
           info: (b, ca) async => infoOf(),
           handler: (r) async => r.url.path == '/api/enrol/complete'
-              ? jsonResponse(401, {'errors': ['Kod pendaftaran tidak sah atau telah tamat'], 'code': 'bad_enrol_code'})
+              ? jsonResponse(401, {'errors': ['Kod pendaftaran sudah digunakan'], 'code': 'enrol_code_used'})
               : happyBox(r),
         ),
       );
@@ -242,6 +258,44 @@ void main() {
       await t.pumpAndSettle();
       expect(find.text('Kod sudah digunakan'), findsOneWidget);
     });
+  });
+
+  testWidgets('[A6] a pasted text that is not an invitation shows the ARB sentence in the app language', (t) async {
+    final box = FakeBox(happyBox);
+    final flow = EnrolFlow(
+      clientFor: box.client,
+      key: FakeDeviceKey(),
+      trust: FakeTrust(),
+      store: MemoryEnrolledBoxStore(),
+      platform: 'android',
+      now: fixedNow,
+    );
+    for (final (locale, text) in [
+      (const Locale('en'), 'This is not a MAXCOM enrolment code'),
+      (const Locale('ms'), 'Ini bukan kod pendaftaran MAXCOM'),
+    ]) {
+      await t.pumpWidget(
+        MaterialApp(
+          key: UniqueKey(),
+          theme: SurauTheme.light(),
+          locale: locale,
+          localizationsDelegates: S.localizationsDelegates,
+          supportedLocales: S.supportedLocales,
+          home: EnrolScreen(
+            flow: flow,
+            cameraAvailable: false,
+            onEnrolled: (_) {},
+            pairingUi: false,
+            initialCode: 'surau1:abc',
+            toLocal: fixedToLocal,
+            now: fixedNow,
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      expect(find.textContaining(text), findsOneWidget, reason: '$locale');
+      expect(find.textContaining('tidak sah'), findsNothing);
+    }
   });
 
   group('ScanRouter', () {

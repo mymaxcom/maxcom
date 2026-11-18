@@ -23,6 +23,7 @@ import '../../finance/ledger.dart';
 import '../../l10n/generated/s.dart';
 import '../../screens/widgets/box_read.dart' show writeErrorText;
 import '../../screens/widgets/pieces.dart' show SectionLabel;
+import '../labels.dart';
 import '../shell/permissions.dart';
 import 'finance_box_api.dart';
 import 'finance_widgets.dart' show FinTwoColumnPage;
@@ -219,7 +220,7 @@ class _FundsScreenState extends ConsumerState<FundsScreen> {
       ),
       const SizedBox(height: 12),
       Align(
-        alignment: Alignment.centerLeft,
+        alignment: AlignmentDirectional.centerStart,
         child: OutlinedButton.icon(
           key: const Key('finr-add-fund'),
           onPressed: () => _fundDialog(context, d, null),
@@ -263,7 +264,7 @@ class _FundsScreenState extends ConsumerState<FundsScreen> {
     ].join(', ');
     return Padding(
       key: ValueKey(f.id),
-      padding: const EdgeInsets.fromLTRB(4, 8, 8, 8),
+      padding: const EdgeInsetsDirectional.fromSTEB(4, 8, 8, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -314,7 +315,7 @@ class _FundsScreenState extends ConsumerState<FundsScreen> {
             ],
           ),
           Padding(
-            padding: const EdgeInsets.only(left: 12),
+            padding: const EdgeInsetsDirectional.only(start: 12),
             child: Row(
               children: [
                 TextButton.icon(
@@ -456,6 +457,7 @@ class _FundsScreenState extends ConsumerState<FundsScreen> {
     final figure = _cardValue(d, 'figure', 'balance') as String;
     final seconds = (_cardValue(d, 'highlightSeconds', 20) as num).toInt();
     final showTarget = _cardValue(d, 'showTarget', true) == true;
+    final featured = _cardValue(d, 'featured', false) == true;
     final qr = _cardValue(d, 'qrAssetId', '');
     final labels = {
       'balance': s.finrFigBalance,
@@ -500,6 +502,14 @@ class _FundsScreenState extends ConsumerState<FundsScreen> {
               value: showTarget,
               onChanged: (v) => setState(() => _cardEdits['showTarget'] = v),
             ),
+            SwitchListTile(
+              key: const Key('finr-card-featured'),
+              contentPadding: EdgeInsets.zero,
+              // The setting's own generated label (registry), in the app's language.
+              title: Text(settingLabel('featured', appLangOf(context))),
+              value: featured,
+              onChanged: (v) => setState(() => _cardEdits['featured'] = v),
+            ),
             const SizedBox(height: 8),
             ImageField(
               label: s.finrCardQr,
@@ -511,7 +521,7 @@ class _FundsScreenState extends ConsumerState<FundsScreen> {
             ),
             const SizedBox(height: 12),
             Align(
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerEnd,
               child: FilledButton(
                 key: const Key('finr-card-save'),
                 onPressed: _cardEdits.isEmpty ? null : () => _saveCard(d),

@@ -23,6 +23,7 @@ class FinanceAuditRow {
     required this.entity,
     required this.editedAt,
     this.userName,
+    this.userRef,
     this.deviceId,
     this.entityId,
     this.syncedAt,
@@ -41,6 +42,7 @@ class FinanceAuditRow {
       at: s(j['at']) ?? '',
       actor: s(j['actor']) ?? '',
       userName: s(j['userName']),
+      userRef: s(j['userRef']),
       deviceId: s(j['deviceId']),
       entity: s(j['entity']) ?? '',
       entityId: s(j['entityId']),
@@ -59,6 +61,10 @@ class FinanceAuditRow {
   final String at;
   final String actor;
   final String? userName;
+
+  /// The person's ID (`U-0001`) beside the name of the time; null for the
+  /// system or an older box.
+  final String? userRef;
   final String? deviceId;
 
   /// `finance:entry`, `finance:fund`, `finance:perihal`, `finance:month`,

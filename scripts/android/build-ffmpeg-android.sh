@@ -54,9 +54,11 @@ import json, sys
 f = json.load(open(sys.argv[1]))
 kinds = {"protocols": "protocol", "demuxers": "demuxer", "muxers": "muxer", "encoders": "encoder",
          "decoders": "decoder", "parsers": "parser", "bsfs": "bsf", "filters": "filter"}
+# The JSON lists the names ffmpeg prints (-muxers); a few configure component names differ from them.
+configure_name = {("muxers", "s16le"): "pcm_s16le"}
 for key, kind in kinds.items():
     for name in f[key]:
-        print(f"--enable-{kind}={name}")
+        print(f"--enable-{kind}={configure_name.get((key, name), name)}")
 for lib in f["externalLibs"]:
     print(f"--enable-{lib}")
 PY

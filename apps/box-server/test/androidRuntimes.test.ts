@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { must } from './helpers/must.ts';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const script = join(repoRoot, 'scripts', 'android', 'fetch-box-runtimes.ps1');
@@ -255,7 +256,7 @@ describe('android-pins.json', () => {
   const eight = ['nodejs-lts', 'libc++', 'openssl', 'c-ares', 'libicu', 'libsqlite', 'zlib', 'ca-certificates'];
   it('has both arches with the eight packages, https urls, sha256, version, licence and a safe cache file name', () => {
     for (const arch of ['arm', 'aarch64']) {
-      const pk = pinsJson.termux[arch];
+      const pk = must(pinsJson.termux[arch], `termux pins for ${arch}`);
       expect(Object.keys(pk).sort()).toEqual([...eight].sort());
       for (const [name, p] of Object.entries(pk)) {
         expect(p.url, `${arch} ${name} url`).toMatch(/^https:\/\//);
@@ -270,8 +271,8 @@ describe('android-pins.json', () => {
   });
   it('has both MediaMTX entries of one version, with the release asset names', () => {
     expect(Object.keys(pinsJson.mediamtx).sort()).toEqual(['arm64-v8a', 'armeabi-v7a']);
-    const a = pinsJson.mediamtx['armeabi-v7a'];
-    const b = pinsJson.mediamtx['arm64-v8a'];
+    const a = must(pinsJson.mediamtx['armeabi-v7a'], 'mediamtx armeabi-v7a');
+    const b = must(pinsJson.mediamtx['arm64-v8a'], 'mediamtx arm64-v8a');
     expect(a.version).toBe(b.version);
     expect(a.url).toMatch(/^https:\/\/github\.com\/bluenviron\/mediamtx\/releases\/download\/v[\d.]+\/mediamtx_v[\d.]+_linux_armv7\.tar\.gz$/);
     expect(b.url).toMatch(/_linux_arm64\.tar\.gz$/);

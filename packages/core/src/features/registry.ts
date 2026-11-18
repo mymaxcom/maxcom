@@ -3,6 +3,7 @@
 import type { ImageRef } from '../image.ts';
 import type { ThemeStyles } from '../theme/style.ts';
 import type { InstalledPacks } from '../theme/packs.ts';
+import type { AddedAudioId } from '../live/sources.ts';
 
 export type FeatureGroup = 'solat' | 'skrin' | 'kandungan' | 'quran' | 'audio' | 'live' | 'kewangan' | 'jemaah' | 'awan' | 'keselamatan' | 'lanjutan';
 
@@ -24,7 +25,7 @@ export type FeatureKey =
   | 'programKhas' | 'takwim' | 'hadis' | 'worldTimes' | 'tugasan'
   | 'ayatCard' | 'zikirSelepasSolat' | 'quranReader' | 'tilawah'
   | 'beeps'
-  | 'liveOnKiosk' | 'liveYoutube' | 'recording'
+  | 'liveOnKiosk' | 'liveYoutube' | 'recording' | 'liveCamera'
   | 'finance' | 'tabungCard'
   | 'calendarFeed' | 'jemaahPage'
   | 'cloudSync' | 'youtubeCatchUp' | 'recordingCleanup'
@@ -38,6 +39,7 @@ export interface FeatureDef {
   defaults: Record<string, unknown>;
   labelMs: string;
   labelEn: string;
+  labelAr: string;
 }
 
 export interface FeatureSettings {
@@ -86,6 +88,7 @@ export interface TypedSettings {
   liveYoutube: LiveYoutubeSettings;
   system: SystemSettings;
   recording: RecordingSettings;
+  liveCamera: LiveCameraSettings;
   hadis: HadisSettings;
 }
 export interface HadisSettings extends FeatureSettings {
@@ -119,6 +122,15 @@ export interface SystemSettings extends FeatureSettings {
   suspendedAt: string | null;
 }
 export interface RecordingSettings extends FeatureSettings { segmentMinutes: number; keepOnDevice: boolean }
+/**
+ * The external camera (plan 4.2). The address and login are NOT here: they are one sealed record on the box. `avOffsetMs`
+ * is the fallback for a camera with no audio track only (0..2000 ms, step 50, one value per added source).
+ */
+export interface LiveCameraSettings extends FeatureSettings {
+  name: string;
+  transport: 'auto' | 'tcp' | 'udp';
+  avOffsetMs: Record<AddedAudioId, number>;
+}
 export interface DataSource { name: string; url: string }
 export interface DataSourcesSettings extends FeatureSettings {
   esolat: DataSource;
@@ -178,19 +190,19 @@ function week(d: Record<SolatKey, number>): WeekTable {
 
 function def(
   key: FeatureKey, group: FeatureGroup, locked: boolean, defaultEnabled: boolean,
-  defaults: Record<string, unknown>, labelMs: string, labelEn: string,
+  defaults: Record<string, unknown>, labelMs: string, labelEn: string, labelAr: string,
 ): FeatureDef {
-  return { key, group, locked, defaultEnabled, defaults, labelMs, labelEn };
+  return { key, group, locked, defaultEnabled, defaults, labelMs, labelEn, labelAr };
 }
 
 export const FEATURES: readonly FeatureDef[] = [
-  def('prayerBar', 'solat', true, true, { showImsak: true, showSyuruk: true, timeFormat: '12h' }, 'Bar waktu solat', 'Prayer times bar'),
-  def('clock', 'solat', true, true, { showSeconds: false }, 'Jam', 'Clock'),
-  def('prayerSequenceSafety', 'solat', true, true, {}, 'Perlindungan urutan solat', 'Prayer sequence safety'),
-  def('zone', 'solat', true, true, { zone: 'SGR01', autoFetch: true }, 'Zon waktu solat', 'Prayer time zone'),
+  def('prayerBar', 'solat', true, true, { showImsak: true, showSyuruk: true, timeFormat: '12h' }, 'Bar waktu solat', 'Prayer times bar', 'شريط مواقيت الصلاة'),
+  def('clock', 'solat', true, true, { showSeconds: false }, 'Jam', 'Clock', 'الساعة'),
+  def('prayerSequenceSafety', 'solat', true, true, {}, 'Perlindungan urutan solat', 'Prayer sequence safety', 'حماية ترتيب الصلوات'),
+  def('zone', 'solat', true, true, { zone: 'SGR01', autoFetch: true }, 'Zon waktu solat', 'Prayer time zone', 'منطقة مواقيت الصلاة'),
   def('location', 'solat', true, true,
     { country: 'MY', timezone: 'Asia/Kuala_Lumpur', latitude: null, longitude: null, city: '' },
-    'Lokasi surau', 'Surau location'),
+    'Lokasi surau', 'Surau location', 'موقع المصلى'),
   def('prayerCalc', 'solat', true, true,
     {
       method: 'auto',
@@ -199,25 +211,25 @@ export const FEATURES: readonly FeatureDef[] = [
       adjustMinutes: { imsak: 0, subuh: 0, syuruk: 0, zohor: 0, asar: 0, maghrib: 0, isyak: 0 },
       imsakMinutes: 10,
     },
-    'Kiraan setempat', 'Local calculation'),
+    'Kiraan setempat', 'Local calculation', 'الحساب المحلي'),
   def('prayerSources', 'solat', true, true,
     { sourceOrder: ['official', 'calc', 'file'], crossCheck: true },
-    'Sumber waktu solat', 'Prayer time sources'),
+    'Sumber waktu solat', 'Prayer time sources', 'مصادر مواقيت الصلاة'),
   def('azanCountdown', 'solat', false, true,
     { minutesBefore: { subuh: 10, zohor: 10, asar: 10, maghrib: 10, isyak: 10 }, fullScreen: true, beep: true },
-    'Kiraan detik azan', 'Azan countdown'),
-  def('masukWaktu', 'solat', false, true, { screenSeconds: 60, beep: true }, 'Skrin masuk waktu', 'Prayer time entered screen'),
+    'Kiraan detik azan', 'Azan countdown', 'العد التنازلي للأذان'),
+  def('masukWaktu', 'solat', false, true, { screenSeconds: 60, beep: true }, 'Skrin masuk waktu', 'Prayer time entered screen', 'شاشة دخول الوقت'),
   def('iqamahCountdown', 'solat', false, true,
     { minutes: week({ subuh: 12, zohor: 10, asar: 10, maghrib: 10, isyak: 10 }), endWarningSeconds: 30, beep: true },
-    'Kiraan detik iqamah', 'Iqamah countdown'),
+    'Kiraan detik iqamah', 'Iqamah countdown', 'العد التنازلي للإقامة'),
   def('solatScreen', 'solat', false, true,
-    { minutes: week({ subuh: 15, zohor: 15, asar: 15, maghrib: 15, isyak: 15 }), message: 'Sila senyapkan telefon bimbit' },
-    'Skrin sedang solat', 'Prayer in progress screen'),
-  def('jumaat', 'solat', false, true, { khutbahMinutes: 20, iqamahMinutes: 7, solatMinutes: 15 }, 'Solat Jumaat', 'Friday prayer'),
-  def('tarawih', 'solat', false, true, { hijriMonth: 9, gapMinutes: 10, minutes: 45 }, 'Solat tarawih', 'Tarawih prayer'),
-  def('syurukWarning', 'solat', false, true, { minutesBefore: 5, beep: false }, 'Amaran syuruk', 'Sunrise warning'),
-  def('imsakBeep', 'solat', false, false, {}, 'Bunyi imsak', 'Imsak beep'),
-  def('isyraq', 'solat', false, true, { minutesAfterSyuruk: 15, durationMinutes: 5 }, 'Waktu isyraq', 'Isyraq time'),
+    { minutes: week({ subuh: 15, zohor: 15, asar: 15, maghrib: 15, isyak: 15 }), message: '' },
+    'Skrin sedang solat', 'Prayer in progress screen', 'شاشة الصلاة الجارية'),
+  def('jumaat', 'solat', false, true, { khutbahMinutes: 20, iqamahMinutes: 7, solatMinutes: 15 }, 'Solat Jumaat', 'Friday prayer', 'صلاة الجمعة'),
+  def('tarawih', 'solat', false, true, { hijriMonth: 9, gapMinutes: 10, minutes: 45 }, 'Solat tarawih', 'Tarawih prayer', 'صلاة التراويح'),
+  def('syurukWarning', 'solat', false, true, { minutesBefore: 5, beep: false }, 'Amaran syuruk', 'Sunrise warning', 'تنبيه الشروق'),
+  def('imsakBeep', 'solat', false, false, {}, 'Bunyi imsak', 'Imsak beep', 'صوت الإمساك'),
+  def('isyraq', 'solat', false, true, { minutesAfterSyuruk: 15, durationMinutes: 5 }, 'Waktu isyraq', 'Isyraq time', 'وقت الإشراق'),
   def('dataSources', 'lanjutan', true, true,
     {
       esolat: { name: 'e-Solat JAKIM', url: 'https://www.e-solat.gov.my/index.php?r=esolatApi/takwimsolat' },
@@ -227,28 +239,28 @@ export const FEATURES: readonly FeatureDef[] = [
       quranAudio: { name: 'EveryAyah', url: 'https://everyayah.com/data' },
       hadeethenc: { name: 'HadeethEnc', url: 'https://hadeethenc.com/api/v1' },
     },
-    'Sumber data internet', 'Internet data sources'),
-  def('firstAzanSubuh', 'solat', false, false, { minutesBefore: 10, audioFile: null }, 'Azan pertama Subuh', 'First Subuh azan'),
+    'Sumber data internet', 'Internet data sources', 'مصادر بيانات الإنترنت'),
+  def('firstAzanSubuh', 'solat', false, false, { minutesBefore: 10, audioFile: null }, 'Azan pertama Subuh', 'First Subuh azan', 'الأذان الأول للفجر'),
 
   def('surauInfo', 'skrin', true, true,
     { name: 'Surau', shortName: '', kind: 'surau', shortAddress: '', helpName: '', helpPhone: '', helpEmail: '', logo: '', showName: true },
-    'Maklumat surau', 'Surau details'),
-  def('hijriDate', 'skrin', false, true, { adjustDays: 0, switchAt: 'maghrib' }, 'Tarikh Hijrah', 'Hijri date'),
-  def('backgrounds', 'skrin', false, true, { images: ['default-1', 'default-2'], rotate: 'daily' }, 'Latar belakang', 'Backgrounds'),
-  def('autoTone', 'skrin', false, true, { override: null }, 'Warna teks automatik', 'Automatic text tone'),
-  def('language', 'skrin', false, true, { lang: 'ms' }, 'Bahasa', 'Language'),
-  def('orientation', 'skrin', false, true, { mode: 'landscape' }, 'Orientasi skrin', 'Screen orientation'),
-  def('kioskTemplate', 'skrin', false, true, { templateId: 'default' }, 'Templat paparan', 'Display template'),
-  def('themeStyle', 'skrin', false, true, { styles: {}, packs: {} }, 'Gaya tema', 'Theme style'),
+    'Maklumat surau', 'Surau details', 'بيانات المصلى'),
+  def('hijriDate', 'skrin', false, true, { adjustDays: 0, switchAt: 'maghrib' }, 'Tarikh Hijrah', 'Hijri date', 'التاريخ الهجري'),
+  def('backgrounds', 'skrin', false, true, { images: ['default-1', 'default-2'], rotate: 'daily' }, 'Latar belakang', 'Backgrounds', 'الخلفيات'),
+  def('autoTone', 'skrin', false, true, { override: null }, 'Warna teks automatik', 'Automatic text tone', 'لون النص التلقائي'),
+  def('language', 'skrin', true, true, { lang: 'auto' }, 'Bahasa skrin TV', 'TV screen language', 'لغة شاشة التلفاز'),
+  def('orientation', 'skrin', false, true, { mode: 'landscape' }, 'Orientasi skrin', 'Screen orientation', 'اتجاه الشاشة'),
+  def('kioskTemplate', 'skrin', false, true, { templateId: 'default' }, 'Templat paparan', 'Display template', 'قالب العرض'),
+  def('themeStyle', 'skrin', false, true, { styles: {}, packs: {} }, 'Gaya tema', 'Theme style', 'نمط القالب'),
 
-  def('kuliahCard', 'kandungan', false, true, { durationSeconds: 15, order: 1, daysAhead: 7 }, 'Kad kuliah', 'Lecture card'),
-  def('penceramahPhoto', 'kandungan', false, true, { shape: 'round' }, 'Gambar penceramah', 'Speaker photo'),
-  def('kitabCover', 'kandungan', false, true, {}, 'Kulit kitab', 'Book cover'),
-  def('pengumuman', 'kandungan', false, true, { durationSeconds: 15, order: 2, daysAhead: 7, maxItems: 5 }, 'Pengumuman', 'Announcements'),
-  def('ticker', 'kandungan', false, true, { speed: 'normal' }, 'Teks bergerak', 'Ticker'),
-  def('posters', 'kandungan', false, true, { durationSeconds: 15, order: 3 }, 'Poster', 'Posters'),
-  def('programKhas', 'kandungan', false, true, { durationSeconds: 15, order: 4, daysAhead: 7, hideAfterMinutes: 5 }, 'Program khas', 'Special programmes'),
-  def('takwim', 'kandungan', false, true, { durationSeconds: 15, order: 5, count: 3 }, 'Takwim', 'Calendar'),
+  def('kuliahCard', 'kandungan', false, true, { durationSeconds: 15, order: 1, daysAhead: 7 }, 'Kad kuliah', 'Lecture card', 'بطاقة الدروس'),
+  def('penceramahPhoto', 'kandungan', false, true, { shape: 'round' }, 'Gambar penceramah', 'Speaker photo', 'صورة المحاضر'),
+  def('kitabCover', 'kandungan', false, true, {}, 'Kulit kitab', 'Book cover', 'غلاف الكتاب'),
+  def('pengumuman', 'kandungan', false, true, { durationSeconds: 15, order: 2, daysAhead: 7, maxItems: 5 }, 'Pengumuman', 'Announcements', 'الإعلانات'),
+  def('ticker', 'kandungan', false, true, { speed: 'normal' }, 'Teks bergerak', 'Ticker', 'النص المتحرك'),
+  def('posters', 'kandungan', false, true, { durationSeconds: 15, order: 3 }, 'Poster', 'Posters', 'الملصقات'),
+  def('programKhas', 'kandungan', false, true, { durationSeconds: 15, order: 4, daysAhead: 7, hideAfterMinutes: 5 }, 'Program khas', 'Special programmes', 'البرامج الخاصة'),
+  def('takwim', 'kandungan', false, true, { durationSeconds: 15, order: 5, count: 3 }, 'Takwim', 'Calendar', 'التقويم'),
   def('hadis', 'kandungan', false, true,
     {
       durationSeconds: 20, order: 6,
@@ -260,22 +272,22 @@ export const FEATURES: readonly FeatureDef[] = [
       fontSize: 'auto',
       allowedGrades: { sahih: true, hasan: true, sahih_lighairihi: false, hasan_lighairihi: false },
     },
-    'Hadis', 'Hadith'),
-  def('worldTimes', 'kandungan', false, true, { durationSeconds: 15, order: 7 }, 'Waktu dunia', 'World times'),
-  def('tugasan', 'kandungan', false, true, { durationSeconds: 15, order: 8, daysAhead: 14 }, 'Tugasan', 'Duty roster'),
+    'Hadis', 'Hadith', 'الحديث'),
+  def('worldTimes', 'kandungan', false, true, { durationSeconds: 15, order: 7 }, 'Waktu dunia', 'World times', 'توقيت العالم'),
+  def('tugasan', 'kandungan', false, true, { durationSeconds: 15, order: 8, daysAhead: 14 }, 'Tugasan', 'Duty roster', 'جدول المناوبات'),
 
   def('ayatCard', 'quran', false, true,
     { durationSeconds: 20, order: 9, pick: 'daily', surah: 2, ayatFrom: 255, ayatTo: 255, showTranslation: true, textSize: 'm' },
-    'Kad ayat', 'Verse card'),
-  def('zikirSelepasSolat', 'quran', false, true, { durationSeconds: 20, minutesAfterSolat: 10 }, 'Zikir selepas solat', 'Post-prayer zikir'),
-  def('quranReader', 'quran', false, true, {}, 'Pembaca Al-Quran', 'Quran reader'),
-  def('tilawah', 'quran', false, false, { reciter: 'Husary_64kbps', volume: 60, cacheMaxMb: 300 }, 'Tilawah', 'Recitation'),
+    'Kad ayat', 'Verse card', 'بطاقة الآية'),
+  def('zikirSelepasSolat', 'quran', false, true, { durationSeconds: 20, minutesAfterSolat: 10 }, 'Zikir selepas solat', 'Post-prayer zikir', 'أذكار بعد الصلاة'),
+  def('quranReader', 'quran', false, true, {}, 'Pembaca Al-Quran', 'Quran reader', 'قارئ القرآن'),
+  def('tilawah', 'quran', false, false, { reciter: 'Husary_64kbps', volume: 60, cacheMaxMb: 300 }, 'Tilawah', 'Recitation', 'التلاوة'),
 
-  def('beeps', 'audio', false, true, { volume: 70 }, 'Bunyi amaran', 'Beeps'),
+  def('beeps', 'audio', false, true, { volume: 70 }, 'Bunyi amaran', 'Beeps', 'أصوات التنبيه'),
 
   def('liveOnKiosk', 'live', false, true,
     { audio: false, volume: 50, showStrip: true, fit: 'cover' },
-    'Siaran langsung di skrin', 'Live on kiosk'),
+    'Siaran langsung di skrin', 'Live on kiosk', 'البث المباشر على الشاشة'),
   def('liveYoutube', 'live', false, true,
     {
       privacy: 'unlisted',
@@ -285,32 +297,36 @@ export const FEATURES: readonly FeatureDef[] = [
       descriptionTemplate: '{topic}\nKitab: {kitab}\n{surau}, {date}',
       maxBitrateKbps: 2500,
     },
-    'Siaran langsung YouTube', 'Live on YouTube'),
-  def('recording', 'live', false, true, { segmentMinutes: 15, keepOnDevice: true }, 'Rakaman', 'Recording'),
+    'Siaran langsung YouTube', 'Live on YouTube', 'البث المباشر على YouTube'),
+  def('recording', 'live', false, true, { segmentMinutes: 15, keepOnDevice: true }, 'Rakaman', 'Recording', 'التسجيل'),
+  def('liveCamera', 'live', false, false,
+    { name: 'Kamera luaran', transport: 'auto', avOffsetMs: { deviceMic: 0, boxInput: 0 } },
+    'Kamera luaran', 'External camera', 'الكاميرا الخارجية'),
 
   def('finance', 'kewangan', false, false,
     { penceramahFundId: '', bigAmountSen: 2000000, startedOn: '' },
-    'Kewangan', 'Finance'),
+    'Kewangan', 'Finance', 'المالية'),
   def('tabungCard', 'kewangan', false, false,
     {
       durationSeconds: 15, order: 10, figure: 'balance', highlightSeconds: 20, showTarget: true, qrAssetId: '',
-      manualTitle: 'Tabung Surau',
+      featured: false,
+      manualTitle: '',
       row1Label: '', row1Sen: 0, row2Label: '', row2Sen: 0, row3Label: '', row3Sen: 0,
     },
-    'Kad tabung', 'Donation fund card'),
+    'Kad tabung', 'Donation fund card', 'بطاقة صندوق التبرعات'),
 
-  def('calendarFeed', 'jemaah', false, false, {}, 'Suapan kalendar', 'Calendar feed'),
-  def('jemaahPage', 'jemaah', false, false, {}, 'Laman jemaah', 'Congregation page'),
+  def('calendarFeed', 'jemaah', false, false, {}, 'Suapan kalendar', 'Calendar feed', 'خلاصة التقويم'),
+  def('jemaahPage', 'jemaah', false, false, {}, 'Laman jemaah', 'Congregation page', 'صفحة المصلّين'),
 
-  def('cloudSync', 'lanjutan', false, true, { dirtyCheckSeconds: 120, cloudUrl: '' }, 'Penyelarasan awan', 'Cloud sync'),
+  def('cloudSync', 'lanjutan', false, true, { dirtyCheckSeconds: 120, cloudUrl: '' }, 'Penyelarasan awan', 'Cloud sync', 'المزامنة مع السحابة'),
   def('youtubeCatchUp', 'awan', false, true,
     { wifiOnly: true, joinSegments: true, replaceGappyLive: 'ask' },
-    'Muat naik susulan YouTube', 'YouTube catch-up upload'),
-  def('recordingCleanup', 'awan', false, true, { keepDays: 1 }, 'Pembersihan rakaman', 'Recording clean-up'),
+    'Muat naik susulan YouTube', 'YouTube catch-up upload', 'الرفع اللاحق إلى YouTube'),
+  def('recordingCleanup', 'awan', false, true, { keepDays: 1 }, 'Pembersihan rakaman', 'Recording clean-up', 'تنظيف التسجيلات'),
 
-  def('appLock', 'keselamatan', false, false, {}, 'Kunci aplikasi', 'App lock'),
+  def('appLock', 'keselamatan', false, false, {}, 'Kunci aplikasi', 'App lock', 'قفل التطبيق'),
 
   def('system', 'lanjutan', true, true,
     { noVideoSeconds: 12, cloudWakeSeconds: 20, syncHistoryDays: 180, suspendedAt: null },
-    'Sistem', 'System'),
+    'Sistem', 'System', 'النظام'),
 ];

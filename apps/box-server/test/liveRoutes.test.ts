@@ -33,22 +33,22 @@ describe('GET /api/kiosk/live', () => {
   it('is false before start, true once the fake reports ready, false again after stop', async () => {
     const h = await make();
     expect(await kioskLive(h)).toEqual({ live: false, since: null, kuliah: null, audio: false, volume: 50, path: 'surau' });
-    const media = await loginAs(h.app, 'media');
-    await h.app.inject({ method: 'POST', url: '/api/live/start', headers: media.headers, payload: startBody(h), remoteAddress: LAN });
+    const liveUser = await loginAs(h.app, 'live');
+    await h.app.inject({ method: 'POST', url: '/api/live/start', headers: liveUser.headers, payload: startBody(h), remoteAddress: LAN });
     expect((await kioskLive(h)).live).toBe(false);
     h.fake.setReady(true, { sourceType: 'srtConn', sourceId: 'c1', bytesReceived: 5 });
     await until(() => h.app.liveSessions!.kioskLive().live);
     const on = await kioskLive(h);
     expect(on).toMatchObject({ live: true, kuliah: { label: 'Kuliah Maghrib', penceramah: 'Ustaz Ahmad Fauzi', topic: 'Bab Solat' }, audio: false, volume: 50 });
     expect(typeof on.since).toBe('string');
-    await h.app.inject({ method: 'POST', url: '/api/live/stop', headers: media.headers, payload: {}, remoteAddress: LAN });
+    await h.app.inject({ method: 'POST', url: '/api/live/stop', headers: liveUser.headers, payload: {}, remoteAddress: LAN });
     expect((await kioskLive(h)).live).toBe(false);
   });
 
   it('is false when liveOnKiosk is switched off mid-session, and follows the audio setting', async () => {
     const h = await make();
-    const media = await loginAs(h.app, 'media');
-    await h.app.inject({ method: 'POST', url: '/api/live/start', headers: media.headers, payload: startBody(h), remoteAddress: LAN });
+    const liveUser = await loginAs(h.app, 'live');
+    await h.app.inject({ method: 'POST', url: '/api/live/start', headers: liveUser.headers, payload: startBody(h), remoteAddress: LAN });
     h.fake.setReady(true, { sourceType: 'srtConn', sourceId: 'c1' });
     await until(() => h.app.liveSessions!.kioskLive().live);
     const admin = await loginAs(h.app, 'admin');
@@ -61,7 +61,7 @@ describe('GET /api/kiosk/live', () => {
     });
     expect(put.statusCode).toBe(200);
     expect(await kioskLive(h)).toMatchObject({ live: true, audio: true, volume: 80 });
-    putFeature(h.app.surau.db, 'liveOnKiosk', { enabled: false }, 'test');
+    putFeature(h.app.surau.db, 'liveOnKiosk', { enabled: false }, 'test', undefined, 'sdm');
     expect((await kioskLive(h)).live).toBe(false);
   });
 
@@ -91,10 +91,10 @@ describe('role checks on /api/live/*', () => {
     }
   });
 
-  it('status as media: idle state is well formed', async () => {
+  it('status as the live role: idle state is well formed', async () => {
     const h = await make();
-    const media = await loginAs(h.app, 'media');
-    const r = await h.app.inject({ method: 'GET', url: '/api/live/status', headers: media.headers, remoteAddress: LAN });
+    const liveUser = await loginAs(h.app, 'live');
+    const r = await h.app.inject({ method: 'GET', url: '/api/live/status', headers: liveUser.headers, remoteAddress: LAN });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({
       session: null,
@@ -107,11 +107,11 @@ describe('role checks on /api/live/*', () => {
 
   it('status while live reports ingest protocol and readiness', async () => {
     const h = await make();
-    const media = await loginAs(h.app, 'media');
-    await h.app.inject({ method: 'POST', url: '/api/live/start', headers: media.headers, payload: startBody(h), remoteAddress: LAN });
+    const liveUser = await loginAs(h.app, 'live');
+    await h.app.inject({ method: 'POST', url: '/api/live/start', headers: liveUser.headers, payload: startBody(h), remoteAddress: LAN });
     h.fake.setReady(true, { sourceType: 'srtConn', sourceId: 'c1', bytesReceived: 1000 });
     await until(() => h.app.liveSessions!.kioskLive().live);
-    const r = (await h.app.inject({ method: 'GET', url: '/api/live/status', headers: media.headers, remoteAddress: LAN })).json();
+    const r = (await h.app.inject({ method: 'GET', url: '/api/live/status', headers: liveUser.headers, remoteAddress: LAN })).json();
     expect(r.session).toMatchObject({ source: 'android' });
     expect(r.ingest).toMatchObject({ ready: true, protocol: 'srt' });
   });
@@ -175,15 +175,15 @@ describe('kiosk event stream', () => {
     const s = openStream((h.app.server.address() as AddressInfo).port);
     try {
       await until(() => s.frames.length >= 2);
-      const media = await loginAs(h.app, 'media');
-      await h.app.inject({ method: 'POST', url: '/api/live/start', headers: media.headers, payload: startBody(h), remoteAddress: LAN });
+      const liveUser = await loginAs(h.app, 'live');
+      await h.app.inject({ method: 'POST', url: '/api/live/start', headers: liveUser.headers, payload: startBody(h), remoteAddress: LAN });
       const before = liveFrames(s.frames).length;
       const t0 = Date.now();
       h.fake.setReady(true, { sourceType: 'srtConn', sourceId: 'c1', bytesReceived: 9 });
       await until(() => liveFrames(s.frames).some((f) => f.live), 1000);
       expect(Date.now() - t0).toBeLessThan(100 + 60);
       expect(liveFrames(s.frames).length).toBeGreaterThan(before);
-      await h.app.inject({ method: 'POST', url: '/api/live/stop', headers: media.headers, payload: {}, remoteAddress: LAN });
+      await h.app.inject({ method: 'POST', url: '/api/live/stop', headers: liveUser.headers, payload: {}, remoteAddress: LAN });
       await until(() => liveFrames(s.frames).at(-1)?.live === false, 1000);
     } finally {
       s.close();

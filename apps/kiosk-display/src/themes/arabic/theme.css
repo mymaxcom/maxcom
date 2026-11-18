@@ -204,10 +204,8 @@
 .stage[data-template='arabic'] .kul-label { color: var(--muted); }
 .stage[data-template='arabic'] .kul-topic { color: var(--accent-2); }
 .stage[data-template='arabic'] .hadis-ar { color: var(--text); }
-.stage[data-template='arabic'][data-screen='poster'] .poster-frame img {
-  border: 0.156rem solid var(--accent);
-  box-shadow: 0 0 0 0.52rem #0a1630, 0 0 0 0.625rem rgb(217 178 95 / 0.55), 0 1.563rem 4.167rem rgb(0 0 0 / 0.6);
-}
+/* Full-height poster: a thin gold line drawn inside the picture's own edge (an inset outline takes no height away). */
+.stage[data-template='arabic'][data-screen='poster'] .poster-frame img { outline: 0.156rem solid; outline-color: var(--accent); outline-offset: -0.156rem; }
 .stage[data-template='arabic'][data-screen='poster'] .deco .d2 { display: none; }
 
 /* ---- Arabic-led screens ---- */
@@ -292,4 +290,21 @@
   background-color: var(--plate-bg);
   box-shadow: 0 0 0 var(--plate-pad) var(--plate-bg);
   border-radius: var(--plate-radius);
+}
+
+/* Tabung (mockup tabung-r1 frame H): gold on the night blue, the small Arabic word beside the title. */
+.stage[data-template='arabic'][data-kind='content'] .tabung {
+  --tb-amt: #ffffff; --tb-muted: var(--muted); --tb-on-acc: #10204a;
+  --tb-row-bg: rgb(255 255 255 / 0.04); --tb-row-border: 1px solid rgb(217 178 95 / 0.22);
+  --tb-track: rgb(255 255 255 / 0.12); --tb-fill: linear-gradient(90deg, #b48a3a, #f0d28b); --tb-pct: #e9c977;
+  --tb-ring: #e2bf6c; --tb-dot: rgb(217 178 95 / 0.3); --tb-hair: rgb(217 178 95 / 0.22); --tb-qr-h: #e2bf6c;
+  --tb-hot-bg: linear-gradient(90deg, rgb(217 178 95 / 0.3), rgb(217 178 95 / 0.06));
+}
+.stage[data-template='arabic'][data-kind='content'] .tabung__title::after {
+  content: '\0635\0646\062F\0648\0642';
+  margin-left: 1.15rem;
+  font-family: 'Amiri', var(--font-arabic);
+  font-size: 0.9em;
+  font-weight: 700;
+  color: rgb(217 178 95 / 0.75);
 }

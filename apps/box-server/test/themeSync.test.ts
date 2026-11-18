@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { LOCAL_SURAU_ID } from '../src/tenant.ts';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +20,7 @@ import { buildCloud, CLOUD_URL } from './support/fakeCloud.ts';
 import type { TestCloud } from './support/fakeCloud.ts';
 import { FakeWorker } from './support/fakeWorker.ts';
 import { insertSite } from './support/sites.ts';
+import { ensureSurau } from './support/surauRow.ts';
 import { jpeg, manifestJson as json, woff2, zip } from './support/themePacks.ts';
 
 interface Box { app: FastifyInstance; dir: string; boxId: string }
@@ -54,11 +56,14 @@ async function makeWorld(): Promise<World> {
     });
     const c = cloud ?? buildCloud(app.surau.boxId);
     if (cloud === null) worker = new FakeWorker(c.fetch);
-    const { code } = issueLinkCode({ db: c.app.surau.db, now: () => new Date() }, { boxId: app.surau.boxId, name });
+    const { code } = issueLinkCode({ db: c.app.surau.db, now: () => new Date() }, { boxId: app.surau.boxId, name, target: { surauId: ensureSurau(c.app.surau.db, cloud === null ? 'sdm' : 'sdm-b') } });
     const lines: string[] = [];
     const exit = await runCloudLink(['--data', dir, '--db', join(dir, 'box.db'), 'link', CLOUD_URL, code], { out: (l) => lines.push(l), err: (l) => lines.push(l) }, worker.fetch);
     expect(exit, lines.join('\n')).toBe(0);
     worker.setSecret(app.surau.boxId, loadSyncKey(dir)!.wakeSecret);
+    // Plan 14 allows one live box per surau for now, so the second box links into its own surau and is then moved
+    // into the first one: the theme sync between sibling boxes of one surau is what these tests are about.
+    if (cloud !== null) c.app.surau.db.prepare("UPDATE sites SET surau_id = 'sdm' WHERE box_id = ?").run(app.surau.boxId);
     void preId;
     return { box: { app, dir, boxId: app.surau.boxId }, cloud: c };
   };
@@ -95,9 +100,9 @@ describe('theme packs through the cloud', () => {
     const w = await makeWorld();
     await install(w.a, pack());
     await run(w.a);
-    expect(getSettings(w.cloud.app.surau.db).themeStyle.packs['hijau-siti']).toMatchObject({ version: 3 });
+    expect(getSettings(w.cloud.app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toMatchObject({ version: 3 });
     await run(w.b);
-    const rec = getSettings(w.b.app.surau.db).themeStyle.packs['hijau-siti']!;
+    const rec = getSettings(w.b.app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']!;
     expect(rec).toMatchObject({ version: 3, base: 'creative' });
     const onA = await get(w.a, `/themes/hijau-siti/${H3}/bundle.css`);
     const onB = await get(w.b, `/themes/hijau-siti/${H3}/bundle.css`);
@@ -116,9 +121,9 @@ describe('theme packs through the cloud', () => {
     const z = pack();
     // the record alone (the settings entry arrives before the file in a slow cycle)
     const meta = putAsset(w.a.app.surau.db, w.a.dir, z, PACK_MIME, 'u');
-    putFeature(w.b.app.surau.db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: z.length, fonts: [], screens: [], images: { kuliah: 'jpg' }, defaults: {} } } }, 'sync');
+    putFeature(w.b.app.surau.db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: z.length, fonts: [], screens: [], images: { kuliah: 'jpg' }, defaults: {} } } }, 'sync', undefined, LOCAL_SURAU_ID);
     expect((await get(w.b, `/themes/hijau-siti/${H3}/bundle.css`)).statusCode).toBe(404);
-    expect(getSettings(w.b.app.surau.db).themeStyle.packs['hijau-siti']).toBeDefined();
+    expect(getSettings(w.b.app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toBeDefined();
     putAsset(w.b.app.surau.db, w.b.dir, z, PACK_MIME, 'sync');
     expect((await get(w.b, `/themes/hijau-siti/${H3}/bundle.css`)).statusCode).toBe(200);
   });
@@ -127,9 +132,9 @@ describe('theme packs through the cloud', () => {
     const w = await makeWorld();
     const bad = zip({ 'theme.json': json(), 'theme.css': '@import "https://x.example/a.css";' });
     const meta = putAsset(w.cloud.app.surau.db, w.cloud.dir, bad, PACK_MIME, 'cloud');
-    putFeature(w.cloud.app.surau.db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: bad.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'cloud');
+    putFeature(w.cloud.app.surau.db, 'themeStyle', { packs: { 'hijau-siti': { assetId: meta.id, version: 3, title: 'Hijau Siti', base: 'creative', contract: 1, bytes: bad.length, fonts: [], screens: [], images: {}, defaults: {} } } }, 'cloud', undefined, LOCAL_SURAU_ID);
     await run(w.b);
-    expect(getSettings(w.b.app.surau.db).themeStyle.packs['hijau-siti']).toBeDefined();
+    expect(getSettings(w.b.app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toBeDefined();
     expect((await get(w.b, `/themes/hijau-siti/${H3}/bundle.css`)).statusCode).toBe(404);
     expect((await get(w.b, `/themes/hijau-siti/${H3}/images/kuliah.jpg`)).statusCode).toBe(404);
     expect(readFileSync(join(w.b.dir, 'assets', `${meta.id}.maxtheme`)).length).toBe(bad.length);
@@ -145,14 +150,14 @@ describe('theme packs through the cloud', () => {
     expect((await w.a.app.inject({ method: 'DELETE', url: '/api/themes/hijau-siti', headers: login.headers })).statusCode).toBe(204);
     await run(w.a);
     await run(w.b);
-    expect(getSettings(w.cloud.app.surau.db).themeStyle.packs['hijau-siti']).toBeUndefined();
-    expect(getSettings(w.b.app.surau.db).themeStyle.packs['hijau-siti']).toBeUndefined();
+    expect(getSettings(w.cloud.app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toBeUndefined();
+    expect(getSettings(w.b.app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toBeUndefined();
     expect((await get(w.b, `/themes/hijau-siti/${H3}/bundle.css`)).statusCode).toBe(404);
     // and the same name can be installed again, at any version
     await install(w.a, pack({ version: 1 }));
     await run(w.a);
     await run(w.b);
-    expect(getSettings(w.b.app.surau.db).themeStyle.packs['hijau-siti']).toMatchObject({ version: 1 });
+    expect(getSettings(w.b.app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toMatchObject({ version: 1 });
     expect((await get(w.b, `/themes/hijau-siti/${H1}/bundle.css`)).statusCode).toBe(200);
   });
 
@@ -181,7 +186,7 @@ describe('theme packs through the cloud', () => {
     // nothing was staged or stored by those calls, and the cloud still relays what a box syncs
     await install(w.a, z);
     await run(w.a);
-    expect(getSettings(w.cloud.app.surau.db).themeStyle.packs['hijau-siti']).toMatchObject({ version: 3 });
+    expect(getSettings(w.cloud.app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toMatchObject({ version: 3 });
     // support stays available (the app asks the cloud which contract each box supports)
     expect((await w.cloud.app.inject({ method: 'GET', url: '/api/themes/support', headers: admin.headers })).statusCode).toBe(200);
     // and a box still answers these (it is where themes are made)

@@ -6,14 +6,18 @@
 //
 // Answers are parsed leniently: a missing optional field takes its default,
 // so a box one step ahead or behind does not break a screen. Failures are
-// [PrayerError] with Bahasa Malaysia wording; a lost session, an unreachable
+// [PrayerError] (BM text, or any language through `text(S)`); a lost session, an unreachable
 // box and a [LiveOnly] refusal pass through unchanged for the shell.
 
 import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../box/box_client.dart';
+import '../../l10n/generated/s.dart';
+import '../../l10n/s_lookup.dart';
+import '../common/error_text.dart' show errorText, kErrorCodeTexts;
 import '../shell/box_gateway.dart';
+import 'prayer_names.dart';
 
 // ---- errors ----
 
@@ -28,33 +32,77 @@ enum PrayerFailure {
   other,
 }
 
-/// A request the box refused. [message] is the text to show.
+/// The refusals the app words itself; the box's own message (a 400 or 409
+/// with a text) is carried as it came.
+enum PrayerMsg {
+  forbidden,
+  notFound,
+  rateLimited,
+  offline,
+  upstream,
+  zonesUpstream,
+  conflict,
+  tooLarge,
+  badType,
+  unavailable,
+  invalidData,
+}
+
+/// A request the box refused. [message] is the BM text; screens show
+/// [text], the same in the language of the app.
 class PrayerError implements Exception {
-  const PrayerError(this.kind, this.message, {this.status});
+  const PrayerError(this.kind, this.message, {this.status, this.msg, this.cause});
+
+  /// A refusal the app words itself.
+  PrayerError.of(this.kind, PrayerMsg this.msg, {this.status})
+    : message = _textOf(sBm, msg),
+      cause = null;
 
   final PrayerFailure kind;
   final String message;
   final int? status;
+  final PrayerMsg? msg;
 
-  static const String forbiddenMessage = 'Tiada kebenaran untuk tindakan ini';
-  static const String notFoundMessage = 'Tidak dijumpai';
-  static const String rateLimitedMessage =
-      'Terlalu banyak carian. Cuba lagi sebentar lagi';
-  static const String offlineMessage =
-      'Carian lokasi perlukan sambungan internet pada MAXCOM';
-  static const String upstreamMessage =
-      'Sumber waktu solat tidak menjawab. Cuba lagi nanti';
-  static const String conflictMessage = 'Tindakan ini tidak boleh dibuat lagi';
-  static const String tooLargeMessage = 'Fail terlalu besar. Pilih fail yang lebih kecil';
-  static const String badTypeMessage = 'Jenis fail tidak disokong';
-  static const String unavailableMessage =
-      'Perkhidmatan tidak tersedia buat masa ini';
+  /// The box's coded refusal this error was made from; its text is the app's
+  /// own, in the language of the app (`csv_year_mismatch`, `undo_blocked`, ...).
+  final BoxError? cause;
+
+  /// What to show, in the language of [s].
+  String text(S s) {
+    final c = cause;
+    if (c != null) return errorText(s, c);
+    return msg == null ? message : _textOf(s, msg!);
+  }
+
+  static String _textOf(S s, PrayerMsg m) => switch (m) {
+    PrayerMsg.forbidden => s.errorForbidden,
+    PrayerMsg.notFound => s.prayerErrNotFound,
+    PrayerMsg.rateLimited => s.prayerErrRateLimited,
+    PrayerMsg.offline => s.prayerErrOffline,
+    PrayerMsg.upstream => s.prayerErrUpstream,
+    PrayerMsg.zonesUpstream => s.prayerErrZonesUpstream,
+    PrayerMsg.conflict => s.prayerErrConflict,
+    PrayerMsg.tooLarge => s.prayerErrTooLarge,
+    PrayerMsg.badType => s.prayerErrBadType,
+    PrayerMsg.unavailable => s.prayerErrUnavailable,
+    PrayerMsg.invalidData => s.prayerErrInvalidData,
+  };
+
+  static String get forbiddenMessage => _textOf(sBm, PrayerMsg.forbidden);
+  static String get notFoundMessage => _textOf(sBm, PrayerMsg.notFound);
+  static String get rateLimitedMessage => _textOf(sBm, PrayerMsg.rateLimited);
+  static String get offlineMessage => _textOf(sBm, PrayerMsg.offline);
+  static String get upstreamMessage => _textOf(sBm, PrayerMsg.upstream);
+  static String get conflictMessage => _textOf(sBm, PrayerMsg.conflict);
+  static String get tooLargeMessage => _textOf(sBm, PrayerMsg.tooLarge);
+  static String get badTypeMessage => _textOf(sBm, PrayerMsg.badType);
+  static String get unavailableMessage => _textOf(sBm, PrayerMsg.unavailable);
 
   @override
   String toString() => 'PrayerError($kind, $message)';
 }
 
-const String _genericBoxMessage = 'Permintaan gagal';
+const String _genericBoxMessage = BoxError.genericMessage;
 
 // ---- small readers ----
 
@@ -282,6 +330,7 @@ class PrayerStatus {
     this.daysResolved = 0,
     this.daysOfficial = 0,
     this.daysFile = 0,
+    this.hasCounts = false,
     this.officialZone,
     this.officialYears = const [],
     this.zonesFetchedAt,
@@ -290,6 +339,7 @@ class PrayerStatus {
     this.zonesWarning,
     this.autoFetch = const AutoFetchStatus(),
     this.warnings = const [],
+    this.warningCodes = const [],
   });
 
   factory PrayerStatus.fromJson(Map<String, dynamic> j) {
@@ -315,6 +365,7 @@ class PrayerStatus {
       daysResolved: _int(ahead['resolved']),
       daysOfficial: _int(ahead['official']),
       daysFile: _int(ahead['file']),
+      hasCounts: j['daysAhead'] is Map,
       officialZone: _str(official['zone']),
       officialYears: [
         for (final y in _maps(official['years']))
@@ -335,6 +386,7 @@ class PrayerStatus {
         lastError: _str(auto['lastError']),
       ),
       warnings: _strings(j['warnings']),
+      warningCodes: warningsOf(j),
     );
   }
 
@@ -348,6 +400,9 @@ class PrayerStatus {
   final int daysResolved;
   final int daysOfficial;
   final int daysFile;
+
+  /// The answer carried the `daysAhead` counts (an older box may not).
+  final bool hasCounts;
   final String? officialZone;
   final List<OfficialYear> officialYears;
   final String? zonesFetchedAt;
@@ -356,7 +411,44 @@ class PrayerStatus {
   final String? zonesWarning;
   final AutoFetchStatus autoFetch;
   final List<String> warnings;
+
+  /// The same warnings by code, in the same order as far as the box sends codes.
+  final List<PrayerWarning> warningCodes;
+
+  /// Days ahead the surau really has data for: official and file days where
+  /// the country has an official source (a calculated day is a fallback and
+  /// does not count), every resolved day abroad. Null when the box sent no counts.
+  int? get coverage => !hasCounts ? null : (hasOfficial ? daysOfficial + daysFile : daysResolved);
+
+  /// Official days held, by year.
+  Map<int, int> get officialDaysByYear => {for (final y in officialYears) y.year: y.days};
+
+  /// What to show for each warning: its code's text, else the box's sentence.
+  List<String> warningTexts(S s) => warningLines(s, warnings, warningCodes);
 }
+
+/// The `warningCodes` of a status or settings answer; each paired with the
+/// sentence at the same position in `warnings` when there is one.
+List<PrayerWarning> warningsOf(Map<String, dynamic> j) {
+  final sentences = _strings(j['warnings']);
+  final codes = _maps(j['warningCodes']);
+  return [
+    for (var i = 0; i < codes.length; i++)
+      if (_str(codes[i]['code']) != null)
+        PrayerWarning(
+          code: _str(codes[i]['code'])!,
+          detail: _map(codes[i]['detail']),
+          sentence: i < sentences.length ? sentences[i] : '',
+        ),
+  ];
+}
+
+/// Warning lines to show: coded warnings in their language; every sentence
+/// the box sent beyond the coded ones (a warning with no code yet) as it came.
+List<String> warningLines(S s, List<String> sentences, List<PrayerWarning> codes) => [
+  for (final c in codes) c.text(s),
+  for (var i = codes.length; i < sentences.length; i++) sentences[i],
+];
 
 class CountryInfo {
   const CountryInfo({
@@ -517,10 +609,24 @@ class LocationSearch {
 }
 
 class ImportRowError {
-  const ImportRowError(this.row, this.message);
+  const ImportRowError(this.row, this.message, {this.field, this.reason});
 
   final int row;
+
+  /// The box's own sentence (BM); shown only for a reason this app does not know.
   final String message;
+
+  /// The column (`date`, `subuh`, ...) and the stable reason (`empty`,
+  /// `invalid`, `gap`, ...) the app words itself.
+  final String? field;
+  final String? reason;
+
+  /// What to show, in the language of [s].
+  String text(S s) {
+    final r = reason;
+    final w = r == null ? null : importRowReason(s, field ?? 'row', r);
+    return w ?? message;
+  }
 }
 
 /// The answer to a dry run of a file import. [hint] is `official` when the
@@ -559,7 +665,12 @@ class ImportPreview {
       columns: _strings(j['columns']),
       errors: [
         for (final e in _maps(j['errors']))
-          ImportRowError(_int(e['row']), _str(e['message']) ?? ''),
+          ImportRowError(
+            _int(e['row']),
+            _str(e['message']) ?? '',
+            field: _str(e['field']),
+            reason: _str(e['reason']),
+          ),
       ],
       rangeFrom: _str(range['from']),
       rangeTo: _str(range['to']),
@@ -715,31 +826,48 @@ class PrayerRepository {
 
   PrayerError _map2(BoxError e, {bool search = false, bool zones = false}) {
     final box = e.message == _genericBoxMessage ? null : e.message;
+    final coded = e.code != null && kErrorCodeTexts.containsKey(e.code);
+    if (coded && e.status != 401) {
+      final kind = switch (e.status) {
+        400 => PrayerFailure.invalid,
+        403 => PrayerFailure.forbidden,
+        404 => PrayerFailure.notFound,
+        409 => PrayerFailure.conflict,
+        429 => PrayerFailure.rateLimited,
+        502 => PrayerFailure.upstream,
+        _ => PrayerFailure.other,
+      };
+      return PrayerError(kind, box ?? _genericBoxMessage, status: e.status, cause: e);
+    }
     switch (e.status) {
       case 400:
-        return PrayerError(PrayerFailure.invalid, box ?? 'Data tidak sah', status: 400);
+        return box != null
+            ? PrayerError(PrayerFailure.invalid, box, status: 400)
+            : PrayerError.of(PrayerFailure.invalid, PrayerMsg.invalidData, status: 400);
       case 403:
-        return const PrayerError(PrayerFailure.forbidden, PrayerError.forbiddenMessage, status: 403);
+        return PrayerError.of(PrayerFailure.forbidden, PrayerMsg.forbidden, status: 403);
       case 404:
-        return const PrayerError(PrayerFailure.notFound, PrayerError.notFoundMessage, status: 404);
+        return PrayerError.of(PrayerFailure.notFound, PrayerMsg.notFound, status: 404);
       case 409:
-        return PrayerError(PrayerFailure.conflict, box ?? PrayerError.conflictMessage, status: 409);
+        return box != null
+            ? PrayerError(PrayerFailure.conflict, box, status: 409)
+            : PrayerError.of(PrayerFailure.conflict, PrayerMsg.conflict, status: 409);
       case 413:
-        return const PrayerError(PrayerFailure.invalid, PrayerError.tooLargeMessage, status: 413);
+        return PrayerError.of(PrayerFailure.invalid, PrayerMsg.tooLarge, status: 413);
       case 415:
-        return const PrayerError(PrayerFailure.invalid, PrayerError.badTypeMessage, status: 415);
+        return PrayerError.of(PrayerFailure.invalid, PrayerMsg.badType, status: 415);
       case 429:
-        return const PrayerError(PrayerFailure.rateLimited, PrayerError.rateLimitedMessage, status: 429);
+        return PrayerError.of(PrayerFailure.rateLimited, PrayerMsg.rateLimited, status: 429);
       case 502:
-        return PrayerError(
+        return PrayerError.of(
           PrayerFailure.upstream,
-          zones ? 'Senarai zon tidak dapat dimuat turun sekarang. Cuba lagi nanti' : PrayerError.upstreamMessage,
+          zones ? PrayerMsg.zonesUpstream : PrayerMsg.upstream,
           status: 502,
         );
       case 503:
         return search
-            ? const PrayerError(PrayerFailure.offline, PrayerError.offlineMessage, status: 503)
-            : const PrayerError(PrayerFailure.other, PrayerError.unavailableMessage, status: 503);
+            ? PrayerError.of(PrayerFailure.offline, PrayerMsg.offline, status: 503)
+            : PrayerError.of(PrayerFailure.other, PrayerMsg.unavailable, status: 503);
       default:
         return PrayerError(PrayerFailure.other, box ?? _genericBoxMessage, status: e.status);
     }

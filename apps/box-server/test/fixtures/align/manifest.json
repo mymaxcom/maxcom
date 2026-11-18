@@ -1,0 +1,48 @@
+{
+  "rate": 16000,
+  "clipSec": 9,
+  "seed": 20261117,
+  "lagConvention": "src[n] = ref[n + lag]; lag > 0: source early",
+  "vectors": [
+    {
+      "file": "lag-37.s16",
+      "expectedLagMs": 37
+    },
+    {
+      "file": "lag-480.s16",
+      "expectedLagMs": 480
+    },
+    {
+      "file": "lag-1250.s16",
+      "expectedLagMs": 1250
+    },
+    {
+      "file": "lag-2900.s16",
+      "expectedLagMs": 2900
+    },
+    {
+      "file": "noise-480.s16",
+      "expectedLagMs": 480,
+      "noiseSnrDb": 6
+    },
+    {
+      "file": "echo-1250.s16",
+      "expectedLagMs": 1250,
+      "room": true
+    },
+    {
+      "file": "invert-480.s16",
+      "expectedLagMs": 480,
+      "inverted": true
+    },
+    {
+      "file": "drift-480.s16",
+      "expectedLagMs": 480,
+      "ppm": 50
+    },
+    {
+      "file": "silence.s16",
+      "expectedLagMs": null
+    }
+  ]
+}

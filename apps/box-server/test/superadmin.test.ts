@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { FeedEntry, Role } from '@surau/core';
 import { buildApp } from '../src/app.ts';
 import { beginEnrolment } from '../src/auth/devices.ts';
-import { activeAdminCount, activeSuperadminCount, createUser, getUserRow, listUsers, promoteSuperadmin, setUsersRole } from '../src/auth/users.ts';
+import { activeAdminCount, activeSuperadminCount, createUser, getUserRow, listUsers, promoteSuperadmin, setRoles, setUsersRole } from '../src/auth/users.ts';
 import { openDb } from '../src/db.ts';
 import { applyFeedEntry } from '../src/sync/apply.ts';
 import { readFeed } from '../src/sync/feed.ts';
@@ -53,7 +53,7 @@ function userEntry(id: string, origin: string, roles: Role[], name = 'Pentadbir 
     after: { name, roles, active: true },
   };
 }
-const ctx = (origin: string) => ({ now: new Date('2026-11-09T10:05:00.000Z'), origin, actor: 'user:x', dataDir: tmpdir() });
+const ctx = (origin: string) => ({ surauId: 'sdm', now: new Date('2026-11-09T10:05:00.000Z'), origin, actor: 'user:x', dataDir: tmpdir() });
 
 describe('superadmin membership is cloud-only', () => {
   it('a box refuses to add the role through the routes, even for a Pentadbir MAXCOM', async () => {
@@ -62,14 +62,14 @@ describe('superadmin membership is cloud-only', () => {
     const other = await loginAs(box, 'media');
     const r = await putRoles(box, sup.headers, other.userId, ['admin', 'superadmin']);
     expect(r.statusCode).toBe(403);
-    expect(r.json().code).toBe('superadmin_cloud_only');
+    expect(r.json().code).toBe('superadmin_cli_only');
     expect(getUserRow(box.surau.db, other.userId)!.roles).toEqual(['media']);
     const c = await box.inject({ method: 'POST', url: '/api/users', headers: sup.headers, payload: { name: 'Baru', roles: ['superadmin'] } });
     expect(c.statusCode).toBe(403);
-    expect(c.json().code).toBe('superadmin_cloud_only');
+    expect(c.json().code).toBe('superadmin_cli_only');
   });
 
-  it('the cloud needs superadmin:manage: an admin is refused, a Pentadbir MAXCOM succeeds', async () => {
+  it('the cloud needs superadmin:manage (an admin is refused) and even a Pentadbir MAXCOM is refused: CLI only', async () => {
     const cloud = makeApp('cloud');
     const admin = await loginAs(cloud, 'admin');
     const sup = await loginAs(cloud, 'superadmin');
@@ -79,12 +79,16 @@ describe('superadmin membership is cloud-only', () => {
     expect(no.json().code).toBe('forbidden');
     expect((await cloud.inject({ method: 'POST', url: '/api/users', headers: admin.headers, payload: { name: 'X', roles: ['superadmin'] } })).statusCode).toBe(403);
     const ok = await putRoles(cloud, sup.headers, target.userId, ['media', 'superadmin']);
-    expect(ok.statusCode, ok.body).toBe(200);
-    expect(getUserRow(cloud.surau.db, target.userId)!.roles).toEqual(['superadmin', 'media']);
+    expect(ok.statusCode, ok.body).toBe(403);
+    expect(ok.json().code).toBe('superadmin_cli_only');
+    expect(logCount(cloud.surau.db, 'superadmin_cli_only')).toBe(1);
+    expect(getUserRow(cloud.surau.db, target.userId)!.roles).toEqual(['media']);
     const made = await cloud.inject({ method: 'POST', url: '/api/users', headers: sup.headers, payload: { name: 'Pentadbir Dua', roles: ['superadmin'] } });
-    expect(made.statusCode).toBe(201);
+    expect(made.statusCode).toBe(403);
+    // the CLI path (library) makes one; then an ordinary admin may not touch that row
+    setRoles(cloud.surau.db, target.userId, ['media', 'superadmin'], 'cli');
     // taking the role away is the same right; ordinary roles stay in the admin's hands
-    expect((await putRoles(cloud, admin.headers, target.userId, ['media', 'ajk'])).statusCode).toBe(403);
+    expect((await putRoles(cloud, admin.headers, target.userId, ['media', 'ajk'])).statusCode).toBe(404); // hidden from a surau session
     expect((await putRoles(cloud, admin.headers, (await loginAs(cloud, 'ajk')).userId, ['media'])).statusCode).toBe(200);
   });
 
@@ -103,12 +107,14 @@ describe('superadmin membership is cloud-only', () => {
     expect(await send(cloud, admin, target.userId, ['media', 'superadmin'])).toMatchObject({ status: 'refused', reason: 'forbidden' });
     expect(logCount(cloud.surau.db, 'superadmin_manage')).toBe(1);
     expect(getUserRow(cloud.surau.db, target.userId)!.roles).toEqual(['media']);
-    expect((await send(cloud, sup, target.userId, ['media', 'superadmin'])).status).toBe('applied');
+    expect(await send(cloud, sup, target.userId, ['media', 'superadmin'])).toMatchObject({ status: 'refused', reason: 'forbidden' });
+    expect(logCount(cloud.surau.db, 'superadmin_cli_only')).toBe(1);
+    expect(getUserRow(cloud.surau.db, target.userId)!.roles).toEqual(['media']);
     const box = makeApp('box');
     const bsup = await loginAs(box, 'superadmin');
     const btarget = await loginAs(box, 'media');
     expect(await send(box, bsup, btarget.userId, ['media', 'superadmin'])).toMatchObject({ status: 'refused', reason: 'forbidden' });
-    expect(logCount(box.surau.db, 'superadmin_cloud_only')).toBe(1);
+    expect(logCount(box.surau.db, 'superadmin_cli_only')).toBe(1);
   });
 });
 
@@ -118,29 +124,33 @@ describe('the last administrators', () => {
     const sup = await loginAs(cloud, 'superadmin');
     await loginAs(cloud, 'admin'); // another admin, so last_admin is not what fires first
     const demote = await putRoles(cloud, sup.headers, sup.userId, ['ajk']);
-    expect(demote.statusCode).toBe(409);
-    expect(demote.json().code).toBe('last_superadmin');
+    expect(demote.statusCode).toBe(403);
+    expect(demote.json().code).toBe('superadmin_cli_only');
+    expect(() => setRoles(cloud.surau.db, sup.userId, ['ajk'], 'cli')).toThrowError(expect.objectContaining({ code: 'last_superadmin' }));
     const off = await cloud.inject({ method: 'POST', url: `/api/users/${sup.userId}/deactivate`, headers: sup.headers });
     expect(off.statusCode).toBe(409);
     expect(off.json().code).toBe('last_superadmin');
     // with a second Pentadbir MAXCOM the first can step down
-    const second = await cloud.inject({ method: 'POST', url: '/api/users', headers: sup.headers, payload: { name: 'Kedua', roles: ['superadmin'] } });
-    expect(second.statusCode).toBe(201);
-    expect((await putRoles(cloud, sup.headers, sup.userId, ['ajk'])).statusCode).toBe(200);
+    createUser(cloud.surau.db, { name: 'Kedua', roles: ['superadmin'] }, 'cli', 'sdm');
+    expect(setRoles(cloud.surau.db, sup.userId, ['ajk'], 'cli').roles).toEqual(['ajk']);
   });
 
-  it('a Pentadbir MAXCOM counts as an administrator: the only one is last_admin', async () => {
+  it('a Pentadbir MAXCOM is not a surau administrator and a surau session cannot reach it (404)', async () => {
     const box = makeApp('box');
     const solo = await loginAs(box, 'superadmin');
-    expect(activeAdminCount(box.surau.db)).toBe(1);
+    expect(activeAdminCount(box.surau.db, 'sdm')).toBe(0);
     expect(activeSuperadminCount(box.surau.db)).toBe(1);
     const r = await box.inject({ method: 'POST', url: `/api/users/${solo.userId}/deactivate`, headers: solo.headers });
-    expect(r.statusCode).toBe(409);
-    expect(r.json().code).toBe('last_admin');
-    const both = await loginAs(box, ['admin']);
-    expect(activeAdminCount(box.surau.db)).toBe(2);
-    // an admin who is not a superadmin can go once another administrator remains
-    const d = await box.inject({ method: 'POST', url: `/api/users/${both.userId}/deactivate`, headers: solo.headers });
+    expect(r.statusCode).toBe(404);
+    const first = await loginAs(box, ['admin']);
+    expect(activeAdminCount(box.surau.db, 'sdm')).toBe(1);
+    // the only surau administrator cannot go, whatever a Pentadbir MAXCOM would add
+    const last = await box.inject({ method: 'POST', url: `/api/users/${first.userId}/deactivate`, headers: first.headers });
+    expect(last.json().code).toBe('last_admin');
+    const second = await loginAs(box, ['admin']);
+    expect(activeAdminCount(box.surau.db, 'sdm')).toBe(2);
+    // an admin can go once another administrator remains
+    const d = await box.inject({ method: 'POST', url: `/api/users/${first.userId}/deactivate`, headers: second.headers });
     expect(d.statusCode, d.body).toBe(200);
   });
 });
@@ -201,7 +211,7 @@ describe('replicated superadmin rows', () => {
 
   it('a box takes a superadmin row from the cloud and refuses to lose its last one by replication', () => {
     const box = memDb('box');
-    createUser(box, { name: 'Pentadbir Surau', roles: ['admin'] }, 'test');
+    createUser(box, { name: 'Pentadbir Surau', roles: ['admin'] }, 'test', 'sdm');
     const e = userEntry('u-cloud', 'cloud', ['superadmin']);
     expect(applyFeedEntry(box, e, ctx('cloud'))).toEqual({ status: 'applied', reason: null });
     expect(getUserRow(box, 'u-cloud')!.roles).toEqual(['superadmin']);
@@ -216,17 +226,17 @@ describe('replicated superadmin rows', () => {
   it('the first superadmin is made by promotion on the cloud and then replicates to the box', async () => {
     const cloud = memDb('cloud');
     const box = memDb('box');
-    createUser(box, { name: 'Pentadbir Surau', roles: ['admin'] }, 'test');
+    createUser(box, { name: 'Pentadbir Surau', roles: ['admin'] }, 'test', 'sdm');
     // the box's admin reaches the cloud as an ordinary user
     for (const e of readFeed(box, 0, 500, { users: true, devices: true }).entries) applyFeedEntry(cloud, e, ctx('box:b1'));
-    const adminOnCloud = listUsers(cloud).find((u) => u.name === 'Pentadbir Surau')!;
+    const adminOnCloud = listUsers(cloud, 'sdm').find((u) => u.name === 'Pentadbir Surau')!;
     expect(adminOnCloud.roles).toEqual(['admin']);
     const before = readFeed(cloud, 0, 500, { users: true, devices: true }).head;
     await new Promise((r) => setTimeout(r, 15)); // the promotion is a later edit than the box's own
     const p = promoteSuperadmin(cloud, adminOnCloud.id, 'local', 'MAXCOM SuperAdmin');
     expect(p.roles).toEqual(['superadmin', 'admin']);
     // ... and the box takes it from the cloud
-    const feed = readFeed(cloud, before, 500, { users: true, devices: true });
+    const feed = readFeed(cloud, before, 500, { users: true, devices: true, star: true });
     expect(feed.entries.length).toBeGreaterThan(0);
     for (const e of feed.entries) expect(applyFeedEntry(box, e, { ...ctx('cloud'), now: new Date(Date.now() + 60_000) }).status).toBe('applied');
     const onBox = getUserRow(box, adminOnCloud.id)!;
@@ -236,8 +246,8 @@ describe('replicated superadmin rows', () => {
 
   it('promotion counts every superadmin row, active or not, as "one exists"', () => {
     const cloud = memDb('cloud');
-    const a = createUser(cloud, { name: 'Pertama', roles: ['admin'] }, 'test');
-    const b = createUser(cloud, { name: 'Kedua', roles: ['admin'] }, 'test');
+    const a = createUser(cloud, { name: 'Pertama', roles: ['admin'] }, 'test', 'sdm');
+    const b = createUser(cloud, { name: 'Kedua', roles: ['admin'] }, 'test', 'sdm');
     promoteSuperadmin(cloud, a.id, 'local');
     cloud.prepare('UPDATE users SET active = 0 WHERE id = ?').run(a.id);
     expect(activeSuperadminCount(cloud)).toBe(0);
@@ -247,11 +257,11 @@ describe('replicated superadmin rows', () => {
 
   it('the promote step makes a superadmin at the database, and only while none exists', () => {
     const box = memDb('box');
-    const u = createUser(box, { name: 'Pentadbir Ujian', roles: ['admin'] }, 'test');
+    const u = createUser(box, { name: 'Pentadbir Ujian', roles: ['admin'] }, 'test', 'sdm');
     const p = promoteSuperadmin(box, u.id, 'local', 'MAXCOM SuperAdmin');
     expect(p.roles).toEqual(['superadmin', 'admin']);
     expect(p.name).toBe('MAXCOM SuperAdmin');
-    const v = createUser(box, { name: 'Lain', roles: ['admin'] }, 'test');
+    const v = createUser(box, { name: 'Lain', roles: ['admin'] }, 'test', 'sdm');
     expect(() => promoteSuperadmin(box, v.id, 'local')).toThrowError(/sudah wujud/);
   });
 });
@@ -299,7 +309,7 @@ describe('a device enrolment for a Pentadbir MAXCOM from a site', () => {
 
 describe('the Pentadbir MAXCOM device always asks for a PIN', () => {
   async function enrolWithoutPin(app: FastifyInstance, roles: Role[]) {
-    const user = createUser(app.surau.db, { name: `U ${roles.join('+')}`, roles: roles.includes('superadmin') ? ['ajk'] : roles }, 'test');
+    const user = createUser(app.surau.db, { name: `U ${roles.join('+')}`, roles: roles.includes('superadmin') ? ['ajk'] : roles }, 'test', 'sdm');
     if (roles.includes('superadmin')) app.surau.db.prepare('UPDATE users SET roles_json = ? WHERE id = ?').run(JSON.stringify(roles), user.id);
     const { code } = beginEnrolment(app.surau.db, { userId: user.id, deviceName: 'P' }, 'test', { canManageSuperadmin: true });
     const keys = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
@@ -378,8 +388,8 @@ describe('promote-superadmin on the command line', () => {
     dirs.push(dir);
     const dbPath = join(dir, 'surau.db');
     const db = openDb(dbPath);
-    const u = createUser(db, { name: 'Pentadbir Ujian', roles: ['admin'] }, 'test');
-    createUser(db, { name: 'Ustaz Ali', roles: ['admin'] }, 'test');
+    const u = createUser(db, { name: 'Pentadbir Ujian', roles: ['admin'] }, 'test', 'sdm');
+    createUser(db, { name: 'Ustaz Ali', roles: ['admin'] }, 'test', 'sdm');
     db.close();
     expect(cli(['--db', dbPath, 'promote-superadmin', '--name', 'pentadbir ujian']).code).toBe(1); // the exact name only
     const r = cli(['--db', dbPath, 'promote-superadmin', '--name', 'Pentadbir Ujian', '--rename', 'MAXCOM SuperAdmin']);

@@ -4,7 +4,9 @@ import { ROLES } from '@surau/core';
 import type { Role } from '@surau/core';
 import { beginEnrolment } from '../src/auth/devices.ts';
 import { getVersion } from '../src/settingsStore.ts';
-import { createUser } from '../src/auth/users.ts';
+import { createUser, serverRoleOf } from '../src/auth/users.ts';
+import { holdsOpsRole, issueOpsEnrolment } from '../src/auth/opsDevice.ts';
+import { LOCAL_SURAU_ID, SURAU_HEADER } from '../src/tenant.ts';
 
 export const TEST_PIN = '482916';
 
@@ -13,8 +15,11 @@ export interface Login {
   userId: string;
   deviceId: string;
   roles: Role[];
-  /** `{ authorization: 'Bearer <token>' }` for `app.inject`. */
-  headers: { authorization: string };
+  /**
+   * `{ authorization: 'Bearer <token>' }` for `app.inject`. An ops login on a cloud-role app also carries the
+   * acting-surau header for the local surau (Plan 14 Task 3), so the existing tests act in one surau as before.
+   */
+  headers: { authorization: string; 'x-maxcom-surau'?: string };
   /** Settings version right after set-up (creating users bumps it). */
   baseVersion: number;
   /** Signs a fresh challenge and unlocks again (a new session for the same device). */
@@ -31,7 +36,7 @@ let counter = 0;
  * verifies. Each login uses its own fake client address so the per-IP rate limits of one app are
  * never consumed by test set-up.
  */
-export async function loginAs(app: FastifyInstance, role: Role | Role[], pin: string = TEST_PIN): Promise<Login> {
+export async function loginAs(app: FastifyInstance, role: Role | Role[], pin: string = TEST_PIN, surauId: string = LOCAL_SURAU_ID): Promise<Login> {
   const roles = Array.isArray(role) ? role : [role];
   const n = ++counter;
   const remoteAddress = `10.${(n >> 8) & 255}.${n & 255}.7`;
@@ -39,11 +44,26 @@ export async function loginAs(app: FastifyInstance, role: Role | Role[], pin: st
 
   // The Pentadbir MAXCOM is cloud-made; a test database gets one the way the operator does (the promote step).
   const plain = roles.filter((r) => r !== 'superadmin');
-  const user = createUser(db, { name: `Test ${roles.join('+')} ${n}`, roles: plain.length > 0 ? plain : ['ajk'] }, 'test');
+  const user = createUser(db, { name: `Test ${roles.join('+')} ${n}`, roles: plain.length > 0 ? plain : ['ajk'] }, 'test', surauId);
   if (roles.includes('superadmin')) {
     db.prepare('UPDATE users SET roles_json = ? WHERE id = ?').run(JSON.stringify(ROLES.filter((r) => roles.includes(r))), user.id);
   }
-  const { code } = beginEnrolment(db, { userId: user.id, deviceName: `Peranti ${n}` }, 'test', { canManageSuperadmin: true });
+  // As migration 019 does: an ops-role account is a `*` user.
+  if (holdsOpsRole(roles)) db.prepare("UPDATE users SET surau_id = '*', no = NULL, no_src = NULL WHERE id = ?").run(user.id);
+  // On a cloud-role app an ops-role person gets no ordinary code (Plan 14 Task 23): it enrols an OPS device the
+  // CLI way, so the existing superadmin tests keep their powers there. A box-role app is unchanged.
+  const opsLogin = serverRoleOf(db) === 'cloud' && holdsOpsRole(roles);
+  if (opsLogin) {
+    db.prepare('INSERT OR IGNORE INTO suraus (id, name, created_at, created_by) VALUES (?, ?, ?, ?)').run(
+      LOCAL_SURAU_ID,
+      'Surau ujian',
+      new Date().toISOString(),
+      'test',
+    );
+  }
+  const { code } = opsLogin
+    ? issueOpsEnrolment(db, { userId: user.id, deviceName: `Peranti ${n}` }, 'test')
+    : beginEnrolment(db, { userId: user.id, deviceName: `Peranti ${n}` }, 'test', { canManageSuperadmin: true });
 
   const keys = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const jwk = await webcrypto.subtle.exportKey('jwk', keys.publicKey);
@@ -53,7 +73,7 @@ export async function loginAs(app: FastifyInstance, role: Role | Role[], pin: st
     method: 'POST',
     url: '/api/enrol/complete',
     remoteAddress,
-    payload: { code, publicJwk, platform: 'web', pin },
+    payload: { code, publicJwk, platform: 'web', pin, ...(opsLogin ? { client: 'ops' } : {}) },
   });
   if (enrol.statusCode !== 200) throw new Error(`enrol failed: ${enrol.statusCode} ${enrol.body}`);
   const deviceId = String(enrol.json().deviceId);
@@ -80,8 +100,8 @@ export async function loginAs(app: FastifyInstance, role: Role | Role[], pin: st
     userId: user.id,
     deviceId,
     roles,
-    headers: { authorization: `Bearer ${token}` },
-    baseVersion: getVersion(db),
+    headers: opsLogin ? { authorization: `Bearer ${token}`, [SURAU_HEADER]: LOCAL_SURAU_ID } : { authorization: `Bearer ${token}` },
+    baseVersion: getVersion(db, surauId),
     relogin: unlockOnce,
     sign: async (message: Uint8Array): Promise<string> =>
       Buffer.from(await webcrypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, keys.privateKey, Buffer.from(message))).toString('base64url'),

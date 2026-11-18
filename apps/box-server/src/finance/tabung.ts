@@ -1,21 +1,30 @@
 /** The donation card for the TV: live figures from the ledger, or the hand-typed rows while finance is off. */
 import type { DatabaseSync } from 'node:sqlite';
-import { effective, klDateOf, signOf } from '@surau/core';
+import { effective, klDateOf, signOf, tvLanguage } from '@surau/core';
 import type { EffectiveEntry, Fund, Settings, TabungCardView, TabungRow } from '@surau/core';
-import { allEntries, listFunds } from './store.ts';
+import { allEntries, listFunds, listPerihal } from './store.ts';
 
 type Raw = Record<string, unknown> | undefined;
 const feat = (s: Settings, k: string): Raw => (s as unknown as Record<string, Raw>)[k];
 const intOr = (v: unknown, fb: number): number => (typeof v === 'number' && Number.isSafeInteger(v) ? v : fb);
 const ASSET = /^[0-9a-f]{64}$/;
 
+/** The texts the box writes on the card, in the TV language (the surau's own words are never replaced). */
+const TEXT = {
+  ms: { title: 'Tabung Surau', fridayLast: 'Kutipan Jumaat terakhir', last: 'Kutipan terakhir', month: 'Bulan ini' },
+  en: { title: 'Donation fund', fridayLast: 'Last Friday collection', last: 'Last collection', month: 'This month' },
+} as const;
+/** The old stored default of the title, written before the default became empty: it counts as "untouched". */
+const OLD_TITLE_DEFAULT = 'Tabung Surau';
+
 const FIGURES = ['balance', 'month', 'lastEntry'] as const;
 
 /** `null` when the card is off; a manual card while finance is off; else the live card of the public tabung. */
 const cmpStr = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
-export function buildTabung(db: DatabaseSync, now: Date, settings: Settings): TabungCardView | null {
+export function buildTabung(db: DatabaseSync, now: Date, settings: Settings, surauId: string): TabungCardView | null {
   const card = feat(settings, 'tabungCard');
+  const tx = TEXT[tvLanguage(settings)];
   if (card === undefined || card.enabled !== true) return null;
   const qr = typeof card.qrAssetId === 'string' && ASSET.test(card.qrAssetId) ? card.qrAssetId : null;
   const figure = FIGURES.find((f) => f === card.figure) ?? 'balance';
@@ -27,8 +36,9 @@ export function buildTabung(db: DatabaseSync, now: Date, settings: Settings): Ta
       if (label === '') continue;
       rows.push({ id: `manual-${n}`, name: label, valueSen: intOr(card[`row${n}Sen`], 0), subLabel: null, subSen: null, targetSen: null, highlightUntil: null });
     }
-    const edited = db.prepare("SELECT edited_at, updated_at FROM settings WHERE feature = 'tabungCard'").get();
-    const title = typeof card.manualTitle === 'string' && card.manualTitle.trim() !== '' ? card.manualTitle.trim() : 'Tabung Surau';
+    const edited = db.prepare("SELECT edited_at, updated_at FROM settings WHERE surau_id = ? AND feature = 'tabungCard'").get(surauId);
+    const own = typeof card.manualTitle === 'string' ? card.manualTitle.trim() : '';
+    const title = own === '' || own === OLD_TITLE_DEFAULT ? tx.title : own;
     return {
       title, manual: true, figure, rows, qrAssetId: qr,
       updatedAt: edited === undefined ? null : String(edited.edited_at ?? edited.updated_at),
@@ -36,7 +46,7 @@ export function buildTabung(db: DatabaseSync, now: Date, settings: Settings): Ta
   }
 
   const ym = klDateOf(now).slice(0, 7);
-  const eff = effective(allEntries(db));
+  const eff = effective(allEntries(db, surauId));
   const showTarget = card.showTarget !== false;
   const highlightMs = Math.max(0, Math.min(120, intOr(card.highlightSeconds, 20))) * 1000;
 
@@ -49,8 +59,11 @@ export function buildTabung(db: DatabaseSync, now: Date, settings: Settings): Ta
   let latest = 0;
   for (const e of eff) latest = Math.max(latest, touchOf(e) || 0);
 
+  // the Jumaat line is about the Friday collection: the perihal named for it, not any money in
+  const jumaatPerihal = new Set(listPerihal(db, { includeArchived: true }, surauId).filter((p) => p.direction === 'in' && /jumaat/i.test(p.label)).map((p) => p.id));
+  const lastOf = (list: EffectiveEntry[]): number => (list.length > 0 ? list[list.length - 1]!.effAmountSen : 0);
   const rows: TabungRow[] = [];
-  for (const f of listFunds(db) as Fund[]) {
+  for (const f of listFunds(db, undefined, surauId) as Fund[]) {
     if (!f.public) continue;
     const mine = (byFund.get(f.id) ?? []).filter((e) => !e.voided);
     const balance = mine.reduce((a, e) => a + signOf(e.kind) * e.effAmountSen, 0);
@@ -64,8 +77,12 @@ export function buildTabung(db: DatabaseSync, now: Date, settings: Settings): Ta
     let subLabel: string | null = null;
     let subSen: number | null = null;
     const targetSen = showTarget ? f.targetSen : null;
-    if (f.jumaat) { subLabel = 'Kutipan Jumaat terakhir'; subSen = lastIn; }
-    else if (targetSen === null) { subLabel = 'Bulan ini'; subSen = monthIn; }
+    if (f.jumaat) {
+      const fridays = ins.filter((e) => e.perihalId !== null && jumaatPerihal.has(e.perihalId));
+      if (fridays.length > 0) { subLabel = tx.fridayLast; subSen = lastOf(fridays); }
+      else { subLabel = tx.last; subSen = lastIn; }
+    }
+    else if (targetSen === null) { subLabel = tx.month; subSen = monthIn; }
 
     let touched = 0;
     for (const e of byFund.get(f.id) ?? []) touched = Math.max(touched, touchOf(e) || 0);
@@ -75,5 +92,5 @@ export function buildTabung(db: DatabaseSync, now: Date, settings: Settings): Ta
       highlightUntil: until > now.getTime() ? new Date(until).toISOString() : null,
     });
   }
-  return { title: 'Tabung Surau', manual: false, figure, rows, qrAssetId: qr, updatedAt: latest > 0 ? new Date(latest).toISOString() : null };
+  return { title: tx.title, manual: false, figure, rows, qrAssetId: qr, updatedAt: latest > 0 ? new Date(latest).toISOString() : null };
 }

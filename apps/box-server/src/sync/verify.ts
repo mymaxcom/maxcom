@@ -1,16 +1,20 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { can, isFeatureKey, isoInstantMs, opMessage, patchNeedsSystemWrite } from '@surau/core';
+import { can, canWriteSettingsFeatures, isFeatureKey, isoInstantMs, opMessage, patchNeedsSystemWrite } from '@surau/core';
 import type { FeedEntry, OpKind, OpRefusal, Permission, SyncOp } from '@surau/core';
 import { verifyP256 } from '../auth/crypto.ts';
-import { getDeviceWithKey } from '../auth/devices.ts';
+import { expectedBoxId, getDeviceWithKey } from '../auth/devices.ts';
 import { authLog } from '../auth/sessions.ts';
-import { getAuthUser } from '../auth/users.ts';
+import { effectiveRolesFor, isOpsDevice } from '../auth/opsDevice.ts';
+import { getAuthUser, isStarUser, serverRoleOf } from '../auth/users.ts';
 import { sanitizeStamps } from '../settingsStore.ts';
 import { cleanPublicJwk } from './sites.ts';
 import type { VerifiedOp } from './apply.ts';
 
 /** The surau this server holds today (spec 7.2: a second surau later is a second value, not a schema change). */
 export const DEFAULT_SURAU_ID = 'sdm';
+
+/** The surau id every app and box signs on the wire today: on the cloud it means the sender's own surau. */
+export const WIRE_SURAU_ID = DEFAULT_SURAU_ID;
 
 /** Same encoding `unlock` accepts: base64url of the 64-byte IEEE P1363 r||s. */
 const SIG_RE = /^[A-Za-z0-9_-]{86}$/;
@@ -107,10 +111,16 @@ export function verifyDeviceOp(
   const problem = shapeProblem(op);
   if (problem !== null) return refuse('invalid', problem);
   const o = op as SyncOp;
-  if (o.boxId !== server.boxId) return refuse('invalid', 'box_mismatch');
-  if (o.surauId !== (server.surauId ?? DEFAULT_SURAU_ID)) return refuse('invalid', 'surau_mismatch');
+  // The box named in the op must be the device's own home box (Plan 14 Task 7); an unknown device is checked
+  // against this server's id, as before, and is refused below as unknown.
+  const known = getDeviceWithKey(db, o.deviceId);
+  const homeBox = known === undefined ? server.boxId : expectedBoxId(db, known, { boxId: server.boxId, role: serverRoleOf(db) });
+  if (homeBox === null || o.boxId !== homeBox) return refuse('invalid', 'box_mismatch');
+  // `surauId` names the tenant, or is the wire alias `sdm` = "my own surau" that every app signs today (Plan 14
+  // section 3.1); the tenant itself comes from the device row, never from the op. Any other id is refused.
+  if (o.surauId !== (server.surauId ?? DEFAULT_SURAU_ID) && o.surauId !== WIRE_SURAU_ID) return refuse('invalid', 'surau_mismatch');
 
-  const device = getDeviceWithKey(db, o.deviceId);
+  const device = known;
   if (device === undefined || device.publicJwk === null) return refuse('device_unknown', 'device_unknown');
   if (device.revokedAt !== null) return refuse('device_revoked', 'device_revoked');
   if (device.userId !== o.userId) return refuse('device_unknown', 'user_mismatch');
@@ -127,21 +137,43 @@ export function verifyDeviceOp(
     return refuse('bad_signature', 'bad_signature');
   }
 
-  const needs = OP_PERMISSIONS[o.kind];
-  for (const p of needs) if (!can(user.roles, p)) return refuse('forbidden', 'forbidden');
+  // The roles this device acts with (Plan 14 section 3.4): on the cloud the ops roles count only from an ops device.
+  const roles = effectiveRolesFor(db, user, device.id, { role: serverRoleOf(db) });
+  // A settings.put names one feature: Siaran Langsung (live:settings) may write the live features only.
+  const liveOnly = o.kind === 'settings.put' && !can(roles, 'settings:write') && isFeatureKey(o.entityId) && canWriteSettingsFeatures(roles, [o.entityId]);
+  const needs: readonly Permission[] = liveOnly ? ['live:settings'] : OP_PERMISSIONS[o.kind];
+  for (const p of needs) if (!can(roles, p)) return refuse('forbidden', 'forbidden');
 
   // Finer rights inside two kinds. MAXCOM system values are for the Pentadbir MAXCOM only (system:write), and
   // adding or removing the Pentadbir MAXCOM role needs superadmin:manage; the permission above is not enough.
-  if (o.kind === 'settings.put' && isFeatureKey(o.entityId) && patchNeedsSystemWrite(o.entityId, o.payload) && !can(user.roles, 'system:write')) {
+  if (o.kind === 'settings.put' && isFeatureKey(o.entityId) && patchNeedsSystemWrite(o.entityId, o.payload) && !can(roles, 'system:write')) {
     return refuse('forbidden', 'system_write');
   }
-  if (o.kind === 'user.put' && (changesSuperadmin(db, o) || holdsSuperadmin(db, o.entityId)) && !can(user.roles, 'superadmin:manage')) {
+  // A Pentadbir MAXCOM or Sokongan MAXCOM row and its devices do not exist for a surau session (operator decision 21):
+  // the answer is the one an unmalformed op for nothing gets, and one auth_log row says why.
+  // On a BOX the one exception is the person's own account (its own row, its own devices) from its own phone: a
+  // rename only (roles and active stay with the CLI), and revoking its own devices. Every other account gets not_found.
+  const onBox = serverRoleOf(db) !== 'cloud';
+  if (o.kind === 'user.put' && isStarUser(db, o.entityId) && !isOpsDevice(db, device.id)) {
+    if (!(onBox && o.entityId === o.userId)) return refuse('invalid', 'not_found');
+    if (changesRolesOrActive(db, o)) return refuse('forbidden', 'superadmin_cli_only');
+  }
+  if (o.kind === 'device.revoke') {
+    const dev = getDeviceWithKey(db, o.entityId);
+    if (dev !== undefined && isStarUser(db, dev.userId) && !isOpsDevice(db, device.id) && !(onBox && dev.userId === o.userId)) {
+      return refuse('invalid', 'not_found');
+    }
+  }
+  if (o.kind === 'user.put' && (changesSuperadmin(db, o) || holdsSuperadmin(db, o.entityId)) && !can(roles, 'superadmin:manage')) {
     return refuse('forbidden', 'superadmin_manage');
   }
+  // The ops roles (superadmin, support) are granted or removed only by the CLI, never by a synced op (operator
+  // decision 2026-11-12), not even from an ops device of a superadmin.
+  if (o.kind === 'user.put' && changesOpsRoles(db, o)) return refuse('forbidden', 'superadmin_cli_only');
   // Any edit to a Pentadbir MAXCOM, or the revocation of one's device, is superadmin:manage too (not only the role bit).
   if (o.kind === 'device.revoke') {
     const owner = getDeviceWithKey(db, o.entityId)?.userId;
-    if (owner !== undefined && holdsSuperadmin(db, owner) && !can(user.roles, 'superadmin:manage')) {
+    if (owner !== undefined && holdsSuperadmin(db, owner) && !can(roles, 'superadmin:manage')) {
       return refuse('forbidden', 'superadmin_manage');
     }
   }
@@ -157,6 +189,27 @@ function changesSuperadmin(db: DatabaseSync, o: SyncOp): boolean {
   const after = Array.isArray(o.payload.roles) && o.payload.roles.includes('superadmin');
   const before = getAuthUser(db, o.entityId)?.roles.includes('superadmin') === true;
   return after !== before;
+}
+
+/** Does a `user.put` change any role, or the active flag, of its target? (Absent fields change nothing.) */
+function changesRolesOrActive(db: DatabaseSync, o: SyncOp): boolean {
+  if (!isPlain(o.payload)) return false;
+  const now = getAuthUser(db, o.entityId);
+  if (o.payload.active !== undefined && o.payload.active !== (now?.active ?? true)) return true;
+  if (o.payload.roles === undefined) return false;
+  const roles: unknown = o.payload.roles;
+  if (!Array.isArray(roles)) return true;
+  const had = new Set<string>(now?.roles ?? []);
+  const want = new Set<unknown>(roles);
+  return want.size !== had.size || [...want].some((r) => typeof r !== 'string' || !had.has(r));
+}
+
+/** Does a `user.put` add or remove `superadmin` or `support` on its target? (A payload without roles changes none.) */
+function changesOpsRoles(db: DatabaseSync, o: SyncOp): boolean {
+  if (!isPlain(o.payload) || o.payload.roles === undefined) return false;
+  const roles: unknown = o.payload.roles;
+  const now = getAuthUser(db, o.entityId)?.roles ?? [];
+  return ['superadmin', 'support'].some((r) => (Array.isArray(roles) && roles.includes(r)) !== now.includes(r as never));
 }
 
 const ACTOR_RE = /^[A-Za-z0-9:_@.|-]{1,120}$/;
@@ -177,7 +230,11 @@ function prayerEntryOk(entity: string, entityId: unknown, after: unknown): boole
   return isPlain(after);
 }
 
-const DEVICE_AFTER_KEYS = new Set(['id', 'userId', 'name', 'platform', 'revoked', 'publicJwk', 'enrolledAt']);
+// `boxId` (Plan 14 Task 7): the home box a box names for the phones it enrolled, on the way UP only. The cloud never
+// sends it down (an unmodified box refuses any key outside its own list), and never takes it from the entry: the
+// home box is stamped from the sending site.
+const DEVICE_AFTER_KEYS = new Set(['id', 'userId', 'name', 'platform', 'revoked', 'publicJwk', 'enrolledAt', 'boxId', 'no', 'noSrc']);
+const BOX_ID_RE = /^[0-9a-f]{16}$/;
 const DEVICE_PLATFORMS: readonly string[] = ['android', 'ios-web', 'web', 'kiosk'];
 
 /**
@@ -192,6 +249,9 @@ function deviceAfterOk(entityId: string, after: unknown): boolean {
   if (after.name !== undefined && !str(after.name, 200)) return false;
   if (after.platform !== undefined && !(typeof after.platform === 'string' && DEVICE_PLATFORMS.includes(after.platform))) return false;
   if (after.revoked !== undefined && typeof after.revoked !== 'boolean') return false;
+  if (after.boxId !== undefined && !(typeof after.boxId === 'string' && BOX_ID_RE.test(after.boxId))) return false;
+  if (after.no !== undefined && !(typeof after.no === 'number' && Number.isInteger(after.no) && after.no >= 1 && after.no < 1_000_000_000)) return false;
+  if (after.noSrc !== undefined && after.noSrc !== 'b' && after.noSrc !== 'c') return false;
   if (after.enrolledAt !== undefined && !(typeof after.enrolledAt === 'string' && isoInstantMs(after.enrolledAt) !== null)) return false;
   if (after.publicJwk !== undefined) {
     if (cleanPublicJwk(after.publicJwk) === null) return false;
@@ -237,6 +297,8 @@ export function verifySiteEntry(site: { boxId: string; surauId: string }, server
   if (isoInstantMs(e.editedAt) === null) return { ok: false, detail: 'bad_time' };
   if (typeof e.syncedAt !== 'string' || e.syncedAt.length > 40) return { ok: false, detail: 'bad_shape' };
   if (e.entity === 'device' && !deviceAfterOk(e.entityId as string, e.after)) return { ok: false, detail: 'bad_device' };
+  // A site names only its own box as a phone's home box; another box's id is refused, never honoured.
+  if (e.entity === 'device' && isPlain(e.after) && e.after.boxId !== undefined && e.after.boxId !== site.boxId) return { ok: false, detail: 'box_mismatch' };
   if (e.entity.startsWith('prayer:') && !prayerEntryOk(e.entity, e.entityId, e.after)) return { ok: false, detail: 'bad_prayer' };
   if (e.entity.startsWith('finance:') && !financeEntryOk(e.entity, e.entityId, e.after)) return { ok: false, detail: 'bad_finance' };
   if (e.stamps !== undefined && (e.entity !== 'settings' || sanitizeStamps(e.stamps, (t) => t) === null)) return { ok: false, detail: 'bad_stamps' };

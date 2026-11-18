@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { LOCAL_SURAU_ID } from '../src/tenant.ts';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -72,11 +73,11 @@ describe('theme routes', () => {
     expect(img.statusCode).toBe(200);
     expect(img.headers['content-type']).toBe('image/jpeg');
 
-    const before = getVersion(app.surau.db);
+    const before = getVersion(app.surau.db, LOCAL_SURAU_ID);
     const i = await app.inject({ method: 'POST', url: '/api/themes/install', headers: admin, payload: { stagedId } });
     expect(i.statusCode).toBe(201);
     expect(i.json()).toEqual({ name: 'hijau-siti', version: 3, title: 'Hijau Siti' });
-    expect(getVersion(app.surau.db)).toBeGreaterThan(before);
+    expect(getVersion(app.surau.db, LOCAL_SURAU_ID)).toBeGreaterThan(before);
 
     const css = await app.inject({ method: 'GET', url: `/themes/hijau-siti/${H}/bundle.css` });
     expect(css.statusCode).toBe(200);
@@ -111,7 +112,8 @@ describe('theme routes', () => {
 
   it('a pack with a font or an animation is refused at the check, and nothing is staged', async () => {
     const { app, admin } = await setup();
-    for (const extra of <Record<string, string | Buffer>[]>[{ 'fonts/naskh-siti.woff2': woff2(500) }, { 'theme.css': '.a{animation:x 1s}' }, { 'theme.css': '@font-face{font-family:x}' }, { 'images/semua.webp': Buffer.alloc(30) }]) {
+    const extras: Array<Record<string, string | Buffer>> = [{ 'fonts/naskh-siti.woff2': woff2(500) }, { 'theme.css': '.a{animation:x 1s}' }, { 'theme.css': '@font-face{font-family:x}' }, { 'images/semua.webp': Buffer.alloc(30) }];
+    for (const extra of extras) {
       const c = await check(app, admin, zip({ 'theme.json': json(), 'theme.css': '.a{color:red}', ...extra }));
       expect(c.statusCode).toBe(200);
       expect(c.json().stagedId).toBeNull();
@@ -129,7 +131,7 @@ describe('theme routes', () => {
     const r = await app.inject({ method: 'POST', url: '/api/themes/install', headers: admin, payload: { stagedId: c.json().stagedId } });
     expect(r.statusCode).toBe(429);
     expect(r.json().code).toBe('too_many_installs');
-    expect(getSettings(app.surau.db).themeStyle.packs['hijau-siti']!.version).toBe(10);
+    expect(getSettings(app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']!.version).toBe(10);
   });
 
   it('a refused pack answers 200 with the issues and stages nothing', async () => {
@@ -234,7 +236,7 @@ Connection: close
       expect(kiosk.statusCode, `kiosk ${call.url}`).toBe(403);
     }
     // nothing was staged, installed or removed by those refusals
-    expect(getSettings(app.surau.db).themeStyle.packs).toEqual({});
+    expect(getSettings(app.surau.db, LOCAL_SURAU_ID).themeStyle.packs).toEqual({});
     expect((await app.inject({ method: 'GET', url: `/api/themes/staged/${stagedId}/bundle.css`, headers: admin })).statusCode).toBe(200);
     // a LAN client without a token cannot read the served pack either
     await app.inject({ method: 'POST', url: '/api/themes/install', headers: admin, payload: { stagedId } });
@@ -266,7 +268,7 @@ Connection: close
     const { app, admin } = await setup();
     const c = await check(app, admin, validZip());
     await app.inject({ method: 'POST', url: '/api/themes/install', headers: admin, payload: { stagedId: c.json().stagedId } });
-    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'test');
+    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'hijau-siti' }, 'test', undefined, LOCAL_SURAU_ID);
     const inUse = await app.inject({ method: 'DELETE', url: '/api/themes/hijau-siti', headers: admin });
     expect(inUse.statusCode).toBe(409);
     expect(inUse.json()).toMatchObject({ code: 'in_use', errors: ['Tema ini sedang digunakan. Pilih tema lain dahulu.'] });
@@ -275,11 +277,11 @@ Connection: close
     expect(built.json()).toMatchObject({ code: 'built_in', errors: ['Tema bawaan MAXCOM tidak boleh dipadam.'] });
     expect((await app.inject({ method: 'DELETE', url: '/api/themes/tiada', headers: admin })).statusCode).toBe(404);
     expect((await app.inject({ method: 'DELETE', url: '/api/themes/Bad%20Name', headers: admin })).statusCode).toBe(404);
-    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'creative' }, 'test');
-    const before = getVersion(app.surau.db);
+    putFeature(app.surau.db, 'kioskTemplate', { templateId: 'creative' }, 'test', undefined, LOCAL_SURAU_ID);
+    const before = getVersion(app.surau.db, LOCAL_SURAU_ID);
     expect((await app.inject({ method: 'DELETE', url: '/api/themes/hijau-siti', headers: admin })).statusCode).toBe(204);
-    expect(getVersion(app.surau.db)).toBeGreaterThan(before);
-    expect(getSettings(app.surau.db).themeStyle.packs['hijau-siti']).toBeUndefined();
+    expect(getVersion(app.surau.db, LOCAL_SURAU_ID)).toBeGreaterThan(before);
+    expect(getSettings(app.surau.db, LOCAL_SURAU_ID).themeStyle.packs['hijau-siti']).toBeUndefined();
     expect((await app.inject({ method: 'GET', url: `/themes/hijau-siti/${H}/bundle.css` })).statusCode).toBe(404);
   });
 
@@ -289,10 +291,10 @@ Connection: close
     const bus = (app as unknown as { surau: { db: unknown } }).surau;
     expect(bus).toBeDefined();
     const c = await check(app, admin, validZip());
-    const before = getVersion(app.surau.db);
+    const before = getVersion(app.surau.db, LOCAL_SURAU_ID);
     const r = await app.inject({ method: 'POST', url: '/api/themes/install', headers: admin, payload: { stagedId: c.json().stagedId } });
     expect(r.statusCode).toBe(201);
-    seen.push(getVersion(app.surau.db));
+    seen.push(getVersion(app.surau.db, LOCAL_SURAU_ID));
     expect(seen[0]).toBeGreaterThan(before);
     // the bundle the kiosk fetches now names the pack
     const b = await app.inject({ method: 'GET', url: '/api/kiosk/bundle' });

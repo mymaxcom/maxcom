@@ -10,6 +10,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_lang.dart';
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../l10n/generated/s.dart';
@@ -19,6 +20,8 @@ import '../../upload/upload_providers.dart' show uploadQueueProvider;
 import '../../upload/upload_queue.dart';
 import '../live/live_screen.dart' show LiveKuliah;
 import '../live/live_widgets.dart';
+import '../labels.dart' show monthWord, appLangOf, appLangOfS;
+import '../labels_content.dart' show monthWordsMs;
 import '../registry.g.dart' as reg;
 
 // ---- providers ----
@@ -156,22 +159,8 @@ Uri youtubeWatchUri(String videoId) =>
 
 // ---- words ----
 
-const List<String> _monthsMs = [
-  'Jan',
-  'Feb',
-  'Mac',
-  'Apr',
-  'Mei',
-  'Jun',
-  'Jul',
-  'Ogos',
-  'Sep',
-  'Okt',
-  'Nov',
-  'Dis',
-];
-
-String shortMonth(int month) => _monthsMs[month - 1];
+String shortMonth(int month, [AppLang lang = AppLang.ms]) =>
+    monthWord(month, lang, ms: monthWordsMs[month - 1]);
 
 /// `16:00` in the reader's zone ([local] already converted).
 String clockWords(DateTime local) =>
@@ -283,7 +272,7 @@ class UploadJobCard extends StatelessWidget {
     final day = k != null && DateTime.tryParse(k.date) != null
         ? DateTime.parse(k.date)
         : localOf(job.createdAt);
-    final dateWords = '${day.day} ${shortMonth(day.month)} ${day.year}';
+    final dateWords = '${day.day} ${shortMonth(day.month, appLangOfS(s))} ${day.year}';
     final subtitle = [k?.penceramah, dateWords].whereType<String>().join(', ');
     final resets = job.quotaResetsAt;
     final quotaTime = resets == null ? null : clockWords(localOf(resets));
@@ -300,7 +289,7 @@ class UploadJobCard extends StatelessWidget {
       CleanupPhase.scheduled => () {
         final at = cleanup!.deleteAt(keepDays)!;
         final d = localOf(at.toUtc());
-        return s.uploadDeleteOn('${d.day} ${shortMonth(d.month)} ${d.year}');
+        return s.uploadDeleteOn('${d.day} ${shortMonth(d.month, appLangOfS(s))} ${d.year}');
       }(),
       _ => null,
     };
@@ -477,7 +466,7 @@ class _DayTile extends StatelessWidget {
                 ),
               ),
               Text(
-                shortMonth(day.month).toUpperCase(),
+                shortMonth(day.month, appLangOf(context)).toUpperCase(),
                 style: text.labelSmall!.copyWith(
                   color: Colors.white.withValues(alpha: 0.82),
                   letterSpacing: 1.2,
@@ -487,8 +476,8 @@ class _DayTile extends StatelessWidget {
           ),
         ),
         if (done)
-          Positioned(
-            right: -7,
+          PositionedDirectional(
+            end: -7,
             top: -7,
             child: Container(
               width: 24,
@@ -516,7 +505,7 @@ class _ReplaceChip extends StatelessWidget {
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 14, 10),
       decoration: BoxDecoration(
         color: SurauColors.goldSoft,
         borderRadius: BorderRadius.circular(SurauTheme.radiusControl),
@@ -565,7 +554,7 @@ class _CleanupNote extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 14, 10),
       decoration: BoxDecoration(
         color: SurauColors.tealSoft,
         borderRadius: BorderRadius.circular(SurauTheme.radiusControl),
@@ -607,7 +596,7 @@ class _InlineNote extends StatelessWidget {
     final theme = Theme.of(context).textTheme;
     final ink = danger ? SurauColors.dangerInk : LiveColors.waitingInk;
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 14, 10),
       decoration: BoxDecoration(
         color: danger ? SurauColors.dangerSoft : LiveColors.waitingSoft,
         borderRadius: BorderRadius.circular(SurauTheme.radiusControl),

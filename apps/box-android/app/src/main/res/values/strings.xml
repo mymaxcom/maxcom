@@ -5,11 +5,11 @@
     <!-- Foreground service notification -->
     <string name="notif_channel_name">Perkhidmatan MAXCOM</string>
     <string name="notif_channel_desc">Menunjukkan bahawa pelayan MAXCOM sedang berjalan.</string>
-    <string name="notif_title">MAX Kiosk Server sedang berjalan</string>
-    <string name="notif_text_running">Pelayan surau aktif pada peranti ini.</string>
-    <string name="notif_text_starting">MAXCOM sedang dimulakan.</string>
-    <string name="notif_text_waiting_clock">Menunggu jam Internet.</string>
-    <string name="notif_text_failed">MAXCOM tidak dapat dimulakan.</string>
+    <string name="notif_title">MAX Kiosk Server sedang berjalan / MAX Kiosk Server is running</string>
+    <string name="notif_text_running">Pelayan surau aktif pada peranti ini / The surau server is active on this device</string>
+    <string name="notif_text_starting">MAXCOM sedang dimulakan / MAXCOM is starting</string>
+    <string name="notif_text_waiting_clock">Menunggu jam Internet / Waiting for the Internet clock</string>
+    <string name="notif_text_failed">MAXCOM tidak dapat dimulakan / MAXCOM could not start</string>
 
     <!-- Kiosk start screen -->
     <string name="start_title">MAXCOM</string>

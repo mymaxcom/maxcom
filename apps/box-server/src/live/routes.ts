@@ -2,6 +2,7 @@ import { isIP } from 'node:net';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { actorOf } from '../actor.ts';
 import { identityCan } from '../auth/authz.ts';
+import { reqSurau } from '../reqSurau.ts';
 import { LIVE_MSG, LiveError, parseStartRequest } from './sessions.ts';
 import type { LiveSessions } from './sessions.ts';
 import { MAX_SDP_BYTES, sendLiveError } from './webrtcProxy.ts';
@@ -16,6 +17,10 @@ export interface LiveRouteDeps {
   lanIps: string[];
   /** The box's YouTube service; null when the box has no data folder (unit tests) or the leg was injected as a bare seam. */
   youtube?: YoutubeService | null;
+  /** The YouTube service of one surau (the cloud keeps one sign-in per surau); when absent `youtube` serves every request. */
+  youtubeFor?: (surauId: string) => YoutubeService | null;
+  /** The cloud: a sign-out is also refused while a broadcast of that surau is open. */
+  cloud?: boolean;
 }
 
 /** Hostname the caller used to reach the box (fallback for the SRT host when no LAN IP is known). */
@@ -69,7 +74,7 @@ export function registerLiveRoutes(app: FastifyInstance, deps: LiveRouteDeps): v
         throw new LiveError(403, 'not_owner', LIVE_MSG.forbidden);
       }
       // the answer does not wait for ffmpeg, MediaMTX and YouTube clean-up; a new start does
-      const result = await sessions.stop(current.id, actorOf(request), 'stopped', { background: true });
+      const result = await sessions.stop(current.id, actorOf(request), 'stopped', { background: true, emergency: current.deviceId !== deviceId });
       return reply.header('Cache-Control', 'no-store').send(result);
     } catch (error) {
       return sendLiveError(reply, error);
@@ -86,9 +91,23 @@ export function registerLiveRoutes(app: FastifyInstance, deps: LiveRouteDeps): v
     }
   });
 
-  app.get('/api/live/status', async (_request, reply) => {
+  // the starting device's status poll is also its heartbeat: a box-pulled live ends 10 minutes after the last one
+  app.get('/api/live/status', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
+    const a = request.auth;
+    if (a != null && a.kind === 'user') sessions.heartbeat(a.deviceId);
     return sessions.status();
+  });
+
+  // volume = a run-time command, adding or removing a source = a combiner restart; the starting device only
+  app.post('/api/live/audio', async (request, reply) => {
+    try {
+      const { deviceId } = userOf(request);
+      const status = await sessions.changeAudio(deviceId, request.body);
+      return reply.header('Cache-Control', 'no-store').send(status);
+    } catch (error) {
+      return sendLiveError(reply, error);
+    }
   });
 
   app.get('/api/kiosk/live', async (_request, reply) => {
@@ -98,7 +117,8 @@ export function registerLiveRoutes(app: FastifyInstance, deps: LiveRouteDeps): v
 
   // YouTube sign-in (device code). Only the user code and the Google address ever reach a client:
   // the device code, the tokens and the OAuth client stay on the box.
-  const yt = deps.youtube ?? null;
+  const ytFor = (request: FastifyRequest): YoutubeService | null =>
+    deps.youtubeFor !== undefined ? deps.youtubeFor(reqSurau(request)) : (deps.youtube ?? null);
   const youtubeFailure = (reply: FastifyReply, error: unknown): FastifyReply => {
     if (error instanceof LiveError) return sendLiveError(reply, error);
     const reason = error instanceof YoutubeError ? error.reason : 'network';
@@ -112,14 +132,16 @@ export function registerLiveRoutes(app: FastifyInstance, deps: LiveRouteDeps): v
     return reply.code(status).header('Cache-Control', 'no-store').send({ errors: [message], code: `youtube_${reason}` });
   };
 
-  app.get('/api/live/youtube/status', async (_request, reply) => {
+  app.get('/api/live/youtube/status', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
+    const yt = ytFor(request);
     if (yt !== null) return yt.info();
     const s = sessions.status().youtube;
     return { configured: false, signedIn: s.signedIn, channelTitle: s.channelTitle, lastError: s.lastError };
   });
   app.post('/api/live/youtube/signin', async (request, reply) => {
     try {
+      const yt = ytFor(request);
       if (yt === null) throw new YoutubeError('not_configured');
       const out = await yt.begin(actorOf(request));
       return reply.header('Cache-Control', 'no-store').send(out);
@@ -129,8 +151,9 @@ export function registerLiveRoutes(app: FastifyInstance, deps: LiveRouteDeps): v
   });
   app.post('/api/live/youtube/signin/poll', async (request, reply) => {
     try {
+      const yt = ytFor(request);
       if (yt === null) throw new YoutubeError('not_configured');
-      const out = await yt.poll(actorOf(request));
+      const out = await yt.poll(actorOf(request), reqSurau(request));
       return reply.header('Cache-Control', 'no-store').send(out);
     } catch (error) {
       return youtubeFailure(reply, error);
@@ -138,10 +161,12 @@ export function registerLiveRoutes(app: FastifyInstance, deps: LiveRouteDeps): v
   });
   app.post('/api/live/youtube/signout', async (request, reply) => {
     try {
+      const yt = ytFor(request);
       if (yt === null) throw new YoutubeError('not_configured');
-      // signing out mid-live would orphan the broadcast: refused until the live is stopped
-      if (sessions.current() !== null) throw new LiveError(409, 'live_busy', LIVE_MSG.ytSignoutBusy);
-      await yt.signout(actorOf(request));
+      // signing out mid-live would orphan the broadcast: refused until the live is stopped (on the cloud: until
+      // the surau's sites have ended theirs)
+      if (sessions.current() !== null || (deps.cloud === true && yt.hasOpenBroadcast())) throw new LiveError(409, 'live_busy', LIVE_MSG.ytSignoutBusy);
+      await yt.signout(actorOf(request), reqSurau(request));
       return reply.header('Cache-Control', 'no-store').send({ signedIn: false });
     } catch (error) {
       return youtubeFailure(reply, error);
@@ -150,6 +175,9 @@ export function registerLiveRoutes(app: FastifyInstance, deps: LiveRouteDeps): v
 
   app.post('/api/live/whip', { bodyLimit: MAX_SDP_BYTES }, (request, reply) => proxy.whipPost(request, reply));
   app.delete('/api/live/whip/:id', (request, reply) => proxy.whipDelete(request, reply));
+  // the starting device's preview of the combined stream (muted on the device)
+  app.post('/api/live/preview/whep', { bodyLimit: MAX_SDP_BYTES }, (request, reply) => proxy.previewPost(request, reply));
+  app.delete('/api/live/preview/whep/:id', (request, reply) => proxy.previewDelete(request, reply));
   app.post('/api/kiosk/live/whep', { bodyLimit: MAX_SDP_BYTES }, (request, reply) => proxy.whepPost(request, reply));
   app.delete('/api/kiosk/live/whep/:id', (request, reply) => proxy.whepDelete(request, reply));
 }

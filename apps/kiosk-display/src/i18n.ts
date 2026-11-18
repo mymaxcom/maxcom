@@ -14,6 +14,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     masukWaktu: 'Telah masuk waktu {prayer}',
     iqamahIn: 'Iqamah dalam',
     solatNow: 'Solat sedang didirikan',
+    silentPhone: 'Sila senyapkan telefon bimbit',
     khutbahNow: 'Khutbah Jumaat sedang disampaikan',
     khutbahCalm: 'Sila dengar dengan tenang',
     syurukIn: 'Syuruk dalam',
@@ -31,11 +32,23 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     pengumuman: 'Pengumuman',
     programKhas: 'Program khas',
     takwim: 'Takwim',
-    tabungTag: 'TABUNG SURAU',
+    tabungTitle: 'Tabung surau',
     tabungUpdated: 'Dikemas kini {date}',
-    tabungTarget: '{pct}% daripada sasaran {target}',
-    tabungQr: 'Derma melalui DuitNow QR',
-    tabungNew: 'BARU',
+    tabungOfTarget: 'daripada sasaran {target}',
+    tabungOfTargetLeft: 'daripada sasaran {target}, baki {left}',
+    tabungDone: 'Sasaran tercapai',
+    tabungReached: 'tercapai',
+    tabungNeeded: 'Baki diperlukan {amount}',
+    tabungQrTitle: 'Imbas untuk menderma',
+    tabungQrName: 'DuitNow QR',
+    tabungQrHint: 'Boleh guna mana-mana aplikasi bank atau e-dompet',
+    tabungNew: 'Baru',
+    tabungNewTitle: 'Sumbangan baru diterima',
+    tabungThanks: 'Terima kasih. Semoga Allah membalas kebaikan anda.',
+    tabungOthers: 'Tabung lain',
+    tabungAll: 'Semua tabung ({n})',
+    tabungTotal: 'Jumlah semua tabung',
+    tabungPages: 'Halaman',
     batal: 'DIBATALKAN',
     today: 'Hari ini',
     daysLeftWord: 'hari lagi',
@@ -73,6 +86,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // Plan 5 Task 6: the live layer.
     liveNow: 'SIARAN LANGSUNG',
     liveRunning: 'Siaran langsung sedang berjalan',
+    liveResuming: 'Siaran akan bersambung sebentar lagi',
     previewNoContent: 'Tiada kandungan untuk skrin ini lagi',
     // Plan 14 Tasks 8 and 9: the box states and the network check.
     setupSub: 'Persediaan pertama',
@@ -169,6 +183,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     masukWaktu: 'It is now time for {prayer}',
     iqamahIn: 'Iqamah in',
     solatNow: 'Prayer in progress',
+    silentPhone: 'Please silence your phones',
     khutbahNow: 'Friday sermon in progress',
     khutbahCalm: 'Please listen quietly',
     syurukIn: 'Sunrise in',
@@ -184,11 +199,23 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     pengumuman: 'Announcement',
     programKhas: 'Special programme',
     takwim: 'Calendar',
-    tabungTag: 'DONATION FUNDS',
+    tabungTitle: 'Donation funds',
     tabungUpdated: 'Updated {date}',
-    tabungTarget: '{pct}% of the {target} target',
-    tabungQr: 'Donate with DuitNow QR',
-    tabungNew: 'NEW',
+    tabungOfTarget: 'of the {target} target',
+    tabungOfTargetLeft: 'of the {target} target, {left} to go',
+    tabungDone: 'Target reached',
+    tabungReached: 'reached',
+    tabungNeeded: 'Still needed {amount}',
+    tabungQrTitle: 'Scan to donate',
+    tabungQrName: 'DuitNow QR',
+    tabungQrHint: 'Works with any banking or e-wallet app',
+    tabungNew: 'New',
+    tabungNewTitle: 'New donation received',
+    tabungThanks: 'Thank you. May Allah reward your kindness.',
+    tabungOthers: 'Other funds',
+    tabungAll: 'All funds ({n})',
+    tabungTotal: 'Total of all funds',
+    tabungPages: 'Page',
     batal: 'CANCELLED',
     today: 'Today',
     daysLeftWord: 'days to go',
@@ -222,6 +249,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     pairBadge: 'Not paired yet',
     liveNow: 'LIVE',
     liveRunning: 'Live broadcast in progress',
+    liveResuming: 'The broadcast will resume shortly',
     previewNoContent: 'No content for this screen yet',
     setupSub: 'First setup',
     boxLangLabel: 'Language',
@@ -346,6 +374,15 @@ const arDigits = (n: number): string => String(n).replace(/\d/g, (d) => String.f
 export function fmtHijriAr(now: Date, hijri: { d: number; m: number; y: number }, tz: string): string {
   const wd = klWeekday(dateOf(now, tz));
   return `${WEEKDAY_AR[wd]}، ${arDigits(hijri.d)} ${HIJRI_MONTH_AR[hijri.m - 1] ?? ''} ${arDigits(hijri.y)} هـ`;
+}
+
+/** The old stored default of the silent-phone message (before the default became empty): it counts as untouched. */
+const OLD_SILENT_DEFAULT = 'Sila senyapkan telefon bimbit';
+
+/** The message under "prayer in progress": the surau's own words, else the TV-language default. */
+export function silentPhoneText(stored: unknown, lang: Lang): string {
+  const own = typeof stored === 'string' ? stored.trim() : '';
+  return own === '' || own === OLD_SILENT_DEFAULT ? t('silentPhone', lang) : own;
 }
 
 export function t(key: string, lang: Lang, vars?: Record<string, string | number>): string {

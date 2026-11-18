@@ -73,12 +73,12 @@ describe('validateFeatureSettings', () => {
 
 describe('registry', () => {
   it('has labels and unique keys', () => {
-    expect(FEATURES.every((f) => f.labelMs && f.labelEn)).toBe(true);
+    expect(FEATURES.every((f) => f.labelMs && f.labelEn && f.labelAr)).toBe(true);
     const keys = FEATURES.map((f) => f.key as FeatureKey);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys).toHaveLength(54);
+    expect(keys).toHaveLength(55);
     expect(new Set(FEATURES.map((f) => f.group)).size).toBe(11);
-    expect(FEATURES.filter((f) => f.locked)).toHaveLength(10);
+    expect(FEATURES.filter((f) => f.locked)).toHaveLength(11);
   });
   it('DAY_KEYS and minutesFor', () => {
     expect(DAY_KEYS[5]).toBe('jumaat');
@@ -217,10 +217,10 @@ describe('surauInfo', () => {
   it('accepts good values', () => {
     const good = {
       name: 'Masjid Al-Falah', kind: 'masjid', shortAddress: 'Taman Seri, Shah Alam',
-      helpName: 'Encik Ahmad (Setiausaha)', helpPhone: '012-345 6789', helpEmail: 'ahmad@example.my',
+      helpName: 'Encik Ahmad (Setiausaha)', helpPhone: '012-000 0001', helpEmail: 'ahmad@example.my',
     };
     expect(validateFeatureSettings('surauInfo', good)).toEqual({ ok: true, value: good });
-    expect(validateFeatureSettings('surauInfo', { helpPhone: '+60123456789', helpEmail: '', helpName: '' }).ok).toBe(true);
+    expect(validateFeatureSettings('surauInfo', { helpPhone: '+60120000001', helpEmail: '', helpName: '' }).ok).toBe(true);
     expect(validateFeatureSettings('surauInfo', { name: 'x'.repeat(80) }).ok).toBe(true);
     expect(validateFeatureSettings('surauInfo', { shortName: 'SDM' }).ok).toBe(true);
     expect(validateFeatureSettings('surauInfo', { shortName: '' }).ok).toBe(true);

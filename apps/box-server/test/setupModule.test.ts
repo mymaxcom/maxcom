@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { makeFakeBundle, writeTarGz } from './helpers/fakeBundle.ts';
+import { must } from './helpers/must.ts';
 
 const psm1 = fileURLToPath(new URL('../../../scripts/setup/MaxcomSetup.psm1', import.meta.url));
 const fakeBundleTs = fileURLToPath(new URL('./helpers/fakeBundle.ts', import.meta.url));
@@ -168,7 +169,7 @@ J ([ordered]@{
     // one changed byte, same size
     const bytes = readFileSync(b.mediamtxZip);
     const flipped = Buffer.from(bytes);
-    flipped[flipped.length - 1] ^= 0xff;
+    flipped[flipped.length - 1] = must(flipped[flipped.length - 1], 'last byte') ^ 0xff;
     writeFileSync(b.mediamtxZip, flipped);
     const changed = ps(`J @(Get-BundleManifestProblem ${q(dir)})`);
     expect(changed.json.length).toBe(1);

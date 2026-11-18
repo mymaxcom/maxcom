@@ -6,6 +6,7 @@ import { THEME_NAME_RE } from '../theme/catalog.ts';
 import { sanitizeThemeStyles, themeStylesError } from '../theme/style.ts';
 import { packsError, sanitizePacks } from '../theme/packs.ts';
 import { SURAHS } from './lists.ts';
+import { AV_OFFSET_CHOICES } from '../live/sources.ts';
 import { isCountryCode } from '../prayer/countries.ts';
 import { isValidTimeZone } from '../time.ts';
 import type { FeatureDef, FeatureKey, FeatureSettings, Settings } from './registry.ts';
@@ -55,7 +56,7 @@ function ruleFor(name: string): Rule | undefined {
     case 'hijriMonth': return { t: 'int', min: 1, max: 12 };
     case 'switchAt': return { t: 'enum', vals: ['maghrib', 'midnight'] };
     case 'timeFormat': return { t: 'enum', vals: ['12h', '24h'] };
-    case 'lang': return { t: 'enum', vals: ['ms', 'en'] };
+    case 'lang': return { t: 'enum', vals: ['auto', 'ms', 'en'] };
     case 'mode': return { t: 'enum', vals: ['landscape', 'portrait'] };
     case 'templateId': return { t: 'regex', re: THEME_NAME_RE, what: 'a theme name (a-z, 0-9, hyphen, at most 32)' };
     case 'rotate': return { t: 'enum', vals: ['daily', 'hourly', 'off'] };
@@ -74,7 +75,9 @@ function ruleFor(name: string): Rule | undefined {
     case 'noVideoSeconds': return { t: 'int', min: 5, max: 60 };
     case 'cloudWakeSeconds': return { t: 'int', min: 10, max: 60 };
     case 'syncHistoryDays': return { t: 'intSet', vals: [180, 365] };
-    case 'message': return { t: 'text', min: 1, max: 100 };
+    case 'message': return { t: 'text', min: 0, max: 100 };
+    case 'transport': return { t: 'enum', vals: ['auto', 'tcp', 'udp'] };
+    case 'avOffsetMs': return { t: 'intSet', vals: AV_OFFSET_CHOICES };
     case 'relayVideo': return { t: 'enum', vals: ['copy', 'reencode'] };
     case 'maxBitrateKbps': return { t: 'int', min: 500, max: 6000 };
     case 'titleTemplate': return { t: 'text', min: 1, max: 100 };

@@ -31,6 +31,26 @@ Future<SaveResult> save(Uint8List bytes, String filename, String mime) async {
   return const SaveResult(saved: false, sharedInstead: true);
 }
 
+/// A text through ACTION_SEND `text/plain` (ShareChannel.kt, method
+/// `shareText`). The text is never logged and a failure carries no detail.
+Future<ShareResult> shareText(String text, [String? subject]) async {
+  try {
+    final r = await _channel.invokeMapMethod<String, Object?>('shareText', {
+      'text': text,
+      'subject': ?subject,
+    });
+    final via = r?['via'];
+    return ShareResult(
+      via is String && ShareResult.vias.contains(via) ? via : 'other',
+      completed: r?['completed'] == true,
+    );
+  } on PlatformException {
+    throw const ShareFailed();
+  } on MissingPluginException {
+    throw const ShareFailed();
+  }
+}
+
 Future<ShareResult> share(Uint8List bytes, String filename, String mime) async {
   try {
     final r = await _channel.invokeMapMethod<String, Object?>(

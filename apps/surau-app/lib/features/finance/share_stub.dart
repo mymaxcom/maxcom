@@ -10,6 +10,9 @@ const String implementation = 'stub';
 Future<SaveResult> save(Uint8List bytes, String filename, String mime) async =>
     const SaveResult(saved: false);
 
+Future<ShareResult> shareText(String text, [String? subject]) async =>
+    const ShareResult('other', completed: false, unavailable: true);
+
 Future<ShareResult> share(
   Uint8List bytes,
   String filename,

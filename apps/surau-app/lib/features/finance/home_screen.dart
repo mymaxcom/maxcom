@@ -16,6 +16,8 @@ import '../../finance/finance_models.dart';
 import '../../finance/finance_repository.dart';
 import '../../finance/ledger.dart';
 import '../../l10n/generated/s.dart';
+import '../../ops/device_lock_card.dart';
+import '../../ops/ops_build.dart';
 import '../../screens/widgets/pieces.dart';
 import '../../sync/sync_providers.dart';
 import '../sync/sync_actions.dart';
@@ -63,15 +65,7 @@ class FinanceHomeScreen extends ConsumerWidget {
       title: s.navFinance,
       body: FinTwoColumnPage(
         top: [
-          if (roles.contains('superadmin')) ...[
-            FinInfoBox(
-              key: const Key('fin-super-banner'),
-              text: s.finSuperBanner,
-              icon: Icons.shield_outlined,
-              tone: FinTone.gold,
-            ),
-            const SizedBox(height: 12),
-          ],
+          if (kOpsBuild && roles.contains('superadmin')) const FinanceSuperBanner(),
           if (!canWrite) ...[
             FinInfoBox(
               key: const Key('fin-view-only'),
@@ -84,11 +78,11 @@ class FinanceHomeScreen extends ConsumerWidget {
         left: [
           FinHero(
             title: s.finTotalAll,
-            value: formatRm(summary.totalSen),
+            value: finLtr(s, formatRm(summary.totalSen)),
             subtitle: s.finAsOf(todayText, summary.funds.length),
             io: [
-              (s.finMonthIn, formatRm(summary.monthInSen)),
-              (s.finMonthOut, formatRm(summary.monthOutSen)),
+              (s.finMonthIn, finLtr(s, formatRm(summary.monthInSen))),
+              (s.finMonthOut, finLtr(s, formatRm(summary.monthOutSen))),
             ],
           ),
           const SizedBox(height: 14),
@@ -132,7 +126,7 @@ class FinanceHomeScreen extends ConsumerWidget {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        formatRm(f.balanceSen),
+                        finLtr(s, formatRm(f.balanceSen)),
                         key: Key('fin-fund-balance-${f.fund.id}'),
                         style: Theme.of(context).textTheme.titleSmall!.copyWith(
                           fontWeight: FontWeight.w800,

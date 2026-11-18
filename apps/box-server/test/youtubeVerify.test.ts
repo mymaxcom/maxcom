@@ -57,6 +57,12 @@ describe('parseIsoDuration', () => {
   });
 });
 
+/** The cloud answers only for videos the surau logged (its lives and uploads). */
+function ownVideos(r: Rig, ...ids: string[]): void {
+  const ins = r.app.surau.db.prepare('INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  for (const id of ids) ins.run('sdm', '2026-11-05T12:00:00.000Z', 'site:boxid0001', 'youtube/broadcast', id, null, '{}');
+}
+
 describe('POST /api/youtube/verify', () => {
   const post = (r: Rig, headers: Record<string, string>, payload: unknown) =>
     r.app.inject({ method: 'POST', url: '/api/youtube/verify', headers, payload: payload as object });
@@ -67,8 +73,9 @@ describe('POST /api/youtube/verify', () => {
     r.up.videos.vidBusy = { uploadStatus: 'uploaded', processingStatus: 'processing', duration: 'PT10M' };
     r.up.videos.vidPrivate = { privacy: 'private', duration: 'PT30M' };
     r.up.videos.vidOk = { privacy: 'unlisted', uploadStatus: 'processed', processingStatus: 'succeeded', duration: 'PT1H1M5S' };
-    const media = await loginAs(r.app, 'media');
-    const res = await post(r, media.headers, { videoIds: ['vidOk', 'vidMissing', 'vidBusy', 'vidPrivate'] });
+    ownVideos(r, 'vidOk', 'vidMissing', 'vidBusy', 'vidPrivate');
+    const liveUser = await loginAs(r.app, 'live');
+    const res = await post(r, liveUser.headers, { videoIds: ['vidOk', 'vidMissing', 'vidBusy', 'vidPrivate'] });
     expect(res.statusCode).toBe(200);
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.json()).toEqual({
@@ -86,19 +93,21 @@ describe('POST /api/youtube/verify', () => {
 
   it('a video with no duration yet is not processed enough: durationSeconds null', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
-    const res = await post(r, media.headers, { videoIds: ['vidNoDur'] });
+    ownVideos(r, 'vidNoDur');
+    const liveUser = await loginAs(r.app, 'live');
+    const res = await post(r, liveUser.headers, { videoIds: ['vidNoDur'] });
     expect(res.json().results[0]).toMatchObject({ exists: true, durationSeconds: null });
   });
 
   it('refuses a bad body: not a list, empty, more than 20, bad id, not text', async () => {
     const r = await rig();
-    const media = await loginAs(r.app, 'media');
+    const liveUser = await loginAs(r.app, 'live');
     const many = Array.from({ length: 21 }, (_, i) => `v${i}`);
+    ownVideos(r, ...many);
     for (const body of [{}, { videoIds: 'abc' }, { videoIds: [] }, { videoIds: many }, { videoIds: ['a b'] }, { videoIds: [5] }, { videoIds: ['x'.repeat(33)] }]) {
-      expect((await post(r, media.headers, body)).statusCode).toBe(400);
+      expect((await post(r, liveUser.headers, body)).statusCode).toBe(400);
     }
-    expect((await post(r, media.headers, { videoIds: many.slice(0, 20) })).statusCode).toBe(200);
+    expect((await post(r, liveUser.headers, { videoIds: many.slice(0, 20) })).statusCode).toBe(200);
     expect(r.up.lists).toHaveLength(1);
   });
 
@@ -113,8 +122,8 @@ describe('POST /api/youtube/verify', () => {
 
   it('not signed in to YouTube: 503 reauthorise, no Google call', async () => {
     const r = await rig(false);
-    const media = await loginAs(r.app, 'media');
-    const res = await post(r, media.headers, { videoIds: ['a'] });
+    const liveUser = await loginAs(r.app, 'live');
+    const res = await post(r, liveUser.headers, { videoIds: ['a'] });
     expect(res.statusCode).toBeGreaterThanOrEqual(409);
     expect(r.up.lists).toHaveLength(0);
   });
@@ -122,9 +131,9 @@ describe('POST /api/youtube/verify', () => {
   it('writes nothing to the change history and leaks no token', async () => {
     const r = await rig();
     const { db } = r.app.surau;
-    const media = await loginAs(r.app, 'media');
+    const liveUser = await loginAs(r.app, 'live');
     const before = Number(db.prepare('SELECT COUNT(*) AS n FROM change_log').get()?.n);
-    const res = await post(r, media.headers, { videoIds: ['vidOk'] });
+    const res = await post(r, liveUser.headers, { videoIds: ['vidOk'] });
     expect(res.body).not.toContain('access-token');
     expect(Number(db.prepare('SELECT COUNT(*) AS n FROM change_log').get()?.n)).toBe(before);
   });

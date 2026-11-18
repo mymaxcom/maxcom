@@ -52,6 +52,37 @@ class _KutipanScreenState extends ConsumerState<KutipanScreen> {
   String? _error;
   FinanceEntry? _saved;
 
+  /// Months (`YYYY-MM`) closed in the local copy: no entry may be dated into
+  /// them, the box would refuse it after "saved".
+  Set<String> _closed = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClosed();
+  }
+
+  Future<void> _loadClosed() async {
+    final repo = ref.read(financeRepositoryProvider);
+    if (repo == null) return;
+    final months = await repo.months();
+    if (!mounted) return;
+    setState(() => _closed = {
+      for (final m in months)
+        if (m.closed) m.ym,
+    });
+  }
+
+  /// The first day a date may be picked from: the start of the previous
+  /// month, or of this one when the previous month is closed.
+  DateTime _firstPickable() {
+    final t = DateTime.parse('${_today}T00:00:00Z');
+    final prev = DateTime(t.year, t.month - 1, 1);
+    return _closed.contains(finYmd(prev).substring(0, 7))
+        ? DateTime(t.year, t.month, 1)
+        : prev;
+  }
+
   @override
   void dispose() {
     _amount.dispose();
@@ -68,7 +99,11 @@ class _KutipanScreenState extends ConsumerState<KutipanScreen> {
   String get _today =>
       ref.read(financeRepositoryProvider)?.todayKl ?? finYmd(DateTime.now());
 
-  String get _dateValue => _date ?? _today;
+  /// The chosen day; today when its month has been closed since.
+  String get _dateValue {
+    final d = _date ?? _today;
+    return _closed.contains(d.substring(0, 7)) ? _today : d;
+  }
 
   /// The last Friday before today.
   String _lastFriday() {
@@ -214,6 +249,7 @@ class _KutipanScreenState extends ConsumerState<KutipanScreen> {
       _error = null;
     });
     try {
+      await _loadClosed();
       final input = <String, dynamic>{
         'entryDate': _dateValue,
         'fundId': _fundId ?? (await repo.funds()).first.id,
@@ -311,7 +347,7 @@ class _KutipanScreenState extends ConsumerState<KutipanScreen> {
                           key: const Key('fin-date'),
                           onTap: () async {
                             final t = DateTime.parse('${today}T00:00:00Z');
-                            final first = DateTime(t.year, t.month - 1, 1);
+                            final first = _firstPickable();
                             final picked = await showDatePicker(
                               context: context,
                               initialDate: DateTime.parse(date),
@@ -432,6 +468,7 @@ class _KutipanScreenState extends ConsumerState<KutipanScreen> {
                       child: TextField(
                         key: const Key('fin-reference'),
                         controller: _reference,
+                        inputFormatters: finTextFormatters(60),
                         onChanged: (_) => setState(() {}),
                       ),
                     ),
@@ -446,7 +483,11 @@ class _KutipanScreenState extends ConsumerState<KutipanScreen> {
                     child: TextField(
                       key: const Key('fin-note'),
                       controller: _note,
+                      inputFormatters: finTextFormatters(200),
                       maxLength: 200,
+                      // Wraps over up to three lines, but Enter types nothing.
+                      keyboardType: TextInputType.text,
+                      textInputAction: TextInputAction.done,
                       minLines: 2,
                       maxLines: 3,
                     ),
@@ -502,7 +543,7 @@ class _KutipanScreenState extends ConsumerState<KutipanScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Align(
-          alignment: Alignment.centerLeft,
+          alignment: AlignmentDirectional.centerStart,
           child: TextButton.icon(
             key: const Key('fin-den-toggle'),
             onPressed: () => setState(() => _denOpen = !_denOpen),
@@ -539,7 +580,7 @@ class _KutipanScreenState extends ConsumerState<KutipanScreen> {
                             int.parse(d) *
                             100,
                       ),
-                      textAlign: TextAlign.right,
+                      textAlign: TextAlign.end,
                       style: text.bodyMedium,
                     ),
                   ),

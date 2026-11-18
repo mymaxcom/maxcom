@@ -52,9 +52,10 @@ export class TokenStore {
   private readonly dir: string;
   private readonly key: Buffer;
 
-  constructor(dataDir: string) {
+  /** `fileName`: the cloud keeps one file per surau (`youtube-token-<surauId>.json`); a box keeps `youtube-token.json`. */
+  constructor(dataDir: string, fileName = 'youtube-token.json') {
     this.dir = secretDir(dataDir);
-    this.path = join(this.dir, 'youtube-token.json');
+    this.path = join(this.dir, fileName);
     this.key = deriveYoutubeTokenKey(loadBoxKey(dataDir));
   }
 

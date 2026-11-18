@@ -6,8 +6,10 @@
 //
 // The PIN verifier is PBKDF2-HMAC-SHA256 over the PIN with a 16-byte random
 // salt and at least 210 000 iterations. Five wrong PINs in a row lock the
-// offline unlock for five minutes; the count and the lock are stored, so a
-// restart does not reset them.
+// offline unlock for 15 minutes, the next round 30 minutes, then the offline
+// door is closed (the third round closes it) until an
+// online unlock saves the PIN again, as it is after a server 423. The count,
+// the rounds and the lock are stored, so a restart does not reset them.
 
 import 'dart:convert';
 import 'dart:math';
@@ -97,6 +99,12 @@ class PinLocked extends PinCheck {
   final DateTime until;
 }
 
+/// Offline unlock is closed (three lock rounds, a server 423 for this person,
+/// or a revoked device): only an online unlock opens the app again.
+class PinClosed extends PinCheck {
+  const PinClosed();
+}
+
 /// No verifier on this phone (never unlocked online with a PIN).
 class PinUnknown extends PinCheck {
   const PinUnknown();
@@ -149,9 +157,34 @@ class OfflineVault {
   static const String _profile = 'profile';
   static const String _pin = 'pin';
 
-  /// Wrong PINs in a row before the lock, and how long it lasts.
+  static const String _revoked = 'revoked';
+
+  /// Wrong PINs in a row before the lock.
   static const int maxTries = 5;
-  static const Duration lockFor = Duration(minutes: 5);
+
+  /// Lock rounds before the offline door closes.
+  static const int maxRounds = 3;
+
+  /// How long the lock of round [round] (1, 2, 3 ...) lasts: 15 minutes,
+  /// doubling, never more than 24 hours (the server's own rule).
+  static Duration lockForRound(int round) {
+    final r = round < 1 ? 1 : round;
+    if (r > 7) return const Duration(hours: 24);
+    final d = Duration(minutes: 15 * (1 << (r - 1)));
+    return d > const Duration(hours: 24) ? const Duration(hours: 24) : d;
+  }
+
+  /// A revoked device wiped this copy (see [wipeForRevocation]).
+  Future<bool> isRevoked() async =>
+      (await store.getDoc(collection, _revoked)) != null;
+
+  /// A server answered 423 for this person: close the offline door until
+  /// the next online unlock saves the PIN again.
+  Future<void> closeOffline() async {
+    final doc = await store.getDoc(collection, _pin);
+    if (doc == null) return;
+    await store.putDoc(collection, _pin, {...doc, 'closed': true});
+  }
 
   Future<void> saveProfile(OfflineProfile p) =>
       store.putDoc(collection, _profile, p.toJson());
@@ -174,6 +207,7 @@ class OfflineVault {
       'salt': base64.encode(salt),
       'hash': base64.encode(hash),
       'fails': 0,
+      'rounds': 0,
     });
   }
 
@@ -181,9 +215,11 @@ class OfflineVault {
 
   /// Checks [pin] against the stored verifier, counting wrong tries.
   Future<PinCheck> checkPin(String pin) async {
+    if (await isRevoked()) return const PinClosed();
     final doc = await store.getDoc(collection, _pin);
     final v = _parse(doc);
     if (doc == null || v == null) return const PinUnknown();
+    if (doc['closed'] == true) return const PinClosed();
     final t = now();
     final locked = DateTime.tryParse(doc['lockedUntil'] as String? ?? '');
     if (locked != null && t.isBefore(locked)) return PinLocked(locked);
@@ -192,15 +228,27 @@ class OfflineVault {
       await store.putDoc(collection, _pin, {
         ...doc,
         'fails': 0,
+        'rounds': 0,
       }..remove('lockedUntil'));
       return const PinOk();
     }
     final fails = ((doc['fails'] as num?)?.toInt() ?? 0) + 1;
     if (fails >= maxTries) {
-      final until = t.add(lockFor);
+      final rounds = ((doc['rounds'] as num?)?.toInt() ?? 0) + 1;
+      if (rounds >= maxRounds) {
+        await store.putDoc(collection, _pin, {
+          ...doc,
+          'fails': 0,
+          'rounds': rounds,
+          'closed': true,
+        }..remove('lockedUntil'));
+        return const PinClosed();
+      }
+      final until = t.add(lockForRound(rounds));
       await store.putDoc(collection, _pin, {
         ...doc,
         'fails': 0,
+        'rounds': rounds,
         'lockedUntil': until.toUtc().toIso8601String(),
       });
       return PinLocked(until);
@@ -237,4 +285,14 @@ class OfflineVault {
     }
     return diff == 0;
   }
+}
+
+/// A revoked device (the server said `device_revoked`): the local copy and
+/// the offline vault are wiped and a flag stays, so the offline door never
+/// opens again on this copy. Being merely unreachable never calls this.
+Future<void> wipeForRevocation(LocalStore store) async {
+  await store.wipe();
+  await store.putDoc(OfflineVault.collection, OfflineVault._revoked, {
+    'at': DateTime.now().toUtc().toIso8601String(),
+  });
 }

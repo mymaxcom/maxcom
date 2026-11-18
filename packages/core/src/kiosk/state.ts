@@ -55,6 +55,28 @@ function addDays(date: string, n: number): string {
   return klDateOf(new Date(klInstant(date, '12:00').getTime() + n * 24 * 60 * MIN));
 }
 
+const ORDER = ['imsak', 'subuh', 'syuruk', 'zohor', 'asar', 'maghrib', 'isyak'] as const;
+
+/**
+ * The instant of one of a day's seven times. A time earlier than the prayer before it (Maghrib or Isyak after
+ * midnight in a high-latitude summer, which `checkPrayerDay` accepts) belongs to the NEXT calendar day, and so does
+ * every time after it. Without this a wrapped Isyak 00:20 lands the same morning and is never "next".
+ */
+function timeInstant(day: PrayerDay, key: (typeof ORDER)[number], tz: string): Date {
+  let wrapped = false;
+  let prev = '';
+  for (const k of ORDER) {
+    const t = day.times[k];
+    if (prev !== '' && t < prev) wrapped = true;
+    prev = t;
+    if (k === key) {
+      const at = instantOf(day.date, t, tz);
+      return wrapped ? new Date(at.getTime() + 24 * 60 * MIN) : at;
+    }
+  }
+  return instantOf(day.date, day.times[key], tz);
+}
+
 function iqamahBeep(iq: Raw, end: Date, start: Date): Partial<Stage> {
   if (!on(iq) || !bool(iq?.beep, true)) return {};
   const w = num(iq?.endWarningSeconds, 30);
@@ -83,7 +105,7 @@ function buildStages(day: PrayerDay, settings: Settings, hijriMonth?: number): S
   let isyakEnd: Date | null = null;
 
   for (const key of SOLAT) {
-    const T = instantOf(day.date, day.times[key], tz);
+    const T = timeInstant(day, key, tz);
     const prayer: SolatName = key === 'zohor' && fridayOn ? 'jumaat' : key;
     const push = (start: Date, end: Date, phase: PhaseInterval['phase'], extra: Partial<Stage> = {}) => {
       out.push({ start, end, phase, prayer, ...extra });
@@ -182,13 +204,13 @@ export function buildDayIntervals(day: PrayerDay, settings: Settings, hijriMonth
 function nextFrom(day: PrayerDay, settings: Settings, now: Date): KioskState['next'] {
   const tz = tzOf(settings);
   const fridayOn = klWeekday(day.date) === 5 && on(feat(settings, 'jumaat'));
-  const list: Array<[SolatName | 'imsak' | 'syuruk', string]> = [
-    ['imsak', day.times.imsak], ['subuh', day.times.subuh], ['syuruk', day.times.syuruk],
-    [fridayOn ? 'jumaat' : 'zohor', day.times.zohor], ['asar', day.times.asar],
-    ['maghrib', day.times.maghrib], ['isyak', day.times.isyak],
+  const list: Array<[SolatName | 'imsak' | 'syuruk', (typeof ORDER)[number]]> = [
+    ['imsak', 'imsak'], ['subuh', 'subuh'], ['syuruk', 'syuruk'],
+    [fridayOn ? 'jumaat' : 'zohor', 'zohor'], ['asar', 'asar'],
+    ['maghrib', 'maghrib'], ['isyak', 'isyak'],
   ];
-  for (const [name, t] of list) {
-    const at = instantOf(day.date, t, tz);
+  for (const [name, key] of list) {
+    const at = timeInstant(day, key, tz);
     if (at.getTime() > now.getTime()) return { name, at };
   }
   return null;

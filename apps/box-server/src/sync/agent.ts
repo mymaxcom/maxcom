@@ -1,3 +1,4 @@
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { createHash, createHmac } from 'node:crypto';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import https from 'node:https';
@@ -5,7 +6,7 @@ import { Readable } from 'node:stream';
 import { rootCertificates } from 'node:tls';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { CONTENT_KINDS, KIOSK_TEMPLATE_IDS, MAX_PHOTO_BYTES, THEME_CONTRACT, isoInstantMs } from '@surau/core';
+import { CONTENT_KINDS, KIOSK_TEMPLATE_IDS, MAX_PHOTO_BYTES, THEME_CONTRACT, isoInstantMs, normalisePhone } from '@surau/core';
 import type { FeedEntry, Snapshot } from '@surau/core';
 import { getAssetPath, isAssetId, putAsset } from '../assets/store.ts';
 import { PHOTO_ID_RE, checkJpeg, checkReplicatedBytes, markPresent, photoMeta, photoPath, writePhotoFile } from '../finance/photos.ts';
@@ -14,13 +15,16 @@ import type { ChangeBus } from '../events.ts';
 import { getSettings, getVersion } from '../settingsStore.ts';
 import { applyFeedEntry } from './apply.ts';
 import { readFeed } from './feed.ts';
+import { mergeDeviceSeen } from './deviceSeen.ts';
+import { applyPeopleIdsAnswer, hasUnnumbered, localBoxIds, mergeCloudIds } from './peopleIds.ts';
+import { backfillIds, raiseCounters, siteRoleOf, SITE_ROLE_KEY } from '../auth/ids.ts';
 import { headSeq, SYNC_BODY_LIMIT } from './routes.ts';
 import { AutoLink, linkState } from './register.ts';
 import type { LinkState } from './register.ts';
 import { loadSyncKey, normaliseCloudUrl } from './syncKey.ts';
 import type { SyncKeyData } from './syncKey.ts';
 import { LAST_PUSH_SEQ_KEY } from './trim.ts';
-import { DEFAULT_SURAU_ID, verifySiteEntry } from './verify.ts';
+import { verifySiteEntry } from './verify.ts';
 
 /**
  * The box's sync agent (box role). Event driven, never periodic:
@@ -43,6 +47,17 @@ export type AgentErrorReason = 'unreachable' | 'unauthorised' | 'http_5xx' | 'ht
 export const BACKOFF_MS = [60_000, 120_000, 300_000, 900_000] as const;
 export const DEBOUNCE_MS = 30_000;
 const PAGE = 500;
+/** How often the box asks the cloud when its phones were last used there. */
+const DEVICE_SEEN_EVERY_MS = 60 * 60_000;
+/** While a record still waits for its ID the box asks again after this long. */
+const IDS_SOON_MS = 60_000;
+
+/** The cloud's `maxNo`, or null when it is not two non-negative integers. */
+function maxNoOf(v: unknown): { user: number; device: number } | null {
+  if (typeof v !== 'object' || v === null) return null;
+  const { user, device } = v as Record<string, unknown>;
+  return typeof user === 'number' && Number.isInteger(user) && user >= 0 && typeof device === 'number' && Number.isInteger(device) && device >= 0 ? { user, device } : null;
+}
 const MAX_WAKE_TRIES = 5;
 const MAX_ASSETS_PER_CYCLE = 200;
 const ASSET_MAX_BYTES = 20 * 1024 * 1024;
@@ -51,7 +66,7 @@ export const THEMES_HEADER = 'X-Maxcom-Themes';
 export const THEMES_HEADER_VALUE = `${THEME_CONTRACT};${KIOSK_TEMPLATE_IDS.join(',')}`;
 const API_TIMEOUT_MS = 30_000;
 const ASSET_TIMEOUT_MS = 120_000;
-const ALL = { users: true, devices: true, keys: true, finance: true, financeWrite: true } as const;
+const ALL = { users: true, devices: true, keys: true, finance: true, financeWrite: true, contentWrite: true } as const;
 const MAX_PHOTOS_PER_CYCLE = 10;
 const PHOTO_SENT_PREFIX = 'photo_up/';
 const FINANCE_TRAVELS: ReadonlySet<string> = new Set(['finance:entry', 'finance:fund', 'finance:perihal', 'finance:month', 'finance:photo']);
@@ -292,7 +307,7 @@ export class SyncAgent {
   }
 
   private settings(): Record<string, unknown> {
-    return getSettings(this.o.db).cloudSync as unknown as Record<string, unknown>;
+    return getSettings(this.o.db, LOCAL_SURAU_ID).cloudSync as unknown as Record<string, unknown>;
   }
 
   private enabled(): boolean {
@@ -657,6 +672,9 @@ export class SyncAgent {
     await this.assetsDown(key, pulledAssets);
     await this.photosDown(key);
     await this.themeSupportDown(key);
+    await this.idsPushUp(key);
+    await this.peopleResyncDown(key);
+    await this.deviceSeenDown(key);
     const at = this.o.now().toISOString();
     this.setState('last_push', at);
     this.setState('last_pull', at);
@@ -694,6 +712,117 @@ export class SyncAgent {
       this.setState('theme_support_at', this.o.now().toISOString());
     } catch {
       /* the cached list ages out; "cannot confirm" is the safe answer */
+    }
+  }
+
+  /**
+   * Once after the upgrade (`people_resync`): read the cloud's snapshot and fill what the feed never carried before
+   * this version: a missing phone number (kept as it is, no change row, no echo back) and a person the cloud has
+   * deleted. A failure leaves the flag for the next round; an older cloud without the keys changes nothing.
+   */
+  private async peopleResyncDown(key: SyncKeyData): Promise<void> {
+    if (this.getState('people_resync') !== '1') return;
+    try {
+      const res = await this.call(key, '/api/sync/snapshot', () => ({ method: 'GET' }), API_TIMEOUT_MS);
+      if (res.status !== 200) {
+        await res.arrayBuffer().catch(() => undefined);
+        return;
+      }
+      const snap = (await this.okJson(res, this.o.limits?.snapshot ?? SNAPSHOT_BODY_LIMIT)) as { users?: unknown; serverTime?: unknown };
+      const served = typeof snap.serverTime === 'string' && !Number.isNaN(Date.parse(snap.serverTime)) ? snap.serverTime : this.o.now().toISOString();
+      const entries: FeedEntry[] = [];
+      for (const u of Array.isArray(snap.users) ? snap.users.slice(0, 20_000) : []) {
+        const o = (typeof u === 'object' && u !== null ? u : {}) as Record<string, unknown>;
+        if (typeof o.id !== 'string') continue;
+        const local = this.o.db.prepare('SELECT phone, deleted_at, surau_id FROM users WHERE id = ?').get(o.id);
+        if (local === undefined || String(local.surau_id) === '*') continue;
+        if (typeof o.phone === 'string' && local.phone === null) {
+          const e164 = normalisePhone(o.phone);
+          if (e164 !== null) this.o.db.prepare('UPDATE users SET phone = ? WHERE id = ? AND phone IS NULL').run(e164, o.id);
+        }
+        if (o.deleted === true && local.deleted_at === null) {
+          const at = typeof o.editedAt === 'string' && o.editedAt !== '' ? o.editedAt : served;
+          entries.push({ seq: 0, entity: 'user', entityId: o.id, rev: typeof o.rev === 'string' && o.rev !== '' ? o.rev : `${at}|cloud`, editedAt: at, syncedAt: at, actor: 'cloud', deviceId: null, origin: 'cloud', opId: null, after: { id: o.id, name: o.name, roles: o.roles, active: false, deleted: true } });
+        }
+      }
+      if (entries.length > 0) this.applyPulled(entries, new Set(), true);
+      this.setState('people_resync', null);
+    } catch {
+      /* retried next round */
+    }
+  }
+
+  /**
+   * What the cloud knows that the box cannot see: when each phone was last used through the cloud (so a person who
+   * only works from home is not flagged "Tidak aktif"), the cloud-series IDs it holds, the highest numbers it has
+   * allocated (the box raises its counters above them) and the role it has on file for this box. At most one try an
+   * hour, or a minute while some record still waits for its ID; any failure (an older cloud answers 404) is dropped
+   * quietly, nothing else in the round depends on it. The time of the last good merge is `device_seen_at` (the
+   * clean-up deletes no phone while it is older than 7 days).
+   */
+  private async deviceSeenDown(key: SyncKeyData): Promise<void> {
+    try {
+      const nowMs = this.o.now().getTime();
+      const every = this.getState('ids_push') === '1' || hasUnnumbered(this.o.db) ? IDS_SOON_MS : DEVICE_SEEN_EVERY_MS;
+      const tried = Date.parse(this.getState('device_seen_try_at') ?? '');
+      if (Number.isFinite(tried) && tried <= nowMs && nowMs - tried < every) return;
+      this.setState('device_seen_try_at', new Date(nowMs).toISOString());
+      const res = await this.call(key, '/api/sync/device-seen', () => ({ method: 'GET' }));
+      if (res.status !== 200) {
+        await res.arrayBuffer().catch(() => undefined);
+        return;
+      }
+      const body = JSON.parse(await this.readCapped(res, 2 * 1024 * 1024)) as unknown;
+      if (typeof body !== 'object' || body === null) return;
+      const o = body as { seen?: unknown; role?: unknown; maxNo?: unknown; ids?: unknown };
+      if (!Array.isArray(o.seen)) return;
+      if (typeof o.role === 'string' && /^[a-z]{1,20}$/.test(o.role)) {
+        this.setState(SITE_ROLE_KEY, o.role);
+      }
+      const max = maxNoOf(o.maxNo);
+      if (max !== null) raiseCounters(this.o.db, LOCAL_SURAU_ID, max);
+      mergeCloudIds(this.o.db, o.ids);
+      // a box the cloud calls primary numbers what it created while it waited for that answer (after it adopted the cloud's own numbers)
+      if (siteRoleOf(this.o.db) === 'primary') backfillIds(this.o.db, 'box');
+      mergeDeviceSeen(this.o.db, o.seen, this.o.now());
+      this.setState('device_seen_at', this.o.now().toISOString());
+    } catch {
+      /* the next hour asks again */
+    }
+  }
+
+  /**
+   * The box's plain-series ID numbers go to the cloud once after the upgrade, and again after the cloud refused one
+   * as taken (`ids_push`). The cloud's answer carries what to adopt and what to renumber. A cloud without the route
+   * (404) or a failure leaves the flag for the next round; a 403 (this box is not the primary) clears it.
+   */
+  private async idsPushUp(key: SyncKeyData): Promise<void> {
+    if (this.getState('ids_push') !== '1') return;
+    try {
+      const role = siteRoleOf(this.o.db);
+      if (role !== null && role !== 'primary') {
+        this.setState('ids_push', null);
+        return;
+      }
+      const res = await this.call(key, '/api/sync/people-ids', () => ({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(localBoxIds(this.o.db)),
+      }));
+      if (res.status === 403) {
+        await res.arrayBuffer().catch(() => undefined);
+        this.setState('ids_push', null);
+        return;
+      }
+      if (res.status !== 200) {
+        await res.arrayBuffer().catch(() => undefined);
+        return;
+      }
+      const answer = JSON.parse(await this.readCapped(res, 2 * 1024 * 1024)) as unknown;
+      applyPeopleIdsAnswer(this.o.db, LOCAL_SURAU_ID, answer, maxNoOf(typeof answer === 'object' && answer !== null ? (answer as { maxNo?: unknown }).maxNo : undefined));
+      this.setState('ids_push', null);
+    } catch {
+      /* retried next round */
     }
   }
 
@@ -771,6 +900,8 @@ export class SyncAgent {
     const benign = known ? reasons.filter((r) => BENIGN_REFUSALS.has(r)).length : 0;
     this.cycleRefused += refused - benign;
     for (const r of known ? reasons.filter((x) => !BENIGN_REFUSALS.has(x)) : ['unknown']) this.noteReason(r);
+    // the cloud holds a number this box issued for another record: send the numbers again so it can renumber
+    if (reasons.includes('id_taken')) this.setState('ids_push', '1');
   }
 
   /** The cloud tells, per finance entry it took, when it first held it; the box shows that beside its own time. */
@@ -780,7 +911,7 @@ export class SyncAgent {
     let n = 0;
     for (const [id, at] of Object.entries(map)) {
       if (++n > 500) break;
-      if (/^[A-Za-z0-9_-]{1,100}$/.test(id) && typeof at === 'string' && isoInstantMs(at) !== null) setCloudReceived(this.o.db, id, at);
+      if (/^[A-Za-z0-9_-]{1,100}$/.test(id) && typeof at === 'string' && isoInstantMs(at) !== null) setCloudReceived(this.o.db, id, at, LOCAL_SURAU_ID);
     }
   }
 
@@ -796,7 +927,7 @@ export class SyncAgent {
       const id = String(r.id);
       if (this.num(PHOTO_SENT_PREFIX + id) === 1) continue;
       if (n >= MAX_PHOTOS_PER_CYCLE) break;
-      const local = photoPath(this.o.db, this.o.dataDir, id);
+      const local = photoPath(this.o.db, this.o.dataDir, id, LOCAL_SURAU_ID);
       if (local === null) continue;
       n++;
       try {
@@ -842,11 +973,11 @@ export class SyncAgent {
         const buf = Buffer.concat(chunks);
         if (createHash('sha256').update(buf).digest('hex') !== id) continue;
         checkJpeg(buf);
-        const row = photoMeta(this.o.db, id);
+        const row = photoMeta(this.o.db, id, LOCAL_SURAU_ID);
         if (row === null) continue;
-        checkReplicatedBytes(this.o.db, row, buf);
+        checkReplicatedBytes(this.o.db, row, buf, LOCAL_SURAU_ID);
         writePhotoFile(this.o.dataDir, id, buf);
-        markPresent(this.o.db, id);
+        markPresent(this.o.db, id, LOCAL_SURAU_ID);
       } catch {
         this.noteReason('photo_pull');
       }
@@ -904,7 +1035,7 @@ export class SyncAgent {
     const origin = typeof o.origin === 'string' ? o.origin : '';
     const probe = synth ? { ...(e as object), origin: 'local' } : e;
     const boxId = origin.startsWith('box:') ? origin.slice(4) : this.o.boxId;
-    return verifySiteEntry({ boxId, surauId: DEFAULT_SURAU_ID }, { surauId: DEFAULT_SURAU_ID }, probe).ok;
+    return verifySiteEntry({ boxId, surauId: LOCAL_SURAU_ID }, { surauId: LOCAL_SURAU_ID }, probe).ok;
   }
 
   /** Move the push cursor over rows just applied from the cloud, when everything before them was already pushed. */
@@ -922,7 +1053,7 @@ export class SyncAgent {
       }
       const e = raw as FeedEntry;
       if (e.origin === `box:${this.o.boxId}`) continue;
-      const r = applyFeedEntry(this.o.db, e, { now: this.o.now(), origin: 'cloud', actor: e.actor, dataDir: this.o.dataDir, role: 'box', surauId: DEFAULT_SURAU_ID });
+      const r = applyFeedEntry(this.o.db, e, { now: this.o.now(), origin: 'cloud', actor: e.actor, dataDir: this.o.dataDir, role: 'box', surauId: LOCAL_SURAU_ID });
       if (r.status === 'applied') {
         changed = true;
         assetIdsIn(e.after, assets);
@@ -964,7 +1095,7 @@ export class SyncAgent {
       this.setState('last_pull_seq', String(cursor));
       if (next === null) break;
     }
-    if (changed) this.o.bus.emit(getVersion(this.o.db));
+    if (changed) this.o.bus.emit(getVersion(this.o.db, LOCAL_SURAU_ID), LOCAL_SURAU_ID);
     return { head, pulledAssets: assets };
   }
 

@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
 import '../../../l10n/generated/s.dart';
-import '../location_screen.dart' show monthsLongMs;
+import '../prayer_names.dart';
 import '../prayer_repository.dart';
-import '../sources_screen.dart' show crossCheckMinutes, flagBackground, flagInk, prayerNamesMs;
+import '../sources_screen.dart' show crossCheckMinutes, flagBackground, flagInk;
 
 const Map<String, Color> prayerSourceColours = {
   'official': Color(0xFF0B5C55),
@@ -21,7 +21,6 @@ const Color prayerCorrectionColour = Color(0xFFC99400);
 Color dayColour(ResolvedDay d) =>
     d.corrected.isNotEmpty ? prayerCorrectionColour : prayerSourceColours[d.source] ?? SurauColors.outline;
 
-const List<String> _dayShortMs = ['Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab', 'Ahd'];
 
 /// The six times of the table; imsak is on the day sheet.
 const List<String> gridPrayers = ['subuh', 'syuruk', 'zohor', 'asar', 'maghrib', 'isyak'];
@@ -64,12 +63,12 @@ class MonthGrid extends StatelessWidget {
               children: [
                 SizedBox(width: _dayWidth, child: Text(s.pdGridDay, style: head)),
                 for (final p in gridPrayers)
-                  Expanded(child: FittedBox(fit: BoxFit.scaleDown, child: Text(prayerNamesMs[p]!, style: head))),
+                  Expanded(child: FittedBox(fit: BoxFit.scaleDown, child: Text(prayerName(s, p), style: head))),
               ],
             ),
           ),
           const Divider(),
-          for (final d in days) _row(d, text),
+          for (final d in days) _row(s, d, text),
         ],
       ),
     );
@@ -77,10 +76,10 @@ class MonthGrid extends StatelessWidget {
 
   static const double _dayWidth = 66;
 
-  Widget _row(ResolvedDay d, TextTheme text) {
+  Widget _row(S s, ResolvedDay d, TextTheme text) {
     final date = DateTime.parse(d.date);
     final isToday = d.date == today;
-    final label = dateLabel?.call(d) ?? '${_dayShortMs[date.weekday - 1]} ${date.day}';
+    final label = dateLabel?.call(d) ?? '${weekdayShort(s, date.weekday)} ${date.day}';
     final tap = onTapDay;
     final num = text.bodySmall!.copyWith(
       color: SurauColors.text,
@@ -191,6 +190,7 @@ class YearGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final text = Theme.of(context).textTheme;
     final byDate = {for (final d in days) d.date: d};
     return Wrap(
@@ -208,7 +208,7 @@ class YearGrid extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(monthsLongMs[m - 1], style: text.titleSmall),
+                      Text(monthLong(s, m), style: text.titleSmall),
                       const SizedBox(height: 6),
                       _cells(m, byDate),
                     ],

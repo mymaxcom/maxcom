@@ -21,6 +21,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:surau_app/app/deps.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/app/router.dart';
+import 'package:surau_app/ops/ops_build.dart';
 import 'package:surau_app/box/box_client.dart';
 import 'package:surau_app/features/common/surau_info.dart';
 import 'package:surau_app/features/enrol/enrol_flow.dart';
@@ -99,6 +100,9 @@ class World {
           ...sessionJson,
           'token': 'tok-$via',
         });
+      case '/api/auth/me':
+        // The ops build asks after the unlock; this phone is an ordinary one that is not marked as acting for others.
+        return jsonResponse(200, {'ops': true, 'scope': 'surau'});
       case '/api/surau/info':
         return jsonResponse(200, fixtureInfoJson);
       case '/api/sync/ops':
@@ -312,7 +316,9 @@ void main() {
     expect(visitedUnlock, isFalse);
     expect(rig.location, AppRoutes.dashboard);
     await rig.stop(t);
-  });
+  // Public build only: in the MAXCOM Ops build the enrolled box IS the cloud, so a cloud session is final
+  // and never switches back (SessionKeeper ops flag, gate fix 25fd76e).
+  }, skip: kOpsBuild);
 
   testWidgets('box down, cloud waking: a signed wake, progress, then in by '
       'itself after Retry-After', (t) async {
