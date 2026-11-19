@@ -14,6 +14,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/labels.dart' show appLangOfS;
 import '../app/providers.dart';
 import '../app/shell.dart';
 import '../app/theme.dart';
@@ -506,6 +507,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                       : t.previewClockFrom(whenWords(
                             deps.toLocal(now),
                             today: deps.toLocal(deps.now()),
+                            lang: appLangOfS(t),
                           )),
                   style: text.bodyMedium!.copyWith(
                     color: SurauColors.muted,

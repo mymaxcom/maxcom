@@ -18,7 +18,7 @@
 // [cameraDiscoveryFill] is the list-only switch: off, a tap only puts the
 // camera's address in the form and the rest is typed by hand.
 
-import 'dart:async' show unawaited;
+import 'dart:async' show Timer, unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
@@ -56,11 +56,43 @@ String maskCameraUrl(String url) {
   final authority = cut == -1 ? rest : rest.substring(0, cut);
   final tail = cut == -1 ? '' : rest.substring(cut);
   final at = authority.lastIndexOf('@');
-  if (at == -1) return url;
-  final info = authority.substring(0, at);
-  final colon = info.indexOf(':');
-  if (colon == -1) return url;
-  return '$head${info.substring(0, colon)}:$cameraPasswordMask${authority.substring(at)}$tail';
+  var out = url;
+  if (at != -1) {
+    final info = authority.substring(0, at);
+    final colon = info.indexOf(':');
+    if (colon != -1) {
+      out = '$head${info.substring(0, colon)}:$cameraPasswordMask${authority.substring(at)}$tail';
+    }
+  }
+  return _maskQuery(out);
+}
+
+const _querySecretKeys = <String>{'pass', 'pwd', 'password', 'passwd'};
+
+/// Each non-empty value of a password parameter of the query becomes the dots (as core `maskCameraQuery`).
+String _maskQuery(String url) {
+  final h = url.indexOf('#');
+  final hash = h == -1 ? '' : url.substring(h);
+  final noHash = h == -1 ? url : url.substring(0, h);
+  final q = noHash.indexOf('?');
+  if (q == -1) return url;
+  var changed = false;
+  final pairs = noHash.substring(q + 1).split('&').map((p) {
+    final eq = p.indexOf('=');
+    if (eq == -1) return p;
+    var key = p.substring(0, eq);
+    try {
+      key = Uri.decodeComponent(key);
+    } on Object {
+      // a key that does not decode is compared as it is
+    }
+    if (_querySecretKeys.contains(key.toLowerCase()) && eq < p.length - 1) {
+      changed = true;
+      return '${p.substring(0, eq)}=$cameraPasswordMask';
+    }
+    return p;
+  }).join('&');
+  return changed ? '${noHash.substring(0, q)}?$pairs$hash' : url;
 }
 
 /// Where the address points: host, port and path (login and scheme left out), lower-cased host. Two addresses with
@@ -97,13 +129,28 @@ enum CameraTestPhase { idle, running, done, failed }
 
 /// The state and the calls of the camera record behind the form.
 class CameraSourceController extends ChangeNotifier {
-  CameraSourceController(this._gateway) {
+  CameraSourceController(this._gateway, {bool Function()? viaCloud}) : _viaCloud = viaCloud ?? (() => false) {
     url.addListener(_changed);
     username.addListener(_changed);
     password.addListener(_changed);
   }
 
   final BoxGateway? Function() _gateway;
+
+  /// The session came from the cloud: the address and login are sealed to the box's key and sent through it
+  /// (the box applies them on its next check); the test and the ONVIF search need the surau's own network.
+  final bool Function() _viaCloud;
+
+  /// Read by the card: the form is the cloud's (a change waits for the box, no test, no ONVIF search).
+  bool get viaCloud => _viaCloud();
+
+  /// While a change sent through the cloud waits for the box, the cloud is asked again now and then.
+  Timer? _pendingTimer;
+  static const Duration _pendingEvery = Duration(seconds: 15);
+
+  /// The box does not know the camera routes (HTTP 404: the cloud, or an old box): the same words as the cloud card,
+  /// never the raw `not found: GET ...` text.
+  static bool _isNotFound(BoxError e) => e.status == 404;
 
   /// The app language the messages this controller keeps (errors, test results) are in;
   /// the card sets it on every build.
@@ -112,6 +159,12 @@ class CameraSourceController extends ChangeNotifier {
   final TextEditingController url = TextEditingController();
   final TextEditingController username = TextEditingController();
   final TextEditingController password = TextEditingController();
+
+  /// The password field: focused when the box restored the camera and waits for its password.
+  final FocusNode passwordFocus = FocusNode(debugLabel: 'camera-password');
+
+  /// The box restored the camera from the cloud backup (which never holds the password) and waits for it here.
+  bool get passwordNeeded => record.passwordNeeded && !record.hasPassword;
 
   LiveCameraRecord record = LiveCameraRecord.none;
   bool loading = true;
@@ -210,7 +263,7 @@ class CameraSourceController extends ChangeNotifier {
     } on SessionExpired {
       loadError = cameraLoadFailed(lang);
     } on BoxError catch (e) {
-      loadError = e.message;
+      loadError = _isNotFound(e) ? cameraAtSurauOnly(lang) : e.message;
     }
     loading = false;
     _notify();
@@ -219,6 +272,7 @@ class CameraSourceController extends ChangeNotifier {
   void _apply(LiveCameraRecord r) {
     if (_disposed) return;
     record = r;
+    _watchPending();
     _filledFull = null;
     _filledMasked = null;
     // The listeners must not read these writes as typing.
@@ -236,6 +290,47 @@ class CameraSourceController extends ChangeNotifier {
     urlError = null;
     loginError = null;
     saveError = null;
+    if (passwordNeeded) {
+      // after the form is drawn with the open password box
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_disposed && passwordNeeded && passwordFocus.canRequestFocus && passwordFocus.context != null) passwordFocus.requestFocus();
+      });
+    }
+  }
+
+  /// Cloud only: asks again every few seconds while a change waits for the box, so the form settles by itself.
+  void _watchPending() {
+    _pendingTimer?.cancel();
+    _pendingTimer = null;
+    if (!record.pending || !_viaCloud()) return;
+    _pendingTimer = Timer.periodic(_pendingEvery, (_) => unawaited(_refreshPending()));
+  }
+
+  bool _refreshing = false;
+
+  Future<void> _refreshPending() async {
+    final g = _gateway();
+    if (_disposed || g == null || _refreshing || !record.pending) return;
+    _refreshing = true;
+    try {
+      final fresh = await g.liveCamera();
+      if (_disposed) return;
+      if (!fresh.pending) {
+        // settled: the box applied it (the address it holds is shown) or refused it (`failure` says why)
+        if (dirty) {
+          // the person is typing again: their text stays, only the state changes
+          record = fresh;
+          _watchPending();
+        } else {
+          _apply(fresh);
+        }
+        _notify();
+      }
+    } on Object {
+      // the next round tries again
+    } finally {
+      _refreshing = false;
+    }
   }
 
   void startChangingPassword() {
@@ -270,6 +365,7 @@ class CameraSourceController extends ChangeNotifier {
     }
     final g = _gateway();
     if (g == null) return false;
+    if (_viaCloud()) return _saveViaCloud(g);
     try {
       final saved = await g.saveLiveCamera(
         url: addressMoved ? _withoutMask(_urlForBox) : _urlForBox,
@@ -286,7 +382,9 @@ class CameraSourceController extends ChangeNotifier {
     } on SessionExpired {
       return false;
     } on BoxError catch (e) {
-      if (e.code == 'password_again') {
+      if (_isNotFound(e)) {
+        saveError = cameraAtSurauOnly(lang);
+      } else if (e.code == 'password_again') {
         passwordError = cameraPassAgain(lang);
         changingPassword = true;
       } else if (e.code == 'bad_address') {
@@ -301,11 +399,83 @@ class CameraSourceController extends ChangeNotifier {
     return false;
   }
 
+  /// The login typed inside the address (`rtsp://user:pass@host`), or null.
+  static String? _inlineUser(String url) {
+    final m = RegExp(r'^rtsp://([^:@/?#]*)(?::[^@/?#]*)?@').firstMatch(url);
+    final u = m?.group(1);
+    return u == null || u.isEmpty ? null : u;
+  }
+
+  /// Cloud: seals the address and login to the box's key and sends them; the box applies them on its next check.
+  /// What the form shows meanwhile is the masked address that was sent, with the "sent to the box" note.
+  Future<bool> _saveViaCloud(BoxGateway g) async {
+    var relay = record.relay;
+    if (relay == null) {
+      saveError = cameraCloudNoBox(lang);
+      _notify();
+      return false;
+    }
+    final sentUrl = addressMoved ? _withoutMask(_urlForBox) : _urlForBox;
+    final sentUser = username.text.trim();
+    final sentPassword = password.text.isNotEmpty ? password.text : null;
+    final keptPassword = record.hasPassword && !addressMoved && sentPassword == null;
+    try {
+      LiveCameraRecord? out;
+      for (var attempt = 0; attempt < 2 && out == null; attempt++) {
+        try {
+          out = await g.saveLiveCameraViaCloud(relay: relay!, url: sentUrl, username: sentUser, password: sentPassword);
+        } on BoxError catch (e) {
+          // another change got in first: read the number again and seal again, once
+          if (e.code != 'stale' || attempt == 1) rethrow;
+          final fresh = await g.liveCamera();
+          relay = fresh.relay;
+          if (relay == null) throw const BoxError(409, 'no_box', code: 'no_box');
+        }
+      }
+      final inline = _inlineUser(sentUrl);
+      final user = inline ?? (sentUser.isNotEmpty ? sentUser : null);
+      final inlinePassword = _hasInlinePassword(sentUrl);
+      _apply(
+        LiveCameraRecord(
+          configured: true,
+          url: maskCameraUrl(sentUrl),
+          username: user,
+          hasPassword: sentPassword != null || inlinePassword || keptPassword,
+          lastTest: null,
+          pending: true,
+          relay: out!.relay ?? relay,
+        ),
+      );
+      _notify();
+      return true;
+    } on BoxUnreachable {
+      saveError = cameraTestBoxAway(lang);
+    } on OfflineWriteRefused {
+      saveError = OfflineWriteRefused.message;
+    } on SessionExpired {
+      return false;
+    } on BoxError catch (e) {
+      if (e.code == 'no_box') {
+        saveError = cameraCloudNoBox(lang);
+      } else if (_isNotFound(e)) {
+        saveError = cameraAtSurauOnly(lang);
+      } else if (e.code == 'stale') {
+        saveError = cameraCloudRefused(lang, 'error');
+      } else {
+        saveError = errorText(sFor(lang), e);
+      }
+    }
+    _notify();
+    return false;
+  }
+
   /// "Uji sambungan": saves what is typed first (the box tests the saved address), then asks the box.
   Future<void> runTest(String transport) async {
     if (testPhase == CameraTestPhase.running) return;
     final g = _gateway();
     if (g == null) return;
+    // the test needs the box next to the camera; the card does not offer it over the cloud
+    if (_viaCloud()) return;
     if (!hasAddress) {
       urlError = cameraTestNeedUrl(lang);
       _notify();
@@ -334,7 +504,7 @@ class CameraSourceController extends ChangeNotifier {
     } on BoxError catch (e) {
       // 409 live_busy, 429 too_many: the app's words for the code.
       testPhase = CameraTestPhase.failed;
-      testMessage = errorText(sFor(lang), e);
+      testMessage = _isNotFound(e) ? cameraAtSurauOnly(lang) : errorText(sFor(lang), e);
     }
     _notify();
   }
@@ -363,7 +533,7 @@ class CameraSourceController extends ChangeNotifier {
     } on SessionExpired {
       discoverError = cameraLoadFailed(lang);
     } on BoxError catch (e) {
-      discoverError = e.message;
+      discoverError = _isNotFound(e) ? cameraAtSurauOnly(lang) : e.message;
     }
     discovering = false;
     _notify();
@@ -397,7 +567,7 @@ class CameraSourceController extends ChangeNotifier {
     } on SessionExpired {
       fillError = cameraLoadFailed(lang);
     } on BoxError catch (e) {
-      fillError = e.code == 'username_missing' ? cameraUserMissing(lang) : e.message;
+      fillError = _isNotFound(e) ? cameraAtSurauOnly(lang) : (e.code == 'username_missing' ? cameraUserMissing(lang) : e.message);
     }
     filling = false;
     _notify();
@@ -420,6 +590,15 @@ class CameraSourceController extends ChangeNotifier {
     if (g == null) return false;
     try {
       await g.clearLiveCamera();
+      if (_viaCloud()) {
+        // the box removes it on its next check; until then the form says so
+        final fresh = await g.liveCamera();
+        _apply(LiveCameraRecord(configured: false, url: '', username: null, hasPassword: false, lastTest: null, pending: fresh.pending, relay: fresh.relay));
+        testPhase = CameraTestPhase.idle;
+        testOutcome = null;
+        _notify();
+        return true;
+      }
     } on BoxUnreachable {
       saveError = cameraTestBoxAway(lang);
       _notify();
@@ -427,7 +606,7 @@ class CameraSourceController extends ChangeNotifier {
     } on SessionExpired {
       return false;
     } on BoxError catch (e) {
-      saveError = e.message;
+      saveError = _isNotFound(e) ? cameraAtSurauOnly(lang) : e.message;
       _notify();
       return false;
     }
@@ -441,9 +620,11 @@ class CameraSourceController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _pendingTimer?.cancel();
     url.dispose();
     username.dispose();
     password.dispose();
+    passwordFocus.dispose();
     super.dispose();
   }
 }
@@ -687,7 +868,10 @@ class _CameraSourceCardState extends State<CameraSourceCard> {
                 ),
                 const SizedBox(height: 6),
                 Text(cameraUrlHelp(lang), style: help()),
-                if (widget.discoveryReady && !ro) ...[
+                if (c.viaCloud) ...[
+                  const SizedBox(height: 10),
+                  Text(cameraDiscoverSurauOnly(lang), key: const ValueKey('camera-discover-surau-only'), style: help()),
+                ] else if (widget.discoveryReady && !ro) ...[
                   const SizedBox(height: 10),
                   Align(
                     alignment: AlignmentDirectional.centerStart,
@@ -725,17 +909,21 @@ class _CameraSourceCardState extends State<CameraSourceCard> {
                 Text(cameraAudioHelp(lang), style: help()),
               ]),
               const Divider(),
-              _section([
-                OutlinedButton.icon(
-                  key: const ValueKey('camera-test'),
-                  onPressed: ro || c.testPhase == CameraTestPhase.running ? null : () => c.runTest(widget.transport),
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(cameraTest(lang)),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                ),
-                const SizedBox(height: 10),
-                _TestResult(controller: c, help: help()),
-              ]),
+              _section(
+                c.viaCloud
+                    ? [Text(cameraTestSurauOnly(lang), key: const ValueKey('camera-test-surau-only'), style: help())]
+                    : [
+                        OutlinedButton.icon(
+                          key: const ValueKey('camera-test'),
+                          onPressed: ro || c.testPhase == CameraTestPhase.running ? null : () => c.runTest(widget.transport),
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: Text(cameraTest(lang)),
+                          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                        ),
+                        const SizedBox(height: 10),
+                        _TestResult(controller: c, help: help()),
+                      ],
+              ),
               const Divider(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
@@ -784,6 +972,16 @@ class _CameraSourceCardState extends State<CameraSourceCard> {
             ],
           ),
         ),
+        if (c.record.pending)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: _Line(cameraCloudPending(lang), bad: false, key: const ValueKey('camera-pending')),
+          )
+        else if (c.record.failure != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: _Line(cameraCloudRefused(lang, c.record.failure), bad: true, key: const ValueKey('camera-cloud-refused')),
+          ),
         if (c.saveError != null) Padding(padding: const EdgeInsets.only(top: 12), child: _Line(c.saveError!, bad: true)),
         const SizedBox(height: 16),
         _Line(cameraNetworkNotice(lang), bad: false),
@@ -833,9 +1031,15 @@ class _CameraSourceCardState extends State<CameraSourceCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (c.passwordNeeded && !c.changingPassword) ...[
+          _Line(cameraPassNeeded(lang), bad: true, key: const ValueKey('camera-password-needed')),
+          const SizedBox(height: 8),
+        ],
         TextField(
           key: const ValueKey('camera-password'),
           controller: c.password,
+          focusNode: c.passwordFocus,
+          autofocus: c.passwordNeeded && !ro,
           enabled: !ro,
           obscureText: !c.showPassword,
           autocorrect: false,
@@ -862,7 +1066,9 @@ class _CameraSourceCardState extends State<CameraSourceCard> {
             style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
             child: Text(cameraPassCancel(lang)),
           ),
-        ] else
+        ] else if (c.passwordNeeded)
+          Text(cameraPassNeededHelp(lang), style: helpStyle)
+        else
           Text(cameraPassHelpNew(lang), style: helpStyle),
       ],
     );
@@ -1315,7 +1521,7 @@ class _Result extends StatelessWidget {
 
 /// A line under the card: the network notice (info) or a refusal (bad).
 class _Line extends StatelessWidget {
-  const _Line(this.message, {required this.bad});
+  const _Line(this.message, {super.key, required this.bad});
 
   final String message;
   final bool bad;

@@ -306,7 +306,8 @@ export class Relay {
     const kbps = Math.round(opts.maxBitrateKbps);
     const video =
       opts.relayVideo === 'reencode'
-        ? ['-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-g', '60', '-keyint_min', '60', '-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`, '-pix_fmt', 'yuv420p']
+        ? // a keyframe every 2 s whatever the frame rate (-g 60 is 2.4 s at 25 fps), none on scene cuts, CBR signalled (YouTube's encoder guidance)
+          ['-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-force_key_frames', 'expr:gte(t,n_forced*2)', '-sc_threshold', '0', '-x264-params', 'nal-hrd=cbr', '-b:v', `${kbps}k`, '-minrate', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`, '-pix_fmt', 'yuv420p']
         : ['-c:v', 'copy'];
     const audio = ['-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2'];
     const url = `${this.o.ingestUrl ?? YOUTUBE_INGEST}/${encodeURIComponent(opts.key)}`;

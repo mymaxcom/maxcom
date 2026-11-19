@@ -1,4 +1,4 @@
-# MAXCOM R2: Rujukan / References / المراجع
+# MAXCOM R2 (2026.11.13): Rujukan / References / المراجع
 
 Every guide is available in Bahasa Melayu, English and Arabic.
 Setiap panduan tersedia dalam Bahasa Melayu, Bahasa Inggeris dan Bahasa Arab.

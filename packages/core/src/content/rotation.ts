@@ -7,9 +7,10 @@ import type { PhaseInterval, SolatName } from '../kiosk/state.ts';
 import { hadisPlan } from './hadisDisplay.ts';
 import { TABUNG_SHOWING_MAX_PAGES, tabungFeatured, tabungPageCount, tabungPages } from './tabungPages.ts';
 import type { KioskContent, KioskHadis, TilawahSlot } from './types.ts';
+import { videoSlotSeconds } from './video.ts';
 
 export type SlotFeature =
-  | 'kuliahCard' | 'pengumuman' | 'posters' | 'programKhas' | 'takwim'
+  | 'kuliahCard' | 'pengumuman' | 'posters' | 'videos' | 'programKhas' | 'takwim'
   | 'hadis' | 'worldTimes' | 'tugasan' | 'ayatCard' | 'tabungCard';
 
 export interface Slot {
@@ -28,7 +29,7 @@ const SEC = 1_000;
 const DAY_MS = 24 * 60 * MIN;
 const DEFAULT_SECONDS = 15;
 const FEATURES: readonly SlotFeature[] = [
-  'kuliahCard', 'pengumuman', 'posters', 'programKhas', 'takwim', 'hadis', 'worldTimes', 'tugasan', 'ayatCard', 'tabungCard',
+  'kuliahCard', 'pengumuman', 'posters', 'videos', 'programKhas', 'takwim', 'hadis', 'worldTimes', 'tugasan', 'ayatCard', 'tabungCard',
 ];
 
 type Raw = Partial<FeatureSettings> | undefined;
@@ -189,6 +190,14 @@ function buildLayout(content: KioskContent, settings: Settings, now: Date): Layo
           .filter((p) => (p.from === undefined || p.from <= today) && (p.to === undefined || today <= p.to))
           .sort((a, b) => a.order - b.order);
         return many(visible.map((p) => p.id));
+      }
+      // A video's slot is as long as the video (capped at 10 minutes), not the feature's durationSeconds: it plays to the end.
+      case 'videos': {
+        const visible = (content.videos ?? [])
+          .filter((v) => v.days.includes('umum') || v.days.includes(dayKey))
+          .filter((v) => (v.from === undefined || v.from <= today) && (v.to === undefined || today <= v.to))
+          .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+        return visible.map((v): Slot => ({ feature, itemId: v.id, durationSeconds: videoSlotSeconds(v) }));
       }
       case 'programKhas': {
         const hide = num(f.hideAfterMinutes, 5) * MIN;

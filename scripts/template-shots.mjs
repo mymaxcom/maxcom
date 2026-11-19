@@ -7,8 +7,8 @@
 // a string "@asset:<key>" inside it becomes the id of that fixture picture (IMAGES in ui-preview/fixtures/content.mjs).
 //
 // States: normal (kuliah card, ticker, source footer), iqamah (countdown), emergency (calculated-times band),
-// solat (the dimmed calm screen), poster (full-height poster screen), poster-light (pale poster), poster-wide (16:9 picture, 1600x900), azan, masuk-waktu, jumaat, tiada-data, hadis, ayat,
-// pengumuman, pengumuman-pic, pengumuman-pic-tall, pengumuman-pic-missing, takwim, tabung, tabung-1, tabung-3, tabung-6, tabung-15,
+// solat (the dimmed calm screen), poster (full-height poster screen), poster-light (pale poster), poster-wide (16:9 picture, 1600x900), poster-xwide (3:1 banner), and the same three with -nostretch (Regangkan off), azan, masuk-waktu, jumaat, tiada-data, hadis, ayat,
+// cloud-online, cloud-offline (the cloud icon), pengumuman, pengumuman-pic, pengumuman-pic-tall, pengumuman-pic-missing, takwim, tabung, tabung-1, tabung-3, tabung-6, tabung-15,
 // tabung-15-summary, tabung-hot, tabung-over, tabung-noqr, tabung-manual, tabung-featured, tabung-40-summary1..3, tabung-month-neg, program, logo, logo-poster, logo-iqamah, arab-ayat, arab-hadis, arab-zikir, live, live-nologo (the live screen's waiting panel
 // through the preview mechanism). Files: <outDir>/<template>-<state>.png.
 // Env SHOT_SIZE=<w>x<h>@<dsf> (default 1920x1080@1). Reduced motion is emulated so two runs are pixel-equal, and every
@@ -82,10 +82,17 @@ const STATES = {
   poster: { now: `${DAY}T15:52:00+08:00`, content: 'default', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
   'poster-light': { now: `${DAY}T15:52:00+08:00`, content: 'poster-light', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
   'poster-wide': { now: `${DAY}T15:52:00+08:00`, content: 'poster-wide', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
+  'poster-xwide': { now: `${DAY}T15:52:00+08:00`, content: 'poster-xwide', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
+  'poster-nostretch': { now: `${DAY}T15:52:00+08:00`, content: 'poster-nostretch', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
+  'poster-wide-nostretch': { now: `${DAY}T15:52:00+08:00`, content: 'poster-wide-nostretch', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
+  'poster-xwide-nostretch': { now: `${DAY}T15:52:00+08:00`, content: 'poster-xwide-nostretch', card: 'posters', wait: '[data-layer="content"] [data-card="posters"]', expectPhase: 'normal' },
   azan: { now: at(DAY, row.asar, -60), expectPhase: 'azanCountdown' },
   'masuk-waktu': { now: at(DAY, row.asar, 5), expectPhase: 'masukWaktu' },
   jumaat: { now: at(friday, rowOf(friday).times.zohor, 120), expectPhase: 'khutbah' },
   'tiada-data': { now: `${DAY}T15:52:00+08:00`, noDays: true, expectPhase: 'noData' },
+  // The cloud icon beside the bottom-right logo (a linked box, cloudSync on): the box answers /api/kiosk/cloud fresh or stale.
+  'cloud-online': { ...card('kuliahCard'), cloud: 'online' },
+  'cloud-offline': { ...card('kuliahCard'), cloud: 'offline' },
   hadis: card('hadis'),
   // 06:30, between Syuruk and Zohor's day half: with Syuruk hidden the bar, the headline and the chip name Zohor.
   standin: { now: `${DAY}T06:30:00+08:00`, expectPhase: 'normal' },
@@ -224,6 +231,11 @@ try {
         else localStorage.removeItem('surau.content');
       }, { b: JSON.stringify({ bundle, fetchedAt: Date.now() }), c: content });
       await ctx.route('**/api/**', (route) => route.abort());
+      if (st.cloud) {
+        // the page clock starts at 2026-01-01T00:00:01Z, so "fresh" and "stale" are measured from there
+        const lastOkAt = st.cloud === 'online' ? '2026-01-01T00:00:00.000Z' : '2025-12-31T20:00:00.000Z';
+        await ctx.route('**/api/kiosk/cloud', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ linked: true, lastOkAt, cloudSyncEnabled: true }) }));
+      }
       await ctx.route('**/surau-logo*', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: logoBody }));
       await ctx.route('**/assets/*', (route) => {
         const id = new URL(route.request().url()).pathname.split('/').pop() ?? '';

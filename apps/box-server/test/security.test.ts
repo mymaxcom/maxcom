@@ -1221,8 +1221,10 @@ describe('8 response headers', () => {
       expect(csp).toContain("style-src 'self' 'unsafe-inline'");
       // The one network source beyond 'self' is the loopback port of the Windows host-exit helper, and only the kiosk
       // page document itself gets it; its scripts, the service worker and everything else keep connect-src 'self'.
-      expect(csp.replace('http://127.0.0.1:*', '')).not.toMatch(/unsafe-eval|\*|http:|https:/);
+      // The YouTube player of a Video item (youtube-nocookie.com) is the one frame source, again only for the kiosk page document.
+      expect(csp.replace('http://127.0.0.1:*', '').replace('https://www.youtube-nocookie.com', '')).not.toMatch(/unsafe-eval|\*|http:|https:/);
       const kioskDocument = !url.includes('.js');
+      expect(csp.includes('frame-src https://www.youtube-nocookie.com;'), `${url} frame-src`).toBe(kioskDocument);
       expect(csp, url).toContain(kioskDocument ? "connect-src 'self' http://127.0.0.1:*;" : "connect-src 'self';");
       expect(csp, 'script-src must not allow inline script').not.toMatch(/script-src[^;]*unsafe-inline/);
       expect(res.headers['x-content-type-options']).toBe('nosniff');

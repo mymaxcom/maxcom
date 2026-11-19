@@ -38,7 +38,7 @@ describe('cloud status', () => {
 
   it('useCloudStatus reports offline for a stale linked box and not for a fresh one', async () => {
     const stale = (async () => new Response(JSON.stringify(linked(ago(30))))) as unknown as typeof fetch;
-    let s: CloudStatus = { linked: false, lastOkAt: null, offline: false };
+    let s: CloudStatus = { linked: false, lastOkAt: null, enabled: false, offline: false };
     function Probe(p: { f: typeof fetch }) {
       s = useCloudStatus({ fetchImpl: p.f, now: () => NOW });
       return <div />;
@@ -53,11 +53,11 @@ describe('cloud status', () => {
     expect(s.offline).toBe(false);
   });
 
-  it('a failing poll leaves the badge hidden', async () => {
+  it('a failing poll leaves the icon hidden', async () => {
     const f = (async () => {
       throw new Error('net');
     }) as unknown as typeof fetch;
-    let s: CloudStatus = { linked: false, lastOkAt: null, offline: false };
+    let s: CloudStatus = { linked: false, lastOkAt: null, enabled: false, offline: false };
     function Probe() {
       s = useCloudStatus({ fetchImpl: f, now: () => NOW });
       return <div />;

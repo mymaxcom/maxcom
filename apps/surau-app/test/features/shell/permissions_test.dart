@@ -39,12 +39,14 @@ Map<String, bool> _parseDefaults(String ts) => {
 };
 
 void main() {
-  test('[L4] with only liveYoutube on there is no Live tab and no Live route', () {
+  test('[L4] with the kiosk switch off the Live page stays for live:settings (the live settings are there), for no one else', () {
     final onlyYoutube = FeatureFlags.defaults.copyWith({
       'liveOnKiosk': false,
       'liveYoutube': true,
     });
-    expect(routeAllowed('/live', {'live'}, onlyYoutube), isFalse);
+    expect(routeAllowed('/live', {'live'}, onlyYoutube), isTrue);
+    expect(routeAllowed('/live', {'media'}, onlyYoutube), isFalse);
+    expect(routeAllowed('/live/settings/liveOnKiosk', {'live'}, onlyYoutube), isTrue);
     final kiosk = FeatureFlags.defaults.copyWith({'liveOnKiosk': true});
     expect(routeAllowed('/live', {'live'}, kiosk), isTrue);
   });
@@ -183,6 +185,7 @@ void main() {
       '/finance/audit': '/api/finance/audit',
       '/finance/setup': '/api/finance/funds',
       '/live': '/api/live/status',
+      '/live/settings': '/api/settings',
       '/upload': '/api/youtube/quota',
       '/jemaah': '/api/settings',
     };

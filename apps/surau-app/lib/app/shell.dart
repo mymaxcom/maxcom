@@ -5,12 +5,14 @@
 // every page shows under its title, and the health poll that keeps data
 // fresh while the app is in front.
 
+import '../features/live/live_notice_box.dart' show liveBoxNoticeProvider;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/labels.dart' show appLangOfS;
 import '../box/box_address.dart';
 import '../ops/fleet/acting_banner.dart';
 import '../ops/fleet/surau_switcher.dart';
@@ -98,6 +100,8 @@ class _AppShellState extends ConsumerState<AppShell>
       ref.read(pinMemoryProvider).touch();
       _startPolling();
       ref.read(healthProvider.notifier).refresh();
+      // The live notice (a live another admin started) is read again.
+      ref.invalidate(liveBoxNoticeProvider);
       ref.read(syncCoordinatorProvider).onForeground();
       // Offline or on the cloud: try the box (and the cloud) again now.
       ref.read(sessionKeeperProvider).resume();
@@ -142,7 +146,7 @@ class _AppShellState extends ConsumerState<AppShell>
     // The Live tab folded to its preview alone: no navigation, so the video
     // is as large as the screen allows.
     final hideNav =
-        ref.watch(liveFoldedProvider) && widget.location.startsWith('/live');
+        ref.watch(liveFoldedProvider) && widget.location == '/live';
     // Ops build: the gold band "Anda melihat sebagai MAXCOM" sits over every screen while a surau is chosen.
     final page = kOpsBuild ? ActingFrame(child: widget.child) : widget.child;
     // A touch is "use" for the remembered PIN's 2 h idle limit (A3).
@@ -786,7 +790,7 @@ class OfflineBanner extends ConsumerWidget {
       message = s.offlineSessionBanner;
     } else if (last != null) {
       message = s.offlineBannerAt(
-        whenWords(deps.toLocal(last), today: deps.toLocal(deps.now())),
+        whenWords(deps.toLocal(last), today: deps.toLocal(deps.now()), lang: appLangOfS(s)),
       );
     } else if (ref.watch(readCacheProvider).isEmpty) {
       message = s.offlineNoData;
@@ -836,6 +840,7 @@ class ShellPage extends StatelessWidget {
     required this.body,
     this.actions = const [],
     this.floatingActionButton,
+    this.backTo,
   });
 
   final String title;
@@ -843,12 +848,19 @@ class ShellPage extends StatelessWidget {
   final List<Widget> actions;
   final Widget? floatingActionButton;
 
+  /// A page reached by `go` has nothing under it to pop to: this is where its Back arrow (and the system Back) goes.
+  final String? backTo;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final back = backTo;
+    final scaffold = Scaffold(
       // The MAXCOM cloud and box icons sit last, top right, on every page;
       // a long title gives way first (it ends in dots).
       appBar: AppBar(
+        leading: back == null
+            ? null
+            : BackButton(key: const ValueKey('page-back'), onPressed: () => GoRouter.of(context).go(back)),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           ...actions,
@@ -867,6 +879,14 @@ class ShellPage extends StatelessWidget {
           Expanded(child: body),
         ],
       ),
+    );
+    if (back == null) return scaffold;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) GoRouter.of(context).go(back);
+      },
+      child: scaffold,
     );
   }
 }

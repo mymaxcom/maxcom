@@ -1,0 +1,31 @@
+/* The cloud state icon: immediately left of the bottom-right MAXCOM logo (.host-exit), same height, same plate.
+   It is not part of the logo button and takes no pointer events. The corner is physical (not mirrored for
+   Arabic): the logo stays bottom-right, so "inner side of the logo" is always its left. */
+.cloud-icon {
+  position: fixed;
+  /* logo: right 0.7rem + width 5.475rem (0.24rem padding x2 + 1.12rem tall image at 464:118.8) ; then a 0.35rem gap */
+  right: calc(0.7rem + 5.475rem + 0.35rem);
+  bottom: 0.35rem;
+  z-index: 40; /* above a full-screen poster, as the logo is */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 0.45rem;
+  background: var(--mark-plate, #082824);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  opacity: 0.9;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 900ms ease;
+}
+.cloud-icon svg { display: block; width: 1.2rem; height: 1.2rem; }
+.cloud-icon[data-state='online'] { color: var(--cloud-ok, #2fd4bd); }
+.cloud-icon[data-state='offline'] { color: var(--cloud-bad, #ff6b6b); }
+.cloud-icon[data-dim='true'] { opacity: 0.4; }
+
+.stage[data-template='colourful'] .cloud-icon { --mark-plate: #1d1442; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16); }
+.stage[data-template='creative'] .cloud-icon { --mark-plate: #0e1620; border-radius: 0 0.6rem 0 0.6rem; }
+.stage[data-template='oldschool'] .cloud-icon { --mark-plate: #2a1c10; border-radius: 0.2rem; box-shadow: none; }
+.stage[data-template='minimal'] .cloud-icon { --mark-plate: #16211f; box-shadow: none; }

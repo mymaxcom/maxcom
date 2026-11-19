@@ -2,6 +2,9 @@ import { DAY_KEYS } from '../features/registry.ts';
 import { validateImageRef } from '../image.ts';
 import type { ImageRef, ImageSlotKey } from '../image.ts';
 import type { ContentKind, ContentItemOf, HadisExt } from './types.ts';
+import { VIDEO_LIMITS, VIDEO_SOURCES, isYoutubeId } from './video.ts';
+
+export * from './video.ts';
 
 export const CONTENT_KINDS: readonly ContentKind[] = [
   'penceramah',
@@ -10,6 +13,7 @@ export const CONTENT_KINDS: readonly ContentKind[] = [
   'pengumuman',
   'ticker',
   'poster',
+  'video',
   'programKhas',
   'takwim',
   'hadis',
@@ -91,12 +95,16 @@ function checkDateTime(path: string, v: unknown, errors: string[]): string | und
   return v;
 }
 
+const BIDI_CONTROLS = /[\u202A-\u202E\u2066-\u2069]/g;
+
 function checkText(path: string, v: unknown, errors: string[], max = MAX_TEXT): string | undefined {
   if (typeof v !== 'string') {
     errors.push(`${path} must be text`);
     return undefined;
   }
-  const trimmed = v.trim();
+  // Direction overrides and isolates (U+202A to U+202E, U+2066 to U+2069) typed or pasted by a surau are removed: they could
+  // reorder the text of a neighbouring block on the TV. Arabic letters and the plain marks (U+200E, U+200F) stay.
+  const trimmed = v.replace(BIDI_CONTROLS, '').trim();
   if (trimmed.length > max) {
     errors.push(`${path} must be at most ${max} characters`);
     return undefined;
@@ -222,12 +230,69 @@ function buildPoster(src: Record<string, unknown>, errors: string[]): ContentIte
   const from = src.from === undefined ? undefined : checkDate('from', src.from, errors);
   const to = src.to === undefined ? undefined : checkDate('to', src.to, errors);
   const order = checkInt('order', src.order, 0, 1000000, errors);
+  let stretch: boolean | undefined;
+  if (src.stretch !== undefined) {
+    if (typeof src.stretch === 'boolean') stretch = src.stretch;
+    else errors.push('stretch must be true or false');
+  }
   checkRange(from, to, errors);
   if (!title || !assetId || !days || order === undefined) return undefined;
   const out: Record<string, unknown> = { title, assetId, days, order };
   if (from !== undefined) out.from = from;
   if (to !== undefined) out.to = to;
+  if (stretch !== undefined) out.stretch = stretch;
   return out as unknown as ContentItemOf<'poster'>;
+}
+
+function buildVideo(src: Record<string, unknown>, errors: string[]): ContentItemOf<'video'> | undefined {
+  const title = checkText('title', src.title, errors, MAX_POSTER_TITLE);
+  if (title === '') errors.push('title is required');
+  const source = checkEnum('source', src.source, VIDEO_SOURCES, errors);
+  const days = checkDayList('days', src.days, false, errors);
+  const from = src.from === undefined ? undefined : checkDate('from', src.from, errors);
+  const to = src.to === undefined ? undefined : checkDate('to', src.to, errors);
+  const order = checkInt('order', src.order, 0, 1000000, errors);
+  const durationSec = src.durationSec === undefined ? undefined : checkInt('durationSec', src.durationSec, 1, 86400, errors);
+  const startSec = src.startSec === undefined ? undefined : checkInt('startSec', src.startSec, 0, 86400, errors);
+  const endSec = src.endSec === undefined ? undefined : checkInt('endSec', src.endSec, 1, 86400, errors);
+  let sound: boolean | undefined;
+  if (src.sound !== undefined) {
+    if (typeof src.sound === 'boolean') sound = src.sound;
+    else errors.push('sound must be true or false');
+  }
+  let assetId: string | undefined;
+  if (src.assetId !== undefined) {
+    if (typeof src.assetId === 'string' && /^[0-9a-f]{64}$/.test(src.assetId)) assetId = src.assetId;
+    else errors.push('assetId must be a 64-character asset id');
+  }
+  let youtubeId: string | undefined;
+  if (src.youtubeId !== undefined) {
+    if (isYoutubeId(src.youtubeId)) youtubeId = src.youtubeId;
+    else errors.push('youtubeId must be an 11-character YouTube video id');
+  }
+  if (source === 'upload') {
+    if (assetId === undefined) errors.push('assetId is required for an uploaded video');
+    if (youtubeId !== undefined) errors.push('youtubeId is only for a YouTube video');
+    if (durationSec !== undefined && durationSec > VIDEO_LIMITS.maxSeconds) errors.push(`durationSec must be at most ${VIDEO_LIMITS.maxSeconds}`);
+    if (startSec !== undefined || endSec !== undefined) errors.push('startSec and endSec are only for a recording clip');
+  } else if (source === 'youtube' || source === 'rakaman') {
+    if (youtubeId === undefined) errors.push('youtubeId is required for a YouTube video');
+    if (assetId !== undefined) errors.push('assetId is only for an uploaded video');
+    if (source === 'youtube' && (startSec !== undefined || endSec !== undefined)) errors.push('startSec and endSec are only for a recording clip');
+    if (source === 'rakaman' && startSec !== undefined && endSec !== undefined && endSec <= startSec) errors.push('endSec must be after startSec');
+  }
+  checkRange(from, to, errors);
+  if (!title || !source || !days || order === undefined) return undefined;
+  const out: Record<string, unknown> = { title, source, days, order };
+  if (assetId !== undefined) out.assetId = assetId;
+  if (youtubeId !== undefined) out.youtubeId = youtubeId;
+  if (durationSec !== undefined) out.durationSec = durationSec;
+  if (startSec !== undefined) out.startSec = startSec;
+  if (endSec !== undefined) out.endSec = endSec;
+  if (sound !== undefined) out.sound = sound;
+  if (from !== undefined) out.from = from;
+  if (to !== undefined) out.to = to;
+  return out as unknown as ContentItemOf<'video'>;
 }
 
 function buildProgramKhas(src: Record<string, unknown>, errors: string[]): ContentItemOf<'programKhas'> | undefined {
@@ -373,6 +438,7 @@ const BUILDERS: Record<ContentKind, Builder<ContentItemOf<ContentKind>>> = {
   pengumuman: buildPengumuman,
   ticker: buildTicker,
   poster: buildPoster,
+  video: buildVideo,
   programKhas: buildProgramKhas,
   takwim: buildTakwim,
   hadis: buildHadis,

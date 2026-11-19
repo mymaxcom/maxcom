@@ -49,7 +49,7 @@ describe('theme health reports', () => {
     expect((await post(app, report())).statusCode).toBe(204);
     // anonymous across the network: nothing about the theme (not themeOk, not the report)
     const lan = (await app.inject({ method: 'GET', url: '/api/health', remoteAddress: '10.5.5.5' })).json();
-    expect(Object.keys(lan).sort()).toEqual(['name', 'ok', 'themes', 'version']);
+    expect(Object.keys(lan).sort()).toEqual(['features', 'name', 'ok', 'themes', 'version']);
     expect(lan.themeOk).toBeUndefined();
     expect(lan.themeHealth).toBeUndefined();
     // anonymous on the box's own machine (the setup doctor): themeOk, never the report
@@ -87,9 +87,9 @@ describe('theme health reports', () => {
     expect((await app.inject({ method: 'POST', url: '/api/kiosk/theme-health', headers: { 'content-type': 'text/plain' }, payload: 'x' })).statusCode).toBeGreaterThanOrEqual(400);
   });
 
-  it('accepts a report from the shell-only stage screens (tugasan, waktu-dunia), stored and read back', async () => {
+  it('accepts a report from the shell-only stage screens (tugasan, waktu-dunia, video), stored and read back', async () => {
     const { app } = await setup();
-    expect([...SHELL_ONLY_SCREEN_IDS]).toEqual(['tugasan', 'waktu-dunia']);
+    expect([...SHELL_ONLY_SCREEN_IDS]).toEqual(['tugasan', 'waktu-dunia', 'video']);
     for (const screen of SHELL_ONLY_SCREEN_IDS) expect(parseHealthBody(report({ screen })), screen).not.toBeNull();
     expect((await post(app, report({ screen: 'tugasan' }))).statusCode).toBe(204);
     expect(activeThemeHealth(app.surau.db)).toMatchObject({ ok: false, screen: 'tugasan', failed: ['clock'] });

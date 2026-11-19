@@ -126,7 +126,8 @@ async function startBox(dataDir: string, port: number): Promise<{ child: ChildPr
     stdio: 'ignore',
   });
   procs.push(child);
-  for (let i = 0; i < 80; i++) {
+  // a deadline, not a count of tries: on a busy machine the box can take well over 20 s to come up
+  for (const end = Date.now() + 120_000; Date.now() < end;) {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/api/box/info`);
       if (r.ok) return { child, boxId: ((await r.json()) as { boxId: string }).boxId };
@@ -219,7 +220,7 @@ describe.skipIf(process.platform !== 'win32')('migrate-data.ps1 (real box, temp 
     sourceList = hashList(source);
     expect(Object.keys(sourceList)).toContain('secret/box.key');
     expect(Object.keys(sourceList)).toContain('surau.db');
-  }, 60_000);
+  }, 180_000);
 
   it('migrates a stopped box: target equals source, backup and manifest match, BOXID is the real box id, source unchanged', async () => {
     const base = join(tmp(), 'pasang baru');

@@ -2,7 +2,7 @@ import { dateOf, kuliahOnScreen } from '@surau/core';
 import type { KuliahView } from '@surau/core';
 import { useEffect } from 'preact/hooks';
 import { prayerLabel } from '../../format.ts';
-import { daysBetween, fmtDayMonth, fmtTimeOfDay, fmtWeekday, t } from '../../i18n.ts';
+import { commaOf, daysBetween, fmtDayMonth, fmtTimeOfDay, fmtWeekday, t } from '../../i18n.ts';
 import type { Lang } from '../../i18n.ts';
 import { assetSrc } from '../../content/assets.ts';
 import type { CardProps } from '../../content/ContentLayer.tsx';
@@ -20,8 +20,8 @@ export type KuliahDayRel = 'today' | 'tomorrow' | 'later';
 export function kuliahDayOf(date: string, today: string, lang: Lang): { rel: KuliahDayRel; word: string; date: string } {
   const d = daysBetween(today, date);
   const dayMonth = fmtDayMonth(date, lang);
-  if (d === 0) return { rel: 'today', word: t('kuliahWhenToday', lang), date: `${fmtWeekday(date, lang)}, ${dayMonth}` };
-  if (d === 1) return { rel: 'tomorrow', word: t('kuliahWhenTomorrow', lang), date: `${fmtWeekday(date, lang)}, ${dayMonth}` };
+  if (d === 0) return { rel: 'today', word: t('kuliahWhenToday', lang), date: `${fmtWeekday(date, lang)}${commaOf(lang)}${dayMonth}` };
+  if (d === 1) return { rel: 'tomorrow', word: t('kuliahWhenTomorrow', lang), date: `${fmtWeekday(date, lang)}${commaOf(lang)}${dayMonth}` };
   return { rel: 'later', word: fmtWeekday(date, lang), date: dayMonth };
 }
 

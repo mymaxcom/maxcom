@@ -25,6 +25,8 @@ export interface SearchOptions {
   /** Minimum gap between two requests to Nominatim from this box (policy: 1 per second). */
   minIntervalMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Test seam: the clock the request spacing is measured with (default Date.now). */
+  clockMs?: () => number;
 }
 
 const round4 = (n: number): number => Math.round(n * 10000) / 10000;
@@ -98,10 +100,11 @@ export async function searchLocation(
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   // The slot is reserved before waiting, in one synchronous step, so concurrent searches queue one gap apart
   // instead of all reading the same last time and going out together.
+  const clockMs = options.clockMs ?? Date.now;
   const last = lastRequestAt.get(db);
-  const slot = gap > 0 && last !== undefined ? Math.max(Date.now(), last + gap) : Date.now();
+  const slot = gap > 0 && last !== undefined ? Math.max(clockMs(), last + gap) : clockMs();
   lastRequestAt.set(db, slot);
-  const wait = slot - Date.now();
+  const wait = slot - clockMs();
   if (wait > 0) await sleep(wait);
 
   const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${new URLSearchParams({ q, format: 'jsonv2', limit: String(MAX_RESULTS), addressdetails: '1' }).toString()}`;

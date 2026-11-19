@@ -3,7 +3,8 @@
 //   node scripts/gen-app-fixtures.mjs             registry.g.dart + settings-cases.json (deterministic)
 //   node scripts/gen-app-fixtures.mjs --registry  registry.g.dart + settings-cases.json only
 //   node scripts/gen-app-fixtures.mjs --content   content-cases.json only (deterministic)
-//   node scripts/gen-app-fixtures.mjs --vectors   unlock vectors (random key, differs every run)
+//   node scripts/gen-app-fixtures.mjs --surahs    only the surah table in registry.g.dart + test/fixtures/surahs.json
+//   node scripts/gen-app-fixtures.mjs --vectors  unlock vectors (random key, differs every run)
 import { generateKeyPairSync, sign, createPrivateKey, randomBytes, createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, copyFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -107,6 +108,36 @@ function dartValue(v) {
   return '{' + Object.entries(v).map(([k, x]) => `${dartStr(k)}: ${dartValue(x)}`).join(', ') + '}';
 }
 
+const SURAHS_DOC = '/// SURAHS from core (islamic/surahs.ts): [number, Malaysian name, verse count, Arabic name].';
+const surahsRows = (SURAHS) => SURAHS.map((x) => [x.n, x.nameMs, x.ayat, x.nameAr]);
+const surahsDartLine = (SURAHS) => `const List<List<Object>> surahs = ${dartValue(surahsRows(SURAHS))};`;
+
+/**
+ * Only the surah table: rewrites the `surahs` line of registry.g.dart in place and writes test/fixtures/surahs.json
+ * (the Dart test compares all 114 rows with it). Fails if the ayat counts the app had differ from core's.
+ */
+async function writeSurahs() {
+  const { SURAHS } = await import('@surau/core');
+  if (SURAHS.length !== 114) throw new Error('core SURAHS must have 114 rows');
+  const file = join(appDir, 'lib', 'features', 'registry.g.dart');
+  let dart = readFileSync(file, 'utf8');
+  const re = /^const List<List<Object>> surahs = .*;$/m;
+  const m = re.exec(dart);
+  if (!m) throw new Error('surahs line not found in registry.g.dart');
+  const rows = [...m[0].matchAll(/\[(\d+), '(?:[^'\\]|\\.)*', (\d+)/g)].map((x) => [Number(x[1]), Number(x[2])]);
+  if (rows.length !== 114) throw new Error(`registry.g.dart surahs has ${rows.length} rows, not 114`);
+  for (const [n, ayat] of rows) {
+    if (SURAHS[n - 1].ayat !== ayat) throw new Error(`ayat count differs for surah ${n}: app ${ayat}, core ${SURAHS[n - 1].ayat}`);
+  }
+  dart = dart.replace(re, () => surahsDartLine(SURAHS));
+  dart = dart.replace(/^\/\/\/ SURAHS from core.*$/m, () => SURAHS_DOC);
+  writeFileSync(file, dart);
+  const fixDir = join(appDir, 'test', 'fixtures');
+  mkdirSync(fixDir, { recursive: true });
+  writeFileSync(join(fixDir, 'surahs.json'), JSON.stringify(surahsRows(SURAHS)) + '\n');
+  console.log('wrote surahs in', file, 'and surahs.json');
+}
+
 async function writeRegistry() {
   const core = await import('@surau/core');
   const {
@@ -187,8 +218,8 @@ async function writeRegistry() {
     '/// FEATURE_DESC from core: feature key -> {ms, en, ar, keywords}.',
     `const Map<String, Map<String, Object?>> featureDescTable = ${dartValue(FEATURE_DESC)};`,
     '',
-    '/// SURAHS from core: [number, name, verse count].',
-    `const List<List<Object>> surahs = ${dartValue(SURAHS.map((x) => [x.n, x.nameMs, x.ayat]))};`,
+    SURAHS_DOC,
+    surahsDartLine(SURAHS),
     '',
     '/// HIJRI_MONTHS from core.',
     `const List<String> hijriMonthsMs = ${dartValue(HIJRI_MONTHS.ms)};`,
@@ -360,13 +391,16 @@ async function writeRegistry() {
   const crossCases = [];
   const cross = (note, key, patch, current) =>
     crossCases.push({ key, note, patch, current, ok: validateFeatureSettings(key, patch, current).ok });
-  cross('ayat range too long', 'ayatCard', { ayatFrom: 10, ayatTo: 20 }, { surah: 2 });
-  cross('ayat range 5 verses', 'ayatCard', { ayatFrom: 252, ayatTo: 256 }, { surah: 2 });
-  cross('ayat range 6 verses', 'ayatCard', { ayatFrom: 251, ayatTo: 256 }, { surah: 2 });
-  cross('ayat inside the stored surah', 'ayatCard', { ayatFrom: 255, ayatTo: 256 }, { surah: 2 });
-  cross('ayat beyond the surah', 'ayatCard', { surah: 1, ayatTo: 8 }, { ayatFrom: 1 });
-  cross('ayat whole short surah', 'ayatCard', { surah: 1, ayatFrom: 3, ayatTo: 7 }, {});
-  cross('ayat from after to', 'ayatCard', { ayatFrom: 5, ayatTo: 3 }, { surah: 2 });
+  const M = { pick: 'manual' };
+  cross('ayat range too long', 'ayatCard', { ayatFrom: 10, ayatTo: 20 }, { ...M, surah: 2 });
+  cross('ayat range 3 verses', 'ayatCard', { ayatFrom: 254, ayatTo: 256 }, { ...M, surah: 2 });
+  cross('ayat range 4 verses', 'ayatCard', { ayatFrom: 253, ayatTo: 256 }, { ...M, surah: 2 });
+  cross('ayat range 5 verses', 'ayatCard', { ayatFrom: 252, ayatTo: 256 }, { ...M, surah: 2 });
+  cross('ayat inside the stored surah', 'ayatCard', { ayatFrom: 255, ayatTo: 256 }, { ...M, surah: 2 });
+  cross('ayat beyond the surah', 'ayatCard', { surah: 1, ayatTo: 8 }, { ...M, ayatFrom: 1 });
+  cross('ayat whole short surah', 'ayatCard', { surah: 1, ayatFrom: 5, ayatTo: 7 }, M);
+  cross('ayat from after to', 'ayatCard', { ayatFrom: 5, ayatTo: 3 }, { ...M, surah: 2 });
+  cross('ayat long range ignored when daily', 'ayatCard', { ayatFrom: 10, ayatTo: 20 }, { pick: 'daily', surah: 2 });
   const fixDir = join(appDir, 'test', 'fixtures');
   mkdirSync(fixDir, { recursive: true });
   writeFileSync(join(fixDir, 'settings-cases.json'), JSON.stringify({ coreSourceHash: hash, cases, crossCases }, null, 1) + '\n');
@@ -404,6 +438,7 @@ const VALID_ITEMS = {
   pengumuman: { title: 'Gotong-royong', body: 'Sabtu ini selepas Subuh.', from: '2026-11-01', to: '2026-11-07', priority: 2, pictureAssetId: ASSET_ID },
   ticker: { text: 'Selamat datang ke surau kami', from: '2026-11-01', to: '2026-11-30' },
   poster: { title: 'Poster Maulidur Rasul', assetId: ASSET_ID, days: ['umum', 'jumaat'], from: '2026-11-01', to: '2026-11-30', order: 1 },
+  video: { title: 'Selamat datang', source: 'upload', assetId: ASSET_ID, durationSec: 75, days: ['umum'], order: 1 },
   programKhas: {
     title: 'Majlis Maulidur Rasul',
     at: '2026-11-20T20:30',
@@ -430,6 +465,7 @@ const OPTIONAL = {
   pengumuman: ['pictureAssetId'],
   ticker: [],
   poster: ['from', 'to'],
+  video: ['from', 'to', 'sound', 'durationSec'],
   programKhas: ['assetId', 'note'],
   takwim: ['hijriLabel', 'assetId'],
   hadis: ['textAr'],
@@ -471,6 +507,10 @@ const EXTRA = {
     ['days', []], ['days', ['daily']], ['days', ['umum']], ['days', ['ahad', 'isnin', 'selasa', 'rabu', 'khamis', 'jumaat', 'sabtu']],
     ['days', ['sunday']], ['days', 'umum'], ['assetId', 'A'.repeat(64)], ['assetId', 'a'.repeat(63)], ['order', 0], ['order', -1],
     ['order', 1000000], ['order', 1000001], ['from', '2026-12-01'],
+  ],
+  video: [
+    ['title', 'a'.repeat(81)], ['sound', true], ['sound', false], ['sound', 'yes'], ['source', 'tv'], ['source', 'youtube'],
+    ['youtubeId', 'dQw4w9WgXcQ'], ['durationSec', 600], ['durationSec', 601], ['assetId', 'xyz'], ['days', []], ['order', 0], ['order', 1000001],
   ],
   programKhas: [
     ['at', '2026-11-20T24:00'], ['at', '2026-11-20 20:30'], ['at', '2026-11-20T20:30:00'], ['showFrom', '2026-11-21'], ['status', 'batal'],
@@ -656,9 +696,9 @@ async function writeHadisCases() {
 }
 
 const args = new Set(process.argv.slice(2));
-const known = new Set(['--vectors', '--registry', '--content', '--hadis']);
+const known = new Set(['--vectors', '--registry', '--content', '--hadis', '--surahs']);
 if ([...args].some((a) => !known.has(a))) {
-  console.error('usage: node scripts/gen-app-fixtures.mjs [--registry] [--content] [--hadis] [--vectors]');
+  console.error('usage: node scripts/gen-app-fixtures.mjs [--registry] [--content] [--hadis] [--surahs] [--vectors]');
   process.exit(2);
 }
 if (args.has('--vectors')) writeVectors();
@@ -667,5 +707,6 @@ if (args.has('--registry') || args.size === 0) {
   // Plan 7: the finance ledger vectors core and the app both test against.
   copyFileSync(join(root, 'packages', 'core', 'test', 'fixtures', 'finance-vectors.json'), join(appDir, 'test', 'fixtures', 'finance-vectors.json'));
 }
+if (args.has('--surahs') || args.size === 0) await writeSurahs();
 if (args.has('--content') || args.size === 0) await writeContentCases();
 if (args.has('--hadis') || args.size === 0) await writeHadisCases();

@@ -473,7 +473,7 @@ void main() {
     expect(j.parts.first.offset, 4096);
   });
 
-  test('a job with no cloud session waits with no_cloud and starts later', () async {
+  test('a job with no session on the box waits with no_box and starts later', () async {
     var hasCloud = false;
     final q = UploadQueue(
       store: store,
@@ -492,7 +492,7 @@ void main() {
     final job = await q.enqueueFromSession('sess1', 'k1');
     await q.kick();
     expect(runner.started, isEmpty);
-    expect((await q.jobs()).single.lastError, 'no_cloud');
+    expect((await q.jobs()).single.lastError, 'no_box');
     hasCloud = true;
     await q.kick();
     expect(runner.started, [job.id]);

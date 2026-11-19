@@ -17,7 +17,7 @@ export type StageScreenId = ScreenId | PhaseOnlyScreenId | ShellOnlyScreenId;
  * prayer strip (the phases-without-an-entry rule), which the shell always shows on them. The ids are core's
  * SHELL_ONLY_SCREEN_IDS, which the box server's health endpoint accepts too.
  */
-const SHELL_ONLY: Partial<Record<SlotFeature, ShellOnlyScreenId>> = { tugasan: 'tugasan', worldTimes: 'waktu-dunia' };
+const SHELL_ONLY: Partial<Record<SlotFeature, ShellOnlyScreenId>> = { tugasan: 'tugasan', worldTimes: 'waktu-dunia', videos: 'video' };
 
 /** The stage id of a rotation card that takes the content shell without a catalog screen; null for every other card. */
 export function shellOnlyScreenOf(feature: SlotFeature): ShellOnlyScreenId | null {

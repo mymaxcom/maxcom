@@ -567,6 +567,7 @@ class HealthDto {
     this.name,
     this.themes,
     this.themeHealth,
+    this.features,
   });
 
   factory HealthDto.fromJson(Map<String, dynamic> j) {
@@ -590,6 +591,7 @@ class HealthDto {
           ? ThemeSupport.fromJson(j['themes'] as Map<String, dynamic>)
           : null,
       themeHealth: j['themeHealth'] is Map<String, dynamic> ? ThemeHealth.fromJson(j['themeHealth'] as Map<String, dynamic>) : null,
+      features: j['features'] is List ? [for (final f in j['features'] as List) if (f is String) f] : null,
     );
   }
 
@@ -620,6 +622,12 @@ class HealthDto {
 
   /// What the display saw when it loaded the uploaded theme in use (admin answer only); null when there is no report.
   final ThemeHealth? themeHealth;
+
+  /// What the box can do that older boxes cannot (`video`, `posterStretch`: 2026.11.13). Absent on an older box.
+  final List<String>? features;
+
+  /// Whether the box has [feature]; an older box (no `features`) has none of them.
+  bool supports(String feature) => features?.contains(feature) ?? false;
 }
 
 /// The last health report of an uploaded theme: did the clock, the prayer
@@ -996,6 +1004,9 @@ class LiveStatusDto {
     this.warnings = const [],
     this.video,
     this.audio = const [],
+    this.signIn,
+    this.youtubeSignInHere = true,
+    this.noticeRev,
   });
 
   factory LiveStatusDto.fromJson(Map<String, dynamic> j) {
@@ -1012,8 +1023,11 @@ class LiveStatusDto {
       youtubeHealth: _str(yt['health']),
       watchUrl: _str(yt['watchUrl']),
       youtubeError: _str(yt['lastError']),
+      signIn: YoutubeSignInInfo.maybe(yt),
+      youtubeSignInHere: yt['signInHere'] != false,
       warnings: _strings(j['warnings']),
       video: _str(j['video']),
+      noticeRev: j['noticeRev'] is num ? (j['noticeRev'] as num).toInt() : null,
       audio: [
         for (final a in (_map(j['audio'])['sources'] is List ? _map(j['audio'])['sources'] as List : const []))
           if (a is Map && a['id'] is String) LiveAudioSourceDto.fromJson(a.cast<String, dynamic>()),
@@ -1023,6 +1037,9 @@ class LiveStatusDto {
 
   /// The picture source of the running live (`phone` or `external`); null while the box does not say.
   final String? video;
+
+  /// Changes with every edit of the live notice text (`noticeRev` of the box); null while the box does not say.
+  final int? noticeRev;
 
   /// Per-source health of the audio mix (plan 4.7); empty while the box does not report it.
   final List<LiveAudioSourceDto> audio;
@@ -1046,6 +1063,13 @@ class LiveStatusDto {
   final String? youtubeHealth;
   final String? watchUrl;
   final String? youtubeError;
+
+  /// The device-code sign-in the server carries (`youtube.signIn`); null when nothing is pending or the box does not say.
+  final YoutubeSignInInfo? signIn;
+
+  /// False when the server answering cannot sign in or out (release 2026.11.13: the cloud; the grant is held by the
+  /// MAXCOM at the surau). True on a box, and on an older server that does not say.
+  final bool youtubeSignInHere;
 
   /// YouTube is receiving the picture now.
   bool get youtubeReceiving => youtubeHealth != null && youtubeState == 'live';
@@ -1111,6 +1135,48 @@ class KioskLiveDto {
   final String? since;
 }
 
+/// The server-held YouTube sign-in as a status read shows it (`youtube.signIn`): `pending` with the code to
+/// show, or the `denied` / `expired` outcome for a couple of minutes after it ended.
+class YoutubeSignInInfo {
+  const YoutubeSignInInfo({
+    required this.state,
+    this.userCode,
+    this.verificationUrl,
+    this.expiresAt,
+  });
+
+  /// The `signIn` of a `youtube` object, or null when it is absent or says nothing is pending.
+  static YoutubeSignInInfo? maybe(Map<String, dynamic> youtube) {
+    final v = youtube['signIn'];
+    if (v is! Map) return null;
+    final m = v.cast<String, dynamic>();
+    final state = _str(m['state']);
+    if (state == 'denied' || state == 'expired') {
+      return YoutubeSignInInfo(state: state!);
+    }
+    if (state == 'pending') {
+      final code = _str(m['userCode']);
+      if (code == null || code.isEmpty) return null;
+      final at = _str(m['expiresAt']);
+      return YoutubeSignInInfo(
+        state: 'pending',
+        userCode: code,
+        verificationUrl: _str(m['verificationUrl']),
+        expiresAt: at == null ? null : DateTime.tryParse(at)?.toLocal(),
+      );
+    }
+    return null;
+  }
+
+  /// `pending|denied|expired`.
+  final String state;
+  final String? userCode;
+  final String? verificationUrl;
+  final DateTime? expiresAt;
+}
+
+String? _knownAccountState(Object? v) => v is String && const {'signedIn', 'signedOut', 'unknown'}.contains(v) ? v : null;
+
 /// `GET /api/live/youtube/status`.
 class YoutubeStatusDto {
   const YoutubeStatusDto({
@@ -1118,19 +1184,37 @@ class YoutubeStatusDto {
     required this.signedIn,
     this.channelTitle,
     this.lastError,
+    this.signIn,
+    this.signInHere = true,
+    this.state,
+    this.lastGoodChannel,
   });
 
   factory YoutubeStatusDto.fromJson(Map<String, dynamic> j) => YoutubeStatusDto(
+        state: _knownAccountState(j['state']),
+        lastGoodChannel: j['lastGood'] is Map ? _str((j['lastGood'] as Map)['channelTitle']) : null,
         configured: j['configured'] == true,
         signedIn: j['signedIn'] == true,
         channelTitle: _str(j['channelTitle']),
         lastError: _str(j['lastError']),
+        signIn: YoutubeSignInInfo.maybe(j),
+        signInHere: j['signInHere'] != false,
       );
 
   final bool configured;
   final bool signedIn;
   final String? channelTitle;
   final String? lastError;
+  final YoutubeSignInInfo? signIn;
+
+  /// `signedIn` | `signedOut` | `unknown` from a newer box; null from an older one (the flag alone decides).
+  final String? state;
+
+  /// The channel the box last saw signed in (`lastGood.channelTitle`); shown beside an unknown state.
+  final String? lastGoodChannel;
+
+  /// False on the cloud (2026.11.13): sign-in, sign-out and a channel change are made at the surau only.
+  final bool signInHere;
 }
 
 /// `POST /api/live/youtube/signin`: the code to type at Google.
@@ -1139,16 +1223,21 @@ class YoutubeSignInDto {
     required this.userCode,
     required this.verificationUrl,
     required this.interval,
+    this.expiresAt,
   });
 
   factory YoutubeSignInDto.fromJson(Map<String, dynamic> j) => YoutubeSignInDto(
         userCode: (j['userCode'] as String?) ?? '',
         verificationUrl: (j['verificationUrl'] as String?) ?? '',
         interval: j['interval'] is num ? (j['interval'] as num).toInt() : 5,
+        expiresAt: DateTime.tryParse((j['expiresAt'] as String?) ?? '')?.toLocal(),
       );
 
   final String userCode;
   final String verificationUrl;
+
+  /// When the code stops working (null when the box does not say).
+  final DateTime? expiresAt;
 
   /// Seconds between polls.
   final int interval;

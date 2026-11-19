@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../labels.dart' show appLangOfS;
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../box/setup_client.dart';
@@ -83,7 +84,7 @@ class _NetworkCheckSheetState extends ConsumerState<NetworkCheckSheet> {
             ok: last != null,
             text: last == null
                 ? s.netNeverSynced
-                : s.netLastSync(whenWords(deps.toLocal(last), today: deps.toLocal(deps.now()))),
+                : s.netLastSync(whenWords(deps.toLocal(last), today: deps.toLocal(deps.now()), lang: appLangOfS(s))),
           ),
           const SizedBox(height: 12),
           Align(

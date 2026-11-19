@@ -22,7 +22,7 @@ describe('field metadata', () => {
     expect(fieldMeta('autoTone', 'override')?.hidden).toBe(true);
     const hidden = Object.entries(FIELD_META).flatMap(([f, t]) => Object.entries(t!).filter(([, m]) => m.hidden).map(([p]) => `${f}.${p}`));
     expect(hidden.sort()).toEqual([
-      'autoTone.override', 'liveYoutube.relayFrom', 'pengumuman.daysAhead', 'programKhas.daysAhead', 'system.suspendedAt', 'themeStyle.enabled',
+      'autoTone.override', 'liveYoutube.nextLiveOn', 'liveYoutube.relayFrom', 'pengumuman.daysAhead', 'programKhas.daysAhead', 'system.suspendedAt', 'themeStyle.enabled',
     ]);
   });
   it('[K17] settings nothing reads are hidden yet still validate, so old data loads', () => {
@@ -104,6 +104,9 @@ describe('field metadata', () => {
     expect(FIELD_META.liveYoutube!.maxBitrateKbps!.scope).toBe('system');
     expect(fieldMeta('tilawah', 'cacheMaxMb')!.scope).toBe('system');
     expect(fieldMeta('liveYoutube', 'privacy')).toBeUndefined();
+    // the surau's YouTube choice has its own control on the Live screen: not offered in Tetapan, and any live role may change it
+    expect(fieldMeta('liveYoutube', 'nextLiveOn')!.hidden).toBe(true);
+    expect(isSystemField('liveYoutube', 'nextLiveOn')).toBe(false);
     expect(FIELD_META.liveYoutube!.relayFrom!.disabledChoices).toEqual(['phone']);
   });
   it('picks only inside the allowed range', () => {
@@ -140,7 +143,7 @@ describe('system scope', () => {
   });
   it('lists the Lanjutan deep links and the ordered features', () => {
     expect(LANJUTAN_ROWS.map((r) => r.feature)).toEqual(['liveYoutube', 'tilawah']);
-    expect(ORDERED_FEATURES).toHaveLength(10);
+    expect(ORDERED_FEATURES).toHaveLength(11);
     for (const k of ORDERED_FEATURES) expect(BY.get(k)!.defaults).toHaveProperty('order');
     for (const f of FEATURES) if ('order' in f.defaults) expect(ORDERED_FEATURES).toContain(f.key);
   });

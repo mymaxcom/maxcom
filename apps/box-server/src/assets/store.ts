@@ -47,6 +47,7 @@ const EXT: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'audio/mpeg': 'mp3',
+  'video/mp4': 'mp4',
   [PACK_MIME]: 'maxtheme',
 };
 

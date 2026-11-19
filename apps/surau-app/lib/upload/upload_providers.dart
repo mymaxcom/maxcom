@@ -10,10 +10,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/providers.dart';
 import '../box/trust.dart' show CaDerSource, usesPublicTls;
+import '../box/wire.dart' show SessionDto;
 import '../features/enrol/enrol_flow.dart' show EnrolledBox;
 import '../store/local_store.dart';
 import '../sync/sync_providers.dart';
-import '../sync/transport.dart' show boxAt;
 import 'session_files.dart';
 import 'upload_queue.dart';
 import 'upload_runner_android.dart' show AndroidUploadRunner;
@@ -52,8 +52,8 @@ Future<CatchUpSettings> readCatchUpSettings(LocalStore store) async =>
       await store.getDoc(Collections.settings, 'youtubeCatchUp'),
     );
 
-/// The CA the native uploader pins for its calls to [cloudBox] (the box with
-/// its base swapped to the cloud). Null when the cloud uses public TLS
+/// The CA the native uploader pins for its calls to [cloudBox] (the enrolled
+/// box, or the box with its base swapped to the cloud). Null when it uses public TLS
 /// (normal HTTPS) or no CA is kept.
 Future<Uint8List?> uploadCaDer(EnrolledBox cloudBox, Object? store) async {
   final sha = cloudBox.caSha256;
@@ -71,26 +71,28 @@ final uploadRunnerProvider = Provider<UploadRunner?>((ref) {
   return runner;
 });
 
-/// Cloud access for a run: the cloud base, this device's session there and
-/// the pinned root CA. Null when the box has no cloud or the device holds no
-/// session on it (then a job waits, `lastError: no_cloud`).
+/// Access for a run (release 2026.11.13): the MAXCOM at the surau holds the
+/// YouTube grant, so `begin`, `done` and `quota` go to the enrolled box, with
+/// this device's session there and the surau's root CA. The bytes go straight
+/// to Google from anywhere once a session is open. Null while the device holds
+/// no session on the box (then a job waits, `lastError: no_box`); a `done`
+/// that cannot reach the box is kept with its video id and sent again later.
 final uploadAuthProvider = Provider<Future<UploadAuth?> Function()>((ref) {
   return () async {
     final deps = ref.read(appDepsProvider);
     final box = ref.read(enrolledBoxProvider);
-    final cloud = box?.cloud;
-    if (box == null || cloud == null) return null;
+    if (box == null) return null;
     final session = ref.read(sessionProvider);
-    final token = cloud.authority == box.box.authority
-        ? session?.token
-        : ref.read(sessionTokensProvider).get(cloud);
-    if (token == null) return null;
-    final cloudBox = boxAt(box, cloud);
-    final client = await deps.enrolledClient(cloudBox);
-    final ca = await uploadCaDer(cloudBox, deps.boxStore);
+    // the cloud never holds the grant now: a cloud session's token is not used here
+    final token = session != null && session.via != SessionDto.viaCloud
+        ? session.token
+        : ref.read(sessionTokensProvider).get(box.box);
+    if (token == null || token.isEmpty) return null;
+    final client = await deps.enrolledClient(box);
+    final ca = await uploadCaDer(box, deps.boxStore);
     return UploadAuth(
       api: HttpUploadApi(client: client, token: token),
-      base: cloud,
+      base: box.box,
       token: token,
       caDer: ca,
     );

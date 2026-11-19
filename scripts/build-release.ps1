@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  MAXCOM: builds the Windows box release archive maxcom-box-<version>-windows.tar.gz on the dev machine.
+  MAXCOM: builds the Windows box release archive maxcom-box-<version>[-b<N>]-windows.tar.gz on the dev machine.
   Windows PowerShell 5.1.
 .DESCRIPTION
   The archive holds only MAXCOM's own code and the production (pure JavaScript) dependencies, with the
@@ -142,6 +142,17 @@ if (-not (Test-Path -LiteralPath $versionsFile -PathType Leaf)) { Fail "versions
 try { $versions = Get-Content -LiteralPath $versionsFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch { Fail 'versions.json bukan JSON yang sah.' }
 $declared = [string]$versions.$versionKey
 if ($declared -notmatch '^20[0-9]{2}\.(0[1-9]|1[0-2])\.[1-9][0-9]?$') { Fail "versions.json: $versionKey tiada atau bukan YYYY.MM.N (diberi: '$declared')" }
+# internal build of this product's current version (builds.json, optional; not listed = 0), stamped in release.json
+$build = 0
+$buildsFile = Join-Path $repo 'builds.json'
+if (Test-Path -LiteralPath $buildsFile -PathType Leaf) {
+  try { $builds = Get-Content -LiteralPath $buildsFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch { Fail 'builds.json bukan JSON yang sah.' }
+  $bp = $builds.PSObject.Properties[$versionKey]
+  if ($null -ne $bp) {
+    if ([string]$bp.Value -notmatch '^[0-9]$') { Fail "builds.json: $versionKey mesti nombor 0 hingga 9" }
+    $build = [int]$bp.Value
+  }
+}
 if ($Version -eq '') { $Version = $declared }
 elseif ($Version -ne $declared) { Fail "-Version $Version tidak sama dengan versions.json $versionKey ($declared)" }
 $nodeCheck = Get-Command node -ErrorAction SilentlyContinue
@@ -163,7 +174,9 @@ foreach ($n in 'node', 'mediamtx', 'ffmpeg') {
 }
 if ([string]$pins.ffmpeg.url -match 'release-essentials') { Fail 'release-pins.json: url ffmpeg mesti berversi, bukan ffmpeg-release-essentials.zip yang berubah-ubah.' }
 
-$archiveName = "maxcom-box-$Version-$Platform.tar.gz"
+# the build rides in the name when above 0 (maxcom-box-<ver>-b<N>-<platform>.tar.gz): a b0 and a b1 never overwrite each other
+$buildTag = if ($build -gt 0) { "-b$build" } else { '' }
+$archiveName = "maxcom-box-$Version$buildTag-$Platform.tar.gz"
 $archivePath = Join-Path $OutDir $archiveName
 $tar = Join-Path ([Environment]::GetEnvironmentVariable('SystemRoot')) 'System32\tar.exe'
 
@@ -202,9 +215,9 @@ foreach ($port in $DevPorts) {
 
 $git = Get-Command git -ErrorAction SilentlyContinue
 if (-not $git) { Fail 'git tiada pada PATH.' }
-$dirty = & $git.Source -C $repo status --porcelain -- apps packages versions.json
+$dirty = & $git.Source -C $repo status --porcelain -- apps packages versions.json builds.json
 if ($LASTEXITCODE -ne 0) { Fail 'git status gagal.' }
-if ($dirty -and -not $AllowDirty) { Fail "ada perubahan belum commit di apps/, packages/ atau versions.json:`n$($dirty -join "`n")" }
+if ($dirty -and -not $AllowDirty) { Fail "ada perubahan belum commit di apps/, packages/, versions.json atau builds.json:`n$($dirty -join "`n")" }
 $commit = (& $git.Source -C $repo rev-parse HEAD)
 if ($LASTEXITCODE -ne 0 -or [string]$commit -notmatch '^[0-9a-f]{40}$') { Fail 'git rev-parse HEAD gagal.' }
 
@@ -328,6 +341,7 @@ try {
   $rel = [ordered]@{
     v = 1
     version = $Version
+    build = $build
     platform = $Platform
     commit = $commit
     builtAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')

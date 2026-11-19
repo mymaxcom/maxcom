@@ -18,6 +18,7 @@ import '../app/theme.dart';
 import '../box/box_client.dart';
 import '../features/data_sources.dart';
 import '../features/shell/permissions.dart';
+import '../features/surah_names.dart' show normaliseSearch, surahSearchText;
 import '../l10n/generated/s.dart';
 import 'widgets/box_read.dart';
 import 'widgets/pieces.dart';
@@ -541,13 +542,10 @@ class _SurahSheetState extends State<_SurahSheet> {
   Widget build(BuildContext context) {
     final t = S.of(context);
     final text = Theme.of(context).textTheme;
-    final q = _query.trim().toLowerCase();
+    final q = normaliseSearch(_query);
     final shown = [
       for (var n = 1; n <= 114; n++)
-        if (q.isEmpty ||
-            '$n' == q ||
-            surahNamesMs[n - 1].toLowerCase().replaceAll("'", '').contains(q.replaceAll("'", '')))
-          n,
+        if (q.isEmpty || '$n' == q || normaliseSearch(surahSearchText(n)).contains(q)) n,
     ];
     return Column(
       children: [

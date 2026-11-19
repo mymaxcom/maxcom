@@ -18,7 +18,7 @@ import '../kinds.dart';
 import '../preview_message.dart';
 import 'content_form.dart';
 
-class PosterEditor extends StatelessWidget {
+class PosterEditor extends ConsumerWidget {
   const PosterEditor({super.key, required this.initial, required this.itemId, this.readOnly = false});
 
   final Map<String, dynamic> initial;
@@ -30,6 +30,7 @@ class PosterEditor extends StatelessWidget {
     'title': defaultPosterTitle(liveCount),
     'days': ['umum'],
     'order': nextOrder,
+    'stretch': true,
   };
 
   /// Mirror of core's `defaultPosterTitle`: `Poster` followed by the live
@@ -37,17 +38,34 @@ class PosterEditor extends StatelessWidget {
   static String defaultPosterTitle(int liveCount) => 'Poster ${liveCount + 1}';
 
   @override
-  Widget build(BuildContext context) => ContentForm(
-    spec: contentKindByKey('poster')!,
-    initial: initial,
-    itemId: itemId,
-    readOnly: readOnly,
-    // The kiosk preview shows the uploaded picture itself; the box renders
-    // the adjusted one when the poster is saved.
-    extra: (context, values) => PosterPreviewButton(
-      poster: PreviewPoster.tryFrom(ImageRef.assetIdOf(values['assetId']), values['title']),
-    ),
-  );
+  Widget build(BuildContext context, WidgetRef ref) {
+    // A box older than 2026.11.13 does not know `stretch` (it refuses the field): the switch is not offered there.
+    final stretchOk = ref.watch(boxSupportsProvider('posterStretch'));
+    final full = contentKindByKey('poster')!;
+    final spec = stretchOk
+        ? full
+        : ContentKindSpec(
+            key: full.key,
+            labelMs: full.labelMs,
+            labelMsPlural: full.labelMsPlural,
+            icon: full.icon,
+            fields: [for (final f in full.fields) if (f.key != 'stretch') f],
+            carried: full.carried,
+          );
+    return ContentForm(
+      spec: spec,
+      // A poster saved before 2026.11.13 has no `stretch`: absent means Yes (the kiosk stretches it too). Only a
+      // `false` is ever sent (see FieldSpec.omitWhen), so an absent field stays absent.
+      initial: {if (stretchOk) 'stretch': true, ...initial},
+      itemId: itemId,
+      readOnly: readOnly,
+      // The kiosk preview shows the uploaded picture itself; the box renders
+      // the adjusted one when the poster is saved.
+      extra: (context, values) => PosterPreviewButton(
+        poster: PreviewPoster.tryFrom(ImageRef.assetIdOf(values['assetId']), values['title'], values['stretch']),
+      ),
+    );
+  }
 }
 
 /// `Pratonton di TV`: enabled once the poster has a picture on the box

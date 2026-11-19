@@ -352,6 +352,17 @@ class LiveSourceNotifier extends Notifier<LiveSourceState> {
     await _push();
   }
 
+  /// A microphone was plugged in (or the person undid that): the device
+  /// microphone on or off with its volume, only with the external camera
+  /// (with the phone camera it is always in).
+  Future<void> setDeviceMic(AudioSourceMix m) async {
+    if (!state.external) return;
+    final next = withSource(state.mix, idDeviceMic, AudioSourceMix(enabled: m.enabled, volume: stepVolume(m.volume)));
+    if (_mixEquals(next, state.mix)) return;
+    _set(state.copyWith(mix: next));
+    await _push();
+  }
+
   Future<void> remove(String id) async {
     if (id == idCamera) return;
     if (id == idDeviceMic && !state.external) return; // the phone's own microphone is today's flow
@@ -565,7 +576,11 @@ class AudioContext {
     this.camBack = false,
     this.muted = false,
     this.lang = AppLang.ms,
+    this.micLabel,
   });
+
+  /// The name of the microphone plugged in and in use (null = the device's own).
+  final String? micLabel;
 
   /// `phone` or `ipad`.
   final String dev;
@@ -587,7 +602,7 @@ class AudioContext {
   final AppLang lang;
 
   bool get ipad => dev == 'ipad';
-  String get micName => ipad ? liveAudioIpadMicRow(lang) : liveAudioPhoneMicRow(lang);
+  String get micName => micLabel ?? (ipad ? liveAudioIpadMicRow(lang) : liveAudioPhoneMicRow(lang));
   String get micShort => ipad ? liveAudioIpadMicShort(lang) : liveAudioPhoneMicShort(lang);
 }
 

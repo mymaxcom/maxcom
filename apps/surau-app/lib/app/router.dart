@@ -116,6 +116,7 @@ abstract final class AppRoutes {
   static const String financeAudit = '/finance/audit';
   static const String financeSetup = '/finance/setup';
   static const String live = '/live';
+  static const String liveSettings = '/live/settings';
   static const String upload = '/upload';
   static const String jemaah = '/jemaah';
   static const String thisDevice = '/this-device';
@@ -131,6 +132,9 @@ abstract final class AppRoutes {
   static const String hadisCari = '/content/hadis/cari';
 
   static String settingsFor(String feature) => '/settings/$feature';
+
+  /// A live feature's form: under Siaran langsung, so Back and the bottom bar stay with it.
+  static String liveSettingsFor(String feature) => '/live/settings/$feature';
   static String themeEditorFor(String theme) => '/settings/templat/$theme';
   static String hadisDetailFor(String heId) => '/content/hadis/cari/$heId';
   static String contentFor(String kind) => '/content/$kind';
@@ -148,10 +152,23 @@ const Map<String, String> customFeatureRoutes = {
   'kioskTemplate': AppRoutes.settingsThemes,
 };
 
+/// The four features of the Siaran langsung page (registry group `live`): their forms live under `/live/settings/`,
+/// never in Konfigurasi.
+const List<String> liveSettingsFeatureKeys = ['liveCamera', 'liveOnKiosk', 'liveYoutube', 'recording'];
+
+/// Where an old `/settings/<live feature>` link (a bookmark, a notification) goes now, query kept; null for any other
+/// location.
+String? liveSettingsMoved(Uri uri) {
+  final seg = uri.pathSegments;
+  if (seg.length != 2 || seg[0] != 'settings' || !liveSettingsFeatureKeys.contains(seg[1])) return null;
+  return Uri(path: AppRoutes.liveSettingsFor(seg[1]), query: uri.hasQuery ? uri.query : null).toString();
+}
+
 /// Where `/settings/<feature>` goes instead of its generic page: a feature the Tetapan lists hide (planned, or edited
 /// elsewhere) is not reachable by typing its address either, so it returns to the list; a feature with a page of its own
 /// goes there; null opens the generic page.
 String? settingsFeatureRedirect(String? feature) {
+  if (feature != null && liveSettingsFeatureKeys.contains(feature)) return AppRoutes.liveSettingsFor(feature);
   if (feature != null && hiddenFeatures.contains(feature)) return AppRoutes.settings;
   return customFeatureRoutes[feature];
 }
@@ -193,6 +210,9 @@ GoRouter createRouter(
     initialLocation: initialLocation,
     refreshListenable: refreshListenable,
     redirect: (context, state) {
+      // Old `/settings/<live feature>` links go to the Siaran langsung page's own route, before any permission check.
+      final moved = liveSettingsMoved(state.uri);
+      if (moved != null) return moved;
       final result = guard(
         GuardInput(
           location: state.uri.toString(),
@@ -452,7 +472,18 @@ GoRouter createRouter(
           ),
           GoRoute(
             path: AppRoutes.live,
-            builder: (context, state) => const LiveScreen(),
+            builder: (context, state) => LiveScreen(openSettings: state.uri.queryParameters['tetapan'] == '1'),
+          ),
+          // The live features' forms: the same screen as Konfigurasi's, with Back to Siaran langsung. A route of its
+          // own (not a child of `/live`), so the live page is not built beneath the form.
+          GoRoute(
+            path: '${AppRoutes.liveSettings}/:feature',
+            redirect: (context, state) =>
+                liveSettingsFeatureKeys.contains(state.pathParameters['feature']) ? null : AppRoutes.live,
+            builder: (context, state) => SettingsFeatureScreen(
+              featureKey: state.pathParameters['feature']!,
+              backTo: AppRoutes.live,
+            ),
           ),
           GoRoute(
             path: AppRoutes.upload,

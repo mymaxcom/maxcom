@@ -23,7 +23,7 @@ function cssFiles(dir: string): string[] {
 }
 
 /** Properties whose value a pack must never steer (even through a variable). Colour-ish properties are the complement. */
-const COLOURISH = /^(?:color|background|background-color|background-image|border(?:-(?:top|right|bottom|left))?(?:-color)?|outline-color|box-shadow|text-shadow|fill|stroke|stop-color|caret-color|--[\w-]+)$/;
+const COLOURISH = /^(?:color|background|background-color|background-image|border(?:-(?:top|right|bottom|left|inline|inline-start|inline-end|block|block-start|block-end))?(?:-color)?|outline-color|box-shadow|text-shadow|fill|stroke|stop-color|caret-color|--[\w-]+)$/;
 
 function stripComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, '');

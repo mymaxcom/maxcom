@@ -85,7 +85,7 @@
 .stage[data-template='minimal'] .clock__hm { font-weight: 300; letter-spacing: -0.045em; color: var(--text); }
 .stage[data-template='minimal'] .screen--main .clock__hm { font-size: 14rem; }
 .stage[data-template='minimal'] .clock__aside { font-weight: 600; color: var(--accent); opacity: 1; }
-.stage[data-template='minimal'] .screen--main .clock__aside { font-size: 2.6rem; margin-left: 1rem; }
+.stage[data-template='minimal'] .screen--main .clock__aside { font-size: 2.6rem; margin-inline-start: 1rem; }
 .stage[data-template='minimal'] .clock__aside .num { font-weight: 500; color: var(--muted); }
 .stage[data-template='minimal'] .screen--main .next {
   grid-area: next;
@@ -121,7 +121,7 @@
 .stage[data-template='minimal'] .screen--main .zikir { grid-area: band; width: 43rem; margin: 0 0 1.6rem 3rem; }
 .stage[data-template='minimal'] .zikir__page.has-repeat { padding: 0 0 8.4rem; }
 .stage[data-template='minimal'] .zikir__repeat { top: auto; bottom: 1.4rem; right: 50%; transform: translateX(50%); width: 7rem; height: 7rem; }
-.stage[data-template='minimal'] .card--wide { right: 0; }
+.stage[data-template='minimal'] .card--wide { inset-inline-end: 0; }
 .stage[data-template='minimal'] .card:not(.card--poster) { background: #ffffff; border: 1px solid #e3e8e5; box-shadow: 0 1.2rem 3rem rgb(20 40 36 / 0.07); border-radius: 1rem; }
 .stage[data-template='minimal'] .card__tag { letter-spacing: 0.04em; text-transform: none; font-size: 1.3rem; }
 .stage[data-template='minimal'] .card--pengumuman { justify-content: flex-start; padding: 2.8rem; gap: 1.2rem; }
@@ -135,9 +135,9 @@
   --tb-hair: var(--hair); --tb-hot-bg: #eef6f3;
 }
 .stage[data-template='minimal'][data-kind='content'] .tabung__rows { gap: 0; }
-.stage[data-template='minimal'][data-kind='content'] .tabung__row { border-radius: 0; border-bottom: 1px solid var(--hair); padding-left: 0.21rem; padding-right: 0.21rem; }
+.stage[data-template='minimal'][data-kind='content'] .tabung__row { border-radius: 0; border-bottom: 1px solid var(--hair); padding-inline-start: 0.21rem; padding-inline-end: 0.21rem; }
 .stage[data-template='minimal'][data-kind='content'] .tabung__row:last-child { border-bottom: 0; }
-.stage[data-template='minimal'][data-kind='content'] .tabung__row.is-hot { border: 0.1rem solid var(--accent); border-radius: 0.83rem; padding-left: 1.46rem; padding-right: 1.46rem; }
+.stage[data-template='minimal'][data-kind='content'] .tabung__row.is-hot { border: 0.1rem solid var(--accent); border-radius: 0.83rem; padding-inline-start: 1.46rem; padding-inline-end: 1.46rem; }
 .stage[data-template='minimal'][data-kind='content'] :is(.tabung__fhero, .tabung__mini, .tabung__total) { border: 1px solid var(--hair); }
 .stage[data-template='minimal'][data-kind='content'] .tabung__qr { background-image: none; }
 .stage[data-template='minimal'][data-kind='content'] .tabung__qrbox { box-shadow: none; border: 1px solid #e1e2de; }
@@ -173,9 +173,9 @@
   background: none;
   color: var(--accent);
   padding: 0 1.2rem 0 0;
-  margin-right: 0.2rem;
+  margin-inline-end: 0.2rem;
   height: 1.6rem;
-  border-right: 1px solid var(--hair);
+  border-inline-end: 1px solid var(--hair);
   font-size: 1.1rem;
   letter-spacing: 0.02em;
   text-transform: none;
@@ -188,15 +188,15 @@
 /* No card: the clock is the screen. */
 .stage[data-template='minimal'] .screen--main.is-idle .content { display: none; }
 .stage[data-template='minimal'] .screen--main.is-idle .clock__hm { font-size: 21rem; letter-spacing: -0.045em; }
-.stage[data-template='minimal'] .screen--main.is-idle .clock__aside { font-size: 3.6rem; margin-left: 1.3rem; }
+.stage[data-template='minimal'] .screen--main.is-idle .clock__aside { font-size: 3.6rem; margin-inline-start: 1.3rem; }
 .stage[data-template='minimal'] .screen--main.is-idle .next { font-size: 2.6rem; margin-top: 2.4rem; padding: 0; }
 .stage[data-template='minimal'] .screen--main.is-idle .next .num { font-size: 3.2rem; margin: 0; }
 .stage[data-template='minimal'] .screen--main.is-idle .ident__dates { font-size: 1.9rem; margin-top: 1rem; }
 .stage[data-template='minimal'] .screen--main.is-idle .pbar { margin-top: 2.6rem; }
 /* Phases: the same quiet page; the countdown is the thin clock. */
-.stage[data-template='minimal'] .screen--phase .phase__head { left: 4rem; right: 4rem; top: 2.6rem; align-items: center; }
+.stage[data-template='minimal'] .screen--phase .phase__head { inset-inline-start: 4rem; inset-inline-end: 4rem; top: 2.6rem; align-items: center; }
 .stage[data-template='minimal'] .phase__clock { color: var(--muted); font-weight: 600; font-size: 2.4rem; }
-.stage[data-template='minimal'] .screen--phase .pbar { top: auto; bottom: 2.5rem; left: 4rem; right: 4rem; margin: 0; }
+.stage[data-template='minimal'] .screen--phase .pbar { top: auto; bottom: 2.5rem; inset-inline-start: 4rem; inset-inline-end: 4rem; margin: 0; }
 .stage[data-template='minimal'] .phase__centre { top: 8rem; bottom: 10.5rem; }
 .stage[data-template='minimal'][data-phase='noData'] .phase__centre { top: 0; bottom: 0; }
 .stage[data-template='minimal'] .phase__title { font-size: calc(2.8rem * var(--scale, 1)); font-weight: 500; color: var(--muted); }
@@ -210,7 +210,7 @@
 .stage[data-template='minimal'] .phase__nodata .clock__hm { font-size: 18rem; }
 .stage[data-template='minimal'] .phase__nodata .clock__aside { font-size: 3.4rem; }
 .stage[data-template='minimal'] .phase__date { color: var(--muted); font-weight: 500; opacity: 1; }
-.stage[data-template='minimal'] .screen--phase .emergency-band { left: 4rem; right: 4rem; bottom: 10.2rem; }
+.stage[data-template='minimal'] .screen--phase .emergency-band { inset-inline-start: 4rem; inset-inline-end: 4rem; bottom: 10.2rem; }
 /* Solat and tarawih: a dark, quiet version of the same page. */
 .stage[data-template='minimal'][data-dim='true'] {
   --text: #e6ecea;
@@ -250,7 +250,7 @@
 .stage[data-template='minimal'] .screen--live .next--chip { background: #ffffff; color: var(--text); border: 1px solid var(--hair); border-radius: 1rem; }
 .stage[data-template='minimal'] .screen--live .next--chip .chip-t { font-weight: 300; letter-spacing: -0.03em; color: var(--accent); }
 .stage[data-template='minimal'] .live-strip { border-radius: 1rem; text-shadow: none; }
-.stage[data-template='minimal'] .live-strip__tag { background: var(--accent); color: #ffffff; border-right: 0; }
+.stage[data-template='minimal'] .live-strip__tag { background: var(--accent); color: #ffffff; border-inline-end: 0; }
 .stage[data-template='minimal'] .live-strip__tag .live-strip__dot { box-shadow: 0 0 0 0.22rem rgb(255 255 255 / 0.9); }
 .stage[data-template='minimal'] .live-screen__waiting { color: var(--accent); }
 /* ======================================================================================================
@@ -341,11 +341,11 @@
    ====================================================================================================== */
 /* Theme round 2, rule 14: sentence case (no tracked capitals), hairlines instead of boxes, a bold clock. */
 .stage[data-template='minimal'][data-kind='content'] .region-clock .hm { font-weight: 700; letter-spacing: -0.02em; }
-.stage[data-template='minimal'][data-kind='content'] .brand-name { font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--text); }
+.stage[data-template='minimal'][data-kind='content'] .brand-name { font-weight: 700; --bn-ls: 0em; text-transform: none; color: var(--text); }
 .stage[data-template='minimal'][data-kind='content'] .next--chip { --chip-cd-bg: var(--accent); --chip-cd-ink: #ffffff; background: #ffffff; color: var(--text); border: 1px solid var(--hair); }
 .stage[data-template='minimal'][data-kind='content'] .chip-k { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); }
 .stage[data-template='minimal'][data-kind='content'] .strip { background: transparent; border: 0; border-top: 1px solid var(--hair); border-radius: 0; box-shadow: none; }
-.stage[data-template='minimal'][data-kind='content'] .strip .pcell { border-left: 0; }
+.stage[data-template='minimal'][data-kind='content'] .strip .pcell { border-inline-start: 0; }
 .stage[data-template='minimal'][data-kind='content'] .strip .pcell-label { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); opacity: 1; }
 .stage[data-template='minimal'][data-kind='content'] .strip .pcell-time { font-weight: 600; }
 .stage[data-template='minimal'][data-kind='content'] .strip .pcell.is-current { background: transparent; color: var(--accent); box-shadow: inset 0 0.313rem 0 var(--accent); }

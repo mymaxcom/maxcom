@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Cleartext only to the box server on this device's own loopback. -->
+    <!-- Cleartext only to the box server on this device's own loopback: the kiosk page origin (localhost) and the
+         native health checks (127.0.0.1). -->
     <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
         <domain includeSubdomains="false">127.0.0.1</domain>
     </domain-config>
 </network-security-config>

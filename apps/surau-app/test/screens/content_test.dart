@@ -460,10 +460,10 @@ void main() {
 
   testWidgets('tilawah slot: edit in place, the switch and the chips', (tester) async {
     final h = await openContent(tester, '/content/tilawahSlot');
-    expect(find.text('Surah 18'), findsOneWidget);
-    expect(find.text('Surah 36'), findsOneWidget);
+    expect(find.text('Surah 18 · Al-Kahfi'), findsOneWidget);
+    expect(find.text('Surah 36 · Yasin'), findsOneWidget);
     expect(find.text('Dimatikan'), findsOneWidget);
-    await tester.tap(find.text('Surah 36'));
+    await tester.tap(find.text('Surah 36 · Yasin'));
     await settle(tester);
     expect(h.location, '/content/tilawahSlot/l2');
     expect(find.text('Sunting slot tilawah'), findsOneWidget);
@@ -489,6 +489,32 @@ void main() {
       'enabled': true,
     });
     expect(find.text('Dimatikan'), findsNothing);
+  });
+
+  testWidgets('tilawah slot: the surah is a picker of number and name, searchable, saves the number', (tester) async {
+    final h = await openContent(tester, '/content/tilawahSlot/l1');
+    final pick = find.byKey(const ValueKey('field-surah'));
+    await reveal(tester, pick);
+    expect(find.textContaining('18. Al-Kahfi'), findsOneWidget);
+    await tester.tap(pick);
+    await settle(tester);
+    await tester.enterText(find.byKey(const ValueKey('picker-search')), 'ya sin');
+    await settle(tester);
+    expect(find.byKey(const ValueKey('picker-36')), findsOneWidget);
+    expect(find.byKey(const ValueKey('picker-18')), findsNothing);
+    await tester.enterText(find.byKey(const ValueKey('picker-search')), '112');
+    await settle(tester);
+    expect(find.byKey(const ValueKey('picker-112')), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('picker-search')), 'ya sin');
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('picker-36')));
+    await settle(tester);
+    expect(find.textContaining('36. Yasin'), findsOneWidget);
+    await reveal(tester, save);
+    await tester.tap(save);
+    await settle(tester);
+    final put = h.box.byPath('/api/content/tilawahSlot/l1')!;
+    expect((jsonDecode(put.body) as Map)['surah'], 36);
   });
 
   testWidgets('Padam: confirm, DELETE, the row is gone', (tester) async {

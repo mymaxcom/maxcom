@@ -179,7 +179,7 @@ abstract class PageEnv {
 
 // ---- the publisher ----
 
-class WebPublisher implements LivePublisher {
+class WebPublisher implements LivePublisher, LiveMicControl {
   WebPublisher({
     this.tokenProvider,
     Uri? box,
@@ -363,7 +363,7 @@ class WebPublisher implements LivePublisher {
     _emit(_state.copyWith(warnings: next));
   }
 
-  static Map<String, Object?> constraintsFor({required bool front}) => {
+  static Map<String, Object?> constraintsFor({required bool front, String? micId}) => {
     'video': {
       'facingMode': front ? 'user' : 'environment',
       // Always a 16:9 1280x720 track, whatever way the device is held. Where
@@ -376,12 +376,35 @@ class WebPublisher implements LivePublisher {
       'frameRate': 30,
     },
     // A PA microphone: no processing.
-    'audio': {
-      'echoCancellation': false,
-      'noiseSuppression': false,
-      'autoGainControl': false,
-    },
+    'audio': _audioConstraints(micId),
   };
+
+  static Map<String, Object?> _audioConstraints(String? micId) => {
+    if (micId != null) 'deviceId': {'exact': micId},
+    'echoCancellation': false,
+    'noiseSuppression': false,
+    'autoGainControl': false,
+  };
+
+  /// The microphone the person's device switched to by itself (a USB or
+  /// Lightning mic plugged in); null = the browser's default.
+  String? _micId;
+
+  /// getUserMedia with the chosen microphone; one that was unplugged since
+  /// falls back to the browser's default instead of failing the capture.
+  Future<CaptureStream> _openCapture(
+    Map<String, Object?> Function(String? micId) build,
+  ) async {
+    final id = _micId;
+    if (id != null) {
+      try {
+        return await _getUserMedia(build(id));
+      } catch (_) {
+        _micId = null;
+      }
+    }
+    return _getUserMedia(build(null));
+  }
 
   // ---- prepare and preview ----
 
@@ -414,22 +437,18 @@ class WebPublisher implements LivePublisher {
   }
 
   Future<void> _acquire() async {
-    final cap = await _getUserMedia(
-      _extMode && _audioOnly
-          ? micConstraints()
-          : constraintsFor(front: _front),
+    final cap = await _openCapture(
+      (id) => _extMode && _audioOnly
+          ? micConstraints(micId: id)
+          : constraintsFor(front: _front, micId: id),
     );
     _swapCapture(cap);
   }
 
   /// The iPad microphone alone (an added source of the box's mix): raw, for
   /// a PA, like the camera capture's audio.
-  static Map<String, Object?> micConstraints() => {
-    'audio': {
-      'echoCancellation': false,
-      'noiseSuppression': false,
-      'autoGainControl': false,
-    },
+  static Map<String, Object?> micConstraints({String? micId}) => {
+    'audio': _audioConstraints(micId),
   };
 
   void _swapCapture(CaptureStream cap) {
@@ -974,10 +993,16 @@ class WebPublisher implements LivePublisher {
     final front = !_front;
     final CaptureStream next;
     try {
-      next = await _getUserMedia(constraintsFor(front: front));
+      next = await _openCapture((id) => constraintsFor(front: front, micId: id));
     } catch (_) {
       return; // the camera stays as it was
     }
+    await _applyRecapture(next, front);
+  }
+
+  /// The new capture (camera and microphone) replaces the running one; a live
+  /// goes on over the same connection, the recording starts a new segment.
+  Future<void> _applyRecapture(CaptureStream next, bool front) async {
     final epoch = _epoch;
     final liveNow = _live;
     if (liveNow) {
@@ -1000,6 +1025,56 @@ class WebPublisher implements LivePublisher {
       }
     }
     _emit(_state.copyWith(frontCamera: front));
+  }
+
+  /// A microphone plugged in (or unplugged) while this device publishes: the
+  /// sound comes from [deviceId] (null = the default one) from now on. A live
+  /// goes on over the same connection (the track is replaced); false when the
+  /// microphone could not be opened (nothing changes).
+  @override
+  Future<bool> setMicrophone(String? deviceId) async {
+    final prev = _micId;
+    _micId = deviceId;
+    final cap = _capture;
+    if (cap == null) return true; // the next capture uses it
+    if (cap.hasEnded) {
+      // the unplugged microphone ended the capture: take a new one now
+      if (_live) {
+        if (_extMode && _ext.mic == ExternalMic.lost) {
+          unawaited(_reacquireExt(_epoch));
+        } else if (!_extMode) {
+          unawaited(_reacquire(_epoch));
+        }
+      }
+      return true;
+    }
+    final audioOnly = _extMode && _audioOnly;
+    final CaptureStream next;
+    try {
+      next = await _getUserMedia(
+        audioOnly
+            ? micConstraints(micId: deviceId)
+            : constraintsFor(front: _front, micId: deviceId),
+      );
+    } catch (_) {
+      _micId = prev;
+      return false;
+    }
+    if (!identical(cap, _capture)) {
+      next.stop();
+      return true;
+    }
+    if (audioOnly) {
+      _swapCapture(next);
+      if (_live) {
+        try {
+          await _peer?.replaceTracks(next);
+        } catch (_) {}
+      }
+    } else {
+      await _applyRecapture(next, _front);
+    }
+    return true;
   }
 
   @override
@@ -1172,7 +1247,7 @@ class WebPublisher implements LivePublisher {
     _setExt(_ext.copyWith(mic: ExternalMic.starting));
     final CaptureStream cap;
     try {
-      cap = await _getUserMedia(micConstraints());
+      cap = await _openCapture((id) => micConstraints(micId: id));
     } catch (_) {
       if (!_active(epoch)) return;
       await _micRefused();
@@ -1582,7 +1657,7 @@ class WebPublisher implements LivePublisher {
     final epoch = _epoch;
     final CaptureStream cam;
     try {
-      cam = await _getUserMedia(constraintsFor(front: _front));
+      cam = await _openCapture((id) => constraintsFor(front: _front, micId: id));
     } catch (_) {
       return false;
     }

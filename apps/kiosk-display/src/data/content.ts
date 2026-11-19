@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { buildCycle, currentSlot, dateOf, zikirWindow } from '@surau/core';
 import type { KioskContent, Slot, SlotFeature } from '@surau/core';
 import { num } from '../content/assets.ts';
@@ -10,6 +10,7 @@ import {
 import type { PreviewPoster } from './preview.ts';
 import type { KioskView } from './kiosk.ts';
 import { tarawihMonthFor } from './tarawih.ts';
+import { videoRoomSeconds } from '../video/room.ts';
 
 export interface LoadedContent {
   content: KioskContent;
@@ -24,7 +25,7 @@ const RELOAD_MS = 15 * 60 * 1000;
 
 const LIST_KEYS = ['kuliah', 'pengumuman', 'ticker', 'posters', 'programKhas', 'takwim', 'worldTimes', 'tugasan', 'zikir'] as const;
 const FEATURES: readonly SlotFeature[] = [
-  'kuliahCard', 'pengumuman', 'posters', 'programKhas', 'takwim', 'hadis', 'worldTimes', 'tugasan', 'ayatCard', 'tabungCard',
+  'kuliahCard', 'pengumuman', 'posters', 'videos', 'programKhas', 'takwim', 'hadis', 'worldTimes', 'tugasan', 'ayatCard', 'tabungCard',
 ];
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -201,6 +202,8 @@ export interface ContentView {
   current: ReturnType<typeof currentSlot>;
   zikir: ReturnType<typeof zikirWindow>;
   override: SlotFeature | null;
+  /** A slot that cannot go on (a video that ended, failed or may not start) is given up: the rotation shows what follows. */
+  skip?: (startedAt: Date) => void;
 }
 
 export function useContent(view: KioskView): ContentView {
@@ -305,9 +308,53 @@ export function useContent(view: KioskView): ContentView {
   const cycle = useMemo(() => (content ? buildCycle(content, settings, view.now) : { slots: [], cycleStartSec: 0 }), [content, settings, second]);
   const rotation = cycle.slots;
 
-  const current = useMemo(() => currentSlot(rotation, view.now, cycle.cycleStartSec, view.tz), [rotation, view.now, cycle.cycleStartSec, view.tz]);
+  const natural = useMemo(() => currentSlot(rotation, view.now, cycle.cycleStartSec, view.tz), [rotation, view.now, cycle.cycleStartSec, view.tz]);
 
+  // Slots given up: a video that ended, failed, stalled or cannot play is skipped for the rest of its time (keyed by the
+  // slot's start instant). A video that cannot finish before the next prayer phase or recitation is not started (soft rule).
+  // The value is the instant the skip happened, recorded once: the slot that follows starts from it (a fixed start, so
+  // its own page timer and its own skip key stay still while the time runs). Always after the skipped start, so a chain
+  // of skips never meets its own key.
+  const [skipped, setSkipped] = useState<ReadonlyMap<number, number>>(() => new Map());
+  const nowRef = useRef(view.now);
+  nowRef.current = view.now;
+  const skip = useCallback((startedAt: Date) => {
+    setSkipped((cur) => (cur.has(startedAt.getTime()) ? cur : new Map(cur).set(startedAt.getTime(), Math.max(nowRef.current.getTime(), startedAt.getTime() + 1))));
+  }, []);
+  const roomChecked = useRef(new Set<number>());
   const today = view.state.today;
+  const hijriMonth = view.hijri?.m;
+  const tooLate = useMemo(() => {
+    if (!natural || natural.slot.feature !== 'videos') return false;
+    const key = natural.startedAt.getTime();
+    if (skipped.has(key)) return false;
+    // decided once per showing, when it is first seen
+    if (roomChecked.current.has(key)) return false;
+    roomChecked.current.add(key);
+    if (roomChecked.current.size > 50) roomChecked.current = new Set([key]);
+    const room = videoRoomSeconds(view.now, today ?? null, settings, content?.tilawah.slots ?? [], tarawihMonthFor(view.now, today ? [today] : [], settings) ?? hijriMonth);
+    return room < natural.slot.durationSeconds;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [natural, skipped]);
+  useEffect(() => {
+    if (tooLate && natural) skip(natural.startedAt);
+  }, [tooLate, natural, skip]);
+  const current = useMemo(() => {
+    let cur = natural;
+    let nat = natural; // the slot the clock itself is on: the chain walks the clock's boundaries, the shown start is the skip's
+    for (let guard = 0; cur && nat && skipped.has(cur.startedAt.getTime()) && guard < rotation.length + 1; guard++) {
+      const end = new Date(nat.startedAt.getTime() + nat.slot.durationSeconds * 1000);
+      const after = currentSlot(rotation, end, cycle.cycleStartSec, view.tz);
+      // one slot in the cycle: nothing else to show until the showing's time is over
+      if (!after || after.index === nat.index) return null;
+      // the following slot starts at the instant of the skip (fixed), or at its own start when that instant is past
+      const at = skipped.get(cur.startedAt.getTime()) as number;
+      cur = { ...after, startedAt: at < end.getTime() ? new Date(at) : after.startedAt };
+      nat = after;
+    }
+    return cur;
+  }, [natural, skipped, rotation, cycle.cycleStartSec, view.tz]);
+
   const zikir = useMemo(() => {
     const days = today ? [today] : [];
     const month = tarawihMonthFor(view.now, days, settings) ?? view.hijri?.m;
@@ -335,7 +382,7 @@ export function useContent(view: KioskView): ContentView {
       }
     : forced ? null : zikir;
 
-  return { forced, content, rotation, current, zikir: zikirOut, override };
+  return { forced, content, rotation, current, zikir: zikirOut, override, skip };
 }
 
 /** The id the preview gives the host's poster; never a box item id (those are UUIDs). */
@@ -358,6 +405,7 @@ export function emptyContent(date: string): KioskContent {
 export function withPreviewPoster(content: KioskContent, p: PreviewPoster): KioskContent {
   const poster = {
     id: PREVIEW_POSTER_ID, assetId: p.assetId, title: p.title, days: ['umum'], order: 0,
+    ...(p.stretch === undefined ? {} : { stretch: p.stretch }),
     updatedAt: content.date, updatedBy: 'preview',
   } as unknown as KioskContent['posters'][number];
   return { ...content, posters: [poster] };

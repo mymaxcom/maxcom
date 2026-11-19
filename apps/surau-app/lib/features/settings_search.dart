@@ -9,10 +9,15 @@ import '../l10n/s_lookup.dart';
 import '../ops/ops_build.dart';
 import '../ops/registry_ops.g.dart';
 import '../ops/system_labels_ms.dart';
+import '../app/router.dart' show liveSettingsFeatureKeys;
 import 'labels.dart';
+import 'labels_cam.dart';
 import 'labels_ms.dart' show settingLabelsMs, choiceLabelsMs;
 import 'registry.g.dart';
 import 'shell/permissions.dart';
+
+/// The key of the one hit that stands for the four live features.
+const String liveSettingsMovedKey = 'live-moved';
 
 class SearchHit {
   const SearchHit(this.feature, this.why);
@@ -88,6 +93,8 @@ class SettingsSearchIndex {
       if (why != null) hits.add(SearchHit(key, why.isEmpty ? null : why));
     }
 
+    // The live features are not listed here: a query that matches any of them gives the one pointer row instead.
+    var liveMatched = false;
     for (final f in features) {
       if (f.group == 'lanjutan' && !seesSystem) continue;
       if (hiddenFeatures.contains(f.key)) continue;
@@ -103,7 +110,15 @@ class SettingsSearchIndex {
         }
       });
       final desc = featureDescTable[f.key];
-      hit(
+      final liveFeature = liveSettingsFeatureKeys.contains(f.key);
+      void add(String key, String? why) {
+        if (liveFeature) {
+          if (why != null) liveMatched = true;
+        } else {
+          hit(key, why);
+        }
+      }
+      add(
         f.key,
         _match(
           q,
@@ -115,6 +130,21 @@ class SettingsSearchIndex {
           keywords: (desc?['keywords'] as List?)?.cast<String>() ?? const [],
         ),
       );
+    }
+
+    if (canSee(roles, 'live:settings')) {
+      if (!liveMatched) {
+        final texts = [
+          for (final l in AppLang.values) ...[
+            liveSettingsMovedRow(l), liveSettingsMovedHint(l), liveSectionSettings(l), liveSettingsCameraRow(l),
+            liveSettingsKioskRow(l), liveSettingsKioskHint(l), liveSettingsYoutubeRow(l), liveSettingsYoutubeHint(l),
+            liveSettingsRecordingRow(l), liveSettingsRecordingHint(l),
+          ],
+          ...liveSettingsMovedWords,
+        ];
+        liveMatched = _firstMatch(texts, q) != null;
+      }
+      if (liveMatched) hits.add(const SearchHit(liveSettingsMovedKey, null));
     }
 
     if (kOpsBuild && seesSystem) {

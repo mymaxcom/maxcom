@@ -1,5 +1,5 @@
 {
- "coreSourceHash": "5c850d2b9b41dc4a23994a3541debd2d18063db4a656df40a8423010b56072b5",
+ "coreSourceHash": "2799021570641f4607226875da67ec7042e16f2f22b553b2a8781ddd070c023b",
  "cases": [
   {
    "key": "prayerBar",
@@ -10425,6 +10425,103 @@
    "ok": false
   },
   {
+   "key": "language",
+   "note": "defaults",
+   "patch": {
+    "lang": "auto"
+   },
+   "ok": true
+  },
+  {
+   "key": "language",
+   "note": "reset",
+   "patch": {
+    "enabled": true,
+    "lang": "auto"
+   },
+   "ok": true
+  },
+  {
+   "key": "language",
+   "note": "enabled true",
+   "patch": {
+    "enabled": true
+   },
+   "ok": true
+  },
+  {
+   "key": "language",
+   "note": "enabled false",
+   "patch": {
+    "enabled": false
+   },
+   "ok": false
+  },
+  {
+   "key": "language",
+   "note": "enabled not bool",
+   "patch": {
+    "enabled": "yes"
+   },
+   "ok": false
+  },
+  {
+   "key": "language",
+   "note": "unknown key",
+   "patch": {
+    "zzUnknown": 1
+   },
+   "ok": false
+  },
+  {
+   "key": "language",
+   "note": "lang wrong value",
+   "patch": {
+    "lang": "zzz-wrong"
+   },
+   "ok": false
+  },
+  {
+   "key": "language",
+   "note": "lang empty",
+   "patch": {
+    "lang": ""
+   },
+   "ok": false
+  },
+  {
+   "key": "language",
+   "note": "lang 501 chars",
+   "patch": {
+    "lang": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "language",
+   "note": "lang 500 chars",
+   "patch": {
+    "lang": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "language",
+   "note": "lang number",
+   "patch": {
+    "lang": 123
+   },
+   "ok": false
+  },
+  {
+   "key": "language",
+   "note": "lang null",
+   "patch": {
+    "lang": null
+   },
+   "ok": false
+  },
+  {
    "key": "surauInfo",
    "note": "defaults",
    "patch": {
@@ -11646,103 +11743,6 @@
    "ok": false
   },
   {
-   "key": "language",
-   "note": "defaults",
-   "patch": {
-    "lang": "auto"
-   },
-   "ok": true
-  },
-  {
-   "key": "language",
-   "note": "reset",
-   "patch": {
-    "enabled": true,
-    "lang": "auto"
-   },
-   "ok": true
-  },
-  {
-   "key": "language",
-   "note": "enabled true",
-   "patch": {
-    "enabled": true
-   },
-   "ok": true
-  },
-  {
-   "key": "language",
-   "note": "enabled false",
-   "patch": {
-    "enabled": false
-   },
-   "ok": false
-  },
-  {
-   "key": "language",
-   "note": "enabled not bool",
-   "patch": {
-    "enabled": "yes"
-   },
-   "ok": false
-  },
-  {
-   "key": "language",
-   "note": "unknown key",
-   "patch": {
-    "zzUnknown": 1
-   },
-   "ok": false
-  },
-  {
-   "key": "language",
-   "note": "lang wrong value",
-   "patch": {
-    "lang": "zzz-wrong"
-   },
-   "ok": false
-  },
-  {
-   "key": "language",
-   "note": "lang empty",
-   "patch": {
-    "lang": ""
-   },
-   "ok": false
-  },
-  {
-   "key": "language",
-   "note": "lang 501 chars",
-   "patch": {
-    "lang": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-   },
-   "ok": false
-  },
-  {
-   "key": "language",
-   "note": "lang 500 chars",
-   "patch": {
-    "lang": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-   },
-   "ok": false
-  },
-  {
-   "key": "language",
-   "note": "lang number",
-   "patch": {
-    "lang": 123
-   },
-   "ok": false
-  },
-  {
-   "key": "language",
-   "note": "lang null",
-   "patch": {
-    "lang": null
-   },
-   "ok": false
-  },
-  {
    "key": "orientation",
    "note": "defaults",
    "patch": {
@@ -12920,6 +12920,111 @@
   },
   {
    "key": "posters",
+   "note": "order null",
+   "patch": {
+    "order": null
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "defaults",
+   "patch": {
+    "order": 11
+   },
+   "ok": true
+  },
+  {
+   "key": "videos",
+   "note": "reset",
+   "patch": {
+    "enabled": true,
+    "order": 11
+   },
+   "ok": true
+  },
+  {
+   "key": "videos",
+   "note": "enabled true",
+   "patch": {
+    "enabled": true
+   },
+   "ok": true
+  },
+  {
+   "key": "videos",
+   "note": "enabled false",
+   "patch": {
+    "enabled": false
+   },
+   "ok": true
+  },
+  {
+   "key": "videos",
+   "note": "enabled not bool",
+   "patch": {
+    "enabled": "yes"
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "unknown key",
+   "patch": {
+    "zzUnknown": 1
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "order min",
+   "patch": {
+    "order": 0
+   },
+   "ok": true
+  },
+  {
+   "key": "videos",
+   "note": "order max",
+   "patch": {
+    "order": 99
+   },
+   "ok": true
+  },
+  {
+   "key": "videos",
+   "note": "order min-1",
+   "patch": {
+    "order": -1
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "order max+1",
+   "patch": {
+    "order": 100
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "order fraction",
+   "patch": {
+    "order": 0.5
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "order as text",
+   "patch": {
+    "order": "11"
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
    "note": "order null",
    "patch": {
     "order": null
@@ -15595,7 +15700,8 @@
     "relayVideo": "copy",
     "titleTemplate": "{label}: {penceramah}",
     "descriptionTemplate": "{topic}\nKitab: {kitab}\n{surau}, {date}",
-    "maxBitrateKbps": 2500
+    "maxBitrateKbps": 2500,
+    "nextLiveOn": true
    },
    "ok": true
   },
@@ -15609,7 +15715,8 @@
     "relayVideo": "copy",
     "titleTemplate": "{label}: {penceramah}",
     "descriptionTemplate": "{topic}\nKitab: {kitab}\n{surau}, {date}",
-    "maxBitrateKbps": 2500
+    "maxBitrateKbps": 2500,
+    "nextLiveOn": true
    },
    "ok": true
   },
@@ -15938,6 +16045,22 @@
    "note": "maxBitrateKbps null",
    "patch": {
     "maxBitrateKbps": null
+   },
+   "ok": false
+  },
+  {
+   "key": "liveYoutube",
+   "note": "nextLiveOn flipped",
+   "patch": {
+    "nextLiveOn": false
+   },
+   "ok": true
+  },
+  {
+   "key": "liveYoutube",
+   "note": "nextLiveOn as text",
+   "patch": {
+    "nextLiveOn": "true"
    },
    "ok": false
   },
@@ -18117,6 +18240,33 @@
     "ayatTo": 20
    },
    "current": {
+    "pick": "manual",
+    "surah": 2
+   },
+   "ok": false
+  },
+  {
+   "key": "ayatCard",
+   "note": "ayat range 3 verses",
+   "patch": {
+    "ayatFrom": 254,
+    "ayatTo": 256
+   },
+   "current": {
+    "pick": "manual",
+    "surah": 2
+   },
+   "ok": true
+  },
+  {
+   "key": "ayatCard",
+   "note": "ayat range 4 verses",
+   "patch": {
+    "ayatFrom": 253,
+    "ayatTo": 256
+   },
+   "current": {
+    "pick": "manual",
     "surah": 2
    },
    "ok": false
@@ -18129,18 +18279,7 @@
     "ayatTo": 256
    },
    "current": {
-    "surah": 2
-   },
-   "ok": true
-  },
-  {
-   "key": "ayatCard",
-   "note": "ayat range 6 verses",
-   "patch": {
-    "ayatFrom": 251,
-    "ayatTo": 256
-   },
-   "current": {
+    "pick": "manual",
     "surah": 2
    },
    "ok": false
@@ -18153,6 +18292,7 @@
     "ayatTo": 256
    },
    "current": {
+    "pick": "manual",
     "surah": 2
    },
    "ok": true
@@ -18165,6 +18305,7 @@
     "ayatTo": 8
    },
    "current": {
+    "pick": "manual",
     "ayatFrom": 1
    },
    "ok": false
@@ -18174,10 +18315,12 @@
    "note": "ayat whole short surah",
    "patch": {
     "surah": 1,
-    "ayatFrom": 3,
+    "ayatFrom": 5,
     "ayatTo": 7
    },
-   "current": {},
+   "current": {
+    "pick": "manual"
+   },
    "ok": true
   },
   {
@@ -18188,9 +18331,23 @@
     "ayatTo": 3
    },
    "current": {
+    "pick": "manual",
     "surah": 2
    },
    "ok": false
+  },
+  {
+   "key": "ayatCard",
+   "note": "ayat long range ignored when daily",
+   "patch": {
+    "ayatFrom": 10,
+    "ayatTo": 20
+   },
+   "current": {
+    "pick": "daily",
+    "surah": 2
+   },
+   "ok": true
   }
  ]
 }

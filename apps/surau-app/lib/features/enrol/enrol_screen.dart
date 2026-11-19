@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../labels.dart' show appLangOfS;
 import '../../app/theme.dart';
 import '../../box/box_address.dart';
 import '../../box/box_client.dart';
@@ -675,7 +676,7 @@ class _EnrolScreenState extends State<EnrolScreen> {
     final expiry = widget.toLocal(
       DateTime.fromMillisecondsSinceEpoch(p.exp, isUtc: true),
     );
-    final when = whenWords(expiry, today: widget.toLocal(widget.now()));
+    final when = whenWords(expiry, today: widget.toLocal(widget.now()), lang: appLangOfS(s));
     final invitedBy = x.invitedBy;
     final note = invitedBy != null
         ? s.invitedByUntil(invitedBy, when)

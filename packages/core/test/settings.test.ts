@@ -76,7 +76,7 @@ describe('registry', () => {
     expect(FEATURES.every((f) => f.labelMs && f.labelEn && f.labelAr)).toBe(true);
     const keys = FEATURES.map((f) => f.key as FeatureKey);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys).toHaveLength(55);
+    expect(keys).toHaveLength(56);
     expect(new Set(FEATURES.map((f) => f.group)).size).toBe(11);
     expect(FEATURES.filter((f) => f.locked)).toHaveLength(11);
   });
@@ -306,17 +306,22 @@ describe('Plan 12 rules', () => {
     expect(ok('firstAzanSubuh', { audioFile: 'A'.repeat(64) })).toBe(false);
     expect(ok('firstAzanSubuh', { audioFile: null })).toBe(true);
   });
-  it('ayat range: at most 5 verses, inside the surah', () => {
-    expect(err('ayatCard', { ayatFrom: 10, ayatTo: 20 }, { surah: 2 })).toMatch(/at most 5/);
-    expect(ok('ayatCard', { ayatFrom: 255, ayatTo: 256 }, { surah: 2 })).toBe(true);
-    expect(ok('ayatCard', { ayatFrom: 252, ayatTo: 256 }, { surah: 2 })).toBe(true);
-    expect(ok('ayatCard', { ayatFrom: 251, ayatTo: 256 }, { surah: 2 })).toBe(false);
-    expect(err('ayatCard', { surah: 1, ayatTo: 8 }, { ayatFrom: 1 })).toMatch(/Al-Fatihah has 7/);
-    expect(ok('ayatCard', { surah: 1, ayatFrom: 3, ayatTo: 7 }, {})).toBe(true);
-    expect(err('ayatCard', { ayatFrom: 5, ayatTo: 3 }, { surah: 2 })).toMatch(/not be after/);
+  it('ayat range: at most 3 verses, inside the surah, only when the surau picks the verses', () => {
+    const M = { pick: 'manual' };
+    expect(err('ayatCard', { ayatFrom: 10, ayatTo: 20 }, { ...M, surah: 2 })).toMatch(/at most 3/);
+    expect(ok('ayatCard', { ayatFrom: 255, ayatTo: 256 }, { ...M, surah: 2 })).toBe(true);
+    expect(ok('ayatCard', { ayatFrom: 254, ayatTo: 256 }, { ...M, surah: 2 })).toBe(true);
+    expect(ok('ayatCard', { ayatFrom: 253, ayatTo: 256 }, { ...M, surah: 2 })).toBe(false);
+    expect(ok('ayatCard', { ayatFrom: 252, ayatTo: 256 }, { ...M, surah: 2 })).toBe(false);
+    expect(err('ayatCard', { surah: 1, ayatTo: 8 }, { ...M, ayatFrom: 1 })).toMatch(/Al-Fatihah has 7/);
+    expect(ok('ayatCard', { surah: 1, ayatFrom: 5, ayatTo: 7 }, M)).toBe(true);
+    expect(err('ayatCard', { ayatFrom: 5, ayatTo: 3 }, { ...M, surah: 2 })).toMatch(/not be after/);
+    // the daily and random picks ignore the verse fields: nothing to check
+    expect(ok('ayatCard', { ayatFrom: 10, ayatTo: 20 }, { pick: 'daily', surah: 2 })).toBe(true);
+    expect(ok('ayatCard', { ayatFrom: 10, ayatTo: 20 }, { pick: 'random', surah: 2 })).toBe(true);
     // the cross-field rule reads the verse fields only: a patch that leaves them alone passes an old stored range
-    expect(ok('ayatCard', { showTranslation: false }, { surah: 2, ayatFrom: 10, ayatTo: 20 })).toBe(true);
-    expect(ok('ayatCard', { ayatFrom: 11 }, { surah: 2, ayatFrom: 10, ayatTo: 20 })).toBe(false);
+    expect(ok('ayatCard', { showTranslation: false }, { ...M, surah: 2, ayatFrom: 10, ayatTo: 14 })).toBe(true);
+    expect(ok('ayatCard', { ayatFrom: 11 }, { ...M, surah: 2, ayatFrom: 10, ayatTo: 14 })).toBe(false);
     // without the stored copy the cross-field rule is skipped (single-field rules still apply)
     expect(ok('ayatCard', { ayatFrom: 10, ayatTo: 20 })).toBe(true);
   });

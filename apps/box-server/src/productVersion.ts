@@ -28,3 +28,22 @@ export function boxVersion(): string {
   cached = readVersion(resolve(root, 'release.json')) ?? readVersion(resolve(import.meta.dirname, '..', 'package.json')) ?? '0.0.0';
   return cached;
 }
+
+let cachedBuild: number | undefined;
+
+/** The internal build (0 to 9) of this release from `release.json`; 0 for a checkout or an archive that has none. */
+export function boxBuild(): number {
+  if (cachedBuild !== undefined) return cachedBuild;
+  try {
+    const b = (JSON.parse(readFileSync(resolve(import.meta.dirname, '..', '..', '..', 'release.json'), 'utf8')) as { build?: unknown }).build;
+    cachedBuild = typeof b === 'number' && Number.isInteger(b) && b >= 0 && b <= 9 ? b : 0;
+  } catch {
+    cachedBuild = 0;
+  }
+  return cachedBuild;
+}
+
+/** `<version>;b<build>`: what this process says about itself to its peer (header `X-Maxcom-Server`) and keys re-tries on. */
+export function softwareToken(): string {
+  return `${boxVersion()};b${boxBuild()}`;
+}

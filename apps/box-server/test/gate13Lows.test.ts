@@ -28,12 +28,12 @@ describe('gate 13 item 9: Nominatim slot is reserved synchronously', () => {
     const clock = Date.parse('2026-11-09T10:00:00Z');
     const limiter = createRateLimiter({ windowMs: 60_000, max: 50, now: () => clock });
     const slept: number[] = [];
-    const opts = { key: 'u', minIntervalMs: 1000, sleep: async (ms: number) => { slept.push(ms); } };
+    // the spacing is measured on the test's own clock, so a busy machine (time passing between the three calls) cannot shorten it
+    const opts = { key: 'u', minIntervalMs: 1000, sleep: async (ms: number) => { slept.push(ms); }, clockMs: () => clock };
     await Promise.all(['one', 'two', 'three'].map((q) => searchLocation(db, q, impl, 'https://nominatim.openstreetmap.org/search', () => new Date(clock), limiter, opts)));
     slept.sort((a, b) => a - b);
     expect(slept).toHaveLength(2);
-    expect(slept[0]!).toBeGreaterThan(900);
-    expect(slept[1]!).toBeGreaterThan(1900);
+    expect(slept).toEqual([1000, 2000]);
   });
 });
 

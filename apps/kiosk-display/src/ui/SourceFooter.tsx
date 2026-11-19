@@ -12,10 +12,11 @@ export interface SourceFooterProps {
  */
 export function SourceFooter({ view, lang }: SourceFooterProps) {
   const footer = view.todaySource.footer;
-  const text = footer ? (lang === 'en' ? footer.en : footer.ms) : '';
+  // The box writes the line in Malay and English only: an Arabic screen shows the English one, set left to right.
+  const text = footer ? (lang === 'ms' ? footer.ms : footer.en) : '';
   if (!text) return null;
   return (
-    <div class="source-footer free-text" data-testid="source-footer">
+    <div class="source-footer free-text" data-testid="source-footer" {...(lang === 'ar' ? { lang: 'en', dir: 'ltr' } : {})}>
       {text}
     </div>
   );

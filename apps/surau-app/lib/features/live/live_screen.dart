@@ -14,12 +14,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../labels.dart' show appLangOfS;
+import '../../app/app_lang.dart' show AppLang;
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../app/shell.dart';
 import '../../app/theme.dart';
+import '../../box/box_client.dart' show BoxError;
 import '../../l10n/generated/s.dart';
+import '../common/bidi.dart';
 import '../common/time_words.dart';
+import '../common/ui_flags.dart';
 import '../labels.dart' show appLangOf;
 import '../labels_cam.dart';
 import '../registry.g.dart' as reg;
@@ -32,10 +37,12 @@ import '../upload/upload_widgets.dart';
 import 'live_controller.dart';
 import 'live_fold.dart';
 import 'live_notice.dart';
+import 'live_notice_box.dart';
 import 'live_notice_sheet.dart';
 import 'live_source.dart';
 import 'live_source_widgets.dart';
 import 'live_widgets.dart';
+import 'mic_watch.dart';
 import 'publisher.dart';
 import 'web_publisher.dart';
 
@@ -212,11 +219,18 @@ String? catchUpSessionId({
 }) => web ? publisherSession : boxSession;
 
 class LiveScreen extends ConsumerStatefulWidget {
-  const LiveScreen({super.key});
+  const LiveScreen({super.key, this.openSettings = false});
+
+  /// `?tetapan=1`: opened from Konfigurasi's pointer, so the Tetapan siaran card is open.
+  final bool openSettings;
 
   @override
   ConsumerState<LiveScreen> createState() => _LiveScreenState();
 }
+
+/// The phone's remembered choice for the Tetapan siaran card (per phone, like the app's other small flags).
+const _settingsChosenKey = 'live.settingsCardChosen';
+const _settingsOpenKey = 'live.settingsCardOpen';
 
 class _LiveScreenState extends ConsumerState<LiveScreen> {
   late final LivePublisher _publisher;
@@ -227,10 +241,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
   bool _kuliahChosen = false;
   String? _kuliahId;
-  bool _youtubeWanted = true;
-
-  /// The live session whose "Siaran sudah bermula" banner was shown and closed or used.
-  String? _noticeBannerDone;
+  // The surau's choice for the next live is the setting `liveYoutube.nextLiveOn`, one for the whole surau.
+  // [_pendingWanted] is this phone's tap until the box has answered; [_localWanted] serves a box that has no
+  // such setting yet (an older box): today's in-memory choice, default on.
+  bool? _pendingWanted;
+  // The answer of the dedicated route, kept until this phone's copy of the settings shows it (or a minute passes).
+  bool? _confirmedWanted;
+  DateTime? _confirmedAt;
+  bool _localWanted = true;
 
   /// The folded or open state of the idle sections (kept while the screen lives).
   final Map<String, bool> _open = {};
@@ -247,6 +265,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.openSettings) _open['set'] = true;
     _publisher = ref.read(livePublisherProvider);
     _controller = ref.read(liveBoxProvider.notifier);
     _state = _publisher.current;
@@ -271,21 +290,26 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       _controller.attach();
       // what this device remembers and what the box says about the camera (also when the publisher is ready already)
       unawaited(ref.read(liveSourceProvider.notifier).ensureLoaded());
+      // a microphone plugged in is picked up by itself
+      ref.read(micAutoProvider.notifier).start();
     });
   }
 
   ScaffoldMessengerState? _messenger;
+  MicAutoNotifier? _micAuto;
   String _stillLiveText = '';
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messenger = ScaffoldMessenger.maybeOf(context);
+    _micAuto = ref.read(micAutoProvider.notifier);
     _stillLiveText = S.of(context).ra4StillLive;
   }
 
   @override
   void dispose() {
+    _micAuto?.stop();
     _controller.detach();
     // The live goes on without this page (its heartbeat is the controller's): say so once.
     if (_controller.takeLeaveReminder()) {
@@ -325,12 +349,102 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 
   /// Why YouTube cannot be used now, or null when it can.
-  String? _youtubeBlock(S s, LiveBoxStatus box, bool canSignIn) {
-    if (!box.internet) return s.liveWarnNoInternet;
+  ///
+  /// [asReason] gives the same cause as a clause for "YouTube tidak dapat digunakan sekarang: ...", without
+  /// "YouTube:" in front (the dialog already starts with the name).
+  String? _youtubeBlock(S s, LiveBoxStatus box, bool canSignIn, {bool asReason = false}) {
+    if (!box.internet) return asReason ? s.liveYoutubeWhyNoInternet : s.liveWarnNoInternet;
+    if (box.youtube.phase == YoutubeAccountPhase.unknown) {
+      return asReason ? youtubeUnknownReason(s, box.youtube.channel) : youtubeUnknownText(s, box.youtube.channel);
+    }
     if (!box.youtube.signedIn) {
+      if (box.youtube.reason == YoutubeSignOutReason.revoked) {
+        return asReason ? s.liveYoutubeWhyRevoked : s.liveYoutubeRevoked;
+      }
+      if (asReason) return canSignIn ? s.liveYoutubeWhyNeedsSignIn : s.liveYoutubeWhyAskAdmin;
       return canSignIn ? s.liveYoutubeNeedsSignIn : s.liveYoutubeAskAdmin;
     }
     return null;
+  }
+
+  /// The surau's choice: the box's setting when it has one (shared by every phone), else this run's own.
+  bool _wantedFrom(Map<String, dynamic>? settings) {
+    final pending = _pendingWanted;
+    if (pending != null) return pending;
+    final f = settings?['liveYoutube'];
+    final confirmed = _confirmedWanted;
+    if (confirmed != null) {
+      final fresh = _confirmedAt != null && ref.read(appDepsProvider).now().difference(_confirmedAt!) < const Duration(minutes: 1);
+      final caughtUp = f is Map && f['nextLiveOn'] == confirmed;
+      if (fresh && !caughtUp) return confirmed;
+      _confirmedWanted = null;
+    }
+    if (f is Map && f['nextLiveOn'] is bool) return f['nextLiveOn'] as bool;
+    return _localWanted;
+  }
+
+  bool _boxKnowsChoice(Map<String, dynamic>? settings) {
+    final f = settings?['liveYoutube'];
+    return f is Map && f['nextLiveOn'] is bool;
+  }
+
+  /// A tap on the chip: written to the surau setting (optimistic, put back with a message when the box refuses).
+  Future<void> _setWanted(bool next, {required bool boxKnows}) async {
+    if (!boxKnows) {
+      setState(() => _localWanted = next);
+      return;
+    }
+    final gateway = ref.read(gatewayProvider);
+    final failed = S.of(context).liveYoutubeChoiceFailed;
+    final messenger = _messenger;
+    setState(() => _pendingWanted = next);
+    try {
+      if (gateway == null) throw StateError('no box');
+      try {
+        // The dedicated route: live:control is enough (the settings route needs settings:write).
+        final answer = await gateway.put('/api/live/youtube/next-live', {'on': next});
+        _confirmedWanted = answer['nextLiveOn'] is bool ? answer['nextLiveOn'] as bool : next;
+        _confirmedAt = ref.read(appDepsProvider).now();
+      } on BoxError catch (e) {
+        // An older box has no such route: the settings field, as before.
+        if (e.status != 404) rethrow;
+        await gateway.put('/api/settings/liveYoutube', {'nextLiveOn': next});
+      }
+      ref.invalidate(settingsProvider);
+      await ref.read(settingsProvider.future);
+    } on Object {
+      if (mounted) messenger?.showSnackBar(SnackBar(content: Text(failed)));
+    } finally {
+      if (mounted) setState(() => _pendingWanted = null);
+    }
+  }
+
+  /// Mula siaran with YouTube chosen but not usable: ask, never start TV only silently.
+  Future<void> _askTvOnly(String reason) async {
+    final s = S.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('live-youtube-ask'),
+        title: Text(s.liveYoutubeAskTitle),
+        content: Text(s.liveYoutubeAskBody(reason)),
+        actions: [
+          TextButton(
+            key: const ValueKey('live-youtube-ask-cancel'),
+            onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(false),
+            child: Text(s.actionCancel),
+          ),
+          FilledButton(
+            key: const ValueKey('live-youtube-ask-yes'),
+            onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(true),
+            child: Text(s.liveYoutubeAskYes),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await _start(false);
   }
 
   Future<void> _start(bool youtube) async {
@@ -755,6 +869,23 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
   void _toggle(String key) => setState(() => _open[key] = !_isOpen(key));
 
+  /// The Tetapan siaran card: what the person chose on this phone, else open when no live runs and folded during one.
+  /// A sign-in under way keeps it open (its code is the task at hand).
+  bool _settingsOpen({required bool running, required bool signingIn}) {
+    if (signingIn) return true;
+    final now = _open['set'];
+    if (now != null) return now;
+    final chosen = ref.watch(uiFlagProvider(_settingsChosenKey)).value ?? false;
+    if (chosen) return ref.watch(uiFlagProvider(_settingsOpenKey)).value ?? !running;
+    return !running;
+  }
+
+  Future<void> _toggleSettings(bool open) async {
+    setState(() => _open['set'] = !open);
+    await setUiFlag(ref, _settingsChosenKey, true);
+    await setUiFlag(ref, _settingsOpenKey, !open);
+  }
+
   /// The notice for the running live: needs a public YouTube watch link and a
   /// holder of `live:control` (Siaran Langsung or Pentadbir).
   LiveNoticeInput? _noticeInput(String? watchUrl, LiveKuliah? kuliah) {
@@ -763,8 +894,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     return liveNoticeInputFor(id, kuliah, ref.read(surauInfoProvider)?.name);
   }
 
-  Future<void> _openNotice(LiveNoticeInput input, {String? sessionId}) async {
-    if (sessionId != null) setState(() => _noticeBannerDone = sessionId);
+  Future<void> _openNotice(LiveNoticeInput? input) async {
     await showLiveNoticeSheet(context, ref, input: input);
   }
 
@@ -779,6 +909,18 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final canEmergency = can(roles, 'settings:write');
     final source = ref.watch(liveSourceProvider);
     final sourceNotifier = ref.read(liveSourceProvider.notifier);
+    // A live that got (or lost) its watch link: the box's notice is read again.
+    ref.listen(micAutoProvider.select((m) => m.toast), (_, t) {
+      if (t == null) return;
+      final mic = ref.read(micAutoProvider.notifier);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(MicAutoNotifier.toastText(t, lang)),
+          action: t.undo ? SnackBarAction(label: liveMicUndo(lang), onPressed: () => unawaited(mic.undo())) : null,
+        ),
+      );
+    });
+    ref.listen(liveBoxProvider.select((b) => b.watchUrl), (_, _) => ref.invalidate(liveBoxNoticeProvider));
     ref.listen(settingsProvider, (_, _) async {
       // The camera switch or its name changed in Tetapan: read it again (not during a live).
       if (!mounted || _state.isLive) return;
@@ -787,6 +929,16 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       if (!mounted) return;
       if (ref.read(liveSourceProvider).video != before && _state.phase == PublisherPhase.ready) {
         await _prepare();
+      }
+    });
+    // the moment the sign-in completes while this screen is open: said once, with the channel
+    ref.listen<LiveBoxStatus>(liveBoxProvider, (prev, next) {
+      if (!mounted || prev == null) return;
+      if (prev.youtube.phase == YoutubeAccountPhase.signingIn && next.youtube.phase == YoutubeAccountPhase.signedIn) {
+        final t = S.of(context);
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(t.liveYoutubeConnectedSnack(bidiIsolate(next.youtube.channel ?? t.liveYoutube)))),
+        );
       }
     });
     final choiceAsync = ref.watch(liveKuliahProvider);
@@ -798,8 +950,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
     final other = box.otherLive;
     final live = _state.isLive;
-    final noticeInput = live ? _noticeInput(box.watchUrl, choice?.byId(_kuliahId)) : null;
-    final noticeSession = box.sessionId ?? 'live';
+    final noticeInput = (live || other != null) ? _noticeInput(box.watchUrl, choice?.byId(_kuliahId)) : null;
+    // The surau's notice on the box: every live:control holder sees it, whichever device started the live.
+    final boxNotice = ref.watch(liveBoxNoticeProvider).value;
     final readOnly = !live && other != null;
     final ipad = _ipad;
     final busy =
@@ -809,7 +962,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final youtubeFeature = flags.isOn('liveYoutube');
     final kioskFeature = flags.isOn('liveOnKiosk');
     final block = youtubeFeature ? _youtubeBlock(s, box, canSettings) : s.liveNotUsed;
-    final youtubeOn = youtubeFeature && block == null && _youtubeWanted;
+    final settingsMap = ref.watch(settingsProvider).value?.value;
+    final boxKnowsChoice = _boxKnowsChoice(settingsMap);
+    final wanted = _wantedFrom(settingsMap);
+    // What the chip shows is the surau's choice; whether YouTube can be used right now is a separate matter
+    // (a block is told beside it and asked about at Mula siaran, it never changes the choice).
+    final youtubeChosen = youtubeFeature && wanted;
+    final youtubeOn = youtubeChosen && block == null;
+    final canChoose = can(roles, 'live:control');
     final canStart =
         kioskFeature &&
         !_starting &&
@@ -841,6 +1001,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       camBack: camBack,
       muted: _state.muted,
       lang: lang,
+      micLabel: ref.watch(micAutoProvider.select((m) => m.mic))?.nameIn(lang),
     );
     final rows = buildAudioRows(source: view, ctx: ctx, info: info);
     final audioNotices = buildAudioNotices(source: view, ctx: ctx, info: info);
@@ -860,28 +1021,16 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final lostSec = _state.camera?.lostSec ?? 0;
     final micInMix = view.mix.deviceMic.enabled && view.external;
     final notices = <Widget>[
-      if (noticeInput != null && _noticeBannerDone != noticeSession)
+      if (noticeInput != null || boxNotice != null)
         LiveNotice(
           key: const ValueKey('live-notice-banner'),
           icon: Icons.campaign_rounded,
           title: s.liveNoticeStarted,
-          action: Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              TextButton(
-                key: const ValueKey('live-notice-banner-close'),
-                onPressed: () => setState(() => _noticeBannerDone = noticeSession),
-                child: Text(s.actionClose),
-              ),
-              FilledButton.icon(
-                key: const ValueKey('live-notice-banner-share'),
-                onPressed: () => _openNotice(noticeInput, sessionId: noticeSession),
-                icon: const Icon(Icons.share_rounded),
-                label: Text(s.liveNoticeShare),
-              ),
-            ],
+          action: FilledButton.icon(
+            key: const ValueKey('live-notice-banner-share'),
+            onPressed: () => _openNotice(noticeInput),
+            icon: const Icon(Icons.share_rounded),
+            label: Text(s.liveNoticeShare),
           ),
         ),
       if (!box.boxReachable && !box.stopping)
@@ -1017,7 +1166,19 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             ],
           )
         : _publisher.preview(context);
+    final liveDest = live && (kioskFeature || youtubeFeature)
+        ? Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              _state.outputs.youtube != null ? s.liveDestLive2 : s.liveDestLive1,
+              key: const ValueKey('live-dest-summary'),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          )
+        : null;
+
     final monitor = <Widget>[
+      ?liveDest,
       LivePreviewFrame(
         picture: picture,
         state: _state,
@@ -1075,15 +1236,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           tone: ytTone,
           // A blocked leg says why in its subtitle; no status words beside it.
           status: block != null && !live ? '' : ytText,
-          // The leg is chosen before the start; while live the light says it all.
-          trailing: live || busy
-              ? null
-              : Switch(
-                  value: youtubeOn,
-                  onChanged: block != null
-                      ? null
-                      : (v) => setState(() => _youtubeWanted = v),
-                ),
+          // The leg is chosen with the chip above "Mula siaran" (single control, the surau setting liveYoutube.nextLiveOn).
         ),
       OutputRow(
         key: const ValueKey('live-recording'),
@@ -1106,6 +1259,40 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     ];
     final outputs = LiveCard(children: outputRows);
 
+    // The destinations, always visible right above "Mula siaran" (not inside the folded card).
+    final signedIn = box.youtube.signedIn;
+    final unknownYoutube = box.youtube.phase == YoutubeAccountPhase.unknown;
+    final destinations = (!live && !readOnly && (kioskFeature || youtubeFeature))
+        ? _Destinations(
+            kiosk: kioskFeature,
+            youtube: youtubeFeature
+                ? (
+                    on: youtubeChosen,
+                    label: youtubeChosen
+                        ? ((box.youtube.channel ?? '').isEmpty ? s.liveDestOnPlain : s.liveDestOn(bidiIsolate(box.youtube.channel!)))
+                        : s.liveDestOff,
+                    enabled: canChoose && _pendingWanted == null && !busy && !_starting,
+                    onTap: () => unawaited(_setWanted(!wanted, boxKnows: boxKnowsChoice)),
+                  )
+                : null,
+            kioskLabel: s.liveKiosk,
+            recordingOn: recordingOn,
+            recordingLabel: recordingOn ? s.liveDestRec : s.liveDestRecOff,
+            note: !youtubeFeature
+                ? null
+                : unknownYoutube
+                ? youtubeUnknownText(s, box.youtube.channel)
+                : (signedIn && block == null && !wanted)
+                ? s.liveDestSkip
+                : (!signedIn ? s.liveDestNone : null),
+            noteIsSkip: signedIn || unknownYoutube,
+            // Unknown with no last good channel (a box never signed in, its cloud away): Sambung is still offered.
+            connectLabel: !signedIn && (!unknownYoutube || (box.youtube.channel ?? '').isEmpty) && canSettings
+                ? s.liveDestLink
+                : null,
+            onConnect: () => setState(() => _open['set'] = true),
+          )
+        : null;
     final picker = _KuliahTile(
       choice: choice,
       kuliah: choice?.byId(_kuliahId),
@@ -1113,18 +1300,39 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       onTap: choice == null ? null : () => _pickKuliah(choice),
     );
 
-    final signIn = canSettings && youtubeFeature && !live
-        ? YoutubeAccountCard(box: box)
+    // "Tetapan siaran": the four live forms and the YouTube account in ONE card, for a holder of `live:settings`.
+    final settingsCard = canSettings
+        ? FoldSection(
+            sectionKey: 'set',
+            icon: Icons.tune_rounded,
+            title: liveSectionSettings(lang),
+            summary: _settingsSummary(s, lang, box.youtube, source.camera.enabled),
+            open: _settingsOpen(
+              running: live || readOnly,
+              signingIn: youtubeFeature && !live && box.youtube.phase == YoutubeAccountPhase.signingIn,
+            ),
+            onToggle: () => _toggleSettings(
+              _settingsOpen(
+                running: live || readOnly,
+                signingIn: youtubeFeature && !live && box.youtube.phase == YoutubeAccountPhase.signingIn,
+              ),
+            ),
+            child: _SettingsLinks(
+              cameraOn: source.camera.enabled,
+              cameraName: camName,
+              account: youtubeFeature && !live ? YoutubeAccountCard(box: box) : null,
+            ),
+          )
         : null;
-
-    // A sign-in under way is the task at hand: its code goes to the top.
-    final signInFirst =
-        signIn != null && box.youtube.phase == YoutubeAccountPhase.signingIn;
 
     final button = LiveActionButton(
       // our own stop keeps the quiet "Menghentikan siaran" until the box is done
       phase: box.stopping ? PublisherPhase.stopping : _state.phase,
-      onStart: canStart ? () => _start(youtubeOn) : null,
+      onStart: canStart
+          ? () => (youtubeChosen && block != null)
+              ? _askTvOnly(_youtubeBlock(s, box, canSettings, asReason: true) ?? block)
+              : _start(youtubeChosen)
+          : null,
       onStop: _confirmStop,
     );
 
@@ -1173,7 +1381,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           onPick: (k) async {
             await sourceNotifier.selectVideo(k);
           },
-          onOpenCamera: canSettings ? () => GoRouter.of(context).go(AppRoutes.settingsFor('liveCamera')) : null,
+          onOpenCamera: canSettings ? () => GoRouter.of(context).go(AppRoutes.liveSettingsFor('liveCamera')) : null,
         ),
       ),
       FoldSection(
@@ -1205,16 +1413,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           ],
         ),
       ),
-      if (canSettings)
-        FoldSection(
-          sectionKey: 'set',
-          icon: Icons.tune_rounded,
-          title: liveSectionSettings(lang),
-          summary: Text(liveSectionSettingsSummary(lang, source.camera.enabled)),
-          open: _isOpen('set'),
-          onToggle: () => _toggle('set'),
-          child: _SettingsLinks(cameraOn: source.camera.enabled, cameraName: camName),
-        ),
+      ?settingsCard,
       Padding(
         padding: const EdgeInsetsDirectional.fromSTEB(6, 0, 6, 0),
         child: Text(
@@ -1341,7 +1540,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               ],
             ],
           )
-        : button;
+        : (destinations == null
+              ? button
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [destinations, const SizedBox(height: 10), button],
+                ));
 
     if (ref.watch(liveFoldedProvider)) {
       // The preview alone, edge to edge inside the safe areas: no title bar
@@ -1384,7 +1589,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
     final idle = !live && !readOnly;
     List<Widget> controls(double gap) => [
-      if (signInFirst) ...[signIn, SizedBox(height: gap)],
       picker,
       SizedBox(height: gap),
       if (idle) ...[
@@ -1394,7 +1598,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         if (liveSources != null) SizedBox(height: gap),
         if (switchRow != null) ...[switchRow, SizedBox(height: gap)],
         outputs,
-        if (noticeInput != null) ...[
+        if (noticeInput != null || boxNotice != null) ...[
           SizedBox(height: gap),
           OutlinedButton.icon(
             key: const ValueKey('live-notice-share'),
@@ -1403,8 +1607,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             label: Text(s.liveNoticeShare),
           ),
         ],
+        if (settingsCard != null) ...[SizedBox(height: gap), settingsCard],
       ],
-      if (signIn != null && !signInFirst) ...[SizedBox(height: gap), signIn],
     ];
 
     return ShellPage(
@@ -1479,6 +1683,123 @@ Color _toneInkOf(RowTone t) => switch (t) {
   RowTone.idle => SurauColors.muted,
 };
 
+/// "Skrin surau / YouTube / Rakaman" as chips with a visible on or off state,
+/// and the one-line note that makes a screen-only start a visible choice.
+class _Destinations extends StatelessWidget {
+  const _Destinations({
+    required this.kiosk,
+    required this.youtube,
+    required this.kioskLabel,
+    required this.recordingOn,
+    required this.recordingLabel,
+    required this.note,
+    required this.noteIsSkip,
+    required this.connectLabel,
+    required this.onConnect,
+  });
+
+  final bool kiosk;
+  final ({bool on, String label, bool enabled, VoidCallback onTap})? youtube;
+  final String kioskLabel;
+  final bool recordingOn;
+  final String recordingLabel;
+  final String? note;
+  final bool noteIsSkip;
+  final String? connectLabel;
+  final VoidCallback onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final y = youtube;
+    return Column(
+      key: const ValueKey('live-destinations'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (kiosk) _DestChip(key: const ValueKey('live-dest-kiosk'), label: kioskLabel, on: true),
+            if (y != null)
+              _DestChip(
+                key: const ValueKey('live-dest-youtube'),
+                label: y.label,
+                on: y.on,
+                onTap: y.enabled ? y.onTap : null,
+              ),
+            _DestChip(key: const ValueKey('live-dest-recording'), label: recordingLabel, on: recordingOn),
+          ],
+        ),
+        if (note != null) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline_rounded,
+                size: 18,
+                color: noteIsSkip ? LiveColors.waitingInk : SurauColors.muted,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  note!,
+                  key: ValueKey(noteIsSkip ? 'live-dest-skip' : 'live-dest-none'),
+                  style: text.bodySmall!.copyWith(color: noteIsSkip ? LiveColors.waitingInk : SurauColors.muted),
+                ),
+              ),
+              if (connectLabel != null)
+                TextButton(
+                  key: const ValueKey('live-dest-connect'),
+                  onPressed: onConnect,
+                  child: Text(connectLabel!),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DestChip extends StatelessWidget {
+  const _DestChip({super.key, required this.label, required this.on, this.onTap});
+
+  final String label;
+  final bool on;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = on ? LiveColors.healthyInk : SurauColors.muted;
+    return Material(
+      color: on ? ink.withValues(alpha: 0.12) : Colors.transparent,
+      shape: StadiumBorder(side: BorderSide(color: on ? ink : SurauColors.line)),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(12, 6, 14, 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(on ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, size: 20, color: ink),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(label, style: Theme.of(context).textTheme.labelLarge!.copyWith(color: ink)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CardHead extends StatelessWidget {
   const _CardHead(this.title);
 
@@ -1496,10 +1817,13 @@ class _CardHead extends StatelessWidget {
 
 /// "Tetapan siaran": where the holder of `live:settings` changes the camera, the screen, YouTube and the recording.
 class _SettingsLinks extends StatelessWidget {
-  const _SettingsLinks({required this.cameraOn, required this.cameraName});
+  const _SettingsLinks({required this.cameraOn, required this.cameraName, this.account});
 
   final bool cameraOn;
   final String cameraName;
+
+  /// The YouTube account entry, last (null while a live runs or YouTube is not used).
+  final Widget? account;
 
   @override
   Widget build(BuildContext context) {
@@ -1507,7 +1831,7 @@ class _SettingsLinks extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     Widget row(String key, IconData icon, String title, Widget sub) => InkWell(
       key: ValueKey('live-settings-$key'),
-      onTap: () => GoRouter.of(context).go(AppRoutes.settingsFor(key)),
+      onTap: () => GoRouter.of(context).go(AppRoutes.liveSettingsFor(key)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 64),
         child: Padding(
@@ -1543,6 +1867,7 @@ class _SettingsLinks extends StatelessWidget {
         row('liveOnKiosk', Icons.tv_rounded, liveSettingsKioskRow(lang), Text(liveSettingsKioskHint(lang))),
         row('liveYoutube', Icons.smart_display_rounded, liveSettingsYoutubeRow(lang), Text(liveSettingsYoutubeHint(lang))),
         row('recording', Icons.fiber_manual_record_rounded, liveSettingsRecordingRow(lang), Text(liveSettingsRecordingHint(lang))),
+        if (account != null) ...[const Divider(height: 1, indent: 20, endIndent: 20), account!],
       ],
     );
   }
@@ -1704,7 +2029,7 @@ class _KuliahSheet extends ConsumerWidget {
           k == null
               ? s.liveNoKuliahHint
               : [
-                  whenWords(k.at, today: today),
+                  whenWords(k.at, today: today, lang: appLangOfS(s)),
                   k.penceramah,
                 ].whereType<String>().join(', '),
         ),
@@ -1758,6 +2083,15 @@ class _KuliahSheet extends ConsumerWidget {
 
 // ---- YouTube account ----
 
+/// "YouTube: tidak dapat disemak sekarang (kali terakhir: saluran)": the sign-in could not be read, which is not a sign-out.
+String youtubeUnknownText(S s, String? lastChannel) =>
+    (lastChannel == null || lastChannel.isEmpty) ? s.liveYoutubeUnknownNoLast : s.liveYoutubeUnknown(bidiIsolate(lastChannel));
+
+/// The same cause as [youtubeUnknownText] as a clause after "YouTube tidak dapat digunakan sekarang:", without the
+/// "YouTube:" prefix that the dialog's own first words already carry.
+String youtubeUnknownReason(S s, String? lastChannel) =>
+    (lastChannel == null || lastChannel.isEmpty) ? s.liveYoutubeWhyUnknownNoLast : s.liveYoutubeWhyUnknown(bidiIsolate(lastChannel));
+
 class YoutubeAccountCard extends ConsumerWidget {
   const YoutubeAccountCard({super.key, required this.box});
 
@@ -1772,90 +2106,245 @@ class YoutubeAccountCard extends ConsumerWidget {
     final open = ref.read(appDepsProvider).openUrl;
 
     final List<Widget> body;
-    switch (yt.phase) {
-      case YoutubeAccountPhase.signedIn:
-        body = [
-          Text(
-            s.liveSignedInAs(yt.channel ?? s.liveYoutube),
-            style: text.bodyMedium,
-          ),
-          const SizedBox(height: 4),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton(
-              onPressed: notifier.signOut,
-              child: Text(s.liveSignOut),
+    if (!box.youtubeSignInHere) {
+      // Away from the surau (2026.11.13): the grant is held by the MAXCOM at the surau. The cloud shows the flag
+      // it pushed; signing in, signing out and changing the channel are made on the surau Wi-Fi only.
+      final flag = yt.signedIn
+          ? s.liveYoutubeConnectedSnack(bidiIsolate(yt.channel ?? s.liveYoutube))
+          : yt.phase == YoutubeAccountPhase.unknown
+          ? youtubeUnknownText(s, yt.channel)
+          : (yt.reason == YoutubeSignOutReason.revoked ? s.liveSignInRevoked : s.liveYoutubeNotConnected);
+      body = [
+        Row(
+          key: const ValueKey('live-youtube-flag'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              yt.signedIn ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+              color: yt.signedIn ? LiveColors.healthy : LiveColors.waitingInk,
+              size: 22,
             ),
-          ),
-        ];
-      case YoutubeAccountPhase.signedOut:
-        body = [
-          Text(
-            s.liveSignInHint,
-            style: text.bodyMedium!.copyWith(color: SurauColors.muted),
-          ),
-          const SizedBox(height: 14),
-          OutlinedButton.icon(
-            onPressed: notifier.signIn,
-            icon: const Icon(Icons.login_rounded),
-            label: Text(s.liveSignIn),
-          ),
-        ];
-      case YoutubeAccountPhase.signingIn:
-        final url = yt.verificationUrl ?? 'https://www.google.com/device';
-        body = [
-          Text(s.liveSignInCode, style: text.bodyMedium),
-          const SizedBox(height: 14),
-          Container(
-            key: const ValueKey('live-signin-code'),
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-            decoration: BoxDecoration(
-              color: SurauColors.glass,
-              borderRadius: BorderRadius.circular(SurauTheme.radiusControl),
-              border: Border.all(color: SurauColors.goldHairline),
-            ),
-            alignment: Alignment.center,
-            child: yt.userCode == null
-                ? const Icon(
-                    Icons.more_horiz_rounded,
-                    color: SurauColors.gold,
-                    size: 40,
-                  )
-                : FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      yt.userCode!,
-                      maxLines: 1,
-                      style: text.displaySmall!.copyWith(
-                        color: SurauColors.gold,
-                        letterSpacing: 3,
-                      ),
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: () => open(Uri.parse(url)),
-            icon: const Icon(Icons.open_in_new_rounded),
-            label: Text(s.liveSignInOpen),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(
-                Icons.hourglass_top_rounded,
-                size: 18,
-                color: SurauColors.muted,
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                flag,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: text.titleSmall!.copyWith(color: yt.signedIn ? LiveColors.healthyInk : LiveColors.waitingInk),
               ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          key: const ValueKey('live-youtube-at-surau'),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+          decoration: BoxDecoration(
+            color: SurauColors.glass,
+            borderRadius: BorderRadius.circular(SurauTheme.radiusControl),
+            border: Border.all(color: SurauColors.goldHairline),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.wifi_rounded, color: SurauColors.teal, size: 20),
               const SizedBox(width: 10),
-              Expanded(child: Text(s.liveSignInWaiting, style: text.bodySmall)),
+              Expanded(child: Text(s.liveYoutubeAtSurauOnly, style: text.bodyMedium)),
             ],
           ),
-        ];
+        ),
+      ];
+    } else {
+      switch (yt.phase) {
+        case YoutubeAccountPhase.signedIn:
+          body = [
+            Row(
+              key: const ValueKey('live-youtube-connected'),
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: LiveColors.healthy,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    s.liveYoutubeConnected,
+                    style: text.titleSmall!.copyWith(color: LiveColors.healthyInk),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(start: 30),
+              child: Text(
+                yt.channel ?? s.liveYoutube,
+                key: const ValueKey('live-youtube-channel'),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: text.titleMedium!.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton(
+                key: const ValueKey('live-youtube-signout'),
+                onPressed: () => _confirmSignOut(context, s, notifier),
+                child: Text(s.liveSignOutChange),
+              ),
+            ),
+          ];
+        case YoutubeAccountPhase.unknown:
+          // not a sign-out: nothing to sign in to, the sign-in is only not readable now
+          // (with no last good channel there is nothing to wait for: the sign-in is offered)
+          body = [
+            Row(
+              key: const ValueKey('live-youtube-unknown'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, color: LiveColors.waitingInk, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    youtubeUnknownText(s, yt.channel),
+                    style: text.titleSmall!.copyWith(color: LiveColors.waitingInk),
+                  ),
+                ),
+              ],
+            ),
+            if ((yt.channel ?? '').isEmpty) ...[
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                key: const ValueKey('live-youtube-unknown-signin'),
+                onPressed: notifier.signIn,
+                icon: const Icon(Icons.login_rounded),
+                label: Text(s.liveSignIn),
+              ),
+            ],
+          ];
+        case YoutubeAccountPhase.signedOut:
+          final why = switch (yt.reason) {
+            YoutubeSignOutReason.denied => s.liveSignInDenied,
+            YoutubeSignOutReason.expired => s.liveSignInExpired,
+            YoutubeSignOutReason.revoked => s.liveSignInRevoked,
+            null => null,
+          };
+          body = [
+            if (why != null)
+              Row(
+                key: const ValueKey('live-signin-outcome'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: LiveColors.waitingInk,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      why,
+                      style: text.bodyMedium!.copyWith(color: LiveColors.waitingInk),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Text(
+                s.liveSignInHint,
+                style: text.bodyMedium!.copyWith(color: SurauColors.muted),
+              ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: notifier.signIn,
+              icon: const Icon(Icons.login_rounded),
+              label: Text(s.liveSignIn),
+            ),
+          ];
+        case YoutubeAccountPhase.signingIn:
+          // always the one Google page: the address the box sends is not used
+          final url = 'https://www.google.com/device';
+          body = yt.byAdmin
+              ? [
+                  Row(
+                    children: [
+                      const Icon(Icons.hourglass_top_rounded, size: 18, color: SurauColors.muted),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          s.liveSignInByAdmin,
+                          key: const ValueKey('live-signin-by-admin'),
+                          style: text.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ]
+              : [
+            Text(s.liveSignInCode, style: text.bodyMedium),
+            const SizedBox(height: 14),
+            Container(
+              key: const ValueKey('live-signin-code'),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+              decoration: BoxDecoration(
+                color: SurauColors.glass,
+                borderRadius: BorderRadius.circular(SurauTheme.radiusControl),
+                border: Border.all(color: SurauColors.goldHairline),
+              ),
+              alignment: Alignment.center,
+              child: yt.userCode == null
+                  ? const Icon(
+                      Icons.more_horiz_rounded,
+                      color: SurauColors.gold,
+                      size: 40,
+                    )
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        yt.userCode!,
+                        maxLines: 1,
+                        style: text.displaySmall!.copyWith(
+                          color: SurauColors.gold,
+                          letterSpacing: 3,
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: () => open(Uri.parse(url)),
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: Text(s.liveSignInOpenGoogle),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(
+                  Icons.hourglass_top_rounded,
+                  size: 18,
+                  color: SurauColors.muted,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    key: const ValueKey('live-signin-waiting'),
+                    yt.expiresAt == null
+                        ? s.liveSignInWaiting
+                        : s.liveSignInWaitingMin(_minutesLeft(ref, yt.expiresAt!)),
+                    style: text.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ];
+      }
     }
 
-    return Card(
+    // A flat entry of the Tetapan siaran card (no card of its own).
+    return KeyedSubtree(
       key: const ValueKey('live-youtube-account'),
       child: Padding(
         padding: const EdgeInsetsDirectional.fromSTEB(20, 18, 20, 18),
@@ -1872,7 +2361,6 @@ class YoutubeAccountCard extends ConsumerWidget {
                 Expanded(
                   child: Text(s.liveYoutubeAccount, style: text.titleSmall),
                 ),
-                if (yt.signedIn) const StatusLight(LightTone.healthy),
               ],
             ),
             const SizedBox(height: 10),
@@ -1882,6 +2370,61 @@ class YoutubeAccountCard extends ConsumerWidget {
       ),
     );
   }
+
+  /// Whole minutes until the code stops working (never below 1 while it still works).
+  static int _minutesLeft(WidgetRef ref, DateTime expiresAt) {
+    final left = expiresAt.difference(ref.read(appDepsProvider).now());
+    final m = (left.inSeconds / 60).ceil();
+    return m < 1 ? 1 : m;
+  }
+
+  /// Changing the channel or signing out ends YouTube for the next live, so it is asked first.
+  static Future<void> _confirmSignOut(
+    BuildContext context,
+    S s,
+    LiveBoxNotifier notifier,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('live-youtube-signout-confirm'),
+        title: Text(s.liveSignOutConfirmTitle),
+        content: Text(s.liveSignOutConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(s.actionCancel),
+          ),
+          FilledButton(
+            key: const ValueKey('live-youtube-signout-yes'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(s.liveSignOutConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await notifier.signOut();
+  }
+}
+
+/// The collapsed "Tetapan siaran" line: the connected channel with a check mark, else the plain summary.
+Widget _settingsSummary(S s, AppLang lang, YoutubeAccount yt, bool cameraOn) {
+  if (!yt.signedIn) return Text(liveSectionSettingsSummary(lang, cameraOn));
+  final camera = (cameraOn ? liveSettingsCameraOn(lang) : liveSettingsCameraOff(lang)).toLowerCase();
+  return Row(
+    key: const ValueKey('live-settings-summary-connected'),
+    children: [
+      const Icon(Icons.check_circle_rounded, color: LiveColors.healthy, size: 16),
+      const SizedBox(width: 6),
+      Expanded(
+        child: Text(
+          s.liveSettingsSummaryConnected(yt.channel ?? s.liveYoutube, camera),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    ],
+  );
 }
 
 // ---- after the stop ----

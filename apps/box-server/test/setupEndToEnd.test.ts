@@ -67,7 +67,9 @@ function systemSnapshot(): string {
       "$ErrorActionPreference = 'SilentlyContinue'",
       "$t = @(Get-ScheduledTask | Where-Object { $_.TaskName -like '*MAXCOM*' -or $_.TaskName -like 'Maxcom*' } | ForEach-Object { $_.TaskPath + $_.TaskName + '=' + $_.State } | Sort-Object)",
       "$f = @(Get-NetFirewallRule | Where-Object { $_.DisplayName -like '*MAXCOM*' } | ForEach-Object { $_.DisplayName + '=' + $_.Enabled } | Sort-Object)",
-      "$c = @(foreach ($s in 'Cert:\\LocalMachine\\Root','Cert:\\LocalMachine\\My','Cert:\\CurrentUser\\Root','Cert:\\CurrentUser\\My') { $s + '=' + ((Get-ChildItem $s | ForEach-Object { $_.Thumbprint } | Sort-Object) -join ',') })",
+      // certScripts.test.ts (another worker) makes and removes throw-away CsTest certificates in CurrentUser\My while
+      // this test runs; they are not this install's doing, so they are left out of the before/after comparison
+      "$c = @(foreach ($s in 'Cert:\\LocalMachine\\Root','Cert:\\LocalMachine\\My','Cert:\\CurrentUser\\Root','Cert:\\CurrentUser\\My') { $s + '=' + ((Get-ChildItem $s | Where-Object { $_.Subject -notlike '*CsTest*' -and $_.Issuer -notlike '*CsTest*' } | ForEach-Object { $_.Thumbprint } | Sort-Object) -join ',') })",
       "ConvertTo-Json -Compress @{ tasks = $t; fw = $f; certs = $c }",
     ].join('; '),
   );

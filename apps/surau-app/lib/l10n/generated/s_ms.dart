@@ -1885,8 +1885,8 @@ class SMs extends S {
   }
 
   @override
-  String contentSurah(int n) {
-    return 'Surah $n';
+  String contentSurah(int n, String name) {
+    return 'Surah $n · $name';
   }
 
   @override
@@ -2507,12 +2507,175 @@ class SMs extends S {
   String get liveSignInWaiting => 'Menunggu anda log masuk';
 
   @override
+  String get errcVideoBusy =>
+      'Video lain sedang dimuat naik ke MAXCOM. Cuba sebentar lagi.';
+
+  @override
+  String get errcCameraStale => 'Tetapan kamera telah berubah. Cuba lagi.';
+
+  @override
+  String get errcCameraPasswordAgain => 'Taip semula kata laluan kamera.';
+
+  @override
+  String get liveSignInByAdmin =>
+      'Log masuk YouTube sedang dibuat oleh pentadbir.';
+
+  @override
   String liveSignedInAs(String channel) {
     return 'Disambungkan kepada $channel';
   }
 
   @override
   String get liveSignOut => 'Log keluar YouTube';
+
+  @override
+  String get liveYoutubeConnected => 'YouTube disambungkan';
+
+  @override
+  String liveYoutubeConnectedSnack(String channel) {
+    return 'YouTube disambungkan: $channel';
+  }
+
+  @override
+  String get liveYoutubeAtSurauOnly =>
+      'Log masuk / tukar saluran YouTube hanya di Wi-Fi surau.';
+
+  @override
+  String get liveYoutubeNotConnected => 'YouTube belum disambungkan';
+
+  @override
+  String liveDestOn(String channel) {
+    return 'YouTube: Ya, $channel';
+  }
+
+  @override
+  String get liveDestOff => 'YouTube: Tidak';
+
+  @override
+  String get liveDestSkip =>
+      'YouTube tidak dipilih: siaran hanya ke skrin surau.';
+
+  @override
+  String get liveDestNone => 'YouTube belum disambungkan';
+
+  @override
+  String liveYoutubeUnknown(String channel) {
+    return 'YouTube: tidak dapat disemak sekarang (kali terakhir: $channel)';
+  }
+
+  @override
+  String get liveYoutubeUnknownNoLast =>
+      'YouTube: tidak dapat disemak sekarang';
+
+  @override
+  String get liveYoutubeAskTitle => 'YouTube tidak dapat digunakan';
+
+  @override
+  String liveYoutubeAskBody(String reason) {
+    return 'YouTube tidak dapat digunakan sekarang: $reason. Mulakan siaran ke skrin surau sahaja?';
+  }
+
+  @override
+  String get liveYoutubeWhyNoInternet => 'tiada internet';
+
+  @override
+  String get liveYoutubeWhyRevoked => 'sambungan perlu dibuat semula';
+
+  @override
+  String get liveYoutubeWhyNeedsSignIn => 'belum log masuk';
+
+  @override
+  String get liveYoutubeWhyAskAdmin =>
+      'belum log masuk, minta Pentadbir log masuk';
+
+  @override
+  String get liveYoutubeWhyUnknownNoLast =>
+      'akaun tidak dapat disemak sekarang';
+
+  @override
+  String liveYoutubeWhyUnknown(String channel) {
+    return 'akaun tidak dapat disemak sekarang (kali terakhir: $channel)';
+  }
+
+  @override
+  String get tvLangArNeedsUpdate => 'Kemas kini MAXCOM untuk Bahasa Arab';
+
+  @override
+  String get tvLangArAskTitle => 'Tukar bahasa skrin TV ke Bahasa Arab?';
+
+  @override
+  String get tvLangArAskBody =>
+      'Tema Arabic Art paling sesuai dengan skrin TV berbahasa Arab. Anda boleh menukarnya semula di Bahasa skrin TV.';
+
+  @override
+  String get tvLangArAskYes => 'Ya';
+
+  @override
+  String get tvLangArAskNo => 'Tidak';
+
+  @override
+  String get liveYoutubeAskYes => 'Ya';
+
+  @override
+  String get liveYoutubeChoiceFailed =>
+      'Pilihan YouTube tidak dapat disimpan. Cuba lagi.';
+
+  @override
+  String get liveYoutubeRevoked => 'YouTube perlu disambung semula';
+
+  @override
+  String get liveDestOnPlain => 'YouTube: Ya';
+
+  @override
+  String get liveDestLink => 'Sambung';
+
+  @override
+  String get liveDestLive2 => 'Ke skrin surau dan YouTube';
+
+  @override
+  String get liveDestLive1 => 'Ke skrin surau sahaja';
+
+  @override
+  String get liveDestRec => 'Rakaman: Ya';
+
+  @override
+  String get liveDestRecOff => 'Rakaman: Tidak';
+
+  @override
+  String get liveSignInOpenGoogle => 'Buka halaman Google';
+
+  @override
+  String liveSignInWaitingMin(int minutes) {
+    return 'Menunggu pengesahan… (tamat dalam $minutes min)';
+  }
+
+  @override
+  String get liveSignInDenied => 'Log masuk dibatalkan';
+
+  @override
+  String get liveSignInExpired => 'Kod tamat tempoh. Cuba lagi.';
+
+  @override
+  String get liveSignInRevoked =>
+      'Akses YouTube telah ditarik balik atau tamat. Sila log masuk semula.';
+
+  @override
+  String get liveSignOutChange => 'Tukar saluran / Log keluar';
+
+  @override
+  String get liveSignOutConfirmTitle => 'Tukar saluran atau log keluar?';
+
+  @override
+  String get liveSignOutConfirmBody =>
+      'Siaran langsung seterusnya tidak akan sampai ke YouTube sehingga seseorang log masuk semula.';
+
+  @override
+  String get liveSignOutConfirmAction => 'Log keluar';
+
+  @override
+  String liveSettingsSummaryConnected(String channel, String camera) {
+    return 'YouTube disambungkan: $channel. Kamera luaran $camera';
+  }
 
   @override
   String get liveRecordingsPending => 'Rakaman belum disimpan';
@@ -3018,6 +3181,10 @@ class SMs extends S {
       'Awan tidak dapat dihubungi. Muat naik bermula sendiri apabila awan boleh dihubungi.';
 
   @override
+  String get uploadErrorNoBox =>
+      'Muat naik bermula sendiri apabila telefon berada di Wi-Fi surau.';
+
+  @override
   String get uploadErrorUnlock =>
       'Buka MAXCOM dan buka kuncinya untuk meneruskan muat naik.';
 
@@ -3093,6 +3260,10 @@ class SMs extends S {
   @override
   String get settingsLanjutanDimmed =>
       'Tidak digunakan bila Telefon terus dipilih';
+
+  @override
+  String get settingsReencodeUnsupported =>
+      'Kod semula tidak disokong pada MAXCOM ini. Gunakan Salin terus.';
 
   @override
   String get settingsComingSoon => 'Tersedia dalam keluaran akan datang';
@@ -3176,8 +3347,39 @@ class SMs extends S {
 
   @override
   String settingsAyatHelp(String name, int n) {
-    return '$name ada $n ayat: pilih antara 1 hingga $n. Paling banyak 5 ayat sekali paparan.';
+    return '$name ada $n ayat. Paling banyak 3 ayat sekali paparan.';
   }
+
+  @override
+  String get settingsAyatCountLabel => 'Bilangan ayat';
+
+  @override
+  String settingsAyatSurahEnds(int n) {
+    return 'Surah ini tamat pada ayat $n.';
+  }
+
+  @override
+  String settingsAyatTv(String name, int n, int a, int b) {
+    return 'Dipaparkan di TV: Surah $name ($n): ayat $a hingga $b';
+  }
+
+  @override
+  String settingsAyatTvOne(String name, int n, int a) {
+    return 'Dipaparkan di TV: Surah $name ($n): ayat $a';
+  }
+
+  @override
+  String settingsAyatTypeHint(int n) {
+    return 'Taip nombor ayat (1 hingga $n)';
+  }
+
+  @override
+  String settingsAyatTypeError(int n) {
+    return 'Masukkan nombor antara 1 dan $n';
+  }
+
+  @override
+  String get settingsAyatOldRange => 'Julat lama dipendekkan kepada 3 ayat.';
 
   @override
   String settingsHijriMonthN(int n) {
@@ -3269,6 +3471,9 @@ class SMs extends S {
 
   @override
   String get settingsOrderOff => 'dimatikan';
+
+  @override
+  String get settingsOrderVideoLength => 'Sepanjang video';
 
   @override
   String get settingsOrderUp => 'Naik';
@@ -6361,10 +6566,10 @@ class SMs extends S {
 
   @override
   String get valAyatOrder =>
-      'Ayat dari mesti sebelum atau sama dengan Ayat hingga';
+      'Ayat mula mesti sebelum atau sama dengan ayat akhir';
 
   @override
-  String get valAyatMax => 'Paling banyak 5 ayat sekali paparan';
+  String get valAyatMax => 'Paling banyak 3 ayat sekali paparan';
 
   @override
   String get valUnknownFeature => 'Ciri tidak dikenali';
@@ -7023,6 +7228,10 @@ class SMs extends S {
       'Tidak dapat menghubungi YouTube. Cuba lagi.';
 
   @override
+  String get errcYoutubeAtBox =>
+      'Log masuk YouTube kini dibuat pada MAXCOM di surau. Kemas kini aplikasi dan cuba di Wi-Fi surau.';
+
+  @override
   String get errcCatchupOff => 'Muat naik rakaman ke YouTube tidak dihidupkan';
 
   @override
@@ -7581,7 +7790,7 @@ class SMs extends S {
   String get ra6LinkBoxError => 'MAXCOM di surau: ralat';
 
   @override
-  String get liveNoticeShare => 'Kongsi pautan siaran';
+  String get liveNoticeShare => 'Kongsi pautan';
 
   @override
   String get liveNoticeTitle => 'Makluman siaran langsung';
@@ -7605,17 +7814,64 @@ class SMs extends S {
   String get liveNoticePickEmpty => 'Tiada pengguna dijumpai.';
 
   @override
-  String get liveNoticeStarted =>
-      'Siaran sudah bermula. Kongsi pautan kepada AJK dan jemaah.';
+  String get liveNoticeStarted => 'Siaran sedang berlangsung.';
 
   @override
   String get liveNoticeShareGo => 'Kongsi';
+
+  @override
+  String get liveNoticeCardBadge => 'SIARAN LANGSUNG';
+
+  @override
+  String get liveNoticePictureFailed =>
+      'Gambar tidak dapat disediakan. Teks sahaja dikongsi.';
+
+  @override
+  String get liveNoticeCopiedCaption =>
+      'Teks disalin, tampal sebagai kapsyen jika teks tidak muncul';
+
+  @override
+  String get liveNoticeQrHint =>
+      'Imbas dengan kamera telefon. WhatsApp akan dibuka dengan mesej ini.';
+
+  @override
+  String get liveNoticeEditDone => 'Siap';
+
+  @override
+  String get liveNoticeEditText => 'Ubah teks';
+
+  @override
+  String get liveNoticeNoPicture => 'Tanpa gambar';
+
+  @override
+  String get liveNoticeMore => 'Lagi';
+
+  @override
+  String get liveNoticeToSelf => 'Hantar kepada diri sendiri';
+
+  @override
+  String get liveNoticeCopy => 'Salin teks';
+
+  @override
+  String get liveNoticeFromPhone => 'Hantar dari telefon';
+
+  @override
+  String get liveNoticeWhatsApp => 'Kongsi ke WhatsApp';
 
   @override
   String get liveNoticeCopied => 'Teks disalin. Tampalkan di WhatsApp.';
 
   @override
   String get liveNoticeShareFailed => 'Teks tidak dapat dikongsi.';
+
+  @override
+  String liveNoticeEditedBy(String name, String time) {
+    return 'Diubah oleh $name, $time';
+  }
+
+  @override
+  String get liveNoticeChangedMeanwhile =>
+      'Teks telah diubah oleh orang lain. Teks terkini ditunjukkan, semak sebelum dikongsi.';
 
   @override
   String waOpensTo(String number) {
@@ -8210,4 +8466,170 @@ class SMs extends S {
   String needsBoth(String first, String second) {
     return '$first dan $second';
   }
+
+  @override
+  String get errVideoTooBig =>
+      'Video terlalu besar. Paling besar 300 MB dan 720p; kecilkan atau pangkas dalam Galeri telefon dahulu.';
+
+  @override
+  String get errVideoTooLong =>
+      'Video terlalu panjang. Paling lama 10 minit; pangkas dalam Galeri telefon dahulu.';
+
+  @override
+  String get errVideoNotH264 =>
+      'Video mesti MP4 dengan H.264. Pilih video lain atau tukar formatnya dahulu.';
+
+  @override
+  String get errVideoNoSpace =>
+      'Ruang storan MAXCOM tidak mencukupi. Padam video lama dahulu.';
+
+  @override
+  String get errVideoUploadFailed =>
+      'Muat naik video gagal. Pastikan telefon masih di Wi-Fi surau, kemudian cuba lagi.';
+
+  @override
+  String get kindDescVideo =>
+      'Video yang dimuat naik atau dari YouTube, dimainkan penuh skrin di TV.';
+
+  @override
+  String get videoSourceLabel => 'Sumber video';
+
+  @override
+  String get videoSourceUpload => 'Muat naik';
+
+  @override
+  String get videoSourceYoutube => 'YouTube';
+
+  @override
+  String get videoSourceRakaman => 'Rakaman';
+
+  @override
+  String get videoPick => 'Pilih video daripada telefon';
+
+  @override
+  String get videoPickAgain => 'Pilih video lain';
+
+  @override
+  String get videoChecking => 'Menyemak video...';
+
+  @override
+  String videoCompressing(int percent) {
+    return 'Mengecilkan video ke 720p... $percent%';
+  }
+
+  @override
+  String videoUploading(int percent) {
+    return 'Memuat naik ke MAXCOM... $percent%';
+  }
+
+  @override
+  String get videoUploadedOk => 'Sudah dimuat naik ke MAXCOM';
+
+  @override
+  String videoPickedLine(String name, String size) {
+    return '$name ($size)';
+  }
+
+  @override
+  String get videoCloudNote =>
+      'Muat naik video hanya di Wi-Fi surau. Sambung telefon ke Wi-Fi surau, atau tambah video YouTube (boleh dari mana-mana).';
+
+  @override
+  String videoStorageLeft(String size) {
+    return 'Ruang storan MAXCOM: $size lagi';
+  }
+
+  @override
+  String get videoLimitsNote =>
+      'Paling besar 300 MB, paling lama 10 minit, 720p. Pangkas dalam Galeri telefon dahulu jika perlu.';
+
+  @override
+  String get videoCannotCompress =>
+      'Telefon ini tidak boleh mengecilkan video. Pilih video MP4 (H.264) yang sudah dalam had.';
+
+  @override
+  String get videoYoutubeLink => 'Pautan YouTube';
+
+  @override
+  String get videoYoutubeHint => 'Tampal pautan atau ID video';
+
+  @override
+  String get videoYoutubeBad => 'Ini bukan pautan video YouTube.';
+
+  @override
+  String get videoYoutubeLive =>
+      'Ini siaran langsung. Untuk memaparkan siaran langsung di TV, gunakan Siaran langsung. Selepas siaran tamat, rakamannya boleh dipilih di sini.';
+
+  @override
+  String get videoYoutubeNote =>
+      'Video saluran lain mungkin ada iklan atau dibuang oleh pemiliknya. Memerlukan internet di surau; tanpa internet video dilangkau.';
+
+  @override
+  String get videoRakamanNote =>
+      'Petikan daripada rakaman kuliah surau di YouTube. Tetapkan bila ia bermula dan berhenti.';
+
+  @override
+  String get videoClipStart => 'Mula (mm:ss)';
+
+  @override
+  String get videoClipEnd => 'Tamat (mm:ss)';
+
+  @override
+  String get videoClipOrder => 'Tamat mesti selepas mula.';
+
+  @override
+  String get videoClipLong => 'Petikan paling lama 10 minit.';
+
+  @override
+  String get videoNeedsFile => 'Pilih video dan tunggu ia selesai dimuat naik.';
+
+  @override
+  String get videoWaitUpload => 'Tunggu muat naik selesai sebelum Simpan.';
+
+  @override
+  String get videoEstimate => 'Anggaran tempoh (minit)';
+
+  @override
+  String get videoEstimateHint =>
+      'YouTube tidak memberi tempoh video. Beri anggaran (1 hingga 10 minit); skrin terus bertukar sebaik video tamat.';
+
+  @override
+  String get videoEstimateBad => 'Masukkan nombor 1 hingga 10.';
+
+  @override
+  String get videoCloudReadOnly =>
+      'Butiran video yang dimuat naik hanya boleh diubah di Wi-Fi surau.';
+
+  @override
+  String get videoPreview => 'Pratonton';
+
+  @override
+  String get videoPreviewHint =>
+      'Di TV: video memenuhi skrin, nama surau dan jam di atasnya. Tiada teks lain.';
+
+  @override
+  String videoRowUpload(String length) {
+    return 'Muat naik, $length';
+  }
+
+  @override
+  String get videoRowYoutube => 'YouTube';
+
+  @override
+  String videoRowRakaman(String start, String end) {
+    return 'Petikan rakaman $start hingga $end';
+  }
+
+  @override
+  String get videoSoundOn => 'Berbunyi';
+
+  @override
+  String get videoExpiredSuggest =>
+      'Tarikh tamat sudah lalu. Padam untuk menjimatkan ruang?';
+
+  @override
+  String get videoFileLost => 'Fail tiada pada MAXCOM ini; dilangkau di TV.';
+
+  @override
+  String get videoFetching => 'Mengambil tajuk daripada YouTube...';
 }

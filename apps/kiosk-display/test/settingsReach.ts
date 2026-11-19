@@ -84,6 +84,7 @@ export const REACH: Record<string, Record<string, Reach>> = {
   },
   ticker: { enabled: by(`${K}screens/Main.tsx`), speed: by(`${K}content/Ticker.tsx`) },
   posters: { enabled: by(ROT), durationSeconds: by(ROT), order: by(ROT) },
+  videos: { enabled: by(ROT), order: by(ROT) },
   programKhas: {
     enabled: by(ROT), durationSeconds: by(ROT), order: by(ROT), hideAfterMinutes: by(ROT),
     daysAhead: { none: 'hidden', why: 'planned (Dirancang), hidden from Tetapan (FieldMeta hidden): a programme shows by its own show-from and show-to dates, nothing reads the window' },
@@ -119,6 +120,7 @@ export const REACH: Record<string, Record<string, Reach>> = {
     relayVideo: by(`${B}live/sessions.ts`), titleTemplate: { by: [`${C}live/youtubeMeta.ts`], needle: /settings\.titleTemplate/ },
     descriptionTemplate: { by: [`${C}live/youtubeMeta.ts`], needle: /settings\.descriptionTemplate/ },
     maxBitrateKbps: by(`${B}live/sessions.ts`),
+    nextLiveOn: { none: 'hidden', why: 'hidden from Tetapan (FieldMeta hidden): the surau-wide YouTube choice for the next live, set from the Live screen of the app (box route PUT /api/live/youtube/next-live); the TV never reads it' },
   },
   recording: {
     enabled: by(`${A}features/live/live_screen.dart`), segmentMinutes: by(`${A}features/live/live_controller.dart`),

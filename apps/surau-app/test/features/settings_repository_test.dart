@@ -323,6 +323,24 @@ void main() {
       );
     });
 
+    test('lang ar refused naming language.lang says MAXCOM needs the update for Arabic', () async {
+      final rig = _Rig(
+        (r) async => jsonResponse(400, {
+          'errors': ['language.lang must be one of auto, ms, en'],
+        }),
+      );
+      await expectLater(
+        rig.repo.save('language', {'lang': 'ar'}),
+        throwsA(
+          isA<SettingsSaveError>()
+              .having((e) => e.msg, 'msg', SettingsMsg.tvLangArNeedsUpdate)
+              .having((e) => e.message, 'bm', 'Kemas kini MAXCOM untuk Bahasa Arab')
+              .having((e) => e.text(lookupS(const Locale('en'))), 'en', 'Update MAXCOM to use Arabic')
+              .having((e) => e.text(lookupS(const Locale('ar'))), 'ar', contains('MAXCOM')),
+        ),
+      );
+    });
+
     test('any other 400 keeps the box message', () async {
       final rig = _Rig(
         (r) async => jsonResponse(400, {

@@ -96,6 +96,7 @@ class ChoiceCards extends StatelessWidget {
     required this.onChanged,
     this.error,
     this.readOnly = false,
+    this.extraDisabled = const {},
   });
 
   final String path;
@@ -107,12 +108,19 @@ class ChoiceCards extends StatelessWidget {
   final String? error;
   final bool readOnly;
 
+  /// Choices this box cannot run, with the sentence shown under each (on top of the registry's `disabledChoices`).
+  /// A disabled choice never shows as the selected one: the first enabled choice is what runs.
+  final Map<String, String> extraDisabled;
+
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final lang = appLangOf(context);
     final text = Theme.of(context).textTheme;
-    final disabled = meta.disabledChoices;
+    final disabled = [...meta.disabledChoices, ...extraDisabled.keys];
+    final shown = extraDisabled.containsKey(value)
+        ? meta.choices.map((c) => '$c').firstWhere((c) => !disabled.contains(c), orElse: () => value)
+        : value;
     return FieldFrame(
       label: label,
       error: error,
@@ -125,8 +133,8 @@ class ChoiceCards extends StatelessWidget {
               key: ValueKey('setting-$path-$c'),
               title: choiceLabel(name, c, lang),
               sentence: choiceHelp(name, c, lang),
-              hint: disabled.contains(c) ? s.settingsComingSoon : null,
-              selected: c == value,
+              hint: extraDisabled[c] ?? (disabled.contains(c) ? s.settingsComingSoon : null),
+              selected: c == shown,
               onTap: readOnly || disabled.contains(c) ? null : () => onChanged(c),
               text: text,
             ),

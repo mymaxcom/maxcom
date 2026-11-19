@@ -253,15 +253,17 @@ void main() {
       expect(ok('system', {'suspendedAt': 'x'}), isFalse);
       expect(ok('system', {'suspendedAt': null}), isTrue);
       expect(ok('system', {'suspendedAt': '2026-11-09T10:00:00.000Z'}), isTrue);
-      final r = validateFeatureSettings('ayatCard', {'surah': 1, 'ayatTo': 8}, current: {'ayatFrom': 1});
+      final r = validateFeatureSettings('ayatCard', {'surah': 1, 'ayatTo': 8}, current: {'pick': 'manual', 'ayatFrom': 1});
       expect(r.errors.single.path, 'ayatTo');
       expect(r.errors.single.message, 'Al-Fatihah ada 7 ayat');
       expect(
-        validateFeatureSettings('ayatCard', {'ayatFrom': 10, 'ayatTo': 20}, current: {'surah': 2}).firstMessage,
-        'Paling banyak 5 ayat sekali paparan',
+        validateFeatureSettings('ayatCard', {'ayatFrom': 10, 'ayatTo': 20}, current: {'pick': 'manual', 'surah': 2}).firstMessage,
+        'Paling banyak 3 ayat sekali paparan',
       );
+      // the daily and random picks ignore the verses: nothing to check
+      expect(validateFeatureSettings('ayatCard', {'ayatFrom': 10, 'ayatTo': 20}, current: {'pick': 'daily', 'surah': 2}).ok, isTrue);
       // an old stored range that breaks the rule is reported only when the patch touches a verse field
-      const oldRange = {'surah': 2, 'ayatFrom': 10, 'ayatTo': 20};
+      const oldRange = {'pick': 'manual', 'surah': 2, 'ayatFrom': 10, 'ayatTo': 14};
       expect(validateFeatureSettings('ayatCard', {'showTranslation': false}, current: oldRange).ok, isTrue);
       expect(validateFeatureSettings('ayatCard', {'ayatFrom': 11}, current: oldRange).ok, isFalse);
     });

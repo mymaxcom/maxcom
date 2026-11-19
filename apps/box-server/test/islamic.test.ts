@@ -2,11 +2,14 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdirSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Fastify from 'fastify';
+import { SURAHS } from '@surau/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fetchEveryAyahSurah, fetchQuranEnc } from '../src/islamic/fetch.ts';
 import {
   AYAT_COUNTS,
+  DAILY_CHUNKS,
   DAILY_RANGES,
+  dailyChunk,
   SURAH_NAMES,
   ayatForDay,
   getAyat,
@@ -16,6 +19,8 @@ import {
 import type { QuranText } from '../src/islamic/quranStore.ts';
 import { registerIslamicRoutes } from '../src/islamic/routes.ts';
 import { runCli } from '../src/cli/fetchIslamic.ts';
+import { ayatDailyAnchor } from '../src/kioskContent.ts';
+import { DatabaseSync } from 'node:sqlite';
 
 interface Row { id: string; sura: string; aya: string; arabic_text: string; translation: string; footnotes: null }
 const fixture = JSON.parse(
@@ -95,6 +100,11 @@ describe('constants', () => {
     expect(AYAT_COUNTS).toHaveLength(114);
     expect(AYAT_COUNTS.reduce((a, b) => a + b, 0)).toBe(6236);
     expect(SURAH_NAMES).toHaveLength(114);
+    // one source: the box reads the same core table the app is generated from
+    SURAHS.forEach((s, i) => {
+      expect(AYAT_COUNTS[i]).toBe(s.ayat);
+      expect(SURAH_NAMES[i]).toEqual([s.nameAr, s.nameMs]);
+    });
     expect(DAILY_RANGES).toHaveLength(60);
     for (const [s, from, to] of DAILY_RANGES) {
       expect(from).toBeGreaterThanOrEqual(1);
@@ -155,10 +165,53 @@ describe('quranStore', () => {
 
   it('ayatForDay daily is stable per date and differs on the next day', () => {
     const s = { pick: 'daily' as const, surah: 2, ayatFrom: 255, ayatTo: 255 };
-    const a = ayatForDay(quran, s, '2026-11-03');
+    const a = ayatForDay(quran, s, '2026-11-03', '2026-11-01');
     expect(a).not.toBeNull();
-    expect(ayatForDay(quran, s, '2026-11-03')).toEqual(a);
-    expect(ayatForDay(quran, s, '2026-11-04')).not.toEqual(a);
+    expect(ayatForDay(quran, s, '2026-11-03', '2026-11-01')).toEqual(a);
+    expect(ayatForDay(quran, s, '2026-11-04', '2026-11-01')).not.toEqual(a);
+  });
+
+  it('ayatForDay daily reads the Quran in order from the anchor day, up to 3 verses, never across a surah end', () => {
+    const s = { pick: 'daily' as const, surah: 2, ayatFrom: 255, ayatTo: 255 };
+    const anchor = '2026-11-19';
+    const day = (n: number): string => new Date(Date.UTC(2026, 10, 19 + n)).toISOString().slice(0, 10);
+    const at = (n: number) => {
+      const c = ayatForDay(quran, s, day(n), anchor);
+      return c === null ? null : [c.surah, c.ayatFrom, c.ayatTo];
+    };
+    expect(at(0)).toEqual([1, 1, 3]);
+    expect(at(1)).toEqual([1, 4, 6]);
+    expect(at(2)).toEqual([1, 7, 7]);
+    expect(at(3)).toEqual([2, 1, 3]);
+    expect(at(4)).toEqual([2, 4, 6]);
+    // Al-Baqarah has 286 verses: 96 chunks, the last 286 alone; then Ali Imran 1-3
+    expect(at(3 + 95)).toEqual([2, 286, 286]);
+    expect(at(3 + 96)).toEqual([3, 1, 3]);
+    // the whole Quran, then Al-Fatihah again
+    const total = DAILY_CHUNKS.length;
+    expect(total).toBe(SURAHS.reduce((n, x) => n + Math.ceil(x.ayat / 3), 0));
+    expect(DAILY_CHUNKS[total - 1]).toEqual([114, 4, 6]);
+    expect(at(total - 1)).toEqual([114, 4, 6]);
+    expect(at(total)).toEqual([1, 1, 3]);
+    // every verse once, in order
+    let expected = 0;
+    for (const [surah, from, to] of DAILY_CHUNKS) {
+      expect(to - from).toBeLessThanOrEqual(2);
+      expect(to).toBeLessThanOrEqual(AYAT_COUNTS[surah - 1]!);
+      expected += to - from + 1;
+    }
+    expect(expected).toBe(6236);
+    expect(dailyChunk(anchor, day(-1))).toEqual(DAILY_CHUNKS[total - 1]);
+  });
+
+  it('the daily anchor is stored once per surau and read back (restart, the whole day, the next day)', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('CREATE TABLE sync_state (key TEXT PRIMARY KEY, value TEXT)');
+    expect(ayatDailyAnchor(db, 'sdm', '2026-11-19')).toBe('2026-11-19');
+    expect(ayatDailyAnchor(db, 'sdm', '2026-11-19')).toBe('2026-11-19');
+    expect(ayatDailyAnchor(db, 'sdm', '2026-11-25')).toBe('2026-11-19');
+    expect(ayatDailyAnchor(db, 'kolej', '2026-11-25')).toBe('2026-11-25');
+    db.close();
   });
 
   it('ayatForDay random is seeded by the date', () => {
@@ -186,11 +239,18 @@ describe('quranStore', () => {
     expect(card?.surahNameAr).toBe('البقرة');
   });
 
-  it('cuts ranges longer than 8 ayat and returns null for an uncached surah', () => {
+  it('cuts ranges longer than 3 ayat (old stored 4 to 5 verse ranges, long curated passages) and returns null for an uncached surah', () => {
     const card = ayatForDay(quran, { pick: 'manual', surah: 2, ayatFrom: 1, ayatTo: 30 }, '2026-11-03');
     expect(card?.ayatFrom).toBe(1);
-    expect(card?.ayatTo).toBe(8);
-    expect(card?.arabic).toHaveLength(8);
+    expect(card?.ayatTo).toBe(3);
+    expect(card?.arabic).toHaveLength(3);
+    const old5 = ayatForDay(quran, { pick: 'manual', surah: 2, ayatFrom: 10, ayatTo: 14 }, '2026-11-03');
+    expect([old5?.ayatFrom, old5?.ayatTo]).toEqual([10, 12]);
+    for (let d = 0; d < DAILY_RANGES.length; d += 1) {
+      const day = new Date(Date.UTC(2026, 0, 1 + d)).toISOString().slice(0, 10);
+      const c = ayatForDay(quran, { pick: 'daily', surah: 2, ayatFrom: 1, ayatTo: 1 }, day);
+      if (c) expect(c.ayatTo - c.ayatFrom).toBeLessThanOrEqual(2);
+    }
     const partial: QuranText = { ...quran, surahs: { 1: quran.surahs[1] as QuranText['surahs'][number] } };
     expect(ayatForDay(partial, { pick: 'manual', surah: 2, ayatFrom: 1, ayatTo: 2 }, '2026-11-03')).toBeNull();
     expect(() => getAyat(partial, 2, 1, 2)).toThrow();

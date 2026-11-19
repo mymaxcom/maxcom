@@ -468,7 +468,7 @@ describe('status and link', () => {
     const app = makeApp();
     const ajk = await loginAs(app, 'ajk');
     const r = await app.inject({ method: 'GET', url: '/api/sync/status', headers: ajk.headers });
-    expect(r.json()).toEqual({ linked: false, cloudUrl: null, lastPush: null, lastPull: null, pendingOut: 0, lastError: null, link: 'pending' });
+    expect(r.json()).toEqual({ linked: false, cloudUrl: null, lastPush: null, lastPull: null, pendingOut: 0, lastError: null, parked: 0, link: 'pending' });
     app.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('linked','1'), ('cloud_url','https://c.example'), ('pending_out','3')").run();
     expect((await app.inject({ method: 'GET', url: '/api/sync/status', headers: ajk.headers })).json()).toMatchObject({ linked: true, cloudUrl: 'https://c.example', pendingOut: 3, link: 'linked' });
   });

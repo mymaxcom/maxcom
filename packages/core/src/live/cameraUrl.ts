@@ -82,11 +82,16 @@ export function cameraUrlError(url: string, boxIps: readonly string[] = []): str
 }
 
 /**
- * The address with the password replaced by dots, for display and for reading back. Never throws and never returns the
+ * The address with the password replaced by dots, for display and for reading back: the login's password and each
+ * password parameter of the query (see CAMERA_QUERY_SECRET_KEYS). Never throws and never returns the
  * password, even for an address that is not valid. An `@` after the first `/`, `?` or `#` belongs to the path, not the login.
  */
 export function maskCameraUrl(url: string): string {
   if (typeof url !== 'string') return '';
+  return maskCameraQuery(maskCameraLogin(url));
+}
+
+function maskCameraLogin(url: string): string {
   const s = url.indexOf('://');
   const head = s === -1 ? '' : url.slice(0, s + 3);
   const rest = s === -1 ? url : url.slice(s + 3);
@@ -109,4 +114,124 @@ export function isMaskedCameraUrl(url: string): boolean {
   const authority = cut === -1 ? rest : rest.slice(0, cut);
   const at = authority.lastIndexOf('@');
   return at !== -1 && authority.slice(0, at).endsWith(`:${CAMERA_PASSWORD_MASK}`);
+}
+
+/* ---------------------------------------------------------------- a password in the query */
+
+/** Query parameters that carry a camera password (`?user=admin&password=...`); compared without case. */
+export const CAMERA_QUERY_SECRET_KEYS: readonly string[] = ['pass', 'pwd', 'password', 'passwd'];
+
+function decodeKey(k: string): string {
+  try {
+    return decodeURIComponent(k).toLowerCase();
+  } catch {
+    return k.toLowerCase();
+  }
+}
+
+/** True for a query parameter name that carries a password. */
+export function isCameraQuerySecretKey(key: string): boolean {
+  return CAMERA_QUERY_SECRET_KEYS.includes(decodeKey(key));
+}
+
+interface QueryParts {
+  /** Everything before the `?` (scheme, login, host, path). */
+  base: string;
+  /** The `key=value` pairs (or a bare key) in order; null when there is no query. */
+  pairs: { key: string; value: string | null }[] | null;
+  /** A fragment, kept as it is (the address rules refuse one, but the helpers never throw). */
+  hash: string;
+}
+
+function splitQuery(url: string): QueryParts {
+  const h = url.indexOf('#');
+  const hash = h === -1 ? '' : url.slice(h);
+  const noHash = h === -1 ? url : url.slice(0, h);
+  const q = noHash.indexOf('?');
+  if (q === -1) return { base: noHash, pairs: null, hash };
+  const query = noHash.slice(q + 1);
+  const pairs = query === '' ? [] : query.split('&').map((p) => {
+    const eq = p.indexOf('=');
+    return eq === -1 ? { key: p, value: null } : { key: p.slice(0, eq), value: p.slice(eq + 1) };
+  });
+  return { base: noHash.slice(0, q), pairs, hash };
+}
+
+function joinQuery(parts: QueryParts): string {
+  if (parts.pairs === null) return `${parts.base}${parts.hash}`;
+  const q = parts.pairs.map((p) => (p.value === null ? p.key : `${p.key}=${p.value}`)).join('&');
+  return `${parts.base}${q === '' ? '' : `?${q}`}${parts.hash}`;
+}
+
+/** The non-empty password values held in the query (for the log redactor). */
+export function cameraQuerySecrets(url: string): string[] {
+  if (typeof url !== 'string') return [];
+  const { pairs } = splitQuery(url);
+  return (pairs ?? []).filter((p) => isCameraQuerySecretKey(p.key) && p.value !== null && p.value !== '').map((p) => p.value as string);
+}
+
+/** The address with each password in its query replaced by the dots (for display, the history and reading back). */
+export function maskCameraQuery(url: string): string {
+  if (typeof url !== 'string') return '';
+  const parts = splitQuery(url);
+  if (parts.pairs === null) return url;
+  let changed = false;
+  for (const p of parts.pairs) {
+    if (isCameraQuerySecretKey(p.key) && p.value !== null && p.value !== '') {
+      p.value = CAMERA_PASSWORD_MASK;
+      changed = true;
+    }
+  }
+  return changed ? joinQuery(parts) : url;
+}
+
+/**
+ * The address with every password parameter of its query removed (for the cloud backup, which never holds a
+ * password); `had` says whether a non-empty one was there.
+ */
+export function stripCameraQuerySecrets(url: string): { url: string; had: boolean } {
+  if (typeof url !== 'string') return { url: '', had: false };
+  const parts = splitQuery(url);
+  if (parts.pairs === null) return { url, had: false };
+  const keep = parts.pairs.filter((p) => !isCameraQuerySecretKey(p.key));
+  if (keep.length === parts.pairs.length) return { url, had: false };
+  const had = parts.pairs.some((p) => isCameraQuerySecretKey(p.key) && p.value !== null && p.value !== '');
+  return { url: joinQuery({ ...parts, pairs: keep }), had };
+}
+
+/** True when a password parameter of the query still holds the dots. */
+export function hasMaskedCameraQuery(url: string): boolean {
+  if (typeof url !== 'string') return false;
+  return (splitQuery(url).pairs ?? []).some((p) => isCameraQuerySecretKey(p.key) && p.value === CAMERA_PASSWORD_MASK);
+}
+
+/** Host, port, path and the query without its passwords: what must not change for a stored password to be put back. */
+function placeOf(url: string): string {
+  const s = url.indexOf('://');
+  const rest = s === -1 ? url : url.slice(s + 3);
+  const cut = rest.search(/[/?#]/);
+  const authority = cut === -1 ? rest : rest.slice(0, cut);
+  const tail = cut === -1 ? '' : rest.slice(cut);
+  const at = authority.lastIndexOf('@');
+  const host = at === -1 ? authority : authority.slice(at + 1);
+  return stripCameraQuerySecrets(`${host}${tail}`).url;
+}
+
+/**
+ * Puts the stored passwords back where the query still holds the dots. Only for the same host, port, path and other
+ * query parameters (a changed address could send the stored password elsewhere); null when a dotted value cannot be
+ * put back (then the password is typed again). An address with no dots in its query is returned as it is.
+ */
+export function restoreMaskedCameraQuery(typed: string, stored: string): string | null {
+  if (!hasMaskedCameraQuery(typed)) return typed;
+  if (typeof stored !== 'string' || placeOf(typed) !== placeOf(stored)) return null;
+  const t = splitQuery(typed);
+  const old = splitQuery(stored).pairs ?? [];
+  for (const p of t.pairs ?? []) {
+    if (!isCameraQuerySecretKey(p.key) || p.value !== CAMERA_PASSWORD_MASK) continue;
+    const was = old.find((o) => decodeKey(o.key) === decodeKey(p.key) && o.value !== null && o.value !== '' && o.value !== CAMERA_PASSWORD_MASK);
+    if (was === undefined) return null;
+    p.value = was.value;
+  }
+  return joinQuery(t);
 }

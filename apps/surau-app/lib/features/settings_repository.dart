@@ -24,7 +24,7 @@ enum SettingsFailure { invalid, notFound, forbidden, other }
 
 /// A refusal the app words itself (not the box's text): [SettingsSaveError.text]
 /// gives it in the app language.
-enum SettingsMsg { forbidden, notFound, tvLangNeedsUpdate }
+enum SettingsMsg { forbidden, notFound, tvLangNeedsUpdate, tvLangArNeedsUpdate }
 
 /// A save the box refused. [message] is the text to show beside the form:
 /// the box's `errors[0]` for a 400.
@@ -57,6 +57,7 @@ class SettingsSaveError implements Exception {
     SettingsMsg.forbidden => s.errorForbidden,
     SettingsMsg.notFound => s.errorFeatureNotFound,
     SettingsMsg.tvLangNeedsUpdate => s.tvLangNeedsUpdate,
+    SettingsMsg.tvLangArNeedsUpdate => s.tvLangArNeedsUpdate,
   };
 
   static String _bmText(SettingsMsg m) => _textOf(sBm, m);
@@ -112,7 +113,7 @@ Map<String, dynamic> diffPatch(
   return out;
 }
 
-/// A box from before the TV language "Ikut lokasi" (`auto`) answers 400 and
+/// A box from before the TV language "Automatik" (`auto`) or Arabic (`ar`) answers 400 and
 /// names `language.lang`: say plainly that the box needs the update.
 bool _olderBoxRefusesTvLang(
   String feature,
@@ -120,7 +121,7 @@ bool _olderBoxRefusesTvLang(
   String boxMessage,
 ) =>
     feature == 'language' &&
-    patch['lang'] == 'auto' &&
+    (patch['lang'] == 'auto' || patch['lang'] == 'ar') &&
     boxMessage.contains('language.lang');
 
 class SettingsRepository {
@@ -160,7 +161,7 @@ class SettingsRepository {
         400 when _olderBoxRefusesTvLang(feature, patch, e.message) =>
           SettingsSaveError.of(
             SettingsFailure.invalid,
-            SettingsMsg.tvLangNeedsUpdate,
+            patch['lang'] == 'ar' ? SettingsMsg.tvLangArNeedsUpdate : SettingsMsg.tvLangNeedsUpdate,
             status: 400,
           ),
         400 => SettingsSaveError(SettingsFailure.invalid, e.message, status: 400, source: e),

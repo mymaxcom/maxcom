@@ -51,6 +51,7 @@ import { applyOp } from '../src/sync/apply.ts';
 import type { VerifiedOp } from '../src/sync/apply.ts';
 import { startFakeGoogle } from './support/fakeGoogle.ts';
 import { withUploadApi } from './support/fakeGoogleUpload.ts';
+import { seedCloudGrant } from './support/cloudGrant.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -566,11 +567,8 @@ describe('controller additions: the storage limit on the device asset op; catch-
     const db = app.surau.db;
     mkdirSync(join(cloud.dir, 'secret'), { recursive: true });
     writeFileSync(join(cloud.dir, 'secret', 'youtube-client.json'), JSON.stringify({ client_id: 'cid-123.apps.googleusercontent.com', client_secret: 'csecret-SECRET' }));
-    const admin = await loginAs(app, 'admin');
-    expect((await app.inject({ method: 'POST', url: '/api/live/youtube/signin', headers: admin.headers })).statusCode).toBe(200);
-    g.approve = true;
-    t += 6000;
-    expect((await app.inject({ method: 'POST', url: '/api/live/youtube/signin/poll', headers: admin.headers })).json()).toMatchObject({ signedIn: true });
+    // the grant the cloud held from before release 2026.11.13 (the cloud makes no new one)
+    seedCloudGrant(cloud.dir, () => new Date(t));
     const pen = putItem(db, 'penceramah', { name: 'Ustaz Ahmad' }, 'test', undefined, 'sdm');
     const kuliah = putItem(db, 'kuliah', { date: '2026-11-05', slot: 'maghrib', time: '19:15', label: 'Kuliah Maghrib', penceramahId: pen.item.id, topic: 'Bab Solat', status: 'aktif' }, 'test', undefined, 'sdm');
     // the cloud's surau `sdm` has a row (as on the pilot cloud), a tiny limit, and is already full of assets

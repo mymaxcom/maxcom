@@ -67,7 +67,7 @@ describe('live settings rules', () => {
   it('has the planned defaults', () => {
     const s = resolveSettings({});
     expect(s.liveOnKiosk).toMatchObject({ audio: false, volume: 50, showStrip: true, fit: 'cover' });
-    expect(s.liveYoutube).toMatchObject({ privacy: 'unlisted', relayVideo: 'copy', maxBitrateKbps: 2500 });
+    expect(s.liveYoutube).toMatchObject({ privacy: 'unlisted', relayVideo: 'copy', maxBitrateKbps: 2500, nextLiveOn: true });
     expect(s.recording).toMatchObject({ segmentMinutes: 15, keepOnDevice: true });
   });
   it('liveYoutube', () => {
@@ -76,6 +76,8 @@ describe('live settings rules', () => {
     expect(v('liveYoutube', { maxBitrateKbps: 100 })).toBe(false);
     expect(v('liveYoutube', { maxBitrateKbps: 6001 })).toBe(false);
     expect(v('liveYoutube', { maxBitrateKbps: 500 })).toBe(true);
+    expect(v('liveYoutube', { nextLiveOn: false })).toBe(true);
+    expect(v('liveYoutube', { nextLiveOn: 'no' })).toBe(false);
     expect(v('liveYoutube', { relayVideo: 'reencode' })).toBe(true);
     expect(v('liveYoutube', { relayVideo: 'x' })).toBe(false);
     expect(v('liveYoutube', { titleTemplate: '' })).toBe(false);

@@ -14,6 +14,8 @@ const win = process.platform === 'win32';
 const versions = JSON.parse(readFileSync(join(repoRoot, 'versions.json'), 'utf8')) as Record<string, string>;
 const apkVersion = must(versions['kiosk-server-android'], 'kiosk-server-android version');
 const winVersion = must(versions['kiosk-server-windows'], 'kiosk-server-windows version');
+const builds = JSON.parse(readFileSync(join(repoRoot, 'builds.json'), 'utf8')) as Record<string, number>;
+const tagOf = (key: string): string => ((builds[key] ?? 0) > 0 ? `-b${builds[key]}` : '');
 
 const work = mkdtempSync(join(tmpdir(), 'maxcom-bapk-'));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
@@ -88,11 +90,11 @@ describe.runIf(win)('build-box-apk.ps1 (run)', () => {
   it('build-release -Platform android -DryRun names the android archive; windows stays the default; linux is refused', () => {
     const a = ps(['-File', releaseScript, '-Version', apkVersion, '-Platform', 'android', '-DryRun']);
     expect(a.status).toBe(0);
-    expect(a.out).toContain(`maxcom-box-${apkVersion}-android.tar.gz`);
+    expect(a.out).toContain(`maxcom-box-${apkVersion}${tagOf('kiosk-server-android')}-android.tar.gz`);
     expect(a.out).not.toContain('ensure-live-firewall.ps1');
     const w = ps(['-File', releaseScript, '-Version', winVersion, '-DryRun']);
     expect(w.status).toBe(0);
-    expect(w.out).toContain(`maxcom-box-${winVersion}-windows.tar.gz`);
+    expect(w.out).toContain(`maxcom-box-${winVersion}${tagOf('kiosk-server-windows')}-windows.tar.gz`);
     expect(w.out).toContain('ensure-live-firewall.ps1');
     const l = ps(['-File', releaseScript, '-Version', winVersion, '-Platform', 'linux', '-DryRun']);
     expect(l.status).not.toBe(0);

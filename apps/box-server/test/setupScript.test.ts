@@ -282,6 +282,103 @@ describe.runIf(isWin)('setup.ps1 runs', () => {
     expect(readFileSync(join(backups, must(pre[0], 'pre-upgrade backup'), 'surau.db'), 'utf8')).toBe('fake database bytes');
   });
 
+  describe('internal build of the same public version', () => {
+    const bundleWithBuild = (e: Env, build: number, tag: string): Env => {
+      const b = makeFakeBundle(join(e.base, `bundle-${tag}`), { version: '2026.11.1', nodeStub: true, build });
+      const pins = join(e.base, `pins-${tag}.json`);
+      writePins(pins, b);
+      return { ...e, bundle: b, pins };
+    };
+
+    it('same version and same build is a no-op (an installed release without a build marker is build 0)', () => {
+      const e = makeEnv('2026.11.1');
+      expect(runSetup(layoutArgs(e)).status).toBe(0);
+      mkdirSync(e.data, { recursive: true });
+      writeFileSync(join(e.data, 'surau.db'), 'db');
+      const again = runSetup(layoutArgs(bundleWithBuild(e, 0, 'again')));
+      expect(again.status, again.out).toBe(0);
+      expect(existsSync(join(e.root, 'previous.txt'))).toBe(false);
+      expect(readdirSync(join(e.base, 'backups')).filter((x) => x.startsWith('pre-'))).toEqual([]);
+      expect(readdirSync(join(e.root, 'releases'))).toEqual(['2026.11.1']);
+
+      const b1 = bundleWithBuild(e, 1, 'b1');
+      expect(runSetup(layoutArgs(b1)).status).toBe(0);
+      const same = runSetup(layoutArgs(bundleWithBuild(e, 1, 'b1again')));
+      expect(same.status, same.out).toBe(0);
+      expect(readdirSync(join(e.root, 'releases')).sort()).toEqual(['2026.11.1', '2026.11.1-b1']);
+      expect(readFileSync(join(e.root, 'previous.txt'), 'utf8')).toBe('2026.11.1');
+      expect(readdirSync(join(e.base, 'backups')).length).toBe(1);
+    });
+
+    it('a higher build of the same version upgrades, keeps the data and can switch back', () => {
+      const e = makeEnv('2026.11.1');
+      expect(runSetup(layoutArgs(e)).status).toBe(0); // no marker: build 0
+      mkdirSync(e.data, { recursive: true });
+      writeFileSync(join(e.data, 'surau.db'), 'fake database bytes');
+
+      const r = runSetup(layoutArgs(bundleWithBuild(e, 1, 'b1')));
+      expect(r.status, r.out).toBe(0);
+      expect(readFileSync(join(e.root, 'previous.txt'), 'utf8')).toBe('2026.11.1');
+      expect(existsSync(join(e.root, 'releases', '2026.11.1', '.ok'))).toBe(true);
+      expect(existsSync(join(e.root, 'releases', '2026.11.1-b1', '.ok'))).toBe(true);
+      const rel = JSON.parse(readFileSync(join(e.root, 'current', 'release.json'), 'utf8')) as { version: string; build?: number };
+      expect(rel.version).toBe('2026.11.1');
+      expect(rel.build).toBe(1);
+      expect(readFileSync(join(e.data, 'surau.db'), 'utf8')).toBe('fake database bytes');
+      const backups = join(e.base, 'backups');
+      const pre = readdirSync(backups).filter((n) => n.startsWith('pre-2026.11.1-b1-'));
+      expect(pre.length).toBe(1);
+      expect(readFileSync(join(backups, must(pre[0], 'pre-upgrade backup'), 'surau.db'), 'utf8')).toBe('fake database bytes');
+
+      const sw = spawnSync(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(dirname(setupPath), 'switch-release.ps1'),
+          '-InstallRoot', e.root, '-Previous', '-Yes', '-LayoutOnly'],
+        { encoding: 'utf8', timeout: 150_000 },
+      );
+      expect(sw.status, `${sw.stdout}${sw.stderr}`).toBe(0);
+      const back = JSON.parse(readFileSync(join(e.root, 'current', 'release.json'), 'utf8')) as { build?: number };
+      expect(back.build).toBeUndefined();
+      expect(readFileSync(join(e.root, 'previous.txt'), 'utf8')).toBe('2026.11.1-b1');
+    });
+
+    it('fails closed: a bundle whose release.json cannot be read (or has a bad build) stops setup with GAGAL and installs nothing, never an assumed build 0', () => {
+      const e = makeEnv('2026.11.1');
+      expect(runSetup(layoutArgs(e)).status).toBe(0); // build 0 installed
+      const unreadable = (text: string, tag: string): Env => {
+        const b = makeFakeBundle(join(e.base, `bundle-${tag}`), { version: '2026.11.1', nodeStub: true, releaseJsonText: text });
+        const pins = join(e.base, `pins-${tag}.json`);
+        writePins(pins, b);
+        return { ...e, bundle: b, pins };
+      };
+      for (const [text, tag] of [['{ this is not json', 'junk'], ['', 'empty'], ['{"v":1,"version":"2026.11.1","build":"x"}', 'badbuild'], ['{"v":1,"version":"2026.11.1","build":12}', 'bigbuild']] as const) {
+        const r = runSetup(layoutArgs(unreadable(text, tag)));
+        expect(r.status, `${tag}: ${r.out}`).toBe(1);
+        expect(r.out, tag).toMatch(/GAGAL: (release\.json dalam arkib|build dalam release\.json)/);
+        expect(readdirSync(join(e.root, 'releases')), tag).toEqual(['2026.11.1']);
+      }
+    });
+
+    it('a bundle whose archive name says -b1 but whose release.json says another build is refused', () => {
+      const e = makeEnv('2026.11.1');
+      const b = makeFakeBundle(join(e.base, 'bundle-mismatch'), { version: '2026.11.1', nodeStub: true, build: 1, nameBuild: 2 });
+      const pins = join(e.base, 'pins-mismatch.json');
+      writePins(pins, b);
+      const r = runSetup(layoutArgs({ ...e, bundle: b, pins }));
+      expect(r.status, r.out).toBe(1);
+      expect(r.out).toMatch(/GAGAL: nama arkib .* menyatakan binaan 2 tetapi release\.json dalamnya binaan 1/);
+    });
+
+    it('refuses a lower build of the same version over a higher one', () => {
+      const e = makeEnv('2026.11.1');
+      expect(runSetup(layoutArgs(bundleWithBuild(e, 2, 'b2'))).status).toBe(0);
+      const r = runSetup(layoutArgs(bundleWithBuild(e, 1, 'b1')));
+      expect(r.status).toBe(1);
+      expect(r.out).toMatch(/GAGAL: binaan 1 lebih lama daripada binaan 2/);
+      expect((JSON.parse(readFileSync(join(e.root, 'current', 'release.json'), 'utf8')) as { build?: number }).build).toBe(2);
+    });
+  });
+
   it('refuses to install an older version over a newer one', () => {
     const e2 = makeEnv('2026.11.2');
     expect(runSetup(layoutArgs(e2)).status).toBe(0);

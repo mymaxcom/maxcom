@@ -346,6 +346,29 @@ describe('content routes', () => {
     expect(asset.json().code).toBe('asset_missing');
   });
 
+  it('a poster stretch flag round-trips (true, false, absent) and a non-boolean is a 400', async () => {
+    const app = makeApp();
+    const id = 'c'.repeat(64);
+    app.surau.db
+      .prepare('INSERT INTO assets (id, mime, bytes, width, height, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, 'image/png', 10, 2, 2, new Date().toISOString(), 'local');
+    const base = { title: 'Poster 1', assetId: id, days: ['umum'], order: 1 };
+    for (const [pid, extra, want] of [['s1', { stretch: false }, false], ['s2', { stretch: true }, true], ['s3', {}, undefined]] as const) {
+      const put = await app.inject({ method: 'PUT', url: `/api/content/poster/${pid}`, payload: { ...base, ...extra } });
+      expect(put.statusCode).toBe(201);
+      const got = ((await app.inject({ method: 'GET', url: `/api/content/poster/${pid}` })).json() as { item: { stretch?: boolean } }).item;
+      expect(got.stretch).toBe(want);
+      expect('stretch' in got).toBe(want !== undefined);
+    }
+    const again = await app.inject({ method: 'PUT', url: '/api/content/poster/s3', payload: { ...base, stretch: false } });
+    expect(again.statusCode).toBe(200);
+    for (const bad of ['yes', 1, null]) {
+      const r = await app.inject({ method: 'PUT', url: '/api/content/poster/s4', payload: { ...base, stretch: bad } });
+      expect(r.statusCode).toBe(400);
+      expect((r.json() as { errors: string[] }).errors.join(' ')).toMatch(/stretch/);
+    }
+  });
+
   it('invalid item is 400 with errors; unknown kind is 404 on every verb', async () => {
     const app = makeApp();
     const bad = await app.inject({ method: 'PUT', url: '/api/content/kuliah/k2', payload: { date: '2026-13-05' } });

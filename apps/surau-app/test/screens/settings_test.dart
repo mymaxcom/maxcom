@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/providers.dart';
+import 'package:surau_app/app/router.dart' show liveSettingsFeatureKeys;
 import 'package:surau_app/features/registry.g.dart';
 import 'package:surau_app/features/settings_repository.dart';
 
@@ -100,7 +101,17 @@ void main() {
     final h = await openSettings(tester);
     expect(h.location, '/settings');
     expect(find.text('Solat'), findsOneWidget);
-    expect(find.text('Sentiasa hidup'), findsNothing, reason: 'every group folded at start');
+    // Bahasa skrin TV is the first item, in a card of its own above every group (operator 2026-11-20).
+    expect(find.text('Sentiasa hidup'), findsOneWidget, reason: 'every group folded at start; only the pinned row is open');
+    final pinned = find.byKey(const ValueKey('settings-pinned'));
+    expect(pinned, findsOneWidget);
+    expect(find.descendant(of: pinned, matching: find.text('Bahasa skrin TV')), findsOneWidget);
+    expect(find.descendant(of: pinned, matching: find.byKey(const ValueKey('settings-row-language'))), findsOneWidget);
+    expect(
+      tester.getTopLeft(pinned).dy,
+      lessThan(tester.getTopLeft(find.byKey(const ValueKey('settings-group-solat'))).dy),
+      reason: 'above the first group',
+    );
     expect(find.textContaining('Kotak'), findsNothing);
     await expectGoldens(tester, h.app, 'settings_list');
 
@@ -108,7 +119,9 @@ void main() {
     await pumpAtSize(tester, h.app, GoldenSize.ipadMiniLandscape);
     // A group whose features are all hidden is not drawn (e.g. jemaah while jemaahPage and calendarFeed are planned).
     bool hasVisible(String g) => features.any((f) => f.group == g && !hiddenFeatures.contains(f.key));
-    for (final g in ['solat', 'skrin', 'kandungan', 'quran', 'audio', 'live', 'kewangan', 'jemaah', 'awan', 'keselamatan'].where(hasVisible)) {
+    // The four live features are Siaran langsung's: not listed here (its group is not drawn either).
+    expect(find.byKey(const ValueKey('settings-group-live')), findsNothing);
+    for (final g in ['solat', 'skrin', 'kandungan', 'quran', 'audio', 'kewangan', 'jemaah', 'awan', 'keselamatan'].where(hasVisible)) {
       final head = find.byKey(ValueKey('settings-group-$g'));
       await reveal(tester, head);
       await tester.tap(head);
@@ -116,7 +129,7 @@ void main() {
     }
     final off = <String>[];
     var locked = 0;
-    for (final f in features.where((f) => f.group != 'lanjutan' && !hiddenFeatures.contains(f.key))) {
+    for (final f in features.where((f) => f.group != 'lanjutan' && !hiddenFeatures.contains(f.key) && !liveSettingsFeatureKeys.contains(f.key))) {
       final row = find.byKey(ValueKey('settings-row-${f.key}'));
       await reveal(tester, row);
       expect(row, findsOneWidget, reason: f.key);
@@ -125,7 +138,7 @@ void main() {
       if (find.descendant(of: row, matching: find.text('Sentiasa hidup')).evaluate().isNotEmpty) locked++;
     }
     expect(locked, 9, reason: 'prayerBar, clock, prayerSequenceSafety, zone, location, prayerSources, prayerCalc, surauInfo, language; the Lanjutan features are hidden from an admin');
-    expect(off, unorderedEquals(['firstAzanSubuh', 'tilawah', 'appLock', 'finance', 'tabungCard', 'liveCamera']), reason: 'the features with no settings are switches now; Kewangan and Kad tabung are off until switched on');
+    expect(off, unorderedEquals(['firstAzanSubuh', 'tilawah', 'appLock', 'finance', 'tabungCard']), reason: 'the features with no settings are switches now; Kewangan and Kad tabung are off until switched on');
 
     await reveal(tester, find.text('Kiraan detik iqamah'));
     await tester.tap(find.text('Kiraan detik iqamah'));

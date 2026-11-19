@@ -77,7 +77,7 @@
 .card__ribbon {
   position: absolute;
   top: 2.6rem;
-  right: -4.4rem;
+  inset-inline-end: -4.4rem;
   width: 16rem;
   padding: 0.45rem 0;
   transform: rotate(45deg);
@@ -114,7 +114,7 @@
 .pengumuman__sub {
   position: absolute;
   top: 1.1rem;
-  right: 1.8rem;
+  inset-inline-end: 1.8rem;
   font-size: 1.05rem;
   font-weight: 700;
   opacity: 0.75;
@@ -328,7 +328,7 @@
 
 /* Wide cards (Islamic text) run from the left gutter to the right gutter: the Arabic needs the line length. */
 .card--wide {
-  right: calc(56rem + 2 * var(--gutter) - 100vw);
+  inset-inline-end: calc(56rem + 2 * var(--gutter) - 100vw);
 }
 .card__head {
   flex: none;
@@ -338,7 +338,7 @@
   gap: 1.2rem;
   min-width: 0;
 }
-.card__head > :first-child { margin-right: auto; }
+.card__head > :first-child { margin-inline-end: auto; }
 
 /* ---- Hadis: tag | Arabic (right) / Malay (left) | source ------------------ */
 .card--hadis {
@@ -390,7 +390,7 @@
 /* grade chip beside the tag */
 .hadis__grade {
   flex: none;
-  margin-left: 1rem;
+  margin-inline-start: 1rem;
   padding: 0.1rem 0.8rem;
   border: 1px solid var(--accent);
   border-radius: 999px;
@@ -528,7 +528,7 @@
 }
 .wt__day {
   font-style: normal;
-  margin-left: 0.5rem;
+  margin-inline-start: 0.5rem;
   color: var(--accent);
   font-weight: 700;
 }
@@ -554,7 +554,7 @@
   flex-direction: column;
   gap: 0.4rem;
 }
-.tugasan__day + .tugasan__day { border-left: 1px solid rgb(var(--accent-rgb) / 0.28); padding-left: 1.4rem; }
+.tugasan__day + .tugasan__day { border-inline-start: 1px solid rgb(var(--accent-rgb) / 0.28); padding-inline-start: 1.4rem; }
 .tugasan__date {
   margin: 0;
   font-size: 1.3rem;
@@ -614,7 +614,7 @@
   text-overflow: ellipsis;
 }
 .tugasan__days.cols-3 { gap: 1rem; }
-.tugasan__days.cols-3 .tugasan__day + .tugasan__day { padding-left: 1rem; }
+.tugasan__days.cols-3 .tugasan__day + .tugasan__day { padding-inline-start: 1rem; }
 .tugasan__days.cols-3 .tugasan__name { font-size: 1.3rem; }
 .tugasan__days.cols-3 .tugasan__photo { width: 2.8rem; height: 2.8rem; font-size: 1.2rem; }
 
@@ -629,7 +629,7 @@
 .stage[data-kind='content'] .card--tugasan { gap: 0.8rem; padding: 1.7rem 2.6rem 1.6rem; }
 .stage[data-kind='content'] .card--tugasan .tugasan__days { gap: 2.6rem; }
 .stage[data-kind='content'] .card--tugasan .tugasan__day { gap: 0.9rem; min-height: 0; }
-.stage[data-kind='content'] .card--tugasan .tugasan__day + .tugasan__day { padding-left: 2.6rem; }
+.stage[data-kind='content'] .card--tugasan .tugasan__day + .tugasan__day { padding-inline-start: 2.6rem; }
 .stage[data-kind='content'] .card--tugasan .tugasan__date { font-size: 2.3rem; line-height: 1.2; }
 .stage[data-kind='content'] .card--tugasan .tugasan__rows {
   flex: 1 1 0;
@@ -768,7 +768,7 @@
   opacity: 0.95;
   overflow-wrap: anywhere;
 }
-.ayat__trno { color: var(--accent); margin-right: 0.4rem; }
+.ayat__trno { color: var(--accent); margin-inline-end: 0.4rem; }
 .ayat__credit {
   flex: none;
   display: flex;
@@ -829,7 +829,7 @@
 .ticker__track {
   display: inline-block;
   white-space: nowrap;
-  padding-left: 100%;
+  padding-inline-start: 100%;
   font-size: 1.5rem;
   font-weight: 600;
   line-height: 1;
@@ -882,7 +882,7 @@
   animation: card-in 400ms ease-out both;
   --fit: 1;
 }
-.zikir__page.has-repeat { padding-right: 12rem; padding-left: 12rem; }
+.zikir__page.has-repeat { padding-inline-end: 12rem; padding-inline-start: 12rem; }
 .zikir__ar {
   /* The deep tails of Amiri (meem, kasrah) reach below the line box: keep them off the Malay line under it. */
   padding-bottom: 0.3em;
@@ -905,7 +905,7 @@
 .zikir__page.is-s .zikir__ms { font-size: calc(1.6rem * var(--fit) * var(--scale, 1) * var(--boost, 1)); }
 .zikir__repeat {
   position: absolute;
-  right: 2.2rem;
+  inset-inline-end: 2.2rem;
   top: 50%;
   transform: translateY(-50%);
   width: 7.6rem;
@@ -1014,7 +1014,7 @@
 }
 .tabung__dots {
   flex: none;
-  margin-left: auto;
+  margin-inline-start: auto;
   display: flex;
   align-items: center;
   gap: 0.625rem;
@@ -1030,7 +1030,7 @@
   background: var(--tb-dot);
 }
 .tabung__dots i.is-on { width: 2.4rem; background: var(--accent); }
-.tabung__dots .num { margin-left: 0.42rem; }
+.tabung__dots .num { margin-inline-start: 0.42rem; }
 .tabung__body {
   --f: calc(var(--fit, 1) * var(--scale, 1));
   flex: 1;
@@ -1060,7 +1060,7 @@
 }
 .tabung__new {
   display: inline-block;
-  margin-left: 0.83rem;
+  margin-inline-start: 0.83rem;
   padding: 0.16em 0.55em 0.2em;
   border-radius: 999px;
   background: var(--accent);
@@ -1077,7 +1077,7 @@
 .tabung__fig {
   display: block;
   min-width: 0;
-  text-align: right;
+  text-align: end;
   white-space: nowrap;
 }
 .tabung__value {
@@ -1091,7 +1091,7 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 .tabung__value small {
-  margin-right: 0.22em;
+  margin-inline-end: 0.22em;
   font-size: 0.4em;
   font-weight: 700;
   letter-spacing: 0;
@@ -1229,7 +1229,7 @@
   animation: tabung-bloom 1.2s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
 @keyframes tabung-bloom { from { transform: scale(0.4) rotate(-45deg); opacity: 0; } }
-.tabung__thanks { min-width: 0; text-align: right; }
+.tabung__thanks { min-width: 0; text-align: end; }
 .tabung__thanks b {
   display: block;
   font-size: calc(var(--nm, 2.4rem) * 1.09 * var(--f, 1));
@@ -1287,10 +1287,10 @@
   align-items: flex-start;
 }
 .tabung__hinfo .tabung__name { margin-bottom: 1.35rem; }
-.tabung__hinfo .tabung__fig { width: 100%; text-align: left; }
+.tabung__hinfo .tabung__fig { width: 100%; text-align: start; }
 .tabung__hinfo .tabung__tgt { display: block; margin-top: 1.56rem; white-space: normal; }
 .tabung__hinfo :is(.tabung__sub, .tabung__done) { margin-top: 1.56rem; }
-.tabung__hinfo .tabung__thanks { margin-top: 1.56rem; text-align: left; }
+.tabung__hinfo .tabung__thanks { margin-top: 1.56rem; text-align: start; }
 .tabung__needed {
   display: inline-block;
   margin-top: 1.04rem;
@@ -1328,7 +1328,7 @@
   font-weight: 600;
   color: var(--tb-muted);
 }
-.tabung__fsub .tabung__dots { margin-left: 0; }
+.tabung__fsub .tabung__dots { margin-inline-start: 0; }
 .tabung__minis {
   flex: 1;
   min-height: 0;
@@ -1358,10 +1358,10 @@
   background: var(--tb-row-bg);
   overflow: hidden;
 }
-.tabung__mini .tabung__fig { text-align: left; }
+.tabung__mini .tabung__fig { text-align: start; }
 .tabung__mini .tabung__prog { gap: 0.83rem; }
 .tabung__mini .tabung__pct { min-width: 0; }
-.tabung__mini .tabung__thanks { text-align: left; }
+.tabung__mini .tabung__thanks { text-align: start; }
 .tabung__mini.is-hot { border: 0.16rem solid var(--accent); background: var(--tb-hot-bg); }
 
 /* Summary page (two pages or more): every fund and its figure, then the total of all funds. */
@@ -1399,7 +1399,7 @@
   color: var(--tb-amt);
   white-space: nowrap;
 }
-.tabung__samt small { margin-right: 0.25em; font-size: 0.55em; color: var(--tb-muted); }
+.tabung__samt small { margin-inline-end: 0.25em; font-size: 0.55em; color: var(--tb-muted); }
 .tabung__srow .tabung__new { font-size: calc(1.2rem * var(--f, 1)); }
 .tabung__total {
   --amt: 4.375rem;

@@ -67,6 +67,10 @@ describe('planListeners', () => {
     });
   });
 
+  it('also plans the IPv6 loopback (S1)', () => {
+    expect(planListeners({}, null).http6).toEqual({ host: '::1' });
+  });
+
   it('rejects an invalid port and ignores SURAU_HTTP_LAN / SURAU_HOST', () => {
     const tls = fixtureTls();
     expect(() => planListeners({ SURAU_HTTPS_PORT: '99999' }, tls)).toThrow(/SURAU_HTTPS_PORT/);
@@ -308,6 +312,64 @@ describe('TLS failures keep the loopback kiosk up (Q1, M1)', () => {
     } finally {
       console.warn = warn;
       await new Promise<void>((done) => blocker.close(() => done()));
+    }
+  });
+});
+
+describe('IPv6 loopback listener (S1)', () => {
+  const ipv6 = await_ipv6();
+  function await_ipv6(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const s = net.createServer();
+      s.once('error', () => resolve(false));
+      s.listen({ host: '::1', port: 0 }, () => s.close(() => resolve(true)));
+    });
+  }
+
+  it('127.0.0.1 and [::1] both answer on the same port', async () => {
+    if (!(await ipv6)) return;
+    const l = await startListeners({
+      dbPath: ':memory:', staticDir: null, tls: null,
+      plan: { http: { host: '127.0.0.1', port: 0 }, http6: { host: '::1' }, https: null, warnings: [] }, env: {},
+    });
+    started.push(l);
+    expect((await get(`http://127.0.0.1:${l.httpPort}/api/health`)).status).toBe(200);
+    expect((await get(`http://[::1]:${l.httpPort}/api/health`)).status).toBe(200);
+  });
+
+  it('a [::1] port already taken by another process: the box refuses to start with a clear message (F9)', async () => {
+    if (!(await ipv6)) return;
+    const blocker = net.createServer();
+    await new Promise<void>((done) => blocker.listen({ host: '::1', port: 0 }, done));
+    const busy = (blocker.address() as net.AddressInfo).port;
+    try {
+      await expect(
+        startListeners({
+          dbPath: ':memory:', staticDir: null, tls: null,
+          plan: { http: { host: '127.0.0.1', port: busy }, http6: { host: '::1' }, https: null, warnings: [] }, env: {},
+        }),
+      ).rejects.toThrow(/\[::1\]:\d+ \(EADDRINUSE\)/);
+      // the 127.0.0.1 listener was closed again, not left running
+      await expect(get(`http://127.0.0.1:${busy}/api/health`)).rejects.toThrow();
+    } finally {
+      await new Promise<void>((done) => blocker.close(() => done()));
+    }
+  });
+
+  it('no usable IPv6 address (EADDRNOTAVAIL): the box stays up on 127.0.0.1 and warns once (F9)', async () => {
+    const warnings: string[] = [];
+    const warn = console.warn;
+    console.warn = (...a: unknown[]) => { warnings.push(a.join(' ')); };
+    try {
+      const l = await startListeners({
+        dbPath: ':memory:', staticDir: null, tls: null,
+        plan: { http: { host: '127.0.0.1', port: 0 }, http6: { host: '2001:db8::dead:beef' }, https: null, warnings: [] }, env: {},
+      });
+      started.push(l);
+      expect((await get(`http://127.0.0.1:${l.httpPort}/api/health`)).status).toBe(200);
+      expect(warnings.filter((w) => w.includes('[::1]'))).toHaveLength(1);
+    } finally {
+      console.warn = warn;
     }
   });
 });

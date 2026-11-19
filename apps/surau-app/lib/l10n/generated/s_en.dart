@@ -1873,8 +1873,8 @@ class SEn extends S {
   }
 
   @override
-  String contentSurah(int n) {
-    return 'Surah $n';
+  String contentSurah(int n, String name) {
+    return 'Surah $n · $name';
   }
 
   @override
@@ -2498,12 +2498,173 @@ class SEn extends S {
   String get liveSignInWaiting => 'Waiting for you to sign in';
 
   @override
+  String get errcVideoBusy =>
+      'Another video is being uploaded to MAXCOM. Try again shortly.';
+
+  @override
+  String get errcCameraStale => 'The camera settings changed. Try again.';
+
+  @override
+  String get errcCameraPasswordAgain => 'Type the camera password again.';
+
+  @override
+  String get liveSignInByAdmin => 'An administrator is signing in to YouTube.';
+
+  @override
   String liveSignedInAs(String channel) {
     return 'Connected to $channel';
   }
 
   @override
   String get liveSignOut => 'Sign out of YouTube';
+
+  @override
+  String get liveYoutubeConnected => 'YouTube connected';
+
+  @override
+  String liveYoutubeConnectedSnack(String channel) {
+    return 'YouTube connected: $channel';
+  }
+
+  @override
+  String get liveYoutubeAtSurauOnly =>
+      'Sign in to YouTube or change the channel on the surau Wi-Fi only.';
+
+  @override
+  String get liveYoutubeNotConnected => 'YouTube is not connected';
+
+  @override
+  String liveDestOn(String channel) {
+    return 'YouTube: Yes, $channel';
+  }
+
+  @override
+  String get liveDestOff => 'YouTube: No';
+
+  @override
+  String get liveDestSkip =>
+      'YouTube is not selected: the broadcast goes to the surau screen only.';
+
+  @override
+  String get liveDestNone => 'YouTube is not connected yet';
+
+  @override
+  String liveYoutubeUnknown(String channel) {
+    return 'YouTube: cannot be checked right now (last seen: $channel)';
+  }
+
+  @override
+  String get liveYoutubeUnknownNoLast => 'YouTube: cannot be checked right now';
+
+  @override
+  String get liveYoutubeAskTitle => 'YouTube cannot be used';
+
+  @override
+  String liveYoutubeAskBody(String reason) {
+    return 'YouTube cannot be used right now: $reason. Start the broadcast to the surau screen only?';
+  }
+
+  @override
+  String get liveYoutubeWhyNoInternet => 'there is no internet';
+
+  @override
+  String get liveYoutubeWhyRevoked => 'it needs to be connected again';
+
+  @override
+  String get liveYoutubeWhyNeedsSignIn => 'it is not signed in';
+
+  @override
+  String get liveYoutubeWhyAskAdmin =>
+      'it is not signed in, ask an administrator to sign in';
+
+  @override
+  String get liveYoutubeWhyUnknownNoLast =>
+      'the account cannot be checked right now';
+
+  @override
+  String liveYoutubeWhyUnknown(String channel) {
+    return 'the account cannot be checked right now (last seen: $channel)';
+  }
+
+  @override
+  String get tvLangArNeedsUpdate => 'Update MAXCOM to use Arabic';
+
+  @override
+  String get tvLangArAskTitle => 'Change the TV screen language to Arabic?';
+
+  @override
+  String get tvLangArAskBody =>
+      'The Arabic Art theme suits a TV screen in Arabic best. You can change it back under TV screen language.';
+
+  @override
+  String get tvLangArAskYes => 'Yes';
+
+  @override
+  String get tvLangArAskNo => 'No';
+
+  @override
+  String get liveYoutubeAskYes => 'Yes';
+
+  @override
+  String get liveYoutubeChoiceFailed =>
+      'The YouTube choice could not be saved. Try again.';
+
+  @override
+  String get liveYoutubeRevoked => 'YouTube needs to be connected again';
+
+  @override
+  String get liveDestOnPlain => 'YouTube: Yes';
+
+  @override
+  String get liveDestLink => 'Connect';
+
+  @override
+  String get liveDestLive2 => 'To the surau screen and YouTube';
+
+  @override
+  String get liveDestLive1 => 'To the surau screen only';
+
+  @override
+  String get liveDestRec => 'Recording: Yes';
+
+  @override
+  String get liveDestRecOff => 'Recording: No';
+
+  @override
+  String get liveSignInOpenGoogle => 'Open the Google page';
+
+  @override
+  String liveSignInWaitingMin(int minutes) {
+    return 'Waiting for approval… (expires in $minutes min)';
+  }
+
+  @override
+  String get liveSignInDenied => 'Sign-in was cancelled';
+
+  @override
+  String get liveSignInExpired => 'The code has expired. Try again.';
+
+  @override
+  String get liveSignInRevoked =>
+      'YouTube access was withdrawn or has expired. Please sign in again.';
+
+  @override
+  String get liveSignOutChange => 'Change channel / Sign out';
+
+  @override
+  String get liveSignOutConfirmTitle => 'Change channel or sign out?';
+
+  @override
+  String get liveSignOutConfirmBody =>
+      'The next live will not reach YouTube until someone signs in again.';
+
+  @override
+  String get liveSignOutConfirmAction => 'Sign out';
+
+  @override
+  String liveSettingsSummaryConnected(String channel, String camera) {
+    return 'YouTube connected: $channel. External camera $camera';
+  }
 
   @override
   String get liveRecordingsPending => 'Recordings not saved yet';
@@ -3017,6 +3178,10 @@ class SEn extends S {
       'The cloud cannot be reached. The upload starts by itself once it can.';
 
   @override
+  String get uploadErrorNoBox =>
+      'The upload starts by itself when the phone is on the surau Wi-Fi.';
+
+  @override
   String get uploadErrorUnlock =>
       'Open MAXCOM and unlock it to continue the upload.';
 
@@ -3090,6 +3255,10 @@ class SEn extends S {
 
   @override
   String get settingsLanjutanDimmed => 'Not used when Phone direct is chosen';
+
+  @override
+  String get settingsReencodeUnsupported =>
+      'Re-encode is not supported on this box. Use Copy as is.';
 
   @override
   String get settingsComingSoon => 'Available in a future release';
@@ -3173,8 +3342,39 @@ class SEn extends S {
 
   @override
   String settingsAyatHelp(String name, int n) {
-    return '$name has $n verses: choose from 1 to $n. At most 5 verses at once.';
+    return '$name has $n verses. At most 3 verses at once.';
   }
+
+  @override
+  String get settingsAyatCountLabel => 'Number of verses';
+
+  @override
+  String settingsAyatSurahEnds(int n) {
+    return 'This surah ends at verse $n.';
+  }
+
+  @override
+  String settingsAyatTv(String name, int n, int a, int b) {
+    return 'Shown on the TV: Surah $name ($n): verses $a to $b';
+  }
+
+  @override
+  String settingsAyatTvOne(String name, int n, int a) {
+    return 'Shown on the TV: Surah $name ($n): verse $a';
+  }
+
+  @override
+  String settingsAyatTypeHint(int n) {
+    return 'Type the verse number (1 to $n)';
+  }
+
+  @override
+  String settingsAyatTypeError(int n) {
+    return 'Enter a number between 1 and $n';
+  }
+
+  @override
+  String get settingsAyatOldRange => 'The old range was shortened to 3 verses.';
 
   @override
   String settingsHijriMonthN(int n) {
@@ -3266,6 +3466,9 @@ class SEn extends S {
 
   @override
   String get settingsOrderOff => 'off';
+
+  @override
+  String get settingsOrderVideoLength => 'As long as the video';
 
   @override
   String get settingsOrderUp => 'Move up';
@@ -6353,10 +6556,11 @@ class SEn extends S {
   }
 
   @override
-  String get valAyatOrder => 'Verse from must come before or equal Verse to';
+  String get valAyatOrder =>
+      'The start verse must come before or equal the last verse';
 
   @override
-  String get valAyatMax => 'At most 5 verses per display';
+  String get valAyatMax => 'At most 3 verses per display';
 
   @override
   String get valUnknownFeature => 'Unknown feature';
@@ -7017,6 +7221,10 @@ class SEn extends S {
   String get errcYoutubeNetwork => 'Cannot reach YouTube. Try again.';
 
   @override
+  String get errcYoutubeAtBox =>
+      'YouTube sign-in is now made on the MAXCOM at the surau. Update the app and try on the surau Wi-Fi.';
+
+  @override
   String get errcCatchupOff =>
       'Uploading recordings to YouTube is not turned on';
 
@@ -7574,7 +7782,7 @@ class SEn extends S {
   String get ra6LinkBoxError => 'MAXCOM at the surau: error';
 
   @override
-  String get liveNoticeShare => 'Share the live link';
+  String get liveNoticeShare => 'Share the link';
 
   @override
   String get liveNoticeTitle => 'Live stream notice';
@@ -7598,17 +7806,64 @@ class SEn extends S {
   String get liveNoticePickEmpty => 'No user found.';
 
   @override
-  String get liveNoticeStarted =>
-      'The live has started. Share the link with the AJK and the congregation.';
+  String get liveNoticeStarted => 'The live is running.';
 
   @override
   String get liveNoticeShareGo => 'Share';
+
+  @override
+  String get liveNoticeCardBadge => 'LIVE NOW';
+
+  @override
+  String get liveNoticePictureFailed =>
+      'The picture could not be made. Only the text was shared.';
+
+  @override
+  String get liveNoticeCopiedCaption =>
+      'Text copied, paste it as the caption if the text does not appear';
+
+  @override
+  String get liveNoticeQrHint =>
+      'Scan with a phone camera. WhatsApp will open with this message.';
+
+  @override
+  String get liveNoticeEditDone => 'Done';
+
+  @override
+  String get liveNoticeEditText => 'Edit text';
+
+  @override
+  String get liveNoticeNoPicture => 'No picture';
+
+  @override
+  String get liveNoticeMore => 'More';
+
+  @override
+  String get liveNoticeToSelf => 'Send to myself';
+
+  @override
+  String get liveNoticeCopy => 'Copy text';
+
+  @override
+  String get liveNoticeFromPhone => 'Send from a phone';
+
+  @override
+  String get liveNoticeWhatsApp => 'Share to WhatsApp';
 
   @override
   String get liveNoticeCopied => 'Text copied. Paste it in WhatsApp.';
 
   @override
   String get liveNoticeShareFailed => 'The text could not be shared.';
+
+  @override
+  String liveNoticeEditedBy(String name, String time) {
+    return 'Edited by $name, $time';
+  }
+
+  @override
+  String get liveNoticeChangedMeanwhile =>
+      'The text was changed by someone else. The latest text is shown; check it before sharing.';
 
   @override
   String waOpensTo(String number) {
@@ -8203,4 +8458,172 @@ class SEn extends S {
   String needsBoth(String first, String second) {
     return '$first and $second';
   }
+
+  @override
+  String get errVideoTooBig =>
+      'The video is too big. At most 300 MB and 720p; shrink or trim it in the phone\'s Gallery first.';
+
+  @override
+  String get errVideoTooLong =>
+      'The video is too long. At most 10 minutes; trim it in the phone\'s Gallery first.';
+
+  @override
+  String get errVideoNotH264 =>
+      'The video must be an MP4 with H.264. Pick another video or change its format first.';
+
+  @override
+  String get errVideoNoSpace =>
+      'The box does not have enough storage. Delete an old video first.';
+
+  @override
+  String get errVideoUploadFailed =>
+      'The video upload failed. Make sure the phone is still on the surau Wi-Fi, then try again.';
+
+  @override
+  String get kindDescVideo =>
+      'Videos you upload or take from YouTube, played full screen on the TV.';
+
+  @override
+  String get videoSourceLabel => 'Video source';
+
+  @override
+  String get videoSourceUpload => 'Upload';
+
+  @override
+  String get videoSourceYoutube => 'YouTube';
+
+  @override
+  String get videoSourceRakaman => 'Recording';
+
+  @override
+  String get videoPick => 'Choose a video from the phone';
+
+  @override
+  String get videoPickAgain => 'Choose another video';
+
+  @override
+  String get videoChecking => 'Checking the video...';
+
+  @override
+  String videoCompressing(int percent) {
+    return 'Shrinking the video to 720p... $percent%';
+  }
+
+  @override
+  String videoUploading(int percent) {
+    return 'Uploading to the box... $percent%';
+  }
+
+  @override
+  String get videoUploadedOk => 'Uploaded to the box';
+
+  @override
+  String videoPickedLine(String name, String size) {
+    return '$name ($size)';
+  }
+
+  @override
+  String get videoCloudNote =>
+      'Videos can only be uploaded on the surau Wi-Fi. Connect the phone to the surau Wi-Fi, or add a YouTube video (possible from anywhere).';
+
+  @override
+  String videoStorageLeft(String size) {
+    return 'Box storage: $size left';
+  }
+
+  @override
+  String get videoLimitsNote =>
+      'At most 300 MB, 10 minutes and 720p. Trim it in the phone\'s Gallery first if needed.';
+
+  @override
+  String get videoCannotCompress =>
+      'This phone cannot shrink videos. Choose an MP4 (H.264) video that is already within the limits.';
+
+  @override
+  String get videoYoutubeLink => 'YouTube link';
+
+  @override
+  String get videoYoutubeHint => 'Paste the link or the video ID';
+
+  @override
+  String get videoYoutubeBad => 'This is not a YouTube video link.';
+
+  @override
+  String get videoYoutubeLive =>
+      'This is a live broadcast. To show a live on the TV, use Live. After it ends, its recording can be chosen here.';
+
+  @override
+  String get videoYoutubeNote =>
+      'Videos from other channels may show ads or be removed by their owner. Needs internet at the surau; without it the video is skipped.';
+
+  @override
+  String get videoRakamanNote =>
+      'A clip of the surau\'s lecture recording on YouTube. Set when it starts and stops.';
+
+  @override
+  String get videoClipStart => 'Start (mm:ss)';
+
+  @override
+  String get videoClipEnd => 'End (mm:ss)';
+
+  @override
+  String get videoClipOrder => 'The end must be after the start.';
+
+  @override
+  String get videoClipLong => 'A clip can be 10 minutes at most.';
+
+  @override
+  String get videoNeedsFile =>
+      'Choose a video and wait for it to finish uploading.';
+
+  @override
+  String get videoWaitUpload => 'Wait for the upload to finish before saving.';
+
+  @override
+  String get videoEstimate => 'Estimated length (minutes)';
+
+  @override
+  String get videoEstimateHint =>
+      'YouTube does not tell us the length. Give a rough length (1 to 10 minutes); the screen moves on as soon as the video ends.';
+
+  @override
+  String get videoEstimateBad => 'Enter a number from 1 to 10.';
+
+  @override
+  String get videoCloudReadOnly =>
+      'The details of an uploaded video can only be changed on the surau Wi-Fi.';
+
+  @override
+  String get videoPreview => 'Preview';
+
+  @override
+  String get videoPreviewHint =>
+      'On the TV: the video fills the screen with the surau name and the clock over it. No other text.';
+
+  @override
+  String videoRowUpload(String length) {
+    return 'Upload, $length';
+  }
+
+  @override
+  String get videoRowYoutube => 'YouTube';
+
+  @override
+  String videoRowRakaman(String start, String end) {
+    return 'Recording clip $start to $end';
+  }
+
+  @override
+  String get videoSoundOn => 'With sound';
+
+  @override
+  String get videoExpiredSuggest =>
+      'The end date has passed. Delete it to save space?';
+
+  @override
+  String get videoFileLost =>
+      'The file is not on this box; it is skipped on the TV.';
+
+  @override
+  String get videoFetching => 'Getting the title from YouTube...';
 }

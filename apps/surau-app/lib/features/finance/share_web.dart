@@ -73,3 +73,37 @@ Future<ShareResult> share(Uint8List bytes, String filename, String mime) async {
     return const ShareResult('other', completed: false);
   }
 }
+
+Future<bool> whatsAppInstalled() async => false;
+
+/// The picture and the text through navigator.share when the browser can
+/// share a file; else the text alone (unavailable when the browser has no
+/// share at all, and the caller then opens wa.me or copies).
+Future<ShareResult> shareNotice(String text, Uint8List? picture, bool toWhatsApp) async {
+  final nav = web.window.navigator;
+  if (picture != null && nav.has('share')) {
+    final file = web.File(
+      <JSAny>[picture.toJS].toJS,
+      'siaran.jpg',
+      web.FilePropertyBag(type: 'image/jpeg'),
+    );
+    final data = web.ShareData(files: <web.File>[file].toJS, text: text);
+    var can = false;
+    try {
+      can = nav.canShare(data);
+    } on Object {
+      can = false;
+    }
+    if (can) {
+      try {
+        await nav.share(data).toDart;
+        return const ShareResult('other');
+      } on Object {
+        return const ShareResult('other', completed: false);
+      }
+    }
+  }
+  return shareText(text);
+}
+
+Future<void> cleanNotice() async {}

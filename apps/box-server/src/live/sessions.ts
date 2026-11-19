@@ -25,6 +25,8 @@ import { getSettings } from '../settingsStore.ts';
 import { Aligner, DEFAULT_INITIAL_DELAY_MS } from './align.ts';
 import type { AlignerOptions } from './align.ts';
 import { cameraPullUrl, cameraSecrets } from './camera.ts';
+import { EncoderCapability } from './encoder.ts';
+import type { EncoderProbe } from './encoder.ts';
 import type { CameraRecord, CameraTestResult } from './camera.ts';
 import type { FirewallState } from './firewall.ts';
 import type { LiveRuntime, MediamtxPath } from './mediamtx.ts';
@@ -32,6 +34,7 @@ import { LevelMeter } from './levels.ts';
 import { MONITOR_RATE, Mixer } from './mixer.ts';
 import type { MixerOptions, MixerStartConfig, MixerStatus, MixUnit, VolumeTarget } from './mixer.ts';
 import { KIOSK_AUDIO_PATH, Relay } from './relay.ts';
+import { FrameGrabber } from './noticeFrame.ts';
 import type { RelayOptions } from './relay.ts';
 
 /** A refusal with the HTTP status and a stable code the app switches on. Messages carry no secret. */
@@ -55,6 +58,8 @@ export const LIVE_MSG = {
   kuliahBatal: 'Kuliah ini telah dibatalkan',
   badRequest: 'Permintaan siaran tidak sah',
   noSession: 'Tiada siaran sedang berjalan',
+  noNotice: 'Tiada siaran YouTube yang sedang berjalan',
+  badNotice: 'Teks tidak sah: perlu mengandungi pautan siaran dan tidak lebih 1000 aksara',
   wrongSource: 'Siaran ini tidak dihantar dari pelayar',
   forbidden: 'Siaran ini dimulakan oleh peranti lain',
   rate: 'Terlalu banyak cubaan mula siaran. Cuba lagi sebentar lagi.',
@@ -102,6 +107,8 @@ export interface LiveSessionsDeps {
   monitorMs?: number;
   /** No ingest for this long, at start or after it vanished, ends the session (default 10 min). */
   idleTimeoutMs?: number;
+  /** How long an ended session's YouTube broadcast stays open for a restart of the same kuliah (default 5 min; 0 = never). */
+  youtubeGraceMs?: number;
   /** The media-ports firewall check (cached by the check itself); without it the state is always unknown. */
   firewall?: { check(): Promise<FirewallState>; state(): FirewallState } | null;
   /** No picture for this long after the start (or after it vanished) shows `no_video_from_device` (default 12 s). */
@@ -110,6 +117,10 @@ export interface LiveSessionsDeps {
   dataDir?: string;
   /** Test hook: replaces the ffmpeg executable, arguments and timings of the relay. */
   relayOptions?: Partial<RelayOptions>;
+  /** Test hook: options of the live-notice frame grabber (a spawn stand-in, a clock). */
+  frameOptions?: Partial<import('./noticeFrame.ts').FrameGrabberOptions>;
+  /** Test hook: replaces the H.264 encoder probe (default: runs `ffmpeg -h encoder=libx264` once per ffmpeg path). */
+  encoderProbe?: EncoderProbe;
   /** Pause between tries to set the publisher user and passphrase again after a MediaMTX respawn (default 500). */
   reprovisionMs?: number;
   /** The saved external camera (B1); also set later with `attachCamera`. Only the box reads the full address. */
@@ -195,6 +206,8 @@ interface Session {
   startedBy: string;
   deviceId: string;
   kuliah: { label: string; penceramah: string; topic: string | null } | null;
+  /** The kuliah's start (HH:MM) for the live notice. */
+  kuliahTime: string | null;
   pubUser: string;
   pubPass: string;
   passphrase: string | null;
@@ -203,8 +216,12 @@ interface Session {
   youtubeKey: string | null;
   /** The broadcast is being created after the start answer (a sleeping cloud can take ~20 s). */
   ytPending: boolean;
+  /** The visibility its YouTube broadcast was made with (a restart inside the grace window reuses it only for the same one). */
+  ytPrivacy: string | null;
   /** Why the YouTube leg could not start (a fixed warning code); shown through the status. */
   ytWarning: string | null;
+  /** "Kod semula" was asked but this box cannot encode H.264: the relay runs `copy` (warning `reencode_unsupported`). */
+  reencodeFallback: boolean;
   /** The ffmpeg relay of the box YouTube leg (youtubeVia 'box' with a key); null otherwise. */
   relay: Relay | null;
   /** The kiosk audio leg (ffmpeg: video copy + Opus republished to `surau-kiosk`); null while the kiosk audio is off. */
@@ -305,6 +322,7 @@ export interface StartResult {
 export const MEDIA_PORTS_BLOCKED = 'media_ports_blocked';
 export const NO_VIDEO_FROM_DEVICE = 'no_video_from_device';
 const NO_VIDEO_MS = 12_000;
+const YOUTUBE_GRACE_MS = 300_000;
 const isBlocked = (s: FirewallState): boolean => s === 'missing' || s === 'wrong';
 
 const ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -357,6 +375,9 @@ export class LiveSessions {
   private starting: Promise<StartResult> | null = null;
   private timer: NodeJS.Timeout | null = null;
   private lastKiosk = '';
+  /** The surau-level live notice edit (one per live; ends with it). */
+  private noticeEdit: { sessionId: string; text: string; by: string; at: string } | null = null;
+  private readonly frames: FrameGrabber;
   private ticking = false;
   /** Slow MediaMTX/ffmpeg/YouTube clean-up of ended sessions and legs; a new start waits for it. */
   private cleanup: Promise<void> = Promise.resolve();
@@ -366,8 +387,15 @@ export class LiveSessions {
   private provisionGen = 0;
   /** Starts of the last hour (device and time) for the limiter. */
   private starts: Array<{ at: number; deviceId: string }> = [];
+  /**
+   * The YouTube broadcast of a session that ended a moment ago. It stays open for the grace window so a new start
+   * of the same kuliah on the same leg carries on with it (one kuliah, one recording: an encoder reconnecting to
+   * the same key); it is completed when the window ends or a start for something else comes.
+   */
+  private lingering: { kuliahId: string | null; via: YoutubeVia; broadcastId: string; watchUrl: string | null; key: string; privacy: string | null; timer: NodeJS.Timeout } | null = null;
 
   private readonly d: LiveSessionsDeps;
+  private readonly encoder: EncoderCapability;
   private camera: CameraSource | null;
   private cameraBusy: (() => boolean) | null = null;
   private readonly timing: CombinerTimings;
@@ -381,9 +409,20 @@ export class LiveSessions {
 
   constructor(deps: LiveSessionsDeps) {
     this.d = deps;
+    this.encoder = new EncoderCapability(deps.encoderProbe);
     this.camera = deps.camera ?? null;
     this.timing = { ...COMBINER_DEFAULTS, ...(deps.combiner ?? {}) };
     this.monitorMs = deps.monitorMs ?? 2000;
+    this.frames = new FrameGrabber({
+      ffmpegPath: () => this.d.relayOptions?.ffmpegPath ?? this.d.runtime?.tools.ffmpeg ?? null,
+      api: () => this.d.runtime?.api ?? null,
+      ready: () => this.session?.ready === true,
+      sessionId: () => this.session?.id ?? null,
+      path: PATH,
+      ...(this.d.relayOptions?.rtspPort !== undefined ? { rtspPort: this.d.relayOptions.rtspPort } : {}),
+      ...(this.d.relayOptions?.argsPrefix !== undefined ? { argsPrefix: this.d.relayOptions.argsPrefix } : {}),
+      ...(deps.frameOptions ?? {}),
+    });
     this.idleMs = deps.idleTimeoutMs ?? 600_000;
     // MediaMTX keeps the publisher user and the SRT passphrase in memory only: a respawn loses them
     deps.runtime?.spawnListeners.add(() => this.reprovision());
@@ -471,6 +510,19 @@ export class LiveSessions {
 
   /** The state the kiosk shows. Computed on every call from the cached ingest state and the live settings. */
   kioskLive(): KioskLive {
+    const k = this.kioskLiveBase();
+    // the live notice was edited: the number changes with every edit, so the open apps re-read it
+    const rev = this.noticeRev();
+    return rev !== undefined ? { ...k, noticeRev: rev } : k;
+  }
+
+  /** The edit counter of the live notice (same value as the kiosk view's `noticeRev`); undefined while it was not edited in this live. */
+  noticeRev(): number | undefined {
+    const e = this.noticeEdit;
+    return e !== null && e.sessionId === this.session?.id ? Date.parse(e.at) : undefined;
+  }
+
+  private kioskLiveBase(): KioskLive {
     const settings = getSettings(this.d.db, LOCAL_SURAU_ID).liveOnKiosk;
     const s = this.session;
     const audio = settings.audio === true;
@@ -485,6 +537,62 @@ export class LiveSessions {
     }
     if (!s.ready) return { live: false, since: null, kuliah: s.kuliah, audio, volume, path };
     return { live: true, since: s.readySince, kuliah: s.kuliah, audio, volume, path };
+  }
+
+  /* ------------------------------------------------------------------ live notice (surau-level, one per live) */
+
+  /** The 11-character YouTube video id of the session's watch link (or of its broadcast), null when there is none. */
+  private noticeVideoId(s: Session): string | null {
+    const url = s.watchUrl ?? '';
+    const m = /(?:[?&]v=|\/live\/|youtu\.be\/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/.exec(url);
+    if (m !== null) return m[1]!;
+    return s.watchUrl !== null && s.broadcastId !== null && /^[A-Za-z0-9_-]{11}$/.test(s.broadcastId) ? s.broadcastId : null;
+  }
+
+  /** The notice of the running YouTube live; `{ active: false }` when there is none. No credential or address of a camera is in it. */
+  noticeView(): Record<string, unknown> {
+    const s = this.session;
+    const id = s === null ? null : this.noticeVideoId(s);
+    if (s === null || id === null) return { active: false };
+    const e = this.noticeEdit !== null && this.noticeEdit.sessionId === s.id ? this.noticeEdit : null;
+    return {
+      active: true,
+      videoId: id,
+      watchUrl: `https://www.youtube.com/live/${id}`,
+      startedAt: s.startedAt,
+      kuliah: s.kuliah === null ? null : { title: s.kuliah.label, speaker: s.kuliah.penceramah, time: s.kuliahTime },
+      editedText: e?.text ?? null,
+      editedBy: e?.by ?? null,
+      editedAt: e?.at ?? null,
+      frame: this.frames.available(),
+    };
+  }
+
+  /** Saves (or, with null, clears) the surau's edited notice text; last edit wins. Throws LiveError. */
+  editNotice(text: unknown, by: string): Record<string, unknown> {
+    const s = this.session;
+    const id = s === null ? null : this.noticeVideoId(s);
+    if (s === null || id === null) throw new LiveError(404, 'no_notice', LIVE_MSG.noNotice);
+    if (text === null) this.noticeEdit = null;
+    else {
+      // the watch link must stay in the text, and the text stays one short plain message
+      if (typeof text !== 'string' || text.trim() === '' || text.length > 1000 || !text.includes(`https://www.youtube.com/live/${id}`) || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text)) {
+        throw new LiveError(400, 'bad_notice', LIVE_MSG.badNotice);
+      }
+      // strictly increasing, so the open apps see every edit as a new number
+      const prev = this.noticeEdit !== null && this.noticeEdit.sessionId === s.id ? Date.parse(this.noticeEdit.at) : 0;
+      const at = new Date(Math.max(this.d.now().getTime(), prev + 1)).toISOString();
+      this.noticeEdit = { sessionId: s.id, text, by, at };
+    }
+    this.publishKiosk();
+    return this.noticeView();
+  }
+
+  /** One frame of the running picture as a JPEG; null when there is no live notice or no frame. */
+  async noticeFrame(): Promise<Buffer | null> {
+    const s = this.session;
+    if (s === null || this.noticeVideoId(s) === null) return null;
+    return this.frames.get();
   }
 
   /** The media-ports firewall state (a cached read-only check); unknown when no check is wired. Never throws. */
@@ -510,6 +618,7 @@ export class LiveSessions {
       if (s.noCamera) out.push('no_video_from_camera');
     } else if (s?.noVideo === true) out.push(NO_VIDEO_FROM_DEVICE);
     if (s?.ytWarning != null) out.push(s.ytWarning);
+    if (s?.reencodeFallback === true) out.push('reencode_unsupported');
     if (s !== null && s.reportAudio) {
       const sources = this.audioStatus(s);
       if (sources.some((x) => x.id !== 'camera' && x.state === 'lost')) out.push('audio_source_lost');
@@ -616,6 +725,24 @@ export class LiveSessions {
     return { state: 'ready', ingest: YOUTUBE_INGEST, key: s.youtubeKey };
   }
 
+  /**
+   * Can this box's ffmpeg encode H.264? Never waits: the answer known now (false while the probe runs, when there is no
+   * ffmpeg, or when the last probe could not tell); a probe still needed is started in the background.
+   */
+  relayReencodeCapable(): boolean {
+    const ffmpegPath = this.d.relayOptions?.ffmpegPath ?? this.d.runtime?.tools.ffmpeg;
+    if (ffmpegPath == null) return false;
+    const known = this.encoder.peek(ffmpegPath);
+    if (known !== null) return known;
+    void this.encoder.check(ffmpegPath);
+    return false;
+  }
+
+  /** Starts the encoder probe in the background (at boot), so the first status read already has the answer. */
+  warmEncoderProbe(): void {
+    this.relayReencodeCapable();
+  }
+
   /** Starts ffmpeg for the box YouTube leg. It waits for the picture itself; a problem shows in the status, never in the start. */
   private startRelay(s: Session, yt: { relayVideo: unknown; maxBitrateKbps: unknown }): void {
     const key = this.relayKey();
@@ -623,18 +750,42 @@ export class LiveSessions {
     if (key === null || s.relay !== null || this.d.dataDir === undefined || rt?.api == null) return;
     const ffmpegPath = this.d.relayOptions?.ffmpegPath ?? rt.tools.ffmpeg;
     if (ffmpegPath == null) return;
-    try {
-      const relay = new Relay({ ...this.d.relayOptions, ffmpegPath, api: rt.api, dataDir: this.d.dataDir, sessionId: s.id, path: PATH });
-      s.relay = relay;
-      relay.start({
-        key,
-        relayVideo: yt.relayVideo === 'reencode' ? 'reencode' : 'copy',
-        maxBitrateKbps: typeof yt.maxBitrateKbps === 'number' ? yt.maxBitrateKbps : 2500,
-      });
-      rt.secrets.add(relay.readPassword());
-    } catch {
-      console.warn('live: the YouTube relay could not be started (reason: relay_error)');
+    const launch = (mode: 'copy' | 'reencode'): void => {
+      try {
+        const relay = new Relay({ ...this.d.relayOptions, ffmpegPath, api: rt.api!, dataDir: this.d.dataDir!, sessionId: s.id, path: PATH });
+        s.relay = relay;
+        relay.start({
+          key,
+          relayVideo: mode,
+          maxBitrateKbps: typeof yt.maxBitrateKbps === 'number' ? yt.maxBitrateKbps : 2500,
+        });
+        rt.secrets.add(relay.readPassword());
+      } catch {
+        console.warn('live: the YouTube relay could not be started (reason: relay_error)');
+      }
+    };
+    if (yt.relayVideo !== 'reencode') {
+      launch('copy');
+      return;
     }
+    // "Kod semula" needs libx264: a box without it (the Android build) relays the picture as is, never fails the live
+    const decide = (ok: boolean): void => {
+      if (!ok) {
+        s.reencodeFallback = true;
+        console.warn('live: re-encode is not supported by this box ffmpeg, the relay copies the picture (reason: reencode_unsupported)');
+      }
+      launch(ok ? 'reencode' : 'copy');
+    };
+    const known = this.encoder.peek(ffmpegPath);
+    if (known !== null) {
+      decide(known);
+      return;
+    }
+    void this.encoder.check(ffmpegPath).then((ok) => {
+      // the session may have ended, or another start made the relay, while the probe ran
+      if (this.session !== s || s.relay !== null) return;
+      decide(ok);
+    });
   }
 
   /** Resolves when every clean-up left running by an earlier stop has finished (tests, shutdown, the next start). */
@@ -751,6 +902,7 @@ export class LiveSessions {
     const api = rt.api;
 
     let kuliah: Session['kuliah'] = null;
+    let kuliahTime: string | null = null;
     let meta: YoutubeMeta | null = null;
     const surauName = settings.surauInfo.name.trim();
     if (req.kuliahId !== null) {
@@ -758,6 +910,7 @@ export class LiveSessions {
       if (k === null) throw new LiveError(404, 'kuliah_not_found', LIVE_MSG.noKuliah);
       if (k.status !== 'aktif') throw new LiveError(409, 'kuliah_batal', LIVE_MSG.kuliahBatal);
       const p = getItem(this.d.db, 'penceramah', k.penceramahId, LOCAL_SURAU_ID);
+      kuliahTime = typeof k.time === 'string' && /^\d{2}:\d{2}$/.test(k.time) ? k.time : null;
       kuliah = { label: k.label, penceramah: p?.name ?? '', topic: k.topic !== undefined && k.topic !== '' ? k.topic : null };
       if (p !== null) {
         const kitab = k.kitabId !== undefined ? getItem(this.d.db, 'kitab', k.kitabId, LOCAL_SURAU_ID) : null;
@@ -778,6 +931,7 @@ export class LiveSessions {
       startedBy: actor,
       deviceId,
       kuliah,
+      kuliahTime,
       pubUser: `pub-${id}`,
       pubPass: randomAlnum(32),
       // MediaMTX user-name and password rules: alphanumeric only, so the ffmpeg address needs no escaping
@@ -788,7 +942,9 @@ export class LiveSessions {
       watchUrl: null,
       youtubeKey: null,
       ytPending: false,
+      ytPrivacy: null,
       ytWarning: null,
+      reencodeFallback: false,
       relay: null,
       audioLeg: null,
       audioRetryArmed: false,
@@ -868,10 +1024,20 @@ export class LiveSessions {
         if (settings.liveYoutube.enabled !== true) warnings.push('youtube_off');
         else if (!yt || !yt.signedIn()) warnings.push('youtube_not_signed_in');
         else {
-          // the broadcast is made after the answer: a sleeping cloud must not delay the phone or the kiosk
-          session.ytPending = true;
-          pendingYoutube = () =>
-            this.createBroadcastLater(session, yt, meta ?? { title: Array.from(cleanYoutubeText(`Kuliah ${surauName}`).trim()).slice(0, 100).join('').trim(), description: '', privacy: settings.liveYoutube.privacy }, settings.liveYoutube);
+          const youtubeMeta: YoutubeMeta = meta ?? { title: Array.from(cleanYoutubeText(`Kuliah ${surauName}`).trim()).slice(0, 100).join('').trim(), description: '', privacy: settings.liveYoutube.privacy };
+          const kept = this.takeLingering(req.kuliahId, req.youtubeVia, youtubeMeta.privacy);
+          if (kept !== null) {
+            // the same kuliah again inside the grace window: the open broadcast and its key carry on
+            session.broadcastId = kept.broadcastId;
+            session.watchUrl = kept.watchUrl;
+            session.youtubeKey = kept.key;
+            session.ytPrivacy = youtubeMeta.privacy;
+          } else {
+            session.ytPrivacy = youtubeMeta.privacy;
+            // the broadcast is made after the answer: a sleeping cloud must not delay the phone or the kiosk
+            session.ytPending = true;
+            pendingYoutube = () => this.createBroadcastLater(session, yt, youtubeMeta, settings.liveYoutube);
+          }
         }
       }
 
@@ -987,14 +1153,38 @@ export class LiveSessions {
     if (opts.emergency === true) this.audit('live', 'emergency-stop', actor, null, { sessionId: s.id, startedBy: s.startedBy, stoppedBy: actor });
     // the kiosk goes dark at once; the box clean-up follows
     this.publishKiosk();
-    const job = this.teardown(s);
+    // the broadcast lingers only for a kuliah (a later start of the same kuliah carries on with it); never after an
+    // ad-hoc live (two of those are not one recording) and never after an emergency stop (it must end at once)
+    const job = this.teardown(s, reason !== 'shutdown' && opts.emergency !== true && s.kuliahId !== null);
     this.track(job);
     if (opts.background !== true) await job;
     return { stopped: true };
   }
 
-  /** Everything slow about ending a session; never throws. */
-  private async teardown(s: Session): Promise<void> {
+  /** Completes the lingering broadcast now (window over, another start, shutdown). Never throws. */
+  private endLingering(): Promise<void> {
+    const l = this.lingering;
+    if (l === null) return Promise.resolve();
+    this.lingering = null;
+    clearTimeout(l.timer);
+    return (this.d.youtube?.complete(l.broadcastId) ?? Promise.resolve()).catch(() => undefined);
+  }
+
+  /** The lingering broadcast when this start continues it; any other lingering broadcast is completed. */
+  private takeLingering(kuliahId: string | null, via: YoutubeVia, privacy: string): { broadcastId: string; watchUrl: string | null; key: string } | null {
+    const l = this.lingering;
+    if (l === null) return null;
+    if (kuliahId !== null && l.kuliahId === kuliahId && l.via === via && l.privacy === privacy) {
+      this.lingering = null;
+      clearTimeout(l.timer);
+      return l;
+    }
+    this.track(this.endLingering());
+    return null;
+  }
+
+  /** Everything slow about ending a session; never throws. `linger`: keep the broadcast open for the grace window. */
+  private async teardown(s: Session, linger = false): Promise<void> {
     // the relays go first: ffmpeg must not outlive the credentials it reads with
     const legs = [s.relay, s.audioLeg];
     s.audioLeg = null;
@@ -1003,6 +1193,15 @@ export class LiveSessions {
     await s.combinerOp.catch(() => undefined);
     await this.destroyCombiner(s).catch(() => undefined);
     await this.release(s);
+    const grace = this.d.youtubeGraceMs ?? YOUTUBE_GRACE_MS;
+    if (linger && grace > 0 && s.broadcastId !== null && s.youtubeKey !== null) {
+      this.track(this.endLingering());
+      const timer = setTimeout(() => this.track(this.endLingering()), grace);
+      timer.unref();
+      // a power cut inside the window is covered like one mid-live: the open-broadcast record ends it at the next start
+      this.lingering = { kuliahId: s.kuliahId, via: s.youtubeVia, broadcastId: s.broadcastId, watchUrl: s.watchUrl, key: s.youtubeKey, privacy: s.ytPrivacy, timer };
+      return;
+    }
     if (s.broadcastId !== null) {
       try {
         await this.d.youtube?.complete(s.broadcastId);
@@ -1039,6 +1238,7 @@ export class LiveSessions {
         console.warn('live: could not remove a session user (reason: mediamtx_unreachable)');
       }
     }
+    await this.frames.sweepStale().catch(() => 0);
     if (s.passphrase !== null) {
       try {
         await api.pathsPatch(s.publishPath, { srtPublishPassphrase: '' });
@@ -1052,6 +1252,7 @@ export class LiveSessions {
   async shutdown(): Promise<void> {
     this.stopMonitor();
     await this.stop(undefined, 'system', 'shutdown');
+    this.track(this.endLingering());
     await this.cleanup;
   }
 

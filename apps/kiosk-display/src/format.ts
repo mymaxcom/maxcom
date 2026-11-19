@@ -1,5 +1,6 @@
 import { HIJRI_MONTHS_EN, HIJRI_MONTHS_MS, dateOf, klWeekday, offsetMinutes } from '@surau/core';
 import type { HijriDate } from '@surau/core';
+import { GREG_MONTH_AR, HIJRI_MONTH_AR, PRAYER_AR, WEEKDAY_AR, commaOf } from './i18n.ts';
 import type { Lang } from './i18n.ts';
 
 const KL = 'Asia/Kuala_Lumpur';
@@ -40,7 +41,8 @@ export function fmtClock(
   if (timeFormat === '24h') return { hm: `${p2(h)}:${p2(m)}`, s: sec, ampm: '' };
   const h12 = h % 12 === 0 ? 12 : h % 12;
   const pm = h >= 12;
-  const ampm = lang === 'ms' ? (pm ? 'PTG' : 'PG') : pm ? 'PM' : 'AM';
+  // Arabic: the morning and evening marks of the box screens (ص / م).
+  const ampm = lang === 'ms' ? (pm ? 'PTG' : 'PG') : lang === 'ar' ? (pm ? 'م' : 'ص') : pm ? 'PM' : 'AM';
   return { hm: `${h12}:${p2(m)}`, s: sec, ampm };
 }
 
@@ -64,12 +66,14 @@ export function fmtGregorian(now: Date, lang: Lang, tz: string = KL): string {
   const date = dateOf(now, tz);
   const wd = klWeekday(date);
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];
-  const days = lang === 'ms' ? DAYS_MS : DAYS_EN;
-  const months = lang === 'ms' ? MONTHS_MS : MONTHS_EN;
-  return `${days[wd]}, ${d} ${months[m - 1]} ${y}`;
+  const days = lang === 'ms' ? DAYS_MS : lang === 'ar' ? WEEKDAY_AR : DAYS_EN;
+  const months = lang === 'ms' ? MONTHS_MS : lang === 'ar' ? GREG_MONTH_AR : MONTHS_EN;
+  return `${days[wd]}${commaOf(lang)}${d} ${months[m - 1]} ${y}`;
 }
 
 export function fmtHijri(h: HijriDate, lang: Lang): string {
+  // Arabic: the Arabic month names and the Hijri mark, Western digits like the rest of the Arabic screen.
+  if (lang === 'ar') return `${h.d} ${HIJRI_MONTH_AR[h.m - 1] ?? ''} ${h.y} هـ`;
   const names = lang === 'ms' ? HIJRI_MONTHS_MS : HIJRI_MONTHS_EN;
   const name = names[h.m - 1] ?? '';
   return lang === 'ms' ? `${h.d} ${name} ${h.y}H` : `${h.d} ${name} ${h.y} AH`;
@@ -86,7 +90,8 @@ const LABELS: Record<string, string> = {
   isyak: 'Isyak',
 };
 
-/** Prayer names stay Malay in every language. */
-export function prayerLabel(name: string, _lang: Lang): string {
+/** Prayer names stay Malay in Malay and English; Arabic uses the Arabic names. */
+export function prayerLabel(name: string, lang: Lang): string {
+  if (lang === 'ar') return (PRAYER_AR as Record<string, string>)[name] ?? LABELS[name] ?? name;
   return LABELS[name] ?? name;
 }

@@ -76,6 +76,8 @@ async function makePair(o: { onSleep?: (ms: number, p: Pair) => void; limits?: {
   expect(lines.join('\n')).toContain('Dipautkan ke awan: Surau D\'Waqaf');
   expect(exit).toBe(0);
   worker.setSecret(boxId, loadSyncKey(boxDir)!.wakeSecret);
+  // the YouTube handover is settled here: an unsettled one asks the cloud to wake (F1), which these tests count on their own
+  box.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('youtube_handover', '{\"state\":\"done\"}')").run();
   return pair;
 }
 
@@ -377,6 +379,55 @@ describe('wake and dirty flag', () => {
     expect(a.status().state).toBe('idle');
     expect(a.nextDelayMs).toBe(120_000);
     a.stop();
+  });
+
+  const stateOf = (p: Pair, key: string): string | null => {
+    const r = p.box.surau.db.prepare('SELECT value FROM sync_state WHERE key = ?').get(key);
+    return r === undefined ? null : String(r.value);
+  };
+
+  it('a good dirty check on a box with nothing to sync records last_ok and clears last_error, while last_pull stays put', async () => {
+    const p = await makePair();
+    p.box.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('last_error', 'unreachable'), ('last_pull', '2020-01-01T00:00:00.000Z')").run();
+    const a = agentOf(p);
+    a.start();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(p.worker.dirtyChecks).toBe(1);
+    expect(stateOf(p, 'last_ok')).not.toBeNull();
+    expect(stateOf(p, 'last_error')).toBeNull();
+    expect(stateOf(p, 'last_pull')).toBe('2020-01-01T00:00:00.000Z');
+    expect(a.status().lastError).toBeNull();
+    a.stop();
+  });
+
+  it('a failed dirty check does not move last_ok', async () => {
+    const p = await makePair();
+    p.box.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('last_ok', '2020-01-01T00:00:00.000Z')").run();
+    p.hook.fetch = (async () => {
+      throw new TypeError('fetch failed');
+    }) as typeof fetch;
+    const a = agentOf(p);
+    a.start();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(stateOf(p, 'last_ok')).toBe('2020-01-01T00:00:00.000Z');
+    expect(stateOf(p, 'last_error')).toBe('unreachable');
+    a.stop();
+  });
+
+  it('a completed cycle records last_ok too, and unlink removes it', async () => {
+    const p = await makePair();
+    await agentOf(p).runOnce();
+    expect(stateOf(p, 'last_ok')).toBe(stateOf(p, 'last_pull'));
+    expect(stateOf(p, 'last_ok')).not.toBeNull();
+    // the camera relay numbers belong to the old link: a relink or a restored cloud starts again from 1
+    const setState = (k: string, v: string): void => void p.box.surau.db.prepare('INSERT OR REPLACE INTO sync_state (key, value) VALUES (?, ?)').run(k, v);
+    setState('camera_relay_seq', '7');
+    setState('camera_relay_result', '{"seq":7,"ok":true}');
+    const exit = await runCloudLink(['--data', p.boxDir, '--db', join(p.boxDir, 'box.db'), 'unlink'], { out: () => undefined, err: () => undefined });
+    expect(exit).toBe(0);
+    expect(stateOf(p, 'last_ok')).toBeNull();
+    expect(stateOf(p, 'camera_relay_seq')).toBeNull();
+    expect(stateOf(p, 'camera_relay_result')).toBeNull();
   });
 
   it('a raised dirty flag pulls and clears with the head the pull received, not the seq read earlier; a later change stays flagged', async () => {

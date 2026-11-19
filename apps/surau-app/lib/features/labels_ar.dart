@@ -110,7 +110,7 @@ const Map<String, String> settingLabelsAr = {
   'speed': 'السرعة',
   'hideAfterMinutes': 'الإخفاء بعد (دقائق)',
   'count': 'العدد',
-  'pick': 'طريقة الاختيار',
+  'pick': 'الآيات المعروضة',
   // hadis
   'source': 'مصدر الأحاديث',
   'mix': 'الترتيب',
@@ -128,7 +128,7 @@ const Map<String, String> settingLabelsAr = {
   'hasan_lighairihi': 'حسن لغيره',
   // al-quran
   'surah': 'السورة',
-  'ayatFrom': 'من الآية',
+  'ayatFrom': 'البدء من الآية',
   'ayatTo': 'إلى الآية',
   'showTranslation': 'عرض الترجمة',
   'textSize': 'حجم النص',
@@ -162,6 +162,7 @@ const Map<String, String> settingLabelsAr = {
   'titleTemplate': 'قالب العنوان',
   'descriptionTemplate': 'قالب الوصف',
   'maxBitrateKbps': 'الحد الأقصى لمعدل البت (kbps)',
+  'nextLiveOn': 'YouTube للبث القادم',
   'segmentMinutes': 'مدة كل ملف تسجيل (دقائق)',
   'keepOnDevice': 'حفظ التسجيل على الجهاز',
   // audio
@@ -199,7 +200,7 @@ const Map<String, Map<String, String>> choiceLabelsAr = {
   'transport': {'auto': 'تلقائي', 'tcp': 'TCP', 'udp': 'UDP'},
   'timeFormat': {'12h': '12 ساعة', '24h': '24 ساعة'},
   'switchAt': {'maghrib': 'وقت المغرب', 'midnight': 'منتصف الليل'},
-  'lang': {'auto': 'حسب الموقع', 'ms': 'الملايو', 'en': 'الإنجليزية'},
+  'lang': {'auto': 'تلقائي', 'ms': 'الملايو', 'en': 'الإنجليزية', 'ar': 'العربية'},
   'mode': {'landscape': 'أفقي', 'portrait': 'عمودي'},
   // The theme names are one English name in every language (spec 6.10.2).
   'templateId': {
@@ -216,9 +217,9 @@ const Map<String, Map<String, String>> choiceLabelsAr = {
     'off': 'بلا تغيير',
   },
   'pick': {
-    'daily': 'كل يوم',
+    'daily': 'اختيار يومي',
     'random': 'عشوائي',
-    'manual': 'اختيار يدوي',
+    'manual': 'اختر بنفسك',
   },
   'source': {
     'own': 'قائمتي الخاصة',
@@ -316,6 +317,7 @@ const Map<String, String> settingHelpAr = {
       'المباشر يستهلك أقل قدر من معالج MAXCOM. وإعادة الترميز للهواتف التي ترسل '
       'معدل بت مرتفعًا جدًا.',
   'maxBitrateKbps': 'حسب سرعة الرفع في إنترنت المصلى.',
+  'nextLiveOn': 'اختيار مشترك بين المسؤولين: هل يذهب البث القادم إلى YouTube.',
   'cacheMaxMb':
       'يتوقف تنزيل الصوت عند بلوغ الحد؛ ولا يُحذف الصوت القديم. الجزء الواحد '
       'نحو 40 MB.',
@@ -333,12 +335,17 @@ const Map<String, String> settingHelpAr = {
       'كلما كان الفحص أكثر تكرارًا وصلت التغييرات من المنزل أسرع، لكن تُوقَظ '
       'السحابة أكثر.',
   'lang':
-      'لغة شاشة التلفاز، وليست لغة التطبيق على الهاتف. حسب الموقع: الملايو في '
+      'لغة شاشة التلفاز، وليست لغة التطبيق على الهاتف. الوضع التلقائي حسب الموقع: الملايو في '
       'ماليزيا والإنجليزية في الدول الأخرى.',
 };
 
 /// A sentence under each choice, for the settings drawn as cards.
 const Map<String, Map<String, String>> choiceHelpAr = {
+  'pick': {
+    'daily': 'قراءة القرآن بالترتيب، حتى 3 آيات في اليوم، وتستمر غدًا.',
+    'random': 'آية عشوائية واحدة من القرآن كله، تتغير كل يوم.',
+    'manual': 'تُعرض الآيات التي تختارها كل يوم حتى تغيّرها.',
+  },
   'relayFrom': {
     'box': 'يرسل الهاتف الصورة إلى MAXCOM في المصلى، ويقوم MAXCOM بالبث إلى YouTube.',
     'phone':

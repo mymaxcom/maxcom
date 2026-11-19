@@ -10,8 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:surau_app/app/providers.dart';
+import 'package:surau_app/box/box_client.dart';
+import 'package:surau_app/features/unlock/session_keeper.dart';
 import 'package:surau_app/features/settings_widgets/camera_source_card.dart';
 import 'package:surau_app/features/shell/live_camera_gateway.dart' show DiscoveredCamera;
+import 'package:surau_app/sync/camera_relay_seal.dart';
 
 import 'fakes.dart';
 import 'shell/harness.dart';
@@ -44,6 +47,9 @@ class _Cam {
   String? username;
   String? password;
   Map<String, Object?>? lastTest;
+
+  /// The box restored the camera from the cloud backup and waits for its password (the box drops it on a save).
+  bool passwordNeeded = false;
   final List<Map<String, dynamic>> puts = [];
   int deletes = 0;
   final List<Map<String, dynamic>> tests = [];
@@ -61,6 +67,7 @@ class _Cam {
     'username': username,
     'hasPassword': password != null && password!.isNotEmpty,
     'lastTest': lastTest,
+    if (passwordNeeded && (password == null || password!.isEmpty)) 'passwordNeeded': true,
   };
 }
 
@@ -101,6 +108,7 @@ Future<(ShellHarness, _Cam)> openForm(
   h.handlers['PUT /api/live/camera'] = (r) async {
     final b = jsonDecode(r.body) as Map<String, dynamic>;
     cam.puts.add(b);
+    cam.passwordNeeded = false;
     final u = b['url'] as String;
     if (!RegExp(r'^rtsp://(?:[^@/]*@)?10\.168\.').hasMatch(u)) {
       return jsonResponse(400, {'errors': ['Alamat kamera tidak sah.'], 'code': 'bad_address'});
@@ -183,7 +191,7 @@ void main() {
       expect(k('camera-password-dots'), findsOneWidget);
       expect(k('camera-password'), findsNothing);
       expect(find.text('Tukar kata laluan'), findsOneWidget);
-      expect(find.text('Disimpan bersulit di kotak MAXCOM dan sandaran awan. Tidak dipaparkan semula.'), findsOneWidget);
+      expect(find.text('Disimpan bersulit di kotak MAXCOM sahaja, tidak di awan. Tidak dipaparkan semula.'), findsOneWidget);
       expect(find.text('Ada, AAC'), findsOneWidget);
       expect(find.text('Audio kamera digunakan bersama gambarnya. Sumber lain boleh ditambah dan dicampur sebelum setiap siaran.'), findsOneWidget);
       expect(find.text('Uji sambungan'), findsOneWidget);
@@ -230,6 +238,52 @@ void main() {
     });
   });
 
+  group('restored from the cloud backup (the cloud never holds the password)', () {
+    Future<(ShellHarness, _Cam)> openRestored(WidgetTester tester) async {
+      final cam = _Cam();
+      cam
+        ..password = null
+        ..passwordNeeded = true;
+      final h = await pumpShell(tester, roles: const ['admin']);
+      h.settings['liveCamera'] = {'enabled': true, 'name': 'Kamera Mimbar', 'transport': 'auto'};
+      h.container.invalidate(settingsProvider);
+      await settle(tester);
+      h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(200, cam.masked());
+      h.handlers['PUT /api/live/camera'] = (r) async {
+        final b = jsonDecode(r.body) as Map<String, dynamic>;
+        cam.puts.add(b);
+        cam.passwordNeeded = false;
+        if (b['password'] is String) cam.password = b['password'] as String;
+        return jsonResponse(200, cam.masked());
+      };
+      h.router.go('/settings/liveCamera');
+      await settle(tester);
+      return (h, cam);
+    }
+
+    testWidgets('says the password must be typed again, with the password field open and focused; typing it and Simpan ends the state', (tester) async {
+      final (_, cam) = await openRestored(tester);
+      // address and user name came back; no dots, the password box is open and has the focus
+      expect(tester.widget<TextField>(k('camera-url')).controller!.text, 'rtsp://10.168.1.50:554/stream1');
+      expect(tester.widget<TextField>(k('camera-username')).controller!.text, 'siaran');
+      expect(k('camera-password-dots'), findsNothing);
+      expect(k('camera-password-needed'), findsOneWidget);
+      expect(find.text('Kata laluan kamera perlu ditaip semula'), findsOneWidget);
+      expect(find.text('Alamat dan nama pengguna dipulihkan dari sandaran awan. Kata laluan tidak pernah disimpan di awan.'), findsOneWidget);
+      final field = tester.widget<TextField>(k('camera-password'));
+      expect(field.focusNode!.hasFocus, isTrue);
+
+      await _type(tester, 'camera-password', 'kamera2026');
+      await reveal(tester, save);
+      await tester.tap(save);
+      await settle(tester);
+      expect(cam.puts.single, {'url': 'rtsp://10.168.1.50:554/stream1', 'username': 'siaran', 'password': 'kamera2026'});
+      expect(k('camera-password-needed'), findsNothing);
+      expect(k('camera-password-dots'), findsOneWidget);
+      expect(screenText(tester), isNot(contains('kamera2026')));
+    });
+  });
+
   group('mockup 08: the first time', () {
     testWidgets('empty fields with hints, the audio line says it is not known yet, the password box is open', (tester) async {
       final (h, _) = await openForm(tester, configured: false, name: '');
@@ -238,7 +292,7 @@ void main() {
       expect(find.text('rtsp://10.168.1.50:554/stream1'), findsOneWidget);
       expect(find.text('Kosongkan jika ada dalam alamat'), findsNWidgets(2));
       expect(k('camera-password'), findsOneWidget);
-      expect(find.text('Disimpan bersulit di kotak MAXCOM dan sandaran awan.'), findsOneWidget);
+      expect(find.text('Disimpan bersulit di kotak MAXCOM sahaja, tidak di awan.'), findsOneWidget);
       expect(find.text('Belum diketahui. Dikesan semasa Uji sambungan.'), findsOneWidget);
       await reveal(tester, k('camera-lanjutan'));
       await tester.tap(k('camera-lanjutan'));
@@ -344,13 +398,13 @@ void main() {
       await settle(tester);
       expect(cam.deletes, 1);
       expect(find.text('Padam tetapan kamera'), findsNothing, reason: 'no record left to delete');
-      expect(find.text('Hidupkan untuk menyiarkan kuliah dari kamera IP yang dipasang di surau.'), findsOneWidget);
+      expect(find.text('Hidupkan untuk menyiarkan kuliah dari kamera IP atau CCTV di surau. Masukkan alamat RTSP, atau guna Cari kamera di rangkaian (ONVIF).'), findsOneWidget);
     });
 
     testWidgets('a camera never set up has nothing to delete', (tester) async {
       await openForm(tester, enabled: false, configured: false);
       expect(k('camera-delete'), findsNothing);
-      expect(find.text('Hidupkan untuk menyiarkan kuliah dari kamera IP yang dipasang di surau.'), findsOneWidget);
+      expect(find.text('Hidupkan untuk menyiarkan kuliah dari kamera IP atau CCTV di surau. Masukkan alamat RTSP, atau guna Cari kamera di rangkaian (ONVIF).'), findsOneWidget);
     });
 
     testWidgets('switching on shows the form and saves enabled with the settings', (tester) async {
@@ -551,11 +605,12 @@ void main() {
 
   group('who sees it', () {
     for (final role in ['ajk', 'media', 'treasurer']) {
-      testWidgets('$role does not: the page is not found, nothing is asked of the camera route', (tester) async {
+      testWidgets('$role does not: the route is refused, nothing is asked of the camera route', (tester) async {
         final (h, cam) = await openForm(tester, roles: [role]);
+        // /settings/liveCamera goes to /live/settings/liveCamera, which is for live:settings only
+        expect(h.location, '/');
         expect(k('camera-card'), findsNothing);
         expect(k('camera-url'), findsNothing);
-        expect(find.text('Tiada kebenaran untuk tindakan ini'), findsNothing);
         expect(h.box.seen.where((r) => r.url.path.startsWith('/api/live/camera')), isEmpty);
         expect(cam.puts, isEmpty);
       });
@@ -605,6 +660,235 @@ void main() {
       await tester.tap(k('camera-load-retry'));
       await settle(tester);
       expect(k('camera-url'), findsOneWidget);
+    });
+  });
+
+  group('the camera routes live only on the box', () {
+    const atSurau =
+        'Tetapan kamera hanya boleh dibuat di surau. Sambung telefon ke Wi-Fi surau, kemudian buka halaman ini semula. Di sini anda boleh masukkan alamat RTSP kamera atau guna Cari kamera di rangkaian (ONVIF).';
+
+    testWidgets('a 404 from the camera route shows the at-the-surau card with Cuba lagi, never the raw path', (tester) async {
+      final (h, cam) = await openForm(tester);
+      h.router.go('/settings');
+      await settle(tester);
+      h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(404, {'errors': ['not found: GET /api/live/camera']});
+      h.router.go('/settings/liveCamera');
+      await settle(tester);
+      expect(k('camera-load-error'), findsOneWidget);
+      expect(find.text(atSurau), findsOneWidget);
+      expect(screenText(tester), isNot(contains('not found')));
+      expect(screenText(tester), isNot(contains('/api/live/camera')));
+      expect(k('camera-url'), findsNothing);
+      expect(k('camera-load-retry'), findsOneWidget);
+      // the phone reaches the box again: Cuba lagi brings the form
+      h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(200, cam.masked());
+      await tester.tap(k('camera-load-retry'));
+      await settle(tester);
+      expect(k('camera-url'), findsOneWidget);
+    });
+
+    testWidgets('on the surau Wi-Fi the form with the RTSP address shows', (tester) async {
+      await openForm(tester);
+      expect(k('camera-url'), findsOneWidget);
+      expect(find.text(atSurau), findsNothing);
+    });
+  });
+
+  group('the camera set from anywhere (sealed, sent through the cloud)', () {
+    const boxJwk = {
+      'kty': 'EC',
+      'crv': 'P-256',
+      'x': '_3cj-DakG4KtizzNP0ZmsiA6N2jVMtLgLYY9iZNxEUg',
+      'y': 'RsoTz1uetxQljH94us22AGtsGHfpQERE_jECHeqtlN0',
+      'd': 'Mgiv-LvGFamfSh93EKF5BuhllvQSDIO-GKY9TTdPZ98',
+    };
+    const boxId = 'aaaa000000000001';
+    const pending = 'Dihantar ke kotak. Akan digunakan selepas kotak menerima (biasanya dalam 2 minit).';
+
+    Map<String, Object?> view({
+      bool configured = false,
+      String url = '',
+      String? username,
+      bool hasPassword = false,
+      bool pending = false,
+      String? failure,
+      int seq = 1,
+      bool relay = true,
+    }) => {
+      'configured': configured,
+      'url': url,
+      'username': username,
+      'hasPassword': hasPassword,
+      'lastTest': null,
+      'pending': pending,
+      'failure': failure,
+      'relay': relay ? {'boxId': boxId, 'key': {for (final e in boxJwk.entries) if (e.key != 'd') e.key: e.value}, 'seq': seq} : null,
+    };
+
+    Future<ShellHarness> openCloud(WidgetTester tester) async {
+      final h = await pumpShell(
+        tester,
+        roles: const ['admin'],
+        overrides: [
+          sessionKeeperProvider.overrideWith(
+            (ref) => SessionKeeper(
+              attempt: ({required bool boxOnly}) async => throw const BoxUnreachable('test'),
+              onConnected: (_) {},
+              onRefused: (_) {},
+              onUnavailable: () async {},
+              schedule: (d, f) => Timer(d, f)..cancel(),
+            ),
+          ),
+        ],
+      );
+      h.settings['liveCamera'] = {'enabled': true, 'name': 'Kamera Mimbar', 'transport': 'auto'};
+      h.container.read(sessionProvider.notifier).set(h.session().issuedBy(Uri.parse('https://api.mymaxcom.my'), SessionDto.viaCloud));
+      h.container.invalidate(settingsProvider);
+      await settle(tester);
+      return h;
+    }
+
+    Future<void> go(WidgetTester tester, ShellHarness h) async {
+      h.router.go('/settings/liveCamera');
+      await settle(tester);
+    }
+
+    testWidgets('the RTSP block shows over the cloud; ONVIF and the test say they are at the surau only; no raw error', (tester) async {
+      final h = await openCloud(tester);
+      h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(200, view());
+      await go(tester, h);
+      expect(k('camera-url'), findsOneWidget);
+      expect(k('camera-username'), findsOneWidget);
+      expect(k('camera-password'), findsOneWidget);
+      expect(k('camera-discover'), findsNothing);
+      expect(k('camera-test'), findsNothing);
+      await reveal(tester, k('camera-discover-surau-only'));
+      expect(find.text('Cari kamera (ONVIF) hanya di Wi-Fi surau.'), findsOneWidget);
+      expect(find.text('Uji kamera hanya di Wi-Fi surau.'), findsOneWidget);
+      expect(k('camera-load-error'), findsNothing);
+      expect(screenText(tester), isNot(contains('not found')));
+      expect(screenText(tester), isNot(contains('/api/live/camera')));
+    });
+
+    testWidgets('Simpan seals the address and password to the box key: the cloud gets no address, no login; the note says it was sent', (tester) async {
+      final h = await openCloud(tester);
+      final puts = <Map<String, dynamic>>[];
+      var pend = false;
+      h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(
+        200,
+        view(
+          configured: pend,
+          url: pend ? 'rtsp://10.168.1.20:554/main' : '',
+          username: pend ? 'viewer' : null,
+          hasPassword: pend,
+          pending: pend,
+          seq: pend ? 2 : 1,
+        ),
+      );
+      h.handlers['PUT /api/live/camera'] = (r) async {
+        puts.add(jsonDecode(r.body) as Map<String, dynamic>);
+        pend = true;
+        return jsonResponse(200, view(pending: true, seq: 2));
+      };
+      await go(tester, h);
+      await _type(tester, 'camera-url', 'rtsp://10.168.1.20:554/main');
+      await _type(tester, 'camera-username', 'viewer');
+      await _type(tester, 'camera-password', 'jauh123Rahsia');
+      await reveal(tester, save);
+      await tester.tap(save);
+      await settle(tester);
+
+      expect(puts, hasLength(1));
+      expect(puts.single.keys.toSet(), {'boxId', 'seq', 'sealed'});
+      expect(puts.single['boxId'], boxId);
+      expect(puts.single['seq'], 1);
+      final raw = jsonEncode(puts.single);
+      for (final secret in ['jauh123Rahsia', 'viewer', '10.168.1.20', 'rtsp://']) {
+        expect(raw, isNot(contains(secret)));
+      }
+      // only the box key opens it, and it holds what was typed
+      final plain =
+          jsonDecode(openCameraRelay(boxPrivateJwk: boxJwk, sealed: puts.single['sealed'] as String, aad: cameraRelayAad(boxId, 1)))
+              as Map<String, dynamic>;
+      expect(plain, {'seq': 1, 'boxId': boxId, 'url': 'rtsp://10.168.1.20:554/main', 'username': 'viewer', 'password': 'jauh123Rahsia'});
+
+      await reveal(tester, k('camera-pending'));
+      expect(find.text(pending), findsOneWidget);
+      expect(screenText(tester), isNot(contains('jauh123Rahsia')));
+      expect(tester.widget<TextField>(k('camera-url')).controller!.text, 'rtsp://10.168.1.20:554/main');
+      expect(tester.widget<TextField>(k('camera-username')).controller!.text, 'viewer');
+      expect(k('camera-password-dots'), findsOneWidget);
+      expect(k('camera-password'), findsNothing);
+    });
+
+    testWidgets('the note clears by itself once the box has applied the change', (tester) async {
+      final h = await openCloud(tester);
+      var applied = false;
+      h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(
+        200,
+        view(configured: true, url: 'rtsp://10.168.1.20:554/main', pending: !applied, seq: 2),
+      );
+      await go(tester, h);
+      await reveal(tester, k('camera-pending'));
+      expect(find.text(pending), findsOneWidget);
+      applied = true;
+      await tester.pump(const Duration(seconds: 16));
+      await tester.pump();
+      expect(k('camera-pending'), findsNothing);
+      expect(k('camera-cloud-refused'), findsNothing);
+    });
+
+    testWidgets('a change the box refused says why, in words, from a fixed code', (tester) async {
+      final h = await openCloud(tester);
+      h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(200, view(failure: 'bad_address', seq: 2));
+      await go(tester, h);
+      await reveal(tester, k('camera-cloud-refused'));
+      expect(find.textContaining('Kotak tidak menerima alamat itu'), findsOneWidget);
+      expect(k('camera-pending'), findsNothing);
+    });
+
+    testWidgets('a number taken by another change: the phone reads again and seals again, once', (tester) async {
+      final h = await openCloud(tester);
+      var gets = 0;
+      final puts = <Map<String, dynamic>>[];
+      h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(200, view(seq: ++gets == 1 ? 1 : 2));
+      h.handlers['PUT /api/live/camera'] = (r) async {
+        puts.add(jsonDecode(r.body) as Map<String, dynamic>);
+        if (puts.length == 1) return jsonResponse(409, {'errors': ['Tetapan kamera telah berubah. Cuba lagi.'], 'code': 'stale'});
+        return jsonResponse(200, view(pending: true, seq: 3));
+      };
+      await go(tester, h);
+      await _type(tester, 'camera-url', 'rtsp://10.168.1.20:554/main');
+      await reveal(tester, save);
+      await tester.tap(save);
+      await settle(tester);
+      expect(puts.map((p) => p['seq']), [1, 2]);
+      await reveal(tester, k('camera-pending'));
+    });
+
+    testWidgets('no box linked to the cloud: the words say so and nothing is sent', (tester) async {
+      final h = await openCloud(tester);
+      var puts = 0;
+      h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(200, view(relay: false));
+      h.handlers['PUT /api/live/camera'] = (r) async {
+        puts++;
+        return jsonResponse(200, view());
+      };
+      await go(tester, h);
+      await _type(tester, 'camera-url', 'rtsp://10.168.1.20:554/main');
+      await reveal(tester, save);
+      await tester.tap(save);
+      await settle(tester);
+      expect(puts, 0);
+      expect(find.text('Kotak belum disambung ke awan, jadi kamera hanya boleh ditetapkan di Wi-Fi surau.'), findsOneWidget);
+    });
+
+    testWidgets('on the surau Wi-Fi the ONVIF search and the test are there and the note is not', (tester) async {
+      await openForm(tester);
+      expect(k('camera-discover'), findsOneWidget);
+      expect(k('camera-test'), findsOneWidget);
+      expect(k('camera-discover-surau-only'), findsNothing);
+      expect(k('camera-pending'), findsNothing);
     });
   });
 
@@ -716,6 +1000,9 @@ void main() {
       expect(maskCameraUrl('rtsp://10.168.1.20:554/main'), 'rtsp://10.168.1.20:554/main');
       expect(maskCameraUrl('rtsp://10.168.1.20/a@b:c'), 'rtsp://10.168.1.20/a@b:c');
       expect(maskCameraUrl('not an address'), 'not an address');
+      expect(maskCameraUrl('rtsp://10.168.1.20:554/s?user=a&Password=rahsia&x=1'), 'rtsp://10.168.1.20:554/s?user=a&Password=$_dots&x=1');
+      expect(maskCameraUrl('rtsp://u:p@10.168.1.20/s?PWD=abc&pass=d&passwd=e&pass='), 'rtsp://u:$_dots@10.168.1.20/s?PWD=$_dots&pass=$_dots&passwd=$_dots&pass=');
+      expect(maskCameraUrl('rtsp://10.168.1.20/s?channel=1&stream=0'), 'rtsp://10.168.1.20/s?channel=1&stream=0');
     });
 
     testWidgets('a refused login: the box words stay in the sheet, the password box is emptied, the form is untouched', (tester) async {

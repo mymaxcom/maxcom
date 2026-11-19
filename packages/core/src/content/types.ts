@@ -9,6 +9,7 @@ export type ContentKind =
   | 'pengumuman'
   | 'ticker'
   | 'poster'
+  | 'video'
   | 'programKhas'
   | 'takwim'
   | 'hadis'
@@ -74,6 +75,34 @@ export interface Poster extends ContentBase {
   /** The poster's name in lists and search (1..80 characters). */
   title: string;
   assetId: ImageRef;
+  days: ('umum' | DayKey)[];
+  from?: string;
+  to?: string;
+  order: number;
+  /**
+   * "Regangkan gambar": true pulls the picture to the screen frame's exact width and height (aspect ratio not kept,
+   * nothing cropped); false keeps it whole in its own proportions, centred over a blurred fill. Absent means true
+   * (every poster saved before 2026.11.13 stretches; no data migration).
+   */
+  stretch?: boolean;
+}
+
+export interface Video extends ContentBase {
+  /** The video's name in lists and search (1..80 characters). */
+  title: string;
+  /** `upload`: a file on the box (`assetId`); `youtube`: an embed (`youtubeId`); `rakaman`: a clip of a kuliah recording on the surau's YouTube (`youtubeId`, `startSec`, `endSec`). */
+  source: 'upload' | 'youtube' | 'rakaman';
+  /** Upload only: the stored MP4 (H.264). A plain 64-hex asset id, never an adjusted image. */
+  assetId?: string;
+  /** YouTube and rakaman: the 11-character video id. */
+  youtubeId?: string;
+  /** Length of the whole video in seconds (checked at upload; optional for YouTube). The TV shows at most 600 s. */
+  durationSec?: number;
+  /** Rakaman clip: where it starts and stops, in seconds. */
+  startSec?: number;
+  endSec?: number;
+  /** `Bunyi`: absent means false (silent). Never sounds during a prayer phase, a live or tilawah. */
+  sound?: boolean;
   days: ('umum' | DayKey)[];
   from?: string;
   to?: string;
@@ -183,6 +212,7 @@ export interface ContentItemMap {
   pengumuman: Pengumuman;
   ticker: TickerItem;
   poster: Poster;
+  video: Video;
   programKhas: ProgramKhas;
   takwim: Takwim;
   hadis: Hadis;
@@ -221,6 +251,8 @@ export interface AyatCard {
 
 /** Kiosk copies of the items above: every picture is already the derived asset id (a plain string). */
 export type KioskPoster = Omit<Poster, 'assetId'> & { assetId: string };
+/** The kiosk copy of a video: the same fields (an upload's `assetId` is already a plain asset id). */
+export type KioskVideo = Video;
 export type KioskProgramKhas = Omit<ProgramKhas, 'assetId'> & { assetId?: string };
 /** The kiosk copy of a pengumuman: the optional picture is the derived asset id (a plain string). */
 export type KioskPengumuman = Omit<Pengumuman, 'pictureAssetId'> & { pictureAssetId?: string };
@@ -250,6 +282,8 @@ export interface KioskContent {
   pengumuman: KioskPengumuman[];
   ticker: TickerItem[];
   posters: KioskPoster[];
+  /** Videos in rotation order; absent from a box older than the video kind. An upload whose file the box lacks is left out. */
+  videos?: KioskVideo[];
   programKhas: KioskProgramKhas[];
   takwim: KioskTakwim[];
   /** Today's ordered hadis pool (Plan 14); the rotation shows one per cycle. */

@@ -37,6 +37,7 @@ import 'settings_widgets/reciter_dropdown.dart';
 import 'settings_widgets/slider_field.dart';
 import 'settings_widgets/surah_dropdown.dart';
 import 'settings_widgets/template_field.dart';
+import 'settings_widgets/tv_lang_choice.dart';
 import 'settings_widgets/test_button.dart';
 import 'validate.dart';
 
@@ -61,7 +62,11 @@ class SettingsForm extends StatelessWidget {
     this.lanjutanVisible = false,
     this.lanjutanKey,
     this.others = const {},
+    this.relayReencode,
   });
+
+  /// Whether the box can encode H.264 (`relayReencode` of the live status); null = the box does not say (an older box): every choice stays on.
+  final bool? relayReencode;
 
   final FeatureDef feature;
 
@@ -102,9 +107,16 @@ class SettingsForm extends StatelessWidget {
     }
 
     // A preset message comes before the long week table, not under it.
+    // Kad Ayat: the mode block (how to choose, then the verses) comes before Tempoh paparan and Susunan.
+    const modeFirst = {'pick', 'surah', 'ayatFrom', 'ayatTo'};
     final entries = [
       ...feature.defaults.entries.where((e) => fieldMeta(feature.key, e.key)?.ui == 'presetText'),
-      ...feature.defaults.entries.where((e) => fieldMeta(feature.key, e.key)?.ui != 'presetText'),
+      if (feature.key == 'ayatCard') ...feature.defaults.entries.where((e) => modeFirst.contains(e.key)),
+      ...feature.defaults.entries.where(
+        (e) =>
+            fieldMeta(feature.key, e.key)?.ui != 'presetText' &&
+            !(feature.key == 'ayatCard' && modeFirst.contains(e.key)),
+      ),
     ];
     for (final e in entries) {
       final key = e.key;
@@ -114,6 +126,9 @@ class SettingsForm extends StatelessWidget {
       if (key == 'suspendedAt') continue;
       // A value another control owns (autoTone.override: Ubah suai's accent) is kept but not offered.
       if (fieldMeta(feature.key, key)?.hidden == true) continue;
+      // A value that matters only in another mode (the verses of a Kad Ayat that is not "Pilih sendiri") is kept, not drawn.
+      final visible = fieldMeta(feature.key, key)?.visibleWhen;
+      if (visible != null && (values[visible.field] ?? feature.defaults[visible.field]) != visible.equals) continue;
       if (fieldMeta(feature.key, key)?.isSystem == true && !_systemPage) {
         // System values are never drawn in the public app; the ops build draws them in the Lanjutan card.
         if (kOpsBuild && lanjutanVisible) {
@@ -352,6 +367,9 @@ class SettingsForm extends StatelessWidget {
             meta: meta,
             error: error,
             readOnly: ro,
+            extraDisabled: name == 'relayVideo' && relayReencode == false
+                ? {'reencode': S.of(context).settingsReencodeUnsupported}
+                : const {},
             onChanged: onChanged,
           );
         }
@@ -377,12 +395,9 @@ class SettingsForm extends StatelessWidget {
           readOnly: ro,
           onChanged: (nv) {
             onChanged(nv);
-            // A shorter surah pulls the verses back inside it.
-            final last = surahAyatCount(nv as int);
-            final from = _intOf('ayatFrom');
-            final to = _intOf('ayatTo');
-            if (from > last) this.onChanged('ayatFrom', last);
-            if (to > last) this.onChanged('ayatTo', last);
+            // A new surah starts at its first verse, one verse (a stale range from the old surah means nothing here).
+            this.onChanged('ayatFrom', 1);
+            this.onChanged('ayatTo', 1);
           },
         );
       case 'ayatRange':
@@ -391,7 +406,6 @@ class SettingsForm extends StatelessWidget {
           from: _intOf('ayatFrom'),
           to: _intOf('ayatTo'),
           labelFrom: settingLabel('ayatFrom', lang),
-          labelTo: settingLabel('ayatTo', lang),
           errorFrom: errors['ayatFrom'],
           errorTo: errors['ayatTo'],
           readOnly: ro,
@@ -565,6 +579,18 @@ class SettingsForm extends StatelessWidget {
     if (d is String) {
       final rule = ruleFor(name);
       if (rule != null && rule.type == SettingRuleType.enumOf) {
+        if (feature.key == 'language' && name == 'lang') {
+          return TvLangChoice(
+            path: path,
+            name: name,
+            label: label,
+            value: v is String ? v : d,
+            choices: rule.vals,
+            error: error,
+            readOnly: readOnly,
+            onChanged: onChanged,
+          );
+        }
         return ChoiceField(
           path: path,
           name: name,

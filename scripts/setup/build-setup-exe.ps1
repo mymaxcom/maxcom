@@ -39,10 +39,24 @@ function Resolve-ProductVersion([string]$Key, [string]$Given, [string]$Repo) {
   return $declared
 }
 
+# The internal build (0 to 9) of this product's current version: builds.json[<key>], 0 when not listed. When above 0 it is
+# part of every artifact name (-b<N> after the version), so a b0 and a b1 file never overwrite each other.
+function Resolve-ProductBuild([string]$Key, [string]$Repo) {
+  $bf = Join-Path $Repo 'builds.json'
+  if (-not (Test-Path -LiteralPath $bf -PathType Leaf)) { return 0 }
+  try { $bj = Get-Content -LiteralPath $bf -Raw -Encoding UTF8 | ConvertFrom-Json } catch { Fail 'builds.json bukan JSON yang sah.' }
+  $bp = $bj.PSObject.Properties[$Key]
+  if ($null -eq $bp) { return 0 }
+  if ([string]$bp.Value -notmatch '^[0-9]$') { Fail "builds.json: $Key mesti nombor 0 hingga 9" }
+  return [int]$bp.Value
+}
+
 function Get-Sha256Of([string]$path) { return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() }
 
 $repo = (Resolve-Path -LiteralPath (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) '.')).Path.TrimEnd('\')
 $Version = Resolve-ProductVersion 'kiosk-server-windows' $Version $repo
+$Build = Resolve-ProductBuild 'kiosk-server-windows' $repo
+$buildTag = if ($Build -gt 0) { "-b$Build" } else { '' }
 if ($SetupDir -eq '') { $SetupDir = Join-Path $repo 'dist\setup' }
 $SetupDir = [System.IO.Path]::GetFullPath($SetupDir)
 
@@ -50,7 +64,7 @@ if ($IconFile -eq '') { $IconFile = Join-Path $repo 'branding\maxcom\maxcom.ico'
 $IconFile = [System.IO.Path]::GetFullPath($IconFile)
 if (-not (Test-Path -LiteralPath $IconFile -PathType Leaf)) { Fail "ikon tiada: $IconFile (jalankan node scripts\make-icons.mjs atau beri -IconFile)" }
 
-$topName = "MAX-Kiosk-Server-Setup-$Version-windows"
+$topName = "MAX-Kiosk-Server-Setup-$Version$buildTag-windows"
 $bundle = Join-Path $SetupDir $topName
 $exePath = Join-Path $SetupDir "$topName.exe"
 $issPath = Join-Path $PSScriptRoot 'maxcom-setup.iss'

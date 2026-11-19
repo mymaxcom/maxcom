@@ -3354,8 +3354,8 @@ abstract class S {
   /// No description provided for @contentSurah.
   ///
   /// In ms, this message translates to:
-  /// **'Surah {n}'**
-  String contentSurah(int n);
+  /// **'Surah {n} · {name}'**
+  String contentSurah(int n, String name);
 
   /// No description provided for @contentMinutesBefore.
   ///
@@ -4449,6 +4449,30 @@ abstract class S {
   /// **'Menunggu anda log masuk'**
   String get liveSignInWaiting;
 
+  /// No description provided for @errcVideoBusy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video lain sedang dimuat naik ke MAXCOM. Cuba sebentar lagi.'**
+  String get errcVideoBusy;
+
+  /// No description provided for @errcCameraStale.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan kamera telah berubah. Cuba lagi.'**
+  String get errcCameraStale;
+
+  /// No description provided for @errcCameraPasswordAgain.
+  ///
+  /// In ms, this message translates to:
+  /// **'Taip semula kata laluan kamera.'**
+  String get errcCameraPasswordAgain;
+
+  /// No description provided for @liveSignInByAdmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log masuk YouTube sedang dibuat oleh pentadbir.'**
+  String get liveSignInByAdmin;
+
   /// No description provided for @liveSignedInAs.
   ///
   /// In ms, this message translates to:
@@ -4460,6 +4484,258 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Log keluar YouTube'**
   String get liveSignOut;
+
+  /// No description provided for @liveYoutubeConnected.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube disambungkan'**
+  String get liveYoutubeConnected;
+
+  /// No description provided for @liveYoutubeConnectedSnack.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube disambungkan: {channel}'**
+  String liveYoutubeConnectedSnack(String channel);
+
+  /// No description provided for @liveYoutubeAtSurauOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log masuk / tukar saluran YouTube hanya di Wi-Fi surau.'**
+  String get liveYoutubeAtSurauOnly;
+
+  /// No description provided for @liveYoutubeNotConnected.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube belum disambungkan'**
+  String get liveYoutubeNotConnected;
+
+  /// No description provided for @liveDestOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: Ya, {channel}'**
+  String liveDestOn(String channel);
+
+  /// No description provided for @liveDestOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: Tidak'**
+  String get liveDestOff;
+
+  /// No description provided for @liveDestSkip.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube tidak dipilih: siaran hanya ke skrin surau.'**
+  String get liveDestSkip;
+
+  /// No description provided for @liveDestNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube belum disambungkan'**
+  String get liveDestNone;
+
+  /// No description provided for @liveYoutubeUnknown.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: tidak dapat disemak sekarang (kali terakhir: {channel})'**
+  String liveYoutubeUnknown(String channel);
+
+  /// No description provided for @liveYoutubeUnknownNoLast.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: tidak dapat disemak sekarang'**
+  String get liveYoutubeUnknownNoLast;
+
+  /// No description provided for @liveYoutubeAskTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube tidak dapat digunakan'**
+  String get liveYoutubeAskTitle;
+
+  /// No description provided for @liveYoutubeAskBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube tidak dapat digunakan sekarang: {reason}. Mulakan siaran ke skrin surau sahaja?'**
+  String liveYoutubeAskBody(String reason);
+
+  /// No description provided for @liveYoutubeWhyNoInternet.
+  ///
+  /// In ms, this message translates to:
+  /// **'tiada internet'**
+  String get liveYoutubeWhyNoInternet;
+
+  /// No description provided for @liveYoutubeWhyRevoked.
+  ///
+  /// In ms, this message translates to:
+  /// **'sambungan perlu dibuat semula'**
+  String get liveYoutubeWhyRevoked;
+
+  /// No description provided for @liveYoutubeWhyNeedsSignIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'belum log masuk'**
+  String get liveYoutubeWhyNeedsSignIn;
+
+  /// No description provided for @liveYoutubeWhyAskAdmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'belum log masuk, minta Pentadbir log masuk'**
+  String get liveYoutubeWhyAskAdmin;
+
+  /// No description provided for @liveYoutubeWhyUnknownNoLast.
+  ///
+  /// In ms, this message translates to:
+  /// **'akaun tidak dapat disemak sekarang'**
+  String get liveYoutubeWhyUnknownNoLast;
+
+  /// No description provided for @liveYoutubeWhyUnknown.
+  ///
+  /// In ms, this message translates to:
+  /// **'akaun tidak dapat disemak sekarang (kali terakhir: {channel})'**
+  String liveYoutubeWhyUnknown(String channel);
+
+  /// No description provided for @tvLangArNeedsUpdate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kemas kini MAXCOM untuk Bahasa Arab'**
+  String get tvLangArNeedsUpdate;
+
+  /// No description provided for @tvLangArAskTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar bahasa skrin TV ke Bahasa Arab?'**
+  String get tvLangArAskTitle;
+
+  /// No description provided for @tvLangArAskBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tema Arabic Art paling sesuai dengan skrin TV berbahasa Arab. Anda boleh menukarnya semula di Bahasa skrin TV.'**
+  String get tvLangArAskBody;
+
+  /// No description provided for @tvLangArAskYes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ya'**
+  String get tvLangArAskYes;
+
+  /// No description provided for @tvLangArAskNo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak'**
+  String get tvLangArAskNo;
+
+  /// No description provided for @liveYoutubeAskYes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ya'**
+  String get liveYoutubeAskYes;
+
+  /// No description provided for @liveYoutubeChoiceFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan YouTube tidak dapat disimpan. Cuba lagi.'**
+  String get liveYoutubeChoiceFailed;
+
+  /// No description provided for @liveYoutubeRevoked.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube perlu disambung semula'**
+  String get liveYoutubeRevoked;
+
+  /// No description provided for @liveDestOnPlain.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: Ya'**
+  String get liveDestOnPlain;
+
+  /// No description provided for @liveDestLink.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sambung'**
+  String get liveDestLink;
+
+  /// No description provided for @liveDestLive2.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ke skrin surau dan YouTube'**
+  String get liveDestLive2;
+
+  /// No description provided for @liveDestLive1.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ke skrin surau sahaja'**
+  String get liveDestLive1;
+
+  /// No description provided for @liveDestRec.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman: Ya'**
+  String get liveDestRec;
+
+  /// No description provided for @liveDestRecOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman: Tidak'**
+  String get liveDestRecOff;
+
+  /// No description provided for @liveSignInOpenGoogle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka halaman Google'**
+  String get liveSignInOpenGoogle;
+
+  /// No description provided for @liveSignInWaitingMin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu pengesahan… (tamat dalam {minutes} min)'**
+  String liveSignInWaitingMin(int minutes);
+
+  /// No description provided for @liveSignInDenied.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log masuk dibatalkan'**
+  String get liveSignInDenied;
+
+  /// No description provided for @liveSignInExpired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod tamat tempoh. Cuba lagi.'**
+  String get liveSignInExpired;
+
+  /// No description provided for @liveSignInRevoked.
+  ///
+  /// In ms, this message translates to:
+  /// **'Akses YouTube telah ditarik balik atau tamat. Sila log masuk semula.'**
+  String get liveSignInRevoked;
+
+  /// No description provided for @liveSignOutChange.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar saluran / Log keluar'**
+  String get liveSignOutChange;
+
+  /// No description provided for @liveSignOutConfirmTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar saluran atau log keluar?'**
+  String get liveSignOutConfirmTitle;
+
+  /// No description provided for @liveSignOutConfirmBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran langsung seterusnya tidak akan sampai ke YouTube sehingga seseorang log masuk semula.'**
+  String get liveSignOutConfirmBody;
+
+  /// No description provided for @liveSignOutConfirmAction.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log keluar'**
+  String get liveSignOutConfirmAction;
+
+  /// No description provided for @liveSettingsSummaryConnected.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube disambungkan: {channel}. Kamera luaran {camera}'**
+  String liveSettingsSummaryConnected(String channel, String camera);
 
   /// No description provided for @liveRecordingsPending.
   ///
@@ -5343,6 +5619,12 @@ abstract class S {
   /// **'Awan tidak dapat dihubungi. Muat naik bermula sendiri apabila awan boleh dihubungi.'**
   String get uploadErrorNoCloud;
 
+  /// No description provided for @uploadErrorNoBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik bermula sendiri apabila telefon berada di Wi-Fi surau.'**
+  String get uploadErrorNoBox;
+
   /// No description provided for @uploadErrorUnlock.
   ///
   /// In ms, this message translates to:
@@ -5468,6 +5750,12 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Tidak digunakan bila Telefon terus dipilih'**
   String get settingsLanjutanDimmed;
+
+  /// No description provided for @settingsReencodeUnsupported.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod semula tidak disokong pada MAXCOM ini. Gunakan Salin terus.'**
+  String get settingsReencodeUnsupported;
 
   /// No description provided for @settingsComingSoon.
   ///
@@ -5616,8 +5904,50 @@ abstract class S {
   /// No description provided for @settingsAyatHelp.
   ///
   /// In ms, this message translates to:
-  /// **'{name} ada {n} ayat: pilih antara 1 hingga {n}. Paling banyak 5 ayat sekali paparan.'**
+  /// **'{name} ada {n} ayat. Paling banyak 3 ayat sekali paparan.'**
   String settingsAyatHelp(String name, int n);
+
+  /// No description provided for @settingsAyatCountLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bilangan ayat'**
+  String get settingsAyatCountLabel;
+
+  /// No description provided for @settingsAyatSurahEnds.
+  ///
+  /// In ms, this message translates to:
+  /// **'Surah ini tamat pada ayat {n}.'**
+  String settingsAyatSurahEnds(int n);
+
+  /// No description provided for @settingsAyatTv.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dipaparkan di TV: Surah {name} ({n}): ayat {a} hingga {b}'**
+  String settingsAyatTv(String name, int n, int a, int b);
+
+  /// No description provided for @settingsAyatTvOne.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dipaparkan di TV: Surah {name} ({n}): ayat {a}'**
+  String settingsAyatTvOne(String name, int n, int a);
+
+  /// No description provided for @settingsAyatTypeHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Taip nombor ayat (1 hingga {n})'**
+  String settingsAyatTypeHint(int n);
+
+  /// No description provided for @settingsAyatTypeError.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masukkan nombor antara 1 dan {n}'**
+  String settingsAyatTypeError(int n);
+
+  /// No description provided for @settingsAyatOldRange.
+  ///
+  /// In ms, this message translates to:
+  /// **'Julat lama dipendekkan kepada 3 ayat.'**
+  String get settingsAyatOldRange;
 
   /// No description provided for @settingsHijriMonthN.
   ///
@@ -5750,6 +6080,12 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'dimatikan'**
   String get settingsOrderOff;
+
+  /// No description provided for @settingsOrderVideoLength.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sepanjang video'**
+  String get settingsOrderVideoLength;
 
   /// No description provided for @settingsOrderUp.
   ///
@@ -11088,13 +11424,13 @@ abstract class S {
   /// No description provided for @valAyatOrder.
   ///
   /// In ms, this message translates to:
-  /// **'Ayat dari mesti sebelum atau sama dengan Ayat hingga'**
+  /// **'Ayat mula mesti sebelum atau sama dengan ayat akhir'**
   String get valAyatOrder;
 
   /// No description provided for @valAyatMax.
   ///
   /// In ms, this message translates to:
-  /// **'Paling banyak 5 ayat sekali paparan'**
+  /// **'Paling banyak 3 ayat sekali paparan'**
   String get valAyatMax;
 
   /// No description provided for @valUnknownFeature.
@@ -12273,6 +12609,12 @@ abstract class S {
   /// **'Tidak dapat menghubungi YouTube. Cuba lagi.'**
   String get errcYoutubeNetwork;
 
+  /// No description provided for @errcYoutubeAtBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Log masuk YouTube kini dibuat pada MAXCOM di surau. Kemas kini aplikasi dan cuba di Wi-Fi surau.'**
+  String get errcYoutubeAtBox;
+
   /// No description provided for @errcCatchupOff.
   ///
   /// In ms, this message translates to:
@@ -13272,7 +13614,7 @@ abstract class S {
   /// No description provided for @liveNoticeShare.
   ///
   /// In ms, this message translates to:
-  /// **'Kongsi pautan siaran'**
+  /// **'Kongsi pautan'**
   String get liveNoticeShare;
 
   /// No description provided for @liveNoticeTitle.
@@ -13320,7 +13662,7 @@ abstract class S {
   /// No description provided for @liveNoticeStarted.
   ///
   /// In ms, this message translates to:
-  /// **'Siaran sudah bermula. Kongsi pautan kepada AJK dan jemaah.'**
+  /// **'Siaran sedang berlangsung.'**
   String get liveNoticeStarted;
 
   /// No description provided for @liveNoticeShareGo.
@@ -13328,6 +13670,78 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Kongsi'**
   String get liveNoticeShareGo;
+
+  /// No description provided for @liveNoticeCardBadge.
+  ///
+  /// In ms, this message translates to:
+  /// **'SIARAN LANGSUNG'**
+  String get liveNoticeCardBadge;
+
+  /// No description provided for @liveNoticePictureFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar tidak dapat disediakan. Teks sahaja dikongsi.'**
+  String get liveNoticePictureFailed;
+
+  /// No description provided for @liveNoticeCopiedCaption.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teks disalin, tampal sebagai kapsyen jika teks tidak muncul'**
+  String get liveNoticeCopiedCaption;
+
+  /// No description provided for @liveNoticeQrHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Imbas dengan kamera telefon. WhatsApp akan dibuka dengan mesej ini.'**
+  String get liveNoticeQrHint;
+
+  /// No description provided for @liveNoticeEditDone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siap'**
+  String get liveNoticeEditDone;
+
+  /// No description provided for @liveNoticeEditText.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ubah teks'**
+  String get liveNoticeEditText;
+
+  /// No description provided for @liveNoticeNoPicture.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tanpa gambar'**
+  String get liveNoticeNoPicture;
+
+  /// No description provided for @liveNoticeMore.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lagi'**
+  String get liveNoticeMore;
+
+  /// No description provided for @liveNoticeToSelf.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hantar kepada diri sendiri'**
+  String get liveNoticeToSelf;
+
+  /// No description provided for @liveNoticeCopy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Salin teks'**
+  String get liveNoticeCopy;
+
+  /// No description provided for @liveNoticeFromPhone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hantar dari telefon'**
+  String get liveNoticeFromPhone;
+
+  /// No description provided for @liveNoticeWhatsApp.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kongsi ke WhatsApp'**
+  String get liveNoticeWhatsApp;
 
   /// No description provided for @liveNoticeCopied.
   ///
@@ -13340,6 +13754,18 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Teks tidak dapat dikongsi.'**
   String get liveNoticeShareFailed;
+
+  /// No description provided for @liveNoticeEditedBy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Diubah oleh {name}, {time}'**
+  String liveNoticeEditedBy(String name, String time);
+
+  /// No description provided for @liveNoticeChangedMeanwhile.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teks telah diubah oleh orang lain. Teks terkini ditunjukkan, semak sebelum dikongsi.'**
+  String get liveNoticeChangedMeanwhile;
 
   /// No description provided for @waOpensTo.
   ///
@@ -14246,6 +14672,282 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'{first} dan {second}'**
   String needsBoth(String first, String second);
+
+  /// No description provided for @errVideoTooBig.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video terlalu besar. Paling besar 300 MB dan 720p; kecilkan atau pangkas dalam Galeri telefon dahulu.'**
+  String get errVideoTooBig;
+
+  /// No description provided for @errVideoTooLong.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video terlalu panjang. Paling lama 10 minit; pangkas dalam Galeri telefon dahulu.'**
+  String get errVideoTooLong;
+
+  /// No description provided for @errVideoNotH264.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video mesti MP4 dengan H.264. Pilih video lain atau tukar formatnya dahulu.'**
+  String get errVideoNotH264;
+
+  /// No description provided for @errVideoNoSpace.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ruang storan MAXCOM tidak mencukupi. Padam video lama dahulu.'**
+  String get errVideoNoSpace;
+
+  /// No description provided for @errVideoUploadFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik video gagal. Pastikan telefon masih di Wi-Fi surau, kemudian cuba lagi.'**
+  String get errVideoUploadFailed;
+
+  /// No description provided for @kindDescVideo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video yang dimuat naik atau dari YouTube, dimainkan penuh skrin di TV.'**
+  String get kindDescVideo;
+
+  /// No description provided for @videoSourceLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sumber video'**
+  String get videoSourceLabel;
+
+  /// No description provided for @videoSourceUpload.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik'**
+  String get videoSourceUpload;
+
+  /// No description provided for @videoSourceYoutube.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube'**
+  String get videoSourceYoutube;
+
+  /// No description provided for @videoSourceRakaman.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman'**
+  String get videoSourceRakaman;
+
+  /// No description provided for @videoPick.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih video daripada telefon'**
+  String get videoPick;
+
+  /// No description provided for @videoPickAgain.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih video lain'**
+  String get videoPickAgain;
+
+  /// No description provided for @videoChecking.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menyemak video...'**
+  String get videoChecking;
+
+  /// No description provided for @videoCompressing.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mengecilkan video ke 720p... {percent}%'**
+  String videoCompressing(int percent);
+
+  /// No description provided for @videoUploading.
+  ///
+  /// In ms, this message translates to:
+  /// **'Memuat naik ke MAXCOM... {percent}%'**
+  String videoUploading(int percent);
+
+  /// No description provided for @videoUploadedOk.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sudah dimuat naik ke MAXCOM'**
+  String get videoUploadedOk;
+
+  /// No description provided for @videoPickedLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} ({size})'**
+  String videoPickedLine(String name, String size);
+
+  /// No description provided for @videoCloudNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik video hanya di Wi-Fi surau. Sambung telefon ke Wi-Fi surau, atau tambah video YouTube (boleh dari mana-mana).'**
+  String get videoCloudNote;
+
+  /// No description provided for @videoStorageLeft.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ruang storan MAXCOM: {size} lagi'**
+  String videoStorageLeft(String size);
+
+  /// No description provided for @videoLimitsNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paling besar 300 MB, paling lama 10 minit, 720p. Pangkas dalam Galeri telefon dahulu jika perlu.'**
+  String get videoLimitsNote;
+
+  /// No description provided for @videoCannotCompress.
+  ///
+  /// In ms, this message translates to:
+  /// **'Telefon ini tidak boleh mengecilkan video. Pilih video MP4 (H.264) yang sudah dalam had.'**
+  String get videoCannotCompress;
+
+  /// No description provided for @videoYoutubeLink.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan YouTube'**
+  String get videoYoutubeLink;
+
+  /// No description provided for @videoYoutubeHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tampal pautan atau ID video'**
+  String get videoYoutubeHint;
+
+  /// No description provided for @videoYoutubeBad.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ini bukan pautan video YouTube.'**
+  String get videoYoutubeBad;
+
+  /// No description provided for @videoYoutubeLive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ini siaran langsung. Untuk memaparkan siaran langsung di TV, gunakan Siaran langsung. Selepas siaran tamat, rakamannya boleh dipilih di sini.'**
+  String get videoYoutubeLive;
+
+  /// No description provided for @videoYoutubeNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video saluran lain mungkin ada iklan atau dibuang oleh pemiliknya. Memerlukan internet di surau; tanpa internet video dilangkau.'**
+  String get videoYoutubeNote;
+
+  /// No description provided for @videoRakamanNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Petikan daripada rakaman kuliah surau di YouTube. Tetapkan bila ia bermula dan berhenti.'**
+  String get videoRakamanNote;
+
+  /// No description provided for @videoClipStart.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mula (mm:ss)'**
+  String get videoClipStart;
+
+  /// No description provided for @videoClipEnd.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tamat (mm:ss)'**
+  String get videoClipEnd;
+
+  /// No description provided for @videoClipOrder.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tamat mesti selepas mula.'**
+  String get videoClipOrder;
+
+  /// No description provided for @videoClipLong.
+  ///
+  /// In ms, this message translates to:
+  /// **'Petikan paling lama 10 minit.'**
+  String get videoClipLong;
+
+  /// No description provided for @videoNeedsFile.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih video dan tunggu ia selesai dimuat naik.'**
+  String get videoNeedsFile;
+
+  /// No description provided for @videoWaitUpload.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tunggu muat naik selesai sebelum Simpan.'**
+  String get videoWaitUpload;
+
+  /// No description provided for @videoEstimate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Anggaran tempoh (minit)'**
+  String get videoEstimate;
+
+  /// No description provided for @videoEstimateHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube tidak memberi tempoh video. Beri anggaran (1 hingga 10 minit); skrin terus bertukar sebaik video tamat.'**
+  String get videoEstimateHint;
+
+  /// No description provided for @videoEstimateBad.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masukkan nombor 1 hingga 10.'**
+  String get videoEstimateBad;
+
+  /// No description provided for @videoCloudReadOnly.
+  ///
+  /// In ms, this message translates to:
+  /// **'Butiran video yang dimuat naik hanya boleh diubah di Wi-Fi surau.'**
+  String get videoCloudReadOnly;
+
+  /// No description provided for @videoPreview.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pratonton'**
+  String get videoPreview;
+
+  /// No description provided for @videoPreviewHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Di TV: video memenuhi skrin, nama surau dan jam di atasnya. Tiada teks lain.'**
+  String get videoPreviewHint;
+
+  /// No description provided for @videoRowUpload.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik, {length}'**
+  String videoRowUpload(String length);
+
+  /// No description provided for @videoRowYoutube.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube'**
+  String get videoRowYoutube;
+
+  /// No description provided for @videoRowRakaman.
+  ///
+  /// In ms, this message translates to:
+  /// **'Petikan rakaman {start} hingga {end}'**
+  String videoRowRakaman(String start, String end);
+
+  /// No description provided for @videoSoundOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Berbunyi'**
+  String get videoSoundOn;
+
+  /// No description provided for @videoExpiredSuggest.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tarikh tamat sudah lalu. Padam untuk menjimatkan ruang?'**
+  String get videoExpiredSuggest;
+
+  /// No description provided for @videoFileLost.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail tiada pada MAXCOM ini; dilangkau di TV.'**
+  String get videoFileLost;
+
+  /// No description provided for @videoFetching.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mengambil tajuk daripada YouTube...'**
+  String get videoFetching;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

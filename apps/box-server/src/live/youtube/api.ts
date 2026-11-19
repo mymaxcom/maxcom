@@ -2,11 +2,11 @@ import { LOCAL_SURAU_ID } from '../../tenant.ts';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import type { LiveStatus, YoutubeMeta } from '@surau/core';
+import type { LiveStatus, YoutubeAccountReason, YoutubeAccountState, YoutubeLastGood, YoutubeMeta } from '@surau/core';
 import { getSettings } from '../../settingsStore.ts';
 import type { YoutubeLeg } from '../sessions.ts';
 import { GOOGLE_HOSTS, YoutubeAuth, YoutubeError, failureOf, googleDetail, googleRequest } from './oauth.ts';
-import type { SigninBegin, SigninPoll, YoutubeReason } from './oauth.ts';
+import type { SigninBegin, SigninInfo, SigninPoll, YoutubeReason } from './oauth.ts';
 
 const API = 'https://www.googleapis.com/youtube/v3';
 const UPLOAD_API = 'https://www.googleapis.com/upload/youtube/v3/videos';
@@ -36,7 +36,25 @@ export interface YoutubeService extends YoutubeLeg {
   sweepOrphans(maxAgeMs?: number): Promise<number>;
   /** True while a broadcast of this sign-in is open (made and not yet completed). */
   hasOpenBroadcast(): boolean;
-  info(): { configured: boolean; signedIn: boolean; channelTitle: string | null; lastError: YoutubeReason | null };
+  /** `signIn` is present only while a sign-in is pending or just ended (denied / expired). */
+  info(): {
+    configured: boolean;
+    signedIn: boolean;
+    channelTitle: string | null;
+    lastError: YoutubeReason | null;
+    signIn?: SigninInfo;
+    state: YoutubeAccountState;
+    reason: YoutubeAccountReason | null;
+    lastGood: YoutubeLastGood | null;
+    revokedAt: string | null;
+  };
+  /**
+   * The daily look at the grant (one forced token refresh): a withdrawn grant (`invalid_grant`) shows now, with its
+   * date, not at "Mula siaran". A network error or a 5xx changes nothing. Never throws.
+   */
+  verifyGrant(): Promise<'ok' | 'revoked' | 'failed' | 'skipped'>;
+  /** Lets the part of the box that knows say why the sign-in cannot be judged yet (status `unknown`, never signed out). */
+  setUnknownProbe(fn: (() => 'handover_pending' | 'cloud_unreachable' | null) | null): void;
   /** Stops the health timer (the box is closing). */
   shutdown(): void;
   /**
@@ -62,6 +80,14 @@ export interface YoutubeService extends YoutubeLeg {
    * a video a device names was uploaded just now to this channel. null when Google returns nothing for the id.
    */
   videoOrigin(videoId: string): Promise<{ publishedAt: string | null; channelId: string | null; ownChannelId: string | null } | null>;
+  /** A grant is stored here, even one Google has since withdrawn (release 2026.11.13). */
+  holdsGrant(): boolean;
+  /** Box: keeps the grant the cloud handed over and proves it with one refresh (`oauth.ts` `adopt`). */
+  adoptGrant(g: { refreshToken: string; channelId: string; channelTitle: string; scope: string }): Promise<'ok' | 'invalid_grant' | 'failed'>;
+  /** Box: one forced refresh of the stored grant (a handover whose acknowledgement did not get through). */
+  proveGrant(): Promise<'ok' | 'invalid_grant' | 'failed'>;
+  /** Box: the cloud's grant was withdrawn by Google before it could move: show the re-sign-in state. */
+  markRevoked(): void;
 }
 
 /** A broadcast the service has open. Ids and times only: never a key or a token. */
@@ -109,7 +135,12 @@ export interface YoutubeServiceDeps {
   tokenFile?: string;
   /** Open-broadcast record under `live/` (default `youtube-open.json`). */
   openFile?: string;
+  /** Called after a sign-in completed here or a sign-out (the box pushes its non-secret flag to the cloud). */
+  onChange?: () => void;
+  /** First and later daily looks at the grant (a box only; default 5 minutes after start, then every 24 hours). */
+  grantCheck?: { firstMs?: number; everyMs?: number; off?: boolean };
 }
+const DAY_MS = 24 * 3_600_000;
 
 type Health = NonNullable<LiveStatus['youtube']['health']>;
 const HEALTHS: ReadonlySet<string> = new Set<Health>(['noData', 'bad', 'ok', 'good']);
@@ -118,7 +149,36 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
   const { db, now } = deps;
   const timeoutMs = deps.timeoutMs ?? 10_000;
   const surauOf = deps.surauId ?? LOCAL_SURAU_ID;
-  const auth = new YoutubeAuth({ dataDir: deps.dataDir, fetchImpl: deps.fetchImpl, now, timeoutMs, ...(deps.tokenFile !== undefined ? { tokenFile: deps.tokenFile } : {}) });
+  /** Who started the sign-in the server is carrying: the change log row names them when it completes. */
+  let signInActor = 'system';
+  const auth = new YoutubeAuth({
+    dataDir: deps.dataDir,
+    fetchImpl: deps.fetchImpl,
+    now,
+    timeoutMs,
+    ...(deps.tokenFile !== undefined ? { tokenFile: deps.tokenFile } : {}),
+    onSignedIn: (channelTitle) => {
+      audit(signInActor, 'signin', { channelTitle }, surauOf);
+      changed();
+    },
+    // a box keeps the last good sign-in and the end of a sign-in across restarts
+    persistState: (deps.role ?? 'box') === 'box',
+    onRevoked: () => {
+      try {
+        audit('system', 'revoked', { reason: 'invalid_grant' }, surauOf);
+      } catch {
+        /* the history never hides the state */
+      }
+      changed();
+    },
+  });
+  const changed = (): void => {
+    try {
+      deps.onChange?.();
+    } catch {
+      /* the flag push never undoes a sign-in or a sign-out */
+    }
+  };
 
   let broadcastId: string | null = null;
   let watchUrl: string | null = null;
@@ -143,17 +203,25 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
 
   /** One authorised call to the YouTube Data API; every failure leaves as a YoutubeError with a short reason. */
   async function call(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, query: Record<string, string>, body?: unknown): Promise<Record<string, unknown>> {
-    const token = await auth.accessToken();
     const url = `${API}/${path}?${new URLSearchParams(query).toString()}`;
-    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-    const init: { method: string; headers: Record<string, string>; body?: string } = { method, headers };
-    if (body !== undefined) {
-      headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(body);
+    // a 401 means the access token was spent early: it is refreshed once, silently, and the call is made again.
+    // Only Google refusing the refresh (invalid_grant) ends the sign-in.
+    for (let attempt = 0; ; attempt++) {
+      const token = await auth.accessToken();
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      const init: { method: string; headers: Record<string, string>; body?: string } = { method, headers };
+      if (body !== undefined) {
+        headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify(body);
+      }
+      const r = await googleRequest(deps.fetchImpl, url, init, { timeoutMs });
+      if (r.status === 401 && attempt === 0) {
+        auth.invalidateAccess();
+        continue;
+      }
+      if (r.status < 200 || r.status >= 300) throw failureOf(r.status, r.json);
+      return r.json ?? {};
     }
-    const r = await googleRequest(deps.fetchImpl, url, init, { timeoutMs });
-    if (r.status < 200 || r.status >= 300) throw failureOf(r.status, r.json);
-    return r.json ?? {};
   }
 
   /**
@@ -396,7 +464,8 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
         {
           snippet: { title: req.meta.title, description: req.meta.description, scheduledStartTime: now().toISOString() },
           status: { privacyStatus: req.meta.privacy, selfDeclaredMadeForKids: false },
-          contentDetails: { enableAutoStart: true, enableAutoStop: false, latencyPreference: 'low', monitorStream: { enableMonitorStream: false } },
+          // recordFromStart and enableDvr are YouTube's defaults; set explicitly (as a broadcast made in YouTube Studio has them) so the recording is kept
+          contentDetails: { enableAutoStart: true, enableAutoStop: false, enableDvr: true, recordFromStart: true, latencyPreference: 'low', monitorStream: { enableMonitorStream: false } },
         },
       );
       id = typeof created.id === 'string' ? created.id : '';
@@ -420,9 +489,28 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
     }
   }
 
+  /** The daily look at the grant (a box only). The first look comes soon after start, so a withdrawn grant shows before the kuliah. */
+  let grantFirst: NodeJS.Timeout | null = null;
+  let grantTimer: NodeJS.Timeout | null = null;
+  const stopGrantCheck = (): void => {
+    if (grantFirst !== null) clearTimeout(grantFirst);
+    if (grantTimer !== null) clearInterval(grantTimer);
+    grantFirst = null;
+    grantTimer = null;
+  };
+  if (role === 'box' && deps.grantCheck?.off !== true) {
+    const look = (): void => void auth.verify().catch(() => undefined);
+    grantFirst = setTimeout(look, deps.grantCheck?.firstMs ?? 5 * 60_000);
+    grantFirst.unref();
+    grantTimer = setInterval(look, deps.grantCheck?.everyMs ?? DAY_MS);
+    grantTimer.unref();
+  }
+
   return {
     configured: () => auth.configured(),
     signedIn: () => auth.signedIn(),
+    verifyGrant: () => auth.verify().catch(() => 'failed' as const),
+    setUnknownProbe: (fn) => auth.setUnknownProbe(fn),
 
     createBroadcastFor(req: { sessionId: string; meta: YoutubeMeta }) {
       // One broadcast per session: a retry (the first answer was lost) gets the same one, and a retry that
@@ -446,6 +534,22 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
             // the stream is gone (the broadcast ended): that session starts a fresh one
             open.delete(sessionKey);
             persistOpen();
+          }
+        }
+        // Cloud: a box runs one live at a time, so its other open broadcasts are left over from a power cut
+        // (no complete was ever sent, and its status reads keep them from the orphan sweep): end them now.
+        const slash = sessionKey.indexOf('/');
+        if (role === 'cloud' && slash > 0) {
+          const prefix = sessionKey.slice(0, slash + 1);
+          for (const [k, r] of [...open]) {
+            if (k === sessionKey || !k.startsWith(prefix)) continue;
+            try {
+              await finish(r.broadcastId, r.streamId === '' ? null : r.streamId);
+              open.delete(k);
+              persistOpen();
+            } catch {
+              /* the sweep tries again later */
+            }
           }
         }
         return createNew(req, sessionKey);
@@ -537,23 +641,52 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
     },
 
     status(): LiveStatus['youtube'] {
-      return { signedIn: auth.signedIn(), channelTitle: auth.channelTitle(), broadcastId, state, health, watchUrl, lastError: lastError ?? auth.lastError() };
+      const v = auth.view();
+      // `signedIn` stays a plain yes or no for an older app; when the box cannot tell (unknown) it shows what was last good
+      const signedIn = v.state === 'signedIn' || (v.state === 'unknown' && v.lastGood !== null);
+      return {
+        signedIn,
+        channelTitle: auth.channelTitle() ?? (v.state === 'unknown' ? v.lastGood?.channelTitle ?? null : null),
+        broadcastId,
+        state,
+        health,
+        watchUrl,
+        lastError: lastError ?? auth.lastError(),
+        signIn: auth.signInState(),
+        account: v,
+      };
     },
 
-    info: () => ({ configured: auth.configured(), signedIn: auth.signedIn(), channelTitle: auth.channelTitle(), lastError: lastError ?? auth.lastError() }),
+    info() {
+      const signIn = auth.signInState();
+      const v = auth.view();
+      const signedIn = v.state === 'signedIn' || (v.state === 'unknown' && v.lastGood !== null);
+      return {
+        configured: auth.configured(),
+        signedIn,
+        channelTitle: auth.channelTitle() ?? (v.state === 'unknown' ? v.lastGood?.channelTitle ?? null : null),
+        lastError: lastError ?? auth.lastError(),
+        ...(signIn !== null ? { signIn } : {}),
+        state: v.state,
+        reason: v.reason,
+        lastGood: v.lastGood,
+        revokedAt: v.revokedAt,
+      };
+    },
 
     hasOpenBroadcast: () => open.size > 0,
 
     async begin(actor: string): Promise<SigninBegin> {
-      void actor;
-      return auth.begin();
+      const out = await auth.begin();
+      signInActor = actor;
+      return out;
     },
 
     async poll(actor: string, surauId: string = surauOf): Promise<SigninPoll> {
-      const wasIn = auth.signedIn();
-      const r = await auth.poll();
-      if (r.state === 'signed_in' && !wasIn) audit(actor, 'signin', { channelTitle: r.channelTitle }, surauId);
-      return r;
+      // the server completes the sign-in on its own timer; this route only reports (the change log row is written there)
+      void actor;
+      void surauId;
+      return auth.poll();
     },
 
     async signout(actor: string, surauId: string = surauOf): Promise<void> {
@@ -565,7 +698,13 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
       health = null;
       lastError = null;
       audit(actor, 'signout', {}, surauId);
+      changed();
     },
+
+    holdsGrant: () => auth.hasGrant(),
+    adoptGrant: (g) => auth.adopt(g),
+    proveGrant: () => auth.prove(),
+    markRevoked: () => auth.markRevoked(),
 
     async createResumableUpload(meta: YoutubeMeta, privacy: VideoPrivacy, bytes?: number) {
       const token = await auth.accessToken();
@@ -636,6 +775,10 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
       };
     },
 
-    shutdown: stopTimer,
+    shutdown(): void {
+      stopTimer();
+      stopGrantCheck();
+      auth.shutdown();
+    },
   };
 }

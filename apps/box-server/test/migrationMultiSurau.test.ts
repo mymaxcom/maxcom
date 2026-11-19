@@ -86,7 +86,7 @@ function tmp(): string {
 
 const NAME_019 = '019-multi-surau';
 /** Migrations numbered after 019 (themes 2026.11.9, renumbered from 019): they run in the same call. */
-const AFTER_019 = ['020-site-theme-support', '021-camera-secret', '022-people-relook'];
+const AFTER_019 = ['020-site-theme-support', '021-camera-secret', '022-people-relook', '023-youtube-box', '024-outbox-camera-mark', '025-poster-stretch-keep', '026-parked-settings'];
 
 /** The four tables db.ts created BEFORE migration 019 (old keys). */
 const LEGACY_TABLES = `
@@ -188,8 +188,10 @@ function counts(db: DatabaseSync): Record<string, number> {
   for (const t of userTables(db)) {
     // tables 019 creates (Task 8 added surau_assets, the per-surau storage count)
     if (t === 'schema_migrations' || t === 'suraus' || t === 'surau_assets' || t === 'camera_secrets' || t === 'id_counters') continue;
+    // 023 makes the two YouTube tables (empty)
+    if (t === 'youtube_flag' || t === 'youtube_handover' || t === 'parked_settings') continue;
     // 022 sets two one-time flags in sync_state; they are not data
-    const where = t === 'sync_state' ? " WHERE key NOT IN ('people_resync', 'ids_push')" : '';
+    const where = t === 'sync_state' ? " WHERE key NOT IN ('people_resync', 'ids_push', 'poster_stretch_keep')" : '';
     out[t] = Number(one(db, `SELECT COUNT(*) AS n FROM "${t}"${where}`).n);
   }
   return out;
@@ -246,8 +248,8 @@ function shape(db: DatabaseSync): Record<string, unknown> {
 /** Values of the given columns of every row, order-insensitive, JSON per row. */
 function dump(db: DatabaseSync, table: string, columns: string[]): string[] {
   const list = columns.map((c) => `"${c}"`).join(', ');
-  // 022 sets two one-time flags in sync_state; they are not data
-  const where = table === 'sync_state' ? " WHERE key NOT IN ('people_resync', 'ids_push')" : '';
+  // 022 and 025 set one-time flags in sync_state; they are not data
+  const where = table === 'sync_state' ? " WHERE key NOT IN ('people_resync', 'ids_push', 'poster_stretch_keep')" : '';
   return all(db, `SELECT ${list} FROM "${table}"${where}`).map((r) => JSON.stringify(columns.map((c) => r[c]))).sort();
 }
 

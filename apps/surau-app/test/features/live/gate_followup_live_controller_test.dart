@@ -4,6 +4,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:surau_app/l10n/s_lookup.dart';
 import 'package:surau_app/app/deps.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/box/box_client.dart';
@@ -14,7 +15,6 @@ import 'package:surau_app/features/live/live_controller.dart';
 import 'package:surau_app/features/live/recordings_store.dart';
 import 'package:surau_app/features/shell/box_gateway.dart';
 import 'package:surau_app/features/shell/read_cache.dart';
-import 'package:surau_app/sync/live_only.dart';
 
 import '../fakes.dart';
 
@@ -117,7 +117,7 @@ class _CloudAwayGateway extends BoxGateway {
 }
 
 void main() {
-  testWidgets('YouTube sign-in with the cloud away says so instead of '
+  testWidgets('YouTube sign-in with the MAXCOM away says it is made on the surau Wi-Fi instead of '
       'throwing', (tester) async {
     final e = _Env();
     final c = ProviderContainer(
@@ -136,9 +136,9 @@ void main() {
     addTearDown(c.dispose);
     final ctrl = c.read(liveBoxProvider.notifier) as LiveController;
     await ctrl.signIn();
-    expect(c.read(liveBoxProvider).notice, liveOnlyMessage);
+    expect(c.read(liveBoxProvider).notice, sBm.liveYoutubeAtSurauOnly);
     await ctrl.signOut();
-    expect(c.read(liveBoxProvider).notice, liveOnlyMessage);
+    expect(c.read(liveBoxProvider).notice, sBm.liveYoutubeAtSurauOnly);
   });
 
   test('warningText has the BM line for cloud_unreachable', () {

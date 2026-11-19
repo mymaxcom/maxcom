@@ -32,6 +32,11 @@ const List<String> groupOrder = [
   'keselamatan',
 ];
 
+/// Features listed first in the settings list, above every group (operator
+/// 2026-11-20: Bahasa skrin TV is the first item). They are drawn in one card
+/// of their own, in this order, and are left out of their registry group.
+const List<String> pinnedFeatures = ['language'];
+
 /// A sentence under a feature's switch on its settings page, by feature
 /// key (BM). Only features that need more than their name have one.
 const Map<String, String> featureHelpMs = {
@@ -129,7 +134,7 @@ const Map<String, String> settingLabelsMs = {
   'speed': 'Kelajuan',
   'hideAfterMinutes': 'Sembunyi selepas (minit)',
   'count': 'Bilangan',
-  'pick': 'Cara memilih',
+  'pick': 'Ayat yang dipaparkan',
   // hadis
   'source': 'Sumber hadis',
   'mix': 'Susunan',
@@ -147,7 +152,7 @@ const Map<String, String> settingLabelsMs = {
   'hasan_lighairihi': 'Hasan li ghairihi',
   // al-quran
   'surah': 'Surah',
-  'ayatFrom': 'Ayat dari',
+  'ayatFrom': 'Mula dari ayat',
   'ayatTo': 'Ayat hingga',
   'showTranslation': 'Papar terjemahan',
   'textSize': 'Saiz teks',
@@ -181,6 +186,7 @@ const Map<String, String> settingLabelsMs = {
   'titleTemplate': 'Templat tajuk',
   'descriptionTemplate': 'Templat keterangan',
   'maxBitrateKbps': 'Kadar bit maksimum (kbps)',
+  'nextLiveOn': 'YouTube untuk siaran seterusnya',
   'segmentMinutes': 'Panjang setiap fail rakaman (minit)',
   'keepOnDevice': 'Simpan rakaman di peranti',
   // audio
@@ -303,7 +309,7 @@ const Map<String, String> settingLabelsEn = {
   'speed': 'Speed',
   'hideAfterMinutes': 'Hide after (minutes)',
   'count': 'Count',
-  'pick': 'How to choose',
+  'pick': 'Verses to show',
   'source': 'Hadith source',
   'mix': 'Order',
   'changeEvery': 'Change hadith',
@@ -319,7 +325,7 @@ const Map<String, String> settingLabelsEn = {
   'sahih_lighairihi': 'Sahih li ghairihi',
   'hasan_lighairihi': 'Hasan li ghairihi',
   'surah': 'Surah',
-  'ayatFrom': 'Verse from',
+  'ayatFrom': 'Start at verse',
   'ayatTo': 'Verse to',
   'showTranslation': 'Show translation',
   'textSize': 'Text size',
@@ -352,6 +358,7 @@ const Map<String, String> settingLabelsEn = {
   'titleTemplate': 'Title template',
   'descriptionTemplate': 'Description template',
   'maxBitrateKbps': 'Maximum bitrate (kbps)',
+  'nextLiveOn': 'YouTube for the next live',
   'segmentMinutes': 'Length of each recording file (minutes)',
   'keepOnDevice': 'Keep the recording on the device',
   'volume': 'Volume',
@@ -383,7 +390,7 @@ const Map<String, Map<String, String>> choiceLabelsMs = {
   'transport': {'auto': 'Automatik', 'tcp': 'TCP', 'udp': 'UDP'},
   'timeFormat': {'12h': '12 jam', '24h': '24 jam'},
   'switchAt': {'maghrib': 'Waktu Maghrib', 'midnight': 'Tengah malam'},
-  'lang': {'auto': 'Ikut lokasi', 'ms': 'Bahasa Melayu', 'en': 'English'},
+  'lang': {'auto': 'Automatik', 'ms': 'Bahasa Melayu', 'en': 'English', 'ar': 'العربية'},
   'mode': {'landscape': 'Mendatar', 'portrait': 'Menegak'},
   // The theme names are one English name in every language (spec 6.10.2).
   'templateId': {
@@ -400,7 +407,7 @@ const Map<String, Map<String, String>> choiceLabelsMs = {
     'off': 'Tidak bertukar',
   },
   'pick': {
-    'daily': 'Setiap hari',
+    'daily': 'Pilihan harian',
     'random': 'Rawak',
     'manual': 'Pilih sendiri',
   },
@@ -496,6 +503,7 @@ const Map<String, String> settingHelpMs = {
       'melalui MAXCOM. Salin terus guna CPU MAXCOM paling sedikit. Kod semula '
       'untuk telefon yang hantar kadar bit terlalu tinggi.',
   'maxBitrateKbps': 'Ikut kelajuan muat naik internet surau.',
+  'nextLiveOn': 'Pilihan bersama untuk semua pentadbir: siaran seterusnya ke YouTube atau tidak.',
   'cacheMaxMb':
       'Muat turun audio berhenti bila had dicapai; audio lama tidak dipadam. '
       'Satu juzuk lebih kurang 40 MB.',
@@ -512,12 +520,17 @@ const Map<String, String> settingHelpMs = {
   'dirtyCheckSeconds':
       'Lebih kerap, perubahan dari rumah sampai lebih cepat, tetapi awan lebih kerap dibangunkan.',
   'lang':
-      'Bahasa skrin TV, bukan bahasa aplikasi di telefon. Ikut lokasi: BM di '
-      'Malaysia, Inggeris di negara lain.',
+      'Bahasa skrin TV, bukan bahasa aplikasi di telefon. Automatik ikut '
+      'lokasi: BM di Malaysia, Inggeris di negara lain.',
 };
 
 /// A sentence under each choice, for the settings drawn as cards (BM).
 const Map<String, Map<String, String>> choiceHelpMs = {
+  'pick': {
+    'daily': 'Membaca Al-Quran mengikut turutan, hingga 3 ayat sehari, bersambung esok.',
+    'random': 'Satu ayat rawak daripada seluruh Al-Quran, bertukar setiap hari.',
+    'manual': 'Ayat yang anda pilih dipaparkan setiap hari sehingga anda menukarnya.',
+  },
   'relayFrom': {
     'box': 'Telefon hantar gambar ke MAXCOM di surau; MAXCOM yang siarkan ke YouTube.',
     'phone':
@@ -531,7 +544,7 @@ const Map<String, Map<String, String>> choiceLabelsEn = {
   'transport': {'auto': 'Automatic', 'tcp': 'TCP', 'udp': 'UDP'},
   'timeFormat': {'12h': '12 hours', '24h': '24 hours'},
   'switchAt': {'maghrib': 'At Maghrib', 'midnight': 'At midnight'},
-  'lang': {'auto': 'Follow location', 'ms': 'Bahasa Melayu', 'en': 'English'},
+  'lang': {'auto': 'Automatic', 'ms': 'Bahasa Melayu', 'en': 'English', 'ar': 'العربية'},
   'mode': {'landscape': 'Landscape', 'portrait': 'Portrait'},
   // The theme names are one English name in every language (spec 6.10.2).
   'templateId': {
@@ -548,7 +561,7 @@ const Map<String, Map<String, String>> choiceLabelsEn = {
     'off': 'No change',
   },
   'pick': {
-    'daily': 'Every day',
+    'daily': 'Daily selection',
     'random': 'Random',
     'manual': 'Choose yourself',
   },
@@ -648,6 +661,7 @@ const Map<String, String> settingHelpEn = {
       'not go through MAXCOM. Copy as is uses the least MAXCOM CPU. Re-encode is for '
       'phones that send too high a bit rate.',
   'maxBitrateKbps': "Follow the surau's internet upload speed.",
+  'nextLiveOn': 'Shared by all admins: whether the next live goes to YouTube.',
   'cacheMaxMb':
       'The audio download stops when the limit is reached; old audio is not deleted. '
       'One juz is about 40 MB.',
@@ -664,12 +678,17 @@ const Map<String, String> settingHelpEn = {
   'fontSize': 'The base text size. Text size in Customise adds a scale on top of it.',
   'textSize': 'The base text size. Text size in Customise adds a scale on top of it.',
   'lang':
-      'The language of the TV screen, not of the app on the phone. Follow location: '
+      'The language of the TV screen, not of the app on the phone. Automatic follows location: '
       'BM in Malaysia, English in other countries.',
 };
 
 /// English sentence under each choice.
 const Map<String, Map<String, String>> choiceHelpEn = {
+  'pick': {
+    'daily': 'Reads the Quran in order, up to 3 verses a day, continuing tomorrow.',
+    'random': 'One random verse from the whole Quran, changing every day.',
+    'manual': 'The verses you choose are shown every day until you change them.',
+  },
   'relayFrom': {
     'box': 'The phone sends the picture to MAXCOM at the surau; MAXCOM streams to YouTube.',
     'phone':

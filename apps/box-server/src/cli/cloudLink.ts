@@ -115,7 +115,7 @@ export async function runCloudLink(argv: string[], io: CloudLinkIo, fetchImpl?: 
         const had = removeSyncKey(dataDir);
         const db = openDb(dbPath);
         try {
-          db.prepare("DELETE FROM sync_state WHERE key IN ('linked', 'cloud_url', 'last_error', 'last_push', 'last_pull', 'last_push_seq', 'last_pull_seq', 'pending_out')").run();
+          db.prepare("DELETE FROM sync_state WHERE key IN ('linked', 'cloud_url', 'last_error', 'last_push', 'last_pull', 'last_ok', 'last_push_seq', 'last_pull_seq', 'pending_out', 'camera_relay_seq', 'camera_relay_result')").run();
         } finally {
           db.close();
         }

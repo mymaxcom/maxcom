@@ -26,12 +26,17 @@ export function ContentShell({ view, lang, children }: ContentShellProps) {
   const showName = nameShownOf(settings, logo);
   const timeFormat = settings.prayerBar.timeFormat === '24h' ? '24h' : '12h';
   const showSeconds = settings.clock.showSeconds === true;
+  const nameText = showName ? surauNameOf(settings, lang) : '';
+  const letters = Array.from(nameText).length;
+  // A long name steps its size and tracking down (contract.css .name-t1/.name-t2); an Arabic one is not tracked at all.
+  const nameStep = letters > 22 ? ' name-t2' : letters > 16 ? ' name-t1' : '';
+  const nameArabic = Array.from(nameText).some((c) => c.charCodeAt(0) >= 0x600 && c.charCodeAt(0) <= 0x6ff) ? ' name-ar' : '';
   return (
     <>
-      <div class={`region-brand brand has-logo`}>
+      <div class={`region-brand brand has-logo${nameStep}${nameArabic}`}>
         <SurauLogo src={logo} class="ident__logo" />
         <div class="brand-text">
-          {showName ? <span class="brand-name free-text">{surauNameOf(settings, lang)}</span> : null}
+          {showName ? <span class="brand-name free-text">{nameText}</span> : null}
           <div class="shell-date free-text" data-testid="shell-date">
             <span class="shell-greg">{fmtGregorian(now, lang, tz)}</span>
             {hijri ? (

@@ -31,7 +31,16 @@ const before = (id: string): string => readFileSync(resolve(srcDir(), '../test/f
 /** Rules that are in theme.css now and were not in the copy kept from before this task. The main layout's `.pcell` rules
  *  moved under `.pbar` (so the compact strip is not reached by them): that rewrite is not a new rule. */
 function newRules(id: string): Array<{ sel: string; body: string }> {
-  const norm = (r: { sel: string; body: string }): string => `${r.sel.replace(/\.pbar \.pcell/g, '.pcell')}{${r.body}}`;
+  // W14 rewrote left/right as logical properties (the same left to right, mirrored for an Arabic screen): not a new rule.
+  const physical = (body: string): string =>
+    body
+      .replace(/inset-inline-start/g, 'left')
+      .replace(/inset-inline-end/g, 'right')
+      .replace(/(margin|padding|border)-inline-start/g, '$1-left')
+      .replace(/(margin|padding|border)-inline-end/g, '$1-right')
+      .replace(/text-align: start/g, 'text-align: left')
+      .replace(/text-align: end/g, 'text-align: right');
+  const norm = (r: { sel: string; body: string }): string => `${r.sel.replace(/\.pbar \.pcell/g, '.pcell')}{${physical(r.body)}}`;
   const known = new Set(rulesOf(before(id)).map(norm));
   // (the live screen's own dress, plan D task 5, is checked in liveLayout.test.ts)
   return rulesOf(themeCss(id)).filter((r) => !known.has(norm(r)) && !/live/.test(`${r.sel} ${r.body}`));
@@ -98,5 +107,21 @@ describe('content screens in the built-in themes', () => {
         expect(r.body, `${id}: ${r.sel}`).not.toMatch(/display:\s*none|visibility:\s*hidden|opacity:\s*0(?:[;\s]|$)/);
       }
     }
+  });
+});
+
+describe('poster frame (2026.11.13): below the header, Regangkan', () => {
+  const css = readFileSync(resolve(srcDir(), 'themes/contract.css'), 'utf8');
+  const rules = rulesOf(css);
+  const body = (sel: string): string => rules.find((r) => r.sel === sel)?.body ?? '';
+  it('starts below the measured header (with a fallback), small even insets, no header scrim', () => {
+    const f = body('.poster-frame');
+    expect(f).toMatch(/top: calc\(var\(--poster-top, [\d.]+rem\) \+ 0\.833rem\)/);
+    for (const side of ['inset-inline-start', 'inset-inline-end', 'bottom']) expect(f).toContain(`${side}: 0.833rem`);
+    expect(rules.some((r) => r.sel.includes('.poster-stage::after'))).toBe(false);
+  });
+  it('stretch fills the frame exactly; stretch false keeps the picture whole', () => {
+    expect(body('.poster-frame img')).toMatch(/width: 100%.*height: 100%.*object-fit: fill/);
+    expect(body(".poster-frame[data-stretch='false'] img")).toContain('object-fit: contain');
   });
 });

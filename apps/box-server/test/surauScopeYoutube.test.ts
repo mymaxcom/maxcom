@@ -11,6 +11,7 @@ import { insertSite } from './support/sites.ts';
 import type { TestSite } from './support/sites.ts';
 import type { FakeGoogle } from './support/fakeGoogle.ts';
 import { buildCloud } from './support/fakeCloud.ts';
+import { seedCloudGrant } from './support/cloudGrant.ts';
 import { withUploadApi } from './support/fakeGoogleUpload.ts';
 import { startFakeGoogle } from './support/fakeGoogle.ts';
 import { TEST_PIN, loginAs } from './authHelpers.ts';
@@ -36,12 +37,8 @@ describe('youtube uploads scoped by surau_id', () => {
     mkdirSync(join(cloud.dir, 'secret'), { recursive: true });
     writeFileSync(join(cloud.dir, 'secret', 'youtube-client.json'), JSON.stringify({ client_id: 'cid', client_secret: 'secret' }));
 
-    // sign in
-    const admin = await loginAs(app, 'admin');
-    expect((await app.inject({ method: 'POST', url: '/api/live/youtube/signin', headers: admin.headers })).statusCode).toBe(200);
-    g.approve = true;
-    clock.t += 6000;
-    expect((await app.inject({ method: 'POST', url: '/api/live/youtube/signin/poll', headers: admin.headers })).json()).toMatchObject({ signedIn: true });
+    // the grant the cloud held from before release 2026.11.13 (the cloud makes no new one)
+    seedCloudGrant(cloud.dir, clock.now);
 
     const { db } = app.surau;
     const pen = putItem(db, 'penceramah', { name: 'Ustaz' }, 'test', undefined, 'sdm');
@@ -119,11 +116,9 @@ describe('[L1] one YouTube sign-in per surau on the cloud', () => {
     return { app: cloud.app, dir: cloud.dir, g, clock, adminA, adminB, siteA, siteB };
   }
 
-  async function signIn(r: Awaited<ReturnType<typeof rig>>, who: { headers: Record<string, string> }): Promise<void> {
-    expect((await r.app.inject({ method: 'POST', url: '/api/live/youtube/signin', headers: who.headers })).statusCode).toBe(200);
-    r.g.approve = true;
-    r.clock.t += 6000;
-    expect((await r.app.inject({ method: 'POST', url: '/api/live/youtube/signin/poll', headers: who.headers })).json()).toMatchObject({ signedIn: true });
+  /** The grant a surau's cloud sign-in left before release 2026.11.13 (the cloud makes no new one). */
+  async function signIn(r: Awaited<ReturnType<typeof rig>>, who: { surauId: string }): Promise<void> {
+    seedCloudGrant(r.dir, () => new Date(r.clock.t), who.surauId);
   }
   const status = (r: Awaited<ReturnType<typeof rig>>, who: { headers: Record<string, string> }) =>
     r.app.inject({ method: 'GET', url: '/api/live/youtube/status', headers: who.headers });
@@ -137,36 +132,39 @@ describe('[L1] one YouTube sign-in per surau on the cloud', () => {
 
   it('[L1] surau A signed in: surau B is signed out, and B cannot sign A out', async () => {
     const r = await rig();
-    await signIn(r, r.adminA);
+    await signIn(r, { surauId: DEFAULT_SURAU });
     expect((await status(r, r.adminA)).json()).toMatchObject({ signedIn: true });
     expect((await status(r, r.adminB)).json()).toMatchObject({ signedIn: false });
+    // 2026.11.13: no sign-out on the cloud at all (it would revoke the grant the box holds)
     const out = await r.app.inject({ method: 'POST', url: '/api/live/youtube/signout', headers: r.adminB.headers });
-    expect(out.statusCode).toBe(200);
+    expect(out.statusCode).toBe(409);
+    expect(out.json().code).toBe('youtube_at_box');
     expect((await status(r, r.adminA)).json()).toMatchObject({ signedIn: true });
     // B's own site cannot make a broadcast on A's account
     const res = await broadcast(r, r.siteB, 'sess-b');
-    expect(res.statusCode).toBe(503);
-    expect(res.json().code).toBe('youtube_reauthorise');
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('youtube_not_configured');
     expect(r.g.calls.some((c) => c.path === '/youtube/v3/liveBroadcasts' && c.method === 'POST')).toBe(false);
   });
 
   it('[L1] the token file name carries the surau id and no code path reads the shared file', async () => {
     const r = await rig();
-    await signIn(r, r.adminA);
-    await signIn(r, r.adminB);
+    await signIn(r, { surauId: DEFAULT_SURAU });
+    await signIn(r, { surauId: B });
     expect(existsSync(join(r.dir, 'secret', `youtube-token-${DEFAULT_SURAU}.json`))).toBe(true);
     expect(existsSync(join(r.dir, 'secret', `youtube-token-${B}.json`))).toBe(true);
     expect(existsSync(join(r.dir, 'secret', 'youtube-token.json'))).toBe(false);
-    // B signs out: A's file stays
-    await r.app.inject({ method: 'POST', url: '/api/live/youtube/signout', headers: r.adminB.headers });
-    expect(existsSync(join(r.dir, 'secret', `youtube-token-${B}.json`))).toBe(false);
+    // B's sign-out is refused on the cloud (2026.11.13): both files stay, Google is never asked to revoke
+    expect((await r.app.inject({ method: 'POST', url: '/api/live/youtube/signout', headers: r.adminB.headers })).statusCode).toBe(409);
+    expect(existsSync(join(r.dir, 'secret', `youtube-token-${B}.json`))).toBe(true);
     expect(existsSync(join(r.dir, 'secret', `youtube-token-${DEFAULT_SURAU}.json`))).toBe(true);
+    expect(r.g.count('/revoke')).toBe(0);
   });
 
   it('[L1] a broadcast carries its own surau name and a surau cannot end a live of another', async () => {
     const r = await rig();
-    await signIn(r, r.adminA);
-    await signIn(r, r.adminB);
+    await signIn(r, { surauId: DEFAULT_SURAU });
+    await signIn(r, { surauId: B });
     const a = await broadcast(r, r.siteA, 'sess-a');
     expect(a.statusCode).toBe(200);
     const b = await broadcast(r, r.siteB, 'sess-b');
@@ -180,8 +178,8 @@ describe('[L1] one YouTube sign-in per surau on the cloud', () => {
 
   it('[L1] verify of another surau video id is refused; the own one answers', async () => {
     const r = await rig();
-    await signIn(r, r.adminA);
-    await signIn(r, r.adminB);
+    await signIn(r, { surauId: DEFAULT_SURAU });
+    await signIn(r, { surauId: B });
     const a = await broadcast(r, r.siteA, 'sess-a');
     const id = a.json().broadcastId as string;
     const liveA = await loginAs(r.app, 'live');
@@ -193,17 +191,21 @@ describe('[L1] one YouTube sign-in per surau on the cloud', () => {
     expect(theirs.json().code).toBe('unknown_video');
   });
 
-  it('[L1] sign-out is refused while one of the surau sites has a live open', async () => {
+  it('[L1] sign-out, sign-in and its poll are refused on the cloud for every surau, live or not (2026.11.13)', async () => {
     const r = await rig();
-    await signIn(r, r.adminA);
-    await signIn(r, r.adminB);
+    await signIn(r, { surauId: DEFAULT_SURAU });
+    await signIn(r, { surauId: B });
     expect((await broadcast(r, r.siteA, 'sess-a')).statusCode).toBe(200);
-    const out = await r.app.inject({ method: 'POST', url: '/api/live/youtube/signout', headers: r.adminA.headers });
-    expect(out.statusCode).toBe(409);
-    expect(out.json().code).toBe('live_busy');
+    for (const who of [r.adminA, r.adminB]) {
+      for (const url of ['/api/live/youtube/signout', '/api/live/youtube/signin', '/api/live/youtube/signin/poll']) {
+        const out = await r.app.inject({ method: 'POST', url, headers: who.headers });
+        expect(out.statusCode, url).toBe(409);
+        expect(out.json().code).toBe('youtube_at_box');
+      }
+    }
     expect((await status(r, r.adminA)).json()).toMatchObject({ signedIn: true });
-    // B has no live: B may sign out
-    expect((await r.app.inject({ method: 'POST', url: '/api/live/youtube/signout', headers: r.adminB.headers })).statusCode).toBe(200);
+    expect(r.g.count('/revoke')).toBe(0);
+    expect(r.g.count('/device/code')).toBe(0);
   });
 
   it('[L1] the old shared token and open-broadcast files are gone after the first start of a cloud', () => {

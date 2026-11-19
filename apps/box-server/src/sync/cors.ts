@@ -14,7 +14,7 @@ export function normaliseOrigin(raw: string): string | null {
 }
 
 const ALLOW_HEADERS = 'Authorization, Content-Type';
-const ALLOW_METHODS = 'GET, POST, PUT, DELETE';
+const ALLOW_METHODS = 'GET, POST, PUT, PATCH, DELETE';
 
 /**
  * CORS for the configured app origins only (SECURITY code). The allow header is echoed only for an exact

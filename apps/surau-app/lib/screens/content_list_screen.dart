@@ -18,18 +18,23 @@ import '../content/asset_picker.dart';
 import '../content/editors/content_form.dart';
 import '../content/image_ref.dart' show ImageSlot;
 import '../content/kinds.dart';
+import '../content/video_rules.dart' show clockOf;
 import '../features/labels.dart' show appLangOf, appLangOfS;
+import '../features/registry.g.dart' show surahs;
+import '../features/surah_names.dart' show surahName;
 import '../features/shell/permissions.dart';
 import '../l10n/generated/s.dart';
 import 'widgets/box_read.dart';
 import 'widgets/pieces.dart';
 
 /// `/content`: every kind with one line on what it is.
-class ContentKindsScreen extends StatelessWidget {
+class ContentKindsScreen extends ConsumerWidget {
   const ContentKindsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // A box older than 2026.11.13 has no Video: the kind is not offered there.
+    final videoOk = ref.watch(boxSupportsProvider('video'));
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
     return ShellPage(
@@ -42,7 +47,7 @@ class ContentKindsScreen extends StatelessWidget {
           ),
           RowsCard(
             children: [
-              for (final k in contentKinds)
+              for (final k in contentKinds.where((k) => k.key != 'video' || videoOk))
                 ListTile(
                   leading: Icon(k.icon),
                   title: Text(k.labelPlural(appLangOf(context))),
@@ -232,6 +237,7 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
     case 'ticker':
       out.sort((a, b) => cmpStr(a, b, 'to'));
     case 'poster':
+    case 'video':
     case 'worldTime':
     case 'zikir':
       out.sort((a, b) => cmpNum(a, b, 'order'));
@@ -328,6 +334,30 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
         image: it['assetId'],
         slot: ImageSlot.poster,
       );
+    case 'video':
+      final days = daysWords((it['days'] as List?) ?? const [], lang);
+      final r = range('from', 'to');
+      final source = str('source');
+      final what = switch (source) {
+        'upload' => s.videoRowUpload(clockOf(((it['durationSec'] as num?) ?? 0).toInt())),
+        'rakaman' => s.videoRowRakaman(
+          clockOf(((it['startSec'] as num?) ?? 0).toInt()),
+          it['endSec'] is num ? clockOf((it['endSec'] as num).toInt()) : '',
+        ),
+        _ => s.videoRowYoutube,
+      };
+      final to = opt('to');
+      final today = DateTime.now();
+      final todayIso = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final over = to.isNotEmpty && to.compareTo(todayIso) < 0;
+      final title = opt('title');
+      return (
+        title: title.isEmpty ? spec.label(lang) : title,
+        subtitle: [what, days, if (r.isNotEmpty) r, if (over && source == 'upload') s.videoExpiredSuggest].join('\n'),
+        badges: [if (it['sound'] == true) chip(s.videoSoundOn, gold: true)],
+        image: null,
+        slot: ImageSlot.poster,
+      );
     case 'programKhas':
       return (
         title: str('title'),
@@ -371,7 +401,7 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
     case 'tilawahSlot':
       final before = spec.choiceLabel(spec.field('before'), str('before'), lang);
       return (
-        title: s.contentSurah(((it['surah'] as num?) ?? 0).toInt()),
+        title: _surahTitle(s, ((it['surah'] as num?) ?? 0).toInt()),
         subtitle:
             '${s.contentMinutesBefore(((it['minutesBefore'] as num?) ?? 0).toInt(), before)}\n${daysWords((it['days'] as List?) ?? const [], lang)}',
         badges: [if (it['enabled'] != true) chip(s.contentOff)],
@@ -379,6 +409,11 @@ List<Map<String, dynamic>> sortItems(String kind, List<Map<String, dynamic>> ite
       );
   }
   return (title: str('id'), subtitle: '', badges: const [], image: null, slot: ImageSlot.poster);
+}
+
+String _surahTitle(S s, int n) {
+  final name = n >= 1 && n <= surahs.length ? surahName(s, n) : '';
+  return s.contentSurah(n, name);
 }
 
 class _ItemRow extends StatelessWidget {

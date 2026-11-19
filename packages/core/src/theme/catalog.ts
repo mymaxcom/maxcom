@@ -61,7 +61,7 @@ export type PhaseOnlyScreenId = (typeof PHASE_ONLY_SCREEN_IDS)[number];
  * The full-stage content screens with no catalog screen of their own (operator 2026-11-17, "use the whole screen"): the
  * duty roster and the world clocks, shown in the content shell under these stage ids.
  */
-export const SHELL_ONLY_SCREEN_IDS = ['tugasan', 'waktu-dunia'] as const;
+export const SHELL_ONLY_SCREEN_IDS = ['tugasan', 'waktu-dunia', 'video'] as const;
 export type ShellOnlyScreenId = (typeof SHELL_ONLY_SCREEN_IDS)[number];
 
 /** Any id the stage can wear as `data-screen` (and a display can report health from): a catalog screen or one of the above. */
@@ -71,7 +71,7 @@ export function isStageScreenId(s: unknown): s is ScreenId | PhaseOnlyScreenId |
 
 const CARD_SCREEN: Readonly<Record<SlotFeature, ScreenId | null>> = {
   kuliahCard: 'kuliah', pengumuman: 'pengumuman', posters: 'poster', programKhas: 'program', takwim: 'takwim',
-  hadis: 'hadis', ayatCard: 'ayat', tabungCard: 'tabung', worldTimes: null, tugasan: null,
+  hadis: 'hadis', ayatCard: 'ayat', tabungCard: 'tabung', worldTimes: null, tugasan: null, videos: null,
 };
 /** The catalog screen a rotation card belongs to; null for a card with no screen of its own. */
 export function screenOfCard(feature: SlotFeature): ScreenId | null {

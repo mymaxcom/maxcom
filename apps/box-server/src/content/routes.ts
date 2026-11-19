@@ -9,6 +9,7 @@ import { CONTENT_IMAGE_FIELDS, isContentKind, validateContent } from '@surau/cor
 import type { ImageRef } from '@surau/core';
 import { AssetError } from '../assets/store.ts';
 import { deriveImage, ImageAdjustError } from '../imageAdjust.ts';
+import { releaseVideoHold, removeVideoIfUnused } from '../assets/video.ts';
 
 export interface ContentRouteDeps {
   db: DatabaseSync;
@@ -30,6 +31,11 @@ function forReader<T>(request: FastifyRequest, kind: string, item: T): T {
   if (typeof item !== 'object' || item === null || !('phone' in item)) return item;
   const { phone: _phone, ...rest } = item as Record<string, unknown>;
   return rest as T;
+}
+
+/** The stored file an uploaded video item points at, or undefined. */
+function videoAssetOf(item: { assetId?: string } | null): string | undefined {
+  return item?.assetId;
 }
 
 function fail(reply: FastifyReply, error: unknown): FastifyReply {
@@ -82,8 +88,14 @@ export function registerContentRoutes(app: FastifyInstance, deps: ContentRouteDe
         }
       }
     }
+    // A video's file goes when the item stops pointing at it (replaced); the old id is read before the write.
+    const oldVideo = kind === 'video' ? videoAssetOf(getItem(db, 'video', id, reqSurau(request))) : undefined;
     try {
       const result = putItem(db, kind, { ...body, id }, deps.actorOf(request), undefined, reqSurau(request));
+      // the editor's fresh upload is now in its item: its hold ends (a re-save of the same file leaves other holds alone)
+      const newVideo = kind === 'video' ? videoAssetOf(result.item as { assetId?: string }) : undefined;
+      if (newVideo !== undefined && newVideo !== oldVideo) releaseVideoHold(db, newVideo);
+      if (oldVideo !== undefined && oldVideo !== newVideo) removeVideoIfUnused(db, dataDir, oldVideo);
       bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
       return reply.code(result.created ? 201 : 200).send({ item: result.item });
     } catch (error) {
@@ -94,10 +106,12 @@ export function registerContentRoutes(app: FastifyInstance, deps: ContentRouteDe
   app.delete('/api/content/:kind/:id', async (request, reply) => {
     const { kind, id } = request.params as { kind: string; id: string };
     if (!isContentKind(kind)) return reply.code(404).send({ errors: [`unknown content kind ${kind}`] });
+    const oldVideo = kind === 'video' ? videoAssetOf(getItem(db, 'video', id, reqSurau(request))) : undefined;
     try {
       if (!deleteItem(db, kind, id, deps.actorOf(request), undefined, reqSurau(request))) {
         return reply.code(404).send({ errors: [`${kind} ${id} not found`] });
       }
+      if (oldVideo !== undefined) removeVideoIfUnused(db, dataDir, oldVideo);
       bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
       return reply.code(204).send();
     } catch (error) {

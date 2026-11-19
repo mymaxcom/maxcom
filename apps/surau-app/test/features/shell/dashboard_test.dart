@@ -766,6 +766,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('[LG-TW] the connection line has no Malay time word in English or Arabic', (tester) async {
+    for (final lang in [AppLang.en, AppLang.ar]) {
+      await pumpShell(
+        tester,
+        roles: const ['admin'],
+        overrides: [appLangStoreProvider.overrideWithValue(MemoryAppLangStore(lang))],
+      );
+      await openSystem(tester);
+      final texts = tester.widgetList<Text>(find.byType(Text)).map((t) => t.data ?? t.textSpan?.toPlainText() ?? '').toList();
+      for (final t in texts) {
+        for (final w in ['malam', 'pagi', 'petang', 'tengah hari', 'esok']) {
+          expect(t.toLowerCase().contains(w), isFalse, reason: '${lang.code}: "$t" has "$w"');
+        }
+      }
+    }
+  });
+
   testWidgets('English and Arabic', (tester) async {
     for (final lang in [AppLang.en, AppLang.ar]) {
       final h = await pumpShell(

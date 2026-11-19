@@ -5,7 +5,11 @@ import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Every test here runs PowerShell or node child processes (several each): seconds alone, far longer while the
+// whole suite shares the machine. The limit only bounds a hung test; it never hides a failure.
+vi.setConfig({ testTimeout: 180_000 });
 import { must } from './helpers/must.ts';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -15,6 +19,9 @@ const win = process.platform === 'win32';
 const pkgVersion = JSON.parse(readFileSync(join(repoRoot, 'apps', 'box-server', 'package.json'), 'utf8')).version as string;
 const versions = JSON.parse(readFileSync(join(repoRoot, 'versions.json'), 'utf8')) as Record<string, string>;
 const winVersion = must(versions['kiosk-server-windows'], 'kiosk-server-windows version');
+// builds.json (internal build, 0 when not listed): above 0 it is in the archive name of that platform
+const builds = JSON.parse(readFileSync(join(repoRoot, 'builds.json'), 'utf8')) as Record<string, number>;
+const tagOf = (key: string): string => ((builds[key] ?? 0) > 0 ? `-b${builds[key]}` : '');
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -136,10 +143,10 @@ describe.runIf(win)('build-release.ps1 refusals on the real checkout', () => {
   it('-DryRun without -Version takes the version from versions.json', () => {
     const r = runBuild(['-DryRun', '-OutDir', join(tempDir(), 'never-made')]);
     expect(r.status).toBe(0);
-    expect(r.out).toContain(`maxcom-box-${winVersion}-windows.tar.gz`);
+    expect(r.out).toContain(`maxcom-box-${winVersion}${tagOf('kiosk-server-windows')}-windows.tar.gz`);
     const a = runBuild(['-DryRun', '-Platform', 'android', '-OutDir', join(tempDir(), 'never-made')]);
     expect(a.status).toBe(0);
-    expect(a.out).toContain(`maxcom-box-${versions['kiosk-server-android']}-android.tar.gz`);
+    expect(a.out).toContain(`maxcom-box-${versions['kiosk-server-android']}${tagOf('kiosk-server-android')}-android.tar.gz`);
   });
   it('-DryRun prints the stage list and writes nothing', () => {
     const out = join(tempDir(), 'never-made');
@@ -148,7 +155,7 @@ describe.runIf(win)('build-release.ps1 refusals on the real checkout', () => {
     expect(r.out).toContain('DRYRUN stage: apps/kiosk-display/dist/');
     expect(r.out).toContain('DRYRUN stage: release.json');
     expect(r.out).toContain('DRYRUN tar:');
-    expect(r.out).toContain(`maxcom-box-${winVersion}-windows.tar.gz`);
+    expect(r.out).toContain(`maxcom-box-${winVersion}${tagOf('kiosk-server-windows')}-windows.tar.gz`);
     expect(existsSync(out)).toBe(false);
   });
   it('refuses a real build while a dev server port listens (the live box on 8787 is never disturbed)', async () => {
@@ -329,10 +336,37 @@ describe.runIf(win)('build-release.ps1 end to end on a fixture checkout', () => 
     const out = join(tempDir(), 'out');
     const r = runBuild(['-Version', '2026.11.1', '-RepoRoot', fx, '-OutDir', out, '-SkipAppBuild', '-DevPorts', String(await freePort())]);
     expect(r.status).toBe(1);
-    expect(r.out).toMatch(/GAGAL: ada perubahan belum commit di apps\/, packages\/ atau versions\.json/);
+    expect(r.out).toMatch(/GAGAL: ada perubahan belum commit di apps\/, packages\/, versions\.json atau builds\.json/);
     expect(r.out).toContain('versions.json');
     expect(existsSync(out)).toBe(false);
   });
+
+  it('refuses an uncommitted builds.json (the build is stamped into release.json beside the commit)', async () => {
+    const fx = makeFixture();
+    put(fx, 'builds.json', '{"kiosk-server-windows":1}\n');
+    const out = join(tempDir(), 'out');
+    const r = runBuild(['-Version', '2026.11.1', '-RepoRoot', fx, '-OutDir', out, '-SkipAppBuild', '-DevPorts', String(await freePort())]);
+    expect(r.status).toBe(1);
+    expect(r.out).toMatch(/GAGAL: ada perubahan belum commit/);
+    expect(r.out).toContain('builds.json');
+    expect(existsSync(out)).toBe(false);
+  });
+
+  it('a build above 0 is in the archive name and stamped in release.json; the b0 name is not made', async () => {
+    const fx = makeFixture();
+    put(fx, 'builds.json', '{"kiosk-server-windows":2}\n');
+    git(fx, 'add', '-A');
+    git(fx, 'commit', '-q', '-m', 'build 2');
+    const out = join(tempDir(), 'out');
+    const r = runBuild(['-Version', '2026.11.1', '-RepoRoot', fx, '-OutDir', out, '-SkipAppBuild', '-DevPorts', String(await freePort())], 240_000);
+    expect(r.status, r.out).toBe(0);
+    const archive = join(out, 'maxcom-box-2026.11.1-b2-windows.tar.gz');
+    expect(existsSync(archive)).toBe(true);
+    expect(existsSync(join(out, 'maxcom-box-2026.11.1-windows.tar.gz'))).toBe(false);
+    const tar = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
+    const rel = spawnSync(tar, ['-xzOf', archive, 'release.json'], { encoding: 'utf8' });
+    expect(JSON.parse(rel.stdout)).toMatchObject({ version: '2026.11.1', build: 2 });
+  }, 300_000);
 
   it('refuses a web app build whose sha256sums.txt does not match, and when public/app is missing', async () => {
     const fx = makeFixture('2026.11.1', { badSums: true });

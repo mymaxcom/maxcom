@@ -70,7 +70,8 @@ from this file.
 | `camera_test_codec` | Uji gagal: codec (14) | `test/features/live_camera_form_test.dart` |
 | `camera_test_path` | Uji gagal: laluan strim (15) | `test/features/live_camera_form_test.dart` |
 | `camera_password_change` | Tukar kata laluan (16) | `test/features/live_camera_form_test.dart` |
-| `settings_ayat_card` | Kad ayat: surah picker and the verse range | `test/features/settings_widgets_test.dart` |
+| `settings_ayat_card` | Kad ayat: the three modes with a sentence each, verses hidden (daily selection) | `test/features/settings_widgets_test.dart` |
+| `settings_ayat_card_manual` | Kad ayat, Pilih sendiri: surah, start verse, 1 to 3 verse chips, what the TV shows | `test/features/settings_widgets_test.dart` |
 | `settings_system` | Sistem (Lanjutan): the three system values | `test/features/settings_widgets_test.dart` |
 | `settings_order` | Susunan kad di skrin TV: nine cards, drag handle, up and down | `test/screens/settings_order_test.dart` |
 | `settings_search` | Tetapan search for azan: matching groups open, reasons shown | `test/screens/settings_order_test.dart` |
@@ -107,7 +108,7 @@ from this file.
 | `live_running` | Live tab on air: red tally frame and timer, duration, bitrate and fps, both legs `Bersiaran`, recording parts and size, `Berhenti` | `test/screens/live_test.dart` |
 | `live_warning` | On air with the YouTube leg `Cuba lagi dalam 5 s` and the battery, heat and keep-the-screen-on warnings | `test/screens/live_test.dart` |
 | `live_stopped` | The `Siaran tamat` summary: duration, the short YouTube line, where the recording is, `Lihat di YouTube` | `test/screens/live_test.dart` |
-| `live_youtube_signin` | An admin connecting the surau's YouTube account: the device code, `Buka google.com/device`, waiting | `test/screens/live_test.dart` |
+| `live_youtube_signin` | An admin connecting the surau's YouTube account: the device code, `Buka halaman Google`, waiting for approval | `test/screens/live_test.dart` |
 | `live_recordings_pending` | `Rakaman belum disimpan` notice for web recording parts left from the last broadcast | `test/screens/live_test.dart` |
 | `live_src_folded` | Siaran langsung, bahagian dilipat: ringkasan Audio "Audio kamera + Mikrofon telefon, selaras" (mockup 01) | `test/screens/live_source_test.dart` |
 | `live_src_open` | All four sections open: Sumber video, Audio, Ke mana siaran pergi, Tetapan siaran (02) | `test/screens/live_source_test.dart` |

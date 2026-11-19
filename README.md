@@ -7,13 +7,36 @@ feature can be switched on or off.
 *MAXCOM ialah perisian percuma untuk surau, masjid dan musalla: paparan waktu solat, kuliah, pengumuman dan
 kandungan Islam, dengan aplikasi pentadbir untuk telefon dan iPad. Berfungsi tanpa internet.*
 
-## MAXCOM R2 (2026.11.12)
+## MAXCOM R2 (2026.11.13)
 
-MAXCOM R2 is the current release: a free, open source system for surau and masjid, used under its licence
-(CC BY-NC-SA 4.0, see "Licence" below). Downloads: [mymaxcom.my](https://mymaxcom.my) or the
+MAXCOM R2 is the current release, now at version 2026.11.13: a free, open source system for surau and masjid, used
+under its licence (CC BY-NC-SA 4.0, see "Licence" below). Downloads: [mymaxcom.my](https://mymaxcom.my) or the
 [Releases](https://github.com/mymaxcom/maxcom/releases) of this repository.
 
-What is new in R2:
+### Kemas kini 2026.11.13 / Update 2026.11.13
+
+- **Videos on the TV screen.** A new Video content kind (upload from the phone, a YouTube link, or a clip of a surau
+  recording), played full screen on the TV, YouTube videos included, on the Android and the Windows box.
+- **YouTube: sign in once.** The sign-in is kept on the MAXCOM at the surau. "Cannot be checked right now" is shown
+  instead of signing out, the sign-in is checked daily, and a clear card appears only when Google really ends it.
+  Sign-in and sign-out on the surau Wi-Fi only.
+- **Broadcast destinations always in view.** Surau screen, YouTube and Recording above the Start button, with a clear
+  Yes or No. One surau-wide YouTube choice shared by every live admin; the app asks before a start to the surau screen
+  only.
+- **Share the live link.** A banner for every live admin, whichever device started the live; one main button
+  (Share to WhatsApp, Share, or Send from a phone with a QR code); a picture from the live with the message; the text
+  edited once and shared by all; Send to myself.
+- **New microphones picked up automatically** (USB or Lightning on iPad, USB-C on Android); unplugging falls back to
+  the device microphone.
+- **Camera (CCTV) changes made away from the surau reach the box.**
+- **The TV screen in Arabic.** A third TV screen language, Arabic, right to left, on all six themes; any theme with
+  any language (choosing Arabic Art offers to switch the TV to Arabic once).
+- **Security and reliability improvements.**
+
+Upgrading from 2026.11.12: update the MAX Kiosk Server first (every box of a surau together), then the MAX Admin
+Client. No new YouTube sign-in is needed. On an iPad, reload the web app after the box is updated.
+
+### What MAXCOM R2 brought (2026.11.12)
 
 - **Major security audit.** A thorough security and reliability audit, with many improvements that protect
   surau data, user accounts and live broadcasts.
@@ -31,9 +54,6 @@ What is new in R2:
 - **Kewangan module revamp.** A new Tabung screen on the TV (any number of funds, pages, an "All funds"
   summary, a "New" highlight, an option to feature the first fund) and more reliable records (cash payments
   always save, closed months are protected, late entries are flagged, months and amounts in every language).
-
-Upgrading: update the MAX Admin Client and the MAX Kiosk Server together. After upgrading, sign in to YouTube
-once more from the app, and the Pentadbir adds phone numbers for existing users.
 
 ## Products
 

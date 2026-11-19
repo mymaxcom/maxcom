@@ -50,6 +50,17 @@ describe('validateContent', () => {
     expect(validateContent('poster', { title: 'Poster Maulidur Rasul', assetId: 'a'.repeat(64), days: ['umum', 'jumaat'], order: 1 }).ok).toBe(true);
   });
 
+  it('accepts a poster stretch flag (true, false or absent) and rejects a non-boolean', () => {
+    const base = { title: 'Poster 1', assetId: 'a'.repeat(64), days: ['umum'], order: 1 };
+    const none = validateContent('poster', base);
+    expect(none.ok && 'stretch' in (none.value as object)).toBe(false);
+    for (const v of [true, false]) {
+      const r = validateContent('poster', { ...base, stretch: v });
+      expect(r.ok && (r.value as { stretch?: boolean }).stretch).toBe(v);
+    }
+    for (const v of ['yes', 1, null, 0]) expect(validateContent('poster', { ...base, stretch: v }).ok).toBe(false);
+  });
+
   it('rejects poster with invalid day key', () => {
     expect(validateContent('poster', { title: 'Poster 1', assetId: 'a'.repeat(64), days: ['monday'], order: 1 }).ok).toBe(false);
   });
@@ -93,6 +104,21 @@ describe('validateContent', () => {
   it('limits text fields to 2000 characters', () => {
     expect(validateContent('hadis', { textMs: 'x'.repeat(2001), source: 'Riwayat Muslim' }).ok).toBe(false);
     expect(validateContent('hadis', { textMs: 'x'.repeat(2000), source: 'Riwayat Muslim' }).ok).toBe(true);
+  });
+
+  it('strips direction overrides and isolates from surau-typed text and keeps Arabic as it is', () => {
+    const bidi = ['\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069'];
+    const ar = 'السلام عليكم ورحمة الله';
+    const dirty = (t: string): string => `${bidi[0]}${t}${bidi[0]}`;
+    const peng = validateContent('pengumuman', { title: dirty('Gotong-royong'), body: dirty(ar), from: '2026-11-01', to: '2026-11-30', priority: 1 });
+    expect(peng.ok).toBe(true);
+    if (peng.ok) expect(peng.value).toMatchObject({ title: 'Gotong-royong', body: ar });
+    const tick = validateContent('ticker', { text: dirty(ar + ' 12'), from: '2026-11-01', to: '2026-11-30' });
+    expect(tick.ok).toBe(true);
+    if (tick.ok) expect(tick.value).toMatchObject({ text: ar + ' 12' });
+    // the plain direction marks (LRM, RLM) are not overrides and stay
+    const marks = validateContent('ticker', { text: 'a\u200Fb', from: '2026-11-01', to: '2026-11-30' });
+    if (marks.ok) expect(marks.value).toMatchObject({ text: 'a\u200Fb' });
   });
 
   it('limits ticker text to 300 characters', () => {

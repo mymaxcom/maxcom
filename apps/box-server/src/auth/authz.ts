@@ -44,7 +44,7 @@ declare module 'fastify' {
 export type RoutePermission = Permission | 'public' | 'session' | 'session_or_site';
 
 export interface RouteRule {
-  method: 'GET' | 'PUT' | 'POST' | 'DELETE';
+  method: 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE';
   /** Matched against the normalised path (lower case, no query, no trailing slash). */
   pattern: RegExp;
   permission: RoutePermission;
@@ -122,6 +122,9 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'PUT', pattern: /^\/api\/content\/.+$/, permission: 'content:write', sample: '/api/content/announcements/x', tenant: 'required' },
   { method: 'DELETE', pattern: /^\/api\/content\/.+$/, permission: 'content:write', sample: '/api/content/announcements/x', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/assets$/, permission: 'assets:write', sample: '/api/assets', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/assets\/video$/, permission: 'assets:write', sample: '/api/assets/video', tenant: 'required' },
+  { method: 'GET', pattern: /^\/api\/assets\/video\/storage$/, permission: 'assets:write', sample: '/api/assets/video/storage', tenant: 'required' },
+  { method: 'DELETE', pattern: /^\/api\/assets\/video\/[^/]+$/, permission: 'assets:write', sample: `/api/assets/video/${'a'.repeat(64)}`, tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/assets$/, permission: 'assets:write', sample: '/api/assets', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/assets\/[0-9a-f]{64}\/analyze$/, permission: 'assets:write', sample: `/api/assets/${'a'.repeat(64)}/analyze`, tenant: 'required' },
 
@@ -199,6 +202,10 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'POST', pattern: /^\/api\/live\/start$/, permission: 'live:control', sample: '/api/live/start', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/live\/stop$/, permission: 'live:control', sample: '/api/live/stop', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/status$/, permission: 'live:control', sample: '/api/live/status', tenant: 'required' },
+  // the surau's live notice: any live:control holder reads and edits it (last edit wins); the frame is one still of the running picture
+  { method: 'GET', pattern: /^\/api\/live\/notice$/, permission: 'live:control', sample: '/api/live/notice', tenant: 'required' },
+  { method: 'PATCH', pattern: /^\/api\/live\/notice$/, permission: 'live:control', sample: '/api/live/notice', tenant: 'required' },
+  { method: 'GET', pattern: /^\/api\/live\/notice\/frame\.jpg$/, permission: 'live:control', sample: '/api/live/notice/frame.jpg', tenant: 'required' },
   // the starting device changes the audio mix of a running live (the route refuses every other device)
   { method: 'POST', pattern: /^\/api\/live\/audio$/, permission: 'live:control', sample: '/api/live/audio', tenant: 'required' },
   // the starting device's preview of the combined stream (the route refuses every other device)
@@ -220,6 +227,8 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'DELETE', pattern: /^\/api\/live\/whip\/[^/]+$/, permission: 'live:control', sample: '/api/live/whip/x', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/youtube\/ingest$/, permission: 'live:control', sample: '/api/live/youtube/ingest', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/youtube\/status$/, permission: 'live:control', sample: '/api/live/youtube/status', tenant: 'required' },
+  // the surau's one YouTube choice for the next live: anyone who may start a live may change it (last change wins)
+  { method: 'PUT', pattern: /^\/api\/live\/youtube\/next-live$/, permission: 'live:control', sample: '/api/live/youtube/next-live', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/live\/youtube\/signin$/, permission: 'live:settings', sample: '/api/live/youtube/signin', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/live\/youtube\/signin\/poll$/, permission: 'live:settings', sample: '/api/live/youtube/signin/poll', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/live\/youtube\/signout$/, permission: 'live:settings', sample: '/api/live/youtube/signout', tenant: 'required' },
@@ -230,6 +239,12 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'PUT', pattern: /^\/api\/sync\/camera-secret$/, permission: 'session_or_site', sample: '/api/sync/camera-secret', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/sync\/camera-secret$/, permission: 'session_or_site', sample: '/api/sync/camera-secret', tenant: 'required' },
   { method: 'DELETE', pattern: /^\/api\/sync\/camera-secret$/, permission: 'session_or_site', sample: '/api/sync/camera-secret', tenant: 'required' },
+  { method: 'GET', pattern: /^\/api\/sync\/camera-relay$/, permission: 'session_or_site', sample: '/api/sync/camera-relay', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/sync\/camera-relay\/ack$/, permission: 'session_or_site', sample: '/api/sync/camera-relay/ack', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/sync\/youtube\/handover$/, permission: 'session_or_site', sample: '/api/sync/youtube/handover', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/sync\/youtube\/handover\/ack$/, permission: 'session_or_site', sample: '/api/sync/youtube/handover/ack', tenant: 'required' },
+  { method: 'PUT', pattern: /^\/api\/sync\/youtube\/flag$/, permission: 'session_or_site', sample: '/api/sync/youtube/flag', tenant: 'required' },
+  { method: 'GET', pattern: /^\/api\/sync\/youtube\/client$/, permission: 'session_or_site', sample: '/api/sync/youtube/client', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/youtube\/upload\/begin$/, permission: 'live:control', sample: '/api/youtube/upload/begin', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/youtube\/upload\/done$/, permission: 'live:control', sample: '/api/youtube/upload/done', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/youtube\/verify$/, permission: 'live:control', sample: '/api/youtube/verify', tenant: 'required' },

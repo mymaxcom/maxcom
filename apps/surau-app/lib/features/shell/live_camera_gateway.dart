@@ -8,6 +8,9 @@
 // address, for the phone that pulls the camera itself; it is held in
 // memory by the caller and never written down here.
 
+import 'dart:convert';
+
+import '../../sync/camera_relay_seal.dart';
 import 'box_gateway.dart';
 
 /// The last "Uji sambungan" of the box, stored with the record.
@@ -59,7 +62,27 @@ class CameraTestOutcome {
   final String? at;
 }
 
+/// Where a camera change sent through the cloud is sealed to: the box, its public key and the number the change takes.
+class CameraRelayTarget {
+  const CameraRelayTarget({required this.boxId, required this.key, required this.seq});
+
+  static CameraRelayTarget? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final key = j['key'];
+    final seq = j['seq'];
+    if (j['boxId'] is! String || key is! Map || seq is! int) return null;
+    return CameraRelayTarget(boxId: j['boxId'] as String, key: key.cast<String, dynamic>(), seq: seq);
+  }
+
+  final String boxId;
+  final Map<String, dynamic> key;
+  final int seq;
+}
+
 /// What `GET /api/live/camera` and `PUT /api/live/camera` answer: masked.
+///
+/// Over the cloud the answer also says whether a change sent from here still waits for the box ([pending]), why the
+/// box refused the last one ([failure], a short code) and who to seal the next one to ([relay]).
 class LiveCameraRecord {
   const LiveCameraRecord({
     required this.configured,
@@ -67,6 +90,10 @@ class LiveCameraRecord {
     required this.username,
     required this.hasPassword,
     required this.lastTest,
+    this.pending = false,
+    this.failure,
+    this.relay,
+    this.passwordNeeded = false,
   });
 
   factory LiveCameraRecord.fromJson(Map<String, dynamic> j) => LiveCameraRecord(
@@ -75,6 +102,10 @@ class LiveCameraRecord {
     username: j['username'] is String ? j['username'] as String : null,
     hasPassword: j['hasPassword'] == true,
     lastTest: j['lastTest'] is Map ? CameraTestOutcome.fromJson((j['lastTest'] as Map).cast<String, dynamic>()) : null,
+    pending: j['pending'] == true,
+    failure: j['failure'] is String ? j['failure'] as String : null,
+    relay: CameraRelayTarget.fromJson(j['relay']),
+    passwordNeeded: j['passwordNeeded'] == true,
   );
 
   static const LiveCameraRecord none = LiveCameraRecord(
@@ -93,12 +124,28 @@ class LiveCameraRecord {
   final bool hasPassword;
   final CameraTestOutcome? lastTest;
 
+  /// Cloud only: a change sent from here waits for the box (it applies it on its next check).
+  final bool pending;
+
+  /// Cloud only: the box refused the last change; `bad_address`, `bad_login`, `password_again`, `unreadable` or `error`.
+  final String? failure;
+
+  /// Cloud only: what the next change is sealed to; null when no box is linked to the cloud.
+  final CameraRelayTarget? relay;
+
+  /// The camera came back from the cloud backup, which never holds the password: it must be typed again here.
+  final bool passwordNeeded;
+
   LiveCameraRecord withTest(CameraTestOutcome? t) => LiveCameraRecord(
     configured: configured,
     url: url,
     username: username,
     hasPassword: hasPassword,
     lastTest: t,
+    pending: pending,
+    failure: failure,
+    relay: relay,
+    passwordNeeded: passwordNeeded,
   );
 }
 
@@ -156,6 +203,32 @@ extension BoxGatewayLiveCamera on BoxGateway {
       'username': ?username,
       'password': ?password,
     });
+    return LiveCameraRecord.fromJson(out);
+  }
+
+  /// `PUT /api/live/camera` over the cloud: the address and login are sealed to the BOX's key here, so the cloud only
+  /// relays a value it cannot open. [url] may hold the dots in place of the password and [password] left null keeps the
+  /// stored one (the box decides, as on its own form). The answer is the masked record with `pending: true` until the
+  /// box has applied it. A 409 `stale` means another change got in first: read again ([liveCamera]) and send again.
+  Future<LiveCameraRecord> saveLiveCameraViaCloud({
+    required CameraRelayTarget relay,
+    required String url,
+    String? username,
+    String? password,
+  }) async {
+    final plain = jsonEncode({
+      'seq': relay.seq,
+      'boxId': relay.boxId,
+      'url': url,
+      'username': ?username,
+      'password': ?password,
+    });
+    final sealed = sealCameraRelay(
+      boxPublicJwk: relay.key,
+      plaintext: plain,
+      aad: cameraRelayAad(relay.boxId, relay.seq),
+    );
+    final out = await put(liveCameraPath, {'boxId': relay.boxId, 'seq': relay.seq, 'sealed': sealed});
     return LiveCameraRecord.fromJson(out);
   }
 

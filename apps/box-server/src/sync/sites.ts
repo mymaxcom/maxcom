@@ -637,6 +637,26 @@ export function noteThemeSupport(db: DatabaseSync, boxId: string, header: unknow
   db.prepare('UPDATE sites SET theme_contract = ?, theme_builtins = ? WHERE box_id = ?').run(contract, builtins, boxId);
 }
 
+const FEATURES_HEADER_RE = /^[A-Za-z]{1,30}(?:,[A-Za-z]{1,30}){0,19}$/;
+
+/** Records the server features a box says it has (`X-Maxcom-Features`). Anything that does not match the exact shape is ignored. */
+export function noteBoxFeatures(db: DatabaseSync, boxId: string, header: unknown): void {
+  if (typeof header !== 'string' || !FEATURES_HEADER_RE.test(header)) return;
+  const row = db.prepare('SELECT box_features AS f FROM sites WHERE box_id = ?').get(boxId);
+  if (row === undefined || row.f === header) return;
+  db.prepare('UPDATE sites SET box_features = ? WHERE box_id = ?').run(header, boxId);
+}
+
+/**
+ * True when the surau has at least one linked box and every linked box has reported `feature`. The cloud lists a
+ * feature of its own for a surau only then: a box that has not (an older build, or one that never reported) would
+ * refuse what the feature lets the app save.
+ */
+export function surauBoxesHave(db: DatabaseSync, surauId: string, feature: string): boolean {
+  const rows = db.prepare('SELECT box_features AS f FROM sites WHERE surau_id = ? AND linked_at IS NOT NULL AND revoked_at IS NULL').all(surauId);
+  return rows.length > 0 && rows.every((r) => typeof r.f === 'string' && r.f.split(',').includes(feature));
+}
+
 /** The boxes of one surau with what each supports, for the cloud's answers. */
 export function themeSupportOf(db: DatabaseSync, surauId: string): Array<{ boxId: string; name: string; contract: number | null; builtIn: string[] }> {
   return db

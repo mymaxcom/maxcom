@@ -101,3 +101,22 @@ describe('S4: the url function written with an escape', () => {
     expect(rewriteUrls('.a{background:url("images/kuliah.jpg")}', '/themes/x/0123456789abcdef-2/')).toContain('/themes/x/0123456789abcdef-2/images/kuliah.jpg');
   });
 });
+
+describe('logical sides follow their physical twins', () => {
+  it('accepts the logical border, margin and padding properties with in-bound values', () => {
+    for (const decl of [
+      'border-inline-start:.4rem solid #0a0', 'border-inline-end:1px solid red', 'border-block-start-color:red', 'border-inline-width:.1rem', 'border-block-end-style:solid',
+      'padding-inline-start:1rem', 'padding-block:.5rem', 'margin-inline-end:.4rem', 'margin-block-start:1rem',
+    ]) expect(codes(`.a{${decl}}`), decl).toEqual([]);
+  });
+
+  it('keeps the same bounds as the physical ones', () => {
+    for (const decl of ['padding-inline-start:20rem', 'margin-inline-end:-1rem', 'margin-block:99rem', 'border-inline-start-width:5rem', 'border-inline-start-color:url(images/kuliah.jpg)']) {
+      expect(codes(`.a{${decl}}`), decl).not.toEqual([]);
+    }
+  });
+
+  it('still refuses inset and logical sizes that have no physical twin in the list', () => {
+    for (const decl of ['inset-inline-start:0', 'inset-block:0', 'inline-size:1rem']) expect(codes(`.a{${decl}}`), decl).toContain('css_property');
+  });
+});

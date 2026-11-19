@@ -14,6 +14,7 @@ import '../app/shell.dart';
 import '../app/theme.dart';
 import '../box/box_client.dart';
 import '../features/labels.dart';
+import '../features/live/relay_capability.dart';
 import '../features/labels_cam.dart' show cameraUseOff, cameraUseOn, cameraUseTitle;
 import '../features/registry.g.dart';
 import '../features/settings_form.dart';
@@ -34,9 +35,12 @@ import 'widgets/pieces.dart';
 
 /// `/settings/:feature`.
 class SettingsFeatureScreen extends ConsumerWidget {
-  const SettingsFeatureScreen({super.key, required this.featureKey, this.scrollToLanjutan = false});
+  const SettingsFeatureScreen({super.key, required this.featureKey, this.scrollToLanjutan = false, this.backTo});
 
   final String featureKey;
+
+  /// Opened from another page (Siaran langsung): Back goes there.
+  final String? backTo;
 
   /// `?lj=1`: opened from the Lanjutan group, so go straight to its card.
   final bool scrollToLanjutan;
@@ -50,6 +54,7 @@ class SettingsFeatureScreen extends ConsumerWidget {
     // The MAXCOM system pages (group `lanjutan`) exist only in the ops build.
     if (f == null || (!kOpsBuild && f.group == 'lanjutan')) {
       return ShellPage(
+        backTo: backTo,
         title: s.settingsTitle,
         body: SurauTheme.page(
           children: [
@@ -69,6 +74,7 @@ class SettingsFeatureScreen extends ConsumerWidget {
     // The camera form (address, login, test) belongs to Siaran Langsung (`live:settings`), not to Tetapan in general.
     if (f.key == liveCameraFeatureKey && !canSee(roles, 'live:settings')) {
       return ShellPage(
+        backTo: backTo,
         title: s.settingsTitle,
         body: SurauTheme.page(
           children: [
@@ -136,6 +142,7 @@ class SettingsFeatureScreen extends ConsumerWidget {
       );
     }
     return ShellPage(
+      backTo: backTo,
       title: featureLabel(f, ref.watch(appLangProvider)),
       // Hadis has two columns on an iPad and a `Simpan` that stays in view;
       // its body scrolls by itself.
@@ -215,7 +222,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
   void initState() {
     super.initState();
     if (widget.feature.key == liveCameraFeatureKey) {
-      _camera = CameraSourceController(() => ref.read(gatewayProvider))
+      _camera = CameraSourceController(() => ref.read(gatewayProvider), viaCloud: () => ref.read(isCloudGatewayProvider))
         ..addListener(() {
           if (mounted) setState(() {});
         })
@@ -551,6 +558,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
             lanjutanVisible: kOpsBuild && canSee(ref.watch(rolesProvider), 'system:read'),
             lanjutanKey: _lanjutanKey,
             others: _othersOf(ref),
+            relayReencode: f.key == 'liveYoutube' ? ref.watch(relayReencodeProvider).value : null,
           ),
         if (_error != null && fieldError == null) ...[
           ErrorLine(_error!),

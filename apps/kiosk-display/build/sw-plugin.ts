@@ -173,6 +173,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(cacheFirst(request, url.pathname));
     return;
   }
+  // A video is read in byte ranges (206): never answered from, or kept in, the picture cache.
+  if (request.headers.has('range')) return;
   if (MEDIA_PATH.test(url.pathname)) {
     event.respondWith(mediaFirst(request));
     return;

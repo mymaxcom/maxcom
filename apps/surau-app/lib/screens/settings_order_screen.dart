@@ -182,9 +182,10 @@ class _SettingsOrderScreenState extends ConsumerState<SettingsOrderScreen> {
                                     ),
                                   ),
                                   Text(
+                                    // a video plays to its own end: it has no seconds of its own
                                     on
-                                        ? s.settingsOrderSeconds(_seconds(key))
-                                        : '${s.settingsOrderSeconds(_seconds(key))}, ${s.settingsOrderOff}',
+                                        ? (key == 'videos' ? s.settingsOrderVideoLength : s.settingsOrderSeconds(_seconds(key)))
+                                        : '${key == 'videos' ? s.settingsOrderVideoLength : s.settingsOrderSeconds(_seconds(key))}, ${s.settingsOrderOff}',
                                     style: text.bodySmall,
                                   ),
                                 ],

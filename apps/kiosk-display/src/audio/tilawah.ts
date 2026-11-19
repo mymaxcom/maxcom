@@ -127,6 +127,25 @@ export function createTilawahPlayer(opts: { base: string; volume: number }): Pla
 }
 
 /**
+ * The recitation that is due now (its slot, reciter, surah and ayat count), or null when none is. A preview has none.
+ * Shared with the video screen, which never plays while this is not null (a recitation and a video never overlap).
+ */
+export function tilawahPlanOf(
+  view: Pick<KioskView, 'now' | 'state' | 'settings' | 'hijri'>, content: KioskContent | null,
+): { key: string; reciter: string; surah: number; ayatCount: number } | null {
+  // A preview is silent: audio elements cannot send the Bearer header anyway.
+  if (!content || isPreview()) return null;
+  const today = view.state.today;
+  const days = today ? [today] : [];
+  const month = tarawihMonthFor(view.now, days, view.settings) ?? view.hijri?.m;
+  const win = tilawahWindow(view.now, days, view.settings, content.tilawah.slots, month);
+  if (!win) return null;
+  const av = content.tilawah.available[win.slot.surah];
+  if (!av) return null;
+  return { key: `${win.slot.id}|${win.startsAt.getTime()}`, reciter: av.reciter, surah: win.slot.surah, ayatCount: av.ayatCount };
+}
+
+/**
  * Plays tilawah during its window (ends when the azan countdown starts). Mounted only inside Main,
  * so any prayer phase unmounts it and the cleanup stops the audio.
  */
@@ -135,18 +154,7 @@ export function useTilawah(view: KioskView, content: KioskContent | null, impl?:
   const settingsVolume = (view.settings as unknown as { tilawah?: { volume?: unknown } }).tilawah?.volume;
   const volume = typeof settingsVolume === 'number' ? settingsVolume : 60;
 
-  const plan = useMemo(() => {
-    // A preview is silent: audio elements cannot send the Bearer header anyway.
-    if (!content || isPreview()) return null;
-    const today = view.state.today;
-    const days = today ? [today] : [];
-    const month = tarawihMonthFor(view.now, days, view.settings) ?? view.hijri?.m;
-    const win = tilawahWindow(view.now, days, view.settings, content.tilawah.slots, month);
-    if (!win) return null;
-    const av = content.tilawah.available[win.slot.surah];
-    if (!av) return null;
-    return { key: `${win.slot.id}|${win.startsAt.getTime()}`, reciter: av.reciter, surah: win.slot.surah, ayatCount: av.ayatCount };
-  }, [view.now, view.state.today, view.settings, view.hijri, content]);
+  const plan = useMemo(() => tilawahPlanOf(view, content), [view.now, view.state.today, view.settings, view.hijri, content]);
 
   const planRef = useRef(plan);
   planRef.current = plan;

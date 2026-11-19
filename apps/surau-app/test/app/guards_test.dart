@@ -164,10 +164,12 @@ void main() {
         'liveOnKiosk': false,
         'liveYoutube': false,
       });
-      expect(run('/live', roles: {'live'}, features: liveOff).forbidden, isTrue);
-      // [L4] The kiosk switch rules the page: YouTube alone cannot start a live.
+      // Siaran langsung is where the live settings live now: its holder of `live:settings` still opens the page with
+      // the kiosk switch off (the switch is one of them); a role without live:control never does.
+      expect(run('/live', roles: {'live'}, features: liveOff).redirect, isNull);
+      expect(run('/live', roles: {'media'}, features: liveOff).forbidden, isTrue);
       final youtubeOnly = liveOff.copyWith({'liveYoutube': true});
-      expect(run('/live', roles: {'live'}, features: youtubeOnly).forbidden, isTrue);
+      expect(run('/live', roles: {'live'}, features: youtubeOnly).redirect, isNull);
       final kioskOnly = liveOff.copyWith({'liveOnKiosk': true});
       expect(run('/live', roles: {'live'}, features: kioskOnly).redirect, isNull);
 
@@ -227,6 +229,7 @@ void main() {
         'Konfigurasi',
         'Pengguna & peranti',
         'Log perubahan',
+        'Siaran langsung', // still there with the kiosk switch off: the live settings are on that page
       ]);
       final allOn = FeatureFlags.defaults.copyWith({
         'finance': true,

@@ -30,6 +30,13 @@ int _int(Map<String, dynamic> d, String key, [int fallback = 0]) {
 final Map<String, ErrorCodeText> kErrorCodeTexts = <String, ErrorCodeText>{
   // Session, PIN and unlock.
   'no_session': (s, d) => s.errorSessionExpired,
+  // Video upload (2026.11.13).
+  'too_big': (s, d) => s.errVideoTooBig,
+  'too_long': (s, d) => s.errVideoTooLong,
+  'not_h264': (s, d) => s.errVideoNotH264,
+  'no_space': (s, d) => s.errVideoNoSpace,
+  'upload_failed': (s, d) => s.errVideoUploadFailed,
+  'busy': (s, d) => s.errcVideoBusy,
   'session_expired': (s, d) => s.errorSessionExpired,
   'device_revoked': (s, d) => s.errorDeviceRevoked,
   'user_inactive': (s, d) => s.errorDeviceRevoked,
@@ -98,6 +105,8 @@ final Map<String, ErrorCodeText> kErrorCodeTexts = <String, ErrorCodeText>{
   'bad_choice': (s, d) => s.errcBadChoice,
   'unusable': (s, d) => s.errcUnusable,
   'camera_error': (s, d) => s.errcCameraError,
+  'stale': (s, d) => s.errcCameraStale,
+  'password_again': (s, d) => s.errcCameraPasswordAgain,
   'not_configured': (s, d) => s.errcCameraNotConfigured,
   'unavailable': (s, d) => s.errcUnavailable,
   // A refused camera address says which rule it broke (`detail.reason`).
@@ -121,6 +130,8 @@ final Map<String, ErrorCodeText> kErrorCodeTexts = <String, ErrorCodeText>{
   'youtube_forbidden': (s, d) => s.errcYoutubeForbidden,
   'youtube_not_found': (s, d) => s.errcYoutubeNotFound,
   'youtube_network': (s, d) => s.errcYoutubeNetwork,
+  // 2026.11.13: the grant is held by the MAXCOM at the surau; the cloud signs nothing in or out.
+  'youtube_at_box': (s, d) => s.errcYoutubeAtBox,
   'catchup_off': (s, d) => s.errcCatchupOff,
   'unknown_live_video': (s, d) => s.errcUnknownLiveVideo,
   'kuliah_not_found': (s, d) => s.errcKuliahNotFound,

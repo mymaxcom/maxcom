@@ -300,20 +300,34 @@ function Initialize-BackupsDir {
   if (-not (Test-AclOnlyTrusted $b $allowed -Protected)) { throw 'GAGAL: folder backups masih boleh dicapai oleh akaun lain' }
 }
 
-function Get-CurrentVersion {
+function Get-CurrentLeaf {
+  # folder name of the current release: <version> or <version>-b<N> (internal build N)
   $cur = $script:S.P.Current
   if (-not (Test-IsReparsePoint $cur)) { return $null }
   $t = Get-LinkTarget $cur
   if (-not $t) { return $null }
   $leaf = Split-Path -Leaf $t
-  if ($leaf -match '^[0-9]+\.[0-9]+\.[0-9]+$') { return $leaf }
+  if ($leaf -match '^[0-9]+\.[0-9]+\.[0-9]+(-b[1-9])?$') { return $leaf }
   return $null
+}
+
+function Get-CurrentVersion {
+  $leaf = Get-CurrentLeaf
+  if (-not $leaf) { return $null }
+  return ($leaf -replace '-b[1-9]$', '')
+}
+
+function Get-CurrentBuild {
+  # internal build of the installed release: release.json 'build'; no marker = build 0
+  if (-not (Get-CurrentLeaf)) { return 0 }
+  return (Get-ReleaseBuild $script:S.P.Current)
 }
 
 function Test-ReleaseCurrent {
   $v = $script:S.Version
   if ((Get-CurrentVersion) -ne $v) { return $false }
-  return (Test-Path -LiteralPath (Join-Path (Join-Path $script:S.P.Releases $v) '.ok') -PathType Leaf)
+  if ((Get-CurrentBuild) -ne $script:S.Build) { return $false }
+  return (Test-Path -LiteralPath (Join-Path (Join-Path $script:S.P.Releases $script:S.RelName) '.ok') -PathType Leaf)
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -540,16 +554,25 @@ function Resolve-Inputs {
   # bundle archive and version
   $S.Archive = $null
   $S.Version = $null
+  $S.Build = 0
+  $S.RelName = $null
   $found = @()
   foreach ($d in @($S.BundleDir, (Join-Path $S.BundleDir 'payload'))) {
     if (Test-Path -LiteralPath $d -PathType Container) {
       $found += @(Get-ChildItem -LiteralPath $d -File -Filter 'maxcom-box-*-windows.tar.gz')
     }
   }
-  $ok = @($found | Where-Object { $_.Name -match '^maxcom-box-[0-9]+\.[0-9]+\.[0-9]+-windows\.tar\.gz$' })
+  # maxcom-box-<version>-windows.tar.gz, or maxcom-box-<version>-b<N>-windows.tar.gz for an internal build above 0
+  $ok = @($found | Where-Object { $_.Name -match '^maxcom-box-[0-9]+\.[0-9]+\.[0-9]+(-b[1-9])?-windows\.tar\.gz$' })
   if ($ok.Count -eq 1) {
     $S.Archive = $ok[0].FullName
-    $S.Version = ($ok[0].Name -replace '^maxcom-box-([0-9.]+)-windows\.tar\.gz$', '$1')
+    $S.Version = ($ok[0].Name -replace '^maxcom-box-([0-9.]+)(-b[1-9])?-windows\.tar\.gz$', '$1')
+    $nameBuild = 0
+    if ($ok[0].Name -match '-b([1-9])-windows\.tar\.gz$') { $nameBuild = [int]$Matches[1] }
+    # fails closed (GAGAL) when the archive's release.json cannot be read: never an assumed build 0
+    $S.Build = Get-ArchiveBuild $S.Archive
+    if ($S.Build -ne $nameBuild) { throw "GAGAL: nama arkib ($($ok[0].Name)) menyatakan binaan $nameBuild tetapi release.json dalamnya binaan $($S.Build)" }
+    $S.RelName = Get-ReleaseName $S.Version $S.Build
   }
 }
 
@@ -596,7 +619,7 @@ function Invoke-Preflight {
   }
   if (-not (Test-Path -LiteralPath (Join-Path $env:SystemRoot 'System32\tar.exe') -PathType Leaf)) { [void]$probs.Add('tar.exe tiada di System32') }
   foreach ($m in @(Get-BundleManifestProblem $S.BundleDir | Select-Object -First 8)) { [void]$probs.Add("bundle: $m") }
-  if ($null -eq $S.Archive) { [void]$probs.Add('arkib keluaran maxcom-box-<versi>-windows.tar.gz tidak dijumpai (tepat satu) dalam bundle') }
+  if ($null -eq $S.Archive) { [void]$probs.Add('arkib keluaran maxcom-box-<versi>[-b<N>]-windows.tar.gz tidak dijumpai (tepat satu) dalam bundle') }
   foreach ($m in @(Get-InstallRootProblem $P.InstallRoot -AllowUserProfile:$S.LayoutOnly)) { [void]$probs.Add($m) }
   if ((Test-PathInside $P.DataDir $P.InstallRoot -AllowEqual) -or (Test-PathInside $P.InstallRoot $P.DataDir -AllowEqual)) {
     [void]$probs.Add('folder data dan folder pemasangan tidak boleh berada di dalam satu sama lain')
@@ -792,7 +815,7 @@ function Backup-Database {
   $P = $script:S.P
   Initialize-BackupsDir
   $stamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
-  $dir = Join-Path $P.Backups ("pre-{0}-{1}" -f $script:S.Version, $stamp)
+  $dir = Join-Path $P.Backups ("pre-{0}-{1}" -f $script:S.RelName, $stamp)
   [void][System.IO.Directory]::CreateDirectory($dir)
   foreach ($suffix in @('', '-wal', '-shm')) {
     $f = $P.Db + $suffix
@@ -807,17 +830,17 @@ function Backup-Database {
 function Remove-OldReleases {
   $P = $script:S.P
   if (-not (Test-Path -LiteralPath $P.Releases -PathType Container)) { return $false }
-  $keep = @($script:S.Version)
-  $cv = Get-CurrentVersion
+  $keep = @($script:S.RelName)
+  $cv = Get-CurrentLeaf
   if ($cv) { $keep += $cv }
   if (Test-Path -LiteralPath $P.PreviousTxt -PathType Leaf) {
     $pv = ([System.IO.File]::ReadAllText($P.PreviousTxt)).Trim()
-    if ($pv -match '^[0-9]+\.[0-9]+\.[0-9]+$') { $keep += $pv }
+    if ($pv -match '^[0-9]+\.[0-9]+\.[0-9]+(-b[1-9])?$') { $keep += $pv }
   }
   $ch = $false
   foreach ($d in [System.IO.Directory]::GetFileSystemEntries($P.Releases)) {
     $n = Split-Path -Leaf $d
-    if ($n -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(\.part)?$') { continue }
+    if ($n -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-b[1-9])?(\.part)?$') { continue }
     if ($keep -contains $n) { continue }
     [void](Remove-TreeSafe $d -Under $P.Releases)
     $ch = $true
@@ -831,14 +854,18 @@ function Step-Release {
   $ch = $false
   $ver = $S.Version
   $curVer = Get-CurrentVersion
+  $curLeaf = Get-CurrentLeaf
   if ($curVer -and ([version]$ver -lt [version]$curVer)) {
     throw "GAGAL: versi $ver lebih lama daripada $curVer yang sedang dipasang; gunakan switch-release.ps1 untuk kembali"
   }
-  $rel = Expand-Release -Archive $S.Archive -ReleasesDir $P.Releases -Version $ver
+  if ($curVer -eq $ver -and (Get-CurrentBuild) -gt $S.Build) {
+    throw "GAGAL: binaan $($S.Build) lebih lama daripada binaan $(Get-CurrentBuild) yang sedang dipasang (versi $ver); gunakan switch-release.ps1 untuk kembali"
+  }
+  $rel = Expand-Release -Archive $S.Archive -ReleasesDir $P.Releases -Version $ver -Build $S.Build
   if ($rel.Changed) { $ch = $true }
-  if ($curVer -ne $ver) {
+  if ($curLeaf -ne $S.RelName) {
     if (Test-Path -LiteralPath $P.Db -PathType Leaf) { Backup-Database }
-    $sw = Switch-Current -Root $P.InstallRoot -Version $ver
+    $sw = Switch-Current -Root $P.InstallRoot -Version $S.RelName
     if ($sw.Changed) { $ch = $true }
   }
   if (Remove-OldReleases) { $ch = $true }

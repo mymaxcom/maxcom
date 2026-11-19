@@ -151,6 +151,31 @@ Future<ShareResult> shareText(String text, {String? subject}) async {
   return platform.shareText(text, subject);
 }
 
+/// Most bytes of the notice picture (a 1200 x 630 JPEG is about 150 KB).
+const int shareNoticeMaxBytes = 4 * 1024 * 1024;
+
+/// Whether WhatsApp or WhatsApp Business is installed (Android only; the web
+/// and any other platform answer false: it cannot be detected there).
+Future<bool> whatsAppInstalled() => platform.whatsAppInstalled();
+
+/// The live notice: [text] and, when given, a JPEG [picture] (1 byte to
+/// [shareNoticeMaxBytes]). With [toWhatsApp] the share intent is aimed at the
+/// installed WhatsApp (its own chooser of chats and groups), else the system
+/// share sheet. The web shares through navigator.share with the file when the
+/// browser can, else the text alone. Nothing is logged.
+Future<ShareResult> shareNotice(String text, {Uint8List? picture, bool toWhatsApp = false}) async {
+  if (text.isEmpty || text.length > shareTextMaxLength) {
+    throw const ShareArgsError('text');
+  }
+  if (picture != null && (picture.isEmpty || picture.length > shareNoticeMaxBytes)) {
+    throw const ShareArgsError('size');
+  }
+  return platform.shareNotice(text, picture, toWhatsApp);
+}
+
+/// Deletes the temporary picture of an earlier [shareNotice] (Android).
+Future<void> cleanNotice() => platform.cleanNotice();
+
 /// Whether [u] is `https://wa.me/<8 to 15 digits>` with at most one
 /// `text=` query parameter: the only address [openWhatsApp] opens.
 bool isWaMeUri(Uri u) {
@@ -169,6 +194,19 @@ bool isWaMeUri(Uri u) {
 Future<bool> openWhatsApp(Uri waUri, {UrlOpener? open}) async {
   if (!isWaMeUri(waUri)) throw const ShareArgsError('uri');
   return (open ?? launchOutside)(waUri);
+}
+
+/// `https://wa.me/?text=<text>`: WhatsApp's own picker for a message with no
+/// preset recipient (the web fallback when the browser has no share sheet).
+Uri whatsAppShareUri(String text) =>
+    Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
+
+/// Opens [whatsAppShareUri]. False when nothing could open it.
+Future<bool> openWhatsAppShare(String text, {UrlOpener? open}) {
+  if (text.isEmpty || text.length > shareTextMaxLength) {
+    throw const ShareArgsError('text');
+  }
+  return (open ?? launchOutside)(whatsAppShareUri(text));
 }
 
 /// The finance PDF: opens the share sheet (which also offers Drive and

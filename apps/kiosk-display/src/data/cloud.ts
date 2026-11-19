@@ -12,7 +12,7 @@ export interface CloudView {
 export const OFFLINE_GRACE_MS = 15 * 60_000;
 
 /**
- * A linked box (cloudSync on) that has had no good cloud exchange for 15 minutes shows the small offline badge.
+ * A linked box (cloudSync on) that has had no good cloud exchange for 15 minutes shows the red cloud icon (a good one, the teal icon).
  * An unlinked box, or one with cloudSync off, never does.
  */
 export function isOffline(view: CloudView | null, nowMs: number, graceMs: number = OFFLINE_GRACE_MS): boolean {
@@ -36,6 +36,8 @@ export async function fetchCloud(fetchImpl: Fetch = realFetch): Promise<CloudVie
 export interface CloudStatus {
   linked: boolean;
   lastOkAt: string | null;
+  /** cloudSync is switched on (with `linked`, the only case in which the cloud icon shows). */
+  enabled: boolean;
   offline: boolean;
 }
 
@@ -63,5 +65,5 @@ export function useCloudStatus(opts: { fetchImpl?: Fetch; intervalMs?: number; n
     };
   }, []);
   const now = (opts.now ?? Date.now)();
-  return { linked: view?.linked === true, lastOkAt: view?.lastOkAt ?? null, offline: isOffline(view, now) };
+  return { linked: view?.linked === true, lastOkAt: view?.lastOkAt ?? null, enabled: view?.cloudSyncEnabled === true, offline: isOffline(view, now) };
 }

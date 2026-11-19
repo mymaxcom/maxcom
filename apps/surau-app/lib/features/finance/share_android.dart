@@ -68,3 +68,47 @@ Future<ShareResult> share(Uint8List bytes, String filename, String mime) async {
     throw const ShareFailed();
   }
 }
+
+/// Android only: whether a WhatsApp package is installed (the manifest
+/// declares both in `<queries>`).
+Future<bool> whatsAppInstalled() async {
+  try {
+    return await _channel.invokeMethod<bool>('whatsappInstalled') == true;
+  } on PlatformException {
+    return false;
+  } on MissingPluginException {
+    return false;
+  }
+}
+
+/// Text and an optional JPEG through ACTION_SEND, aimed at WhatsApp when
+/// [toWhatsApp]. A failure carries no detail.
+Future<ShareResult> shareNotice(String text, Uint8List? picture, bool toWhatsApp) async {
+  try {
+    final r = await _channel.invokeMapMethod<String, Object?>('shareNotice', {
+      'text': text,
+      'bytes': ?picture,
+      'whatsapp': toWhatsApp,
+    });
+    final via = r?['via'];
+    return ShareResult(
+      via is String && ShareResult.vias.contains(via) ? via : 'other',
+      completed: r?['completed'] == true,
+    );
+  } on PlatformException {
+    throw const ShareFailed();
+  } on MissingPluginException {
+    throw const ShareFailed();
+  }
+}
+
+/// Deletes the cached notice picture (also done on the next share).
+Future<void> cleanNotice() async {
+  try {
+    await _channel.invokeMethod<void>('cleanNotice');
+  } on PlatformException {
+    // nothing to clean
+  } on MissingPluginException {
+    // nothing to clean
+  }
+}

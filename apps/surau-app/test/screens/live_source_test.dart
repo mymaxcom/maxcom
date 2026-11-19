@@ -13,7 +13,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/features/live/fake_publisher.dart';
 import 'package:surau_app/features/live/live_screen.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:surau_app/features/live/live_source.dart';
+import 'package:surau_app/features/live/mic_watch.dart';
 import 'package:surau_app/features/live/publisher.dart';
 import 'package:surau_app/features/shell/live_camera_gateway.dart';
 import 'package:surau_app/box/wire.dart';
@@ -51,6 +53,12 @@ LiveAudioMix _mix({int cam = 100, bool mic = false, int micVol = 100, bool box =
 
 LiveAudioMix get _phoneMix => defaultMix(VideoSourceKind.phone);
 
+/// A microphone plugged in and in use (task W7), without the device watcher.
+class _MicShown extends MicAutoNotifier {
+  @override
+  MicAutoState build() => const MicAutoState(mic: MicInfo(deviceId: 'usb-1', label: 'Rode Lavalier'));
+}
+
 class _T {
   _T(this.h, this.pub, this.store);
 
@@ -81,6 +89,7 @@ Future<_T> _open(
   PublisherState initial = PublisherState.initial,
   bool realController = false,
   GoldenSize size = GoldenSize.phone,
+  List<Override> extra = const [],
 }) async {
   final pub = FakePublisher(initial: initial);
   final store = _MemStore(video, mix ?? (video == VideoSourceKind.external ? _mix() : _phoneMix));
@@ -93,6 +102,7 @@ Future<_T> _open(
       if (!realController) liveBoxProvider.overrideWith(() => LiveBoxNotifier(box)),
       liveDeviceKindProvider.overrideWithValue(device),
       liveSourceStoreProvider.overrideWithValue(store),
+      ...extra,
     ],
   );
   final t = _T(h, pub, store);
@@ -545,7 +555,7 @@ void main() {
   group('who may see and do what', () {
     testWidgets('Siaran Langsung role: sources, YouTube sign-in and the settings section', (tester) async {
       await _open(tester);
-      await _openSection(tester, 'set');
+      // "Tetapan siaran" is open when no live runs: the four forms and the YouTube account in the one card.
       expect(k('live-settings-liveCamera'), findsOneWidget);
       await reveal(tester, k('live-youtube-account'));
       expect(k('live-youtube-account'), findsOneWidget);
@@ -649,6 +659,18 @@ void main() {
         );
       }
     }
+
+    testWidgets('live_mic_external (W7)', (tester) async {
+      final t = await _open(
+        tester,
+        mix: _mix(cam: 40, mic: true),
+        initial: _ready(audio: _audio()),
+        extra: [micAutoProvider.overrideWith(_MicShown.new)],
+      );
+      await _openAll(tester);
+      expect(find.text('Rode Lavalier'), findsWidgets);
+      await g(tester, t, 'live_mic_external', focus: 'live-section-audio');
+    });
 
     testWidgets('live_src_folded (01)', (tester) async {
       final t = await _open(tester, mix: _mix(cam: 40, mic: true), initial: _ready(audio: _audio()));

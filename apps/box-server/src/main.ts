@@ -41,6 +41,8 @@ export function parsePort(value: string | undefined): number | null {
 
 export interface ListenerPlan {
   http: { host: string; port: number };
+  /** The same HTTP app also answers on the IPv6 loopback (same port); null when not wanted. A bind failure is tolerated. */
+  http6?: { host: string } | null;
   https: { host: string; port: number } | null;
   warnings: string[];
 }
@@ -60,6 +62,7 @@ export function planListeners(env: NodeJS.ProcessEnv, tls: TlsMaterial | null): 
   }
   const plan: ListenerPlan = {
     http: { host: '127.0.0.1', port: httpPort },
+    http6: { host: '::1' },
     https: null,
     warnings: [],
   };
@@ -145,6 +148,7 @@ export { workerAdminFrom };
 /** One Fastify app behind both listeners; closing the app closes the HTTPS server too. */
 export async function startListeners(o: StartOptions): Promise<Listeners> {
   let httpsServer: https.Server | null = null;
+  let httpHandler: http.RequestListener | null = null;
   let certReload: CertReloader | null = null;
 
   const serverFactory: FastifyServerFactory = (handler) => {
@@ -161,6 +165,7 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
       httpsServer = https.createServer(tlsOpts, handler);
       hardenServer(httpsServer);
     }
+    httpHandler = handler;
     return http.createServer(handler);
   };
 
@@ -240,6 +245,39 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
 
   await app.listen({ host: o.plan.http.host, port: o.plan.http.port });
   const httpPort = (app.server.address() as AddressInfo).port;
+
+  // `localhost` may resolve to ::1 first: the same app answers there too, so no other local process can sit on that
+  // loopback in front of the kiosk. A host without IPv6 simply has no second listener (logged once).
+  const handler6 = httpHandler as http.RequestListener | null;
+  if (o.plan.http6 && handler6 !== null && o.plan.http.host === '127.0.0.1') {
+    const server6 = http.createServer(handler6);
+    hardenServer(server6);
+    try {
+      await new Promise<void>((done, fail) => {
+        server6.once('error', fail);
+        server6.listen({ host: o.plan.http6?.host ?? '::1', port: httpPort }, () => {
+          server6.off('error', fail);
+          done();
+        });
+      });
+      app.addHook('onClose', async () => {
+        await new Promise<void>((done) => {
+          server6.close(() => done());
+          server6.closeAllConnections();
+        });
+      });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? 'error';
+      if (code === 'EADDRINUSE') {
+        // another process holds [::1]:<port> while 127.0.0.1 is ours: a browser that tries ::1 first would show THAT
+        // process's page on the kiosk (F9). Refuse to run; the service restarts and the doctor names the port owner.
+        await app.close().catch(() => undefined);
+        throw new Error(`HTTP cannot start: another process already listens on [::1]:${httpPort} (EADDRINUSE), in front of this box on localhost. Stop that process (the doctor shows the port owner) and the box service will start again.`);
+      }
+      // no IPv6 on this host (EAFNOSUPPORT, EADDRNOTAVAIL ...): nothing sits in front of the kiosk
+      console.warn(`WARNING: HTTP could not listen on [::1]:${httpPort} (${code}); localhost is served on 127.0.0.1 only`);
+    }
+  }
 
   let httpsPort: number | null = null;
   const server = httpsServer as https.Server | null;

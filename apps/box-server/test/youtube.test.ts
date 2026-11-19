@@ -71,7 +71,7 @@ describe('sign-in by device code', () => {
   it('without the OAuth client file the status says not configured and sign-in is refused', async () => {
     const r = await rig({ client: false });
     const admin = await loginAs(r.h.app, 'admin');
-    expect((await inject(r, 'GET', '/api/live/youtube/status', admin.headers)).json()).toEqual({ configured: false, signedIn: false, channelTitle: null, lastError: null });
+    expect((await inject(r, 'GET', '/api/live/youtube/status', admin.headers)).json()).toMatchObject({ configured: false, signedIn: false, channelTitle: null, lastError: null, heldBy: 'box', signInHere: true, state: 'signedOut' });
     const res = await inject(r, 'POST', '/api/live/youtube/signin', admin.headers);
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('youtube_not_configured');
@@ -93,6 +93,25 @@ describe('sign-in by device code', () => {
     // the device-code request carried the client id and the YouTube scope, nothing else
     const dc = r.g.calls.find((c) => c.path === '/device/code')!;
     expect(new URLSearchParams(dc.body).get('scope')).toBe('https://www.googleapis.com/auth/youtube');
+  });
+
+  it('the status of every app shows the pending sign-in (code and address) and never the device code', async () => {
+    const r = await rig();
+    const admin = await loginAs(r.h.app, 'admin');
+    const quiet = await inject(r, 'GET', '/api/live/status', admin.headers);
+    expect(quiet.json().youtube.signIn).toBeNull();
+    await inject(r, 'POST', '/api/live/youtube/signin', admin.headers);
+    // another phone, opened later, reads the same
+    const other = await loginAs(r.h.app, 'admin');
+    for (const url of ['/api/live/status', '/api/live/youtube/status']) {
+      const res = await inject(r, 'GET', url, other.headers);
+      const yt = url === '/api/live/status' ? res.json().youtube : res.json();
+      expect(yt.signIn).toMatchObject({ state: 'pending', userCode: 'ABCD-EFGH', verificationUrl: 'https://www.google.com/device' });
+      expect(typeof yt.signIn.expiresAt).toBe('string');
+      expect(res.body).not.toContain(FAKE_DEVICE_CODE);
+    }
+    r.h.clock.t += 1_900_000;
+    expect((await inject(r, 'GET', '/api/live/status', admin.headers)).json().youtube.signIn).toEqual({ state: 'expired' });
   });
 
   it('a poll before the interval is answered from the cache and does not hit Google', async () => {
@@ -117,14 +136,14 @@ describe('sign-in by device code', () => {
     const r = await rig();
     const { admin } = await signIn(r);
     const bytes = readFileSync(r.tokenPath);
-    for (const secret of [FAKE_REFRESH, 'access-token-1', 'UC-surau', 'Surau D\'Waqaf']) expect(bytes.includes(Buffer.from(secret))).toBe(false);
+    for (const secret of [FAKE_REFRESH, 'access-token-1', 'UC-surau', 'Surau Contoh']) expect(bytes.includes(Buffer.from(secret))).toBe(false);
     expect(readFileSync(r.tokenPath, 'utf8').startsWith('v1.')).toBe(true);
     const status = await inject(r, 'GET', '/api/live/youtube/status', admin.headers);
-    expect(status.json()).toEqual({ configured: true, signedIn: true, channelTitle: 'Surau D\'Waqaf', lastError: null });
+    expect(status.json()).toMatchObject({ configured: true, signedIn: true, channelTitle: 'Surau Contoh', lastError: null, heldBy: 'box', signInHere: true, state: 'signedIn', reason: null });
     const log = r.h.app.surau.db.prepare("SELECT actor, entity, entity_id, after_json FROM change_log WHERE entity = 'youtube'").all() as Array<{ entity_id: string; after_json: string }>;
     expect(log).toHaveLength(1);
     expect(log[0]!.entity_id).toBe('signin');
-    expect(JSON.parse(log[0]!.after_json)).toEqual({ channelTitle: 'Surau D\'Waqaf' });
+    expect(JSON.parse(log[0]!.after_json)).toEqual({ channelTitle: 'Surau Contoh' });
     const everything = changeLogText(r.h.app) + r.logs.join('\n') + status.body;
     for (const secret of [FAKE_REFRESH, 'access-token', 'csecret-SECRET', FAKE_DEVICE_CODE]) expect(everything).not.toContain(secret);
     // the polling call asked for the device-code grant with the client secret, over the wire only
@@ -137,7 +156,7 @@ describe('sign-in by device code', () => {
     await signIn(r);
     const again = createYoutubeService({ db: r.h.app.surau.db, dataDir: r.h.dataDir, fetchImpl: r.g.fetchImpl, now: r.h.clock.now });
     expect(again.signedIn()).toBe(true);
-    expect(again.info().channelTitle).toBe('Surau D\'Waqaf');
+    expect(again.info().channelTitle).toBe('Surau Contoh');
     writeFileSync(r.tokenPath, 'v1.AAAA.BBBB.CCCC');
     expect(createYoutubeService({ db: r.h.app.surau.db, dataDir: r.h.dataDir, fetchImpl: r.g.fetchImpl, now: r.h.clock.now }).signedIn()).toBe(false);
     writeFileSync(r.tokenPath, 'not even sealed');
@@ -243,6 +262,9 @@ describe('broadcast lifecycle from the kuliah', () => {
       status: { privacyStatus: 'unlisted', selfDeclaredMadeForKids: false },
       contentDetails: { enableAutoStart: true, enableAutoStop: false, latencyPreference: 'low', monitorStream: { enableMonitorStream: false } },
     });
+    // the recording is kept: DVR and record-from-start are explicit, not left to YouTube's defaults
+    expect((ins.json!.contentDetails as Record<string, unknown>).enableDvr).toBe(true);
+    expect((ins.json!.contentDetails as Record<string, unknown>).recordFromStart).toBe(true);
     expect((ins.json!.snippet as { description: string }).description).toContain('Bab Solat');
     const bind = r.g.calls.find((c) => c.path === '/youtube/v3/liveBroadcasts/bind')!;
     expect(bind.query.get('id')).toBe('bc-1');

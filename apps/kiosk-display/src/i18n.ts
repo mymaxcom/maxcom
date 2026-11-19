@@ -1,5 +1,5 @@
-import { dateOf, klWeekday } from '@surau/core';
-export type Lang = 'ms' | 'en';
+import { SURAHS, dateOf, klWeekday } from '@surau/core';
+export type Lang = 'ms' | 'en' | 'ar';
 
 export const STRINGS: Record<Lang, Record<string, string>> = {
   ms: {
@@ -166,6 +166,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     netRetry: 'Uji semula',
     netLoading: 'Menyemak...',
     netUnavailable: 'Semakan rangkaian tidak tersedia pada skrin ini',
+    cloudOnline: 'Dalam talian',
     cloudOffline: 'Luar talian',
     cloudSyncedAt: 'Diselaraskan {time}',
     pairConnectedTo: 'Disambung ke {name}',
@@ -328,13 +329,185 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     netRetry: 'Test again',
     netLoading: 'Checking...',
     netUnavailable: 'The network check is not available on this screen',
+    cloudOnline: 'Online',
     cloudOffline: 'Offline',
     cloudSyncedAt: 'Synced {time}',
     pairConnectedTo: 'Connected to {name}',
     // Tetapan build 2026-11-16: the whole-screen azan countdown.
     azanAt: 'Azan at {time}',
   },
+  // Arabic (W14, operator 2026-11-20): formal Modern Standard Arabic, the terms of the box screens and mymaxcom.my
+  // (المصلى، المسؤول، امسح، رمز QR، السحابة). Product names stay Latin; digits stay Western (0-9), as on the box
+  // screens. It still wants a native speaker's check.
+  ar: {
+    nextIn: '{prayer} بعد',
+    chipNow: 'حان الوقت',
+    factTime: 'الوقت',
+    factAfter: 'بعد',
+    factAfterPrayer: 'صلاة {prayer}',
+    factBook: 'الكتاب',
+    azanIn: 'أذان {prayer} بعد',
+    masukWaktu: 'حان الآن وقت صلاة {prayer}',
+    iqamahIn: 'الإقامة بعد',
+    solatNow: 'الصلاة قائمة',
+    silentPhone: 'يُرجى إغلاق صوت الهواتف',
+    khutbahNow: 'خطبة الجمعة جارية',
+    khutbahCalm: 'يُرجى الإنصات بهدوء',
+    syurukIn: 'الشروق بعد',
+    subuhEnding: 'وقت الفجر يوشك على الانتهاء',
+    isyraq: 'وقت الإشراق',
+    tarawih: 'صلاة التراويح',
+    noData: 'لا توجد بيانات لمواقيت الصلاة. اضبط موقع المصلى في تطبيق MAX Admin Client.',
+    'kiosk.emergency': 'مواقيت محسوبة مؤقتًا؛ لا تتوفر بيانات JAKIM الرسمية لهذا اليوم',
+    surauName: 'المصلى',
+    barCaption: 'مواقيت الصلاة',
+    kuliahWhenToday: 'اليوم',
+    kuliahWhenTomorrow: 'غدًا',
+    pengumuman: 'إعلان',
+    programKhas: 'برنامج خاص',
+    takwim: 'التقويم',
+    tabungTitle: 'صندوق المصلى',
+    tabungUpdated: 'آخر تحديث {date}',
+    tabungOfTarget: 'من الهدف {target}',
+    tabungOfTargetLeft: 'من الهدف {target}، والمتبقي {left}',
+    tabungDone: 'تم بلوغ الهدف',
+    tabungReached: 'تحقق',
+    tabungNeeded: 'المبلغ المتبقي {amount}',
+    tabungQrTitle: 'امسح للتبرع',
+    tabungQrName: 'DuitNow QR',
+    tabungQrHint: 'يعمل مع أي تطبيق مصرفي أو محفظة إلكترونية',
+    tabungNew: 'جديد',
+    tabungNewTitle: 'وصل تبرع جديد',
+    tabungThanks: 'شكرًا لكم. جزاكم الله خيرًا.',
+    tabungOthers: 'صناديق أخرى',
+    tabungAll: 'جميع الصناديق ({n})',
+    tabungTotal: 'مجموع جميع الصناديق',
+    tabungPages: 'الصفحة',
+    batal: 'ملغى',
+    today: 'اليوم',
+    daysLeftWord: 'أيام متبقية',
+    hadis: 'حديث',
+    bahagian: 'الجزء',
+    daripada: 'من',
+    sumber: 'المصدر',
+    worldTimes: 'توقيت العالم',
+    tugasan: 'جدول المناوبات',
+    ayatToday: 'آية اليوم',
+    surahLine: 'سورة {name} ({n}): {range}',
+    arabSurahLine: 'سورة {name}، الآيات {range}',
+    translation: 'الترجمة',
+    zikirAfter: 'الأذكار بعد صلاة {prayer}',
+    roleImam: 'الإمام',
+    roleBilal: 'المؤذن',
+    roleKhatib: 'الخطيب',
+    roleAjk: 'عضو اللجنة المناوب',
+    hourShort: 'س',
+    tomorrowWord: 'غدًا',
+    yesterdayWord: 'أمس',
+    tickerCap: 'إشعار',
+    timesWord: 'مرة',
+    pairTitle: 'اربط شاشة التلفاز هذه',
+    // The app's menu path is a value here ({path}, PAIR_MENU_PATH in i18n-box.ts), set left to right.
+    pairInstruction: 'افتح تطبيق MAX Admin Client، واختر {path}، ثم أدخل هذا الرمز',
+    pairExpiresIn: 'ينتهي الرمز بعد {mmss}',
+    pairRenewing: 'جارٍ طلب رمز جديد…',
+    pairUnreachable: 'تعذّر الاتصال بجهاز MAXCOM',
+    pairRetrying: 'تتم إعادة المحاولة تلقائيًا',
+    pairDone: 'تم ربط الشاشة',
+    pairBadge: 'لم تُربط بعد',
+    liveNow: 'بث مباشر',
+    liveRunning: 'البث المباشر جارٍ',
+    liveResuming: 'سيُستأنف البث بعد قليل',
+    previewNoContent: 'لا يوجد محتوى لهذه الشاشة بعد',
+    setupSub: 'الإعداد الأول',
+    boxLangLabel: 'اللغة',
+    setupTitle: 'إعداد جهاز MAXCOM هذا',
+    setupLead: 'امسح الرمز بتطبيق MAX Admin Client لتصبح المسؤول الأول.',
+    setupLead2: 'لا حاجة إلى الإنترنت، لكن يجب أن يكون الهاتف وجهاز MAXCOM هذا على الشبكة نفسها.',
+    setupStep1: 'تأكد من اتصال الهاتف بشبكة Wi-Fi الرئيسية للمصلى (لا شبكة الضيوف).',
+    setupStep2: 'افتح تطبيق MAX Admin Client واختر مسح رمز QR.',
+    setupStep3: 'امسح الرمز المجاور، ثم أدخل اسم المصلى واسمك.',
+    setupCodeOnce: 'رمز الإعداد، للاستخدام مرة واحدة',
+    setupNewCodeIn: 'رمز جديد بعد {mmss}',
+    setupFingerprint: 'البصمة',
+    setupAddress: 'العنوان',
+    setupBoxName: 'الاسم',
+    setupBoxId: 'المعرّف',
+    setupNoHttps: 'لا توجد شهادة HTTPS على جهاز MAXCOM هذا بعد: على المُركِّب إكمال التركيب',
+    setupNeedsCamera: 'يتطلب الإعداد هاتفًا أو جهاز iPad مزوّدًا بكاميرا',
+    setupNetCheck: 'فحص الشبكة',
+    setupNetHint: 'اضغط OK',
+    setupApp: 'تطبيق MAX Admin Client: {url}',
+    setupHttpsOn: 'HTTPS مفعّل',
+    recoveryTitleNoAdmin: 'يحتاج هذا المصلى إلى مسؤول جديد',
+    recoveryTitleDamaged: 'يجب استعادة بيانات المصلى',
+    recoveryWhyNoAdmin: 'لم يعد هناك مسؤول نشط في {surau}.',
+    recoveryWhyDamaged: 'قاعدة البيانات في جهاز MAXCOM هذا تالفة ولا يمكن قراءتها.',
+    recoveryHowLinked: 'جهاز MAXCOM هذا مرتبط بسحابة MAXCOM',
+    recoveryHowUnlinked: 'جهاز MAXCOM هذا غير مرتبط بالسحابة',
+    recoveryLinked1: 'يمسح المسؤول الجديد هذا الرمز بتطبيق MAX Admin Client.',
+    recoveryLinked2: 'أدخل رمز الاسترداد في الهاتف، أو اطلب من مسؤول MAXCOM الموافقة على المسؤول الجديد.',
+    recoveryLinked3: 'تعود الشاشة إلى وضعها المعتاد بعد الانتهاء.',
+    recoveryUnlinked1: 'امسح هذا الرمز بتطبيق MAX Admin Client.',
+    recoveryUnlinked2: 'أدخل رمز الاسترداد المكتوب على الورق عند الإعداد.',
+    recoveryUnlinked3: 'يصبح ذلك الهاتف المسؤول الجديد لهذا المصلى.',
+    recoveryNoCode: 'لا يوجد رمز استرداد؟ يجب إعادة تثبيت جهاز MAXCOM هذا واستعادة البيانات من النسخة الاحتياطية المحلية.',
+    recoveryNoCodeMade: 'لم يُنشأ رمز استرداد لجهاز MAXCOM هذا.',
+    recoveryNoCodeContact: 'يُرجى التواصل مع مُركِّب MAXCOM.',
+    recoveryDamagedLinked1: 'تواصل مع مسؤول MAXCOM.',
+    recoveryDamagedLinked2: 'يستعيد مسؤول MAXCOM البيانات من النسخة الاحتياطية السحابية.',
+    recoveryDamagedLinked3: 'تعود الشاشة إلى وضعها المعتاد بعد استعادة البيانات.',
+    recoveryDamagedUnlinked1: 'تواصل مع مُركِّب MAXCOM.',
+    recoveryDamagedUnlinked2: 'جهّز ذاكرة USB التي تحمل النسخة الاحتياطية إن وُجدت.',
+    recoveryDamagedUnlinked3: 'تعود الشاشة إلى وضعها المعتاد بعد استعادة البيانات.',
+    recoveryPill: 'وضع الاسترداد',
+    recoveryNoPrayer: 'تعذّرت قراءة مواقيت الصلاة',
+    recoveryCodeOnce: 'رمز الاسترداد، للاستخدام مرة واحدة',
+    lockedTitle: 'تم إيقاف الخدمة',
+    lockedBody: 'تواصل مع مسؤول MAXCOM.',
+    lockedId: 'المعرّف: {id}',
+    netTitle: 'فحص الشبكة',
+    netEthernet: 'Ethernet',
+    netWifi: 'Wi-Fi',
+    netConnected: 'متصل، {address}',
+    netNotUsed: 'غير مستخدم',
+    netInternet: 'الإنترنت',
+    netInternetNotNeeded: 'غير مطلوب للإعداد',
+    netServer: 'خادم MAXCOM',
+    netServerOn: 'يعمل على {url}',
+    netServerOff: 'HTTPS غير مفعّل',
+    netPhone: 'الهاتف',
+    netPhoneSeen: 'وصل هاتف إلى جهاز MAXCOM هذا الساعة {time}',
+    netPhoneNone: 'لم يصل أي هاتف خلال آخر 10 دقائق',
+    netCloud: 'سحابة MAXCOM',
+    netLinked: 'مرتبط، آخر مزامنة {time}',
+    netLinkedNever: 'مرتبط، لم تتم المزامنة بعد',
+    netLinkedShort: 'مرتبط',
+    netUnlinked: 'غير مرتبط',
+    netOk: 'يستطيع الهاتف الوصول إلى جهاز MAXCOM هذا',
+    netOkHint: 'أعد مسح رمز التسجيل في تطبيق MAX Admin Client.',
+    netIsolation: 'السبب المحتمل: شبكة Wi-Fi للضيوف أو عزل الأجهزة',
+    netIsolation1: 'تأكد من أن الهاتف وجهاز MAXCOM هذا على شبكة Wi-Fi نفسها (لا شبكة الضيوف).',
+    netIsolation2: 'أوقف خيار "client isolation" أو "AP isolation" في موجّه Wi-Fi الخاص بالمصلى.',
+    netUnlinkedHint: 'جهاز MAXCOM هذا غير مرتبط بالسحابة، فلا سبيل للاتصال به إلا عبر الشبكة نفسها.',
+    netProbeTitle: 'اختبر الاتصال من الهاتف',
+    netProbeHint: 'امسح الرمز بتطبيق MAX Admin Client. إذا وصل الهاتف، يتحول سطر الهاتف إلى الأخضر.',
+    netBack: 'رجوع',
+    netRetry: 'أعد الفحص',
+    netLoading: 'جارٍ الفحص…',
+    netUnavailable: 'فحص الشبكة غير متاح على هذه الشاشة',
+    cloudOnline: 'متصل',
+    cloudOffline: 'غير متصل',
+    cloudSyncedAt: 'آخر مزامنة {time}',
+    pairConnectedTo: 'متصل بـ {name}',
+    azanAt: 'الأذان الساعة {time}',
+  },
 };
+
+/** Text direction of a TV language: right to left for Arabic. */
+export function dirOfLang(lang: Lang): 'rtl' | 'ltr' {
+  return lang === 'ar' ? 'rtl' : 'ltr';
+}
 
 /**
  * The surau name shown on screen: `settings.surauInfo.name`, falling back to the built-in
@@ -362,11 +535,16 @@ export const PRAYER_AR: Readonly<Record<'imsak' | 'subuh' | 'syuruk' | 'zohor' |
   jumaat: 'الجمعة',
 };
 
-const WEEKDAY_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-const HIJRI_MONTH_AR = [
+export const WEEKDAY_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+export const HIJRI_MONTH_AR = [
   'محرم', 'صفر', 'ربيع الأول', 'ربيع الآخر',
   'جمادى الأولى', 'جمادى الآخرة', 'رجب', 'شعبان',
   'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة',
+];
+/** Gregorian month names in standard Arabic (the names used in the Gulf, Egypt and Malaysia's Arabic press). */
+export const GREG_MONTH_AR = [
+  'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+  'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
 ];
 const arDigits = (n: number): string => String(n).replace(/\d/g, (d) => String.fromCharCode(0x0660 + Number(d)));
 
@@ -374,6 +552,11 @@ const arDigits = (n: number): string => String(n).replace(/\d/g, (d) => String.f
 export function fmtHijriAr(now: Date, hijri: { d: number; m: number; y: number }, tz: string): string {
   const wd = klWeekday(dateOf(now, tz));
   return `${WEEKDAY_AR[wd]}، ${arDigits(hijri.d)} ${HIJRI_MONTH_AR[hijri.m - 1] ?? ''} ${arDigits(hijri.y)} هـ`;
+}
+
+/** A surah's name on screen: its Arabic name on an Arabic screen, else the name the content carries (Malay). */
+export function surahNameFor(surah: number, nameMs: string, lang: Lang): string {
+  return lang === 'ar' ? (SURAHS[surah - 1]?.nameAr ?? nameMs) : nameMs;
 }
 
 /** The old stored default of the silent-phone message (before the default became empty): it counts as untouched. */
@@ -398,19 +581,29 @@ export function t(key: string, lang: Lang, vars?: Record<string, string | number
 const DAYS_SHORT: Record<Lang, string[]> = {
   ms: ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'],
   en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  // Arabic has no short weekday names in common use: the full names.
+  ar: WEEKDAY_AR,
 };
 const DAYS_LONG: Record<Lang, string[]> = {
   ms: ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'],
   en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+  ar: WEEKDAY_AR,
 };
 const MONTHS_SHORT: Record<Lang, string[]> = {
   ms: ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogo', 'Sep', 'Okt', 'Nov', 'Dis'],
   en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+  ar: GREG_MONTH_AR,
 };
 const MONTHS_LONG: Record<Lang, string[]> = {
   ms: ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'],
   en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+  ar: GREG_MONTH_AR,
 };
+
+/** The comma between two parts of a line: the Arabic comma in Arabic. */
+export function commaOf(lang: Lang): string {
+  return lang === 'ar' ? '، ' : ', ';
+}
 
 /** Parts of a 'YYYY-MM-DD' date, or null when malformed. `utc` is the day's UTC midnight (calendar math only). */
 export function ymdParts(date: string): { y: number; m: number; d: number; wd: number; utc: number } | null {
@@ -434,7 +627,7 @@ export function fmtDateShort(date: string, lang: Lang): string {
 export function fmtDateLong(date: string, lang: Lang): string {
   const p = ymdParts(date);
   if (!p) return date;
-  return `${DAYS_LONG[lang][p.wd]}, ${p.d} ${MONTHS_LONG[lang][p.m - 1]} ${p.y}`;
+  return `${DAYS_LONG[lang][p.wd]}${commaOf(lang)}${p.d} ${MONTHS_LONG[lang][p.m - 1]} ${p.y}`;
 }
 
 /** 'Khamis'. A malformed date is returned as given. */
@@ -458,7 +651,7 @@ export function daysBetween(from: string, to: string): number | null {
 }
 
 /**
- * '7:15 malam' (ms, 12h), '7:15 PM' (en, 12h) or '19:15' (24h). Malay time-of-day words follow Malaysian
+ * '7:15 malam' (ms, 12h), '7:15 PM' (en, 12h), '7:15 م' (ar, 12h) or '19:15' (24h). Malay time-of-day words follow Malaysian
  * usage: pagi before noon, tengah hari 12-13, petang 14-18, malam from 19. A malformed time is returned as given.
  */
 export function fmtTimeOfDay(hhmm: string, lang: Lang, timeFormat: '12h' | '24h' = '12h'): string {
@@ -470,6 +663,8 @@ export function fmtTimeOfDay(hhmm: string, lang: Lang, timeFormat: '12h' | '24h'
   const h12 = h % 12 === 0 ? 12 : h % 12;
   let word: string;
   if (lang === 'en') word = h < 12 ? 'AM' : 'PM';
+  // Arabic: the morning and evening marks of the box screens.
+  else if (lang === 'ar') word = h < 12 ? 'ص' : 'م';
   else word = h < 12 ? 'pagi' : h < 14 ? 'tengah hari' : h < 19 ? 'petang' : 'malam';
   return `${h12}:${m[2]} ${word}`;
 }

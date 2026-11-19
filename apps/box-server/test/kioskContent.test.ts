@@ -64,7 +64,7 @@ function seed(app: FastifyInstance): void {
   }, 'secret-actor', undefined, 'sdm');
   putItem(db, 'pengumuman', { title: 'Aktif', body: 'Isi', from: '2026-11-01', to: '2026-11-10', priority: 1 }, 'secret-actor', undefined, 'sdm');
   putItem(db, 'pengumuman', { title: 'Tamat', body: 'Isi', from: '2026-10-01', to: '2026-10-10', priority: 1 }, 'secret-actor', undefined, 'sdm');
-  putItem(db, 'poster', { title: 'Poster 1', assetId: ASSET, days: ['jumaat'], order: 1 }, 'secret-actor', undefined, 'sdm');
+  putItem(db, 'poster', { title: 'Poster 1', assetId: ASSET, days: ['jumaat'], order: 1, stretch: false }, 'secret-actor', undefined, 'sdm');
   putItem(db, 'zikir', { order: 3, textAr: 'ج', textMs: 'tiga' }, 'secret-actor', undefined, 'sdm');
   putItem(db, 'zikir', { order: 1, textAr: 'أ', textMs: 'satu' }, 'secret-actor', undefined, 'sdm');
   putItem(db, 'zikir', { order: 2, textAr: 'ب', textMs: 'dua' }, 'secret-actor', undefined, 'sdm');
@@ -117,6 +117,7 @@ describe('buildKioskContent', () => {
     expect(c.pengumuman).toHaveLength(1);
     expect(c.pengumuman[0]?.title).toBe('Aktif');
     expect(c.posters).toHaveLength(1);
+    expect((c.posters[0] as { stretch?: boolean }).stretch).toBe(false); // the poster's Regangkan flag reaches the kiosk
     expect(c.zikir.map((z) => z.textMs)).toEqual(['satu', 'dua', 'tiga']);
     expect(c.hadisToday).toEqual([]);
   });

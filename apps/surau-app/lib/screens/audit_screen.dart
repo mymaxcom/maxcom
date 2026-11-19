@@ -240,7 +240,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                           onTap: () => setState(() {
                             if (!_open.remove(e.id)) _open.add(e.id);
                           }),
-                          when: _when(e.at, deps.toLocal, today),
+                          when: _when(e.at, deps.toLocal, today, appLangOf(context)),
                           what: _what(s, e, names),
                           who: _who(s, e),
                           onRestore: canRestore && e.entityDeleted && isUserDeleteLine(e) && e.entityId != null
@@ -302,10 +302,11 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     String at,
     DateTime Function(DateTime) toLocal,
     DateTime today,
+    AppLang lang,
   ) {
     final t = DateTime.tryParse(at);
     if (t == null) return at;
-    return whenWords(toLocal(t), today: today);
+    return whenWords(toLocal(t), today: today, lang: lang);
   }
 
   /// "Tetapan: iqamah", "Pengguna: Aminah binti Yusof", "Pengguna dipadam:

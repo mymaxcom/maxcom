@@ -53,7 +53,9 @@ class KioskSourceScanTest {
         val logLines = (webView + activity).lines().filter { it.contains("Log.") }
         for (l in logLines) assertFalse("log line mentions the token: $l", l.contains("token", ignoreCase = true))
         assertTrue(webView.contains("\"mxk=\$token; Path=/; HttpOnly; SameSite=Strict\""))
-        assertTrue(webView.contains("\"http://127.0.0.1:\$port\""))
+        assertTrue(webView.contains("\"http://\${UrlPolicy.KIOSK_HOST}:\$port\""))
+        assertFalse(webView.contains("127.0.0.1"))
+        assertTrue(activity.contains("view.loadUrl(UrlPolicy.kioskUrl(port))"))
     }
 
     @Test

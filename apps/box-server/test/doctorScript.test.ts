@@ -46,6 +46,11 @@ describe('doctor.ps1 static checks', () => {
     expect(src).not.toMatch(/\?\?|\?\./);
   });
 
+  it('box_account also looks at the IPv6 loopback, so a foreign owner of [::1]:<port> is reported (F15)', () => {
+    const line = src.split('\n').find((l) => l.includes('Get-PortOwner $port | Where-Object')) ?? '';
+    for (const a of ["'127.0.0.1'", "'0.0.0.0'", "'::'", "'::1'"]) expect(line, a).toContain(`$_.Address -eq ${a}`);
+  });
+
   it('declares the documented parameters and every check id', () => {
     for (const p of ['$InstallRoot', '$Wait', '[switch]$Json', '$ExpectBoxId', '[switch]$SkipSystemChecks']) expect(src).toContain(p);
     for (const id of CHECK_IDS) expect(src, id).toContain(`'${id}'`);

@@ -14,6 +14,7 @@ const read = (...p: string[]) => readFileSync(join(repoRoot, ...p), 'utf8');
 const KEYS = ['admin-client-android', 'kiosk-server-android', 'kiosk-server-windows'];
 const VERSION_RE = /^20\d\d\.(0[1-9]|1[0-2])\.([1-9]|[1-9]\d)$/;
 const versions = JSON.parse(read('versions.json')) as Record<string, string>;
+const builds = (existsSync(join(repoRoot, 'builds.json')) ? JSON.parse(read('builds.json')) : {}) as Record<string, number>;
 const code = (v: string) => {
   const [y, m, n] = v.split('.').map(Number);
   return ((must(y, 'year') - 2000) * 10000 + must(m, 'month') * 100 + must(n, 'release number')) * 10;
@@ -51,8 +52,8 @@ describe('versions.json', () => {
   });
   it('is 2-space JSON with a trailing newline', () => {
     const text = read('versions.json');
-    expect(text).toBe(`${JSON.stringify(versions, null, 2)}\n`);
-  });
+    // what git holds: a Windows checkout with core.autocrlf shows CRLF in the working copy (not a change to the file)
+    expect(text.replace(/\r\n/g, '\n')).toBe(`${JSON.stringify(versions, null, 2)}\n`);  });
 });
 
 describe('files that carry a product version agree with versions.json', () => {
@@ -65,7 +66,7 @@ describe('files that carry a product version agree with versions.json', () => {
     const m = /^version:\s*(\S+)\+(\d+)\s*$/m.exec(read('apps', 'surau-app', 'pubspec.yaml'));
     expect(m).not.toBeNull();
     expect(m![1]).toBe(versions['admin-client-android']);
-    expect(Number(m![2])).toBe(code(must(versions['admin-client-android'], 'admin-client-android version')));
+    expect(Number(m![2])).toBe(code(must(versions['admin-client-android'], 'admin-client-android version')) + builds['admin-client-android']!);
     expect(Number(m![2])).toBeGreaterThan(1);
   });
   it('admin client: the compile-time default of MAXCOM_VERSION is the pubspec version', () => {
@@ -115,6 +116,39 @@ describe('scripts/set-version.mjs', () => {
     expect(readFileSync(dartPath(d), 'utf8')).toBe(dartFile('2026.11.2'));
     expect(run(d, ['--check']).status).toBe(0);
     expect(existsSync(`${dartPath(d)}.tmp-${process.pid}`)).toBe(false);
+  });
+  it('--build raises only the internal build: the version name stays, the pubspec number goes up by one, builds.json is written; a bump of the version sets it back to 0', () => {
+    const d = tempRoot('2026.11.13');
+    expect(run(d, ['--build', 'admin-client-android', '1']).status).toBe(0);
+    expect(JSON.parse(readFileSync(join(d, 'versions.json'), 'utf8'))['admin-client-android']).toBe('2026.11.13');
+    expect(JSON.parse(readFileSync(join(d, 'builds.json'), 'utf8'))).toEqual({ 'admin-client-android': 1 });
+    const pub = readFileSync(join(d, 'apps', 'surau-app', 'pubspec.yaml'), 'utf8');
+    expect(pub).toContain(`version: 2026.11.13+${code('2026.11.13') + 1}\r\n`);
+    expect(run(d, ['--check']).status).toBe(0);
+    // lower, or not a digit: refused
+    expect(run(d, ['--build', 'admin-client-android', '0']).status).toBe(1);
+    expect(run(d, ['--build', 'admin-client-android', '10']).status).toBe(1);
+    // a server product has no file: only builds.json records it
+    expect(run(d, ['--build', 'kiosk-server-android', '1']).status).toBe(0);
+    expect(JSON.parse(readFileSync(join(d, 'builds.json'), 'utf8'))).toEqual({ 'admin-client-android': 1, 'kiosk-server-android': 1 });
+    // a new version starts at build 0
+    expect(run(d, ['admin-client-android', '2026.11.14']).status).toBe(0);
+    expect(JSON.parse(readFileSync(join(d, 'builds.json'), 'utf8'))).toEqual({ 'kiosk-server-android': 1 });
+    expect(readFileSync(join(d, 'apps', 'surau-app', 'pubspec.yaml'), 'utf8')).toContain(`version: 2026.11.14+${code('2026.11.14')}\r\n`);
+    expect(run(d, ['--check']).status).toBe(0);
+  });
+  it('--check catches a pubspec number that disagrees with builds.json', () => {
+    const d = tempRoot('2026.11.13');
+    writeFileSync(join(d, 'builds.json'), '{"admin-client-android":2}\n');
+    const r = run(d, ['--check']);
+    expect(r.status).toBe(1);
+    expect(r.out).toContain(`2026.11.13+${code('2026.11.13') + 2}`);
+  });
+  it('the Android box versionCode carries the build: (YYMMN * 100) + build * 10 + abi', () => {
+    const g = read('apps', 'box-android', 'app', 'build.gradle.kts');
+    expect(g).toContain('findProperty("boxBuild")');
+    expect(g).toContain('baseCode * 100 + boxBuild * 10 + index');
+    expect(read('scripts', 'android', 'build-box-apk.ps1')).toContain('"-PboxBuild=$boxBuild"');
   });
   it('bumps a server product on its own: only versions.json changes, the other products stay', () => {
     const d = tempRoot();

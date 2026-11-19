@@ -1,24 +1,27 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
-import { CameraStore } from '../live/camera.ts';
-import type { CameraRecord } from '../live/camera.ts';
+import { CameraStore, cameraBackupOf } from '../live/camera.ts';
 import { getSettings } from '../settingsStore.ts';
 import { LOCAL_SURAU_ID } from '../tenant.ts';
-import { cloudFetch } from './agent.ts';
+import { CameraError } from '../live/camera.ts';
+import { BOX_REPORT_HEADERS, cloudFetch } from './agent.ts';
+import { openFromCloud, relayAad } from './cameraRelayCrypto.ts';
 import { loadSyncKey, normaliseCloudUrl } from './syncKey.ts';
 
 /**
  * The box's side of the camera address backup (plan 4.2, 7; cloud side: `cameraSecretCloud.ts`).
  *
- *  - After the camera is saved or cleared (`PUT` / `DELETE /api/live/camera` answered 2xx) the box sends the sealed
- *    record to the cloud over the site-authenticated link: `PUT` with the record, or `DELETE` when none is left.
- *    The cloud seals it under its own key per surau.
+ *  - After the camera is saved or cleared (`PUT` / `DELETE /api/live/camera` answered 2xx) the box sends the backup
+ *    form to the cloud over the site-authenticated link: `PUT` with {address without the password, user name,
+ *    hasPassword}, or `DELETE` when none is left. The password never leaves the box (operator decision 2026-11-19:
+ *    the cloud must not be able to read it). The cloud seals what it gets under its own key per surau.
  *  - A change is first marked pending (`sync_state`), and the mark is cleared only when the cloud confirmed. A
  *    sleeping or unreachable cloud leaves the mark, and the timer tries again. While a mark is set the box never
  *    restores, so a camera removed here cannot be brought back by an older cloud copy.
  *  - A box with no camera of its own (a replaced box of the same surau, linked by a new code) asks the cloud once
  *    after it starts; a record found is saved through the box's own `CameraStore` (so it passes the same address
- *    rules). A box that has a camera pushes it once after it starts instead.
+ *    rules), and when the camera had a password it is marked "password needed" for the surau to type it again. A box
+ *    that has a camera pushes it once after it starts instead.
  *  - Nothing here logs the address, the login or what the cloud answered. A failure is a short fixed reason.
  */
 
@@ -44,7 +47,15 @@ export interface CameraSecretSyncOptions {
   wake?: (() => Promise<unknown>) | undefined;
   /** Run the timer (default true). Tests drive `push` / `restore` / `tick` themselves. */
   auto?: boolean | undefined;
+  /** This box's id: a change sent through the cloud is applied only when it was sealed for this id. */
+  boxId?: string | undefined;
 }
+
+export type CameraRelayOutcome = 'none' | 'applied' | 'refused' | 'rejected' | 'skipped' | 'failed';
+
+const RELAY_SEQ_KEY = 'camera_relay_seq';
+const RELAY_RESULT_KEY = 'camera_relay_result';
+
 
 export class CameraSecretSync {
   private readonly o: CameraSecretSyncOptions;
@@ -84,17 +95,18 @@ export class CameraSecretSync {
   }
 
   /** One request to the cloud: status and the (size-capped) JSON body only. */
-  private async call(method: 'GET' | 'PUT' | 'DELETE', body?: CameraRecord): Promise<{ status: number; json: Record<string, unknown> } | null> {
+  private async call(method: 'GET' | 'PUT' | 'DELETE' | 'POST', body?: unknown, path = '/api/sync/camera-secret'): Promise<{ status: number; json: Record<string, unknown> } | null> {
     const link = this.link();
     if (link === null) return null;
-    const headers: Record<string, string> = { Authorization: `Bearer ${link.token}` };
+    // every request a box sends to the cloud says which theme contract it supports (as the sync agent does)
+    const headers: Record<string, string> = { Authorization: `Bearer ${link.token}`, ...BOX_REPORT_HEADERS };
     const init: RequestInit = { method, headers, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) };
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
     }
     try {
-      const res = await this.fetchImpl(`${link.base}/api/sync/camera-secret`, init);
+      const res = await this.fetchImpl(`${link.base}${path}`, init);
       let text = '';
       if (res.body) {
         const reader = res.body.getReader();
@@ -141,7 +153,7 @@ export class CameraSecretSync {
     const run = (async (): Promise<CameraSecretOutcome> => {
       try {
         if (this.link() === null) return 'skipped';
-        const record = this.store.get();
+        const record = this.store.backup();
         const first = await this.call(record === null ? 'DELETE' : 'PUT', record ?? undefined);
         let res = first;
         if ((res === null || res.status === 503) && this.o.wake !== undefined) {
@@ -151,7 +163,7 @@ export class CameraSecretSync {
         }
         if (res === null || res.status < 200 || res.status >= 300) return 'failed';
         // the record may have changed while the request was out: the mark stays then, and the next try sends it
-        const after = this.store.get();
+        const after = this.store.backup();
         const same = (after === null && record === null) || (after !== null && record !== null && JSON.stringify(after) === JSON.stringify(record));
         if (same) this.setPending(false);
         return record === null ? 'removed' : 'stored';
@@ -177,19 +189,135 @@ export class CameraSecretSync {
       }
       if (res === null || (res.status !== 200 && res.status !== 404)) return 'failed';
       if (res.status === 404) return 'none';
-      const { url, username, password } = res.json;
+      // the backup holds no password (anything else the answer carries is ignored): the surau types it again
+      const { url, username, hasPassword, passwordNeeded, password } = res.json;
       if (typeof url !== 'string') return 'failed';
+      // an older cloud's row may still carry a password, in the address or beside it: it is dropped here too
+      const clean = cameraBackupOf({ url, ...(typeof username === 'string' && username !== '' ? { username } : {}) });
+      const needed = hasPassword === true || passwordNeeded === true || clean.hasPassword || (typeof password === 'string' && password !== '');
       // a camera saved by hand while the request was out wins
       if (this.store.get() !== null || this.pending()) return 'skipped';
-      this.store.save({
-        url,
-        ...(typeof username === 'string' ? { username } : {}),
-        ...(typeof password === 'string' ? { password } : {}),
-      });
+      this.store.save({ url: clean.url, ...(clean.username !== undefined ? { username: clean.username } : {}) }, { passwordNeeded: needed });
+      // the cloud learns that this box waits for the password (the phone away from the surau then asks for it too)
+      if (needed) {
+        this.setPending(true);
+        void this.push();
+      }
       return 'restored';
     } catch {
       return 'failed';
     }
+  }
+
+  // ---- a change sent through the cloud (set from anywhere) -------------------------------------------------------
+
+  private stateGet(key: string): string | null {
+    const r = this.o.db.prepare('SELECT value FROM sync_state WHERE key = ?').get(key);
+    return r === undefined || r.value === null ? null : String(r.value);
+  }
+
+  private stateSet(key: string, value: string): void {
+    this.o.db.prepare('INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+  }
+
+  private relayBusy = false;
+
+  /**
+   * Asks the cloud whether a camera change sealed for this box is waiting; opens it with the box's own key, applies
+   * it through the same `CameraStore` rules as the Wi-Fi form, and answers the cloud with the masked result. A number
+   * at or below the last applied one is never applied again (a replayed value). It never wakes the cloud and never
+   * logs the address or the login. Never throws.
+   */
+  async relayPoll(): Promise<CameraRelayOutcome> {
+    if (this.relayBusy) return 'skipped';
+    this.relayBusy = true;
+    try {
+      return await this.relayRun();
+    } catch {
+      return 'failed';
+    } finally {
+      this.relayBusy = false;
+    }
+  }
+
+  private async relayRun(): Promise<CameraRelayOutcome> {
+    if (this.link() === null || this.o.boxId === undefined) return 'skipped';
+    const res = await this.call('GET', undefined, '/api/sync/camera-relay');
+    if (res === null || (res.status !== 200 && res.status !== 404)) return 'failed';
+    if (res.status === 404) return 'none';
+    const { seq, op, boxId, sealed } = res.json;
+    if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 1 || (op !== 'put' && op !== 'delete') || boxId !== this.o.boxId) return 'rejected';
+    const last = Number(this.stateGet(RELAY_SEQ_KEY) ?? '0');
+    if (seq < last) {
+      // numbered before a change this box already applied (the cloud was restored or relinked): refused, and said so,
+      // so the phone sees the refusal and reads again instead of waiting for ever. Nothing is applied or remembered.
+      await this.relayAck(seq, false, 'stale');
+      return 'refused';
+    }
+    if (seq === last) {
+      // applied before, the answer did not get through: say the same thing again, change nothing
+      let prev: { seq?: unknown; ok?: unknown; code?: unknown } = {};
+      try {
+        prev = JSON.parse(this.stateGet(RELAY_RESULT_KEY) ?? '{}') as typeof prev;
+      } catch {
+        prev = {};
+      }
+      if (prev.seq !== seq) return 'rejected';
+      await this.relayAck(seq, prev.ok === true, typeof prev.code === 'string' ? prev.code : undefined);
+      return prev.ok === true ? 'applied' : 'refused';
+    }
+
+    let ok = false;
+    let code: string | undefined;
+    try {
+      if (op === 'delete') {
+        this.store.clear();
+      } else {
+        const key = loadSyncKey(this.o.dataDir);
+        if (key === null || typeof sealed !== 'string') throw new CameraError(400, 'unreadable', 'unreadable');
+        let plain: Record<string, unknown>;
+        try {
+          plain = JSON.parse(openFromCloud(key.privateJwk, sealed, relayAad(this.o.boxId, seq))) as Record<string, unknown>;
+        } catch {
+          throw new CameraError(400, 'unreadable', 'unreadable');
+        }
+        if (plain.seq !== seq || plain.boxId !== this.o.boxId || typeof plain.url !== 'string') throw new CameraError(400, 'unreadable', 'unreadable');
+        const masked = this.store.save({
+          url: plain.url,
+          ...(typeof plain.username === 'string' ? { username: plain.username } : {}),
+          ...(typeof plain.password === 'string' ? { password: plain.password } : {}),
+        });
+        this.audit('save', { url: masked.url, hasPassword: masked.hasPassword });
+      }
+      if (op === 'delete') this.audit('clear', {});
+      ok = true;
+    } catch (error) {
+      // a fixed code, never the text of what failed
+      code = error instanceof CameraError ? (['bad_address', 'bad_login', 'password_again', 'unreadable'].includes(error.code) ? error.code : 'error') : 'error';
+    }
+    // the number is kept before the answer goes, so a lost answer cannot make the same value apply twice
+    this.stateSet(RELAY_SEQ_KEY, String(seq));
+    this.stateSet(RELAY_RESULT_KEY, JSON.stringify({ seq, ok, ...(code !== undefined ? { code } : {}) }));
+    await this.relayAck(seq, ok, code);
+    if (ok) void this.changed();
+    return ok ? 'applied' : 'refused';
+  }
+
+  private audit(entityId: string, after: Record<string, unknown>): void {
+    try {
+      this.o.db
+        .prepare('INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(LOCAL_SURAU_ID, this.o.now().toISOString(), 'cloud-relay', 'live-camera', entityId, null, JSON.stringify(after), null);
+    } catch {
+      /* the history never stops a change */
+    }
+  }
+
+  private async relayAck(seq: number, ok: boolean, code?: string): Promise<void> {
+    const m = this.store.getMasked();
+    const display = { configured: m.configured, url: m.url, username: m.username, hasPassword: m.hasPassword, ...(m.passwordNeeded === true ? { passwordNeeded: true } : {}) };
+    const body = ok ? { seq, ok: true, display } : { seq, ok: false, code: code ?? 'error' };
+    await this.call('POST', body, '/api/sync/camera-relay/ack');
   }
 
   /** One timer round: deliver a pending change, else (once after start) push an existing camera or restore a missing one. */

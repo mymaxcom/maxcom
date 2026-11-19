@@ -53,7 +53,7 @@ String clockOf(DateTime local) =>
     '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
 
 /// `HH:mm` today, else `5 Nov 10:05`. Both in the reader's zone.
-String stampWords(DateTime local, {required DateTime today, AppLang lang = AppLang.ms}) {
+String stampWords(DateTime local, {required DateTime today, required AppLang lang}) {
   final same =
       local.year == today.year &&
       local.month == today.month &&

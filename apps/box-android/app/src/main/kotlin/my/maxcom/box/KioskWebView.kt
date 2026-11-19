@@ -126,11 +126,14 @@ object KioskWebView {
 
     private fun refused() = WebResourceResponse("text/plain", "utf-8", 403, "Forbidden", emptyMap(), ByteArrayInputStream(ByteArray(0)))
 
-    /** Sets the `mxk` cookie for the loopback origin only. Call before the first load and after a token change. */
+    /**
+     * Sets the `mxk` cookie for the kiosk origin only (`localhost`, host-only: no Domain attribute, so never a
+     * subdomain). Call before the first load and after a token change.
+     */
     fun setKioskCookie(port: Int, token: String) {
         require(token.isNotEmpty() && token.none { it == ';' || it == ',' || it == '"' || it == '\\' || it.code <= 32 || it.code > 126 }) { "bad token" }
         val cm = CookieManager.getInstance()
-        cm.setCookie("http://127.0.0.1:$port", "mxk=$token; Path=/; HttpOnly; SameSite=Strict")
+        cm.setCookie("http://${UrlPolicy.KIOSK_HOST}:$port", "mxk=$token; Path=/; HttpOnly; SameSite=Strict")
         cm.flush()
     }
 

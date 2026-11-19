@@ -349,6 +349,13 @@ final healthProvider = AsyncNotifierProvider<HealthNotifier, Read<HealthDto>?>(
   HealthNotifier.new,
 );
 
+/// Whether the box can do [feature] (`video`, `posterStretch`). While the box's health is not known (offline, loading)
+/// the answer is yes, so nothing is hidden by a missing answer; an older box that answered says no.
+final boxSupportsProvider = Provider.family<bool, String>((ref, feature) {
+  final h = ref.watch(healthProvider).value?.value;
+  return h == null ? true : h.supports(feature);
+});
+
 class SettingsNotifier extends AsyncNotifier<Read<Map<String, dynamic>>?> {
   @override
   Future<Read<Map<String, dynamic>>?> build() async {

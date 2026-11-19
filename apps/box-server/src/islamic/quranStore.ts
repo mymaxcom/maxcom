@@ -1,61 +1,16 @@
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { AYAT_MAX_AT_ONCE, SURAHS } from '@surau/core';
 import type { AyatCard } from '@surau/core';
 
 export const QURAN_KEY = 'malay_basumayyah';
 export const QURAN_TOTAL_AYAT = 6236;
 
-/** Ayat count per surah (index 0 = surah 1). Matches EveryAyah's ayahCount table. */
-export const AYAT_COUNTS: readonly number[] = [
-  7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135,
-  112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85,
-  54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13,
-  14, 11, 11, 18, 12, 12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42,
-  29, 19, 36, 25, 22, 17, 19, 26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11,
-  11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6,
-];
+/** Ayat count per surah (index 0 = surah 1), from the one core surah table. */
+export const AYAT_COUNTS: readonly number[] = SURAHS.map((s) => s.ayat);
 
-/** Surah names: Arabic and Malay (Malaysian transliteration). Index 0 = surah 1. */
-export const SURAH_NAMES: readonly (readonly [string, string])[] = [
-  ['الفاتحة', 'Al-Fatihah'], ['البقرة', 'Al-Baqarah'], ['آل عمران', "Ali 'Imran"],
-  ['النساء', "An-Nisa'"], ['المائدة', "Al-Ma'idah"], ['الأنعام', "Al-An'am"],
-  ['الأعراف', "Al-A'raf"], ['الأنفال', 'Al-Anfal'], ['التوبة', 'At-Taubah'],
-  ['يونس', 'Yunus'], ['هود', 'Hud'], ['يوسف', 'Yusuf'],
-  ['الرعد', "Ar-Ra'd"], ['إبراهيم', 'Ibrahim'], ['الحجر', 'Al-Hijr'],
-  ['النحل', 'An-Nahl'], ['الإسراء', "Al-Isra'"], ['الكهف', 'Al-Kahfi'],
-  ['مريم', 'Maryam'], ['طه', 'Taha'], ['الأنبياء', "Al-Anbiya'"],
-  ['الحج', 'Al-Hajj'], ['المؤمنون', "Al-Mu'minun"], ['النور', 'An-Nur'],
-  ['الفرقان', 'Al-Furqan'], ['الشعراء', "Asy-Syu'ara'"], ['النمل', 'An-Naml'],
-  ['القصص', 'Al-Qasas'], ['العنكبوت', "Al-'Ankabut"], ['الروم', 'Ar-Rum'],
-  ['لقمان', 'Luqman'], ['السجدة', 'As-Sajdah'], ['الأحزاب', 'Al-Ahzab'],
-  ['سبأ', "Saba'"], ['فاطر', 'Fatir'], ['يس', 'Yasin'],
-  ['الصافات', 'As-Saffat'], ['ص', 'Sad'], ['الزمر', 'Az-Zumar'],
-  ['غافر', 'Ghafir'], ['فصلت', 'Fussilat'], ['الشورى', 'Asy-Syura'],
-  ['الزخرف', 'Az-Zukhruf'], ['الدخان', 'Ad-Dukhan'], ['الجاثية', 'Al-Jasiyah'],
-  ['الأحقاف', 'Al-Ahqaf'], ['محمد', 'Muhammad'], ['الفتح', 'Al-Fath'],
-  ['الحجرات', 'Al-Hujurat'], ['ق', 'Qaf'], ['الذاريات', 'Az-Zariyat'],
-  ['الطور', 'At-Tur'], ['النجم', 'An-Najm'], ['القمر', 'Al-Qamar'],
-  ['الرحمن', 'Ar-Rahman'], ['الواقعة', "Al-Waqi'ah"], ['الحديد', 'Al-Hadid'],
-  ['المجادلة', 'Al-Mujadalah'], ['الحشر', 'Al-Hasyr'], ['الممتحنة', 'Al-Mumtahanah'],
-  ['الصف', 'As-Saff'], ['الجمعة', "Al-Jumu'ah"], ['المنافقون', 'Al-Munafiqun'],
-  ['التغابن', 'At-Taghabun'], ['الطلاق', 'At-Talaq'], ['التحريم', 'At-Tahrim'],
-  ['الملك', 'Al-Mulk'], ['القلم', 'Al-Qalam'], ['الحاقة', 'Al-Haqqah'],
-  ['المعارج', "Al-Ma'arij"], ['نوح', 'Nuh'], ['الجن', 'Al-Jinn'],
-  ['المزمل', 'Al-Muzzammil'], ['المدثر', 'Al-Muddaththir'], ['القيامة', 'Al-Qiyamah'],
-  ['الإنسان', 'Al-Insan'], ['المرسلات', 'Al-Mursalat'], ['النبأ', "An-Naba'"],
-  ['النازعات', "An-Nazi'at"], ['عبس', "'Abasa"], ['التكوير', 'At-Takwir'],
-  ['الانفطار', 'Al-Infitar'], ['المطففين', 'Al-Mutaffifin'], ['الانشقاق', 'Al-Insyiqaq'],
-  ['البروج', 'Al-Buruj'], ['الطارق', 'At-Tariq'], ['الأعلى', "Al-A'la"],
-  ['الغاشية', 'Al-Ghasyiyah'], ['الفجر', 'Al-Fajr'], ['البلد', 'Al-Balad'],
-  ['الشمس', 'Asy-Syams'], ['الليل', 'Al-Lail'], ['الضحى', 'Ad-Duha'],
-  ['الشرح', 'Asy-Syarh'], ['التين', 'At-Tin'], ['العلق', "Al-'Alaq"],
-  ['القدر', 'Al-Qadr'], ['البينة', 'Al-Bayyinah'], ['الزلزلة', 'Az-Zalzalah'],
-  ['العاديات', "Al-'Adiyat"], ['القارعة', "Al-Qari'ah"], ['التكاثر', 'At-Takathur'],
-  ['العصر', "Al-'Asr"], ['الهمزة', 'Al-Humazah'], ['الفيل', 'Al-Fil'],
-  ['قريش', 'Quraisy'], ['الماعون', "Al-Ma'un"], ['الكوثر', 'Al-Kauthar'],
-  ['الكافرون', 'Al-Kafirun'], ['النصر', 'An-Nasr'], ['المسد', 'Al-Masad'],
-  ['الإخلاص', 'Al-Ikhlas'], ['الفلق', 'Al-Falaq'], ['الناس', 'An-Nas'],
-];
+/** Surah names: Arabic and Malay (Malaysian transliteration), from the one core table. Index 0 = surah 1. */
+export const SURAH_NAMES: readonly (readonly [string, string])[] = SURAHS.map((s) => [s.nameAr, s.nameMs] as const);
 
 export interface QuranAyah {
   aya: number;
@@ -87,7 +42,37 @@ export interface AyatSettings {
 /** Longest range the card shows; the card pages longer ranges itself. */
 export const MAX_CARD_AYAT = 8;
 
-/** Well-known ranges, indexed by day of year for pick 'daily' (surah, from, to). */
+/**
+ * Pick 'daily' (Pilihan harian): the Quran read in order, one chunk a day. A chunk is up to AYAT_MAX_AT_ONCE (3) verses
+ * and never crosses the end of a surah, so a surah's last chunk can be 1 or 2 verses: Al-Fatihah 1-3, 4-6, 7, then
+ * Al-Baqarah 1-3, ... to An-Nas, then Al-Fatihah again. Entries are [surah, from, to].
+ */
+export const DAILY_CHUNKS: readonly (readonly [number, number, number])[] = (() => {
+  const out: (readonly [number, number, number])[] = [];
+  AYAT_COUNTS.forEach((count, i) => {
+    for (let from = 1; from <= count; from += AYAT_MAX_AT_ONCE) out.push([i + 1, from, Math.min(count, from + AYAT_MAX_AT_ONCE - 1)] as const);
+  });
+  return out;
+})();
+
+/** Whole KL-calendar days from `anchor` to `date` (both YYYY-MM-DD); negative when `date` is earlier. */
+export function daysBetween(anchor: string, date: string): number {
+  const at = (d: string): number => {
+    const m = DATE_RE.exec(d);
+    if (!m) throw new Error(`invalid date "${d}"`);
+    return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  };
+  return Math.round((at(date) - at(anchor)) / 86_400_000);
+}
+
+/** The daily chunk of `date` when the reading started on `anchor` (day 0 = Al-Fatihah 1-3); wraps after An-Nas. */
+export function dailyChunk(anchor: string, date: string): readonly [number, number, number] {
+  const n = DAILY_CHUNKS.length;
+  const i = ((daysBetween(anchor, date) % n) + n) % n;
+  return DAILY_CHUNKS[i]!;
+}
+
+/** Well-known ranges (surah, from, to): the curated list the daily pick used before 2026.11.13 (kept for reference). */
 export const DAILY_RANGES: readonly (readonly [number, number, number])[] = [
   [1, 1, 7], [2, 255, 255], [2, 285, 286], [2, 152, 152], [2, 153, 153], [2, 186, 186],
   [2, 201, 201], [2, 216, 216], [3, 8, 9], [3, 26, 27], [3, 103, 103], [3, 133, 134],
@@ -182,14 +167,6 @@ export function getAyat(q: QuranText, surah: number, from: number, to: number): 
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-function dayOfYear(date: string): number {
-  const m = DATE_RE.exec(date);
-  if (!m) throw new Error(`invalid date "${date}"`);
-  const y = Number(m[1]);
-  const t = Date.UTC(y, Number(m[2]) - 1, Number(m[3]));
-  return Math.floor((t - Date.UTC(y, 0, 1)) / 86_400_000) + 1;
-}
-
 /** FNV-1a then mulberry32: a small deterministic PRNG seeded by the date string. */
 function seededUnit(seed: string): number {
   let h = 0x811c9dc5;
@@ -214,15 +191,17 @@ function locate(n: number): [number, number] {
   return [1, 1];
 }
 
-/** The ayat card for a KL date; null when the needed text is not cached. */
-export function ayatForDay(q: QuranText, settings: AyatSettings, date: string): AyatCard | null {
+/**
+ * The ayat card for a KL date; null when the needed text is not cached. `dailyAnchor` (YYYY-MM-DD) is the day the
+ * daily reading started (day 0 shows Al-Fatihah 1-3); the box keeps it once, so the card is the same all day and
+ * carries on across restarts.
+ */
+export function ayatForDay(q: QuranText, settings: AyatSettings, date: string, dailyAnchor: string = date): AyatCard | null {
   let range: readonly [number, number, number];
   if (settings.pick === 'manual') {
     range = [settings.surah, settings.ayatFrom, settings.ayatTo];
   } else if (settings.pick === 'daily') {
-    const picked = DAILY_RANGES[(dayOfYear(date) - 1) % DAILY_RANGES.length];
-    if (!picked) return null;
-    range = picked;
+    range = dailyChunk(dailyAnchor, date);
   } else {
     const n = Math.floor(seededUnit(date) * QURAN_TOTAL_AYAT);
     const [s, a] = locate(n);
@@ -232,7 +211,8 @@ export function ayatForDay(q: QuranText, settings: AyatSettings, date: string): 
   const count = ayatCountOf(surah);
   if (count === 0 || from > count) return null;
   try {
-    return getAyat(q, surah, from, Math.max(from, Math.min(to, count)));
+    // At most AYAT_MAX_AT_ONCE verses: a longer curated passage or an old stored range shows its first verses.
+    return getAyat(q, surah, from, Math.max(from, Math.min(to, count, from + AYAT_MAX_AT_ONCE - 1)));
   } catch {
     return null;
   }

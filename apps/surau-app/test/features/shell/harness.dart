@@ -52,6 +52,8 @@ const Map<String, Object?> healthyJson = {
   'lockedUsers': 0,
   'daysAhead': 212,
   'assetsBytes': 1048576,
+  // a box of 2026.11.13 or newer
+  'features': ['video', 'posterStretch', 'tvLangAr'],
 };
 
 Map<String, Object?> settingsJson([Map<String, bool> features = const {}]) => {
@@ -339,6 +341,29 @@ Map<String, List<Map<String, Object?>>> contentFixture() {
     ],
     'ticker': [
       {...meta('t1'), 'text': 'Selamat datang ke Surau D\'Waqaf', 'from': '2026-01-01', 'to': '2026-12-31'},
+    ],
+    'video': [
+      {
+        ...meta('vd1'),
+        'title': 'Selamat datang',
+        'source': 'upload',
+        'assetId': 'ee' * 32,
+        'durationSec': 75,
+        'days': ['umum'],
+        'order': 1,
+      },
+      {
+        ...meta('vd2'),
+        'title': 'Kuliah Subuh (petikan)',
+        'source': 'rakaman',
+        'youtubeId': 'dQw4w9WgXcQ',
+        'startSec': 120,
+        'endSec': 420,
+        'sound': true,
+        'days': ['jumaat'],
+        'to': '2026-10-01',
+        'order': 2,
+      },
     ],
     'poster': [
       {

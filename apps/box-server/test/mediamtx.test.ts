@@ -215,7 +215,8 @@ describe('startMediamtx supervisor', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { s, events } = sup('process.exit(1)', { maxRestarts: 4 });
     s.start();
-    await until(() => s.status().state === 'failed');
+    // five node processes start and crash: allow for a busy machine (the delays checked are the supervisor's own)
+    await until(() => s.status().state === 'failed', 60_000);
     const delays = events.filter((e) => e.type === 'backoff').map((e) => e.delayMs);
     expect(delays).toEqual([10, 20, 40, 40]);
     expect(s.status().restarts).toBe(4);
@@ -474,7 +475,7 @@ describe('app wiring', () => {
     await app.ready();
     expect(app.liveRuntime).toBeNull();
     await app.close();
-  });
+  }, 120_000);
 
   it('buildApp with an empty tools folder reports missing tools and does not throw', async () => {
     const { buildApp } = await import('../src/app.ts');

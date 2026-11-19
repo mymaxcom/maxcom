@@ -1,7 +1,8 @@
-// Gate follow-up item 3 (plan Task 8): the YouTube sign-in routes
-// (`/api/live/youtube/*`) and `/api/youtube/*` go to the CLOUD when cloudSync
-// is on and the box knows a cloud URL (and this device holds a session
-// there), and to the box otherwise. Every other route stays on the box.
+// Release 2026.11.13 (YouTube held by the box only): the YouTube sign-in
+// routes (`/api/live/youtube/*`) and `/api/youtube/*` go to the box this
+// gateway talks to and NEVER to the cloud link, whatever cloudSync says. A box
+// that does not answer is not replaced by the cloud: LiveOnly (the app says
+// it is made on the surau Wi-Fi). (Before: plan Task 8 sent them to the cloud.)
 
 import 'dart:async';
 
@@ -114,103 +115,91 @@ void main() {
     });
   });
 
-  test('cloud known, cloudSync on (default): sign-in goes to the cloud with '
-      'the cloud token', () async {
+  test('cloud known, cloudSync on (default): sign-in goes to the BOX with '
+      'the box token; the cloud is never asked', () async {
     final gw = await gateway(cloudUrl: _cloudUri);
     final out = await gw.post('/api/live/youtube/signin', const {});
-    expect(out['from'], 'cloud');
-    expect(box.seen, isEmpty);
-    expect(cloud.seen.single.url.path, '/api/live/youtube/signin');
-    expect(cloud.seen.single.headers['authorization'], contains('cloud-tok'));
-    expect(
-      cloud.seen.single.headers['authorization'],
-      isNot(contains('box-tok')),
-    );
+    expect(out['from'], 'box');
+    expect(cloud.seen, isEmpty);
+    expect(box.seen.single.url.path, '/api/live/youtube/signin');
+    expect(box.seen.single.headers['authorization'], contains('box-tok'));
   });
 
-  test('the poll, sign-out, the status read and /api/youtube/* all go to the '
-      'cloud; /api/live/start and /api/live/status stay on the box', () async {
+  test('the poll, sign-out, the status read, quota, upload begin/done and '
+      'verify all go to the box; none reaches the cloud link', () async {
     final gw = await gateway(cloudUrl: _cloudUri);
     await gw.post('/api/live/youtube/signin/poll', const {});
     await gw.post('/api/live/youtube/signout', const {});
     await gw.getFresh('/api/live/youtube/status');
     await gw.getFresh('/api/youtube/quota');
-    expect(cloud.seen.map((r) => r.url.path), [
+    await gw.post('/api/youtube/upload/begin', const {'bytes': 1});
+    await gw.post('/api/youtube/upload/done', const {'uploadId': 'u'});
+    await gw.post('/api/youtube/verify', const {'videoIds': ['a']});
+    expect(box.seen.map((r) => r.url.path), [
       '/api/live/youtube/signin/poll',
       '/api/live/youtube/signout',
       '/api/live/youtube/status',
       '/api/youtube/quota',
+      '/api/youtube/upload/begin',
+      '/api/youtube/upload/done',
+      '/api/youtube/verify',
     ]);
-    expect(box.seen, isEmpty);
-
-    await gw.post('/api/live/start', const {});
-    await gw.getFresh('/api/live/status');
-    expect(box.seen.map((r) => r.url.path), [
-      '/api/live/start',
-      '/api/live/status',
-    ]);
-    expect(cloud.seen, hasLength(4));
-  });
-
-  test('the clean-up check POST /api/youtube/verify goes to the cloud when '
-      'linked, to the box when not', () async {
-    final linked = await gateway(cloudUrl: _cloudUri);
-    await linked.post('/api/youtube/verify', const {'videoIds': ['a']});
-    expect(cloud.seen.single.url.path, '/api/youtube/verify');
-    expect(box.seen, isEmpty);
-
-    final unlinked = await gateway();
-    await unlinked.post('/api/youtube/verify', const {'videoIds': ['a']});
-    expect(box.seen.single.url.path, '/api/youtube/verify');
-  });
-
-  test('no cloud URL known: the box', () async {
-    final gw = await gateway();
-    final out = await gw.post('/api/live/youtube/signin', const {});
-    expect(out['from'], 'box');
     expect(cloud.seen, isEmpty);
   });
 
-  test('cloudSync switched off: the box', () async {
-    await store.putDoc('settings', 'cloudSync', {
-      '_feature': 'cloudSync',
-      'enabled': false,
-      'rev': 'r1',
-    });
-    final gw = await gateway(cloudUrl: _cloudUri);
-    final out = await gw.post('/api/live/youtube/signin', const {});
-    expect(out['from'], 'box');
-    expect(cloud.seen, isEmpty);
-  });
-
-  test('cloudSync on in the local settings: the cloud', () async {
+  test('cloudSync on in the local settings, or no cloud session: still the '
+      'box', () async {
     await store.putDoc('settings', 'cloudSync', {
       '_feature': 'cloudSync',
       'enabled': true,
       'rev': 'r1',
     });
-    final gw = await gateway(cloudUrl: _cloudUri);
-    final out = await gw.post('/api/live/youtube/signin', const {});
-    expect(out['from'], 'cloud');
-  });
-
-  test('no session on the cloud yet: the box answers, and the box token is '
-      'never sent to the cloud', () async {
-    final gw = await gateway(cloudUrl: _cloudUri, cloudToken: null);
-    final out = await gw.post('/api/live/youtube/signin', const {});
-    expect(out['from'], 'box');
+    final on = await gateway(cloudUrl: _cloudUri);
+    expect((await on.post('/api/live/youtube/signin', const {}))['from'], 'box');
+    final noSession = await gateway(cloudUrl: _cloudUri, cloudToken: null);
+    expect((await noSession.post('/api/live/youtube/signin', const {}))['from'], 'box');
     expect(cloud.seen, isEmpty);
   });
 
-  test('cloud does not answer: LiveOnly, the box is not asked instead',
-      () async {
-    cloudAway = true;
+  test('the box does not answer: LiveOnly for every YouTube route, and the '
+      'cloud is never asked in its place', () async {
+    box = FakeBox((r) async => throw http.ClientException('box away'));
     final gw = await gateway(cloudUrl: _cloudUri);
+    for (final path in [
+      '/api/live/youtube/signin',
+      '/api/live/youtube/signin/poll',
+      '/api/live/youtube/signout',
+      '/api/youtube/upload/begin',
+      '/api/youtube/upload/done',
+      '/api/youtube/verify',
+    ]) {
+      await expectLater(
+        gw.post(path, const {}),
+        throwsA(isA<LiveOnly>()),
+        reason: path,
+      );
+    }
     await expectLater(
-      gw.post('/api/live/youtube/signin', const {}),
-      throwsA(isA<LiveOnly>()),
+      gw.getFresh('/api/live/youtube/status'),
+      throwsA(anyOf(isA<LiveOnly>(), isA<BoxUnreachable>())),
     );
-    expect(box.seen, isEmpty);
+    expect(cloud.seen, isEmpty);
+  });
+
+  test('the route pattern: every YouTube route but the ingest read', () {
+    for (final p in [
+      '/api/live/youtube/signin',
+      '/api/live/youtube/status',
+      '/api/youtube/upload/begin',
+      '/api/youtube/quota?x=1',
+    ]) {
+      expect(BoxGateway.youtubeRoute.hasMatch(p.split('?').first), isTrue, reason: p);
+    }
+    expect(BoxGateway.youtubeRoute.hasMatch('/api/live/youtube/ingest'), isFalse);
+    // Q8: the next-live choice is not a "surau only" route, so it may go through the cloud when away
+    expect(BoxGateway.youtubeRoute.hasMatch('/api/live/youtube/next-live'), isFalse);
+    expect(BoxGateway.youtubeRoute.hasMatch('/api/live/youtube/next-liver'), isTrue);
+    expect(BoxGateway.youtubeRoute.hasMatch('/api/live/status'), isFalse);
   });
 
   test('LocatorTransport.cloudLink: the cloud base with the cloud token, '

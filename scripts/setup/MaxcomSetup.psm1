@@ -31,7 +31,9 @@ $script:SidAdmins = 'S-1-5-32-544'
 $script:SidUsers = 'S-1-5-32-545'
 $script:SidCreatorOwner = 'S-1-3-0'
 $script:SidTrustedInstaller = 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'
-$script:VersionPattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
+$script:PublicVersionPattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
+# A release folder is <version>, or <version>-b<N> for internal build N (1 to 9) of the same public version.
+$script:VersionPattern = '^[0-9]+\.[0-9]+\.[0-9]+(-b[1-9])?$'
 
 # ---------------------------------------------------------------------------------------------
 # Small internal helpers (some exported because the other setup scripts need the same primitives)
@@ -547,10 +549,10 @@ function Remove-OldBackups {
   $all = @()
   foreach ($e in [System.IO.Directory]::GetFileSystemEntries($b)) {
     $n = [System.IO.Path]::GetFileName($e)
-    if ($n -notmatch '^pre-[0-9]+\.[0-9]+\.[0-9]+-([0-9]{8}-[0-9]{6})$') { continue }
+    if ($n -notmatch '^pre-[0-9]+\.[0-9]+\.[0-9]+(-b[1-9])?-([0-9]{8}-[0-9]{6})$') { continue }
     if (Test-IsReparsePoint $e) { continue }
     if (-not (Test-Path -LiteralPath $e -PathType Container)) { continue }
-    $all += [pscustomobject]@{ Path = $e; Stamp = $Matches[1] }
+    $all += [pscustomobject]@{ Path = $e; Stamp = $Matches[2] }
   }
   $sorted = @($all | Sort-Object -Property @{ Expression = { $_.Stamp }; Descending = $true }, @{ Expression = { $_.Path }; Descending = $true })
   $removed = 0
@@ -807,6 +809,83 @@ function New-WorkspaceLinks {
   return $made
 }
 
+function Get-ReleaseName {
+  <# Folder name of a release: the version, plus -b<Build> when the internal build is above 0. #>
+  param([Parameter(Mandatory)][string]$Version, [int]$Build = 0)
+  if ($Build -gt 0) { return "$Version-b$Build" }
+  return $Version
+}
+
+function ConvertTo-BuildNumber($Meta, [bool]$Strict) {
+  # release.json 'build' (0 to 9); absent = 0. Strict throws on a bad value, otherwise a bad value counts as 0.
+  $p = $null
+  if ($null -ne $Meta) { $p = $Meta.PSObject.Properties['build'] }
+  if ($null -eq $p -or $null -eq $p.Value) { return 0 }
+  $n = 0
+  if ([int]::TryParse([string]$p.Value, [ref]$n) -and $n -ge 0 -and $n -le 9) { return $n }
+  if ($Strict) { throw "GAGAL: build dalam release.json tidak sah: $($p.Value)" }
+  return 0
+}
+
+function Get-ReleaseBuild {
+  <# Internal build of an installed release folder (or <root>\current): release.json 'build'; no marker = 0. #>
+  param([Parameter(Mandatory)][string]$Dir)
+  $rj = Join-Path $Dir 'release.json'
+  if (-not (Test-Path -LiteralPath $rj -PathType Leaf)) { return 0 }
+  try { $m = Get-Content -LiteralPath $rj -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return 0 }
+  return (ConvertTo-BuildNumber $m $false)
+}
+
+function Read-ArchiveEntryText {
+  <#
+    Text of one entry of a .tar.gz, read through a process object: tar's stderr is collected on its own, so a line on
+    stderr can never become a terminating error in Windows PowerShell 5.1 (which `2>$null` under
+    $ErrorActionPreference = 'Stop' can do). Returns $null when tar fails or the entry is missing or empty.
+  #>
+  param([Parameter(Mandatory)][string]$Archive, [Parameter(Mandatory)][string]$Entry)
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = (Get-SystemTool 'tar.exe')
+  $psi.Arguments = '-xzOf "' + (ConvertTo-FullPath $Archive) + '" ' + $Entry
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError = $true
+  $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+  $proc = New-Object System.Diagnostics.Process
+  $proc.StartInfo = $psi
+  try {
+    [void]$proc.Start()
+    $errTask = $proc.StandardError.ReadToEndAsync()
+    $txt = $proc.StandardOutput.ReadToEnd()
+    $proc.WaitForExit()
+    [void]$errTask.Result
+    if ($proc.ExitCode -ne 0) { return $null }
+  } catch {
+    return $null
+  } finally {
+    $proc.Dispose()
+  }
+  if ($null -eq $txt -or $txt.Trim() -eq '') { return $null }
+  return $txt
+}
+
+function Get-ArchiveBuild {
+  <#
+    Internal build stamped in the archive's release.json (0 to 9; no marker = 0). Fails CLOSED: an archive that tar
+    cannot read, a release.json that is missing or empty, bad JSON or a bad build value stops setup with GAGAL. A build is
+    never assumed to be 0 (that could make setup think an old release is current and install nothing).
+  #>
+  param([Parameter(Mandatory)][string]$Archive)
+  $txt = $null
+  foreach ($entry in 'release.json', './release.json') {
+    $txt = Read-ArchiveEntryText -Archive $Archive -Entry $entry
+    if ($null -ne $txt) { break }
+  }
+  if ($null -eq $txt) { throw "GAGAL: release.json dalam arkib tidak dapat dibaca: $Archive" }
+  try { $m = $txt | ConvertFrom-Json } catch { throw "GAGAL: release.json dalam arkib bukan JSON yang sah: $Archive" }
+  return (ConvertTo-BuildNumber $m $true)
+}
+
 function Expand-Release {
   <#
     Check the archive, extract to <version>.part, rename to <version>, make the workspace links, write
@@ -818,17 +897,19 @@ function Expand-Release {
   param(
     [Parameter(Mandatory)][string]$Archive,
     [Parameter(Mandatory)][string]$ReleasesDir,
-    [Parameter(Mandatory)][string]$Version
+    [Parameter(Mandatory)][string]$Version,
+    [ValidateRange(0, 9)][int]$Build = 0
   )
-  if ($Version -notmatch $script:VersionPattern) { throw "GAGAL: versi tidak sah: $Version" }
+  if ($Version -notmatch $script:PublicVersionPattern) { throw "GAGAL: versi tidak sah: $Version" }
+  $name = Get-ReleaseName $Version $Build
   $releases = ConvertTo-FullPath $ReleasesDir
   if (Test-IsReparsePoint $releases) { throw "GAGAL: folder releases ialah pautan: $releases" }
   [void][System.IO.Directory]::CreateDirectory($releases)
-  $final = Join-Path $releases $Version
-  $part = Join-Path $releases ($Version + '.part')
+  $final = Join-Path $releases $name
+  $part = Join-Path $releases ($name + '.part')
   $ok = Join-Path $final '.ok'
   if (Test-Path -LiteralPath $ok -PathType Leaf) {
-    return [pscustomobject]@{ Version = $Version; Path = $final; Changed = $false }
+    return [pscustomobject]@{ Version = $Version; Name = $name; Path = $final; Changed = $false }
   }
   $probs = @(Get-ArchiveEntryProblem $Archive)
   if ($probs.Count -gt 0) { throw ("GAGAL: arkib keluaran ditolak: " + (($probs | Select-Object -First 5) -join '; ')) }
@@ -849,6 +930,7 @@ function Expand-Release {
     if (-not (Test-Path -LiteralPath $rj -PathType Leaf)) { throw 'GAGAL: release.json tiada dalam arkib' }
     $meta = Get-Content -LiteralPath $rj -Raw -Encoding UTF8 | ConvertFrom-Json
     if ([string]$meta.version -ne $Version) { throw "GAGAL: versi dalam release.json ($($meta.version)) tidak sama dengan $Version" }
+    if ((ConvertTo-BuildNumber $meta $true) -ne $Build) { throw "GAGAL: build dalam release.json tidak sama dengan $Build" }
   } catch {
     $msg = $_.Exception.Message
     try { [void](Remove-TreeSafe $part -Under $releases) } catch { }
@@ -856,8 +938,8 @@ function Expand-Release {
   }
   [System.IO.Directory]::Move($part, $final)
   [void](New-WorkspaceLinks $final)
-  [System.IO.File]::WriteAllText($ok, $Version, (New-Object System.Text.UTF8Encoding($false)))
-  return [pscustomobject]@{ Version = $Version; Path = $final; Changed = $true }
+  [System.IO.File]::WriteAllText($ok, $name, (New-Object System.Text.UTF8Encoding($false)))
+  return [pscustomobject]@{ Version = $Version; Name = $name; Path = $final; Changed = $true }
 }
 
 function Switch-Current {
@@ -984,7 +1066,7 @@ Export-ModuleMember -Function @(
   'Set-MaxcomRootAcl', 'Set-MaxcomDataAcl', 'Get-MaxcomAclContract', 'Get-MaxcomDataAclProblem', 'Test-MaxcomDataAcl',
   'Get-MaxcomHomeProblem', 'Remove-OldBackups', 'Test-PathInside',
   'Test-BundleManifest', 'Get-BundleManifestProblem', 'Test-ArchiveEntries', 'Get-ArchiveEntryProblem',
-  'Expand-Release', 'New-WorkspaceLinks', 'Switch-Current', 'Remove-JunctionSafe', 'Remove-TreeSafe',
+  'Expand-Release', 'Get-ReleaseName', 'Get-ReleaseBuild', 'Get-ArchiveBuild', 'New-WorkspaceLinks', 'Switch-Current', 'Remove-JunctionSafe', 'Remove-TreeSafe',
   'Get-PrivateIPv4', 'Get-PortOwner', 'Read-InstallState', 'Write-InstallState',
   'ConvertTo-FullPath', 'Test-IsReparsePoint', 'Get-LinkTarget'
 )

@@ -1,9 +1,10 @@
 import { LOCAL_SURAU_ID } from '../tenant.ts';
 import type { DatabaseSync } from 'node:sqlite';
+import { GOOGLE_DEVICE_URL } from '@surau/core';
 import type { LiveStatus, YoutubeMeta } from '@surau/core';
 import type { YoutubeLeg } from '../live/sessions.ts';
 import { getSettings } from '../settingsStore.ts';
-import { cloudFetch } from './agent.ts';
+import { BOX_REPORT_HEADERS, cloudFetch } from './agent.ts';
 import { loadSyncKey, normaliseCloudUrl } from './syncKey.ts';
 import type { SyncKeyData } from './syncKey.ts';
 
@@ -40,6 +41,9 @@ const BODY_CAP = 64 * 1024;
 const KEY_TTL_MS = 20_000;
 const STATUS_IDLE_MS = 60_000;
 const STATUS_LIVE_MS = 10_000;
+/** Signed out, or a sign-in pending on the cloud: a person may be at Google's page, so the answer is looked at often. */
+const STATUS_SIGNIN_MS = 5_000;
+const STATUS_SIGNEDOUT_MS = 10_000;
 const RETRY_MS: readonly number[] = [30_000, 120_000, 300_000];
 /** How long a broadcast request waits for an asleep cloud (wake, then retry with short backoff). */
 const WAIT_BUDGET_MS = 20_000;
@@ -150,7 +154,7 @@ export class RemoteYoutubeLeg implements YoutubeLeg {
     let res: Response;
     let text = '';
     try {
-      const headers: Record<string, string> = { Authorization: `Bearer ${key.siteToken}` };
+      const headers: Record<string, string> = { Authorization: `Bearer ${key.siteToken}`, ...BOX_REPORT_HEADERS };
       const init: RequestInit = { method, headers, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) };
       if (body !== undefined) {
         headers['Content-Type'] = 'application/json';
@@ -236,7 +240,20 @@ export class RemoteYoutubeLeg implements YoutubeLeg {
       health,
       watchUrl: str(j.watchUrl),
       lastError: str(j.lastError, 60),
+      signIn: this.signInOf(j.signIn),
     };
+  }
+
+  /** The cloud's server-held sign-in as the box passes it on: a fixed shape, bounded strings, nothing else. */
+  private signInOf(v: unknown): NonNullable<YoutubeStatus['signIn']> | null {
+    if (typeof v !== 'object' || v === null) return null;
+    const o = v as Record<string, unknown>;
+    if (o.state === 'denied' || o.state === 'expired') return { state: o.state };
+    if (o.state === 'pending' && typeof o.userCode === 'string' && o.userCode !== '' && o.userCode.length <= 40 && typeof o.expiresAt === 'string' && o.expiresAt.length <= 40) {
+      // the address is always Google's own: whatever the cloud sent is ignored (a changed one could send the phone elsewhere)
+      return { state: 'pending', userCode: o.userCode, verificationUrl: GOOGLE_DEVICE_URL, expiresAt: o.expiresAt };
+    }
+    return null;
   }
 
   // ---- YoutubeLeg --------------------------------------------------------------------------------------
@@ -417,9 +434,17 @@ export class RemoteYoutubeLeg implements YoutubeLeg {
     }
   }
 
+  private refreshEveryMs(): number {
+    if (this.broadcasting()) return STATUS_LIVE_MS;
+    const l = this.last;
+    if (l !== null && l.signIn?.state === 'pending') return STATUS_SIGNIN_MS;
+    if (l !== null && !l.signedIn) return STATUS_SIGNEDOUT_MS;
+    return STATUS_IDLE_MS;
+  }
+
   status(): YoutubeStatus {
     const age = this.o.now().getTime() - this.lastAt;
-    if (this.lastAt === 0 || age >= (this.broadcasting() ? STATUS_LIVE_MS : STATUS_IDLE_MS)) void this.refresh();
+    if (this.lastAt === 0 || age >= this.refreshEveryMs()) void this.refresh();
     if (this.last !== null) return this.last;
     return blank(this.lastFailed ? 'cloud_unreachable' : null);
   }

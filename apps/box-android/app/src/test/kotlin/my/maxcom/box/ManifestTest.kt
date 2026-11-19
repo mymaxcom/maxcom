@@ -152,7 +152,8 @@ class ManifestTest {
     fun networkSecurityConfigNamesOnlyLoopback() {
         val doc = parse(File(mainDir, "res/xml/network_security_config.xml"))
         val domains = doc.getElementsByTagName("domain").elements().map { it.textContent.trim() }
-        assertEquals(listOf("127.0.0.1"), domains)
+        assertEquals(listOf("localhost", "127.0.0.1"), domains)
+        for (d in doc.getElementsByTagName("domain").elements()) assertEquals("false", d.getAttribute("includeSubdomains"))
         val base = doc.getElementsByTagName("base-config").elements().single()
         assertEquals("false", base.getAttribute("cleartextTrafficPermitted"))
         val domainConfigs = doc.getElementsByTagName("domain-config").elements()

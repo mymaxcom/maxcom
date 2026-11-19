@@ -54,6 +54,12 @@ object ShareArgs {
     /** A text to share: 1 to 4,096 characters (counted as Dart counts them, in UTF-16 units). */
     fun textOk(text: String?): Boolean = text != null && text.isNotEmpty() && text.length <= MAX_TEXT
 
+    val WHATSAPP_PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
+
+    /** The live notice picture: absent, or a JPEG of 1 byte to 4 MB (starts with FF D8). */
+    fun noticePictureOk(bytes: ByteArray?): Boolean =
+        bytes == null || (bytes.size in 2..(4 * 1024 * 1024) && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte())
+
     /** An optional subject: absent, or at most 200 characters. */
     fun subjectOk(subject: String?): Boolean = subject == null || subject.length <= MAX_SUBJECT
 
@@ -80,6 +86,7 @@ class ShareChannel private constructor(private val activity: Activity) : MethodC
     companion object {
         const val CHANNEL = "my.maxcom/share"
         private const val DIR = "finance"
+        private const val NOTICE_DIR = "live-notice"
         private const val STALE_MS = 60L * 60L * 1000L
         private const val CHOOSER_TIMEOUT_MS = 90_000L
 
@@ -112,6 +119,30 @@ class ShareChannel private constructor(private val activity: Activity) : MethodC
             }
             try {
                 shareText(text!!, subject, result)
+            } catch (_: Exception) {
+                result.error("failed", "failed", null)
+            }
+            return
+        }
+        if (call.method == "whatsappInstalled") {
+            result.success(whatsAppPackage() != null)
+            return
+        }
+        if (call.method == "cleanNotice") {
+            cleanNoticeDir()
+            result.success(null)
+            return
+        }
+        if (call.method == "shareNotice") {
+            val text = call.argument<String>("text")
+            val bytes = call.argument<ByteArray>("bytes")
+            val toWhatsApp = call.argument<Boolean>("whatsapp") == true
+            if (!ShareArgs.textOk(text) || !ShareArgs.noticePictureOk(bytes)) {
+                result.error("bad_args", "bad arguments", null)
+                return
+            }
+            try {
+                shareNotice(text!!, bytes, toWhatsApp, result)
             } catch (_: Exception) {
                 result.error("failed", "failed", null)
             }
@@ -168,6 +199,9 @@ class ShareChannel private constructor(private val activity: Activity) : MethodC
         dir.mkdirs()
         val cutoff = System.currentTimeMillis() - STALE_MS
         dir.listFiles()?.forEach { if (it.isFile && it.lastModified() < cutoff) it.delete() }
+        // A notice picture is only deleted when the sheet opens or the next one is written (the receiving app
+        // may still be starting); one that nobody replaced goes after an hour like these.
+        File(activity.cacheDir, NOTICE_DIR).listFiles()?.forEach { if (it.isFile && it.lastModified() < cutoff) it.delete() }
 
         val file = File(dir, name)
         // Belt and braces after nameOk: the file must sit directly in the share folder.
@@ -190,6 +224,58 @@ class ShareChannel private constructor(private val activity: Activity) : MethodC
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
             if (subject != null) putExtra(Intent.EXTRA_SUBJECT, subject)
+        }
+        openChooser(send, result)
+    }
+
+    /** The first installed WhatsApp package (consumer, then Business), or null. */
+    private fun whatsAppPackage(): String? {
+        for (pkg in ShareArgs.WHATSAPP_PACKAGES) {
+            try {
+                activity.packageManager.getPackageInfo(pkg, 0)
+                return pkg
+            } catch (_: Exception) {
+                // not installed
+            }
+        }
+        return null
+    }
+
+    private fun cleanNoticeDir() {
+        File(activity.cacheDir, NOTICE_DIR).listFiles()?.forEach { if (it.isFile) it.delete() }
+    }
+
+    /**
+     * The live notice: the text, and a JPEG when given (cache/live-notice/siaran.jpg through the
+     * FileProvider, deleted on the next call or by cleanNotice). With [toWhatsApp] and WhatsApp
+     * installed the intent is aimed at that package (its own chooser of chats and groups); else the
+     * system chooser. The text is the picture's caption. Nothing is logged.
+     */
+    private fun shareNotice(text: String, bytes: ByteArray?, toWhatsApp: Boolean, result: MethodChannel.Result) {
+        cleanNoticeDir()
+        val send = Intent(Intent.ACTION_SEND)
+        send.putExtra(Intent.EXTRA_TEXT, text)
+        if (bytes != null) {
+            val dir = File(activity.cacheDir, NOTICE_DIR)
+            dir.mkdirs()
+            val file = File(dir, "siaran.jpg")
+            file.writeBytes(bytes)
+            val uri = FileProvider.getUriForFile(activity, activity.packageName + ".files", file)
+            send.type = "image/jpeg"
+            send.putExtra(Intent.EXTRA_STREAM, uri)
+            send.clipData = ClipData.newRawUri("", uri)
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } else {
+            send.type = "text/plain"
+        }
+        val pkg = if (toWhatsApp) whatsAppPackage() else null
+        if (pkg != null) {
+            // Straight into WhatsApp's own chooser: no system sheet, so no "which app" report.
+            send.setPackage(pkg)
+            finishShare("other", false)
+            activity.startActivity(send)
+            result.success(mapOf("via" to "whatsapp", "completed" to true))
+            return
         }
         openChooser(send, result)
     }

@@ -1,0 +1,90 @@
+/* An Arabic TV screen (W14): the stage wears dir="rtl" lang="ar" data-lang="ar".
+   Flex and grid rows already follow the direction (the prayer bar starts at the right with Imsak, the header puts the
+   surau on the right and the next prayer on the left). This file holds what the direction alone does not do:
+   the Arabic face, the Arabic-led extras that would repeat the Arabic text, the ticker's way of travel, and number
+   runs kept left to right. Logical properties only, never one theme at a time, unless a theme says why. */
+
+/* ---- The Arabic face ---------------------------------------------------------------------------------------
+   'MX Arabic' is the bundled Amiri (the same files as @fontsource/amiri's Arabic subset) limited to the Arabic
+   blocks, so it can stand in front of any theme font: Arabic letters come from Amiri, Latin letters and the digits
+   keep the theme's (or the surau's) own font. app.tsx puts it in front of --font on an Arabic stage. */
+@font-face {
+  font-family: 'MX Arabic';
+  font-style: normal;
+  font-weight: 100 500;
+  font-display: swap;
+  src: url('@fontsource/amiri/files/amiri-arabic-400-normal.woff2') format('woff2'),
+    url('@fontsource/amiri/files/amiri-arabic-400-normal.woff') format('woff');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+200C-200F, U+FB50-FDFF, U+FE70-FEFF;
+}
+@font-face {
+  font-family: 'MX Arabic';
+  font-style: normal;
+  font-weight: 600 900;
+  font-display: swap;
+  src: url('@fontsource/amiri/files/amiri-arabic-700-normal.woff2') format('woff2'),
+    url('@fontsource/amiri/files/amiri-arabic-700-normal.woff') format('woff');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+200C-200F, U+FB50-FDFF, U+FE70-FEFF;
+}
+
+/* Arabic is not set in capitals and never letter-spaced (it breaks the joins). */
+.stage[data-lang='ar'] *:not(.num) { letter-spacing: 0 !important; text-transform: none !important; }
+
+/* ---- No Arabic twice -----------------------------------------------------------------------------------------
+   Every theme carries the Arabic prayer names, the next prayer's Arabic name and the Arabic Hijri line (Arabic-Indic
+   digits) beside the Malay ones; Arabic Art shows them. On an Arabic screen the names and both dates are Arabic
+   already (Western digits, as on the box screens): the extra lines go. Arabic Art keeps its large Arabic prayer names
+   and drops the small label under them instead. */
+.stage[data-lang='ar']:not([data-template='arabic']) :is(.pcell-ar, .next-ar) { display: none !important; }
+.stage[data-lang='ar'] .date-ar { display: none !important; }
+/* Not on an uploaded theme that is on the stage: those two parts are protected (the health check needs them displayed), so a
+   pack built on Arabic Art keeps the small label under the Arabic name. */
+.stage[data-lang='ar'][data-template='arabic']:not([data-pack='ready']) :is(.pcell__label, .pcell-label, .chip-k) { display: none !important; }
+
+/* ---- The theme's own drawing faces the other way --------------------------------------------------------------
+   The ornaments a theme draws itself (the .deco shapes, the slab and seam of Creative behind .bg and the blurred live
+   veil) mirror with the layout; the surau's own pictures never do. A theme that leans its boxes (Creative's bars)
+   multiplies the lean by --lean. */
+.stage[data-lang='ar'] { --lean: -1; }
+.stage[data-lang='ar'] .deco,
+.stage[data-lang='ar'] .bg::before,
+.stage[data-lang='ar'] .bg::after,
+.stage[data-lang='ar'] .live__veil::before,
+.stage[data-lang='ar'] .live__veil::after { transform: scaleX(-1); }
+
+/* ---- Each text in its own direction ----------------------------------------------------------------------------
+   The screen mixes the Arabic words of the TV with what the surau typed (names, notices, the ticker, translations),
+   mostly in Malay. Each text block of the surau's content takes its direction from its own first letters: a Malay
+   notice reads left to right with its full stop at its end, an Arabic one right to left. The layout itself (the
+   boxes, their order) stays right to left; an element that names its own direction (dir) keeps it. */
+.stage[data-lang='ar'] :is(.free-text, .arab-tarjamah, [data-card] *, .zikir *, .ticker__item, .ticker__static):not([dir]) { unicode-bidi: plaintext; }
+
+/* ---- Numbers ---------------------------------------------------------------------------------------------------
+   Clocks, countdowns, times and amounts are isolated runs: "12:45", "01:05:09" and "RM 1,250.00" keep their order
+   whatever sits around them, and a time's Arabic mark (ص / م) stands at its left, where Arabic reads it last. */
+.stage[data-lang='ar'] :is(.num, .clock__hm, .pcell__time, .pcell-time, .chip-t, .wt__time) { unicode-bidi: isolate; }
+
+/* ---- Ticker ------------------------------------------------------------------------------------------------------
+   Right to left the strip starts at the right and the texts travel to the right: each comes in from the left edge. */
+
+.stage[data-lang='ar'] .ticker__track.is-live { animation-name: ticker-scroll-rtl; }
+@keyframes ticker-scroll-rtl {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+/* ---- Small Arabic labels ------------------------------------------------------------------------------------------
+   Naskh sits smaller than the Latin capitals these labels were sized for (the box screens make the same step):
+   the small labels grow by a third, their boxes with them. */
+.stage[data-lang='ar'] :is(.pcell__label, .pcell-label, .chip-k, .ticker__cap, .card__tag, .clock__aside span:not(.num), .clock--compact .ap, .phase__clock small:not(.num), .chip-ap) { zoom: 1.35; }
+
+/* The tabung title's Arabic tag (Arabic Art) would repeat the Arabic title. */
+.stage[data-lang='ar'][data-template][data-kind] .tabung__title::after { content: none; }
+
+/* ---- Naskh tails ------------------------------------------------------------------------------------------------
+   A final yeh or noon in Amiri reaches past its own advance at the line's end (the left, right to left). A one-line
+   box that clips (overflow hidden, for its ellipsis) keeps room for that tail. */
+.stage[data-lang='ar'] :is(.tabung__title, .tabung__nm, .brand-name, .ident__name) { padding-inline-end: 0.35em; }
+
+/* Arabic Art's large Arabic word over a phase title (الأذان, الإقامة...): the title under it is Arabic already. */
+.stage[data-lang='ar'][data-template][data-screen] .phase__title::before { content: none; }

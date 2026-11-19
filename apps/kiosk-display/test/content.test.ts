@@ -180,3 +180,73 @@ describe('assetIdsOf', () => {
     expect(assetIdsOf(content as unknown as Parameters<typeof assetIdsOf>[0])).toEqual([]);
   });
 });
+
+describe('useContent skip: the slot after a skipped one gets a fixed start', () => {
+  const asset = (c: string) => c.repeat(64);
+  const vid = (id: string, order: number) => ({
+    id, updatedAt: '2026-11-01T00:00:00Z', updatedBy: 't', title: id, source: 'upload', assetId: asset(id === 'va' ? 'a' : 'b'), days: ['umum'], order, durationSec: 60,
+  });
+  const seeded = {
+    ...content,
+    posters: [{ id: 'p1', updatedAt: 'x', updatedBy: 't', title: 'P1', assetId: asset('c'), days: ['umum'], order: 1 }],
+    videos: [vid('va', 1), vid('vb', 2)],
+  };
+
+  it('keeps the start fixed while the clock runs, lets a second video skip itself, and the card pages from the fixed start', async () => {
+    const { renderHook, waitFor, act } = await import('@testing-library/preact');
+    const { useContent } = await import('../src/data/content.ts');
+    const { makeView } = await import('./helpers.tsx');
+    const { buildCycle } = await import('@surau/core');
+    const { pageAt } = await import('../src/content/paging.ts');
+    localStorage.setItem('surau.content', JSON.stringify({ content: seeded, fetchedAt: Date.now() }));
+    try {
+      const base = makeView('2026-11-03', '12:00').now.getTime();
+      const view = (sec: number) => ({ ...makeView('2026-11-03', '12:00'), now: new Date(base + sec * 1000) });
+      const hook = renderHook((v) => useContent(v), { initialProps: view(0) });
+      await waitFor(() => expect(hook.result.current.content).not.toBeNull());
+      const cycle = buildCycle(hook.result.current.content!, view(0).settings, view(0).now);
+      const idx = cycle.slots.map((s) => s.itemId);
+      expect(idx).toContain('va');
+      expect(idx).toContain('vb');
+      // find the first instant in the cycle at which the first of the two videos is showing, then play from there
+      let t = 0;
+      for (; t < 1000; t++) {
+        hook.rerender(view(t));
+        if (hook.result.current.current?.slot.feature === 'videos') break;
+      }
+      const first = hook.result.current.current!;
+      expect(first.slot.feature).toBe('videos');
+      const t0 = t;
+      // the first video ends early (6 s in): the slot after it starts at that instant, once
+      hook.rerender(view(t0 + 6));
+      act(() => hook.result.current.skip!(hook.result.current.current!.startedAt));
+      const after1 = hook.result.current.current!;
+      expect(after1.startedAt.getTime()).toBe(base + (t0 + 6) * 1000);
+      expect(after1.slot.itemId).not.toBe(first.slot.itemId);
+      // the clock runs: the start does not move, so the card's page timer and its skip key stay still
+      for (const dt of [7, 8, 9, 12]) {
+        hook.rerender(view(t0 + dt));
+        expect(hook.result.current.current!.startedAt.getTime()).toBe(after1.startedAt.getTime());
+        expect(hook.result.current.current!.slot.itemId).toBe(after1.slot.itemId);
+      }
+      // a paged card gets pages that advance: elapsed grows from the fixed start
+      const pageOf = (sec: number) => pageAt(view(sec).now, hook.result.current.current!.startedAt, 5, 4);
+      expect(pageOf(t0 + 6)).toBe(0);
+      expect(pageOf(t0 + 12)).toBe(1);
+      // when that slot is itself a video it can skip itself, and the one after gets its own fixed start
+      if (after1.slot.feature === 'videos') {
+        hook.rerender(view(t0 + 10));
+        act(() => hook.result.current.skip!(hook.result.current.current!.startedAt));
+        const after2 = hook.result.current.current!;
+        expect(after2.slot.itemId).not.toBe(after1.slot.itemId);
+        expect(after2.slot.feature).toBe('posters');
+        expect(after2.startedAt.getTime()).toBe(base + (t0 + 10) * 1000);
+        hook.rerender(view(t0 + 14));
+        expect(hook.result.current.current!.startedAt.getTime()).toBe(after2.startedAt.getTime());
+      }
+      hook.unmount();
+    } finally {
+      localStorage.removeItem('surau.content');
+    }
+  });
+});

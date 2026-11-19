@@ -195,7 +195,7 @@ describe('CORS', () => {
     expect(pre.statusCode).toBe(204);
     expect(pre.headers['access-control-allow-origin']).toBe(ORIGIN);
     expect(pre.headers['access-control-allow-headers']).toBe('Authorization, Content-Type');
-    expect(pre.headers['access-control-allow-methods']).toBe('GET, POST, PUT, DELETE');
+    expect(pre.headers['access-control-allow-methods']).toBe('GET, POST, PUT, PATCH, DELETE');
     const badPre = await c.app.inject({ method: 'OPTIONS', url: '/api/sync/changes', headers: { origin: 'https://evil.example' } });
     expect(badPre.statusCode).not.toBe(204);
     expect(badPre.headers['access-control-allow-origin']).toBeUndefined();

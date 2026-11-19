@@ -100,7 +100,7 @@ export async function startFakeGoogle(): Promise<FakeGoogle> {
       if (!(req.headers.authorization ?? '').startsWith('Bearer access-token-')) return send(401, { error: { code: 401, errors: [{ reason: 'authError' }] } });
       if (p === '/youtube/v3/channels') {
         if (fake.bigBody > 0) return send(200, { items: [], pad: 'x'.repeat(fake.bigBody) });
-        return send(200, { items: [{ id: 'UC-surau', snippet: { title: 'Surau D\'Waqaf' } }] });
+        return send(200, { items: [{ id: 'UC-surau', snippet: { title: 'Surau Contoh' } }] });
       }
       if (p === '/youtube/v3/liveStreams' && call.method === 'GET') {
         const id = url.searchParams.get('id') ?? '';

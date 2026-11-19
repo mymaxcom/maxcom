@@ -35,6 +35,11 @@ export interface FieldMeta {
    */
   hidden?: boolean;
   /**
+   * Drawn only while another field of the same feature holds the given value (progressive disclosure: the field
+   * is ignored in the other modes). Stored values are kept and nothing is validated for a hidden field.
+   */
+  visibleWhen?: { field: string; equals: boolean | number | string };
+  /**
    * Shown dimmed and not editable, with a short note, while another setting has the given value (one setting, one
    * meaning: the other control makes this one irrelevant). Stored values are untouched.
    */
@@ -52,6 +57,9 @@ type FM = Record<string, FieldMeta>;
 
 /** The slider starts at 5 s: a stored 0 meant 15 s on the TV without saying so. */
 const CARD_DURATION: FM = { durationSeconds: { ui: 'slider', min: 5, max: 600, step: 5, unit: 'saat' } };
+
+/** Surah and verses count only when the surau picks the verses itself. */
+const AYAT_MANUAL: NonNullable<FieldMeta['visibleWhen']> = { field: 'pick', equals: 'manual' };
 
 const TABUNG_MANUAL_OFF: NonNullable<FieldMeta['disabledWhen']> = {
   feature: 'finance', field: 'enabled', equals: true,
@@ -72,6 +80,8 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
     relayFrom: { ui: 'segment', choices: ['box', 'phone'], disabledChoices: ['phone'], hidden: true },
     relayVideo: { ui: 'segment', choices: ['copy', 'reencode'], scope: 'system' },
     maxBitrateKbps: { ui: 'slider', min: 500, max: 6000, step: 500, unit: 'kbps', scope: 'system' },
+    // the Live screen's own YouTube control owns this choice (one setting, one place)
+    nextLiveOn: { ui: 'switch', hidden: true },
     titleTemplate: { ui: 'template', maxLen: 100 },
     descriptionTemplate: { ui: 'template', maxLen: 500 },
   },
@@ -115,9 +125,9 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
   ayatCard: {
     ...CARD_DURATION,
     pick: { ui: 'segment', choices: ['daily', 'random', 'manual'] },
-    surah: { ui: 'surah' },
-    ayatFrom: { ui: 'ayatRange' },
-    ayatTo: { ui: 'ayatRange' },
+    surah: { ui: 'surah', visibleWhen: AYAT_MANUAL },
+    ayatFrom: { ui: 'ayatRange', visibleWhen: AYAT_MANUAL },
+    ayatTo: { ui: 'ayatRange', visibleWhen: AYAT_MANUAL },
     textSize: { ui: 'segment', choices: ['s', 'm', 'l'] },
   },
   kuliahCard: CARD_DURATION,
@@ -262,7 +272,7 @@ export function canWriteSettingsFeatures(roles: readonly Role[], features: reado
 
 /** The features that take part in the TV card rotation (they have an `order` setting). */
 export const ORDERED_FEATURES: readonly FeatureKey[] = [
-  'kuliahCard', 'pengumuman', 'posters', 'programKhas', 'takwim', 'hadis', 'worldTimes', 'tugasan', 'ayatCard', 'tabungCard',
+  'kuliahCard', 'pengumuman', 'posters', 'videos', 'programKhas', 'takwim', 'hadis', 'worldTimes', 'tugasan', 'ayatCard', 'tabungCard',
 ];
 
 export interface FeatureDesc {
@@ -322,9 +332,9 @@ const DESC_MS_EN: Record<FeatureKey, Omit<FeatureDesc, 'ar'>> = {
     'warna',
   ),
   language: d(
-    'Bahasa paparan skrin TV, bukan bahasa aplikasi di telefon. Ikut lokasi: BM di Malaysia, Inggeris di negara lain. Surau di luar negara: tetapkan Lokasi surau.',
-    'The display language of the TV screen, not the language of the app on the phone. Follow location: BM in Malaysia, English in other countries. A surau abroad: set Surau location.',
-    'bahasa',
+    'Bahasa paparan skrin TV, bukan bahasa aplikasi di telefon: Bahasa Melayu, English atau العربية (Bahasa Arab). Automatik ikut lokasi: BM di Malaysia, Inggeris di negara lain. Surau di luar negara: tetapkan Lokasi surau.',
+    'The display language of the TV screen, not the language of the app on the phone: Bahasa Melayu, English or العربية (Arabic). Automatic follows location: BM in Malaysia, English in other countries. A surau abroad: set Surau location.',
+    'bahasa', 'arab', 'arabic',
   ),
   orientation: d('Skrin TV mendatar atau menegak.', 'The TV screen landscape or portrait.', 'mendatar', 'menegak'),
   kioskTemplate: d(
@@ -339,6 +349,7 @@ const DESC_MS_EN: Record<FeatureKey, Omit<FeatureDesc, 'ar'>> = {
   pengumuman: d('Pengumuman surau di skrin TV.', 'Surau announcements on the TV screen.'),
   ticker: d('Teks bergerak di bahagian bawah skrin.', 'Scrolling text along the bottom of the screen.'),
   posters: d('Poster bergilir di skrin TV.', 'Posters shown in turn on the TV screen.'),
+  videos: d('Video bergilir di skrin TV, dimainkan hingga tamat.', 'Videos shown in turn on the TV screen, played to the end.', 'rakaman', 'youtube'),
   programKhas: d('Program khas yang akan datang.', 'Upcoming special programmes.'),
   takwim: d('Tarikh penting Islam yang akan datang.', 'Upcoming important Islamic dates.', 'kalendar'),
   hadis: d(
@@ -403,7 +414,7 @@ const DESC_AR: Record<FeatureKey, string> = {
   hijriDate: 'التاريخ الهجري ووقت تغيّره.',
   backgrounds: 'صور خلفية شاشة التلفاز وسرعة تغيّرها، لجميع القوالب. صور MAXCOM المدمجة للقالب Default فقط. في التخصيص، "حسب القالب" تعني استخدام الصور هنا (أو صورة القالب المرفوع)؛ وصورة خاصة بشاشة معينة تحلّ محلها.',
   autoTone: 'لون النص واللون المميّز يتبعان صورة الخلفية، للقالب Default. أما لون النص أو اللون المميّز المختار في التخصيص فيتغلب عليهما.',
-  language: 'لغة عرض شاشة التلفاز، وليست لغة التطبيق على الهاتف. حسب الموقع: البهاسا الملايو في ماليزيا والإنجليزية في الدول الأخرى. مصلى خارج ماليزيا: اضبط موقع المصلى.',
+  language: 'لغة عرض شاشة التلفاز، وليست لغة التطبيق على الهاتف: البهاسا الملايو أو الإنجليزية أو العربية. الوضع التلقائي حسب الموقع: البهاسا الملايو في ماليزيا والإنجليزية في الدول الأخرى. مصلى خارج ماليزيا: اضبط موقع المصلى.',
   orientation: 'شاشة التلفاز أفقية أو عمودية.',
   kioskTemplate: 'القالب يغيّر مظهر شاشة التلفاز كله. ويمكن تخصيص كل شاشة.',
   themeStyle: 'خصّص مظهر كل شاشة في القالب.',
@@ -413,6 +424,7 @@ const DESC_AR: Record<FeatureKey, string> = {
   pengumuman: 'إعلانات المصلى على شاشة التلفاز.',
   ticker: 'نص متحرك في أسفل الشاشة.',
   posters: 'ملصقات تُعرض بالتناوب على شاشة التلفاز.',
+  videos: 'مقاطع فيديو تُعرض بالتناوب على شاشة التلفاز وتُشغَّل حتى نهايتها.',
   programKhas: 'البرامج الخاصة القادمة.',
   takwim: 'التواريخ الإسلامية المهمة القادمة.',
   hadis: 'أحاديث تُعرض بالتناوب على شاشة التلفاز، عشوائيًا أو باختيارك. وعدد الأحاديث في اليوم يحدد المجموعة اليومية.',

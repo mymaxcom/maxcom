@@ -29,14 +29,17 @@ const PICTURE_FNS = new Set(['url', 'image-set', '-webkit-image-set']);
 
 const SIDES = ['top', 'right', 'bottom', 'left'] as const;
 const sideProps = (stem: string, tail = ''): string[] => SIDES.map((s) => `${stem}-${s}${tail}`);
+// Logical equivalents of the physical sides (the kiosk CSS is direction-neutral). Each is treated exactly like its physical twin.
+const LOGICAL = ['inline', 'inline-start', 'inline-end', 'block', 'block-start', 'block-end'] as const;
+const logicalProps = (stem: string, tail = ''): string[] => LOGICAL.map((s) => `${stem}-${s}${tail}`);
 
-const COLOUR_PROPS = new Set(['color', 'background-color', 'border-color', ...sideProps('border', '-color'), 'outline-color']);
-const KEYWORD_PROPS = new Set(['font-weight', 'font-style', 'text-transform', 'text-align', 'border-style', ...sideProps('border', '-style'), 'outline-style']);
+const COLOUR_PROPS = new Set(['color', 'background-color', 'border-color', ...sideProps('border', '-color'), ...logicalProps('border', '-color'), 'outline-color']);
+const KEYWORD_PROPS = new Set(['font-weight', 'font-style', 'text-transform', 'text-align', 'border-style', ...sideProps('border', '-style'), ...logicalProps('border', '-style'), 'outline-style']);
 const BACKGROUND_PROPS = new Set(['background', 'background-image', 'background-size', 'background-position', 'background-repeat', 'background-origin']);
-const BORDER_WIDTH_PROPS = new Set(['border', 'border-width', ...sideProps('border'), ...sideProps('border', '-width')]);
+const BORDER_WIDTH_PROPS = new Set(['border', 'border-width', ...sideProps('border'), ...sideProps('border', '-width'), ...logicalProps('border'), ...logicalProps('border', '-width')]);
 const RADIUS_PROPS = new Set(['border-radius', 'border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius']);
-const PADDING_PROPS = new Set(['padding', ...sideProps('padding')]);
-const MARGIN_PROPS = new Set(['margin', ...sideProps('margin')]);
+const PADDING_PROPS = new Set(['padding', ...sideProps('padding'), ...logicalProps('padding')]);
+const MARGIN_PROPS = new Set(['margin', ...sideProps('margin'), ...logicalProps('margin')]);
 const GAP_PROPS = new Set(['gap', 'row-gap', 'column-gap', 'grid-gap']);
 const SIZE_PROPS = new Set(['width', 'height', 'min-width', 'min-height', 'max-width', 'max-height']);
 

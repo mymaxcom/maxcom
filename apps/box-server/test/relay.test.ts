@@ -123,9 +123,9 @@ const make = (r: Rig): Relay => {
   return relay;
 };
 
-async function until(cond: () => boolean, ms = 5000): Promise<void> {
+async function until(cond: () => boolean | Promise<boolean>, ms = 5000): Promise<void> {
   const end = Date.now() + ms;
-  while (!cond()) {
+  while (!(await cond())) {
     if (Date.now() > end) throw new Error('timeout waiting for condition');
     await new Promise((res) => setTimeout(res, 10));
   }
@@ -250,7 +250,7 @@ describe('relay command line', () => {
     relay.start({ key: KEY, relayVideo: 'reencode', maxBitrateKbps: 3000 });
     await until(() => r.runs().length >= 1);
     const joined = r.runs()[0]!.join(' ');
-    expect(joined).toContain('-c:v libx264 -preset veryfast -tune zerolatency -g 60 -keyint_min 60 -b:v 3000k -maxrate 3000k -bufsize 6000k -pix_fmt yuv420p');
+    expect(joined).toContain('-c:v libx264 -preset veryfast -tune zerolatency -force_key_frames expr:gte(t,n_forced*2) -sc_threshold 0 -x264-params nal-hrd=cbr -b:v 3000k -minrate 3000k -maxrate 3000k -bufsize 6000k -pix_fmt yuv420p');
     expect(joined).not.toContain('-c:v copy');
   });
 
@@ -417,12 +417,12 @@ describe('relay inside a live session', () => {
     status: () => ({ signedIn: true, channelTitle: 'Surau', broadcastId: 'bc1', state: 'created', health: null, watchUrl: 'https://youtu.be/bc1', lastError: null }),
   });
 
-  async function session(setup?: (h: LiveHarness) => void) {
+  async function session(setup?: (h: LiveHarness) => void, encoderProbe: (p: string) => Promise<boolean | null> = async () => true) {
     const dir = mkdtempSync(join(tmpdir(), 'surau-relay-sess-'));
     const script = join(dir, 'stub-ffmpeg.cjs');
     writeFileSync(script, STUB);
     const h = await startLiveHarness({
-      live: { youtube: fakeYoutube(), relay: { ffmpegPath: process.execPath, argsPrefix: [script], pollMs: 10, backoffBaseMs: 5, backoffMaxMs: 20, killAfterMs: 500 } },
+      live: { youtube: fakeYoutube(), encoderProbe, relay: { ffmpegPath: process.execPath, argsPrefix: [script], pollMs: 10, backoffBaseMs: 5, backoffMaxMs: 20, killAfterMs: 500 } },
     });
     harnesses.push(h);
     setup?.(h);
@@ -482,9 +482,76 @@ describe('relay inside a live session', () => {
       s.h.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
       await s.call('/api/live/start', startBody(s.h, { source: 'web', outputs: { kiosk: true, youtube: true }, youtubeVia: 'box' }));
       await until(() => s.runs().length === 1);
-      expect(s.runs()[0]!.join(' ')).toContain('-c:v libx264 -preset veryfast -tune zerolatency -g 60 -keyint_min 60 -b:v 1800k -maxrate 1800k -bufsize 3600k');
+      expect(s.runs()[0]!.join(' ')).toContain('-c:v libx264 -preset veryfast -tune zerolatency -force_key_frames expr:gte(t,n_forced*2) -sc_threshold 0 -x264-params nal-hrd=cbr -b:v 1800k -minrate 1800k -maxrate 1800k -bufsize 3600k');
     } finally {
       s.cleanup();
+    }
+  });
+
+  it('reencode asked on a box without an H.264 encoder relays copy, warns reencode_unsupported and never fails the live', async () => {
+    let probes = 0;
+    const s = await session(
+      (h) => putFeature(h.app.surau.db, 'liveYoutube', { relayVideo: 'reencode', maxBitrateKbps: 1800 }, 'test', undefined, 'sdm'),
+      async () => {
+        probes++;
+        return false;
+      },
+    );
+    try {
+      s.h.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+      const r = await s.call('/api/live/start', startBody(s.h, { source: 'web', outputs: { kiosk: true, youtube: true }, youtubeVia: 'box' }));
+      expect(r.statusCode).toBe(200);
+      await until(() => s.runs().length === 1);
+      const argv = s.runs()[0]!.join(' ');
+      expect(argv).toContain('-c:v copy');
+      expect(argv).not.toContain('libx264');
+      const st = await s.status();
+      expect(st.warnings).toContain('reencode_unsupported');
+      expect(st.relayReencode).toBe(false);
+      expect(probes).toBe(1);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it('the status never waits for the encoder probe: false while it runs, the answer once it is known', async () => {
+    let answer: (v: boolean) => void = () => undefined;
+    let probes = 0;
+    const s = await session(undefined, () => {
+      probes++;
+      return new Promise<boolean>((res) => {
+        answer = res;
+      });
+    });
+    try {
+      const t0 = Date.now();
+      expect((await s.status()).relayReencode).toBe(false);
+      expect(Date.now() - t0).toBeLessThan(2000);
+      // the probe was started at boot, once
+      expect(probes).toBe(1);
+      answer(true);
+      await until(async () => (await s.status()).relayReencode === true);
+      expect(probes).toBe(1);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it('status reports relayReencode true on a capable box and false when the probe throws', async () => {
+    const a = await session();
+    try {
+      await until(async () => (await a.status()).relayReencode === true);
+      expect((await a.status()).relayReencode).toBe(true);
+    } finally {
+      a.cleanup();
+    }
+    const b = await session(undefined, async () => {
+      throw new Error('boom');
+    });
+    try {
+      expect((await b.status()).relayReencode).toBe(false);
+    } finally {
+      b.cleanup();
     }
   });
 

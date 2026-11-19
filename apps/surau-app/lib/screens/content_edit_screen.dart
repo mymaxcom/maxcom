@@ -22,6 +22,7 @@ import '../content/editors/takwim_editor.dart';
 import '../content/editors/ticker_editor.dart';
 import '../content/editors/tilawah_slot_editor.dart';
 import '../content/editors/tugasan_editor.dart';
+import '../content/editors/video_editor.dart';
 import '../content/editors/world_time_editor.dart';
 import '../content/editors/zikir_editor.dart';
 import '../content/kinds.dart';
@@ -100,6 +101,7 @@ Map<String, dynamic> _defaults(String kind, DateTime today, int nextOrder, int l
   'pengumuman' => PengumumanEditor.defaults(today),
   'ticker' => TickerEditor.defaults(today),
   'poster' => PosterEditor.defaults(nextOrder, liveCount),
+  'video' => VideoEditor.defaults(nextOrder),
   'programKhas' => ProgramKhasEditor.defaults(today),
   'takwim' => TakwimEditor.defaults(today),
   'hadis' => HadisEditor.defaults(),
@@ -121,6 +123,7 @@ Widget _editor(String kind, Map<String, dynamic> initial, String? id, bool readO
     'pengumuman' => PengumumanEditor(key: key, initial: initial, itemId: id, readOnly: readOnly),
     'ticker' => TickerEditor(key: key, initial: initial, itemId: id, readOnly: readOnly),
     'poster' => PosterEditor(key: key, initial: initial, itemId: id, readOnly: readOnly),
+    'video' => VideoEditor(key: key, initial: initial, itemId: id, readOnly: readOnly),
     'programKhas' => ProgramKhasEditor(key: key, initial: initial, itemId: id, readOnly: readOnly),
     'takwim' => TakwimEditor(key: key, initial: initial, itemId: id, readOnly: readOnly),
     'hadis' => HadisEditor(key: key, initial: initial, itemId: id, readOnly: readOnly),

@@ -387,6 +387,10 @@ describe('preview poster message', () => {
     expect(readPreviewPosterMessage(ev(posterMsg(DRAFT, 'T')))).toEqual({ assetId: DRAFT, title: 'T' });
     expect(readPreviewPosterMessage(ev({ type: 'surau-preview', token: TOKEN }))).toBeNull();
     expect(readPreviewPosterMessage(ev(posterMsg(DRAFT, '')))).toEqual({ assetId: DRAFT, title: '' });
+    // The editor's Regangkan flag rides along only as a real boolean.
+    expect(readPreviewPosterMessage(ev({ ...posterMsg(DRAFT, 'T'), stretch: false }))).toEqual({ assetId: DRAFT, title: 'T', stretch: false });
+    expect(readPreviewPosterMessage(ev({ ...posterMsg(DRAFT, 'T'), stretch: true }))).toEqual({ assetId: DRAFT, title: 'T', stretch: true });
+    expect(readPreviewPosterMessage(ev({ ...posterMsg(DRAFT, 'T'), stretch: 'no' }))).toEqual({ assetId: DRAFT, title: 'T' });
     expect(readPreviewPosterMessage(ev(null))).toBeNull();
     expect(readPreviewPosterMessage(ev('surau-preview-poster'))).toBeNull();
     expect(PREVIEW_ASSET_ID_RE.test(DRAFT)).toBe(true);

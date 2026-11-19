@@ -8,6 +8,7 @@ import { withUploadApi } from './support/fakeGoogleUpload.ts';
 import type { GoogleUploadFake } from './support/fakeGoogleUpload.ts';
 import { buildCloud } from './support/fakeCloud.ts';
 import { parseIsoDuration } from '../src/live/youtube/api.ts';
+import { seedCloudGrant } from './support/cloudGrant.ts';
 
 const closers: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -31,14 +32,8 @@ async function rig(signedIn = true): Promise<Rig> {
   const { join } = await import('node:path');
   mkdirSync(join(cloud.dir, 'secret'), { recursive: true });
   writeFileSync(join(cloud.dir, 'secret', 'youtube-client.json'), JSON.stringify({ client_id: 'cid-123.apps.googleusercontent.com', client_secret: 'csecret-SECRET' }));
-  if (signedIn) {
-    const admin = await loginAs(cloud.app, 'admin');
-    await cloud.app.inject({ method: 'POST', url: '/api/live/youtube/signin', headers: admin.headers });
-    g.approve = true;
-    clock.t += 6000;
-    const done = await cloud.app.inject({ method: 'POST', url: '/api/live/youtube/signin/poll', headers: admin.headers });
-    expect(done.json()).toMatchObject({ signedIn: true });
-  }
+  // the grant the cloud held from before release 2026.11.13 (the cloud makes no new one)
+  if (signedIn) seedCloudGrant(cloud.dir, clock.now);
   return { app: cloud.app, g, up };
 }
 

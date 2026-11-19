@@ -3,12 +3,16 @@ import { basename, dirname, join, resolve } from 'node:path';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest, FastifyServerFactory } from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { KIOSK_TEMPLATE_IDS, THEME_CONTRACT, dateOf, hasOfficialSource, isFeatureKey, parseJakimCsv, patchNeedsSystemWrite, tzOf, validateFeatureSettings } from '@surau/core';
+import { KIOSK_TEMPLATE_IDS, SERVER_FEATURES, THEME_CONTRACT, dateOf, hasOfficialSource, isFeatureKey, parseJakimCsv, patchNeedsSystemWrite, tzOf, validateFeatureSettings } from '@surau/core';
 import type { ImageRef } from '@surau/core';
 import type { KioskLive, PrayerDay } from '@surau/core';
 import { actorOf, deviceOf } from './actor.ts';
 import { isAppPath, registerAppStatic } from './appStatic.ts';
 import { registerAssetRoutes } from './assets/routes.ts';
+import { registerVideoRoutes } from './assets/videoRoutes.ts';
+import { keepPosterShape } from './content/posterStretch.ts';
+import { sweepVideoOrphans, VIDEO_SWEEP_EVERY_MS, VIDEO_SWEEP_MIN_AGE_MS } from './assets/video.ts';
+import type { FreeBytes, VideoLimits } from './assets/video.ts';
 import { registerThemeRoutes } from './themes/routes.ts';
 import { createThemeStore } from './themes/store.ts';
 import { activeThemeHealth, themeOk } from './themes/health.ts';
@@ -43,15 +47,19 @@ import { registerCameraRoutes } from './live/cameraRoutes.ts';
 import { registerLiveRoutes } from './live/routes.ts';
 import { LiveSessions } from './live/sessions.ts';
 import type { RelayOptions } from './live/relay.ts';
-import type { YoutubeLeg } from './live/sessions.ts';
+import type { LiveSessionsDeps, YoutubeLeg } from './live/sessions.ts';
 import { createWebrtcProxy } from './live/webrtcProxy.ts';
 import { createYoutubeService } from './live/youtube/api.ts';
 import { registerYoutubeCloudRoutes } from './sync/youtubeCloud.ts';
+import { registerYoutubeBoxCloudRoutes } from './sync/youtubeBoxCloud.ts';
 import { createYoutubeRegistry } from './live/youtube/registry.ts';
 import type { YoutubeRegistry } from './live/youtube/registry.ts';
 import { registerCameraSecretCloudRoutes } from './sync/cameraSecretCloud.ts';
+import { registerCameraRelayCloudRoutes } from './sync/cameraRelayCloud.ts';
 import { attachCameraSecretSync } from './sync/cameraSecretBox.ts';
-import { CloudOrLocalLeg, RemoteYoutubeLeg } from './sync/youtubeRemote.ts';
+import { RemoteYoutubeLeg } from './sync/youtubeRemote.ts';
+import { YoutubeBoxLink } from './sync/youtubeBoxLink.ts';
+import { withBroadcastLog } from './live/youtube/boxLeg.ts';
 import type { YoutubeService } from './live/youtube/api.ts';
 import { isIP } from 'node:net';
 import { registerContentRoutes } from './content/routes.ts';
@@ -87,7 +95,8 @@ import { registerSyncRoutes, syncStatus } from './sync/routes.ts';
 import { ephemeralIdentity, loadIdentity } from './setup/identity.ts';
 import { registerJoinRoutes } from './setup/joinRoutes.ts';
 import { registerCloudInfoRoute, registerStateRoutes } from './setup/stateRoutes.ts';
-import { createClaimHandler, createLinkHandler, enrolCloudOrigin, listSites, noteThemeSupport, registerSiteAssetRoute } from './sync/sites.ts';
+import { softwareToken } from './productVersion.ts';
+import { createClaimHandler, createLinkHandler, enrolCloudOrigin, listSites, noteBoxFeatures, noteThemeSupport, registerSiteAssetRoute, surauBoxesHave } from './sync/sites.ts';
 import { outboxStatus, setOutboxOn, WorkerOutboxSender } from './sync/workerOutbox.ts';
 import type { WorkerAdminConfig } from './sync/workerOutbox.ts';
 import { trimChangeLog } from './sync/trim.ts';
@@ -115,6 +124,11 @@ export interface AppOptions {
   serverFactory?: FastifyServerFactory;
   /** Folder for assets, Islamic caches and other files; default is the folder holding the database. */
   dataDir?: string;
+  /** Test seams of the video upload: the free-space reading and the limits (defaults: the disk and VIDEO_LIMITS). */
+  videoFree?: FreeBytes;
+  videoLimits?: VideoLimits;
+  /** Test seam: how often the box sweeps orphan videos (default every 6 hours). */
+  videoSweepMs?: number;
   /** Public id of this box (signed into every unlock); default derives it from `<dataDir>/secret/box.key`. */
   boxId?: string;
   /** `box` (default) or `cloud` (the always-on replica, Task 4). Only the cloud serves `POST /api/sync/link`. */
@@ -169,7 +183,7 @@ export interface AppOptions {
   /** The media-ports firewall check (main.ts supplies the real one on Windows); left out, the state is unknown. */
   liveFirewall?: { check(): Promise<FirewallState>; state(): FirewallState } | null;
   /** Live session tuning and the YouTube leg (Task 4 supplies `youtube`); tests shorten the timers. */
-  live?: { monitorMs?: number; noVideoMs?: number; idleTimeoutMs?: number; reprovisionMs?: number; youtube?: YoutubeLeg | null; relay?: Partial<RelayOptions> };
+  live?: { monitorMs?: number; noVideoMs?: number; idleTimeoutMs?: number; youtubeGraceMs?: number; reprovisionMs?: number; youtube?: YoutubeLeg | null; relay?: Partial<RelayOptions>; frame?: LiveSessionsDeps['frameOptions']; encoderProbe?: (ffmpegPath: string) => Promise<boolean | null> };
 }
 
 declare module 'fastify' {
@@ -180,6 +194,8 @@ declare module 'fastify' {
     syncAgent: SyncAgent | null;
     /** The cloud's sender towards the Worker's admin routes (cloud role with a Worker configured), else null. */
     workerOutbox: WorkerOutboxSender | null;
+    /** The box's YouTube link to the cloud (client, one-time handover, flag; box role with a data folder), else null. */
+    youtubeBoxLink: YoutubeBoxLink | null;
   }
 }
 
@@ -269,6 +285,8 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   backfillIds(db, role);
   // A box sends the official days it already held before they replicated; a cloud only receives them.
   if (role === 'box') backfillOfficialFeed(db, now(), LOCAL_SURAU_ID);
+  // Posters made before 2026.11.13 keep their shape (stretch: false), once (migration 025's flag); the cloud only clears it.
+  keepPosterShape(db, role);
   // PIN hashes are peppered with a secret derived from box.key (see auth/crypto.ts). An in-memory
   // database with no data folder has no key file; it keeps a random per-handle pepper instead.
   if (!(dbPath === ':memory:' && opts.dataDir === undefined)) attachPinPepper(db, derivePinPepper(loadBoxKey(dataDir)));
@@ -369,7 +387,15 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   // The cloud learns which theme contract each linked box supports from the header its sync agent sends.
   if (role === 'cloud') {
     app.addHook('onRequest', async (request) => {
-      if (request.auth?.kind === 'site') noteThemeSupport(db, request.auth.boxId, request.headers['x-maxcom-themes']);
+      if (request.auth?.kind === 'site') {
+        noteThemeSupport(db, request.auth.boxId, request.headers['x-maxcom-themes']);
+        noteBoxFeatures(db, request.auth.boxId, request.headers['x-maxcom-features']);
+      }
+    });
+    // A linked box learns this cloud's software version from every answer it gets, so it can try again what an older
+    // cloud refused (a settings value it did not know yet) once the cloud is upgraded.
+    app.addHook('onSend', async (request, reply) => {
+      if (request.auth?.kind === 'site') reply.header('X-Maxcom-Server', softwareToken());
     });
   }
   app.decorate('surau', {
@@ -402,15 +428,16 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
   const noDataFolder = dbPath === ':memory:' && opts.dataDir === undefined;
   const youtubeRegistry: YoutubeRegistry | null =
     role === 'cloud' && opts.live?.youtube === undefined && !noDataFolder ? createYoutubeRegistry({ db, dataDir, fetchImpl, now }) : null;
+  /** Release 2026.11.13: the box's link to the cloud for YouTube (made with the camera block below); a sign-in or a sign-out here pushes the flag. */
+  let youtubeBoxLink: YoutubeBoxLink | null = null;
   const localYoutube: YoutubeLeg | null =
     opts.live?.youtube ??
-    (noDataFolder ? null : youtubeRegistry !== null ? youtubeRegistry.for(LOCAL_SURAU_ID) : createYoutubeService({ db, dataDir, fetchImpl, now, role }));
+    (noDataFolder ? null : youtubeRegistry !== null ? youtubeRegistry.for(LOCAL_SURAU_ID) : createYoutubeService({ db, dataDir, fetchImpl, now, role, onChange: () => youtubeBoxLink?.changed() }));
   const youtubeService: YoutubeService | null = localYoutube !== null && 'begin' in localYoutube ? (localYoutube as YoutubeService) : null;
   /** The YouTube service of one surau: the registry's on the cloud, the box's own otherwise. */
   const youtubeFor = (surauId: string): YoutubeService | null => (youtubeRegistry !== null ? youtubeRegistry.for(surauId) : youtubeService);
-  // A linked box (cloudSync on) takes its live YouTube leg from the cloud, which owns the Google token (Plan 6
-  // Task 5); the box's own service stays as the fallback for an unlinked box or `cloudSync` off. A test that
-  // injects its own leg keeps it.
+  // The remote leg over the cloud (Plan 6 Task 5) is kept only to finish the completes an older version stored for
+  // broadcasts the cloud made (release 2026.11.13: the box holds the grant; phase 4 removes this leg).
   const youtubeRemote: RemoteYoutubeLeg | null =
     role === 'box' && realDataDir && opts.live?.youtube === undefined && localYoutube !== null
       ? new RemoteYoutubeLeg({
@@ -427,8 +454,10 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
       : null;
   // stored YouTube completes are retried on every sync agent cycle too
   if (youtubeRemote !== null) syncAgent?.setCycleHook(() => void youtubeRemote.retryPending());
+  // Release 2026.11.13: a live always uses the box's own service (no cloud leg, so no cloud_unreachable and no wait
+  // for a sleeping cloud). Each broadcast the box makes gets its change-log row (the catch-up checks read it).
   const youtube: YoutubeLeg | null =
-    youtubeRemote !== null && localYoutube !== null ? new CloudOrLocalLeg(youtubeRemote, localYoutube, () => youtubeRemote.active()) : localYoutube;
+    role === 'box' && localYoutube !== null && opts.live?.youtube === undefined ? withBroadcastLog(localYoutube, db) : localYoutube;
   app.addHook('onClose', async () => youtubeRemote?.stop());
   // "Mic-in pada kotak" (M1): the box's own capture devices; listed once at start so the combiner finds the name at once
   const audioInputs = new AudioInputs({
@@ -453,10 +482,15 @@ export function buildApp(dbPath: string, opts: AppOptions = {}): FastifyInstance
     noVideoMs: opts.live?.noVideoMs ?? ((): number => Number(getSettings(db, LOCAL_SURAU_ID).system.noVideoSeconds) * 1000),
     ...(dbPath === ':memory:' && opts.dataDir === undefined ? {} : { dataDir }),
     ...(opts.live?.relay !== undefined ? { relayOptions: opts.live.relay } : {}),
+    ...(opts.live?.frame !== undefined ? { frameOptions: opts.live.frame } : {}),
+    ...(opts.live?.encoderProbe !== undefined ? { encoderProbe: opts.live.encoderProbe } : {}),
     ...(opts.live?.monitorMs !== undefined ? { monitorMs: opts.live.monitorMs } : {}),
     ...(opts.live?.idleTimeoutMs !== undefined ? { idleTimeoutMs: opts.live.idleTimeoutMs } : {}),
+    ...(opts.live?.youtubeGraceMs !== undefined ? { youtubeGraceMs: opts.live.youtubeGraceMs } : {}),
     ...(opts.live?.reprovisionMs !== undefined ? { reprovisionMs: opts.live.reprovisionMs } : {}),
   });
+  // the H.264 encoder probe runs in the background at boot, so the live status never waits for it
+  if (live) app.addHook('onReady', async () => liveSessions.warmEncoderProbe());
   // a broadcast an earlier run left open (crash, power cut) is ended now, in the background
   // (the cloud makes the broadcasts of a linked box, so it ends the ones a crash left open too)
   // (the cloud's services recover as they are made)
@@ -737,6 +771,25 @@ data: ${JSON.stringify(live)}
     }
   });
 
+  // The surau's one YouTube choice for the next live (`liveYoutube.nextLiveOn`): every admin with live:control, every
+  // device. A normal settings write (stamped per field, change-logged with the actor, synced, version event for open
+  // apps); last change wins. A block (signed out, no internet) never calls this.
+  app.put('/api/live/youtube/next-live', async (request, reply) => {
+    const body = request.body;
+    if (!isPlain(body) || typeof body.on !== 'boolean') return reply.code(400).send({ errors: ['on must be true or false'] });
+    const surauId = reqSurau(request);
+    try {
+      const versionBefore = getVersion(db, surauId);
+      const settings = putFeature(db, 'liveYoutube', { nextLiveOn: body.on }, actorOf(request), deviceOf(request), surauId);
+      const versionAfter = getVersion(db, surauId);
+      if (versionAfter !== versionBefore) bus.emit(versionAfter, surauId);
+      return reply.header('Cache-Control', 'no-store').send({ nextLiveOn: settings.liveYoutube.nextLiveOn });
+    } catch (error) {
+      if (error instanceof SettingsError) return reply.code(400).send({ errors: error.errors });
+      throw error;
+    }
+  });
+
   app.post('/api/prayer/import', async (request, reply) => {
     const body = request.body;
     if (!isPlain(body)) {
@@ -827,6 +880,9 @@ data: ${JSON.stringify(live)}
     // reach the cloud when the box is away; absent when not linked, and never on the cloud itself.
     const cloudOrigin = role === 'box' ? enrolCloudOrigin(db) : undefined;
     const themes = { contract: THEME_CONTRACT, builtIn: [...KIOSK_TEMPLATE_IDS] };
+    // what this release supports (the app hides the Video kind and the poster stretch switch on a server without them)
+    // The cloud lists `tvLangAr` for a surau only when its linked box has reported it too (an older box would refuse the value).
+    const featuresFor = (sid: string | null): string[] => SERVER_FEATURES.filter((f) => role === 'box' || f !== 'tvLangAr' || (sid !== null && surauBoxesHave(db, sid, f)));
     const withCloud = <T extends object>(o: T): T & { cloud?: string } => (cloudOrigin === undefined ? o : { ...o, cloud: cloudOrigin });
     // the numbered local name (public: it is a certificate DNS name), null on a legacy root; not on the cloud
     const localName = role === 'box' ? boxNameOf(tlsNow()) : null;
@@ -835,7 +891,7 @@ data: ${JSON.stringify(live)}
     const onThisMachine = role === 'box' && isDirectLoopback(request);
     if (!identityCan(request.auth, 'health:read')) {
       // Anonymous: only that it is up, and (cloud) for the surau of the named linked box; never a list of sites.
-      return withCloud({ ok: true, version: getVersion(db, publicSurauOf(db, request, role) ?? NEUTRAL_SURAU_ID), name: localName, themes, ...(onThisMachine ? { themeOk: themeOk(db) } : {}) });
+      return withCloud({ ok: true, version: getVersion(db, publicSurauOf(db, request, role) ?? NEUTRAL_SURAU_ID), name: localName, themes, features: featuresFor(publicSurauOf(db, request, role)), ...(onThisMachine ? { themeOk: themeOk(db) } : {}) });
     }
     const scope = healthScopeOf(db, request, role);
     const surauId = scope.surauId;
@@ -848,6 +904,7 @@ data: ${JSON.stringify(live)}
       version: getVersion(db, surauId),
       name: localName,
       themes,
+      features: featuresFor(scope.all ? null : surauId),
       // The theme state is the box's own display; the cloud has none (its themeStyle is per surau and never reported on).
       ...(role === 'box' ? { themeOk: themeOk(db), themeHealth: activeThemeHealth(db) } : {}),
       tls: tlsNow() ? certInfo(tlsNow()!, now()) : null,
@@ -1017,15 +1074,49 @@ data: ${JSON.stringify(live)}
       limiters,
       boxIps: selfIps,
     });
-    attachCameraSecretSync(app, { db, dataDir, now, boxIps: selfIps, fetchImpl: opts.sync?.fetchImpl, cloudUrl: opts.cloud?.url, wake: syncAgent !== null ? () => syncAgent!.wakeNow() : undefined, auto: opts.sync?.auto });
+    const cameraSync = attachCameraSecretSync(app, { db, dataDir, now, boxIps: selfIps, boxId, fetchImpl: opts.sync?.fetchImpl, cloudUrl: opts.cloud?.url, wake: syncAgent !== null ? () => syncAgent!.wakeNow() : undefined, auto: opts.sync?.auto });
+    // a camera change sent through the cloud is looked for on every sync check (the YouTube retry rides the same hook)
+    // YouTube held by the box (2026.11.13): the OAuth client, the one-time handover of an old cloud grant, the flag
+    if (youtubeService !== null) {
+      const link = new YoutubeBoxLink({ db, dataDir, now, boxId, service: youtubeService, isLive: () => liveSessions.current() !== null, fetchImpl: opts.sync?.fetchImpl, cloudUrl: opts.cloud?.url, auto: opts.sync?.auto, wake: syncAgent !== null ? () => syncAgent!.wakeNow() : undefined });
+      youtubeBoxLink = link;
+      // no grant here and the handover not looked at yet: the status says unknown, never signed out
+      youtubeService.setUnknownProbe(() => link.unknownReason());
+      link.start();
+      app.addHook('onClose', async () => link.stop());
+    }
+    syncAgent?.setCycleHook(() => {
+      void youtubeRemote?.retryPending();
+      void cameraSync.relayPoll();
+      void youtubeBoxLink?.cycle();
+    });
   }
+  app.decorate('youtubeBoxLink', youtubeBoxLink);
   // the cloud's YouTube: the box's broadcast leg and the catch-up upload sessions (Plan 6 Task 5); 404 on a box
   registerYoutubeCloudRoutes(app, { role, db, now, youtube: youtubeService, youtubeFor });
+  // release 2026.11.13: the grant is the box's; the cloud keeps a flag, hands an old grant over once, delivers the client
+  registerYoutubeBoxCloudRoutes(app, { role, db, now, dataDir: realDataDir ? dataDir : null, registry: youtubeRegistry });
   // the sealed backup of the camera address: cloud routes (404 on a box), and the box's push and restore (B5)
   registerCameraSecretCloudRoutes(app, { role, db, now, masterKey: role === 'cloud' && realDataDir ? loadBoxKey(dataDir) : null });
+  // set the camera from anywhere: the sealed change the cloud relays to the box (cloud routes; a box answers its own camera routes)
+  registerCameraRelayCloudRoutes(app, { role, db, now, masterKey: role === 'cloud' && realDataDir ? loadBoxKey(dataDir) : null });
   registerPrayerRoutes(app, prayerDeps);
   registerContentRoutes(app, { db, bus, dataDir, actorOf });
   registerAssetRoutes(app, { db, dataDir, actorOf, role });
+  if (role === 'box') {
+    // Videos are stored on the box only (never on the cloud). A stored video no item points at, older than a day, goes at start.
+    registerVideoRoutes(app, { db, dataDir, actorOf, ...(opts.videoFree ? { free: opts.videoFree } : {}), ...(opts.videoLimits ? { limits: opts.videoLimits } : {}) });
+    if (realDataDir) {
+      const sweep = (): void => {
+        try { sweepVideoOrphans(db, dataDir, VIDEO_SWEEP_MIN_AGE_MS); } catch { /* a sweep that cannot run is not a reason to stop */ }
+      };
+      sweep();
+      // and every 6 hours, so an abandoned upload (editor closed, another pick) does not fill the quota of a box that never restarts
+      const sweepTimer = setInterval(sweep, opts.videoSweepMs ?? VIDEO_SWEEP_EVERY_MS);
+      sweepTimer.unref();
+      app.addHook('onClose', async () => clearInterval(sweepTimer));
+    }
+  }
   const themeStore = createThemeStore({ db, dataDir, now, role });
   registerThemeRoutes(app, { store: themeStore, bus, db, dataDir, role, boxId, now, staticDir: typeof opts.staticDir === 'string' ? opts.staticDir : null, actorOf, deviceOf });
   registerFinanceRoutes(app, { db, dataDir, bus, role, now, limiters, actorOf, deviceOf });

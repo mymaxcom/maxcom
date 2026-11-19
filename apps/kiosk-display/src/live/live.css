@@ -41,7 +41,7 @@
 }
 /* Clear: exactly the live screen's frame (same custom properties as .screen--live's grid). */
 .live--clear {
-  left: var(--live-pad-x);
+  inset-inline-start: var(--live-pad-x);
   top: var(--live-pad-top);
   width: var(--live-frame-w);
   height: var(--live-frame-h);
@@ -204,7 +204,7 @@
 .stage[data-live-layout='full'] .live-screen__side { display: contents; }
 .stage[data-live-layout='full'] .live-screen__ident {
   position: absolute;
-  left: 2.5rem;
+  inset-inline-start: 2.5rem;
   top: 2.083rem;
   z-index: 2;
   max-width: 36rem;
@@ -218,7 +218,7 @@
 .stage[data-live-layout='full'] .live-screen__ident .ident__logo { height: min(3.2rem, var(--logo-cap, 999rem)); }
 .stage[data-live-layout='full'] .live-screen__time {
   position: absolute;
-  right: 2.5rem;
+  inset-inline-end: 2.5rem;
   top: 1.563rem;
   z-index: 2;
   padding: 0.3rem 1.5rem 0.5rem;
@@ -228,10 +228,10 @@
 }
 .stage[data-live-layout='full'] .screen--live .live-screen__time .region-clock { flex-direction: row; align-items: baseline; gap: 0.5rem; }
 .stage[data-live-layout='full'] .screen--live .live-screen__time .clock--compact .hm { font-size: 4.375rem; }
-.stage[data-live-layout='full'] .screen--live .live-screen__time .clock--compact small { margin-left: 0.2rem; }
+.stage[data-live-layout='full'] .screen--live .live-screen__time .clock--compact small { margin-inline-start: 0.2rem; }
 .stage[data-live-layout='full'] .screen--live .next--chip {
   position: absolute;
-  right: 2.5rem;
+  inset-inline-end: 2.5rem;
   top: 7.5rem;
   z-index: 2;
   flex-direction: row;
@@ -246,8 +246,8 @@
 .stage[data-live-layout='full'] .screen--live .next--chip .chip-cd b { font-size: 2.292rem; }
 .stage[data-live-layout='full'] .live-screen__strip {
   position: absolute;
-  left: 2.5rem;
-  right: 2.5rem;
+  inset-inline-start: 2.5rem;
+  inset-inline-end: 2.5rem;
   bottom: 2.083rem;
   height: 6.6rem;
   z-index: 2;
@@ -276,7 +276,7 @@
   gap: 0.7rem;
   padding: 0 1.4rem 0 1.3rem;
   background: rgb(0 0 0 / 0.42);
-  border-right: 1px solid rgb(var(--accent-rgb) / 0.25);
+  border-inline-end: 1px solid rgb(var(--accent-rgb) / 0.25);
   font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: 0.16em;

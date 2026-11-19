@@ -13,6 +13,7 @@ const ASSET = /^[0-9a-f]{64}$/;
 const TEXT = {
   ms: { title: 'Tabung Surau', fridayLast: 'Kutipan Jumaat terakhir', last: 'Kutipan terakhir', month: 'Bulan ini' },
   en: { title: 'Donation fund', fridayLast: 'Last Friday collection', last: 'Last collection', month: 'This month' },
+  ar: { title: 'صندوق المصلى', fridayLast: 'حصيلة آخر جمعة', last: 'آخر حصيلة', month: 'هذا الشهر' },
 } as const;
 /** The old stored default of the title, written before the default became empty: it counts as "untouched". */
 const OLD_TITLE_DEFAULT = 'Tabung Surau';

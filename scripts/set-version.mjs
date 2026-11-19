@@ -3,6 +3,7 @@
 //
 //   node scripts/set-version.mjs <key> <YYYY.MM.N>   bump one product (never lower than its current version)
 //   node scripts/set-version.mjs --check             exit 1 and list every file that disagrees with versions.json
+//   node scripts/set-version.mjs --build <key> <0-9>  the internal build of the current version (builds.json; the version name stays)
 //   node scripts/set-version.mjs --check --key <key> the same, for one product only (the build scripts use this)
 //   --root <dir>                                     another checkout (default: the parent of this scripts folder)
 //
@@ -22,11 +23,15 @@ import { fileURLToPath } from 'node:url';
 
 const VERSION_RE = /^20[0-9]{2}\.(0[1-9]|1[0-2])\.([1-9]|[1-9][0-9])$/;
 
-/** Flutter build number for YYYY.MM.N: (YY*10000 + MM*100 + N) * 10; always above the old "+1". */
-export function pubspecCode(version) {
+/**
+ * Flutter build number for YYYY.MM.N: (YY*10000 + MM*100 + N) * 10 + build; always above the old "+1".
+ * `build` (0 to 9, builds.json) is the internal build of the SAME public version: a device that has the first build
+ * accepts the next one, and the public version name does not change.
+ */
+export function pubspecCode(version, build = 0) {
   const m = /^20([0-9]{2})\.([0-9]{2})\.([0-9]{1,2})$/.exec(version);
   if (!m) throw new Error(`bad version ${version}`);
-  return (Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3])) * 10;
+  return (Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3])) * 10 + build;
 }
 
 const PUBSPEC = 'apps/surau-app/pubspec.yaml';
@@ -57,10 +62,10 @@ export const PRODUCTS = {
           const m = PUBSPEC_LINE.exec(t);
           return m ? `${m[1]}+${m[2]}` : null;
         },
-        expected: (v) => `${v}+${pubspecCode(v)}`,
-        write: (t, v) => {
+        expected: (v, b) => `${v}+${pubspecCode(v, b)}`,
+        write: (t, v, b) => {
           if (!PUBSPEC_LINE.test(t)) throw new Error(`${PUBSPEC}: no "version:" line`);
-          return t.replace(PUBSPEC_LINE, `version: ${v}+${pubspecCode(v)}`);
+          return t.replace(PUBSPEC_LINE, `version: ${v}+${pubspecCode(v, b)}`);
         },
       },
       {
@@ -89,6 +94,27 @@ function cmp(a, b) {
   const pb = b.split('.').map(Number);
   for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] < pb[i] ? -1 : 1;
   return 0;
+}
+
+/**
+ * builds.json (repo root, optional): { "<product>": 0..9 }, the internal build of the product's current version.
+ * A product not listed is build 0. Only the Android products carry it (the app's pubspec number, the box APK's
+ * versionCode); a version bump sets the product back to build 0.
+ */
+export function loadBuilds(root) {
+  const file = join(root, 'builds.json');
+  if (!existsSync(file)) return { file, obj: {} };
+  let obj;
+  try {
+    obj = JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    fail('builds.json bukan JSON yang sah');
+  }
+  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) fail('builds.json mesti objek');
+  for (const [k, v] of Object.entries(obj)) {
+    if (!(k in PRODUCTS) || !Number.isInteger(v) || v < 0 || v > 9) fail(`builds.json: ${k} mesti kunci produk dengan nombor 0 hingga 9`);
+  }
+  return { file, obj };
 }
 
 function loadVersions(root) {
@@ -128,6 +154,7 @@ function writeVersions(file, obj) {
 export function checkVersions(root, onlyKey = null) {
   const problems = [];
   const { obj } = loadVersions(root);
+  const builds = loadBuilds(root).obj;
   for (const k of Object.keys(obj)) if (!(k in PRODUCTS)) problems.push(`versions.json: kunci tidak dikenali "${k}"`);
   const keys = onlyKey === null ? Object.keys(PRODUCTS) : [onlyKey];
   for (const key of keys) {
@@ -147,7 +174,7 @@ export function checkVersions(root, onlyKey = null) {
         continue;
       }
       const have = f.read(readFileSync(p, 'utf8'));
-      const want = f.expected ? f.expected(v) : v;
+      const want = f.expected ? f.expected(v, builds[key] ?? 0) : v;
       if (have !== want) problems.push(`${f.path}: ${have === null ? 'tiada versi' : have}, sepatutnya ${want} (${key})`);
     }
   }
@@ -158,10 +185,12 @@ function main(argv) {
   let root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const rest = [];
   let check = false;
+  let build = false;
   let key = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--check') check = true;
+    else if (a === '--build') build = true;
     else if (a === '--root') root = resolve(argv[++i] ?? fail('--root perlukan folder'));
     else if (a === '--key') key = argv[++i] ?? fail('--key perlukan kunci');
     else if (a.startsWith('--')) fail(`pilihan tidak dikenali ${a}`);
@@ -179,6 +208,29 @@ function main(argv) {
     return;
   }
 
+  if (build) {
+    // node scripts/set-version.mjs --build <key> <0..9>: the internal build of the current version (name unchanged)
+    const [bk, bn] = rest;
+    const n = Number(bn);
+    if (key !== null || rest.length !== 2 || !(bk in PRODUCTS) || !/^[0-9]$/.test(String(bn ?? ''))) fail('guna: node scripts/set-version.mjs --build <kunci> <0-9>');
+    const { obj: vers } = loadVersions(root);
+    const v = vers[bk];
+    if (typeof v !== 'string' || !VERSION_RE.test(v)) fail(`versions.json: ${bk} tiada atau tidak sah`);
+    const { file: bfile, obj: bobj } = loadBuilds(root);
+    if (n < (bobj[bk] ?? 0)) fail(`${bk}: build ${n} lebih rendah daripada build semasa ${bobj[bk] ?? 0}`);
+    const edits = [];
+    for (const f of PRODUCTS[bk].files) {
+      const p = join(root, ...f.path.split('/'));
+      if (!existsSync(p)) fail(`${f.path} tiada`);
+      edits.push({ p, text: f.write(readFileSync(p, 'utf8'), v, n) });
+    }
+    for (const e of edits) writeAtomic(e.p, e.text);
+    writeAtomic(bfile, `${JSON.stringify({ ...bobj, [bk]: n }, null, 2)}
+`);
+    process.stdout.write(`${bk}: ${v} build ${bobj[bk] ?? 0} -> ${n}
+`);
+    return;
+  }
   if (key !== null || rest.length !== 2) fail('guna: node scripts/set-version.mjs <kunci> <YYYY.MM.N>  atau  --check');
   const [k, version] = rest;
   if (!(k in PRODUCTS)) fail(`kunci tidak dikenali "${k}" (ada: ${Object.keys(PRODUCTS).join(', ')})`);
@@ -193,12 +245,19 @@ function main(argv) {
   for (const f of PRODUCTS[k].files) {
     const p = join(root, ...f.path.split('/'));
     if (!existsSync(p)) fail(`${f.path} tiada`);
-    edits.push({ p, text: f.write(readFileSync(p, 'utf8'), version) });
+    edits.push({ p, text: f.write(readFileSync(p, 'utf8'), version, 0) });
   }
   // product files first, versions.json LAST; each write is atomic
   for (const e of edits) writeAtomic(e.p, e.text);
   obj[k] = version;
   writeVersions(file, obj);
+  // a new version starts at build 0
+  const { file: bfile, obj: bobj } = loadBuilds(root);
+  if (k in bobj) {
+    delete bobj[k];
+    writeAtomic(bfile, `${JSON.stringify(bobj, null, 2)}
+`);
+  }
   process.stdout.write(`${k}: ${cur} -> ${version}\n`);
 }
 

@@ -8,14 +8,18 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../l10n/generated/s.dart';
 import '../registry.g.dart';
+import '../surah_names.dart' show normaliseSearch;
 import 'field_meta.dart';
 
 class PickerOption<T> {
-  const PickerOption(this.value, this.title, {this.subtitle});
+  const PickerOption(this.value, this.title, {this.subtitle, this.search});
 
   final T value;
   final String title;
   final String? subtitle;
+
+  /// Extra text the search matches besides the title (other names of the same row).
+  final String? search;
 }
 
 /// The sheet; the chosen value, or null when dismissed.
@@ -55,10 +59,10 @@ class _PickerSheetState<T> extends State<_PickerSheet<T>> {
   Widget build(BuildContext context) {
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
-    final q = _q.trim().toLowerCase();
+    final q = normaliseSearch(_q);
     final shown = q.isEmpty
         ? widget.options
-        : widget.options.where((o) => o.title.toLowerCase().contains(q)).toList();
+        : widget.options.where((o) => normaliseSearch('${o.title} ${o.search ?? ''}').contains(q)).toList();
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),

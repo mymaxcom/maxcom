@@ -231,6 +231,17 @@ describe('PosterCard', () => {
     expect(card.textContent!.trim()).toBe('');
   });
 
+  it('stretches by default: an absent stretch field and stretch true give data-stretch true, false gives false', () => {
+    const frameOf = (stretch: boolean | undefined) => {
+      const c = fixture();
+      if (stretch !== undefined) c.posters[0]!.stretch = stretch;
+      return section(show(c, 'posters')).querySelector('.poster-frame')!;
+    };
+    expect(frameOf(undefined).getAttribute('data-stretch')).toBe('true');
+    expect(frameOf(true).getAttribute('data-stretch')).toBe('true');
+    expect(frameOf(false).getAttribute('data-stretch')).toBe('false');
+  });
+
   it('drops the poster when its picture cannot be loaded (no black box with a broken-image icon)', async () => {
     const r = show(fixture(), 'posters');
     const img = section(r).querySelector('img[data-item="po1"]')!;

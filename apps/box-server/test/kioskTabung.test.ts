@@ -174,4 +174,15 @@ describe('[F13b] the tabung lines follow the TV language', () => {
     putFeature(r.db, 'tabungCard', { manualTitle: 'Tabung Masjid' }, 'test', undefined, 'sdm');
     expect(r.content(at(5)).tabung!.title).toBe('Tabung Masjid');
   });
+  it('[W14] an Arabic TV gets the Arabic title and small lines', () => {
+    const r = rig();
+    const per = (label: string) => listPerihal(r.db, undefined, 'sdm').find((p) => p.label === label)!.id;
+    r.put('e1', r.funds[0]!.id, 28000, '2026-11-06', T0, { perihalId: per('Kutipan solat Jumaat') });
+    r.put('e2', r.funds[1]!.id, 5000, '2026-11-08', T0, { perihalId: per('Peti derma') });
+    putFeature(r.db, 'language', { enabled: true, lang: 'ar' }, 'test', undefined, 'sdm');
+    const card = r.content(at(3600)).tabung!;
+    expect(card.title).toBe('صندوق المصلى');
+    expect(card.rows[0]).toMatchObject({ subLabel: 'حصيلة آخر جمعة', subSen: 28000 });
+    expect(card.rows[1]).toMatchObject({ subLabel: 'هذا الشهر', subSen: 5000 });
+  });
 });

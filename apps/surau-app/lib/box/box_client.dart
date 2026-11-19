@@ -148,6 +148,12 @@ class BoxClient {
     required String token,
   }) async => _decodeObject(await _send('PUT', path, token: token, json: body));
 
+  Future<Map<String, dynamic>> patchJson(
+    String path,
+    Object body, {
+    required String token,
+  }) async => _decodeObject(await _send('PATCH', path, token: token, json: body));
+
   /// Public routes (enrol, challenge, unlock) pass no token. [read] replaces
   /// the client's read budget for this request (a picture push is slow on a
   /// mobile link); the connect budget is unchanged.
@@ -200,6 +206,44 @@ class BoxClient {
       contentType: mime,
     );
     return AssetMeta.fromJson(_decodeObject(res));
+  }
+
+  /// `POST /api/assets/video`: an MP4 streamed from [body] (never held whole in memory), [length] bytes, with
+  /// [onProgress] told how many bytes have gone. No overall deadline (a big file over Wi-Fi takes minutes); the
+  /// box refuses with a coded error (`too_big`, `no_space`, ...) that comes back as a [BoxError].
+  Future<Map<String, dynamic>> uploadVideo(
+    Stream<List<int>> body,
+    int length, {
+    required String token,
+    void Function(int sent)? onProgress,
+  }) async {
+    final req = http.StreamedRequest('POST', _uri('/api/assets/video'));
+    if (token.isNotEmpty) req.headers['authorization'] = 'Bearer $token';
+    req.headers['content-type'] = 'video/mp4';
+    req.contentLength = length;
+    var sent = 0;
+    final pump = req.sink.addStream(
+      body.map((chunk) {
+        sent += chunk.length;
+        onProgress?.call(sent);
+        return chunk;
+      }),
+    ).whenComplete(req.sink.close);
+    final http.Response res;
+    try {
+      final streamed = await client.send(req).timeout(const Duration(minutes: 30));
+      res = await http.Response.fromStream(streamed).timeout(read);
+    } on BoxError {
+      rethrow;
+    } on TimeoutException catch (e) {
+      throw BoxUnreachable.sent(e);
+    } on Exception catch (e) {
+      throw BoxUnreachable(e);
+    } finally {
+      unawaited(pump.catchError((_) {}));
+    }
+    if (res.statusCode >= 400) throw _failure(res, true);
+    return _decodeObject(res);
   }
 
   Future<Uint8List> getBytes(String path, {String? token}) async =>

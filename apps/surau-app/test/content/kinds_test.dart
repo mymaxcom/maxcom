@@ -77,9 +77,9 @@ void main() {
   });
 
   group('specs', () {
-    test('14 kinds, each with a BM label, an icon and fields', () {
-      expect(contentKinds.length, 14);
-      expect(contentKinds.map((k) => k.key).toSet().length, 14);
+    test('15 kinds, each with a BM label, an icon and fields', () {
+      expect(contentKinds.length, 15);
+      expect(contentKinds.map((k) => k.key).toSet().length, 15);
       for (final k in contentKinds) {
         expect(k.labelMs, isNotEmpty, reason: k.key);
         expect(k.labelMsPlural, isNotEmpty, reason: k.key);
@@ -245,5 +245,19 @@ void main() {
       expect(sFor(AppLang.ms).valRange(1, 120), '1 hingga 120');
       expect(sFor(AppLang.ar).valRange(1, 120), contains('120'));
     });
+  });
+
+  test('direction overrides and isolates are stripped from text, Arabic and LRM/RLM stay', () {
+    const bidi = '\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069';
+    const ar = 'السلام عليكم';
+    // 300 letters + 9 controls: over 300 raw, within 300 once the controls are stripped.
+    final long = '$bidi${'x' * 300}';
+    expect(validateContent('ticker', {'text': long, 'from': '2026-11-01', 'to': '2026-11-30'}).ok, isTrue);
+    expect(validateContent('ticker', {'text': '${long}x', 'from': '2026-11-01', 'to': '2026-11-30'}).ok, isFalse);
+    // a name of only controls is empty once stripped
+    expect(validateContent('penceramah', {'name': bidi}).ok, isFalse);
+    expect(validateContent('penceramah', {'name': '$bidi$ar$bidi'}).ok, isTrue);
+    // LRM / RLM are not stripped, so they count as text
+    expect(validateContent('penceramah', {'name': '\u200E\u200F'}).ok, isTrue);
   });
 }

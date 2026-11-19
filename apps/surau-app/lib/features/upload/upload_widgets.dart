@@ -159,7 +159,7 @@ Uri youtubeWatchUri(String videoId) =>
 
 // ---- words ----
 
-String shortMonth(int month, [AppLang lang = AppLang.ms]) =>
+String shortMonth(int month, AppLang lang) =>
     monthWord(month, lang, ms: monthWordsMs[month - 1]);
 
 /// `16:00` in the reader's zone ([local] already converted).
@@ -215,6 +215,7 @@ String? jobErrorWords(S s, UploadJob job) => switch (job.lastError) {
   null || 'quota' => null,
   'join_failed' => s.uploadJoinFailed,
   'no_cloud' => s.uploadErrorNoCloud,
+  'no_box' => s.uploadErrorNoBox,
   'needs_unlock' => s.uploadErrorUnlock,
   'youtube_reauthorise' => s.uploadErrorReauth,
   _ =>

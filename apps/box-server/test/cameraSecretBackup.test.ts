@@ -4,6 +4,10 @@ import { klInstant } from '@surau/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CameraStore } from '../src/live/camera.ts';
 import { CameraSecretSync } from '../src/sync/cameraSecretBox.ts';
+import { deriveCameraSecretKey, scrubCameraSecrets } from '../src/sync/cameraSecretCloud.ts';
+import { openSecret, sealSecret } from '../src/auth/crypto.ts';
+import { loadBoxKey } from '../src/auth/secrets.ts';
+import { buildApp } from '../src/app.ts';
 import { generateSyncKeyPair, saveSyncKey } from '../src/sync/syncKey.ts';
 import { loginAs } from './authHelpers.ts';
 import { buildCloud, CLOUD_URL } from './support/fakeCloud.ts';
@@ -16,6 +20,8 @@ import type { TestSite } from './support/sites.ts';
 const LAN = '10.168.1.40';
 const PASSWORD = 'lihat123Rahsia';
 const ADDRESS = `rtsp://viewer:${PASSWORD}@10.168.1.20:554/main`;
+/** What the backup keeps of ADDRESS: the address without the login, the user name, and that a password exists. */
+const BACKUP = { url: 'rtsp://10.168.1.20:554/main', username: 'viewer', hasPassword: true };
 const ROUTE = '/api/sync/camera-secret';
 
 const closers: Array<() => Promise<void>> = [];
@@ -115,11 +121,19 @@ describe('B5 camera address backup', () => {
     expect(new CameraStore(b.h.dataDir).get()).toBeNull();
     const sync = new CameraSecretSync({ db: b.h.app.surau.db, dataDir: b.h.dataDir, now: r.clock.now, boxIps: [LAN], fetchImpl: b.hook.impl, auto: false });
     expect(await sync.restore()).toBe('restored');
-    expect(new CameraStore(b.h.dataDir).get()).toEqual({ url: ADDRESS });
-    // read back through the box API: masked, as always
+    // the address and the user name come back; the password does not (the cloud never had it)
+    expect(new CameraStore(b.h.dataDir).get()).toEqual({ url: 'rtsp://10.168.1.20:554/main', username: 'viewer' });
+    // read back through the box API: masked, and the password must be typed again
     const live = await loginAs(b.h.app, 'live');
     const masked = (await b.h.app.inject({ method: 'GET', url: '/api/live/camera', headers: live.headers, remoteAddress: LAN })).json();
     expect(JSON.stringify(masked)).not.toContain(PASSWORD);
+    expect(masked).toMatchObject({ configured: true, url: 'rtsp://10.168.1.20:554/main', username: 'viewer', hasPassword: false, passwordNeeded: true });
+    // typing it ends the state
+    const typed = await b.h.app.inject({ method: 'PUT', url: '/api/live/camera', headers: live.headers, remoteAddress: LAN, payload: { url: 'rtsp://10.168.1.20:554/main', username: 'viewer', password: PASSWORD } });
+    expect(typed.statusCode).toBe(200);
+    expect(typed.json()).toMatchObject({ hasPassword: true });
+    expect(typed.json().passwordNeeded).toBeUndefined();
+    expect(new CameraStore(b.h.dataDir).get()).toEqual({ url: 'rtsp://10.168.1.20:554/main', username: 'viewer', password: PASSWORD });
 
     // another surau
     const k = otherSurau(r);
@@ -129,20 +143,124 @@ describe('B5 camera address backup', () => {
     // its own backup is its own, and does not replace sdm's
     expect((await siteCall(r, k, 'PUT', { url: 'rtsp://10.0.0.7:554/live' })).statusCode).toBe(200);
     expect(rows(r)).toBe(2);
-    expect((await siteCall(r, k, 'GET')).json()).toEqual({ url: 'rtsp://10.0.0.7:554/live' });
-    expect((await siteCall(r, r.a.site, 'GET')).json()).toEqual({ url: ADDRESS });
+    expect((await siteCall(r, k, 'GET')).json()).toEqual({ url: 'rtsp://10.0.0.7:554/live', hasPassword: false });
+    expect((await siteCall(r, r.a.site, 'GET')).json()).toEqual(BACKUP);
   });
 
-  it('a record with a separate username and password round-trips', async () => {
+  it('a record with a separate username and password: the cloud keeps the address and the user name only, and a restore asks for the password', async () => {
     const r = await rig();
     await saveOnBox(r.a, { url: 'rtsp://10.168.1.20:554/main', username: 'viewer', password: PASSWORD });
     await until(() => rows(r) === 1 && !pendingOf(r.a));
-    const got = (await siteCall(r, r.a.site, 'GET')).json();
-    expect(got).toEqual({ url: 'rtsp://10.168.1.20:554/main', username: 'viewer', password: PASSWORD });
+    expect((await siteCall(r, r.a.site, 'GET')).json()).toEqual(BACKUP);
     const b = await makeBox(r.cloud, 'cccc000000000003');
     const sync = new CameraSecretSync({ db: b.h.app.surau.db, dataDir: b.h.dataDir, now: r.clock.now, boxIps: [LAN], fetchImpl: b.hook.impl, auto: false });
     expect(await sync.restore()).toBe('restored');
-    expect(new CameraStore(b.h.dataDir).get()).toEqual({ url: 'rtsp://10.168.1.20:554/main', username: 'viewer', password: PASSWORD });
+    expect(new CameraStore(b.h.dataDir).get()).toEqual({ url: 'rtsp://10.168.1.20:554/main', username: 'viewer' });
+    expect(new CameraStore(b.h.dataDir).getMasked().passwordNeeded).toBe(true);
+    // the cloud learns that the box waits for it: the phone away from the surau is asked for the password too
+    await until(() => !pendingOf(b));
+    expect((await siteCall(r, b.site, 'GET')).json()).toEqual({ ...BACKUP, passwordNeeded: true });
+    const user = await loginAs(r.cloud.app, 'live');
+    const view = (await r.cloud.app.inject({ method: 'GET', url: '/api/live/camera', headers: user.headers })).json();
+    expect(view).toMatchObject({ configured: true, url: 'rtsp://10.168.1.20:554/main', username: 'viewer', hasPassword: false, passwordNeeded: true });
+    expect(JSON.stringify(view)).not.toContain(PASSWORD);
+  });
+
+  it('a camera with no password comes back without the "type it again" state', async () => {
+    const r = await rig();
+    await saveOnBox(r.a, { url: 'rtsp://10.168.1.21:554/main', username: 'tamu' });
+    await until(() => rows(r) === 1 && !pendingOf(r.a));
+    expect((await siteCall(r, r.a.site, 'GET')).json()).toEqual({ url: 'rtsp://10.168.1.21:554/main', username: 'tamu', hasPassword: false });
+    const c = await makeBox(r.cloud, 'dddd000000000004');
+    const sync = new CameraSecretSync({ db: c.h.app.surau.db, dataDir: c.h.dataDir, now: r.clock.now, boxIps: [LAN], fetchImpl: c.hook.impl, auto: false });
+    expect(await sync.restore()).toBe('restored');
+    expect(new CameraStore(c.h.dataDir).get()).toEqual({ url: 'rtsp://10.168.1.21:554/main', username: 'tamu' });
+    expect(new CameraStore(c.h.dataDir).getMasked().passwordNeeded).toBeUndefined();
+  });
+
+  it('the box never sends the password: what goes over the wire is the address without it, the user name and hasPassword', async () => {
+    const r = await rig();
+    const sent: string[] = [];
+    r.a.hook.impl = (async (i: Parameters<typeof fetch>[0], n?: RequestInit) => {
+      if (typeof n?.body === 'string') sent.push(n.body);
+      return r.cloud.fetch(i, n);
+    }) as typeof fetch;
+    await saveOnBox(r.a);
+    await until(() => rows(r) === 1 && !pendingOf(r.a));
+    await saveOnBox(r.a, { url: 'rtsp://10.168.1.20:554/main', username: 'viewer', password: PASSWORD });
+    await until(() => !pendingOf(r.a));
+    expect(sent.length).toBeGreaterThanOrEqual(2);
+    for (const body of sent) expect(body).not.toContain(PASSWORD);
+    expect(JSON.parse(sent[0]!)).toEqual(BACKUP);
+  });
+
+  it('a restore from an older cloud that still answers a password drops it and asks for it again', async () => {
+    const r = await rig();
+    const b = await makeBox(r.cloud, 'cccc000000000003');
+    const old = (async () => new Response(JSON.stringify({ url: ADDRESS }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+    const sync = new CameraSecretSync({ db: b.h.app.surau.db, dataDir: b.h.dataDir, now: r.clock.now, boxIps: [LAN], fetchImpl: old, auto: false });
+    expect(await sync.restore()).toBe('restored');
+    expect(new CameraStore(b.h.dataDir).get()).toEqual({ url: 'rtsp://10.168.1.20:554/main', username: 'viewer' });
+    expect(new CameraStore(b.h.dataDir).getMasked().passwordNeeded).toBe(true);
+  });
+
+  it('an older box that still sends the password: the cloud stores no password (not beside the address, not inside it)', async () => {
+    const r = await rig();
+    const key = deriveCameraSecretKey(loadBoxKey(r.cloud.dir));
+    const opened = (): Record<string, unknown> => JSON.parse(openSecret(key, String(cloudDb(r).prepare("SELECT sealed FROM camera_secrets WHERE surau_id = 'sdm'").get()!.sealed))) as Record<string, unknown>;
+    expect((await siteCall(r, r.a.site, 'PUT', { url: ADDRESS })).statusCode).toBe(200);
+    expect(opened()).toEqual({ surauId: 'sdm', ...BACKUP });
+    expect((await siteCall(r, r.a.site, 'PUT', { url: 'rtsp://10.168.1.20:554/main', username: 'viewer', password: PASSWORD })).statusCode).toBe(200);
+    expect(opened()).toEqual({ surauId: 'sdm', ...BACKUP });
+    expect(JSON.stringify((await siteCall(r, r.a.site, 'GET')).json())).not.toContain(PASSWORD);
+  });
+
+  it('start-up rewrite: rows written before the rule lose the password and keep the address and user name, once, idempotently; a row that does not open is removed', async () => {
+    const r = await rig();
+    const db = cloudDb(r);
+    const key = deriveCameraSecretKey(loadBoxKey(r.cloud.dir));
+    otherSurau(r);
+    const put = (surauId: string, plain: Record<string, unknown>): void => {
+      db.prepare('INSERT INTO camera_secrets (surau_id, sealed, box_id, updated_at) VALUES (?, ?, ?, ?)').run(surauId, sealSecret(key, JSON.stringify({ surauId, ...plain })), 'x', '2026-11-18T00:00:00.000Z');
+    };
+    // the two shapes an older cloud stored: the password inside the address, and beside it
+    put('sdm', { url: ADDRESS });
+    put('kolej', { url: 'rtsp://10.0.0.7:554/live', username: 'admin', password: PASSWORD });
+    db.prepare("INSERT INTO camera_secrets (surau_id, sealed, box_id, updated_at) VALUES ('lama', 'not-a-sealed-value', 'x', 'x')").run();
+    db.prepare("DELETE FROM sync_state WHERE key = 'camera_secret_scrubbed_v2'").run();
+
+    expect(scrubCameraSecrets(db, key)).toBe(3);
+    const read = (): Record<string, unknown>[] =>
+      db.prepare('SELECT surau_id, sealed FROM camera_secrets ORDER BY surau_id').all().map((x) => JSON.parse(openSecret(key, String(x.sealed))) as Record<string, unknown>);
+    const plain = read();
+    expect(plain).toEqual([
+      { surauId: 'kolej', url: 'rtsp://10.0.0.7:554/live', username: 'admin', hasPassword: true },
+      { surauId: 'sdm', ...BACKUP },
+    ]);
+    expect(JSON.stringify(plain)).not.toContain(PASSWORD);
+    // once: the flag stops a second pass; without the flag a second pass leaves the same content
+    expect(scrubCameraSecrets(db, key)).toBe(0);
+    db.prepare("DELETE FROM sync_state WHERE key = 'camera_secret_scrubbed_v2'").run();
+    expect(scrubCameraSecrets(db, key)).toBe(2);
+    expect(read()).toEqual(plain);
+    // the replaced box gets the address and the user name
+    expect((await siteCall(r, r.a.site, 'GET')).json()).toEqual(BACKUP);
+  });
+
+  it('the rewrite runs when the cloud starts', async () => {
+    const r = await rig();
+    const key = deriveCameraSecretKey(loadBoxKey(r.cloud.dir));
+    const db = cloudDb(r);
+    db.prepare('INSERT INTO camera_secrets (surau_id, sealed, box_id, updated_at) VALUES (?, ?, ?, ?)').run('sdm', sealSecret(key, JSON.stringify({ surauId: 'sdm', url: ADDRESS })), 'x', '2026-11-18T00:00:00.000Z');
+    db.prepare("DELETE FROM sync_state WHERE key = 'camera_secret_scrubbed_v2'").run();
+    const second = buildApp(join(r.cloud.dir, 'cloud.db'), { dataDir: r.cloud.dir, role: 'cloud', boxId: 'boxid0001', now: r.clock.now });
+    try {
+      await second.ready();
+      const row = second.surau.db.prepare("SELECT sealed FROM camera_secrets WHERE surau_id = 'sdm'").get()!;
+      expect(JSON.parse(openSecret(key, String(row.sealed)))).toEqual({ surauId: 'sdm', ...BACKUP });
+    } finally {
+      await second.close();
+    }
   });
 
   it('clearing the camera on the box removes it from the cloud, and a restore then finds nothing', async () => {
@@ -185,7 +303,7 @@ describe('B5 camera address backup', () => {
     expect(await sync.restore()).toBe('skipped');
     await sync.tick();
     expect(rows(r)).toBe(1);
-    expect((await siteCall(r, r.a.site, 'GET')).json()).toEqual({ url: ADDRESS });
+    expect((await siteCall(r, r.a.site, 'GET')).json()).toEqual(BACKUP);
   });
 
   it('only the linked site may use the routes: a person, no session and a box get 404 or 401', async () => {

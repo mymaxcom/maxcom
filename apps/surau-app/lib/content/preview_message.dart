@@ -84,7 +84,7 @@ bool isAssetId(String id) => _assetIdRe.hasMatch(id);
 /// trimmed, stripped of control characters and cut at
 /// [previewPosterTitleMax]. The constructor refuses a bad id outright.
 class PreviewPoster {
-  PreviewPoster({required this.assetId, required String title}) : title = cleanTitle(title) {
+  PreviewPoster({required this.assetId, required String title, this.stretch}) : title = cleanTitle(title) {
     if (!isAssetId(assetId)) {
       throw ArgumentError.value(assetId, 'assetId', 'must be a box asset id');
     }
@@ -92,9 +92,9 @@ class PreviewPoster {
 
   /// Null unless [assetId] is a box asset id (the editor has a draft or a
   /// saved picture); [title] may be anything, it is cleaned.
-  static PreviewPoster? tryFrom(Object? assetId, Object? title) {
+  static PreviewPoster? tryFrom(Object? assetId, Object? title, [Object? stretch]) {
     if (assetId is! String || !isAssetId(assetId)) return null;
-    return PreviewPoster(assetId: assetId, title: title is String ? title : '');
+    return PreviewPoster(assetId: assetId, title: title is String ? title : '', stretch: stretch is bool ? stretch : null);
   }
 
   static String cleanTitle(String t) {
@@ -105,11 +105,15 @@ class PreviewPoster {
   final String assetId;
   final String title;
 
-  @override
-  bool operator ==(Object other) => other is PreviewPoster && other.assetId == assetId && other.title == title;
+  /// `Regangkan gambar` of the form; null means the kiosk's own default (Yes).
+  final bool? stretch;
 
   @override
-  int get hashCode => Object.hash(assetId, title);
+  bool operator ==(Object other) =>
+      other is PreviewPoster && other.assetId == assetId && other.title == title && other.stretch == stretch;
+
+  @override
+  int get hashCode => Object.hash(assetId, title, stretch);
 }
 
 /// The message the kiosk preview reads as "show this poster".
@@ -117,6 +121,7 @@ Map<String, Object?> previewPosterMessage(PreviewPoster p) => {
   'type': previewPosterMessageType,
   'assetId': p.assetId,
   'title': p.title,
+  if (p.stretch != null) 'stretch': p.stretch,
 };
 
 /// JavaScript for a WebView: posts [previewPosterMessage] exactly as

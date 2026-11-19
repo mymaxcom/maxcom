@@ -304,7 +304,7 @@ if ($skipSys) {
     if ($m -eq '') { Add-Check 'task_kiosk' 'ok' "tugas MAXCOM Kiosk ada untuk $($state.kioskUser)" } else { Add-Check 'task_kiosk' 'fail' $m }
   }
   Test-Run 'box_account' {
-    $o = @(Get-PortOwner $port | Where-Object { $_.Address -eq '127.0.0.1' -or $_.Address -eq '0.0.0.0' -or $_.Address -eq '::' })
+    $o = @(Get-PortOwner $port | Where-Object { $_.Address -eq '127.0.0.1' -or $_.Address -eq '0.0.0.0' -or $_.Address -eq '::' -or $_.Address -eq '::1' })
     if ($o.Count -eq 0) { Add-Check 'box_account' 'fail' "tiada proses mendengar di port $port"; return }
     $bad = @()
     foreach ($x in $o) {

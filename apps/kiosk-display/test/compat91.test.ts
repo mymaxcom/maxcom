@@ -47,7 +47,9 @@ const cssChecks: { name: string; pattern: RegExp; added: string; cssOnly?: boole
   { name: '@layer', pattern: /@layer\b/, added: 'Chrome 99' },
   { name: 'color-mix()', pattern: /color-mix\s*\(/, added: 'Chrome 111' },
   { name: 'dynamic viewport units', pattern: /\b(dvh|svh|lvh)\b/, added: 'Chrome 108-109' },
-  { name: 'inset-inline shorthand', pattern: /\binset-inline\b/, added: 'Chrome 87+' },
+  // The shorthand only: the longhands inset-inline-start / -end (also Chrome 87, so on the T95's 91) carry the
+  // right-to-left layout of an Arabic TV screen.
+  { name: 'inset-inline shorthand', pattern: /\binset-inline\s*:/, added: 'Chrome 87+' },
   { name: 'last baseline alignment', pattern: /align-(items|self|content)\s*:\s*last\s+baseline/, added: 'Chrome 108' },
   { name: 'individual transform properties', pattern: /(^|[\s;{])(scale|rotate|translate)\s*:/, added: 'Chrome 104', cssOnly: true },
   // Not newer than 91, but broken on the T95's Chrome 91 GPU path: a blurred backdrop under a ticking number

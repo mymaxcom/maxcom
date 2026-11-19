@@ -1863,8 +1863,8 @@ class SAr extends S {
   }
 
   @override
-  String contentSurah(int n) {
-    return 'سورة $n';
+  String contentSurah(int n, String name) {
+    return 'سورة $n · $name';
   }
 
   @override
@@ -2480,12 +2480,172 @@ class SAr extends S {
   String get liveSignInWaiting => 'بانتظار تسجيل دخولك';
 
   @override
+  String get errcVideoBusy =>
+      'يجري رفع فيديو آخر إلى MAXCOM. حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get errcCameraStale => 'تغيّرت إعدادات الكاميرا. حاول مرة أخرى.';
+
+  @override
+  String get errcCameraPasswordAgain => 'اكتب كلمة مرور الكاميرا مرة أخرى.';
+
+  @override
+  String get liveSignInByAdmin =>
+      'يقوم أحد المسؤولين بتسجيل الدخول إلى YouTube حاليًا.';
+
+  @override
   String liveSignedInAs(String channel) {
     return 'متصل بالقناة $channel';
   }
 
   @override
   String get liveSignOut => 'تسجيل الخروج من YouTube';
+
+  @override
+  String get liveYoutubeConnected => 'تم ربط YouTube';
+
+  @override
+  String liveYoutubeConnectedSnack(String channel) {
+    return 'تم ربط YouTube: $channel';
+  }
+
+  @override
+  String get liveYoutubeAtSurauOnly =>
+      'تسجيل الدخول إلى YouTube أو تغيير القناة متاح فقط عبر شبكة Wi-Fi الخاصة بالمصلى.';
+
+  @override
+  String get liveYoutubeNotConnected => 'لم يتم ربط YouTube';
+
+  @override
+  String liveDestOn(String channel) {
+    return '⁨YouTube⁩: نعم، $channel';
+  }
+
+  @override
+  String get liveDestOff => '⁨YouTube⁩: لا';
+
+  @override
+  String get liveDestSkip => 'لم يتم اختيار YouTube: يُبث إلى شاشة المصلى فقط.';
+
+  @override
+  String get liveDestNone => 'لم يتم ربط YouTube بعد';
+
+  @override
+  String liveYoutubeUnknown(String channel) {
+    return '⁨YouTube⁩: تعذر التحقق الآن (آخر قناة: $channel)';
+  }
+
+  @override
+  String get liveYoutubeUnknownNoLast => '⁨YouTube⁩: تعذر التحقق الآن';
+
+  @override
+  String get liveYoutubeAskTitle => 'لا يمكن استخدام ⁨YouTube⁩';
+
+  @override
+  String liveYoutubeAskBody(String reason) {
+    return 'لا يمكن استخدام ⁨YouTube⁩ الآن: $reason. هل تبدأ البث إلى شاشة المصلى فقط؟';
+  }
+
+  @override
+  String get liveYoutubeWhyNoInternet => 'لا يوجد اتصال بالإنترنت';
+
+  @override
+  String get liveYoutubeWhyRevoked => 'يجب ربطه من جديد';
+
+  @override
+  String get liveYoutubeWhyNeedsSignIn => 'لم يُسجَّل الدخول إليه';
+
+  @override
+  String get liveYoutubeWhyAskAdmin =>
+      'لم يُسجَّل الدخول إليه، اطلب من المسؤول تسجيل الدخول';
+
+  @override
+  String get liveYoutubeWhyUnknownNoLast => 'تعذر التحقق من الحساب الآن';
+
+  @override
+  String liveYoutubeWhyUnknown(String channel) {
+    return 'تعذر التحقق من الحساب الآن (آخر قناة: $channel)';
+  }
+
+  @override
+  String get tvLangArNeedsUpdate => 'حدّث MAXCOM لاستخدام العربية';
+
+  @override
+  String get tvLangArAskTitle => 'هل تريد تغيير لغة شاشة التلفاز إلى العربية؟';
+
+  @override
+  String get tvLangArAskBody =>
+      'قالب Arabic Art هو الأنسب لشاشة تلفاز باللغة العربية. يمكنك إعادتها من لغة شاشة التلفاز.';
+
+  @override
+  String get tvLangArAskYes => 'نعم';
+
+  @override
+  String get tvLangArAskNo => 'لا';
+
+  @override
+  String get liveYoutubeAskYes => 'نعم';
+
+  @override
+  String get liveYoutubeChoiceFailed =>
+      'تعذر حفظ اختيار YouTube. حاول مرة أخرى.';
+
+  @override
+  String get liveYoutubeRevoked => 'يجب ربط YouTube من جديد';
+
+  @override
+  String get liveDestOnPlain => '⁨YouTube⁩: نعم';
+
+  @override
+  String get liveDestLink => 'ربط';
+
+  @override
+  String get liveDestLive2 => 'إلى شاشة المصلى وYouTube';
+
+  @override
+  String get liveDestLive1 => 'إلى شاشة المصلى فقط';
+
+  @override
+  String get liveDestRec => 'التسجيل: نعم';
+
+  @override
+  String get liveDestRecOff => 'التسجيل: لا';
+
+  @override
+  String get liveSignInOpenGoogle => 'افتح صفحة Google';
+
+  @override
+  String liveSignInWaitingMin(int minutes) {
+    return 'في انتظار التأكيد… (تنتهي خلال $minutes د)';
+  }
+
+  @override
+  String get liveSignInDenied => 'تم إلغاء تسجيل الدخول';
+
+  @override
+  String get liveSignInExpired => 'انتهت صلاحية الرمز. حاول مرة أخرى.';
+
+  @override
+  String get liveSignInRevoked =>
+      'تم سحب صلاحية الوصول إلى YouTube أو انتهت. يرجى تسجيل الدخول مرة أخرى.';
+
+  @override
+  String get liveSignOutChange => 'تغيير القناة / تسجيل الخروج';
+
+  @override
+  String get liveSignOutConfirmTitle => 'تغيير القناة أو تسجيل الخروج؟';
+
+  @override
+  String get liveSignOutConfirmBody =>
+      'لن يصل البث المباشر القادم إلى YouTube حتى يسجّل أحدهم الدخول مرة أخرى.';
+
+  @override
+  String get liveSignOutConfirmAction => 'تسجيل الخروج';
+
+  @override
+  String liveSettingsSummaryConnected(String channel, String camera) {
+    return 'تم ربط YouTube: $channel. الكاميرا الخارجية $camera';
+  }
 
   @override
   String get liveRecordingsPending => 'تسجيلات لم تُحفظ بعد';
@@ -2978,11 +3138,15 @@ class SAr extends S {
       'إذا انقطع البث إلى YouTube أو لم يتوفر إنترنت، يمكن إرسال تسجيل الدرس من هنا بعد انتهاء البث.';
 
   @override
-  String get liveCloudUnreachable => 'YouTube: تعذّر الاتصال بالسحابة';
+  String get liveCloudUnreachable => '⁨YouTube⁩: تعذّر الاتصال بالسحابة';
 
   @override
   String get uploadErrorNoCloud =>
       'تعذّر الاتصال بالسحابة. يبدأ الرفع تلقائيًا عند توفر الاتصال بالسحابة.';
+
+  @override
+  String get uploadErrorNoBox =>
+      'يبدأ الرفع تلقائيًا عندما يكون الهاتف على شبكة Wi-Fi الخاصة بالمصلى.';
 
   @override
   String get uploadErrorUnlock => 'افتح MAXCOM وافتح قفله لمتابعة الرفع.';
@@ -3056,6 +3220,10 @@ class SAr extends S {
 
   @override
   String get settingsLanjutanDimmed => 'غير مستخدم عند اختيار الهاتف مباشرة';
+
+  @override
+  String get settingsReencodeUnsupported =>
+      'إعادة الترميز غير مدعومة على هذا الصندوق. استخدم النسخ المباشر.';
 
   @override
   String get settingsComingSoon => 'متوفر في إصدار قادم';
@@ -3139,8 +3307,39 @@ class SAr extends S {
 
   @override
   String settingsAyatHelp(String name, int n) {
-    return 'في $name $n آية: اختر من 1 إلى $n. بحد أقصى 5 آيات في العرض الواحد.';
+    return 'في $name $n آية. بحد أقصى 3 آيات في العرض الواحد.';
   }
+
+  @override
+  String get settingsAyatCountLabel => 'عدد الآيات';
+
+  @override
+  String settingsAyatSurahEnds(int n) {
+    return 'تنتهي هذه السورة عند الآية $n.';
+  }
+
+  @override
+  String settingsAyatTv(String name, int n, int a, int b) {
+    return 'يُعرض على التلفاز: سورة $name ($n): الآيات $a إلى $b';
+  }
+
+  @override
+  String settingsAyatTvOne(String name, int n, int a) {
+    return 'يُعرض على التلفاز: سورة $name ($n): الآية $a';
+  }
+
+  @override
+  String settingsAyatTypeHint(int n) {
+    return 'اكتب رقم الآية (من 1 إلى $n)';
+  }
+
+  @override
+  String settingsAyatTypeError(int n) {
+    return 'أدخل رقمًا بين 1 و$n';
+  }
+
+  @override
+  String get settingsAyatOldRange => 'تم تقصير النطاق القديم إلى 3 آيات.';
 
   @override
   String settingsHijriMonthN(int n) {
@@ -3232,6 +3431,9 @@ class SAr extends S {
 
   @override
   String get settingsOrderOff => 'متوقفة';
+
+  @override
+  String get settingsOrderVideoLength => 'بطول الفيديو';
 
   @override
   String get settingsOrderUp => 'أعلى';
@@ -6295,10 +6497,11 @@ class SAr extends S {
   }
 
   @override
-  String get valAyatOrder => 'يجب أن تكون «من آية» قبل «إلى آية» أو مساوية لها';
+  String get valAyatOrder =>
+      'يجب أن تكون آية البداية قبل آية النهاية أو مساوية لها';
 
   @override
-  String get valAyatMax => 'الحد الأقصى 5 آيات في كل عرض';
+  String get valAyatMax => 'الحد الأقصى 3 آيات في كل عرض';
 
   @override
   String get valUnknownFeature => 'ميزة غير معروفة';
@@ -6442,7 +6645,7 @@ class SAr extends S {
   String get liveWarnYoutubeForbidden => 'رفض YouTube الطلب.';
 
   @override
-  String get liveWarnCloudUnreachable => 'YouTube: تعذّر الاتصال بالسحابة';
+  String get liveWarnCloudUnreachable => '⁨YouTube⁩: تعذّر الاتصال بالسحابة';
 
   @override
   String liveCamUnreachable(String name) {
@@ -6936,6 +7139,10 @@ class SAr extends S {
 
   @override
   String get errcYoutubeNetwork => 'تعذّر الاتصال بـ YouTube. أعد المحاولة.';
+
+  @override
+  String get errcYoutubeAtBox =>
+      'يتم تسجيل الدخول إلى YouTube الآن على MAXCOM في المصلى. حدّث التطبيق وحاول عبر شبكة Wi-Fi الخاصة بالمصلى.';
 
   @override
   String get errcCatchupOff => 'رفع التسجيلات إلى YouTube غير مفعّل';
@@ -7488,7 +7695,7 @@ class SAr extends S {
   String get ra6LinkBoxError => 'MAXCOM في المصلى: خطأ';
 
   @override
-  String get liveNoticeShare => 'مشاركة رابط البث';
+  String get liveNoticeShare => 'مشاركة الرابط';
 
   @override
   String get liveNoticeTitle => 'إشعار البث المباشر';
@@ -7512,16 +7719,64 @@ class SAr extends S {
   String get liveNoticePickEmpty => 'لم يُعثر على مستخدم.';
 
   @override
-  String get liveNoticeStarted => 'بدأ البث. شارك الرابط مع اللجنة والمصلين.';
+  String get liveNoticeStarted => 'البث جارٍ.';
 
   @override
   String get liveNoticeShareGo => 'مشاركة';
+
+  @override
+  String get liveNoticeCardBadge => 'بث مباشر';
+
+  @override
+  String get liveNoticePictureFailed =>
+      'تعذر إعداد الصورة. تمت مشاركة النص فقط.';
+
+  @override
+  String get liveNoticeCopiedCaption =>
+      'تم نسخ النص، الصقه كتعليق إذا لم يظهر النص';
+
+  @override
+  String get liveNoticeQrHint =>
+      'امسح الرمز بكاميرا الهاتف. سيفتح واتساب بهذه الرسالة.';
+
+  @override
+  String get liveNoticeEditDone => 'تم';
+
+  @override
+  String get liveNoticeEditText => 'تعديل النص';
+
+  @override
+  String get liveNoticeNoPicture => 'بدون صورة';
+
+  @override
+  String get liveNoticeMore => 'المزيد';
+
+  @override
+  String get liveNoticeToSelf => 'إرسال إلى نفسي';
+
+  @override
+  String get liveNoticeCopy => 'نسخ النص';
+
+  @override
+  String get liveNoticeFromPhone => 'إرسال من الهاتف';
+
+  @override
+  String get liveNoticeWhatsApp => 'مشاركة إلى واتساب';
 
   @override
   String get liveNoticeCopied => 'تم نسخ النص. الصقه في واتساب.';
 
   @override
   String get liveNoticeShareFailed => 'تعذرت مشاركة النص.';
+
+  @override
+  String liveNoticeEditedBy(String name, String time) {
+    return 'عدّله $name، $time';
+  }
+
+  @override
+  String get liveNoticeChangedMeanwhile =>
+      'عدّل شخص آخر النص. يظهر أحدث نص، راجعه قبل المشاركة.';
 
   @override
   String waOpensTo(String number) {
@@ -8116,4 +8371,171 @@ class SAr extends S {
   String needsBoth(String first, String second) {
     return '$first و$second';
   }
+
+  @override
+  String get errVideoTooBig =>
+      'الفيديو كبير جدًا. الحد الأقصى 300 ميغابايت و720p؛ قلّصه أو اقتطعه في معرض الهاتف أولًا.';
+
+  @override
+  String get errVideoTooLong =>
+      'الفيديو طويل جدًا. الحد الأقصى 10 دقائق؛ اقتطعه في معرض الهاتف أولًا.';
+
+  @override
+  String get errVideoNotH264 =>
+      'يجب أن يكون الفيديو بصيغة MP4 وترميز H.264. اختر فيديو آخر أو غيّر صيغته أولًا.';
+
+  @override
+  String get errVideoNoSpace =>
+      'مساحة التخزين في الصندوق غير كافية. احذف فيديو قديمًا أولًا.';
+
+  @override
+  String get errVideoUploadFailed =>
+      'فشل رفع الفيديو. تأكد أن الهاتف ما زال على واي فاي المصلى، ثم حاول مجددًا.';
+
+  @override
+  String get kindDescVideo =>
+      'مقاطع فيديو ترفعها أو تأخذها من يوتيوب وتُعرض بملء الشاشة على التلفاز.';
+
+  @override
+  String get videoSourceLabel => 'مصدر الفيديو';
+
+  @override
+  String get videoSourceUpload => 'رفع';
+
+  @override
+  String get videoSourceYoutube => 'يوتيوب';
+
+  @override
+  String get videoSourceRakaman => 'تسجيل';
+
+  @override
+  String get videoPick => 'اختر فيديو من الهاتف';
+
+  @override
+  String get videoPickAgain => 'اختر فيديو آخر';
+
+  @override
+  String get videoChecking => 'جارٍ فحص الفيديو...';
+
+  @override
+  String videoCompressing(int percent) {
+    return 'جارٍ تصغير الفيديو إلى 720p... $percent%';
+  }
+
+  @override
+  String videoUploading(int percent) {
+    return 'جارٍ الرفع إلى الصندوق... $percent%';
+  }
+
+  @override
+  String get videoUploadedOk => 'تم الرفع إلى الصندوق';
+
+  @override
+  String videoPickedLine(String name, String size) {
+    return '$name ($size)';
+  }
+
+  @override
+  String get videoCloudNote =>
+      'لا يمكن رفع الفيديو إلا عبر واي فاي المصلى. صِل الهاتف بواي فاي المصلى، أو أضف فيديو يوتيوب (ممكن من أي مكان).';
+
+  @override
+  String videoStorageLeft(String size) {
+    return 'مساحة تخزين الصندوق: متبقٍ $size';
+  }
+
+  @override
+  String get videoLimitsNote =>
+      'الحد الأقصى 300 ميغابايت و10 دقائق و720p. اقتطعه في معرض الهاتف أولًا عند الحاجة.';
+
+  @override
+  String get videoCannotCompress =>
+      'لا يستطيع هذا الهاتف تصغير الفيديو. اختر فيديو MP4 (H.264) ضمن الحدود.';
+
+  @override
+  String get videoYoutubeLink => 'رابط يوتيوب';
+
+  @override
+  String get videoYoutubeHint => 'الصق الرابط أو معرّف الفيديو';
+
+  @override
+  String get videoYoutubeBad => 'هذا ليس رابط فيديو يوتيوب.';
+
+  @override
+  String get videoYoutubeLive =>
+      'هذا بث مباشر. لعرض البث المباشر على التلفاز استخدم البث المباشر. وبعد انتهائه يمكن اختيار تسجيله هنا.';
+
+  @override
+  String get videoYoutubeNote =>
+      'قد تعرض فيديوهات القنوات الأخرى إعلانات أو يحذفها صاحبها. تحتاج إنترنت في المصلى؛ وبدونه يُتخطى الفيديو.';
+
+  @override
+  String get videoRakamanNote =>
+      'مقطع من تسجيل درس المصلى على يوتيوب. حدّد متى يبدأ ويتوقف.';
+
+  @override
+  String get videoClipStart => 'البداية (mm:ss)';
+
+  @override
+  String get videoClipEnd => 'النهاية (mm:ss)';
+
+  @override
+  String get videoClipOrder => 'يجب أن تكون النهاية بعد البداية.';
+
+  @override
+  String get videoClipLong => 'أطول مقطع 10 دقائق.';
+
+  @override
+  String get videoNeedsFile => 'اختر فيديو وانتظر حتى يكتمل رفعه.';
+
+  @override
+  String get videoWaitUpload => 'انتظر اكتمال الرفع قبل الحفظ.';
+
+  @override
+  String get videoEstimate => 'المدة التقريبية (بالدقائق)';
+
+  @override
+  String get videoEstimateHint =>
+      'لا يخبرنا يوتيوب بمدة الفيديو. أدخل مدة تقريبية (من 1 إلى 10 دقائق)؛ تنتقل الشاشة فور انتهاء الفيديو.';
+
+  @override
+  String get videoEstimateBad => 'أدخل رقمًا من 1 إلى 10.';
+
+  @override
+  String get videoCloudReadOnly =>
+      'لا يمكن تعديل تفاصيل الفيديو المرفوع إلا عبر واي فاي المصلى.';
+
+  @override
+  String get videoPreview => 'معاينة';
+
+  @override
+  String get videoPreviewHint =>
+      'على التلفاز: يملأ الفيديو الشاشة ويظهر اسم المصلى والساعة فوقه. بلا نص آخر.';
+
+  @override
+  String videoRowUpload(String length) {
+    return 'رفع، $length';
+  }
+
+  @override
+  String get videoRowYoutube => 'يوتيوب';
+
+  @override
+  String videoRowRakaman(String start, String end) {
+    return 'مقطع تسجيل من $start إلى $end';
+  }
+
+  @override
+  String get videoSoundOn => 'بصوت';
+
+  @override
+  String get videoExpiredSuggest =>
+      'انتهى تاريخ العرض. هل تحذفه لتوفير المساحة؟';
+
+  @override
+  String get videoFileLost =>
+      'الملف غير موجود على هذا الصندوق؛ يُتخطى على التلفاز.';
+
+  @override
+  String get videoFetching => 'جارٍ جلب العنوان من يوتيوب...';
 }

@@ -6,9 +6,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:surau_app/l10n/s_lookup.dart';
 import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/deps.dart';
 import 'package:surau_app/app/providers.dart';
@@ -62,6 +64,8 @@ Map<String, Object?> _status({
   String relay = 'off',
   String? watch,
   bool signedIn = true,
+  Map<String, Object?>? signIn,
+  String? lastError,
   List<String> warnings = const [],
 }) => {
   'warnings': warnings,
@@ -74,7 +78,8 @@ Map<String, Object?> _status({
     'state': ytState,
     'health': health,
     'watchUrl': watch,
-    'lastError': null,
+    'lastError': lastError,
+    if (signIn != null) 'signIn': signIn,
   },
 };
 
@@ -162,6 +167,9 @@ class _Env {
   };
   final List<Map<String, Object?>> polls = [];
 
+  /// `GET /api/live/youtube/status`; null answers 404 (a box that has no such route).
+  Map<String, Object?>? ytStatus;
+
   Future<http.Response> _handle(http.Request r) async {
     if (away) throw http.ClientException('box away');
     log.add('${r.method} ${r.url.path}');
@@ -178,6 +186,8 @@ class _Env {
       case 'GET /api/live/status':
         if (statusDown) throw http.ClientException('status down');
         return jsonResponse(200, status);
+      case 'GET /api/live/youtube/status':
+        return ytStatus == null ? jsonResponse(404, {'errors': ['tiada']}) : jsonResponse(200, ytStatus!);
       case 'POST /api/live/youtube/signin':
         return signinStatus == 200
             ? jsonResponse(200, signin)
@@ -428,6 +438,18 @@ void main() {
     expect(polls(), first + 2);
   });
 
+  _liveTest('another device live: its watch link is kept, cleared when no session runs', (tester) async {
+    final e = _Env('android');
+    e.status = _status(session: 's9', ytState: 'live', watch: 'https://youtu.be/xyz');
+    await e.ctrl.pollOnce();
+    expect(e.state.otherLive, isNotNull);
+    expect(e.state.watchUrl, 'https://youtu.be/xyz');
+    e.status = _status();
+    await e.ctrl.pollOnce();
+    expect(e.state.otherLive, isNull);
+    expect(e.state.watchUrl, isNull);
+  });
+
   _liveTest('YouTube seconds add up while YouTube receives, for the '
       'summary, and the watch page is kept', (tester) async {
     final e = _Env('android')..startAnswer = _startAnswer(ytVia: 'device');
@@ -534,15 +556,152 @@ void main() {
     expect(e.state.youtube.channel, 'Surau D\'Waqaf');
   });
 
-  _liveTest('an expired or denied sign-in goes back to signed out with a '
-      'notice', (tester) async {
+  _liveTest('an expired or denied sign-in goes back to signed out with its '
+      'own line, not a notice', (tester) async {
     final e = _Env('android');
     e.polls.add({'state': 'expired', 'signedIn': false});
     await e.ctrl.signIn();
     await tester.pump(const Duration(seconds: 5));
     await _drain(tester);
     expect(e.state.youtube.phase, YoutubeAccountPhase.signedOut);
-    expect(e.state.notice, LiveController.signInFailed);
+    expect(e.state.youtube.reason, YoutubeSignOutReason.expired);
+    expect(e.state.notice, isNull);
+    // a status poll with nothing pending does not wipe what ended the attempt
+    e.status = _status(signedIn: false);
+    await e.ctrl.pollOnce();
+    expect(e.state.youtube.reason, YoutubeSignOutReason.expired);
+  });
+
+  _liveTest('a sign-in the server holds shows after a cold start (code, '
+      'address, expiry) without this app having started it', (tester) async {
+    final e = _Env('android');
+    final expires = fixedNow().add(const Duration(minutes: 8));
+    e.status = _status(
+      signedIn: false,
+      signIn: {
+        'state': 'pending',
+        'userCode': 'WXYZ-1234',
+        'verificationUrl': 'https://www.google.com/device',
+        'expiresAt': expires.toUtc().toIso8601String(),
+      },
+    );
+    await e.ctrl.pollOnce();
+    expect(e.state.youtube.phase, YoutubeAccountPhase.signingIn);
+    expect(e.state.youtube.userCode, 'WXYZ-1234');
+    expect(e.state.youtube.verificationUrl, 'https://www.google.com/device');
+    expect(e.state.youtube.expiresAt, isNotNull);
+    expect(e.log.where((l) => l.contains('signin')), isEmpty);
+    // the server finished it while the app was away
+    e.status = _status();
+    await e.ctrl.pollOnce();
+    expect(e.state.youtube.signedIn, isTrue);
+    expect(e.state.youtube.channel, 'Surau D\'Waqaf');
+  });
+
+  _liveTest('the server reports denied and expired; and Google withdrawing '
+      'the access reads as revoked', (tester) async {
+    final e = _Env('android');
+    e.status = _status(signedIn: false, signIn: {'state': 'denied'});
+    await e.ctrl.pollOnce();
+    expect(e.state.youtube.reason, YoutubeSignOutReason.denied);
+    e.status = _status(signedIn: false, signIn: {'state': 'expired'});
+    await e.ctrl.pollOnce();
+    expect(e.state.youtube.reason, YoutubeSignOutReason.expired);
+    final f = _Env('android');
+    f.status = _status(signedIn: false, lastError: 'reauthorise');
+    await f.ctrl.pollOnce();
+    expect(f.state.youtube.phase, YoutubeAccountPhase.signedOut);
+    expect(f.state.youtube.reason, YoutubeSignOutReason.revoked);
+  });
+
+  _liveTest('2026.11.13: the box holds the grant, so its status is taken as it is '
+      '(no hold against a lagging box any more)', (tester) async {
+    final e = _Env('android');
+    e.status = _status(signedIn: false);
+    e.ytStatus = {'configured': true, 'signedIn': true, 'channelTitle': 'Surau Satu', 'lastError': null};
+    await e.ctrl.refreshYoutube();
+    expect(e.state.youtube.signedIn, isTrue);
+    expect(e.state.youtubeSignInHere, isTrue);
+    await e.ctrl.pollOnce();
+    expect(e.state.youtube.signedIn, isFalse);
+  });
+
+  _liveTest('W5: state unknown (a newer box) is NOT signed out: last channel kept, the poll does not turn it into '
+      'a sign-out, and the next read of the sign-in resolves it', (tester) async {
+    final e = _Env('android');
+    e.status = _status(signedIn: false);
+    e.ytStatus = {
+      'configured': true,
+      'signedIn': false,
+      'state': 'unknown',
+      'lastGood': {'signedIn': true, 'channelTitle': 'Surau Satu', 'at': '2026-11-19T10:00:00Z'},
+    };
+    await e.ctrl.refreshYoutube();
+    expect(e.state.youtube.phase, YoutubeAccountPhase.unknown);
+    expect(e.state.youtube.channel, 'Surau Satu');
+    expect(e.state.youtube.signedIn, isFalse);
+    await e.ctrl.pollOnce();
+    expect(e.state.youtube.phase, YoutubeAccountPhase.unknown, reason: 'the live status cannot tell unknown from out');
+    e.ytStatus = {'configured': true, 'signedIn': true, 'state': 'signedIn', 'channelTitle': 'Surau Satu'};
+    await e.ctrl.refreshYoutube();
+    expect(e.state.youtube.signedIn, isTrue);
+    e.ytStatus = {'configured': true, 'signedIn': false, 'state': 'signedOut', 'lastError': 'reauthorise'};
+    await e.ctrl.refreshYoutube();
+    expect(e.state.youtube.phase, YoutubeAccountPhase.signedOut);
+    expect(e.state.youtube.reason, YoutubeSignOutReason.revoked);
+  });
+
+  _liveTest('W5: an older box (no state, no lastGood) and a garbled state read as today', (tester) async {
+    final e = _Env('android');
+    e.ytStatus = {'configured': true, 'signedIn': false, 'state': 7, 'lastGood': 'x'};
+    await e.ctrl.refreshYoutube();
+    expect(e.state.youtube.phase, YoutubeAccountPhase.signedOut);
+    e.ytStatus = {'configured': true, 'signedIn': true, 'channelTitle': 'Surau Satu'};
+    await e.ctrl.refreshYoutube();
+    expect(e.state.youtube.signedIn, isTrue);
+  });
+
+  _liveTest('2026.11.13: away (the cloud answers signInHere false) the flag shows '
+      'and sign-in / sign-out send nothing', (tester) async {
+    final e = _Env('android');
+    e.ytStatus = {'configured': true, 'signedIn': true, 'channelTitle': 'Surau Satu', 'lastError': null, 'heldBy': 'box', 'signInHere': false};
+    await e.ctrl.refreshYoutube();
+    expect(e.state.youtube.channel, 'Surau Satu');
+    expect(e.state.youtubeSignInHere, isFalse);
+    final before = e.log.length;
+    await e.ctrl.signIn();
+    expect(e.state.notice, sBm.liveYoutubeAtSurauOnly);
+    await e.ctrl.signOut();
+    expect(e.log.length, before);
+  });
+
+  _liveTest('coming back to the app (resumed) looks at the status at once, '
+      'and at the sign-in it was finishing', (tester) async {
+    final e = _Env('android');
+    e.status = _status(
+      signedIn: false,
+      signIn: {
+        'state': 'pending',
+        'userCode': 'WXYZ-1234',
+        'verificationUrl': 'https://www.google.com/device',
+        'expiresAt': fixedNow().add(const Duration(minutes: 8)).toUtc().toIso8601String(),
+      },
+    );
+    e.ctrl.attach();
+    await tester.pump(const Duration(milliseconds: 50));
+    await _drain(tester);
+    int statuses() => e.log.where((l) => l == 'GET /api/live/status').length;
+    int polls() => e.log.where((l) => l == 'POST /api/live/youtube/signin/poll').length;
+    final before = statuses();
+    expect(polls(), 0);
+    e.polls.add({'state': 'signed_in', 'signedIn': true, 'channelTitle': 'Surau Satu'});
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(const Duration(milliseconds: 50));
+    await _drain(tester);
+    expect(statuses(), greaterThan(before));
+    expect(polls(), 1);
+    expect(e.state.youtube.signedIn, isTrue);
+    e.ctrl.detach();
   });
 
   _liveTest('sign-out posts and signs out', (tester) async {

@@ -126,7 +126,7 @@
 .stage[data-template='oldschool'] .clock__hm { color: var(--text); font-family: var(--serif); font-weight: 700; letter-spacing: 0; }
 .stage[data-template='oldschool'] .screen--main .clock__hm { font-size: 10.5rem; }
 .stage[data-template='oldschool'] .clock__aside { font-family: var(--serif); font-weight: 700; color: var(--accent); opacity: 1; }
-.stage[data-template='oldschool'] .screen--main .clock__aside { font-size: 2.6rem; margin-left: 0.7rem; }
+.stage[data-template='oldschool'] .screen--main .clock__aside { font-size: 2.6rem; margin-inline-start: 0.7rem; }
 .stage[data-template='oldschool'] .clock__aside .num { font-family: var(--font); font-size: 0.8em; color: var(--text); }
 .stage[data-template='oldschool'] .screen--main .next {
   grid-area: next;
@@ -145,7 +145,7 @@
 .stage[data-template='oldschool'] .screen--main .content { grid-area: band; width: auto; margin-top: 1.4rem; }
 .stage[data-template='oldschool'] .screen--main .zikir { grid-area: band; margin-top: 1.4rem; }
 .stage[data-template='oldschool'] .screen--main .emergency-band { margin-top: 1.2rem; }
-.stage[data-template='oldschool'] .card--wide { right: 0; }
+.stage[data-template='oldschool'] .card--wide { inset-inline-end: 0; }
 /* The jadual: the bar turned into ruled rows. Its caption is the bar's own aria-label ("Waktu solat"). */
 .stage[data-template='oldschool'] .pbar {
   height: auto;
@@ -260,7 +260,7 @@
 .stage[data-template='oldschool'][data-kind='content'] .tabung__title { font-size: calc(2.5rem * var(--scale, 1)); font-weight: 700; }
 .stage[data-template='oldschool'][data-kind='content'] .tabung__name { line-height: 1.12; }
 .stage[data-template='oldschool'][data-kind='content'] .tabung__rows { gap: 0; }
-.stage[data-template='oldschool'][data-kind='content'] .tabung__row { border-bottom: 1px solid #e2d2b4; padding-left: 0.31rem; padding-right: 0.31rem; }
+.stage[data-template='oldschool'][data-kind='content'] .tabung__row { border-bottom: 1px solid #e2d2b4; padding-inline-start: 0.31rem; padding-inline-end: 0.31rem; }
 .stage[data-template='oldschool'][data-kind='content'] .tabung__row:last-child { border-bottom: 0; }
 .stage[data-template='oldschool'][data-kind='content'] .tabung__row.is-hot { border: 0.1rem solid var(--accent); }
 .stage[data-template='oldschool'][data-kind='content'] :is(.tabung__fhero, .tabung__mini, .tabung__total) { border: 1px solid #e2d2b4; }
@@ -289,7 +289,7 @@
 .stage[data-template='oldschool'] .screen--main.is-idle .content { display: none; }
 .stage[data-template='oldschool'] .screen--main.is-idle .clock { justify-self: center; align-self: end; margin-bottom: 1rem; }
 .stage[data-template='oldschool'] .screen--main.is-idle .clock__hm { font-size: 17rem; letter-spacing: 0; }
-.stage[data-template='oldschool'] .screen--main.is-idle .clock__aside { font-size: 3.6rem; margin-left: 1rem; }
+.stage[data-template='oldschool'] .screen--main.is-idle .clock__aside { font-size: 3.6rem; margin-inline-start: 1rem; }
 .stage[data-template='oldschool'] .screen--main.is-idle .ident__dates { font-size: 1.9rem; }
 .stage[data-template='oldschool'] .screen--main.is-idle .next {
   justify-self: center;
@@ -319,7 +319,7 @@
   border-bottom: 0.34rem double var(--rule);
 }
 .stage[data-template='oldschool'] .phase__head .ident__head { flex: 1 1 auto; min-width: 0; }
-.stage[data-template='oldschool'] .phase__head .phase__clock { position: absolute; right: 0; top: 0.6rem; font-size: 2.7rem; color: var(--text); }
+.stage[data-template='oldschool'] .phase__head .phase__clock { position: absolute; inset-inline-end: 0; top: 0.6rem; font-size: 2.7rem; color: var(--text); }
 .stage[data-template='oldschool'] .phase__clock small { font-family: var(--serif); color: var(--accent); font-size: 1.5rem; font-weight: 700; opacity: 1; }
 .stage[data-template='oldschool'] .screen--phase .pbar { position: static; grid-area: bar; }
 .stage[data-template='oldschool'] .phase__centre {
@@ -348,8 +348,8 @@
 }
 .stage[data-template='oldschool'] .phase__calm .phase__title { font-size: calc(5.2rem * var(--scale, 1)); color: var(--text); max-width: 100%; }
 .stage[data-template='oldschool'] .phase__calm .phase__sub { font-size: calc(2.4rem * var(--scale, 1)); margin-top: 1rem; }
-.stage[data-template='oldschool'] .screen--phase .emergency-band { left: 39rem; right: 3.6rem; bottom: 3.6rem; }
-.stage[data-template='oldschool'] .screen--phase .source-footer { left: 39rem; right: 3.6rem; }
+.stage[data-template='oldschool'] .screen--phase .emergency-band { inset-inline-start: 39rem; inset-inline-end: 3.6rem; bottom: 3.6rem; }
+.stage[data-template='oldschool'] .screen--phase .source-footer { inset-inline-start: 39rem; inset-inline-end: 3.6rem; }
 /* No prayer data: no jadual, the clock plate fills the board. */
 .stage[data-template='oldschool'][data-phase='noData'] .phase__centre { grid-column: 1 / -1; }
 .stage[data-template='oldschool'] .phase__nodata .clock__hm { font-size: 13rem; }
@@ -433,7 +433,7 @@
 .stage[data-template='oldschool'] .screen--live .next--chip .chip-k,
 .stage[data-template='oldschool'] .screen--live .next--chip .chip-cd { font-family: var(--serif); font-weight: 700; }
 .stage[data-template='oldschool'] .live-strip { text-shadow: none; }
-.stage[data-template='oldschool'] .live-strip__tag { background: var(--accent); color: var(--ink); border-right: 0; }
+.stage[data-template='oldschool'] .live-strip__tag { background: var(--accent); color: var(--ink); border-inline-end: 0; }
 .stage[data-template='oldschool'] .live-strip__tag .live-strip__dot { box-shadow: 0 0 0 0.22rem rgb(255 255 255 / 0.9); }
 .stage[data-template='oldschool'] .live-strip__who { font-family: var(--serif); font-weight: 700; font-size: 2.6rem; }
 .stage[data-template='oldschool'] .live-screen__waiting { color: var(--accent); font-family: var(--serif); }
@@ -509,11 +509,11 @@
    boxed notice, the prayers a ruled strip with the next one in green, serif captions. The vertical timetable
    stays with the main (biasa) screen. Every rule below is scoped to [data-kind='content'] (test/themeContentCss.test.ts).
    ====================================================================================================== */
-.stage[data-template='oldschool'][data-kind='content'] .screen--shell { padding-left: 3.75rem; padding-right: 3.75rem; padding-bottom: 2.5rem; }
-.stage[data-template='oldschool'][data-kind='content'] .region-brand { left: 3.75rem; top: 2.813rem; }
-.stage[data-template='oldschool'][data-kind='content'] .shell-top { right: 3.75rem; top: 1.979rem; }
-.stage[data-template='oldschool'][data-kind='content'] .brand-name { font-family: var(--serif); font-weight: 700; font-size: 1.875rem; letter-spacing: 0.2em; }
-.stage[data-template='oldschool'][data-kind='content'] .shell-date { font-family: var(--serif); font-weight: 500; font-size: 1.458rem; }
+.stage[data-template='oldschool'][data-kind='content'] .screen--shell { padding-inline-start: 3.75rem; padding-inline-end: 3.75rem; padding-bottom: 2.5rem; }
+.stage[data-template='oldschool'][data-kind='content'] .region-brand { margin-top: 2.813rem; }
+.stage[data-template='oldschool'][data-kind='content'] .shell-top { inset-inline-end: 3.75rem; top: 1.979rem; }
+.stage[data-template='oldschool'][data-kind='content'] .brand-name { font-family: var(--serif); font-weight: 700; --bn-fs: 1.875rem; --bn-ls: 0.2em; }
+.stage[data-template='oldschool'][data-kind='content'] .shell-date { font-family: var(--serif); font-weight: 500; font-size: 1.75rem; }
 .stage[data-template='oldschool'][data-kind='content'] .clock--compact small { font-family: var(--serif); color: var(--accent); opacity: 1; }
 .stage[data-template='oldschool'][data-kind='content'] .eyebrow,
 .stage[data-template='oldschool'][data-kind='content'] .kul-facts span,
@@ -529,8 +529,8 @@
 }
 .stage[data-template='oldschool'][data-kind='content'] .chip-t { color: var(--green); }
 .stage[data-template='oldschool'][data-kind='content'] .strip { border-radius: 0.208rem; }
-.stage[data-template='oldschool'][data-kind='content'] .strip .pcell { border-left: 1px solid var(--rule); }
-.stage[data-template='oldschool'][data-kind='content'] .strip .pcell:first-child { border-left: 0; }
+.stage[data-template='oldschool'][data-kind='content'] .strip .pcell { border-inline-start: 1px solid var(--rule); }
+.stage[data-template='oldschool'][data-kind='content'] .strip .pcell:first-child { border-inline-start: 0; }
 .stage[data-template='oldschool'][data-kind='content'] .strip .pcell.is-current { background: var(--green); color: var(--paper); }
 /* The printed page: the body is a ruled sheet with an inner hairline. */
 .stage[data-template='oldschool'][data-kind='content'] .kuliah,

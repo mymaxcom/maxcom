@@ -55,6 +55,11 @@ export interface CardProps {
    * the picture is not available or has failed, true once it shows. The layout follows that, not the slot.
    */
   onRendered?: (rendered: boolean) => void;
+  /**
+   * A video that is over, failed, stalled or cannot play (no internet, a recitation due) says so: the rotation moves on to
+   * the next slot at once instead of waiting for this one's time. Absent for a forced preview.
+   */
+  onFinished?: () => void;
 }
 
 export interface Pick {
@@ -74,6 +79,7 @@ function firstItemId(content: KioskContent, feature: SlotFeature): string | null
     case 'kuliahCard': return content.kuliah.length > 0 ? null : undefined;
     case 'pengumuman': return content.pengumuman[0]?.id;
     case 'posters': return content.posters[0]?.id;
+    case 'videos': return content.videos?.[0]?.id;
     case 'programKhas': return content.programKhas[0]?.id;
     case 'takwim': return content.takwim.length > 0 ? null : undefined;
     case 'hadis': return content.hadisToday[0]?.id;
@@ -201,6 +207,7 @@ export function ContentLayer({ view, lang, content: cv, onShown }: ContentLayerP
     view, lang, content: s.content, itemId: s.itemId, startedAt: s.startedAt, durationSeconds: s.durationSeconds,
     ...(s.page !== undefined ? { page: s.page } : {}),
     onRendered: live ? (ok) => setUnavailable((cur) => (ok ? (cur === s.key ? null : cur) : s.key)) : undefined,
+    ...(live && !cv.override && s.startedAt !== null && cv.skip ? { onFinished: () => cv.skip?.(s.startedAt as Date) } : {}),
   });
   const shownArab = shown && shownFeature ? arabBaseOf(shown.feature, props(shown, false), env) : null;
   useLayoutEffect(() => {

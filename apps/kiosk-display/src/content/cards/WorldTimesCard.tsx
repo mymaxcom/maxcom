@@ -41,13 +41,15 @@ export function cityTime(tz: string, now: Date, timeFormat: '12h' | '24h', lang:
     if (!Number.isFinite(offsetMin)) return null;
     const dayShift = Math.sign(Date.UTC(a.y, a.mo - 1, a.d) - Date.UTC(k.y, k.mo - 1, k.d)) as -1 | 0 | 1;
     if (timeFormat === '24h') return { time: `${p2(a.h)}:${p2(a.mi)}`, period: '', offsetMin, dayShift };
-    const parts = new Intl.DateTimeFormat(lang === 'en' ? 'en-MY' : 'ms-MY', {
+    // Arabic reads the English parts (Western digits) and writes the box screens' marks (ص / م).
+    const parts = new Intl.DateTimeFormat(lang === 'ms' ? 'ms-MY' : 'en-MY', {
       timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true,
     }).formatToParts(now);
     const part = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
     const hour = part('hour') || String(a.h % 12 === 0 ? 12 : a.h % 12);
     const minute = part('minute') || p2(a.mi);
-    return { time: `${hour}:${minute}`, period: part('dayPeriod'), offsetMin, dayShift };
+    const period = part('dayPeriod');
+    return { time: `${hour}:${minute}`, period: lang === 'ar' ? (a.h < 12 ? 'ص' : 'م') : period, offsetMin, dayShift };
   } catch {
     return null;
   }
@@ -88,7 +90,7 @@ export function WorldTimesCard({ view, lang, content }: CardProps) {
               {ct.period ? <small class="wt__period">{ct.period}</small> : null}
             </span>
             <span class="wt__offset">
-              {fmtOffset(ct.offsetMin, lang)}
+              <bdi dir="ltr">{fmtOffset(ct.offsetMin, lang)}</bdi>
               {ct.dayShift !== 0 ? (
                 <em class="wt__day">{t(ct.dayShift > 0 ? 'tomorrowWord' : 'yesterdayWord', lang)}</em>
               ) : null}

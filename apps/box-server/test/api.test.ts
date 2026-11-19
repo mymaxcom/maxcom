@@ -131,11 +131,13 @@ describe('PUT /api/settings/:feature', () => {
     expect(bundle.version).toBeGreaterThanOrEqual(1);
   });
 
-  it('accepts the TV language choice auto and refuses ar', async () => {
+  it('accepts the TV language choices auto and ar, and refuses an unknown one', async () => {
     const app = makeApp();
     const ok = await app.inject({ method: 'PUT', url: '/api/settings/language', payload: { lang: 'auto' } });
     expect(ok.statusCode).toBe(200);
-    const bad = await app.inject({ method: 'PUT', url: '/api/settings/language', payload: { lang: 'ar' } });
+    const ar = await app.inject({ method: 'PUT', url: '/api/settings/language', payload: { lang: 'ar' } });
+    expect(ar.statusCode).toBe(200);
+    const bad = await app.inject({ method: 'PUT', url: '/api/settings/language', payload: { lang: 'fr' } });
     expect(bad.statusCode).toBe(400);
   });
 });

@@ -12,6 +12,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../labels.dart' show appLangOfS;
 import '../../app/theme.dart';
 import '../../box/box_address.dart';
 import '../../box/box_client.dart';
@@ -252,7 +253,7 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
           _stuck = _Stuck.locked;
           _say(
             s.unlockLockedTitle,
-            subline: s.unlockLockedUntil(timeOfDayWords(widget.toLocal(until))),
+            subline: s.unlockLockedUntil(timeOfDayWords(widget.toLocal(until), lang: appLangOfS(s))),
             tone: _Tone.error,
           );
         });
@@ -626,7 +627,7 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
         _stuck = _Stuck.locked;
         _say(
           s.unlockLockedTitle,
-          subline: s.unlockLockedUntil(timeOfDayWords(widget.toLocal(until))),
+          subline: s.unlockLockedUntil(timeOfDayWords(widget.toLocal(until), lang: appLangOfS(s))),
           tone: _Tone.error,
         );
       case UnlockPinMissing():

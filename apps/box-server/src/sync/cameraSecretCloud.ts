@@ -6,6 +6,7 @@ import { openSecret, sealSecret } from '../auth/crypto.ts';
 import { createRateLimiter } from '../auth/ratelimit.ts';
 import type { RateLimiter } from '../auth/ratelimit.ts';
 import { reqSurau } from '../reqSurau.ts';
+import { cameraBackupOf } from '../live/camera.ts';
 
 /**
  * The cloud's sealed backup of a surau's external camera address (plan 4.2, 6, 7). SECURITY code.
@@ -22,6 +23,10 @@ import { reqSurau } from '../reqSurau.ts';
  *  - The address and login are never logged, never put in `change_log`, never in an error text. The history keeps
  *    only that a backup was stored or removed, and by which box.
  *  - The record is never sent to a device by the cloud and never enters the settings feed.
+ *  - The cloud never holds the camera PASSWORD (operator decision 2026-11-19): a row is {address without the
+ *    password, user name, hasPassword}. A password an older box still sends (beside the address or inside it) is
+ *    dropped before anything is stored; rows written before this rule are rewritten once at start-up
+ *    (`scrubCameraSecrets`). A replaced box restores the address and user name and asks for the password again.
  */
 
 export interface CameraSecretCloudDeps {
@@ -35,15 +40,19 @@ export interface CameraSecretCloudDeps {
   clock?: () => number;
 }
 
-/** One camera backup: the same fields as the box's sealed record. */
+/** One camera backup: never the password. */
 export interface CameraSecretRecord {
   url: string;
   username?: string;
-  password?: string;
+  hasPassword: boolean;
+  /** The box restored this record and waits for the password to be typed there or sent to it. */
+  passwordNeeded?: true;
 }
 
 const FIELD_MAX = 128;
-const BODY_FIELDS = new Set(['url', 'username', 'password']);
+// `password` is still accepted from an older box so it is not refused forever, and is dropped unread
+const BODY_FIELDS = new Set(['url', 'username', 'hasPassword', 'passwordNeeded', 'password']);
+const SCRUB_FLAG = 'camera_secret_scrubbed_v2';
 const NO_CTRL = /^[^\u0000-\u001f\u007f]*$/;
 
 const MSG = {
@@ -62,24 +71,97 @@ export function deriveCameraSecretKey(masterKey: Buffer): Buffer {
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-/** A clean record from a request body, or null. The address obeys the shared address rules (private IPv4, rtsp). */
+/**
+ * A clean record from a request body (or an older stored row), or null. The address obeys the shared address rules
+ * (private IPv4, rtsp). Whatever password came in, beside the address or inside it, is dropped: only `hasPassword`
+ * is kept.
+ */
 export function cleanCameraRecord(v: unknown): CameraSecretRecord | null {
   if (!isRecord(v)) return null;
   for (const k of Object.keys(v)) if (!BODY_FIELDS.has(k)) return null;
   if (typeof v.url !== 'string' || v.url.length > CAMERA_URL_MAX || cameraUrlError(v.url, []) !== null) return null;
-  const out: CameraSecretRecord = { url: v.url };
+  if (v.hasPassword !== undefined && typeof v.hasPassword !== 'boolean') return null;
+  if (v.passwordNeeded !== undefined && typeof v.passwordNeeded !== 'boolean') return null;
+  const login: { username?: string; password?: string } = {};
   for (const k of ['username', 'password'] as const) {
     const x = v[k];
     if (x === undefined) continue;
     if (typeof x !== 'string' || x.length > FIELD_MAX || !NO_CTRL.test(x)) return null;
-    if (x !== '') out[k] = x;
+    if (x !== '') login[k] = x;
   }
-  return out;
+  const b = cameraBackupOf({ url: v.url, ...login });
+  // an address with its login split out still obeys the rules (it is the same address); checked again all the same
+  if (cameraUrlError(b.url, []) !== null) return null;
+  return {
+    url: b.url,
+    ...(b.username !== undefined ? { username: b.username } : {}),
+    hasPassword: v.hasPassword === true || v.passwordNeeded === true || b.hasPassword || login.password !== undefined,
+    ...(v.passwordNeeded === true ? { passwordNeeded: true as const } : {}),
+  };
+}
+
+/**
+ * Once per cloud (a `sync_state` flag), at start-up: rewrites every `camera_secrets` row written before the "no
+ * password in the cloud" rule to its clean form (address and user name kept, the password gone), with SQLite's
+ * secure delete on so the old bytes are overwritten, and removes a row that does not open (it was already unusable).
+ * Idempotent: a clean row is rewritten to the same content. Never logs a record. Returns the rows looked at.
+ */
+export function scrubCameraSecrets(db: DatabaseSync, key: Buffer): number {
+  if (db.prepare('SELECT value FROM sync_state WHERE key = ?').get(SCRUB_FLAG)?.value === '1') return 0;
+  const was = Number(db.prepare('PRAGMA secure_delete').get()?.secure_delete ?? 0);
+  db.exec('PRAGMA secure_delete = ON');
+  let changed = 0;
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const row of db.prepare('SELECT surau_id, sealed FROM camera_secrets').all()) {
+        const surauId = String(row.surau_id);
+        let clean: CameraSecretRecord | null = null;
+        try {
+          const j = JSON.parse(openSecret(key, String(row.sealed))) as Record<string, unknown>;
+          if (j.surauId === surauId) {
+            const { surauId: _s, ...rest } = j;
+            clean = cleanCameraRecord(rest);
+          }
+        } catch {
+          clean = null;
+        }
+        if (clean === null) {
+          db.prepare('DELETE FROM camera_secrets WHERE surau_id = ?').run(surauId);
+        } else {
+          db.prepare('UPDATE camera_secrets SET sealed = ? WHERE surau_id = ?').run(sealSecret(key, JSON.stringify({ surauId, ...clean })), surauId);
+        }
+        changed += 1;
+      }
+      db.prepare('INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(SCRUB_FLAG, '1');
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+    // the WAL may still hold the old pages: copy them back into the file and empty it
+    try {
+      db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch {
+      /* not in WAL mode, or busy: the next checkpoint writes the overwritten pages */
+    }
+  } finally {
+    db.exec(`PRAGMA secure_delete = ${was === 1 ? 'ON' : 'OFF'}`);
+  }
+  return changed;
 }
 
 export function registerCameraSecretCloudRoutes(app: FastifyInstance, deps: CameraSecretCloudDeps): void {
   const { db, now } = deps;
   const key = deps.masterKey === null ? null : deriveCameraSecretKey(deps.masterKey);
+  if (deps.role === 'cloud' && key !== null) {
+    try {
+      scrubCameraSecrets(db, key);
+    } catch {
+      // a fixed reason, never a record; the next start tries again
+      console.error('camera backup: the start-up rewrite did not finish (reason: scrub_failed)');
+    }
+  }
   const clock = deps.clock === undefined ? {} : { now: deps.clock };
   // per site: a fresh backup follows every save, so a handful a minute is plenty
   const writes: RateLimiter = createRateLimiter({ windowMs: 60_000, max: 12, ...clock });
@@ -143,7 +225,8 @@ export function registerCameraSecretCloudRoutes(app: FastifyInstance, deps: Came
       const j = JSON.parse(openSecret(key, String(row.sealed))) as Record<string, unknown>;
       // the row must belong to this surau (a row copied under another surau id does not open)
       if (j.surauId !== surauId) throw new Error('surau');
-      const record = cleanCameraRecord({ url: j.url, ...(j.username !== undefined ? { username: j.username } : {}), ...(j.password !== undefined ? { password: j.password } : {}) });
+      const { surauId: _s, ...rest } = j;
+      const record = cleanCameraRecord(rest);
       if (record === null) throw new Error('record');
       return reply.send(record);
     } catch {

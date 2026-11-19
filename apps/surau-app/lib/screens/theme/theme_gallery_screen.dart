@@ -11,7 +11,9 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../app/shell.dart';
 import '../../app/theme.dart';
+import '../../features/common/ui_flags.dart';
 import '../../features/settings_repository.dart';
+import '../../features/settings_widgets/tv_lang_choice.dart' show tvLangArFeature;
 import '../../features/shell/permissions.dart';
 import '../../box/box_client.dart' show BoxError;
 import '../../box/wire.dart' show ThemeHealth;
@@ -33,6 +35,9 @@ const Map<String, List<Color>> themeBandColours = {
   'arabic': [Color(0xFF0A1630), Color(0xFFD9B25F), Color(0xFF0A1630)],
 };
 const List<Color> _uploadedBand = [Color(0xFFD9DEDC), Color(0xFFB9C2BF)];
+
+/// The phone's mark that the Arabic TV language was asked about (Ya or Tidak).
+const String tvLangArAskedKey = 'ui.tvLangArAsked';
 
 class ThemeGalleryScreen extends ConsumerWidget {
   const ThemeGalleryScreen({super.key});
@@ -295,6 +300,8 @@ class _ThemeSheet extends ConsumerStatefulWidget {
 class _ThemeSheetState extends ConsumerState<_ThemeSheet> {
   bool _busy = false;
   String? _error;
+  // The theme is saved but the TV language was not: the button stays usable to try the language again.
+  bool _languagePending = false;
 
   Future<void> _use() async {
     final repo = ref.read(settingsRepositoryProvider);
@@ -309,6 +316,19 @@ class _ThemeSheetState extends ConsumerState<_ThemeSheet> {
     try {
       await repo.save('kioskTemplate', {'templateId': widget.card.name});
       if (!mounted) return;
+      if (widget.card.name == 'arabic') {
+        final done = await _askTvLanguage(repo);
+        if (!mounted) return;
+        if (!done) {
+          // The language could not be saved: the sheet stays open with the reason, no success is shown.
+          setState(() {
+            _busy = false;
+            _languagePending = true;
+          });
+          return;
+        }
+      }
+      if (!mounted) return;
       nav.pop();
       messenger
         ..clearSnackBars()
@@ -320,6 +340,55 @@ class _ThemeSheetState extends ConsumerState<_ThemeSheet> {
         _error = e is SettingsSaveError ? e.text(s) : writeErrorText(s, e);
       });
     }
+  }
+
+  /// Arabic Art chosen while the TV language is not Arabic: ask once whether to switch it, never again after an answer
+  /// (the answer is kept on this phone). Nothing is asked of a box that cannot show Arabic, or of a surau already in it.
+  /// An answer is "Ya" (the language is saved) or "Tidak"; closing the question some other way is not an answer and is
+  /// asked again next time. Returns false when "Ya" could not be saved (the error is then on the sheet).
+  Future<bool> _askTvLanguage(SettingsRepository repo) async {
+    final settings = ref.read(settingsProvider).value?.value ?? const <String, dynamic>{};
+    final language = settings['language'];
+    if (language is Map && language['lang'] == 'ar') return true;
+    if (!ref.read(boxSupportsProvider(tvLangArFeature))) return true;
+    if (await ref.read(uiFlagsStoreProvider).get(tvLangArAskedKey)) return true;
+    if (!mounted) return true;
+    final s = S.of(context);
+    final yes = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('tvlang-ar-ask'),
+        title: Text(s.tvLangArAskTitle),
+        content: Text(s.tvLangArAskBody),
+        actions: [
+          TextButton(
+            key: const ValueKey('tvlang-ar-ask-no'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(s.tvLangArAskNo),
+          ),
+          FilledButton(
+            key: const ValueKey('tvlang-ar-ask-yes'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(s.tvLangArAskYes),
+          ),
+        ],
+      ),
+    );
+    // Closing the question without an answer (back) is not an answer: nothing is saved, it is asked again next time.
+    if (yes == null || !mounted) return true;
+    if (yes) {
+      try {
+        await repo.save('language', {'lang': 'ar'});
+      } catch (e) {
+        if (!mounted) return false;
+        setState(() => _error = e is SettingsSaveError ? e.text(s) : writeErrorText(s, e));
+        return false;
+      }
+    }
+    // An answer that took effect ("Tidak", or "Ya" saved) is the last time we ask.
+    await ref.read(uiFlagsStoreProvider).set(tvLangArAskedKey, true);
+    return true;
   }
 
   Future<void> _download() async {
@@ -430,7 +499,7 @@ class _ThemeSheetState extends ConsumerState<_ThemeSheet> {
             if (offerable)
               FilledButton.icon(
                 key: const ValueKey('theme-use'),
-                onPressed: _busy || active ? null : _use,
+                onPressed: _busy || (active && !_languagePending) ? null : _use,
                 icon: const Icon(Icons.check_rounded),
                 label: Text(s.themeUse),
               ),

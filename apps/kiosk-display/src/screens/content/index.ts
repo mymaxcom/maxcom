@@ -4,6 +4,7 @@ import type { CardProps } from '../../content/ContentLayer.tsx';
 import { HadisScreen } from './HadisScreen.tsx';
 import { KuliahScreen } from './KuliahScreen.tsx';
 import { PosterScreen } from './PosterScreen.tsx';
+import { VideoScreen } from './VideoScreen.tsx';
 
 /**
  * The full-stage body of a rotation card, when its catalog screen has a design of its own; null for every other card
@@ -12,6 +13,7 @@ import { PosterScreen } from './PosterScreen.tsx';
 export function screenBodyFor(feature: SlotFeature): ((p: CardProps) => ComponentChildren) | null {
   switch (feature) {
     case 'posters': return PosterScreen;
+    case 'videos': return VideoScreen;
     case 'kuliahCard': return KuliahScreen;
     case 'hadis': return HadisScreen;
     default: return null;

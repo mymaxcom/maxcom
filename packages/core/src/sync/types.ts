@@ -122,4 +122,6 @@ export interface SyncStatus {
   lastPull: string | null;
   pendingOut: number;
   lastError: string | null;
+  /** Settings entries kept for a retry after the box or the cloud is upgraded (a mixed rollout); absent from an older server. */
+  parked?: number;
 }

@@ -13,6 +13,8 @@ export class FakeWorker {
   dirtyChecks = 0;
   clears: number[] = [];
   readonly dirty = new Map<string, number>();
+  /** Boxes a relayed camera change waits for (`/_admin/camera/<box>`); `/dirty` then says `camera: true`. */
+  readonly camera = new Set<string>();
   readonly secrets = new Map<string, string>();
   /** Admin side: the token it accepts, the device allowlist, and every admin call received. */
   readonly adminToken = 'test-admin-token';
@@ -75,6 +77,11 @@ export class FakeWorker {
       if (typeof seq !== 'number' || !Number.isInteger(seq) || seq <= 0) return json(400, { error: 'bad seq' });
       this.dirty.set(id, Math.max(this.dirty.get(id) ?? 0, seq));
       return json(200, { seq: this.dirty.get(id) });
+    }
+    if (kind === 'camera' && (method === 'PUT' || method === 'DELETE')) {
+      if (method === 'PUT') this.camera.add(id);
+      else this.camera.delete(id);
+      return new Response(null, { status: 204 });
     }
     if (kind === 'dev' && method === 'PUT') {
       const jwk = plain(body) ? body.jwk : undefined;
@@ -141,7 +148,7 @@ export class FakeWorker {
     if (u.pathname === '/dirty' && method === 'GET') {
       if (!this.sigOk(boxId, (ts) => `maxcom-dirty-get\n${boxId}\n${ts}`, headers)) return json(401, { error: 'unsigned' });
       this.dirtyChecks += 1;
-      return json(200, { seq: this.dirty.get(boxId) ?? 0 });
+      return json(200, { seq: this.dirty.get(boxId) ?? 0, ...(this.camera.has(boxId) ? { camera: true } : {}) });
     }
     if (u.pathname === '/dirty/clear' && method === 'POST') {
       const body = JSON.parse(String(init?.body ?? '{}')) as { upTo?: number };

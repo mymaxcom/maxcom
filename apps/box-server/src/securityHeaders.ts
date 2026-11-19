@@ -24,8 +24,13 @@ export const CSP = [
   "frame-ancestors 'none'",
 ].join('; ');
 
-/** The kiosk page document: the default CSP plus the loopback port of the Windows host exit helper. */
-export const KIOSK_CSP = CSP.replace("connect-src 'self'", "connect-src 'self' http://127.0.0.1:*");
+/**
+ * The kiosk page document: the default CSP plus the loopback port of the Windows host exit helper, and the one place a
+ * frame may come from, the YouTube player of a Video item (youtube-nocookie.com). No other page gets `frame-src`.
+ */
+export const KIOSK_CSP = CSP
+  .replace("connect-src 'self'", "connect-src 'self' http://127.0.0.1:*")
+  .replace("media-src 'self' data: blob:", "media-src 'self' data: blob:; frame-src https://www.youtube-nocookie.com");
 
 const HSTS = 'max-age=31536000';
 

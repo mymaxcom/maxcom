@@ -73,7 +73,8 @@ export async function startLiveHarness(o: HarnessOptions = {}): Promise<LiveHarn
       apiPort: fake.port,
       webrtcPort: fake.port,
     },
-    live: { monitorMs: 20, ...(o.live ?? {}) },
+    // the existing tests expect a stop to complete the broadcast at once; the grace-window tests set their own
+    live: { monitorMs: 20, youtubeGraceMs: 0, ...(o.live ?? {}) },
     ...(o.app ?? {}),
   });
   await app.ready();

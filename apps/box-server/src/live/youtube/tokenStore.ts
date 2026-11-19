@@ -59,6 +59,11 @@ export class TokenStore {
     this.key = deriveYoutubeTokenKey(loadBoxKey(dataDir));
   }
 
+  /** A token file is on disk (it may still not open). */
+  exists(): boolean {
+    return existsSync(this.path);
+  }
+
   load(): YoutubeTokens | null {
     if (!existsSync(this.path)) return null;
     try {

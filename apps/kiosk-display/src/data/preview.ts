@@ -24,6 +24,8 @@ export const PREVIEW_POSTER_TITLE_MAX = 80;
 export interface PreviewPoster {
   assetId: string;
   title: string;
+  /** "Regangkan gambar" of the poster being edited; absent means true (as on a saved poster). */
+  stretch?: boolean;
 }
 /** Bundle and content are re-read this often in preview (a paired display waits for change events instead). */
 export const PREVIEW_POLL_MS = 30_000;
@@ -84,7 +86,8 @@ export function readPreviewPosterMessage(ev: MessageEvent, win: Window = window)
   if (typeof m.title !== 'string') return null;
   // eslint-disable-next-line no-control-regex
   const title = m.title.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, PREVIEW_POSTER_TITLE_MAX);
-  return { assetId: m.assetId, title };
+  // Only a real boolean is carried; anything else is ignored (absent = stretch).
+  return typeof m.stretch === 'boolean' ? { assetId: m.assetId, title, stretch: m.stretch } : { assetId: m.assetId, title };
 }
 
 /**
@@ -164,7 +167,7 @@ export function getPreviewPoster(): PreviewPoster | null {
 }
 
 function setPreviewPoster(p: PreviewPoster | null): void {
-  if (poster === p || (poster && p && poster.assetId === p.assetId && poster.title === p.title)) return;
+  if (poster === p || (poster && p && poster.assetId === p.assetId && poster.title === p.title && poster.stretch === p.stretch)) return;
   poster = p;
   for (const fn of [...posterListeners]) fn(p);
 }

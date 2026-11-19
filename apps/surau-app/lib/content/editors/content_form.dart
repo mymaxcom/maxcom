@@ -19,6 +19,9 @@ import '../../box/box_client.dart';
 import '../../app/app_lang.dart' show AppLang;
 import '../../features/common/error_text.dart';
 import '../../features/common/ltr.dart';
+import '../../features/registry.g.dart' show surahs;
+import '../../features/surah_names.dart';
+import '../../features/settings_widgets/named_dropdown.dart' show PickerButton, PickerOption, showPickerSheet;
 import '../../features/labels.dart' show zoneCityName, appLangOf, appLangOfS, contentChoiceLabel, contentFieldLabel, dayLabel;
 import '../../l10n/generated/s.dart';
 import '../../screens/widgets/box_read.dart';
@@ -330,6 +333,16 @@ class FieldEditor extends StatelessWidget {
           onChanged: onChanged,
         );
       case FieldType.int:
+        if (kind == 'tilawahSlot' && f.key == 'surah') {
+          return SurahPicker(
+            fieldKey: f.key,
+            label: label,
+            value: value,
+            error: error,
+            readOnly: readOnly,
+            onChanged: onChanged,
+          );
+        }
         return IntInput(
           fieldKey: f.key,
           label: label,
@@ -782,6 +795,58 @@ String isoDate(DateTime d) =>
 
 String isoTime(TimeOfDay t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+/// The surah of a tilawah slot: "18. Al-Kahf" on a button, a searchable
+/// sheet of all 114 (search by number or name); stores the same int.
+class SurahPicker extends StatelessWidget {
+  const SurahPicker({
+    super.key,
+    required this.fieldKey,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.error,
+    this.readOnly = false,
+  });
+
+  final String fieldKey;
+  final String label;
+  final Object? value;
+  final void Function(Object? value) onChanged;
+  final String? error;
+  final bool readOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final n = value is num ? (value! as num).toInt().clamp(1, surahs.length) : 1;
+    final row = surahs[n - 1];
+    return _Labelled(
+      label: label,
+      error: error,
+      child: PickerButton(
+        key: ValueKey('field-$fieldKey'),
+        title: surahNumbered(s, n),
+        subtitle: s.settingsAyatCount(row[2] as int),
+        onTap: readOnly
+            ? null
+            : () async {
+                final picked = await showPickerSheet<int>(
+                  context,
+                  title: label,
+                  selected: n,
+                  searchHint: s.settingsSurahSearch,
+                  options: [
+                    for (final r in surahs)
+                      PickerOption(r[0] as int, surahNumbered(s, r[0] as int), subtitle: s.settingsAyatCount(r[2] as int), search: surahSearchText(r[0] as int)),
+                  ],
+                );
+                if (picked != null) onChanged(picked);
+              },
+      ),
+    );
+  }
+}
 
 /// A whole number with `[-]` and `[+]` inside [min]..[max].
 class IntInput extends StatefulWidget {

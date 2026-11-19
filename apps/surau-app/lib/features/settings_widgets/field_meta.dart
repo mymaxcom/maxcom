@@ -27,6 +27,12 @@ class FieldMeta {
   /// Not offered in Tetapan: another control owns the job (core FieldMeta.hidden).
   bool get hidden => raw['hidden'] == true;
 
+  /// Drawn only while another field of the same feature holds the value (core FieldMeta.visibleWhen).
+  VisibleWhen? get visibleWhen {
+    final r = raw['visibleWhen'];
+    return r is Map ? VisibleWhen(r['field'] as String, r['equals']) : null;
+  }
+
   /// Another setting that switches this one off while it holds a value (core FieldMeta.disabledWhen).
   DisabledWhen? get disabledWhen {
     final r = raw['disabledWhen'];
@@ -39,6 +45,12 @@ class FieldMeta {
 
   /// The same sentences for a TV in English (the box fills its own defaults the same way).
   List<String> get presetsEn => [...?(raw['presetsEn'] as List?)?.cast<String>()];
+}
+
+class VisibleWhen {
+  const VisibleWhen(this.field, this.equals);
+  final String field;
+  final Object? equals;
 }
 
 class DisabledWhen {

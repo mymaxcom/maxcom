@@ -36,8 +36,8 @@ void main() {
     testWidgets('live role can switch $f', (tester) async {
       expect(await _switchWritable(tester, 'live', f), isTrue);
     });
-    testWidgets('media cannot switch $f', (tester) async {
-      expect(await _switchWritable(tester, 'media', f), isFalse);
+    testWidgets('media cannot open $f at all (the form is under Siaran langsung, for live:settings)', (tester) async {
+      expect(await _switchWritable(tester, 'media', f), isNull);
     });
     testWidgets('admin can switch $f', (tester) async {
       expect(await _switchWritable(tester, 'admin', f), isTrue);
@@ -48,18 +48,26 @@ void main() {
     expect(await _switchWritable(tester, 'live', 'beeps'), isFalse);
   });
 
-  testWidgets('the Tetapan list shows the live rows and only they are writable for the live role', (tester) async {
+  testWidgets('the old Konfigurasi address of a live feature opens its form under Siaran langsung', (tester) async {
+    final h = await pumpShell(tester, roles: const ['live']);
+    for (final f in _live) {
+      h.router.go('/settings/$f');
+      await settle(tester);
+      expect(h.location, '/live/settings/$f', reason: f);
+    }
+  });
+
+  testWidgets('the Konfigurasi list has no live row; a search gives one pointer for the live role', (tester) async {
     final h = await pumpShell(tester, roles: const ['live']);
     h.router.go('/settings');
     await settle(tester);
-    for (final f in _live) {
-      await tester.enterText(find.byKey(const ValueKey('settings-search')), f == 'liveCamera' ? 'kamera' : f == 'recording' ? 'rakaman' : f == 'liveYoutube' ? 'youtube' : 'siaran');
+    for (final q in ['kamera', 'rakaman', 'youtube', 'siaran', 'onvif']) {
+      await tester.enterText(find.byKey(const ValueKey('settings-search')), q);
       await settle(tester);
-      expect(find.byKey(ValueKey('settings-row-$f')), findsOneWidget, reason: f);
+      for (final f in _live) {
+        expect(find.byKey(ValueKey('settings-row-$f')), findsNothing, reason: '$q $f');
+      }
+      expect(find.byKey(const ValueKey('settings-live-moved')), findsOneWidget, reason: q);
     }
-    await tester.enterText(find.byKey(const ValueKey('settings-search')), 'siaran');
-    await settle(tester);
-    final sw = find.byKey(const ValueKey('settings-switch-liveOnKiosk'));
-    if (sw.evaluate().isNotEmpty) expect(tester.widget<Switch>(sw).onChanged, isNotNull);
   });
 }

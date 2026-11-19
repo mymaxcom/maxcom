@@ -49,7 +49,7 @@ try {
 # --- 0. check everything before anything is changed ------------------------------------------------
 if ($Previous -and $Version -ne '') { Stop-Here 'pilih -Previous atau -Version, bukan kedua-duanya.' }
 if (-not $Previous -and $Version -eq '') { Stop-Here 'perlukan -Previous atau -Version <versi>.' }
-if ($Version -ne '' -and $Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Stop-Here "versi tidak sah: $Version" }
+if ($Version -ne '' -and $Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-b[1-9])?$') { Stop-Here "versi tidak sah: $Version" }
 
 if ($InstallRoot -eq '') { $InstallRoot = Join-Path $env:ProgramFiles 'MAXCOM' }
 $relaxed = ($LayoutOnly -or $DryRun)
@@ -89,7 +89,7 @@ if (Test-IsReparsePoint $paths.Current) {
   $t = Get-LinkTarget $paths.Current
   if ($null -ne $t) {
     $leaf = Split-Path -Leaf $t
-    if ($leaf -match '^[0-9]+\.[0-9]+\.[0-9]+$') { $currentVersion = $leaf }
+    if ($leaf -match '^[0-9]+\.[0-9]+\.[0-9]+(-b[1-9])?$') { $currentVersion = $leaf }
   }
 } elseif (Test-Path -LiteralPath $paths.Current) {
   Stop-Here "$($paths.Current) ialah folder sebenar, bukan pautan. Tiada apa yang diubah."
@@ -97,7 +97,7 @@ if (Test-IsReparsePoint $paths.Current) {
 if ($Previous) {
   if (-not (Test-Path -LiteralPath $paths.PreviousTxt -PathType Leaf)) { Stop-Here 'previous.txt tiada: tiada keluaran sebelumnya untuk kembali. Tiada apa yang diubah.' }
   $Version = ([string](Get-Content -LiteralPath $paths.PreviousTxt -Raw -Encoding UTF8)).Trim()
-  if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Stop-Here 'previous.txt tidak sah. Tiada apa yang diubah.' }
+  if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-b[1-9])?$') { Stop-Here 'previous.txt tidak sah. Tiada apa yang diubah.' }
 }
 $target = Join-Path $paths.Releases $Version
 if ((Test-IsReparsePoint $target) -or -not (Test-Path -LiteralPath $target -PathType Container)) {
@@ -115,7 +115,7 @@ if ($RestoreDb) {
   if ($already) { Stop-Here "keluaran $Version sudah digunakan, -RestoreDb ditolak. Tiada apa yang diubah." }
   if ((Test-Path -LiteralPath $paths.Backups) -and -not (Test-IsReparsePoint $paths.Backups)) {
     $cands = @([System.IO.Directory]::GetDirectories($paths.Backups) |
-      Where-Object { (Split-Path -Leaf $_).StartsWith("pre-$currentVersion-", [System.StringComparison]::Ordinal) -and -not (Test-IsReparsePoint $_) } |
+      Where-Object { (Split-Path -Leaf $_) -match ('^pre-' + [regex]::Escape($currentVersion) + '-[0-9]{8}-[0-9]{6}$') -and -not (Test-IsReparsePoint $_) } |
       Sort-Object { Split-Path -Leaf $_ } -Descending)
     foreach ($c in $cands) {
       $f = Join-Path $c 'surau.db'

@@ -1,5 +1,5 @@
 {
- "contentSourceHash": "56646702c2b4267159bcd29e7a28024193d12b317676c6b940d3e22436d99eb3",
+ "contentSourceHash": "1e51c9e566ee1e47240b90745b0d8a727608cf45e5042795b49040b281d19391",
  "kinds": [
   "penceramah",
   "kitab",
@@ -7,6 +7,7 @@
   "pengumuman",
   "ticker",
   "poster",
+  "video",
   "programKhas",
   "takwim",
   "hadis",
@@ -6171,6 +6172,1238 @@
     "from": "2026-11-01",
     "to": "2026-11-30",
     "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "full",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "minimal",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "with meta keys",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1,
+    "id": "x1",
+    "updatedAt": "2026-11-04T14:30:00.000Z",
+    "updatedBy": "user:u1"
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "unknown key",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1,
+    "zzUnknown": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "empty object",
+   "item": {},
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title missing",
+   "item": {
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title null",
+   "item": {
+    "title": null,
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title number",
+   "item": {
+    "title": 123,
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title text",
+   "item": {
+    "title": "zzz-wrong",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "title empty text",
+   "item": {
+    "title": "",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title spaces",
+   "item": {
+    "title": "   ",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title bool",
+   "item": {
+    "title": true,
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title list",
+   "item": {
+    "title": [],
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title object",
+   "item": {
+    "title": {},
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title 2001 chars",
+   "item": {
+    "title": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "title trailing space",
+   "item": {
+    "title": "Selamat datang ",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "source missing",
+   "item": {
+    "title": "Selamat datang",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source null",
+   "item": {
+    "title": "Selamat datang",
+    "source": null,
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source number",
+   "item": {
+    "title": "Selamat datang",
+    "source": 123,
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "zzz-wrong",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source empty text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source spaces",
+   "item": {
+    "title": "Selamat datang",
+    "source": "   ",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source bool",
+   "item": {
+    "title": "Selamat datang",
+    "source": true,
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source list",
+   "item": {
+    "title": "Selamat datang",
+    "source": [],
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source object",
+   "item": {
+    "title": "Selamat datang",
+    "source": {},
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source 2001 chars",
+   "item": {
+    "title": "Selamat datang",
+    "source": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source trailing space",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload ",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId missing",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId null",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": null,
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId number",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": 123,
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "zzz-wrong",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId empty text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId spaces",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "   ",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId bool",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": true,
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId list",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": [],
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId object",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": {},
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId 2001 chars",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId trailing space",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec missing",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "durationSec null",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": null,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec number",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 123,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "durationSec text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": "zzz-wrong",
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec empty text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": "",
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec spaces",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": "   ",
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec bool",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": true,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec list",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": [],
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec object",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": {},
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec fraction",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75.5,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec negative",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": -1,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec whole float",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "days missing",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "days null",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": null,
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "days number",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": 123,
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "days text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": "zzz-wrong",
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "days empty text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": "",
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "days spaces",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": "   ",
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "days bool",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": true,
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "days list",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "days object",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": {},
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order missing",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ]
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order null",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": null
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order number",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 123
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "order text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": "zzz-wrong"
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order empty text",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": ""
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order spaces",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": "   "
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order bool",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": true
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order list",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": []
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order object",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": {}
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order fraction",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1.5
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order negative",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": -1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order whole float",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "title = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+   "item": {
+    "title": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "sound = true",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1,
+    "sound": true
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "sound = false",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1,
+    "sound": false
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "sound = \"yes\"",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1,
+    "sound": "yes"
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source = \"tv\"",
+   "item": {
+    "title": "Selamat datang",
+    "source": "tv",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "source = \"youtube\"",
+   "item": {
+    "title": "Selamat datang",
+    "source": "youtube",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "youtubeId = \"dQw4w9WgXcQ\"",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1,
+    "youtubeId": "dQw4w9WgXcQ"
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "durationSec = 600",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 600,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "durationSec = 601",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 601,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "assetId = \"xyz\"",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "xyz",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "days = []",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [],
+    "order": 1
+   },
+   "ok": false
+  },
+  {
+   "kind": "video",
+   "note": "order = 0",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 0
+   },
+   "ok": true
+  },
+  {
+   "kind": "video",
+   "note": "order = 1000001",
+   "item": {
+    "title": "Selamat datang",
+    "source": "upload",
+    "assetId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 75,
+    "days": [
+     "umum"
+    ],
+    "order": 1000001
    },
    "ok": false
   },

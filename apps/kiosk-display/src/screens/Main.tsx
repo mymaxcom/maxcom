@@ -51,7 +51,7 @@ interface RegionProps extends MainProps {
 
 /** Whether the card on screen is a picture screen the ticker gives way to (rule 13). */
 export function tickerGivesWay(shown: SlotFeature | null, c: ContentView): boolean {
-  if (shown === 'posters' || shown === 'tabungCard') return true;
+  if (shown === 'posters' || shown === 'videos' || shown === 'tabungCard') return true;
   if ((shown !== 'programKhas' && shown !== 'pengumuman') || !c.content) return false;
   const itemId = pickSlot(c)?.itemId ?? null;
   // A notice (or programme) with its picture gives the room to the picture; a text-only one, or one whose picture
@@ -61,7 +61,7 @@ export function tickerGivesWay(shown: SlotFeature | null, c: ContentView): boole
 }
 
 /** The screens with no prayer strip (rule 1): the picture and list screens keep the whole stage under the top row. */
-const NO_STRIP: ReadonlySet<SlotFeature> = new Set<SlotFeature>(['posters', 'pengumuman', 'programKhas', 'tabungCard']);
+const NO_STRIP: ReadonlySet<SlotFeature> = new Set<SlotFeature>(['posters', 'videos', 'pengumuman', 'programKhas', 'tabungCard']);
 
 /**
  * The rotating content region: content, tilawah, ticker and zikir. Everything that can throw while rendering

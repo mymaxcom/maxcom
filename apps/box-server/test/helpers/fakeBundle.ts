@@ -127,6 +127,12 @@ export interface FakeBundleOptions {
   nodeVersion?: string;
   /** Use a few bytes for node.exe instead of a copy of the real one (fast; the node cannot be run). */
   nodeStub?: boolean;
+  /** Internal build (1 to 9) of the same public version, stamped in release.json; 0 or unset writes no marker. */
+  build?: number;
+  /** The text of release.json inside the archive, instead of the generated one (to test an archive whose marker cannot be read). */
+  releaseJsonText?: string;
+  /** The build named in the archive file name (-b<N>), when it should differ from the one in release.json. */
+  nameBuild?: number;
   /** Extra bundle files, relative path (forward slashes) -> text. They are listed in the manifest. */
   extraFiles?: Record<string, string>;
 }
@@ -164,10 +170,11 @@ const FAKE_MAIN = [
   '',
 ].join('\n');
 
-export function releaseEntriesFor(version: string, nodeVersion: string): TarEntry[] {
+export function releaseEntriesFor(version: string, nodeVersion: string, build = 0, releaseJsonText?: string): TarEntry[] {
   const releaseJson = {
     v: 1,
     version,
+    ...(build > 0 ? { build } : {}),
     platform: 'windows',
     commit: 'fakecommit',
     builtAt: '2026-11-10T00:00:00.000Z',
@@ -175,7 +182,7 @@ export function releaseEntriesFor(version: string, nodeVersion: string): TarEntr
     workspaceLinks: [{ name: '@surau/core', target: 'packages/core' }],
   };
   return [
-    { name: 'release.json', data: JSON.stringify(releaseJson, null, 2) },
+    { name: 'release.json', data: releaseJsonText ?? JSON.stringify(releaseJson, null, 2) },
     { name: 'package.json', data: JSON.stringify({ name: 'maxcom-fake', private: true, version }) },
     { name: 'apps/box-server/package.json', data: JSON.stringify({ name: '@surau/box-server', version }) },
     { name: 'apps/box-server/src/main.ts', data: FAKE_MAIN.replace('__VERSION__', JSON.stringify(version)) },
@@ -192,9 +199,10 @@ export function makeFakeBundle(dir: string, opts: FakeBundleOptions = {}): FakeB
   const payloadDir = join(dir, 'payload');
   mkdirSync(payloadDir, { recursive: true });
 
-  const archiveName = `maxcom-box-${version}-windows.tar.gz`;
+  const nameBuild = opts.nameBuild ?? opts.build ?? 0;
+  const archiveName = `maxcom-box-${version}${nameBuild > 0 ? `-b${nameBuild}` : ''}-windows.tar.gz`;
   const archive = join(dir, archiveName);
-  const releaseEntries = releaseEntriesFor(version, nodeVersion);
+  const releaseEntries = releaseEntriesFor(version, nodeVersion, opts.build ?? 0, opts.releaseJsonText);
   writeTarGz(archive, releaseEntries);
 
   const nodeZipName = `node-v${nodeVersion}-win-x64.zip`;

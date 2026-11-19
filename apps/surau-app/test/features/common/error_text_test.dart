@@ -32,6 +32,16 @@ const _serverSentenceCodes = <String>{
   'import_row_invalid', // one bad row of a file: the prayer screens word it from field and reason (RA2)
   'emergency_today',
   'zone_no_data',
+  // The camera set through the cloud: the camera card words these itself (no_box, stale) or shows the cloud's BM sentence.
+  'at_surau_only',
+  'no_box',
+  'stale',
+  // The YouTube handover between the box and the cloud (2026.11.13): only the box reads it, never a person.
+  'claimed',
+  // The cloud's handover answer when the token file will not open (503): the box retries on its next cycle, no person reads it.
+  'grant_unreadable',
+  // GET /api/live/notice/frame.jpg with no frame: the notice picture falls back to the thumbnail quietly, nothing is shown.
+  'no_frame',
 };
 
 void main() {
@@ -66,6 +76,27 @@ void main() {
           s.errcBadAddress,
         );
       }
+    });
+
+    test('[2026.11.13] youtube_at_box has its own text in ms, en and ar, never the word kotak', () {
+      for (final s in _locales.values) {
+        final t = errorText(s, const BoxError(409, 'Log masuk YouTube kini dibuat pada MAXCOM di surau. Kemas kini aplikasi dan cuba di Wi-Fi surau.', code: 'youtube_at_box'));
+        expect(t, s.errcYoutubeAtBox);
+        expect(t, contains('MAXCOM'));
+        expect(t.toLowerCase(), isNot(contains('kotak')));
+      }
+    });
+
+    test('busy upload, stale camera relay and password_again have their own texts', () {
+      for (final e in _locales.entries) {
+        final s = e.value;
+        expect(errorText(s, const BoxError(409, 'x', code: 'busy')), s.errcVideoBusy, reason: e.key);
+        expect(errorText(s, const BoxError(409, 'x', code: 'stale')), s.errcCameraStale, reason: e.key);
+        expect(errorText(s, const BoxError(400, 'x', code: 'password_again')), s.errcCameraPasswordAgain, reason: e.key);
+      }
+      expect(errorText(_locales['ms']!, const BoxError(409, 'x', code: 'busy')), 'Video lain sedang dimuat naik ke MAXCOM. Cuba sebentar lagi.');
+      expect(errorText(_locales['en']!, const BoxError(409, 'x', code: 'stale')), 'The camera settings changed. Try again.');
+      expect(errorText(_locales['en']!, const BoxError(400, 'x', code: 'password_again')), 'Type the camera password again.');
     });
 
     test('[L8] unknown_video and a refused cloud sign-out have their own texts', () {

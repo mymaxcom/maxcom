@@ -7,6 +7,8 @@ import { decodeImage } from '../imageResize.ts';
 import { AssetError, getAssetPath, isAssetId, listAudioAssets, listImageAssets } from './store.ts';
 import { putSurauAsset, StorageFullError, surauHoldsAsset } from '../surau/storage.ts';
 import { reqSurau } from '../reqSurau.ts';
+import { VIDEO_MIME } from '@surau/core';
+import { serveVideo } from './videoServe.ts';
 
 const UPLOAD_LIMIT = 20 * 1024 * 1024;
 
@@ -89,6 +91,8 @@ export function registerAssetRoutes(app: FastifyInstance, deps: AssetRouteDeps):
       }
       const found = getAssetPath(db, dataDir, id);
       if (found === null) return reply.code(404).send({ errors: ['not found'] });
+      // A video is read in ranges by the media element: 206 with Content-Range, 416 for a range outside the file.
+      if (found.mime === VIDEO_MIME) return serveVideo(request, reply, found.path);
       return reply
         .header('Content-Type', found.mime)
         .header('Cache-Control', 'public, max-age=31536000, immutable')

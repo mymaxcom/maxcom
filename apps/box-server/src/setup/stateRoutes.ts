@@ -185,7 +185,7 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
     reply.header('Cache-Control', 'no-store');
     return {
       linked: linked(),
-      lastOkAt: stateValue(db, 'last_pull'),
+      lastOkAt: stateValue(db, 'last_ok') ?? stateValue(db, 'last_pull'),
       cloudSyncEnabled: getSettings(db, reqSurau(request)).cloudSync.enabled === true,
     };
   });

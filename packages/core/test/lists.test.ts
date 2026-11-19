@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { HIJRI_MONTHS, RECITERS, SURAHS, YOUTUBE_PLACEHOLDERS } from '../src/features/lists.ts';
+import { HIJRI_MONTHS, RECITERS, YOUTUBE_PLACEHOLDERS } from '../src/features/lists.ts';
+import { SURAHS } from '../src/islamic/surahs.ts';
 
 describe('lists', () => {
   it('has 114 surahs with the right verse counts', () => {
@@ -7,7 +8,9 @@ describe('lists', () => {
     SURAHS.forEach((s, i) => expect(s.n).toBe(i + 1));
     expect(SURAHS[0]!.ayat).toBe(7);
     expect(SURAHS[1]!.ayat).toBe(286);
-    expect(SURAHS[17]!.nameMs).toBe('Al-Kahf');
+    expect(SURAHS[17]!.nameMs).toBe('Al-Kahfi');
+    expect(SURAHS[17]!.nameAr).toBe('الكهف');
+    expect(SURAHS.every((s) => s.nameAr.length > 0 && s.nameMs.length > 0)).toBe(true);
     expect(SURAHS.reduce((n, s) => n + s.ayat, 0)).toBe(6236);
   });
   it('names the twelve Hijri months in BM and EN', () => {

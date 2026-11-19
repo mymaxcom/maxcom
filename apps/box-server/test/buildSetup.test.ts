@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,10 @@ const psm = join(repoRoot, 'scripts', 'setup', 'MaxcomSetup.psm1');
 const realPins = join(repoRoot, 'scripts', 'release-pins.json');
 const win = process.platform === 'win32';
 const VERSION = must((JSON.parse(readFileSync(join(repoRoot, 'versions.json'), 'utf8')) as Record<string, string>)['kiosk-server-windows'], 'kiosk-server-windows version');
+
+// the internal build of this checkout (builds.json): above 0 it is in the archive and bundle names (-b<N> after the version)
+const BUILD = Number((JSON.parse(readFileSync(join(repoRoot, 'builds.json'), 'utf8')) as Record<string, number>)['kiosk-server-windows'] ?? 0);
+const TAG = BUILD > 0 ? `-b${BUILD}` : '';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -51,7 +55,7 @@ interface Fixture {
 }
 
 /** Cache of three tiny zips, a pins file with their real hashes, and a fake release archive. */
-function fixture(opts: { releaseVersion?: string } = {}): Fixture {
+function fixture(opts: { releaseVersion?: string; releaseBuild?: number } = {}): Fixture {
   const root = tempDir();
   const cache = join(root, 'cache');
   const releaseDir = join(root, 'release');
@@ -80,8 +84,8 @@ function fixture(opts: { releaseVersion?: string } = {}): Fixture {
   };
   const pinsFile = join(root, 'pins.json');
   writeFileSync(pinsFile, JSON.stringify(pins, null, 2));
-  writeTarGz(join(releaseDir, `maxcom-box-${VERSION}-windows.tar.gz`), [
-    { name: 'release.json', data: JSON.stringify({ v: 1, version: opts.releaseVersion ?? VERSION, platform: 'windows' }) },
+  writeTarGz(join(releaseDir, `maxcom-box-${VERSION}${TAG}-windows.tar.gz`), [
+    { name: 'release.json', data: JSON.stringify({ v: 1, version: opts.releaseVersion ?? VERSION, ...(BUILD > 0 ? { build: opts.releaseBuild ?? BUILD } : {}), platform: 'windows' }) },
     { name: 'package.json', data: '{}' },
   ]);
   return { root, cache, releaseDir, outDir, pinsFile, pins };
@@ -173,7 +177,7 @@ describe.runIf(win)('build-setup.ps1 (run)', () => {
     const out = join(f.root, 'dry-out');
     const r = build(['-Version', VERSION, '-ReleaseDir', f.releaseDir, '-CacheDir', join(f.root, 'dry-cache'), '-OutDir', out, '-PinsFile', blankedPins(f.root), '-DryRun']);
     expect(r.status).toBe(0);
-    for (const s of ['Pasang MAXCOM.cmd', 'PANDUAN PASANG.txt', 'setup/setup.ps1', 'setup/MaxcomSetup.psm1', 'setup/launcher.mjs', 'setup/start.cmd', 'setup/release-pins.json', 'setup/maxcom.ico', `payload/maxcom-box-${VERSION}-windows.tar.gz`, 'payload/node-v24.22.1-win-x64.zip', 'licences/ffmpeg-LICENSE.txt', 'manifest.json']) {
+    for (const s of ['Pasang MAXCOM.cmd', 'PANDUAN PASANG.txt', 'setup/setup.ps1', 'setup/MaxcomSetup.psm1', 'setup/launcher.mjs', 'setup/start.cmd', 'setup/release-pins.json', 'setup/maxcom.ico', `payload/maxcom-box-${VERSION}${TAG}-windows.tar.gz`, 'payload/node-v24.22.1-win-x64.zip', 'licences/ffmpeg-LICENSE.txt', 'manifest.json']) {
       expect(r.out, s).toContain(s);
     }
     expect(r.out).toContain('sha256 belum diisi untuk ffmpeg');
@@ -190,7 +194,7 @@ describe.runIf(win)('build-setup.ps1 (run)', () => {
     expect(r.out).toContain('GAGAL:');
     expect(r.out).toContain('mediamtx');
     expect(existsSync(victim)).toBe(false);
-    expect(existsSync(join(f.outDir, `MAX-Kiosk-Server-Setup-${VERSION}-windows.zip`))).toBe(false);
+    expect(existsSync(join(f.outDir, `MAX-Kiosk-Server-Setup-${VERSION}${TAG}-windows.zip`))).toBe(false);
   });
 
   it('a failed download leaves no file and no zip', () => {
@@ -219,7 +223,18 @@ describe.runIf(win)('build-setup.ps1 (run)', () => {
     expect(r.out).toContain('release.json');
 
     const h = fixture();
-    rmSync(join(h.releaseDir, `maxcom-box-${VERSION}-windows.tar.gz`));
+    rmSync(join(h.releaseDir, `maxcom-box-${VERSION}${TAG}-windows.tar.gz`));
+    expect(build(args(h)).status).toBe(1);
+  });
+
+  it.runIf(BUILD > 0)('refuses an archive whose release.json build is not the one in builds.json, and an archive named without the build', () => {
+    const g = fixture({ releaseBuild: BUILD + 1 });
+    const r = build(args(g));
+    expect(r.status).toBe(1);
+    expect(r.out).toMatch(/GAGAL: release\.json dalam arkib berbinaan \d+, builds\.json kiosk-server-windows \d+/);
+    // the b0 name does not satisfy a b1 build: the bundle needs the archive carrying the build
+    const h = fixture();
+    renameSync(join(h.releaseDir, `maxcom-box-${VERSION}${TAG}-windows.tar.gz`), join(h.releaseDir, `maxcom-box-${VERSION}-windows.tar.gz`));
     expect(build(args(h)).status).toBe(1);
   });
 
@@ -228,7 +243,7 @@ describe.runIf(win)('build-setup.ps1 (run)', () => {
     const r = build(args(f));
     expect(r.out).toContain('OK zip');
     expect(r.status).toBe(0);
-    const top = `MAX-Kiosk-Server-Setup-${VERSION}-windows`;
+    const top = `MAX-Kiosk-Server-Setup-${VERSION}${TAG}-windows`;
     const bundle = join(f.outDir, top);
     const zip = join(f.outDir, `${top}.zip`);
     expect(existsSync(zip)).toBe(true);
@@ -247,7 +262,7 @@ describe.runIf(win)('build-setup.ps1 (run)', () => {
       'Pasang MAXCOM.cmd', 'PANDUAN PASANG.txt', 'setup/setup.ps1', 'setup/MaxcomSetup.psm1', 'setup/doctor.ps1', 'setup/uninstall.ps1',
       'setup/switch-release.ps1', 'setup/migrate-data.ps1', 'setup/box-ca.ps1', 'setup/install-live-tools.ps1', 'setup/ensure-box-firewall.ps1',
       'setup/launcher.mjs', 'setup/start.cmd', 'setup/cli.mjs', 'setup/maxcom.cmd', 'setup/release-pins.json', 'setup/maxcom.ico', 'Semak MAXCOM.cmd'.replace(/^/, 'setup/'),
-      `payload/maxcom-box-${VERSION}-windows.tar.gz`, 'payload/node-v1.0.0-win-x64.zip', 'payload/mediamtx_v1.0.0_windows_amd64.zip', 'payload/ffmpeg-n1.0-win64-gpl-1.0.zip',
+      `payload/maxcom-box-${VERSION}${TAG}-windows.tar.gz`, 'payload/node-v1.0.0-win-x64.zip', 'payload/mediamtx_v1.0.0_windows_amd64.zip', 'payload/ffmpeg-n1.0-win64-gpl-1.0.zip',
       'licences/node-LICENSE.txt', 'licences/mediamtx-LICENSE.txt', 'licences/ffmpeg-LICENSE.txt', 'licences/ffmpeg-SOURCE.txt',
     ]) {
       expect(paths, p).toContain(p);
@@ -281,7 +296,7 @@ describe.runIf(win)('build-setup.ps1 (run)', () => {
   it('a second build over the same output replaces the bundle cleanly', () => {
     const f = fixture();
     expect(build(args(f)).status).toBe(0);
-    const stale = join(f.outDir, `MAX-Kiosk-Server-Setup-${VERSION}-windows`, 'stale.txt');
+    const stale = join(f.outDir, `MAX-Kiosk-Server-Setup-${VERSION}${TAG}-windows`, 'stale.txt');
     writeFileSync(stale, 'x');
     expect(build(args(f)).status).toBe(0);
     expect(existsSync(stale)).toBe(false);

@@ -10,6 +10,7 @@ import { getItem } from '../content/store.ts';
 import type { YoutubeService, VideoPrivacy } from '../live/youtube/api.ts';
 import { YoutubeError } from '../live/youtube/oauth.ts';
 import { getSettings } from '../settingsStore.ts';
+import { YOUTUBE_AT_BOX_MSG } from './youtubeBoxCloud.ts';
 
 /**
  * YouTube on the cloud (Plan 6, Task 5). The cloud owns the sealed Google token. Two groups of routes:
@@ -23,10 +24,15 @@ import { getSettings } from '../settingsStore.ts';
  *    leaves the cloud and the session address is never stored, logged or put in `change_log`.
  *
  * Every route has a row in `ROUTE_PERMISSIONS`. A device session on a site route (and the reverse) gets 404 / 403.
+ *
+ * Release 2026.11.13: the grant is held by the surau's BOX. The catch-up routes (`begin`, `done`, `quota`, `verify`)
+ * now answer on the box too, from its own grant (at the surau). On the cloud they keep serving a surau whose grant the
+ * cloud still holds from before (an old app, until its box takes the grant over); for any other surau they answer 409
+ * `youtube_at_box`. The three box-leg routes stay for a box that has not updated yet.
  */
 
 export interface YoutubeCloudDeps {
-  /** The routes exist on both roles (the route table is one), but answer 404 on a box: only the cloud has the token. */
+  /** The box-leg routes exist on both roles (the route table is one), but answer 404 on a box. */
   role: 'box' | 'cloud';
   db: DatabaseSync;
   now: () => Date;
@@ -174,8 +180,16 @@ export function registerYoutubeCloudRoutes(
   const ytFor = (surauId: string): YoutubeService | null => (deps.youtubeFor !== undefined ? deps.youtubeFor(surauId) : deps.youtube);
 
   const notFound = (reply: FastifyReply): FastifyReply => reply.code(404).header('Cache-Control', 'no-store').send({ errors: [MSG.notFoundRoute] });
-  // on a box these routes exist in the table but not in fact: only the cloud holds the Google token
+  // on a box the box-leg routes exist in the table but not in fact: they are the cloud's side of an old box's live
   const gate = { preHandler: async (_request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> => (deps.role === 'cloud' ? undefined : notFound(reply)) };
+  /**
+   * No YouTube service for this surau. On the cloud that means the grant is (now) held by the surau's box: the
+   * catch-up steps are made there, at the surau. On a box it is a box without a data folder.
+   */
+  const noService = (reply: FastifyReply): FastifyReply =>
+    deps.role === 'cloud'
+      ? reply.code(409).header('Cache-Control', 'no-store').send({ errors: [YOUTUBE_AT_BOX_MSG], code: 'youtube_at_box' })
+      : sendYoutubeFailure(reply, new YoutubeError('not_configured'), now);
   /** The three box routes are for the linked site only: to a device session they do not exist. */
   const siteOnly = (request: FastifyRequest, reply: FastifyReply): { boxId: string } | null => {
     const a = request.auth;
@@ -252,7 +266,7 @@ export function registerYoutubeCloudRoutes(
 
   const deviceOnly = (request: FastifyRequest): string | null => deviceOf(request) ?? null;
 
-  app.post('/api/youtube/upload/begin', gate, async (request, reply) => {
+  app.post('/api/youtube/upload/begin', async (request, reply) => {
     const surauId = reqSurau(request);
     reply.header('Cache-Control', 'no-store');
     const deviceId = deviceOnly(request);
@@ -269,7 +283,7 @@ export function registerYoutubeCloudRoutes(
 
     if (getSettings(db, surauId).youtubeCatchUp.enabled !== true) return reply.code(409).send({ errors: [MSG.catchupOff], code: 'catchup_off' });
     const yt = ytFor(surauId);
-    if (yt === null) return sendYoutubeFailure(reply, new YoutubeError('not_configured'), now);
+    if (yt === null) return noService(reply);
     // only a video this cloud broadcast itself can be replaced: no device can make another video private
     if (replace !== null && db.prepare("SELECT 1 AS x FROM change_log WHERE surau_id = ? AND entity = 'youtube/broadcast' AND entity_id = ?").get(surauId, replace) === undefined) {
       return reply.code(400).send({ errors: [MSG.unknownLive], code: 'unknown_live_video' });
@@ -305,7 +319,7 @@ export function registerYoutubeCloudRoutes(
     }
   });
 
-  app.post('/api/youtube/upload/done', gate, async (request, reply) => {
+  app.post('/api/youtube/upload/done', async (request, reply) => {
     const surauId = reqSurau(request);
     reply.header('Cache-Control', 'no-store');
     const deviceId = deviceOnly(request);
@@ -322,7 +336,7 @@ export function registerYoutubeCloudRoutes(
       // the id is the device's word: it must be a video this very upload made, on this channel, after `begin`
       if (db.prepare('SELECT 1 AS x FROM uploads WHERE surau_id = ? AND video_id = ? AND id <> ?').get(surauId, b.videoId, b.uploadId) !== undefined) return bad(reply, 'unknown_video');
       const yt = ytFor(surauId);
-      if (yt === null) return sendYoutubeFailure(reply, new YoutubeError('not_configured'), now);
+      if (yt === null) return noService(reply);
       try {
         const o = await yt.videoOrigin(b.videoId);
         const began = Date.parse(String(row.created_at));
@@ -379,7 +393,7 @@ export function registerYoutubeCloudRoutes(
     if (!ids.every((x) => typeof x === 'string' && ID_RE.test(x))) return bad(reply);
     const unique = Array.from(new Set(ids as string[]));
     const yt = ytFor(surauId);
-    if (yt === null) return sendYoutubeFailure(reply, new YoutubeError('not_configured'), now);
+    if (yt === null) return noService(reply);
     if (!yt.signedIn()) return sendYoutubeFailure(reply, new YoutubeError('reauthorise'), now);
     // on the cloud only a video this surau logged (a live its sites broadcast, an upload of its devices) may be
     // asked about: one surau cannot learn the state of another's videos
@@ -395,7 +409,7 @@ export function registerYoutubeCloudRoutes(
     }
   });
 
-  app.get('/api/youtube/quota', gate, async (request, reply) => {
+  app.get('/api/youtube/quota', async (request, reply) => {
     const surauId = reqSurau(request);
     reply.header('Cache-Control', 'no-store');
     const w = pacificWindow(now());

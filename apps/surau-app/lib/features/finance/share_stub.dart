@@ -18,3 +18,10 @@ Future<ShareResult> share(
   String filename,
   String mime,
 ) async => const ShareResult('other', completed: false);
+
+Future<bool> whatsAppInstalled() async => false;
+
+Future<ShareResult> shareNotice(String text, Uint8List? picture, bool toWhatsApp) =>
+    shareText(text);
+
+Future<void> cleanNotice() async {}

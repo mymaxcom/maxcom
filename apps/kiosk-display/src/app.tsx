@@ -20,7 +20,7 @@ import { isPreview, usePreviewExtraAssets, usePreviewTheme } from './data/previe
 import { assetSrc } from './content/assets.ts';
 import { useRemoteKeys } from './data/remote.ts';
 import { isBoxLang } from './i18n-box.ts';
-import { t } from './i18n.ts';
+import { dirOfLang, t } from './i18n.ts';
 import type { Lang } from './i18n.ts';
 import { LiveVideo } from './live/LiveLayer.tsx';
 import { liveDisplayMode, useLiveAnchors } from './live/liveMode.ts';
@@ -38,7 +38,7 @@ import { Setup } from './screens/Setup.tsx';
 import { Background, ownListPictureOn, pictureTone, resolveTone, themeListPicture, toneVars } from './ui/Background.tsx';
 import { useBeep } from './ui/Beep.ts';
 import { useFirstAzan } from './audio/firstAzan.ts';
-import { CloudBadge } from './ui/CloudBadge.tsx';
+import { CloudIcon } from './ui/CloudIcon.tsx';
 import { HostExit } from './ui/HostExit.tsx';
 import { QuietBoundary } from './ui/QuietBoundary.tsx';
 import { useBoxNav } from './ui/LangSwitch.tsx';
@@ -57,6 +57,8 @@ import './themes/contract.css';
 import './templates.css';
 // After the templates: the whole-screen azan countdown restyles the phase screen with the same theme tokens.
 import './screens/azan-full.css';
+// Last: an Arabic TV screen (right to left, the Arabic face) over every theme.
+import './rtl.css';
 
 /** The data layer reports errors as message strings; this is the one `loadBundle` throws for a 401 with no cache. */
 const NOT_PAIRED_MESSAGE = new NotPairedError().message;
@@ -74,6 +76,9 @@ function menuImageIds(settings: Settings, theme: string, override?: ThemeStyleEn
   for (const s of Object.values(e.skrin)) if (s?.bgImage) ids.add(s.bgImage);
   return [...ids];
 }
+
+/** The text font of styles.css (:root --font), for an Arabic screen that adds its Arabic face in front of it. */
+const DEFAULT_FONT = "'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif";
 
 /** The themes whose ground (and so the scrim over a picture) is light. */
 const LIGHT_GROUND: ReadonlySet<string> = new Set(['minimal', 'oldschool']);
@@ -281,6 +286,9 @@ export function App() {
   // panels are light or dark by design, so a text colour measured from the picture is not forced onto them.
   const baseVars: Record<string, string> = theme.base === 'default' ? toneVars(tone) : {};
   const stageVars = { ...baseVars, ...menu.vars };
+  // An Arabic TV screen: every theme writes its Arabic letters in the bundled Amiri ('MX Arabic' covers the Arabic
+  // letters only, rtl.css), while Latin words and the digits keep the theme's (or the surau's) own font.
+  if (lang === 'ar') stageVars['--font'] = `'MX Arabic', ${stageVars['--font'] ?? DEFAULT_FONT}`;
   const scaleFactor = SCALE_FACTOR[screenStyle.scale ?? 'S'] ?? 1;
   // The Arabic-led looks of this theme, the preview's forced arab-* screen, and the style of the screen (translation place).
   const arabEnv = {
@@ -305,6 +313,8 @@ export function App() {
       data-theme={packLoad.state === 'failed' ? themeNow.base : themeNow.name}
       data-pack={themeNow.pack !== null ? packLoad.state : undefined}
       data-lang={lang}
+      lang={lang}
+      dir={dirOfLang(lang)}
       {...menu.attrs}
       data-pic={pic ?? undefined}
       data-picture={pictureOn ? 'on' : undefined}
@@ -348,8 +358,8 @@ export function App() {
             {t('pairBadge', lang)}
           </div>
         ) : null}
-        {cloud.offline && !preview && !dim ? (
-          <CloudBadge lastOkAt={cloud.lastOkAt} settings={settings} lang={lang} dim={!normal} />
+        {cloud.linked && cloud.enabled && !preview && !dim ? (
+          <CloudIcon offline={cloud.offline} lastOkAt={cloud.lastOkAt} settings={settings} lang={lang} dim={!normal} />
         ) : null}
         {showDot ? <span class="status-dot" data-testid="status-dot" aria-hidden="true" /> : null}
         <HostExit />

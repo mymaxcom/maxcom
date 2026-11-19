@@ -2,7 +2,7 @@ import { arabicIndic, pageAt, useFit } from '../../content/paging.ts';
 import type { CardProps } from '../../content/ContentLayer.tsx';
 import { textSizeOf } from '../../content/cards/AyatCard.tsx';
 import { useScale } from '../../content/scale.ts';
-import { t } from '../../i18n.ts';
+import { surahNameFor, t } from '../../i18n.ts';
 import { useArabEnv } from '../../themes/arabContext.ts';
 import { Hk } from '../../ui/Hk.tsx';
 import { groupIndices, tarjamahMode } from './arabLook.ts';
@@ -33,7 +33,7 @@ export function ArabAyatScreen({ view, lang, content, startedAt, durationSeconds
   return (
     <article class={`arab-ayat is-size-${size}`} data-card="ayatCard" data-page={`${pageNo + 1}/${groups.length}`} ref={ref} style={`--fit:${fit}`}>
       <div class="aa-head">
-        <span class="aa-surah">{t('arabSurahLine', lang, { name: a.surahNameMs, range })}</span>
+        <span class="aa-surah">{t('arabSurahLine', lang, { name: surahNameFor(a.surah, a.surahNameMs, lang), range })}</span>
       </div>
       <Hk class="aa-text" text={verses} quran />
       {mode !== 'hidden' ? (

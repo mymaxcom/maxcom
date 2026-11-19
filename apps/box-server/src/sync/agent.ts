@@ -6,9 +6,10 @@ import { Readable } from 'node:stream';
 import { rootCertificates } from 'node:tls';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { CONTENT_KINDS, KIOSK_TEMPLATE_IDS, MAX_PHOTO_BYTES, THEME_CONTRACT, isoInstantMs, normalisePhone } from '@surau/core';
+import { CONTENT_KINDS, KIOSK_TEMPLATE_IDS, MAX_PHOTO_BYTES, SERVER_FEATURES, THEME_CONTRACT, VIDEO_MIME, isoInstantMs, normalisePhone } from '@surau/core';
 import type { FeedEntry, Snapshot } from '@surau/core';
 import { getAssetPath, isAssetId, putAsset } from '../assets/store.ts';
+import { sweepVideoOrphans } from '../assets/video.ts';
 import { PHOTO_ID_RE, checkJpeg, checkReplicatedBytes, markPresent, photoMeta, photoPath, writePhotoFile } from '../finance/photos.ts';
 import { setCloudReceived } from '../finance/store.ts';
 import type { ChangeBus } from '../events.ts';
@@ -24,6 +25,7 @@ import type { LinkState } from './register.ts';
 import { loadSyncKey, normaliseCloudUrl } from './syncKey.ts';
 import type { SyncKeyData } from './syncKey.ts';
 import { LAST_PUSH_SEQ_KEY } from './trim.ts';
+import { softwareToken } from '../productVersion.ts';
 import { verifySiteEntry } from './verify.ts';
 
 /**
@@ -45,6 +47,8 @@ export type AgentState = 'idle' | 'waking' | 'syncing' | 'offline';
 export type AgentErrorReason = 'unreachable' | 'unauthorised' | 'http_5xx' | 'http_4xx' | 'tls' | 'snapshot_required' | 'bad_answer' | 'refused';
 
 export const BACKOFF_MS = [60_000, 120_000, 300_000, 900_000] as const;
+/** A camera mark that will not clear may force this many waking cycles an hour (S9). */
+const CAMERA_WAKES_PER_HOUR = 3;
 export const DEBOUNCE_MS = 30_000;
 const PAGE = 500;
 /** How often the box asks the cloud when its phones were last used there. */
@@ -64,6 +68,14 @@ const ASSET_MAX_BYTES = 20 * 1024 * 1024;
 /** What this box supports for themes, sent on every request to the cloud: `<contract>;<built-in ids>`. */
 export const THEMES_HEADER = 'X-Maxcom-Themes';
 export const THEMES_HEADER_VALUE = `${THEME_CONTRACT};${KIOSK_TEMPLATE_IDS.join(',')}`;
+/** The server features this box has (`SERVER_FEATURES`), sent beside the themes: the cloud lists a feature for the surau only when its box says it has it. */
+export const FEATURES_HEADER = 'X-Maxcom-Features';
+export const FEATURES_HEADER_VALUE = SERVER_FEATURES.join(',');
+/** Both report headers, sent on every request a box makes to its cloud. */
+export const BOX_REPORT_HEADERS: Record<string, string> = { [THEMES_HEADER]: THEMES_HEADER_VALUE, [FEATURES_HEADER]: FEATURES_HEADER_VALUE };
+/** A parked settings entry (one a mixed rollout made one side refuse) is dropped after this long. */
+const PARKED_MAX_AGE_MS = 60 * 24 * 3_600_000;
+const PEER_TOKEN_RE = /^[0-9.]{1,20};b[0-9]$/;
 const API_TIMEOUT_MS = 30_000;
 const ASSET_TIMEOUT_MS = 120_000;
 const ALL = { users: true, devices: true, keys: true, finance: true, financeWrite: true, contentWrite: true } as const;
@@ -211,8 +223,14 @@ export class SyncAgent {
   private failures = 0;
   private nextDelay: number | null = null;
   private dirtySeen = 0;
+  /** The Worker said a camera change relayed from a phone waits for this box (`camera: true` beside the seq). */
+  private cameraSeen = false;
+  /** When the camera mark alone forced a waking cycle, within the last hour (S9: at most CAMERA_WAKES_PER_HOUR). */
+  private cameraWakes: number[] = [];
   /** Refusals seen in the running cycle that are not benign (push replies, malformed pulled entries). */
   private cycleRefused = 0;
+  /** The cloud's software token from its last answer (`X-Maxcom-Server`); null until one carries it (an older cloud never does). */
+  private peerToken: string | null = null;
   private cycleReasons: string[] = [];
   private cycleHook: (() => void) | null = null;
 
@@ -267,7 +285,7 @@ export class SyncAgent {
   }
 
   /** The sync facts for health: the stored status plus the live state. */
-  status(): { linked: boolean; cloudUrl: string | null; lastPush: string | null; lastPull: string | null; pendingOut: number; lastError: string | null; state: AgentState; refused: number; lastRefusal: string | null } {
+  status(): { linked: boolean; cloudUrl: string | null; lastPush: string | null; lastPull: string | null; pendingOut: number; lastError: string | null; state: AgentState; refused: number; lastRefusal: string | null; parked: number } {
     const err = this.getState('last_error');
     return {
       linked: this.getState('linked') === '1',
@@ -279,6 +297,7 @@ export class SyncAgent {
       state: this.state,
       refused: this.num('refused_total'),
       lastRefusal: this.getState('last_refusal'),
+      parked: this.parkedCount(),
     };
   }
 
@@ -295,6 +314,15 @@ export class SyncAgent {
     this.nextDelay = ms;
     this.tickTimer = setTimeout(() => void this.tick(), ms);
     this.tickTimer.unref();
+  }
+
+  /** A mark that sticks (a lost clear) may force at most a few waking cycles an hour; records the one asked for. */
+  private cameraWakeAllowed(): boolean {
+    const now = this.o.now().getTime();
+    this.cameraWakes = this.cameraWakes.filter((t) => now - t < 3_600_000);
+    if (this.cameraWakes.length >= CAMERA_WAKES_PER_HOUR) return false;
+    this.cameraWakes.push(now);
+    return true;
   }
 
   private intervalMs(): number {
@@ -349,8 +377,14 @@ export class SyncAgent {
     this.runCycleHook();
     try {
       const dirty = await this.checkDirty(key);
+      this.noteCloudOk();
       // A pending local change is the debounce timer's business unless nothing else is due.
-      if (dirty > 0 || dirty === -1 || (this.pendingCount() > 0 && this.debounceTimer === null)) {
+      // a waiting camera change also takes a full cycle: it wakes a sleeping cloud, and the cycle hook then fetches it
+      const cameraOnly = this.cameraSeen && dirty <= 0 && !(this.pendingCount() > 0 && this.debounceTimer === null);
+      const camera = this.cameraSeen && (!cameraOnly || this.cameraWakeAllowed());
+      // one waking cycle answers the mark: if the Worker still says so, the cap above keeps the cloud from being woken for ever
+      this.cameraSeen = false;
+      if (dirty > 0 || dirty === -1 || camera || (this.pendingCount() > 0 && this.debounceTimer === null)) {
         await this.guarded();
         return;
       }
@@ -409,6 +443,13 @@ export class SyncAgent {
     });
     this.running = p;
     return p;
+  }
+
+  /** A good answer from the cloud (the Worker's dirty check counts): the kiosk's cloud icon follows `last_ok`. */
+  private noteCloudOk(): void {
+    this.setState('last_ok', this.o.now().toISOString());
+    // a refusal recorded by an earlier cycle stays until a cycle decides otherwise
+    if (this.getState('last_error') !== 'refused') this.setState('last_error', null);
   }
 
   private fail(error: unknown): void {
@@ -567,7 +608,9 @@ export class SyncAgent {
   private async call(key: SyncKeyData, path: string, mk: () => RequestInit, timeoutMs = API_TIMEOUT_MS): Promise<Response> {
     for (let attempt = 1; ; attempt++) {
       const init = mk();
-      const res = await this.send(`${this.baseUrl(key)}${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${key.siteToken}`, [THEMES_HEADER]: THEMES_HEADER_VALUE } }, timeoutMs);
+      const res = await this.send(`${this.baseUrl(key)}${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${key.siteToken}`, ...BOX_REPORT_HEADERS } }, timeoutMs);
+      const peer = res.headers.get('x-maxcom-server');
+      if (peer !== null && PEER_TOKEN_RE.test(peer)) this.peerToken = peer;
       if (!(await this.isWaking(res))) return res;
       await res.arrayBuffer().catch(() => undefined);
       this.state = 'waking';
@@ -635,9 +678,11 @@ export class SyncAgent {
     if (res.status === 404) {
       await res.arrayBuffer().catch(() => undefined);
       this.dirtySeen = 0;
+      this.cameraSeen = false;
       return -1;
     }
     const j = await this.okJson(res);
+    this.cameraSeen = j.camera === true;
     const seq = Number(j.seq ?? 0);
     this.dirtySeen = Number.isInteger(seq) && seq > 0 ? seq : 0;
     return this.dirtySeen;
@@ -672,15 +717,99 @@ export class SyncAgent {
     await this.assetsDown(key, pulledAssets);
     await this.photosDown(key);
     await this.themeSupportDown(key);
+    await this.retryParked(key);
     await this.idsPushUp(key);
     await this.peopleResyncDown(key);
     await this.deviceSeenDown(key);
     const at = this.o.now().toISOString();
     this.setState('last_push', at);
     this.setState('last_pull', at);
+    this.setState('last_ok', at);
     this.setState('pending_out', String(this.pendingCount()));
     this.recordRefusals();
     await this.clearDirty(key, head);
+  }
+
+  // ---- parked settings (a mixed rollout) -----------------------------------------------------
+
+  /** What this side and its peer run now; a change of either is the moment a parked entry may be taken. */
+  private softwareKey(): string {
+    return `${softwareToken()}|${this.peerToken ?? this.getState('peer_token') ?? ''}`;
+  }
+
+  parkedCount(): number {
+    if (this.dead) return 0;
+    return Number(this.o.db.prepare('SELECT COUNT(*) AS n FROM parked_settings').get()?.n ?? 0);
+  }
+
+  /** Keep a refused settings entry (the newer stamp per feature and direction) with the day it was first parked. */
+  private park(direction: 'push' | 'pull', e: FeedEntry): void {
+    if (this.dead) return;
+    this.o.db
+      .prepare(
+        `INSERT INTO parked_settings (direction, entity, entity_id, stamp, entry_json, parked_at) VALUES (?, 'settings', ?, ?, ?, ?)
+         ON CONFLICT(direction, entity, entity_id) DO UPDATE SET stamp = excluded.stamp, entry_json = excluded.entry_json WHERE excluded.stamp > parked_settings.stamp`,
+      )
+      .run(direction, e.entityId, e.editedAt, JSON.stringify(e), this.o.now().toISOString());
+    // the first parked entry starts the clock: the next software change on either side triggers its retry
+    if (this.getState('parked_token') === null) this.setState('parked_token', this.softwareKey());
+  }
+
+  /** One settings entry alone to the cloud: true when the cloud refused it as `invalid`. */
+  private async sendRefusedInvalid(key: SyncKeyData, e: FeedEntry): Promise<boolean> {
+    const res = await this.call(key, '/api/sync/ops', () => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: [e] }) }));
+    const reply = await this.okJson(res);
+    return Number(reply.refused) > 0 && Array.isArray(reply.reasons) && reply.reasons[0] === 'invalid';
+  }
+
+  /** A batch the cloud refused as `invalid` in part: find which settings entries, and park them. */
+  private async parkRefusedSettings(key: SyncKeyData, entries: FeedEntry[], reply: Record<string, unknown>): Promise<void> {
+    if (!Array.isArray(reply.reasons) || !reply.reasons.includes('invalid')) return;
+    for (const e of entries) {
+      if (e.entity !== 'settings') continue;
+      if (await this.sendRefusedInvalid(key, e)) this.park('push', e);
+    }
+  }
+
+  /**
+   * Once after this box or the cloud changes software version: try the parked settings entries again. They still obey
+   * the per-field stamps (a newer edit wins on either side), an entry taken is removed, one refused again stays,
+   * and rows older than 60 days are dropped. A failure leaves the key unchanged so the next cycle tries again.
+   */
+  private async retryParked(key: SyncKeyData): Promise<void> {
+    if (this.peerToken !== null) this.setState('peer_token', this.peerToken);
+    const cutoff = new Date(this.o.now().getTime() - PARKED_MAX_AGE_MS).toISOString();
+    this.o.db.prepare('DELETE FROM parked_settings WHERE parked_at < ?').run(cutoff);
+    const now = this.softwareKey();
+    if (this.parkedCount() === 0) {
+      this.setState('parked_token', null);
+      return;
+    }
+    if (this.getState('parked_token') === now) return;
+    try {
+      const rows = this.o.db.prepare('SELECT direction, entity_id, entry_json FROM parked_settings ORDER BY parked_at, entity_id').all();
+      let changed = false;
+      for (const r of rows) {
+        const e = JSON.parse(String(r.entry_json)) as FeedEntry;
+        const gone = (): void => void this.o.db.prepare('DELETE FROM parked_settings WHERE direction = ? AND entity = ? AND entity_id = ?').run(String(r.direction), 'settings', String(r.entity_id));
+        if (r.direction === 'push') {
+          if (!(await this.sendRefusedInvalid(key, e))) gone();
+        } else {
+          const caughtUp = this.num(LAST_PUSH_SEQ_KEY) === headSeq(this.o.db, ALL);
+          const res = applyFeedEntry(this.o.db, e, { now: this.o.now(), origin: 'cloud', actor: e.actor, dataDir: this.o.dataDir, role: 'box', surauId: LOCAL_SURAU_ID });
+          if (res.status === 'refused' && res.reason === 'invalid') continue;
+          gone();
+          if (res.status === 'applied') {
+            changed = true;
+            if (caughtUp) this.setState(LAST_PUSH_SEQ_KEY, String(headSeq(this.o.db, ALL)));
+          }
+        }
+      }
+      if (changed) this.o.bus.emit(getVersion(this.o.db, LOCAL_SURAU_ID), LOCAL_SURAU_ID);
+      this.setState('parked_token', now);
+    } catch {
+      /* the next cycle tries again */
+    }
   }
 
   /**
@@ -845,6 +974,7 @@ export class SyncAgent {
           const reply = await this.okJson(res);
           this.noteRefusals(reply);
           this.noteCloudReceipts(reply);
+          await this.parkRefusedSettings(key, batch.entries, reply);
           for (const e of batch.entries) assetIdsIn(e.after, assets);
         }
         // everything before this batch's last entry that is not in `up` never travels, so the cursor may pass it
@@ -1001,6 +1131,8 @@ export class SyncAgent {
       if (n >= MAX_ASSETS_PER_CYCLE) break;
       const local = getAssetPath(this.o.db, this.o.dataDir, id);
       if (local === null) continue;
+      // A video file never goes to the cloud (only the item's details do); another box lacking it skips the item.
+      if (local.mime === VIDEO_MIME) continue;
       const head = await this.call(key, `/assets/${id}`, () => ({ method: 'HEAD' }));
       if (head.status !== 404) {
         if (head.status >= 500) throw new CycleError('http_5xx');
@@ -1054,6 +1186,8 @@ export class SyncAgent {
       const e = raw as FeedEntry;
       if (e.origin === `box:${this.o.boxId}`) continue;
       const r = applyFeedEntry(this.o.db, e, { now: this.o.now(), origin: 'cloud', actor: e.actor, dataDir: this.o.dataDir, role: 'box', surauId: LOCAL_SURAU_ID });
+      // a settings value this build does not know yet (the cloud is newer): kept, and applied once this box is upgraded
+      if (r.status === 'refused' && r.reason === 'invalid' && e.entity === 'settings') this.park('pull', e);
       if (r.status === 'applied') {
         changed = true;
         assetIdsIn(e.after, assets);
@@ -1095,7 +1229,11 @@ export class SyncAgent {
       this.setState('last_pull_seq', String(cursor));
       if (next === null) break;
     }
-    if (changed) this.o.bus.emit(getVersion(this.o.db, LOCAL_SURAU_ID), LOCAL_SURAU_ID);
+    if (changed) {
+      // An upload video deleted or replaced on the other side leaves its file behind here: remove what no item uses any more.
+      try { sweepVideoOrphans(this.o.db, this.o.dataDir, 60 * 60_000); } catch { /* the next pull tries again */ }
+      this.o.bus.emit(getVersion(this.o.db, LOCAL_SURAU_ID), LOCAL_SURAU_ID);
+    }
     return { head, pulledAssets: assets };
   }
 

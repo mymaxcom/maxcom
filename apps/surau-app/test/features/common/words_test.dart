@@ -55,31 +55,31 @@ void main() {
   });
 
   test('time of day in BM', () {
-    expect(timeOfDayWords(DateTime(2026, 11, 4, 22, 45)), '10:45 malam');
-    expect(timeOfDayWords(DateTime(2026, 11, 4, 8, 0)), '8:00 pagi');
-    expect(timeOfDayWords(DateTime(2026, 11, 4, 0, 5)), '12:05 pagi');
-    expect(timeOfDayWords(DateTime(2026, 11, 4, 12, 30)), '12:30 tengah hari');
-    expect(timeOfDayWords(DateTime(2026, 11, 4, 13, 0)), '1:00 petang');
-    expect(timeOfDayWords(DateTime(2026, 11, 4, 18, 59)), '6:59 petang');
-    expect(timeOfDayWords(DateTime(2026, 11, 4, 19, 0)), '7:00 malam');
+    expect(timeOfDayWords(DateTime(2026, 11, 4, 22, 45), lang: AppLang.ms), '10:45 malam');
+    expect(timeOfDayWords(DateTime(2026, 11, 4, 8, 0), lang: AppLang.ms), '8:00 pagi');
+    expect(timeOfDayWords(DateTime(2026, 11, 4, 0, 5), lang: AppLang.ms), '12:05 pagi');
+    expect(timeOfDayWords(DateTime(2026, 11, 4, 12, 30), lang: AppLang.ms), '12:30 tengah hari');
+    expect(timeOfDayWords(DateTime(2026, 11, 4, 13, 0), lang: AppLang.ms), '1:00 petang');
+    expect(timeOfDayWords(DateTime(2026, 11, 4, 18, 59), lang: AppLang.ms), '6:59 petang');
+    expect(timeOfDayWords(DateTime(2026, 11, 4, 19, 0), lang: AppLang.ms), '7:00 malam');
   });
 
   test('whenWords adds esok or a short date when not today', () {
     final today = DateTime(2026, 11, 4, 20, 0);
     expect(
-      whenWords(DateTime(2026, 11, 4, 22, 45), today: today),
+      whenWords(DateTime(2026, 11, 4, 22, 45), today: today, lang: AppLang.ms),
       '10:45 malam',
     );
     expect(
-      whenWords(DateTime(2026, 11, 5, 0, 10), today: today),
+      whenWords(DateTime(2026, 11, 5, 0, 10), today: today, lang: AppLang.ms),
       '12:10 pagi esok',
     );
     expect(
-      whenWords(DateTime(2026, 11, 12, 9, 0), today: today),
+      whenWords(DateTime(2026, 11, 12, 9, 0), today: today, lang: AppLang.ms),
       '9:00 pagi, 12 Nov',
     );
     expect(
-      whenWords(DateTime(2027, 3, 1, 9, 0), today: today),
+      whenWords(DateTime(2027, 3, 1, 9, 0), today: today, lang: AppLang.ms),
       '9:00 pagi, 1 Mac',
     );
   });

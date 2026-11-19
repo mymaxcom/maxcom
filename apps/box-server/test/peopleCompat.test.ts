@@ -117,7 +117,11 @@ describe('[PP-COMPAT] a database from before this release (migration 021)', () =
   });
 
   it('[PP-COMPAT] the migration list ends with 022 and no earlier migration changed its name', () => {
-    expect(MIGRATIONS.map((m) => m.name).slice(-2)).toEqual(['021-camera-secret', '022-people-relook']);
+    // later releases append after 022 (023 the YouTube flag and handover, 024 the outbox camera mark, 025 poster stretch keep)
+    const names = MIGRATIONS.map((m) => m.name);
+    const at = names.indexOf('021-camera-secret');
+    expect(names.slice(at, at + 2)).toEqual(['021-camera-secret', '022-people-relook']);
+    expect(names.slice(at + 2).every((n) => n > '022-people-relook')).toBe(true);
   });
 });
 

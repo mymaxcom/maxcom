@@ -90,10 +90,16 @@ describe('kiosk scripts static checks', () => {
     }
   });
 
-  it('start-kiosk: loopback HTTP only, integer port, Edge args as an array, no secrets or other hosts', () => {
+  it('start-kiosk: localhost page, loopback health, HTTP only, integer port, Edge args as an array, no secrets or other hosts', () => {
     const s = srcs.start;
     expect(s).toContain('[ValidateRange(1, 65535)][int]$Port');
-    expect(s).toContain('http://127.0.0.1:$Port/');
+    expect(s).toContain('http://localhost:$Port/');
+    expect(s).toContain('http://127.0.0.1:$Port/api/health');
+    expect(s).not.toContain('"http://127.0.0.1:$Port/"');
+    // The executable lines name no other host than localhost (page) and 127.0.0.1 (health).
+    const code = s.split(/\r?\n/).filter((l) => /^\s*\$(url|healthUrl)\s*=/.test(l));
+    const hosts = code.flatMap((l) => [...l.matchAll(/https?:\/\/([^\/:\s"']+)/g)].map((m) => m[1]));
+    expect(hosts.sort()).toEqual(['127.0.0.1', 'localhost']);
     expect(s).not.toMatch(/https:\/\//);
     expect(s).not.toMatch(/\[string\]\$(Url|Uri|Host)/i);
     expect(s).toContain('$edgeArgs = @(');
@@ -152,7 +158,7 @@ describe.runIf(win)('start-kiosk.ps1 runs', () => {
     const args = lines.filter((l) => l.startsWith('ARG ')).map((l) => l.slice(4));
     expect(args).toEqual([
       '--kiosk',
-      'http://127.0.0.1:9123/',
+      'http://localhost:9123/',
       '--edge-kiosk-type=fullscreen',
       '--no-first-run',
       '--no-default-browser-check',
@@ -160,6 +166,8 @@ describe.runIf(win)('start-kiosk.ps1 runs', () => {
       '--autoplay-policy=no-user-gesture-required',
       `--user-data-dir=${join(local, 'MAXCOM', 'kiosk-profile')}`,
     ]);
+    expect(new URL(args[1]!).hostname).toBe('localhost');
+    expect(r.stdout).toContain('HEALTH http://127.0.0.1:9123/api/health');
     // Nothing was created or started.
     expect(existsSync(join(local, 'MAXCOM'))).toBe(false);
   });

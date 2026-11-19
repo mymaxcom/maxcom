@@ -61,6 +61,18 @@ function Resolve-ProductVersion([string]$Key, [string]$Given, [string]$Repo) {
   return $declared
 }
 
+# The internal build (0 to 9) of this product's current version: builds.json[<key>], 0 when not listed. When above 0 it is
+# part of every artifact name (-b<N> after the version), so a b0 and a b1 file never overwrite each other.
+function Resolve-ProductBuild([string]$Key, [string]$Repo) {
+  $bf = Join-Path $Repo 'builds.json'
+  if (-not (Test-Path -LiteralPath $bf -PathType Leaf)) { return 0 }
+  try { $bj = Get-Content -LiteralPath $bf -Raw -Encoding UTF8 | ConvertFrom-Json } catch { Fail 'builds.json bukan JSON yang sah.' }
+  $bp = $bj.PSObject.Properties[$Key]
+  if ($null -eq $bp) { return 0 }
+  if ([string]$bp.Value -notmatch '^[0-9]$') { Fail "builds.json: $Key mesti nombor 0 hingga 9" }
+  return [int]$bp.Value
+}
+
 # ---------------------------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------------------------
@@ -172,6 +184,8 @@ if ($RepoRoot -eq '') { $RepoRoot = Join-Path (Split-Path -Parent (Split-Path -P
 if (-not (Test-Path -LiteralPath $RepoRoot -PathType Container)) { Fail "RepoRoot tiada: $RepoRoot" }
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path.TrimEnd('\')
 $Version = Resolve-ProductVersion 'kiosk-server-windows' $Version $repo
+$Build = Resolve-ProductBuild 'kiosk-server-windows' $repo
+$buildTag = if ($Build -gt 0) { "-b$Build" } else { '' }
 if ($ReleaseDir -eq '') { $ReleaseDir = Join-Path $repo 'dist\release' }
 if ($CacheDir -eq '') { $CacheDir = Join-Path $repo 'dist\release-cache' }
 if ($OutDir -eq '') { $OutDir = Join-Path $repo 'dist\setup' }
@@ -202,8 +216,8 @@ $mtxVer = [string]$pins.mediamtx.version
 if ($mtxVer -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { Fail "versi mediamtx dalam pin mesti seperti v1.21.3, diberi: $mtxVer" }
 if ($zipNames['mediamtx'] -ne "mediamtx_${mtxVer}_windows_amd64.zip") { Fail "nama zip MediaMTX dalam pin ($($zipNames['mediamtx'])) bukan mediamtx_<versi>_windows_amd64.zip" }
 
-$topName = "MAX-Kiosk-Server-Setup-$Version-windows"
-$archiveName = "maxcom-box-$Version-windows.tar.gz"
+$topName = "MAX-Kiosk-Server-Setup-$Version$buildTag-windows"
+$archiveName = "maxcom-box-$Version$buildTag-windows.tar.gz"
 
 # ---------------------------------------------------------------------------------------------
 # Bundle plan: [path inside the bundle, source file]
@@ -271,6 +285,9 @@ foreach ($entryName in 'release.json', './release.json') {
 if ($null -eq $rj) { Fail "release.json tiada di akar $archiveName" }
 try { $rel = $rj | ConvertFrom-Json } catch { Fail "release.json dalam $archiveName bukan JSON yang sah" }
 if ([string]$rel.version -ne $Version) { Fail "release.json dalam arkib berversi '$($rel.version)', bukan $Version" }
+$relBuild = 0
+if ($null -ne $rel.PSObject.Properties['build']) { $relBuild = [int]$rel.build }
+if ($relBuild -ne $Build) { Fail "release.json dalam arkib berbinaan $relBuild, builds.json kiosk-server-windows $Build" }
 
 # ---------------------------------------------------------------------------------------------
 # Pinned tools: verified before use

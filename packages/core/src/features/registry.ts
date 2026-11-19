@@ -21,7 +21,7 @@ export type FeatureKey =
   | 'iqamahCountdown' | 'solatScreen' | 'jumaat' | 'tarawih' | 'syurukWarning' | 'imsakBeep'
   | 'isyraq' | 'firstAzanSubuh' | 'dataSources' | 'location' | 'prayerCalc' | 'prayerSources'
   | 'surauInfo' | 'hijriDate' | 'backgrounds' | 'autoTone' | 'language' | 'orientation' | 'kioskTemplate' | 'themeStyle'
-  | 'kuliahCard' | 'penceramahPhoto' | 'kitabCover' | 'pengumuman' | 'ticker' | 'posters'
+  | 'kuliahCard' | 'penceramahPhoto' | 'kitabCover' | 'pengumuman' | 'ticker' | 'posters' | 'videos'
   | 'programKhas' | 'takwim' | 'hadis' | 'worldTimes' | 'tugasan'
   | 'ayatCard' | 'zikirSelepasSolat' | 'quranReader' | 'tilawah'
   | 'beeps'
@@ -113,6 +113,11 @@ export interface LiveYoutubeSettings extends FeatureSettings {
   titleTemplate: string;
   descriptionTemplate: string;
   maxBitrateKbps: number;
+  /**
+   * The surau's choice for the NEXT live: broadcast to YouTube or not. One setting for the whole surau (every admin with
+   * live:control, every device), synced like any other field; a block (signed out, no internet) never changes it.
+   */
+  nextLiveOn: boolean;
 }
 /** MAXCOM system values (Lanjutan; Pentadbir MAXCOM only). suspendedAt is the reversible stop flag. */
 export interface SystemSettings extends FeatureSettings {
@@ -242,13 +247,14 @@ export const FEATURES: readonly FeatureDef[] = [
     'Sumber data internet', 'Internet data sources', 'مصادر بيانات الإنترنت'),
   def('firstAzanSubuh', 'solat', false, false, { minutesBefore: 10, audioFile: null }, 'Azan pertama Subuh', 'First Subuh azan', 'الأذان الأول للفجر'),
 
+  // First in Skrin: the first TV setting in the app's Konfigurasi list (operator 2026-11-20).
+  def('language', 'skrin', true, true, { lang: 'auto' }, 'Bahasa skrin TV', 'TV screen language', 'لغة شاشة التلفاز'),
   def('surauInfo', 'skrin', true, true,
     { name: 'Surau', shortName: '', kind: 'surau', shortAddress: '', helpName: '', helpPhone: '', helpEmail: '', logo: '', showName: true },
     'Maklumat surau', 'Surau details', 'بيانات المصلى'),
   def('hijriDate', 'skrin', false, true, { adjustDays: 0, switchAt: 'maghrib' }, 'Tarikh Hijrah', 'Hijri date', 'التاريخ الهجري'),
   def('backgrounds', 'skrin', false, true, { images: ['default-1', 'default-2'], rotate: 'daily' }, 'Latar belakang', 'Backgrounds', 'الخلفيات'),
   def('autoTone', 'skrin', false, true, { override: null }, 'Warna teks automatik', 'Automatic text tone', 'لون النص التلقائي'),
-  def('language', 'skrin', true, true, { lang: 'auto' }, 'Bahasa skrin TV', 'TV screen language', 'لغة شاشة التلفاز'),
   def('orientation', 'skrin', false, true, { mode: 'landscape' }, 'Orientasi skrin', 'Screen orientation', 'اتجاه الشاشة'),
   def('kioskTemplate', 'skrin', false, true, { templateId: 'default' }, 'Templat paparan', 'Display template', 'قالب العرض'),
   def('themeStyle', 'skrin', false, true, { styles: {}, packs: {} }, 'Gaya tema', 'Theme style', 'نمط القالب'),
@@ -259,6 +265,8 @@ export const FEATURES: readonly FeatureDef[] = [
   def('pengumuman', 'kandungan', false, true, { durationSeconds: 15, order: 2, daysAhead: 7, maxItems: 5 }, 'Pengumuman', 'Announcements', 'الإعلانات'),
   def('ticker', 'kandungan', false, true, { speed: 'normal' }, 'Teks bergerak', 'Ticker', 'النص المتحرك'),
   def('posters', 'kandungan', false, true, { durationSeconds: 15, order: 3 }, 'Poster', 'Posters', 'الملصقات'),
+  // Video: each video plays to its own end (slot = video length, at most 10 min); `durationSeconds` is not used.
+  def('videos', 'kandungan', false, true, { order: 11 }, 'Video', 'Video', 'الفيديو'),
   def('programKhas', 'kandungan', false, true, { durationSeconds: 15, order: 4, daysAhead: 7, hideAfterMinutes: 5 }, 'Program khas', 'Special programmes', 'البرامج الخاصة'),
   def('takwim', 'kandungan', false, true, { durationSeconds: 15, order: 5, count: 3 }, 'Takwim', 'Calendar', 'التقويم'),
   def('hadis', 'kandungan', false, true,
@@ -296,6 +304,7 @@ export const FEATURES: readonly FeatureDef[] = [
       titleTemplate: '{label}: {penceramah}',
       descriptionTemplate: '{topic}\nKitab: {kitab}\n{surau}, {date}',
       maxBitrateKbps: 2500,
+      nextLiveOn: true,
     },
     'Siaran langsung YouTube', 'Live on YouTube', 'البث المباشر على YouTube'),
   def('recording', 'live', false, true, { segmentMinutes: 15, keepOnDevice: true }, 'Rakaman', 'Recording', 'التسجيل'),

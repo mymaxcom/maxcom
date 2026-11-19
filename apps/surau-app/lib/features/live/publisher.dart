@@ -449,3 +449,13 @@ abstract interface class LiveSourceControl {
   /// Ends the replay and gives the live preview back.
   Future<void> clapStop();
 }
+
+/// What a publisher can do when the person plugs a microphone into the
+/// device (the browser one; on Android the system picks the new microphone
+/// by itself). The screen asks `publisher is LiveMicControl`.
+abstract interface class LiveMicControl {
+  /// The sound comes from [deviceId] from now on (null = the device's own
+  /// default). A running live and its recording carry on. False when the
+  /// microphone could not be opened; nothing changes then.
+  Future<bool> setMicrophone(String? deviceId);
+}

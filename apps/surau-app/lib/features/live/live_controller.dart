@@ -11,6 +11,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart'
+    show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_lang.dart';
@@ -28,29 +30,63 @@ import 'web_publisher.dart';
 
 // ---- the box's side ----
 
-enum YoutubeAccountPhase { signedOut, signingIn, signedIn }
+/// [unknown]: the box could not reach the place that holds the sign-in just now. It is NOT signed out: the choice
+/// and the sign-in card stay as they were, and the last good channel is named.
+enum YoutubeAccountPhase { signedOut, signingIn, signedIn, unknown }
+
+/// Why the account is signed out when it is not the plain start state: the person cancelled at Google, the
+/// code ran out, or Google withdrew the access that was given ("ditarik balik").
+enum YoutubeSignOutReason { denied, expired, revoked }
 
 class YoutubeAccount {
-  const YoutubeAccount.signedOut()
-    : phase = YoutubeAccountPhase.signedOut,
+  const YoutubeAccount.signedOut({this.reason})
+    : byAdmin = false,
+      phase = YoutubeAccountPhase.signedOut,
       userCode = null,
       verificationUrl = null,
+      expiresAt = null,
       channel = null;
 
-  const YoutubeAccount.signingIn({this.userCode, this.verificationUrl})
-    : phase = YoutubeAccountPhase.signingIn,
-      channel = null;
+  const YoutubeAccount.signingIn({
+    this.userCode,
+    this.verificationUrl,
+    this.expiresAt,
+    this.byAdmin = false,
+  }) : phase = YoutubeAccountPhase.signingIn,
+       reason = null,
+       channel = null;
+
+  /// The sign-in could not be checked now; [channel] is the last one the box saw signed in (may be null).
+  const YoutubeAccount.unknown({this.channel})
+    : byAdmin = false,
+      phase = YoutubeAccountPhase.unknown,
+      userCode = null,
+      verificationUrl = null,
+      expiresAt = null,
+      reason = null;
 
   const YoutubeAccount.signedIn(this.channel)
-    : phase = YoutubeAccountPhase.signedIn,
+    : byAdmin = false,
+      phase = YoutubeAccountPhase.signedIn,
       userCode = null,
-      verificationUrl = null;
+      verificationUrl = null,
+      expiresAt = null,
+      reason = null;
 
   final YoutubeAccountPhase phase;
+
+  /// Signed out after something happened (null for the plain start state).
+  final YoutubeSignOutReason? reason;
+
+  /// When the code being shown stops working (null when the box does not say).
+  final DateTime? expiresAt;
 
   /// The device code to type at google.com/device.
   final String? userCode;
   final String? verificationUrl;
+
+  /// A sign-in is under way but the box sent no code (the caller may only control the live): an administrator signs in.
+  final bool byAdmin;
 
   /// The connected channel's name.
   final String? channel;
@@ -85,9 +121,19 @@ class LiveBoxStatus {
     this.audio = const [],
     this.otherLive,
     this.stopFailed = false,
+    this.youtubeSignInHere = true,
+    this.noticeRev,
   });
 
   final bool boxReachable;
+
+  /// Changes whenever someone edits the live notice text (the box's `noticeRev`); null while it does not say. The
+  /// notice is read again when it changes.
+  final int? noticeRev;
+
+  /// False when the answer came from the cloud (2026.11.13): the YouTube grant is held by the MAXCOM at the surau,
+  /// so sign-in, sign-out and a channel change are offered at the surau only; away, the screen shows the flag.
+  final bool youtubeSignInHere;
 
   /// The box can reach the internet (the YouTube leg is possible).
   final bool internet;
@@ -170,6 +216,8 @@ class LiveBoxStatus {
     List<LiveAudioSourceDto>? audio,
     Object? otherLive = _keep,
     bool? stopFailed,
+    bool? youtubeSignInHere,
+    Object? noticeRev = _keep,
   }) => LiveBoxStatus(
     boxReachable: boxReachable ?? this.boxReachable,
     internet: internet ?? this.internet,
@@ -196,6 +244,8 @@ class LiveBoxStatus {
     audio: audio ?? this.audio,
     otherLive: identical(otherLive, _keep) ? this.otherLive : otherLive as OtherLive?,
     stopFailed: stopFailed ?? this.stopFailed,
+    youtubeSignInHere: youtubeSignInHere ?? this.youtubeSignInHere,
+    noticeRev: identical(noticeRev, _keep) ? this.noticeRev : noticeRev as int?,
   );
 }
 
@@ -412,6 +462,8 @@ class LiveController extends LiveBoxNotifier {
   bool _retrying = false;
   Timer? _signInTimer;
   Timer? _ingestTimer;
+  _ResumeWatcher? _resumeWatcher;
+
   List<String> _boxWarnings = const [];
   bool _polling = false;
   bool _attached = false;
@@ -427,6 +479,7 @@ class LiveController extends LiveBoxNotifier {
   LiveBoxStatus build() {
     ref.onDispose(() {
       _disposed = true;
+      _unwatchResume();
       _poll?.cancel();
       _retryTimer?.cancel();
       _signInTimer?.cancel();
@@ -454,14 +507,57 @@ class LiveController extends LiveBoxNotifier {
     if (_attached) return;
     _attached = true;
     unawaited(refreshPending());
-    unawaited(pollOnce());
+    unawaited(_refreshAll());
+    _watchResume();
     _syncPoll();
+  }
+
+  /// One look at the box's status, then at the YouTube sign-in itself (2026.11.13: held by the box; away from the
+  /// surau the cloud answers with the box's flag).
+  Future<void> _refreshAll() async {
+    await pollOnce();
+    await refreshYoutube();
+  }
+
+  /// The app came back to the front (the person was at Google's page): look at once, a timer that slept is not waited for.
+  void _watchResume() {
+    if (_resumeWatcher != null) return;
+    final w = _ResumeWatcher(() {
+      if (_disposed || !_attached) return;
+      unawaited(onResumed());
+    });
+    _resumeWatcher = w;
+    WidgetsBinding.instance.addObserver(w);
+  }
+
+  void _unwatchResume() {
+    final w = _resumeWatcher;
+    if (w == null) return;
+    WidgetsBinding.instance.removeObserver(w);
+    _resumeWatcher = null;
+  }
+
+  int _unknownPolls = 0;
+
+  /// The Live screen is open and the app has just resumed.
+  @visibleForTesting
+  Future<void> onResumed() async {
+    // the surau's YouTube choice may have been changed on another phone meanwhile
+    ref.invalidate(settingsProvider);
+    await _refreshAll();
+    if (_disposed) return;
+    // a sign-in the person was finishing: the server holds it, ask it now instead of waiting for the next timer
+    if (state.youtube.phase == YoutubeAccountPhase.signingIn) {
+      _signInTimer?.cancel();
+      await _pollSignIn();
+    }
   }
 
   @override
   void detach() {
     if (_disposed || !_attached) return;
     _attached = false;
+    _unwatchResume();
     if (state.sessionId != null) _leftWhileLive = true;
     _syncPoll();
   }
@@ -474,6 +570,10 @@ class LiveController extends LiveBoxNotifier {
     if (want && _poll == null) {
       _poll = Timer.periodic(ref.read(livePollIntervalProvider), (_) {
         unawaited(pollOnce());
+        // an unknown sign-in is looked at again now and then (about every 10 polls)
+        if (state.youtube.phase == YoutubeAccountPhase.unknown && ++_unknownPolls % 10 == 0) {
+          unawaited(refreshYoutube());
+        }
       });
     } else if (!want && _poll != null) {
       _poll?.cancel();
@@ -560,16 +660,100 @@ class LiveController extends LiveBoxNotifier {
     );
   }
 
+  /// The account as the server describes it. The sign-in phase comes from the server's `signIn` (so an app opened
+  /// later, or on another phone, shows the same code), not only from this app's memory.
+  YoutubeAccount _accountOf({
+    required bool signedIn,
+    required String? channel,
+    required YoutubeSignInInfo? signIn,
+    required String? lastError,
+    String? accountState,
+    String? lastGoodChannel,
+  }) {
+    final local = state.youtube;
+    // A box that says "unknown" could not look: never a sign-out (an older box sends no state, and the flag decides).
+    if (accountState == 'unknown' && local.phase != YoutubeAccountPhase.signingIn) {
+      return YoutubeAccount.unknown(channel: lastGoodChannel ?? channel);
+    }
+    if (signedIn) return YoutubeAccount.signedIn(channel);
+    if (signIn != null) {
+      if (signIn.state == 'pending') {
+        return YoutubeAccount.signingIn(
+          userCode: signIn.userCode,
+          verificationUrl: signIn.verificationUrl,
+          expiresAt: signIn.expiresAt,
+          byAdmin: signIn.userCode == null || signIn.userCode!.isEmpty,
+        );
+      }
+      return YoutubeAccount.signedOut(
+        reason: signIn.state == 'denied'
+            ? YoutubeSignOutReason.denied
+            : YoutubeSignOutReason.expired,
+      );
+    }
+    if (local.phase == YoutubeAccountPhase.signingIn) {
+      // this app's own sign-in goes on until it ends (a status read between two polls may not show it yet)
+      final until = local.expiresAt;
+      if (until == null || ref.read(appDepsProvider).now().isBefore(until)) {
+        return local;
+      }
+      return const YoutubeAccount.signedOut(
+        reason: YoutubeSignOutReason.expired,
+      );
+    }
+    // Google withdrew the access the surau gave: said plainly instead of the bare start state
+    if (lastError == 'reauthorise') {
+      return const YoutubeAccount.signedOut(reason: YoutubeSignOutReason.revoked);
+    }
+    // what ended this app's own attempt stays on the screen until the person starts again
+    if (local.phase == YoutubeAccountPhase.signedOut &&
+        (local.reason == YoutubeSignOutReason.denied ||
+            local.reason == YoutubeSignOutReason.expired)) {
+      return local;
+    }
+    return const YoutubeAccount.signedOut();
+  }
+
+  /// `GET /api/live/youtube/status`: the sign-in itself, read where it is kept (the box at the surau; away, the
+  /// cloud answers with the box's flag and `signInHere: false`).
+  /// Never throws; a failure leaves what the status poll said.
+  Future<void> refreshYoutube() async {
+    final gateway = _gateway;
+    if (gateway == null || _disposed) return;
+    try {
+      final dto = YoutubeStatusDto.fromJson(
+        await gateway.getFresh('/api/live/youtube/status', quiet: () => true),
+      );
+      if (_disposed) return;
+      final account = _accountOf(
+        signedIn: dto.signedIn,
+        channel: dto.channelTitle,
+        signIn: dto.signIn,
+        lastError: dto.lastError,
+        accountState: dto.state,
+        lastGoodChannel: dto.lastGoodChannel,
+      );
+      _put(state.copyWith(youtube: account, youtubeSignInHere: dto.signInHere));
+    } on Object {
+      // the status poll's view stays; this look is only a sharper one
+    }
+  }
+
   void _apply(LiveStatusDto d) {
     final s = state;
     final live = s.sessionId != null;
-    final YoutubeAccount account;
-    if (d.youtubeSignedIn) {
-      account = YoutubeAccount.signedIn(d.channelTitle);
-    } else if (s.youtube.phase == YoutubeAccountPhase.signingIn) {
-      account = s.youtube;
-    } else {
-      account = const YoutubeAccount.signedOut();
+    var account = _accountOf(
+      signedIn: d.youtubeSignedIn,
+      channel: d.channelTitle,
+      signIn: d.signIn,
+      lastError: d.youtubeError,
+    );
+    // The status poll cannot tell "unknown" from "signed out" (it carries the live leg): an unknown account stays
+    // unknown until the sign-in itself is read again, or the poll sees it signed in.
+    if (state.youtube.phase == YoutubeAccountPhase.unknown &&
+        account.phase == YoutubeAccountPhase.signedOut &&
+        account.reason == null) {
+      account = state.youtube;
     }
     OutputState? leg;
     if (live && s.youtubeViaBox) {
@@ -589,11 +773,17 @@ class LiveController extends LiveBoxNotifier {
         boxReachable: true,
         internet: d.youtubeError != 'network',
         youtube: account,
+        youtubeSignInHere: d.youtubeSignInHere,
+        noticeRev: d.noticeRev,
         busyDevice: d.sessionId == null ? null : s.busyDevice,
         youtubeSeconds: live && d.youtubeReceiving
             ? s.youtubeSeconds + ref.read(livePollIntervalProvider).inSeconds
             : s.youtubeSeconds,
-        watchUrl: live ? (d.watchUrl ?? s.watchUrl) : s.watchUrl,
+        // The box's watch link for any running session (own or another device's);
+        // an own live just ended keeps it for the summary until the next start.
+        watchUrl: d.sessionId != null
+            ? (d.watchUrl ?? (live ? s.watchUrl : null))
+            : (s.otherLive != null ? null : s.watchUrl),
         youtubeLeg: leg,
         ingestReady: live ? d.ingestReady : null,
         warnings: _mediaWarnings(d.warnings, live: live),
@@ -985,6 +1175,11 @@ class LiveController extends LiveBoxNotifier {
     final gateway = _gateway;
     if (gateway == null) return;
     _signInTimer?.cancel();
+    // away from the surau nothing is sent: the cloud signs nothing in (2026.11.13)
+    if (!state.youtubeSignInHere) {
+      _put(state.copyWith(notice: _s.liveYoutubeAtSurauOnly));
+      return;
+    }
     try {
       final dto = YoutubeSignInDto.fromJson(
         await gateway.post('/api/live/youtube/signin', const {}),
@@ -995,13 +1190,14 @@ class LiveController extends LiveBoxNotifier {
           youtube: YoutubeAccount.signingIn(
             userCode: dto.userCode,
             verificationUrl: dto.verificationUrl,
+            expiresAt: dto.expiresAt,
           ),
         ),
       );
       _schedulePoll(dto.interval);
     } on LiveOnly {
-      // the cloud holds the YouTube sign-in and did not answer
-      _put(state.copyWith(notice: _s.liveOnlyNeedsConnection));
+      // the MAXCOM at the surau did not answer: the sign-in is made there only
+      _put(state.copyWith(notice: _s.liveYoutubeAtSurauOnly));
     } on OfflineWriteRefused {
       _put(state.copyWith(boxReachable: false));
     } on BoxError catch (e) {
@@ -1025,14 +1221,22 @@ class LiveController extends LiveBoxNotifier {
         await gateway.post('/api/live/youtube/signin/poll', const {}),
       );
       if (p.signedIn || p.state == 'signed_in') {
+        final a = YoutubeAccount.signedIn(p.channelTitle);
+        _put(state.copyWith(youtube: a, notice: null));
+      } else if (p.state == 'pending' || p.state == 'error') {
+        // the server polls Google itself; a failed look of its own is not the end of the sign-in
+        _schedulePoll(p.interval ?? 5);
+      } else if (p.state == 'denied' || p.state == 'expired') {
         _put(
           state.copyWith(
-            youtube: YoutubeAccount.signedIn(p.channelTitle),
+            youtube: YoutubeAccount.signedOut(
+              reason: p.state == 'denied'
+                  ? YoutubeSignOutReason.denied
+                  : YoutubeSignOutReason.expired,
+            ),
             notice: null,
           ),
         );
-      } else if (p.state == 'pending') {
-        _schedulePoll(p.interval ?? 5);
       } else {
         _put(
           state.copyWith(
@@ -1062,11 +1266,16 @@ class LiveController extends LiveBoxNotifier {
     final gateway = _gateway;
     _signInTimer?.cancel();
     if (gateway == null) return;
+    // a sign-out or a channel change is made at the surau only (2026.11.13)
+    if (!state.youtubeSignInHere) {
+      _put(state.copyWith(notice: _s.liveYoutubeAtSurauOnly));
+      return;
+    }
     try {
       await gateway.post('/api/live/youtube/signout', const {});
       _put(state.copyWith(youtube: const YoutubeAccount.signedOut()));
     } on LiveOnly {
-      _put(state.copyWith(notice: _s.liveOnlyNeedsConnection));
+      _put(state.copyWith(notice: _s.liveYoutubeAtSurauOnly));
     } on OfflineWriteRefused {
       _put(state.copyWith(boxReachable: false));
     } on BoxError catch (e) {
@@ -1104,5 +1313,17 @@ class LiveController extends LiveBoxNotifier {
       // a blocked download leaves the file pending
     }
     await refreshPending();
+  }
+}
+
+/// Calls back when the app returns to the front (the Live screen is open).
+class _ResumeWatcher with WidgetsBindingObserver {
+  _ResumeWatcher(this._onResumed);
+
+  final void Function() _onResumed;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _onResumed();
   }
 }

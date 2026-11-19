@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Every test here runs PowerShell or node child processes (several each): seconds alone, far longer while the
+// whole suite shares the machine. The limit only bounds a hung test; it never hides a failure.
+vi.setConfig({ testTimeout: 180_000 });
 import { completeEnrolment, listDevices } from '../src/auth/devices.ts';
 import { boxId } from '../src/auth/secrets.ts';
 import { getAuthUser, listUsers } from '../src/auth/users.ts';

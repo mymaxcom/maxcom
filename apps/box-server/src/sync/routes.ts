@@ -236,7 +236,16 @@ export function syncStatus(db: DatabaseSync, role: SyncRole): SyncStatus {
     lastPull: stateOf(db, 'last_pull'),
     pendingOut: Number.isFinite(pending) && pending > 0 ? Math.trunc(pending) : 0,
     lastError: err === null ? null : err.slice(0, 200),
+    parked: parkedOf(db),
   };
+}
+
+function parkedOf(db: DatabaseSync): number {
+  try {
+    return Number(db.prepare('SELECT COUNT(*) AS n FROM parked_settings').get()?.n ?? 0);
+  } catch {
+    return 0;
+  }
 }
 
 export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {

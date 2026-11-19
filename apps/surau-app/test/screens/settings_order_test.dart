@@ -48,8 +48,10 @@ void main() {
       Text n(String key) => tester.widget<Text>(k('order-number-$key'));
       expect(n('kuliahCard').data, '1');
       expect(n('hadis').data, '6');
-      expect(tester.widget<FilledButton>(k('order-save')).enabled, isFalse, reason: 'nothing moved');
+      expect(n('videos').data, '11', reason: 'Video takes the last place by default');
       await expectGoldens(tester, h.app, 'settings_order');
+      await reveal(tester, k('order-save'));
+      expect(tester.widget<FilledButton>(k('order-save')).enabled, isFalse, reason: 'nothing moved');
 
       await pumpAtSize(tester, h.app, GoldenSize.ipadMiniLandscape);
       for (var i = 0; i < 3; i++) {
@@ -71,7 +73,8 @@ void main() {
     });
 
     test('every card has its own place in the default order', () {
-      final orders = [for (final key in orderedFeatures) featureByKey(key)!.defaults['order']];
+      // Video is listed beside Poster but takes the last place by default, so no saved order of an older surau moves.
+      final orders = [for (final key in orderedFeatures) featureByKey(key)!.defaults['order'] as int]..sort();
       expect(orders, [for (var i = 1; i <= orderedFeatures.length; i++) i]);
     });
 
@@ -79,7 +82,10 @@ void main() {
       final h = await open(tester, '/settings/order');
       expect(tester.widget<IconButton>(k('order-up-kuliahCard')).onPressed, isNull);
       expect(tester.widget<IconButton>(k('order-down-ayatCard')).onPressed, isNotNull);
-      expect(tester.widget<IconButton>(k('order-down-tabungCard')).onPressed, isNull, reason: 'the last card');
+      await reveal(tester, k('order-down-videos'));
+      expect(tester.widget<IconButton>(k('order-down-tabungCard')).onPressed, isNotNull, reason: 'Video is below it');
+      expect(tester.widget<IconButton>(k('order-down-videos')).onPressed, isNull, reason: 'the last card');
+      await reveal(tester, k('order-down-kuliahCard'));
       await tester.tap(k('order-down-kuliahCard'));
       await settle(tester);
       await tester.tap(k('order-up-kuliahCard'));
@@ -264,23 +270,24 @@ void main() {
       await expectGoldens(tester, h.app, 'settings_applock_superadmin');
     }, skip: !kOpsBuild);
 
-    testWidgets('an old stored range of 20 verses is not flagged until a verse field is touched; the steppers then bring it inside the rule', (tester) async {
+    testWidgets('an old stored range of 20 verses is not flagged until a verse field is touched; the picker then brings it inside the rule', (tester) async {
       final h = await pumpShell(tester, roles: const ['admin']);
-      h.settings['ayatCard'] = {'enabled': true, 'surah': 2, 'ayatFrom': 1, 'ayatTo': 20};
+      h.settings['ayatCard'] = {'enabled': true, 'pick': 'manual', 'surah': 2, 'ayatFrom': 1, 'ayatTo': 20};
       h.container.invalidate(settingsProvider);
       await settle(tester);
       h.router.go('/settings/ayatCard');
       await settle(tester);
       await reveal(tester, k('setting-ayatFrom-plus'));
-      // nothing about the verses was touched: no red line, nothing to save
-      expect(find.text('Paling banyak 5 ayat sekali paparan'), findsNothing);
-      expect(tester.widget<Text>(k('setting-ayatTo-value')).data, '20');
-      // touching "Ayat dari" moves "Ayat hingga" with it, so the range is inside the rule again
+      // nothing about the verses was touched: no red line, the picker shows start 1 and 3 verses
+      expect(find.text('Paling banyak 3 ayat sekali paparan'), findsNothing);
+      expect(tester.widget<Text>(k('setting-ayatFrom-value')).data, '1');
+      expect(tester.widget<ChoiceChip>(k('setting-ayatCount-3')).selected, isTrue);
+      // touching the start moves the end with it, so the range is inside the rule again
       await tester.tap(k('setting-ayatFrom-plus'));
       await settle(tester);
       expect(tester.widget<Text>(k('setting-ayatFrom-value')).data, '2');
-      expect(tester.widget<Text>(k('setting-ayatTo-value')).data, '6');
-      expect(find.text('Paling banyak 5 ayat sekali paparan'), findsNothing);
+      expect(tester.widget<ChoiceChip>(k('setting-ayatCount-3')).selected, isTrue);
+      expect(find.text('Paling banyak 3 ayat sekali paparan'), findsNothing);
     });
   });
 

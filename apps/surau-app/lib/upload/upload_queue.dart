@@ -392,7 +392,7 @@ class UploadQueue {
   final UploadRunner runner;
   final DateTime Function() now;
 
-  /// Cloud access for a run; null result means no cloud is linked.
+  /// Access for a run (the box's begin/done routes); a null result means no session on the box.
   final Future<UploadAuth?> Function()? auth;
 
   /// `youtubeCatchUp.wifiOnly`; defaults to true.
@@ -592,12 +592,13 @@ class UploadQueue {
           if (_running.contains(job.id)) continue;
           final a = await auth?.call();
           if (a == null) {
-            if (job.lastError != 'no_cloud') {
-              await _put(job.copyWith(lastError: 'no_cloud'));
+            // no session on the MAXCOM at the surau (it holds the YouTube grant, 2026.11.13)
+            if (job.lastError != 'no_box') {
+              await _put(job.copyWith(lastError: 'no_box'));
             }
             continue;
           }
-          if (job.lastError == 'no_cloud') {
+          if (job.lastError == 'no_box' || job.lastError == 'no_cloud') {
             job = job.copyWith(lastError: null);
             await _put(job);
           }

@@ -1,7 +1,7 @@
 import { hkdfSync } from 'node:crypto';
 import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CAMERA_PASSWORD_MASK, cameraUrlError, isMaskedCameraUrl, maskCameraUrl } from '@surau/core';
+import { CAMERA_PASSWORD_MASK, cameraQuerySecrets, cameraUrlError, hasMaskedCameraQuery, isMaskedCameraUrl, maskCameraUrl, restoreMaskedCameraQuery, stripCameraQuerySecrets } from '@surau/core';
 import { openSecret, sealSecret } from '../auth/crypto.ts';
 import { loadBoxKey, secretDir } from '../auth/secrets.ts';
 import type { LiveSecrets, MediamtxApi } from './mediamtx.ts';
@@ -77,6 +77,11 @@ export interface MaskedCamera {
   username: string | null;
   hasPassword: boolean;
   lastTest: CameraTestResult | null;
+  /**
+   * Only when true: the record came back from the cloud backup, which never holds the password, and the camera had
+   * one. The password must be typed again here ("Kata laluan kamera perlu ditaip semula").
+   */
+  passwordNeeded?: true;
 }
 
 export class CameraError extends Error {
@@ -173,10 +178,57 @@ export function cameraSecrets(r: CameraRecord): string[] {
   add(r.username);
   add(r.password);
   if (p !== null && p.user !== null && p.pass !== null) add(`${p.user}:${p.pass}`);
+  for (const v of cameraQuerySecrets(r.url)) add(v);
   return [...out];
 }
 
-function parseRecord(text: string): { record: CameraRecord; lastTest: CameraTestResult | null } | null {
+interface Loaded {
+  record: CameraRecord;
+  lastTest: CameraTestResult | null;
+  passwordNeeded: boolean;
+}
+
+/**
+ * What the cloud backup may hold of a camera: the address with no password, the user name, and whether a password
+ * exists. Never the password (operator decision 2026-11-19: the cloud must not be able to read it).
+ */
+export interface CameraBackup {
+  /** The address without any login when the user name could be moved to `username`, else with the user name only. */
+  url: string;
+  username?: string;
+  hasPassword: boolean;
+  /** Only when true: this box restored the camera from the backup and still waits for the password to be typed. */
+  passwordNeeded?: true;
+}
+
+/**
+ * The backup form of a record: a login inside the address is split out and its password dropped, and a password
+ * parameter of the query (`?password=...`) is removed (it then counts as a password the camera has).
+ */
+export function cameraBackupOf(r: CameraRecord): CameraBackup {
+  const q = stripCameraQuerySecrets(r.url);
+  const b = cameraBackupOfLogin({ ...r, url: q.url });
+  return q.had ? { ...b, hasPassword: true } : b;
+}
+
+function cameraBackupOfLogin(r: CameraRecord): CameraBackup {
+  const p = splitUrl(r.url);
+  if (p === null) return { url: r.url, hasPassword: false };
+  if (p.user !== null) {
+    const hasPassword = p.pass !== null && p.pass !== '';
+    const user = safeDecode(p.user);
+    // a user name the separate box accepts moves there (so the password box works after a restore); else it stays in the address
+    if (user !== '' && user.length <= LOGIN_MAX && LOGIN_OK.test(user)) return { url: `${p.head}${p.rest}`, username: user, hasPassword };
+    return { url: p.user === '' ? `${p.head}${p.rest}` : `${p.head}${p.user}@${p.rest}`, hasPassword };
+  }
+  return {
+    url: r.url,
+    ...(r.username !== undefined && r.username !== '' ? { username: r.username } : {}),
+    hasPassword: r.username !== undefined && r.username !== '' && r.password !== undefined && r.password !== '',
+  };
+}
+
+function parseRecord(text: string): Loaded | null {
   let v: unknown;
   try {
     v = JSON.parse(text);
@@ -189,7 +241,7 @@ function parseRecord(text: string): { record: CameraRecord; lastTest: CameraTest
   const record: CameraRecord = { url: o.url };
   if (typeof o.username === 'string' && o.username !== '') record.username = o.username;
   if (typeof o.password === 'string' && o.password !== '') record.password = o.password;
-  return { record, lastTest: parseTest(o.lastTest) };
+  return { record, lastTest: parseTest(o.lastTest), passwordNeeded: o.passwordNeeded === true };
 }
 
 const CODES: readonly CameraTestCode[] = ['ok', 'unreachable', 'login', 'path', 'codec', 'busy', 'not_configured', 'bad_address', 'unavailable'];
@@ -224,7 +276,7 @@ export class CameraStore {
     this.now = o.now ?? (() => new Date());
   }
 
-  private load(): { record: CameraRecord; lastTest: CameraTestResult | null } | null {
+  private load(): Loaded | null {
     if (!existsSync(this.path)) return null;
     try {
       return parseRecord(openSecret(this.key, readFileSync(this.path, 'utf8').trim()));
@@ -234,10 +286,11 @@ export class CameraStore {
     }
   }
 
-  private write(record: CameraRecord, lastTest: CameraTestResult | null): void {
+  private write(record: CameraRecord, lastTest: CameraTestResult | null, passwordNeeded = false): void {
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     const tmp = `${this.path}.tmp`;
-    writeFileSync(tmp, sealSecret(this.key, JSON.stringify({ ...record, ...(lastTest !== null ? { lastTest } : {}) })), { mode: 0o600 });
+    const body = { ...record, ...(lastTest !== null ? { lastTest } : {}), ...(passwordNeeded ? { passwordNeeded: true } : {}) };
+    writeFileSync(tmp, sealSecret(this.key, JSON.stringify(body)), { mode: 0o600 });
     try {
       chmodSync(tmp, 0o600);
     } catch {
@@ -258,7 +311,22 @@ export class CameraStore {
     const p = splitUrl(l.record.url);
     const user = p?.user ?? l.record.username ?? null;
     const hasPassword = p !== null && p.user !== null ? p.pass !== null && p.pass !== '' : l.record.password !== undefined;
-    return { configured: true, url: maskCameraUrl(l.record.url), username: user !== '' ? user : null, hasPassword, lastTest: l.lastTest };
+    return {
+      configured: true,
+      url: maskCameraUrl(l.record.url),
+      username: user !== '' ? user : null,
+      hasPassword,
+      lastTest: l.lastTest,
+      ...(l.passwordNeeded && !hasPassword ? { passwordNeeded: true as const } : {}),
+    };
+  }
+
+  /** What the cloud backup gets: no password, ever. A record still waiting for its password counts as having one. */
+  backup(): CameraBackup | null {
+    const l = this.load();
+    if (l === null) return null;
+    const b = cameraBackupOf(l.record);
+    return l.passwordNeeded ? { ...b, hasPassword: true, passwordNeeded: true } : b;
   }
 
   /** The last box test; null when none has run since the address last changed. */
@@ -274,18 +342,25 @@ export class CameraStore {
     const l = this.load();
     if (l === null) return;
     if (testedUrl !== undefined && cameraPullUrl(l.record) !== testedUrl) return;
-    this.write(l.record, result);
+    this.write(l.record, result, l.passwordNeeded);
   }
 
   /**
    * Validates and seals an address. An address that still holds the dots keeps the stored password; a separate
    * password left out keeps the stored one, an empty one removes it. Refuses with a CameraError (400) and never
-   * echoes what was typed.
+   * echoes what was typed. Any save ends "password needed" unless `o.passwordNeeded` (a restore from the cloud
+   * backup, which never holds the password) sets it.
    */
-  save(input: CameraSaveInput): MaskedCamera {
+  save(input: CameraSaveInput, o: { passwordNeeded?: boolean } = {}): MaskedCamera {
     const prev = this.load();
     if (typeof input !== 'object' || input === null || typeof input.url !== 'string') throw new CameraError(400, 'bad_address', CAMERA_MSG.badAddress);
     let url = input.url.trim();
+    if (hasMaskedCameraQuery(url)) {
+      // dots in a password parameter of the query stand for the stored one: put back only for the same address
+      const restored = prev === null ? null : restoreMaskedCameraQuery(url, prev.record.url);
+      if (restored === null) throw new CameraError(400, 'password_again', CAMERA_MSG.passwordAgain);
+      url = restored;
+    }
     const typed = splitUrl(url);
 
     if (isMaskedCameraUrl(url)) {
@@ -325,7 +400,7 @@ export class CameraStore {
     }
 
     const changed = prev === null || cameraPullUrl(prev.record) !== cameraPullUrl(record);
-    this.write(record, changed ? null : prev.lastTest);
+    this.write(record, changed ? null : prev.lastTest, o.passwordNeeded === true);
     return this.getMasked();
   }
 

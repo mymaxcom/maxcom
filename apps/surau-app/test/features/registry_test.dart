@@ -50,8 +50,8 @@ void main() {
     expect(cases['coreSourceHash'], coreSourceHash);
   });
 
-  test('features: core has 55, 11 of them locked', () {
-    expect(features.length, 55);
+  test('features: core has 56, 11 of them locked', () {
+    expect(features.length, 56);
     final locked = features.where((f) => f.locked).map((f) => f.key).toSet();
     expect(locked, {
       'prayerCalc',

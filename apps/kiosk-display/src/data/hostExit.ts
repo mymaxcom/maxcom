@@ -3,7 +3,8 @@
  *
  * Android: the app's WebView offers `window.MaxcomHost.exit()`.
  * Windows: the kiosk start script opens a loopback listener and launches the page as
- * `http://127.0.0.1:<box port>/#mxhost=<port>.<token>`; a POST of the token to `/exit` closes the kiosk.
+ * `http://localhost:<box port>/#mxhost=<port>.<token>` (localhost, not a bare IP: the YouTube player
+ * refuses a bare-IP page origin); a POST of the token to the helper at `http://127.0.0.1:<port>/exit` closes the kiosk.
  * Anywhere else (hall displays, plain browsers) there is no bridge and nothing happens.
  */
 

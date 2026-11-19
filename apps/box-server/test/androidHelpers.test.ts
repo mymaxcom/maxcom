@@ -4,7 +4,11 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+
+// Every test here runs PowerShell or node child processes (several each): seconds alone, far longer while the
+// whole suite shares the machine. The limit only bounds a hung test; it never hides a failure.
+vi.setConfig({ testTimeout: 180_000 });
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const installScript = join(repoRoot, 'scripts', 'android', 'install-android-box.ps1');

@@ -9,6 +9,7 @@
 // Certificate renewal is automatic and never mentioned, except the one
 // calm line an admin sees when it is failing close to expiry (tech_check).
 
+import '../live/live_notice_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -66,6 +67,7 @@ class DashboardScreen extends ConsumerWidget {
           final two = c.maxWidth >= twoColumnsFrom;
           final maxWidth = two ? 1100.0 : SurauTheme.contentMaxWidth;
           final left = <Widget>[
+            const LiveNoticeBanner(),
             const _TechCheckNotice(),
             const _Attention(),
             if (canSee(roles, 'kiosk:read')) const _OnTv(),
@@ -205,7 +207,7 @@ class _Facts {
       reachText = s.statusUnreachable;
     } else if (reach.lastContact != null) {
       reachText = s.statusReachedAt(
-        whenWords(deps.toLocal(reach.lastContact!), today: deps.toLocal(deps.now())),
+        whenWords(deps.toLocal(reach.lastContact!), today: deps.toLocal(deps.now()), lang: appLangOfS(s)),
       );
     } else {
       reachText = s.statusChecking;
@@ -675,7 +677,7 @@ class _TechCheckNotice extends ConsumerWidget {
     final lastRenew = attempt == null
         ? s.techCheckRenewNever
         : s.techCheckRenewFailed(
-            whenWords(deps.toLocal(attempt), today: deps.toLocal(deps.now())),
+            whenWords(deps.toLocal(attempt), today: deps.toLocal(deps.now()), lang: appLangOfS(s)),
           );
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),

@@ -96,6 +96,35 @@ describe.runIf(win)('MaxcomSetup.psm1 (runs)', () => {
     for (const n of want) expect(r.json).toContain(n);
   });
 
+  it('Get-ArchiveBuild reads the build, and fails closed (GAGAL) on an archive it cannot read: never an assumed build 0', () => {
+    const d = sub('archive-build');
+    const mk = (name: string, entries: Array<{ name: string; data: string }>): string => {
+      const f = join(d, name);
+      writeTarGz(f, entries);
+      return f;
+    };
+    const rel = (o: Record<string, unknown>) => [{ name: 'release.json', data: JSON.stringify({ v: 1, version: '2026.11.1', ...o }) }];
+    const junk = join(d, 'junk.tar.gz');
+    writeFileSync(junk, 'this is not a tar archive at all');
+    const files = {
+      b0: mk('b0.tar.gz', rel({})),
+      b3: mk('b3.tar.gz', rel({ build: 3 })),
+      badJson: mk('badjson.tar.gz', [{ name: 'release.json', data: '{ not json' }]),
+      empty: mk('empty.tar.gz', [{ name: 'release.json', data: '' }]),
+      badValue: mk('badvalue.tar.gz', rel({ build: 'x' })),
+      tooBig: mk('toobig.tar.gz', rel({ build: 12 })),
+      noRelease: mk('norelease.tar.gz', [{ name: 'package.json', data: '{}' }]),
+      junk,
+      missing: join(d, 'missing.tar.gz'),
+    };
+    const call = (k: keyof typeof files) => `(TryIt { Get-ArchiveBuild ${q(files[k])} })`;
+    const r = ps(`$ok0 = Get-ArchiveBuild ${q(files.b0)}; $ok3 = Get-ArchiveBuild ${q(files.b3)}
+J ([ordered]@{ ok0 = $ok0; ok3 = $ok3; badJson = ${call('badJson')}; empty = ${call('empty')}; badValue = ${call('badValue')}; tooBig = ${call('tooBig')}; noRelease = ${call('noRelease')}; junk = ${call('junk')}; missing = ${call('missing')} })`);
+    expect(r.json.ok0).toBe(0);
+    expect(r.json.ok3).toBe(3);
+    for (const k of ['badJson', 'empty', 'badValue', 'tooBig', 'noRelease', 'junk', 'missing']) expect(r.json[k], k).toMatch(/^GAGAL: /);
+  });
+
   it('Get-MaxcomPaths gives every layout path as a full path without trailing slash', () => {
     const root = join(sub('paths'), 'Program Files', 'MAXCOM');
     const data = join(sub('paths'), 'ProgData', 'MAXCOM', 'data');

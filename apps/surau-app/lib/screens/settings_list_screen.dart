@@ -19,6 +19,7 @@ import '../app/router.dart';
 import '../app/shell.dart';
 import '../app/theme.dart';
 import '../features/labels.dart';
+import '../features/labels_cam.dart';
 import '../features/labels_ms.dart';
 import '../features/registry.g.dart';
 import '../features/settings_repository.dart';
@@ -132,6 +133,10 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
       }
       for (final f in features) {
         if (f.group != g || !shown(f.key) || hiddenFeatures.contains(f.key)) continue;
+        // The pinned features have their own card above every group.
+        if (pinnedFeatures.contains(f.key)) continue;
+        // The live features are Siaran langsung's (their forms open from that page); a search points there.
+        if (liveSettingsFeatureKeys.contains(f.key)) continue;
         // Zon JAKIM is for Malaysia only (operator 2026-11-07).
         if (f.key == 'zone' && outsideMalaysia) continue;
         // The camera form is Siaran Langsung's: only holders of live:settings see it in the list.
@@ -188,11 +193,30 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
 
     final groups = <Widget>[];
     var total = 0;
+
+    // ---- the pinned features: first, above every group, never folded ----
+    final pinned = <Widget>[
+      for (final key in pinnedFeatures)
+        for (final f in features)
+          if (f.key == key && shown(key) && !hiddenFeatures.contains(key))
+            _FeatureRow(
+              key: ValueKey('settings-row-${f.key}'),
+              feature: f,
+              on: isOn(f),
+              why: why(f.key),
+              query: _q,
+              canWrite: canWriteSettingsFeature(roles, f.key),
+              onOpen: () {},
+            ),
+    ];
+    total += pinned.length;
     for (final g in groupOrder) {
       final rows = rowsOf(g);
       if (rows.isEmpty) continue;
       total += rows.length;
-      final mine = features.where((f) => f.group == g && !hiddenFeatures.contains(f.key)).toList();
+      final mine = features
+          .where((f) => f.group == g && !hiddenFeatures.contains(f.key) && !liveSettingsFeatureKeys.contains(f.key) && !pinnedFeatures.contains(f.key))
+          .toList();
       groups.add(
         _Group(
           group: g,
@@ -208,6 +232,10 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
         ),
       );
     }
+
+    // ---- the live features moved to Siaran langsung: one pointer row, only for a search that matches them ----
+    final pointer = searching && hits.containsKey(liveSettingsMovedKey);
+    if (pointer) total += 1;
 
     // ---- Lanjutan ----
     // The Lanjutan group exists only in the ops build (Plan 14 Task 25).
@@ -285,6 +313,41 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                 style: (searching ? text.bodySmall! : text.bodyMedium!).copyWith(color: SurauColors.muted),
               ),
             ),
+            if (pointer)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Material(
+                  color: SurauColors.card,
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(SurauTheme.radiusCard),
+                    side: const BorderSide(color: SurauColors.line),
+                  ),
+                  child: _NavRow(
+                    key: const ValueKey('settings-live-moved'),
+                    icon: Icons.videocam_rounded,
+                    label: liveSettingsMovedRow(lang),
+                    hint: liveSettingsMovedHint(lang),
+                    why: null,
+                    query: '',
+                    onTap: () => context.go('${AppRoutes.live}?tetapan=1'),
+                  ),
+                ),
+              ),
+            if (pinned.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Material(
+                  key: const ValueKey('settings-pinned'),
+                  color: SurauColors.card,
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(SurauTheme.radiusCard),
+                    side: const BorderSide(color: SurauColors.line),
+                  ),
+                  child: Column(children: pinned),
+                ),
+              ),
             ...groups,
           ],
         ],

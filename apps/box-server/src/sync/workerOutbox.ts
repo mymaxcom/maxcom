@@ -6,7 +6,8 @@ import { openSecret, sealSecret } from '../auth/crypto.ts';
  * The cloud's outbox towards the Worker's admin routes (SECURITY code; Plan 6 "no lost set").
  *
  * Rows are written in the same transaction as the change that causes them (triggers of migration 009 for the
- * dirty seq and the device allowlist; `enqueueSitePut` / `enqueueSiteDelete` for the wake secret). The sender
+ * dirty seq and the device allowlist; `enqueueSitePut` / `enqueueSiteDelete` for the wake secret;
+ * `enqueueCameraMark` for a relayed camera change waiting for its box). The sender
  * delivers them with backoff until the Worker answers 2xx, so a Worker that is down never loses a change.
  *
  *  - The Worker address and the admin token come from the environment (never from synced settings).
@@ -70,6 +71,23 @@ export function enqueueSiteDelete(db: DatabaseSync, boxId: string, now = new Dat
   if (!outboxOn(db)) return;
   db.prepare(UPSERT).run('site_delete', `site/${boxId}`, '{}', now.toISOString());
   db.prepare('DELETE FROM worker_outbox WHERE key = ?').run(`dirty/${boxId}`);
+}
+
+const CAMERA_MARK = (boxId: string): string => `camera_mark/${boxId}`;
+
+/**
+ * Tell the Worker that a relayed camera change waits for this box (`on`), or that the box answered it. The box's
+ * signed `GET /dirty` then carries `camera: true` and the box runs a waking cycle (migration 024). A clear is queued
+ * only when a mark was queued (a `sync_state` note), so the box's regular checks do not each cost a Worker call.
+ * Nothing secret is queued. Caller owns the transaction.
+ */
+export function enqueueCameraMark(db: DatabaseSync, boxId: string, on: boolean, now = new Date()): void {
+  if (!outboxOn(db)) return;
+  const noted = db.prepare('SELECT 1 AS x FROM sync_state WHERE key = ?').get(CAMERA_MARK(boxId)) !== undefined;
+  if (!on && !noted) return;
+  db.prepare(UPSERT).run(on ? 'camera_put' : 'camera_delete', `camera/${boxId}`, '{}', now.toISOString());
+  if (on) db.prepare('INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(CAMERA_MARK(boxId), now.toISOString());
+  else db.prepare('DELETE FROM sync_state WHERE key = ?').run(CAMERA_MARK(boxId));
 }
 
 export interface OutboxStatus {
@@ -226,6 +244,10 @@ export class WorkerOutboxSender {
       }
       case 'site_delete':
         return { method: 'DELETE', path: `/_admin/site/${id}` };
+      case 'camera_put':
+        return { method: 'PUT', path: `/_admin/camera/${id}` };
+      case 'camera_delete':
+        return { method: 'DELETE', path: `/_admin/camera/${id}` };
       default:
         throw new Unsendable('bad_kind');
     }
@@ -268,7 +290,9 @@ export class WorkerOutboxSender {
     if (status !== 0) reason = `http_${status}`;
     // 401/403 are an operator problem (wrong or expired admin token): keep retrying with the capped backoff,
     // the admin fixes the token and the queue drains. 400/404/409/422 are real validation errors: failed, visible.
-    const retryable = status === 0 || status >= 500 || status === 408 || status === 429 || status === 401 || status === 403;
+    // a PUT 404 for the camera mark is an older Worker without that route: tried again after the Worker is updated (S9)
+    const retryable =
+      status === 0 || status >= 500 || status === 408 || status === 429 || status === 401 || status === 403 || (status === 404 && call.method === 'PUT' && call.path.startsWith('/_admin/camera/'));
     if (retryable) {
       this.retryLater(id, rev, key, reason);
       return false;

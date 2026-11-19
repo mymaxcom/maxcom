@@ -5,7 +5,7 @@ import { FEATURES } from './registry.ts';
 import { THEME_NAME_RE } from '../theme/catalog.ts';
 import { sanitizeThemeStyles, themeStylesError } from '../theme/style.ts';
 import { packsError, sanitizePacks } from '../theme/packs.ts';
-import { SURAHS } from './lists.ts';
+import { SURAHS } from '../islamic/surahs.ts';
 import { AV_OFFSET_CHOICES } from '../live/sources.ts';
 import { isCountryCode } from '../prayer/countries.ts';
 import { isValidTimeZone } from '../time.ts';
@@ -56,7 +56,7 @@ function ruleFor(name: string): Rule | undefined {
     case 'hijriMonth': return { t: 'int', min: 1, max: 12 };
     case 'switchAt': return { t: 'enum', vals: ['maghrib', 'midnight'] };
     case 'timeFormat': return { t: 'enum', vals: ['12h', '24h'] };
-    case 'lang': return { t: 'enum', vals: ['auto', 'ms', 'en'] };
+    case 'lang': return { t: 'enum', vals: ['auto', 'ms', 'en', 'ar'] };
     case 'mode': return { t: 'enum', vals: ['landscape', 'portrait'] };
     case 'templateId': return { t: 'regex', re: THEME_NAME_RE, what: 'a theme name (a-z, 0-9, hyphen, at most 32)' };
     case 'rotate': return { t: 'enum', vals: ['daily', 'hourly', 'off'] };
@@ -277,9 +277,14 @@ export function resolveSettings(stored: Partial<Record<string, Partial<FeatureSe
   return out;
 }
 
+/** The most verses the Kad Ayat card shows at once (the app picker, this rule and the box's read path agree). */
+export const AYAT_MAX_AT_ONCE = 3;
+
 /** Rules that look at several fields at once, run on the patch merged over the stored/default values. */
 const FEATURE_RULES: Partial<Record<FeatureKey, (merged: Plain, errors: string[]) => void>> = {
   ayatCard(m, errors) {
+    // Surah and verses matter only when the surau chooses the verses itself; the daily and random picks ignore them.
+    if (m.pick !== 'manual') return;
     const surah = m.surah;
     const from = m.ayatFrom;
     const to = m.ayatTo;
@@ -289,7 +294,7 @@ const FEATURE_RULES: Partial<Record<FeatureKey, (merged: Plain, errors: string[]
     if (to > s.ayat) { errors.push(`ayatTo: ${s.nameMs} has ${s.ayat} verses`); return; }
     if (from > s.ayat) { errors.push(`ayatFrom: ${s.nameMs} has ${s.ayat} verses`); return; }
     if (from > to) { errors.push('ayatFrom must not be after ayatTo'); return; }
-    if (to - from > 4) errors.push('ayatCard shows at most 5 verses at once');
+    if (to - from > AYAT_MAX_AT_ONCE - 1) errors.push(`ayatCard shows at most ${AYAT_MAX_AT_ONCE} verses at once`);
   },
 };
 

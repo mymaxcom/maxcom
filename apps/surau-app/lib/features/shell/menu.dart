@@ -190,9 +190,15 @@ bool routeAllowed(String location, Set<String> roles, FeatureFlags features) {
     if (path == AppRoutes.financeSetup) return has('finance:write');
     return has('finance:read');
   }
+  if (path.startsWith('${AppRoutes.liveSettings}/')) {
+    // The live features' forms (Kamera luaran, Siaran langsung di skrin, YouTube, Rakaman): Siaran langsung's own.
+    final key = path.substring(AppRoutes.liveSettings.length + 1);
+    return has('live:settings') && liveSettingsFeatureKeys.contains(key);
+  }
   if (path == AppRoutes.live) {
-    // The box refuses every start while the kiosk switch is off, YouTube-only included.
-    return has('live:control') && features.isOn('liveOnKiosk');
+    // The box refuses every start while the kiosk switch is off, YouTube-only included. A holder of `live:settings`
+    // still opens the page: the live settings live there only, and the switch is one of them.
+    return has('live:control') && (features.isOn('liveOnKiosk') || has('live:settings'));
   }
   if (path == AppRoutes.upload) {
     return has('live:control') && features.isOn('youtubeCatchUp');

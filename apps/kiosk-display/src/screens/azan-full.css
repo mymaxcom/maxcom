@@ -15,8 +15,8 @@
 /* Head: the surau name left, the clock right, across the whole width. */
 .stage[data-azan-full][data-template] .screen--azanfull .phase__head {
   position: absolute;
-  left: var(--gutter);
-  right: var(--gutter);
+  inset-inline-start: var(--gutter);
+  inset-inline-end: var(--gutter);
   top: 2.4rem;
   bottom: auto;
   width: auto;
@@ -31,8 +31,8 @@
 /* Centre: the whole middle of the screen, one block, text centred. */
 .stage[data-azan-full][data-template] .screen--azanfull .phase__centre {
   position: absolute;
-  left: var(--gutter);
-  right: var(--gutter);
+  inset-inline-start: var(--gutter);
+  inset-inline-end: var(--gutter);
   top: 9rem;
   bottom: 11.8rem;
   width: auto;
@@ -68,8 +68,8 @@
 /* The prayer strip: seven cells in one row along the bottom (the content screens' compact strip, in the theme's tokens). */
 .stage[data-azan-full][data-template] .screen--azanfull .strip {
   position: absolute;
-  left: var(--gutter);
-  right: var(--gutter);
+  inset-inline-start: var(--gutter);
+  inset-inline-end: var(--gutter);
   top: auto;
   bottom: 2.7rem;
   width: auto;
@@ -131,8 +131,8 @@
 
 /* The source line sits under the strip, as on every phase screen. */
 .stage[data-azan-full][data-template] .screen--azanfull .source-footer {
-  left: var(--gutter);
-  right: var(--gutter);
+  inset-inline-start: var(--gutter);
+  inset-inline-end: var(--gutter);
 }
 
 /* ---- Colourful: the sunset block spans the width; its own colours stay ---- */
@@ -148,7 +148,7 @@
 .stage[data-azan-full][data-template='creative'] { --cut-top: 130%; }
 .stage[data-azan-full][data-template='creative'] .screen--azanfull .phase__head .phase__clock { color: var(--ink); }
 .stage[data-azan-full][data-template='creative'] .screen--azanfull .phase__centre { color: var(--ink); }
-.stage[data-azan-full][data-template='creative'] .screen--azanfull .phase__big { margin-left: 0; }
+.stage[data-azan-full][data-template='creative'] .screen--azanfull .phase__big { margin-inline-start: 0; }
 .stage[data-azan-full][data-template='creative'] .screen--azanfull .azanfull__at { color: var(--ink); }
 .stage[data-azan-full][data-template='creative'] .screen--azanfull .strip {
   background: rgb(var(--glass-rgb) / 0.95);
@@ -160,24 +160,24 @@
 
 /* ---- Old School: the framed paper board spans the width ---- */
 .stage[data-azan-full][data-template='oldschool'] .screen--azanfull .phase__head {
-  left: 3.6rem;
-  right: 3.6rem;
+  inset-inline-start: 3.6rem;
+  inset-inline-end: 3.6rem;
   top: 2.3rem;
   justify-content: center;
   padding: 0 12rem 0.9rem;
   border-bottom: 0.34rem double var(--rule);
 }
-.stage[data-azan-full][data-template='oldschool'] .screen--azanfull .phase__head .phase__clock { position: absolute; right: 0; top: 0.6rem; }
+.stage[data-azan-full][data-template='oldschool'] .screen--azanfull .phase__head .phase__clock { position: absolute; inset-inline-end: 0; top: 0.6rem; }
 .stage[data-azan-full][data-template='oldschool'] .screen--azanfull .phase__centre {
-  left: 3.6rem;
-  right: 3.6rem;
+  inset-inline-start: 3.6rem;
+  inset-inline-end: 3.6rem;
   top: 10.4rem;
   bottom: 11.8rem;
 }
 .stage[data-azan-full][data-template='oldschool'] .screen--azanfull .azanfull__at { font-family: var(--serif); color: var(--accent); }
 .stage[data-azan-full][data-template='oldschool'] .screen--azanfull .strip {
-  left: 3.6rem;
-  right: 3.6rem;
+  inset-inline-start: 3.6rem;
+  inset-inline-end: 3.6rem;
   border-radius: 0;
   background: var(--paper);
   border: 0.24rem double var(--rule);
@@ -186,10 +186,10 @@
 .stage[data-azan-full][data-template='oldschool'] .screen--azanfull .strip .pcell.is-current { background: var(--green); color: #f6e7bf; }
 
 /* ---- Minimal: air, thin type, a hairline strip ---- */
-.stage[data-azan-full][data-template='minimal'] .screen--azanfull .phase__head { left: 4rem; right: 4rem; }
+.stage[data-azan-full][data-template='minimal'] .screen--azanfull .phase__head { inset-inline-start: 4rem; inset-inline-end: 4rem; }
 .stage[data-azan-full][data-template='minimal'] .screen--azanfull .strip {
-  left: 4rem;
-  right: 4rem;
+  inset-inline-start: 4rem;
+  inset-inline-end: 4rem;
   border: 0;
   border-top: 1px solid var(--hair);
   border-radius: 0;

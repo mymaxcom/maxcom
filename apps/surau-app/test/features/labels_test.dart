@@ -192,9 +192,14 @@ void main() {
       expect(settingLabel('lang', AppLang.ms), 'Bahasa skrin TV');
       expect(settingLabel('lang', AppLang.en), 'TV screen language');
       expect(settingLabel('lang', AppLang.ar), 'لغة شاشة التلفاز');
-      expect(choiceLabel('lang', 'auto', AppLang.ms), 'Ikut lokasi');
-      expect(choiceLabel('lang', 'auto', AppLang.en), 'Follow location');
-      expect(choiceLabel('lang', 'auto', AppLang.ar), 'حسب الموقع');
+      expect(choiceLabel('lang', 'auto', AppLang.ms), 'Automatik');
+      expect(choiceLabel('lang', 'auto', AppLang.en), 'Automatic');
+      expect(choiceLabel('lang', 'auto', AppLang.ar), 'تلقائي');
+      for (final l in AppLang.values) {
+        expect(choiceLabel('lang', 'ar', l), 'العربية');
+      }
+      expect(choiceLabel('lang', 'ms', AppLang.ms), 'Bahasa Melayu');
+      expect(choiceLabel('lang', 'en', AppLang.ms), 'English');
       expect(groupLabel('solat', AppLang.en), 'Prayer');
       expect(groupLabel('solat', AppLang.ms), 'Solat');
       expect(settingHelp('maxBitrateKbps', AppLang.en), startsWith('Follow'));
@@ -332,7 +337,9 @@ void main() {
           expect(k.fieldHint(f, AppLang.ms), f.hintMs);
           if (f.hintMs != null) {
             hintKeys.add('${k.key}.${f.key}');
-            expect(k.fieldHint(f, AppLang.en), startsWith('Example:'), reason: '${k.key}.${f.key}');
+            // A switch's help explains Yes and No (poster Regangkan gambar) or what No means (video Bunyi); every other hint is an example.
+            final en = k.fieldHint(f, AppLang.en)!;
+            expect(f.type == FieldType.bool ? (en.startsWith('Yes:') || en.startsWith('No:')) : en.startsWith('Example:'), isTrue, reason: '${k.key}.${f.key}');
             expect(arabic.hasMatch(k.fieldHint(f, AppLang.ar)!), isTrue, reason: '${k.key}.${f.key}');
           }
           for (final c in f.choices) {

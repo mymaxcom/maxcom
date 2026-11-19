@@ -14,6 +14,7 @@ import type { FakeGoogle } from './support/fakeGoogle.ts';
 import { FAKE_UPLOAD_ID, withUploadApi } from './support/fakeGoogleUpload.ts';
 import type { GoogleUploadFake } from './support/fakeGoogleUpload.ts';
 import { buildCloud } from './support/fakeCloud.ts';
+import { seedCloudGrant } from './support/cloudGrant.ts';
 import type { TestCloud } from './support/fakeCloud.ts';
 import { insertSite } from './support/sites.ts';
 import type { TestSite } from './support/sites.ts';
@@ -49,14 +50,8 @@ async function rig(o: { signedIn?: boolean; wrap?: (f: typeof fetch) => typeof f
   for (const m of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     vi.spyOn(console, m).mockImplementation((...a: unknown[]) => void logs.push(a.map(String).join(' ')));
   }
-  if (o.signedIn !== false) {
-    const admin = await loginAs(app, 'admin');
-    expect((await app.inject({ method: 'POST', url: '/api/live/youtube/signin', headers: admin.headers })).statusCode).toBe(200);
-    g.approve = true;
-    clock.t += 6000;
-    const done = await app.inject({ method: 'POST', url: '/api/live/youtube/signin/poll', headers: admin.headers });
-    expect(done.json()).toMatchObject({ state: 'signed_in', signedIn: true });
-  }
+  // the grant the cloud held from before release 2026.11.13 (the cloud makes no new one)
+  if (o.signedIn !== false) seedCloudGrant(cloud.dir, clock.now);
   const { db } = app.surau;
   const pen = putItem(db, 'penceramah', { name: 'Ustaz Ahmad Fauzi' }, 'test', undefined, 'sdm');
   const kuliah = putItem(
@@ -155,7 +150,7 @@ describe('upload sessions for the catch-up', () => {
     expect((await r.app.inject({ method: 'GET', url: '/api/youtube/quota', headers: r.site.headers })).statusCode).toBe(403);
     const st = await r.app.inject({ method: 'GET', url: '/api/cloud/youtube/status', headers: r.site.headers });
     expect(st.statusCode).toBe(200);
-    expect(st.json()).toMatchObject({ signedIn: true, channelTitle: 'Surau D\'Waqaf' });
+    expect(st.json()).toMatchObject({ signedIn: true, channelTitle: 'Surau Contoh' });
     // a device session is not a site: the route does not exist for it
     const admin = await loginAs(r.app, 'admin');
     for (const [m, u] of [['GET', '/api/cloud/youtube/status'], ['POST', '/api/cloud/youtube/broadcast'], ['POST', '/api/cloud/youtube/complete']] as const) {
@@ -177,12 +172,12 @@ describe('upload sessions for the catch-up', () => {
     expect(r.up.sessions).toHaveLength(0);
   });
 
-  it('signed out on the cloud is 503 youtube_reauthorise', async () => {
+  it('no grant on the cloud (the box holds it, 2026.11.13) is 409 youtube_at_box with the sentence for an old app', async () => {
     const r = await rig({ signedIn: false });
     const liveUser = await loginAs(r.app, 'live');
     const res = await begin(r, liveUser.headers);
-    expect(res.statusCode).toBe(503);
-    expect(res.json().code).toBe('youtube_reauthorise');
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'youtube_at_box', errors: ['Log masuk YouTube kini dibuat pada MAXCOM di surau. Kemas kini aplikasi dan cuba di Wi-Fi surau.'] });
     expect(r.up.sessions).toHaveLength(0);
   });
 
@@ -364,25 +359,28 @@ describe('site routes: broadcast, complete, status', () => {
     expect((ins.json!.snippet as { description: string }).description).toBe('x:y');
   });
 
-  it('signed out: broadcast is 503 youtube_reauthorise; a revoked site token is refused', async () => {
+  it('no cloud grant: an old box broadcast is 409 youtube_not_configured; a revoked site token is refused', async () => {
     const r = await rig({ signedIn: false });
     const res = await post(r, '/api/cloud/youtube/broadcast', r.site.headers, { sessionId: 's', meta: { title: 'a', description: '', privacy: 'unlisted' } });
-    expect(res.statusCode).toBe(503);
-    expect(res.json().code).toBe('youtube_reauthorise');
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('youtube_not_configured');
     r.app.surau.db.prepare('UPDATE sites SET revoked_at = ?').run('2026-11-05T00:00:00.000Z');
     expect((await r.app.inject({ method: 'GET', url: '/api/cloud/youtube/status', headers: r.site.headers })).statusCode).toBe(401);
   });
 });
 
 describe('on a box', () => {
-  it('the cloud YouTube routes exist in the table but answer 404: the box holds no Google token for them', async () => {
+  it('the box-leg routes exist in the table but answer 404; the catch-up routes answer on the box (2026.11.13)', async () => {
     const app = buildApp(':memory:');
     closers.push(() => app.close());
     const admin = await loginAs(app, 'admin');
-    for (const [method, url] of [['POST', '/api/youtube/upload/begin'], ['POST', '/api/youtube/upload/done'], ['GET', '/api/youtube/quota'], ['GET', '/api/cloud/youtube/status'], ['POST', '/api/cloud/youtube/broadcast']] as const) {
+    for (const [method, url] of [['GET', '/api/cloud/youtube/status'], ['POST', '/api/cloud/youtube/broadcast'], ['POST', '/api/cloud/youtube/complete']] as const) {
       const res = await app.inject({ method, url, headers: admin.headers, ...(method === 'POST' ? { payload: {} } : {}) });
       expect(res.statusCode, url).toBe(404);
     }
+    expect((await app.inject({ method: 'GET', url: '/api/youtube/quota', headers: admin.headers })).json()).toMatchObject({ uploadsToday: 0, uploadLimit: 100 });
+    expect((await app.inject({ method: 'POST', url: '/api/youtube/upload/begin', headers: admin.headers, payload: {} })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/api/youtube/upload/done', headers: admin.headers, payload: {} })).statusCode).toBe(400);
   });
 });
 
@@ -538,15 +536,38 @@ describe('Q-M2: the broadcast call is idempotent per site and session', () => {
     expect(three.json().key).not.toBe(one.json().key);
   });
 
-  it('both open broadcasts survive: completing one leaves the other recorded', async () => {
+  it('open broadcasts of two boxes both survive: completing one leaves the other recorded', async () => {
     const r = await rig();
+    const site2 = insertSite(r.app.surau.db, { boxId: 'boxid0002' });
     const one = (await post(r, '/api/cloud/youtube/broadcast', r.site.headers, BC)).json();
-    const two = (await post(r, '/api/cloud/youtube/broadcast', r.site.headers, { ...BC, sessionId: 'sess2' })).json();
+    const two = (await post(r, '/api/cloud/youtube/broadcast', site2.headers, BC)).json();
     const file = join(r.cloud.dir, 'live', 'youtube-open-sdm.json');
     expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).broadcasts)).toHaveLength(2);
     expect((await post(r, '/api/cloud/youtube/complete', r.site.headers, { broadcastId: one.broadcastId })).statusCode).toBe(200);
     const left = JSON.parse(readFileSync(file, 'utf8')).broadcasts as Record<string, { broadcastId: string }>;
     expect(Object.values(left).map((x) => x.broadcastId)).toEqual([two.broadcastId]);
+  });
+
+  it('a new session of a box ends that box leftover live broadcast (complete, never DELETE); another box is untouched', async () => {
+    const r = await rig();
+    const site2 = insertSite(r.app.surau.db, { boxId: 'boxid0002' });
+    r.g.lifeCycle = 'live';
+    const a1 = (await post(r, '/api/cloud/youtube/broadcast', r.site.headers, BC)).json();
+    const b1 = (await post(r, '/api/cloud/youtube/broadcast', site2.headers, BC)).json();
+    expect(r.g.count('/youtube/v3/liveBroadcasts/transition')).toBe(0);
+    // box A power-cut mid-kuliah (no complete was sent) and starts a second session
+    const a2 = (await post(r, '/api/cloud/youtube/broadcast', r.site.headers, { ...BC, sessionId: 'sess2' })).json();
+    expect(a2.broadcastId).not.toBe(a1.broadcastId);
+    const tr = r.g.calls.filter((c) => c.path === '/youtube/v3/liveBroadcasts/transition');
+    expect(tr).toHaveLength(1);
+    expect(tr[0]!.query.get('id')).toBe(a1.broadcastId);
+    expect(tr[0]!.query.get('broadcastStatus')).toBe('complete');
+    expect(r.g.calls.filter((c) => c.method === 'DELETE' && c.path === '/youtube/v3/liveBroadcasts')).toHaveLength(0);
+    // box B keeps its live broadcast and its record
+    const file = join(r.cloud.dir, 'live', 'youtube-open-sdm.json');
+    const left = JSON.parse(readFileSync(file, 'utf8')).broadcasts as Record<string, { broadcastId: string }>;
+    expect(Object.values(left).map((x) => x.broadcastId).sort()).toEqual([a2.broadcastId, b1.broadcastId].sort());
+    expect(r.g.broadcasts.has(b1.broadcastId)).toBe(true);
   });
 });
 

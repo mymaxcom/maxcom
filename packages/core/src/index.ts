@@ -10,6 +10,7 @@ export * from './features/registry.ts';
 export * from './features/settings.ts';
 export * from './features/meta.ts';
 export * from './features/lists.ts';
+export * from './islamic/surahs.ts';
 export * from './features/tvLanguage.ts';
 export * from './kiosk/state.ts';
 export * from './hijri.ts';

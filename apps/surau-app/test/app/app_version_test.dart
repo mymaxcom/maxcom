@@ -1,6 +1,7 @@
 // The MAX Admin Client version: the compile-time default equals pubspec.yaml,
 // and the Lagi sheet shows it as `MAX Admin Client <versi>`.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -20,11 +21,17 @@ void main() {
     expect(m.group(1), appVersion);
     expect(appVersionLine, 'MAX Admin Client ${m.group(1)}');
     expect(appVersion, matches(RegExp(r'^20\d\d\.(0[1-9]|1[0-2])\.\d{1,2}$')));
-    // build number = (YY*10000 + MM*100 + N) * 10
+    // build number = (YY*10000 + MM*100 + N) * 10 + build, build (0..9) from builds.json (absent = 0)
     final p = appVersion.split('.').map(int.parse).toList();
+    final buildsFile = File('../../builds.json');
+    final builds = buildsFile.existsSync()
+        ? jsonDecode(buildsFile.readAsStringSync()) as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final build = (builds['admin-client-android'] as int?) ?? 0;
+    expect(build, inInclusiveRange(0, 9));
     expect(
       int.parse(m.group(2)!),
-      ((p[0] - 2000) * 10000 + p[1] * 100 + p[2]) * 10,
+      ((p[0] - 2000) * 10000 + p[1] * 100 + p[2]) * 10 + build,
     );
   });
 

@@ -10,6 +10,10 @@ import '../l10n/generated/s.dart';
 import '../l10n/s_lookup.dart';
 import 'labels.dart' show appLangOfS, featureLabel;
 import 'registry.g.dart';
+import 'surah_names.dart' show surahName;
+
+/// The most verses the Kad Ayat card shows at once (core's `AYAT_MAX_AT_ONCE`).
+const int maxAyatAtOnce = 3;
 
 /// What a setting's value must satisfy, by the setting's top-level name.
 class SettingRule {
@@ -130,7 +134,7 @@ SettingRule? ruleFor(String name) {
     case 'timeFormat':
       return const SettingRule.enumOf(['12h', '24h']);
     case 'lang':
-      return const SettingRule.enumOf(['auto', 'ms', 'en']);
+      return const SettingRule.enumOf(['auto', 'ms', 'en', 'ar']);
     case 'mode':
       return const SettingRule.enumOf(['landscape', 'portrait']);
     case 'templateId':
@@ -714,13 +718,15 @@ void _crossFieldRules(
   S s,
 ) {
   if (key != 'ayatCard') return;
+  // Surah and verses matter only when the surau picks the verses itself (core: `m.pick !== 'manual'`).
+  if (merged['pick'] != 'manual') return;
   final surah = merged['surah'];
   final from = merged['ayatFrom'];
   final to = merged['ayatTo'];
   if (surah is! num || from is! num || to is! num) return;
   if (!_isInteger(surah) || surah < 1 || surah > surahs.length) return;
   final row = surahs[surah.toInt() - 1];
-  final name = row[1] as String;
+  final name = surahName(s, surah.toInt());
   final ayat = row[2] as int;
   if (to > ayat) {
     errors.add(SettingError('ayatTo', s.valSurahAyat(name, ayat)));
@@ -734,7 +740,7 @@ void _crossFieldRules(
     errors.add(SettingError('ayatFrom', s.valAyatOrder));
     return;
   }
-  if (to - from > 4) {
+  if (to - from > maxAyatAtOnce - 1) {
     errors.add(SettingError('ayatTo', s.valAyatMax));
   }
 }

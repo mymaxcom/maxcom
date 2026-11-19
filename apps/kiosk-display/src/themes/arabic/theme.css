@@ -1,6 +1,6 @@
 /* MAXCOM kiosk theme: arabic (Arabic Art, the sixth built-in; spec 6.11 and 6.12). Islamic art and calligraphy: a deep
    navy field with a gold star lattice, a double gilded frame, Arabic names beside the Malay ones, mihrab arches, and the
-   Arabic-led screens of ayat, hadis and zikir. The stage stays left to right: only Arabic text blocks are right to left
+   Arabic-led screens of ayat, hadis and zikir. The stage stays left to right (an Arabic TV screen excepted): only Arabic text blocks are right to left
    (6.12.1). Every ornament is CSS or one of the four SVG files in img/ (the theme's own, no script, no outside address).
    The Arabic typography is in arabic.css. Every selector starts with .stage[data-template='arabic'].
    Chrome 91 only: clip-path, grid, :is(); no backdrop-filter. */
@@ -112,7 +112,7 @@
   top: 1rem;
   width: 0.8rem;
   height: 0.8rem;
-  margin-left: -0.4rem;
+  margin-inline-start: -0.4rem;
   background: var(--accent);
   transform: rotate(45deg);
 }
@@ -162,9 +162,9 @@
 .stage[data-template='arabic'][data-dim='true'] .pbar.is-dimmed { opacity: 0.35; }
 
 /* ---- Content screens (kind content): a flat gilded strip with the Arabic names, a hexagonal chip ---- */
-.stage[data-template='arabic'][data-kind='content'] .brand-name { font-size: 1.1rem; letter-spacing: 0.36em; color: var(--accent-2); }
+.stage[data-template='arabic'][data-kind='content'] .brand-name { --bn-fs: 1.1rem; --bn-ls: 0.36em; color: var(--accent-2); }
 /* The date stays under the small tracked name: one step smaller than the contract's, in the parchment text colour. */
-.stage[data-template='arabic'][data-kind='content'] .shell-date { font-size: 1.146rem; margin-top: 0.5rem; color: #efe4c8; }
+.stage[data-template='arabic'][data-kind='content'] .shell-date { font-size: 1.375rem; margin-top: 0.5rem; color: #efe4c8; }
 .stage[data-template='arabic'][data-kind='content'] .deco .d2 { opacity: 0.08; }
 .stage[data-template='arabic'][data-kind='content'] .next--chip {
   gap: 0.8rem;
@@ -183,8 +183,8 @@
   border-radius: 0;
   background: rgb(8 20 44 / 0.9);
 }
-.stage[data-template='arabic'][data-kind='content'] .strip .pcell { gap: 0.6rem; border-left: 1px solid rgb(217 178 95 / 0.22); }
-.stage[data-template='arabic'][data-kind='content'] .strip .pcell:first-child { border-left: 0; }
+.stage[data-template='arabic'][data-kind='content'] .strip .pcell { gap: 0.6rem; border-inline-start: 1px solid rgb(217 178 95 / 0.22); }
+.stage[data-template='arabic'][data-kind='content'] .strip .pcell:first-child { border-inline-start: 0; }
 .stage[data-template='arabic'][data-kind='content'] .strip .pcell-ar { font-size: 1.8rem; }
 .stage[data-template='arabic'][data-kind='content'] .strip .pcell-label { display: none; }
 .stage[data-template='arabic'][data-kind='content'] .strip .pcell.is-current { background: linear-gradient(180deg, #ecd08a, #c99a40); color: var(--ink); }
@@ -266,7 +266,7 @@
 .stage[data-template='arabic'] .screen--live .next--chip .next-ar { font-size: 2.4rem; }
 .stage[data-template='arabic'] .screen--live .next--chip .chip-t { color: var(--accent-2); }
 .stage[data-template='arabic'] .live-strip { border-top: 2px solid var(--accent); border-bottom: 1px solid var(--hair); border-radius: 0; text-shadow: none; }
-.stage[data-template='arabic'] .live-strip__tag { background: #d6262c; color: #ffffff; border-right: 0; border-radius: 0; }
+.stage[data-template='arabic'] .live-strip__tag { background: #d6262c; color: #ffffff; border-inline-end: 0; border-radius: 0; }
 .stage[data-template='arabic'] .live-screen__waiting { color: var(--accent); }
 
 /* ---- Free text over a menu picture (spec 6.3): one dark plate per visual group, as in the other dark themes ---- */
@@ -302,7 +302,7 @@
 }
 .stage[data-template='arabic'][data-kind='content'] .tabung__title::after {
   content: '\0635\0646\062F\0648\0642';
-  margin-left: 1.15rem;
+  margin-inline-start: 1.15rem;
   font-family: 'Amiri', var(--font-arabic);
   font-size: 0.9em;
   font-weight: 700;

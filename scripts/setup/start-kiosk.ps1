@@ -6,7 +6,9 @@
   Runs as the kiosk user, no elevation. Finds msedge.exe (App Paths, then the two Program Files paths),
   waits up to 180 seconds for http://127.0.0.1:<port>/api/health, then starts Edge in kiosk mode with its
   own profile folder (%LOCALAPPDATA%\MAXCOM\kiosk-profile). The address is always loopback HTTP: only the
-  port can be chosen.
+  port can be chosen. The health check stays on 127.0.0.1, but the page Edge opens is
+  http://localhost:<port>/ : the YouTube player refuses to play (error 150) when the page origin is a bare
+  IP address, and plays when it is localhost.
 
   Without -Once it waits for that Edge to exit and starts it again after 5 seconds, until the file
   %LOCALAPPDATA%\MAXCOM\kiosk-stop exists (the shortcut "Henti skrin MAXCOM" makes it). A stop file left
@@ -15,7 +17,7 @@
 
   Exit to the box OS: for a real start (not -Once, not -PrintOnly) the script opens a loopback listener
   (System.Net.Sockets.TcpListener on 127.0.0.1, a free port) with a random 32-byte token and opens Edge on
-  http://127.0.0.1:<port>/#mxhost=<listener port>.<token>. The kiosk page's corner logo, on a double-click,
+  http://localhost:<port>/#mxhost=<listener port>.<token>. The kiosk page's corner logo, on a double-click,
   POSTs the token to /exit. Only POST /exit with exactly the token is accepted (answer 204): the script then
   stops the Edge process tree it started (taskkill /PID <pid> /T /F, never by image name) and ends, leaving the
   desktop to the admin. The stop file is not created: the next logon, or the Start menu shortcut, shows the
@@ -166,7 +168,7 @@ if ($MyInvocation.InvocationName -eq '.') { return }
 $base = Join-Path $env:LOCALAPPDATA 'MAXCOM'
 $profileDir = Join-Path $base 'kiosk-profile'
 $stopFile = Join-Path $base 'kiosk-stop'
-$url = "http://127.0.0.1:$Port/"
+$url = "http://localhost:$Port/"
 $healthUrl = "http://127.0.0.1:$Port/api/health"
 
 $edge = Find-Edge $EdgePath

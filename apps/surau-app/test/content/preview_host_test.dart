@@ -125,6 +125,13 @@ void main() {
       expect(previewPosterMessage(p), {'type': 'surau-preview-poster', 'assetId': id, 'title': 'Kempen Derma'});
     });
 
+    test('carries the Regangkan flag only when it is a boolean', () {
+      expect(previewPosterMessage(PreviewPoster(assetId: id, title: 'T', stretch: false)), containsPair('stretch', false));
+      expect(previewPosterMessage(PreviewPoster(assetId: id, title: 'T', stretch: true)), containsPair('stretch', true));
+      expect(PreviewPoster.tryFrom(id, 'T', 'no')!.stretch, isNull);
+      expect(PreviewPoster.tryFrom(id, 'T', false)!.stretch, isFalse);
+    });
+
     test('the JS form is JSON-encoded to the page\'s own origin, never *', () {
       final evil = ['"});alert(1);//', String.fromCharCode(92), '`', String.fromCharCode(10)].join();
       final js = previewPosterMessageJs(

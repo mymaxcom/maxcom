@@ -38,7 +38,12 @@ if (versionMatch == null && boxVersion != "0.0.0") {
     throw GradleException("boxVersion '$boxVersion' bukan bentuk YYYY.MM.N (N paling tinggi 99).")
 }
 
-// versionCode = ((YY * 10000 + MM * 100 + N) * 10) + abi; abi 1 = armeabi-v7a, 2 = arm64-v8a.
+// Internal build of the same public version (builds.json, 0 to 9; -PboxBuild=): a box with the first build accepts the next.
+val boxBuild: Int = ((findProperty("boxBuild") as String?)?.toIntOrNull() ?: 0).also {
+    if (it !in 0..9) throw GradleException("boxBuild mesti 0 hingga 9, diberi: $it")
+}
+
+// versionCode = ((YY * 10000 + MM * 100 + N) * 100) + build * 10 + abi; abi 1 = armeabi-v7a, 2 = arm64-v8a.
 val baseCode: Int = versionMatch?.let { m ->
     val (year, month, n) = m.destructured
     (year.toInt() % 100) * 10000 + month.toInt() * 100 + n.toInt()
@@ -58,7 +63,7 @@ android {
         applicationId = "my.maxcom.box"
         minSdk = 28
         targetSdk = 35
-        versionCode = maxOf(baseCode * 10, 1)
+        versionCode = maxOf(baseCode * 100 + boxBuild * 10, 1)
         versionName = boxVersion
     }
 
@@ -111,7 +116,7 @@ kotlin {
     }
 }
 
-// Per-ABI version code and file name MAX-Kiosk-Server-<version>-<abi>.apk (plan decision 3).
+// Per-ABI version code and file name MAX-Kiosk-Server-<version>[-b<build>]-<abi>.apk (plan decision 3; the build is in the name when above 0).
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->
@@ -119,9 +124,9 @@ androidComponents {
                 .firstOrNull { it.filterType == FilterConfiguration.FilterType.ABI }
                 ?.identifier
             val index = abiIndex[abi] ?: return@forEach
-            output.versionCode.set(maxOf(baseCode * 10 + index, 1))
+            output.versionCode.set(maxOf(baseCode * 100 + boxBuild * 10 + index, 1))
             val suffix = if (variant.buildType == "release") "" else "-${variant.buildType}"
-            (output as VariantOutputImpl).outputFileName.set("MAX-Kiosk-Server-$boxVersion-$abi$suffix.apk")
+            (output as VariantOutputImpl).outputFileName.set("MAX-Kiosk-Server-$boxVersion${if (boxBuild > 0) "-b$boxBuild" else ""}-$abi$suffix.apk")
         }
     }
 }

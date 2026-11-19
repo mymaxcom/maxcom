@@ -165,11 +165,21 @@ if ($Version -ne '' -and $Version -notmatch '^20[0-9]{2}\.(0[1-9]|1[0-2])\.[1-9]
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\')
 $Version = Resolve-ProductVersion 'kiosk-server-android' $Version $repo
+# the internal build of this version (builds.json, 0 when absent): the versionCode rises, the version name stays
+$boxBuild = 0
+$bf = Join-Path $repo 'builds.json'
+if (Test-Path -LiteralPath $bf -PathType Leaf) {
+  try { $bj = Get-Content -LiteralPath $bf -Raw -Encoding UTF8 | ConvertFrom-Json } catch { Fail 'builds.json bukan JSON yang sah.' }
+  $bv = $bj.'kiosk-server-android'
+  if ($null -ne $bv) { $boxBuild = [int]$bv }
+  if ($boxBuild -lt 0 -or $boxBuild -gt 9) { Fail "builds.json: kiosk-server-android mesti 0 hingga 9 (diberi: $boxBuild)" }
+}
 if ($OutDir -eq '') { $OutDir = Join-Path $repo 'dist\android' }
 $abis = if ($Abi -eq 'both') { @('armeabi-v7a', 'arm64-v8a') } else { @($Abi) }
 $project = Join-Path $repo 'apps\box-android'
 $main = Join-Path $project 'app\src\main'
-$archiveName = "maxcom-box-$Version-android.tar.gz"
+$buildTag = if ($boxBuild -gt 0) { "-b$boxBuild" } else { '' }
+$archiveName = "maxcom-box-$Version$buildTag-android.tar.gz"
 # The Android Gradle plugin gunzips and renames every *.gz asset (the APK check found a .tar inside), so the archive
 # travels inside the APK as .tgz: same bytes, same sha256, only the asset name differs.
 $assetName = "maxcom-box-$Version-android.tgz"
@@ -304,7 +314,7 @@ foreach ($a in $abis) {
 Write-Host "4/6 gradlew :app:$task"
 Push-Location $project
 try {
-  & (Join-Path $project 'gradlew.bat') ":app:$task" "-PboxVersion=$Version" '--console=plain'
+  & (Join-Path $project 'gradlew.bat') ":app:$task" "-PboxVersion=$Version" "-PboxBuild=$boxBuild" '--console=plain'
   if ($LASTEXITCODE -ne 0) { Fail "gradlew :app:$task gagal." }
 } finally { Pop-Location }
 
@@ -318,7 +328,7 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $results = @()
 $allErrs = @()
 foreach ($a in $abis) {
-  $apk = Join-Path $project "app\build\outputs\apk\$buildType\MAX-Kiosk-Server-$Version-$a$suffix.apk"
+  $apk = Join-Path $project "app\build\outputs\apk\$buildType\MAX-Kiosk-Server-$Version$buildTag-$a$suffix.apk"
   if (-not (Test-Path -LiteralPath $apk -PathType Leaf)) { Fail "APK tiada selepas gradle: $apk" }
   $errs = @(Test-ApkIntegrity -Apk $apk -Abi $a -Manifest $manifests[$a] -ArchiveName $assetName -ArchiveSha256 $archiveSha)
   $errs += @(Test-ApkSigner -Apk $apk -Pin $signerPin -Release (-not $Debug) -ApkSignerJar $apksignerJar -Java $java.Source)

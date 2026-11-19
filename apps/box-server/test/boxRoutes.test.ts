@@ -191,6 +191,14 @@ describe('GET /api/kiosk/cloud and PUT /api/box/name', () => {
     expect(j.lastOkAt).toBe('2026-11-09T09:55:00.000Z');
   });
 
+  it('cloud status prefers last_ok and falls back to last_pull', async () => {
+    const { app } = make();
+    app.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('linked', '1'), ('last_pull', '2026-11-09T09:55:00.000Z')").run();
+    expect(((await get(app, '/api/kiosk/cloud')).json() as { lastOkAt: string }).lastOkAt).toBe('2026-11-09T09:55:00.000Z');
+    app.surau.db.prepare("INSERT INTO sync_state (key, value) VALUES ('last_ok', '2026-11-09T11:00:00.000Z')").run();
+    expect(((await get(app, '/api/kiosk/cloud')).json() as { lastOkAt: string }).lastOkAt).toBe('2026-11-09T11:00:00.000Z');
+  });
+
   it('rename: 61 chars is 400, AJK is 403, admin succeeds and box.json follows', async () => {
     const { app, dir } = make();
     const admin = await loginAs(app, 'admin');

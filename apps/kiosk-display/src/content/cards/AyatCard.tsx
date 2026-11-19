@@ -1,5 +1,5 @@
 import type { AyatCard as AyatData } from '@surau/core';
-import { t } from '../../i18n.ts';
+import { surahNameFor, t } from '../../i18n.ts';
 import type { CardProps } from '../ContentLayer.tsx';
 import { arabicIndic, pageAt, useFit } from '../paging.ts';
 import { useScale } from '../scale.ts';
@@ -155,7 +155,7 @@ export function AyatCard({ view, lang, content, startedAt, durationSeconds }: Ca
     >
       <header class="card__head">
         <span class="card__tag">{t('ayatToday', lang)}</span>
-        <span class="ayat__ref">{t('surahLine', lang, { name: a.surahNameMs, n: a.surah, range: rangeLabel(a) })}</span>
+        <span class="ayat__ref">{t('surahLine', lang, { name: surahNameFor(a.surah, a.surahNameMs, lang), n: a.surah, range: rangeLabel(a) })}</span>
         {p.mode === 'malay' ? <span class="ayat__mode">{t('translation', lang)}</span> : null}
         {pages.length > 1 ? <span class="ayat__pages num">{`${pageNo + 1} / ${pages.length}`}</span> : null}
       </header>

@@ -54,7 +54,7 @@ describe('the live screen: the frame and the video share one box', () => {
 
   it('the clear video box and the live screen grid use the same properties', () => {
     const clear = rule(live, '.live--clear');
-    expect(clear).toMatch(/left:\s*var\(--live-pad-x\)/);
+    expect(clear).toMatch(/inset-inline-start:\s*var\(--live-pad-x\)/);
     expect(clear).toMatch(/top:\s*var\(--live-pad-top\)/);
     expect(clear).toMatch(/width:\s*var\(--live-frame-w\)/);
     expect(clear).toMatch(/height:\s*var\(--live-frame-h\)/);

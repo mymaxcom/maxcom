@@ -55,26 +55,26 @@ const stored = (db: DatabaseSync, feature: string): Record<string, unknown> =>
 const OLD_TITLE = 'T'.repeat(120);
 
 describe('the ayatCard cross-field rule runs on the server', () => {
-  it('a local route refuses a range the surah does not have or longer than 5 verses, and accepts a good one', async () => {
+  it('a local route refuses a range the surah does not have or longer than 3 verses, and accepts a good one', async () => {
     const app = makeApp();
     const admin = await loginAs(app, 'admin');
-    // default surah is Al-Baqarah (286 verses); 10..20 is 11 verses
-    const bad = await put(app, admin, 'ayatCard', { ayatFrom: 10, ayatTo: 20 });
+    // default surah is Al-Baqarah (286 verses); 10..20 is 11 verses; the rule applies when the surau picks the verses
+    const bad = await put(app, admin, 'ayatCard', { pick: 'manual', ayatFrom: 10, ayatTo: 20 });
     expect(bad.statusCode).toBe(400);
-    expect(bad.json().errors.join(' ')).toMatch(/at most 5/);
-    expect((await put(app, admin, 'ayatCard', { surah: 1, ayatFrom: 1, ayatTo: 8 })).statusCode).toBe(400); // Al-Fatihah has 7
-    const ok = await put(app, admin, 'ayatCard', { ayatFrom: 255, ayatTo: 256 });
+    expect(bad.json().errors.join(' ')).toMatch(/at most 3/);
+    expect((await put(app, admin, 'ayatCard', { pick: 'manual', surah: 1, ayatFrom: 1, ayatTo: 8 })).statusCode).toBe(400); // Al-Fatihah has 7
+    const ok = await put(app, admin, 'ayatCard', { pick: 'manual', ayatFrom: 255, ayatTo: 256 });
     expect(ok.statusCode, ok.body).toBe(200);
     expect(getSettings(app.surau.db, 'sdm').ayatCard).toMatchObject({ ayatFrom: 255, ayatTo: 256 });
-    // a patch against the stored copy: moving only ayatTo past the 5-verse limit is refused
+    // a patch against the stored copy: moving only ayatTo past the 3-verse limit is refused
     expect((await put(app, admin, 'ayatCard', { ayatTo: 270 })).statusCode).toBe(400);
   });
 
   it('a signed op is held to it too', async () => {
     const app = makeApp();
     const admin = await loginAs(app, 'admin');
-    expect(await send(app, admin, 'ayatCard', { ayatFrom: 10, ayatTo: 20 })).toMatchObject({ status: 'refused', reason: 'invalid' });
-    expect((await send(app, admin, 'ayatCard', { ayatFrom: 255, ayatTo: 256 })).status).toBe('applied');
+    expect(await send(app, admin, 'ayatCard', { pick: 'manual', ayatFrom: 10, ayatTo: 20 })).toMatchObject({ status: 'refused', reason: 'invalid' });
+    expect((await send(app, admin, 'ayatCard', { pick: 'manual', ayatFrom: 255, ayatTo: 256 })).status).toBe('applied');
   });
 
   it('a replicated entry is not cross-checked', () => {
@@ -87,13 +87,13 @@ describe('the ayatCard cross-field rule runs on the server', () => {
   it('an old stored range that breaks the rule does not block a save that does not touch the verses', async () => {
     const app = makeApp();
     const admin = await loginAs(app, 'admin');
-    seed(app.surau.db, 'ayatCard', { surah: 2, ayatFrom: 10, ayatTo: 20 });
+    seed(app.surau.db, 'ayatCard', { pick: 'manual', surah: 2, ayatFrom: 10, ayatTo: 14 });
     const r = await put(app, admin, 'ayatCard', { showTranslation: false });
     expect(r.statusCode, r.body).toBe(200);
-    expect(getSettings(app.surau.db, 'sdm').ayatCard).toMatchObject({ ayatFrom: 10, ayatTo: 20, showTranslation: false });
+    expect(getSettings(app.surau.db, 'sdm').ayatCard).toMatchObject({ ayatFrom: 10, ayatTo: 14, showTranslation: false });
     // touching a verse field re-checks the whole range
     expect((await put(app, admin, 'ayatCard', { ayatFrom: 11 })).statusCode).toBe(400);
-    expect((await put(app, admin, 'ayatCard', { ayatFrom: 16 })).statusCode).toBe(200);
+    expect((await put(app, admin, 'ayatCard', { ayatFrom: 12 })).statusCode).toBe(200);
   });
 });
 

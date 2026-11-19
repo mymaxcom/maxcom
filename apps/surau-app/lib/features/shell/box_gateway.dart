@@ -152,10 +152,6 @@ class BoxGateway {
     String path, {
     bool Function()? quiet,
   }) async {
-    final cloud = await _cloudFor(path);
-    if (cloud != null) {
-      return _viaCloud(path, cloud, (c, t) => c.getJson(path, token: t));
-    }
     try {
       final body = await client.getJson(path, token: token);
       reach.markUp(now());
@@ -219,6 +215,14 @@ class BoxGateway {
     return _write(() => client.uploadAsset(bytes, mime, token: token));
   }
 
+  /// `POST /api/assets/video`: a video file streamed straight to the box (live only, never queued, never over the
+  /// cloud). [onProgress] gets the bytes sent so far.
+  Future<Map<String, dynamic>> uploadVideo(
+    Stream<List<int>> body,
+    int length, {
+    void Function(int sent)? onProgress,
+  }) => _write(() => client.uploadVideo(body, length, token: token, onProgress: onProgress), path: '/api/assets/video');
+
   /// True when the last [put] was signed and queued on this device (the box
   /// has not heard it yet) instead of sent: the screen says so (K5).
   bool lastPutQueued = false;
@@ -234,6 +238,10 @@ class BoxGateway {
     }
     return _send('PUT', path, (c, t) => c.putJson(path, body, token: t));
   }
+
+  /// `PATCH path`: a live-only write (the live notice text), never queued.
+  Future<Map<String, dynamic>> patch(String path, Object body) =>
+      _send('PATCH', path, (c, t) => c.patchJson(path, body, token: t));
 
   Future<Map<String, dynamic>> post(String path, Object body) async {
     if (_offlineFirst) {
@@ -287,48 +295,23 @@ class BoxGateway {
     String path,
     Future<T> Function(BoxClient client, String token) send,
   ) async {
-    final cloud = await _cloudFor(path);
-    if (cloud != null) return _viaCloud(path, cloud, send);
     return _offlineFirst
         ? _writeLive(method, path, send)
         : _write(() => send(client, token), path: path);
   }
 
-  /// The YouTube sign-in and catch-up routes (`/api/live/youtube/*`,
-  /// `/api/youtube/*`) live on the cloud (plan Task 8).
-  static final RegExp _youtubeRoute = RegExp(
-    r'^/api/(live/)?youtube(?!/ingest$)(/|$)',
+  /// The YouTube sign-in, sign-out and catch-up routes (`/api/live/youtube/*`,
+  /// `/api/youtube/*`). Release 2026.11.13: the grant is held by the MAXCOM at
+  /// the surau, so these go to the box this gateway talks to and NEVER to the
+  /// cloud link (a box that does not answer is not replaced by the cloud: the
+  /// person is told it is made on the surau Wi-Fi). Away from the surau the
+  /// gateway's own client is the cloud, which answers the status with the
+  /// box's flag and refuses a sign-in (`youtube_at_box`). The ingest read and
+  /// the next-live choice (a synced surau setting the cloud can take) are not
+  /// in it.
+  static final RegExp youtubeRoute = RegExp(
+    r'^/api/(live/)?youtube(?!/ingest$)(?!/next-live$)(/|$)',
   );
-
-  /// The cloud link for a YouTube route when cloudSync is on, a cloud URL
-  /// is known and this device has a session there; null sends it to the box.
-  Future<SyncLink?> _cloudFor(String path) async {
-    if (!_offlineFirst || !_youtubeRoute.hasMatch(path.split('?').first)) {
-      return null;
-    }
-    try {
-      return await engine!.cloudLinkIfOn();
-    } on Object {
-      return null;
-    }
-  }
-
-  /// One request on the cloud. The box is not asked in its place when the
-  /// cloud does not answer: the person is told ([LiveOnly]).
-  Future<T> _viaCloud<T>(
-    String path,
-    SyncLink link,
-    Future<T> Function(BoxClient client, String token) send,
-  ) async {
-    try {
-      return await send(link.client, link.token);
-    } on SessionExpired {
-      onSessionExpired();
-      rethrow;
-    } on BoxUnreachable {
-      throw LiveOnly(path);
-    }
-  }
 
   /// Offline-first network write. The box first; when it does not answer,
   /// whichever base the sync engine's locator finds (the cloud away from
@@ -354,8 +337,11 @@ class BoxGateway {
       // pairing), so the person is told to check instead.
       if (e.sent) throw Uncertain(path);
     }
-    // The surau's own settings never go to the cloud.
-    if (isBoxLocalOnly(method, path)) throw LiveOnly(path);
+    // The surau's own settings never go to the cloud, nor does any YouTube
+    // route (the grant is the MAXCOM's at the surau, 2026.11.13).
+    if (isBoxLocalOnly(method, path) || youtubeRoute.hasMatch(path.split('?').first)) {
+      throw LiveOnly(path);
+    }
     // Only the cloud is worth a second try: the box just failed to answer.
     final SyncLink link;
     try {

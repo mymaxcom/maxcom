@@ -17,13 +17,14 @@ import '../features/labels_content.dart' show dayLabelsMs, monthWordsMs, slotLab
 import '../features/validate.dart' show SettingError, ValidationResult, imageRefError;
 import '../l10n/generated/s.dart';
 import '../l10n/s_lookup.dart';
+import 'video_rules.dart' show videoCrossErrors;
 
 export '../features/labels_content.dart' show dayLabelsMs;
 
 /// sha256 of core content/schema.ts + content/types.ts (CRLF as LF) this
 /// port was written against; kinds_test fails when core moved on.
 const String contentSourceHash =
-    '56646702c2b4267159bcd29e7a28024193d12b317676c6b940d3e22436d99eb3';
+    '1e51c9e566ee1e47240b90745b0d8a727608cf45e5042795b49040b281d19391';
 
 enum FieldType {
   text,
@@ -87,6 +88,7 @@ class FieldSpec {
     this.assetKind = AssetKind.image,
     this.hintMs,
     this.hidden = false,
+    this.omitWhen,
   });
 
   final String key;
@@ -116,6 +118,10 @@ class FieldSpec {
   /// Validated and sent back as it was, but not drawn in the form (a stored
   /// field nothing uses any more, such as a kuliah's `seriesId`).
   final bool hidden;
+
+  /// A value that is not sent at all (the box reads an absent field as this value). A poster's `stretch` is sent only
+  /// when it is `false`, so a box older than 2026.11.13 (which refuses the field) still saves the poster.
+  final Object? omitWhen;
 
   String choiceLabelMs(String value) => choiceLabels[value] ?? value;
 }
@@ -147,6 +153,7 @@ class ContentKindSpec {
     'pengumuman' => s.kindDescPengumuman,
     'ticker' => s.kindDescTicker,
     'poster' => s.kindDescPoster,
+    'video' => s.kindDescVideo,
     'programKhas' => s.kindDescProgramKhas,
     'takwim' => s.kindDescTakwim,
     'hadis' => s.kindDescHadis,
@@ -257,6 +264,46 @@ const List<ContentKindSpec> contentKinds = [
     fields: [
       FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Tajuk poster', maxLength: 80),
       FieldSpec(key: 'assetId', type: FieldType.asset, labelMs: 'Gambar poster'),
+      FieldSpec(
+        key: 'stretch',
+        type: FieldType.bool,
+        labelMs: 'Regangkan gambar',
+        required: false,
+        hintMs: 'Ya: gambar memenuhi ruang, bentuk mungkin berubah. Tidak: gambar penuh, bentuk asal.', // lang-ok: BM source of the hint lookup
+        omitWhen: true,
+      ),
+      FieldSpec(key: 'days', type: FieldType.days, labelMs: 'Hari dipaparkan'),
+      FieldSpec(key: 'from', type: FieldType.date, labelMs: 'Tarikh mula', required: false),
+      FieldSpec(key: 'to', type: FieldType.date, labelMs: 'Tarikh tamat', required: false),
+      FieldSpec(key: 'order', type: FieldType.int, labelMs: 'Susunan', min: 0, max: 1000000),
+    ],
+  ),
+  ContentKindSpec(
+    key: 'video',
+    labelMs: 'Video',
+    labelMsPlural: 'Video',
+    icon: Icons.smart_display_rounded,
+    fields: [
+      FieldSpec(key: 'title', type: FieldType.text, labelMs: 'Tajuk video', maxLength: 80),
+      FieldSpec(
+        key: 'source',
+        type: FieldType.enumOf,
+        labelMs: 'Sumber',
+        choices: ['upload', 'youtube', 'rakaman'],
+        choiceLabels: {'upload': 'Muat naik', 'youtube': 'YouTube', 'rakaman': 'Rakaman'},
+      ),
+      FieldSpec(key: 'assetId', type: FieldType.text, labelMs: 'Fail video', required: false, maxLength: 64, hidden: true),
+      FieldSpec(key: 'youtubeId', type: FieldType.text, labelMs: 'Video YouTube', required: false, maxLength: 11, hidden: true),
+      FieldSpec(key: 'durationSec', type: FieldType.int, labelMs: 'Tempoh', required: false, min: 1, max: 86400, hidden: true),
+      FieldSpec(key: 'startSec', type: FieldType.int, labelMs: 'Mula', required: false, min: 0, max: 86400, hidden: true),
+      FieldSpec(key: 'endSec', type: FieldType.int, labelMs: 'Tamat', required: false, min: 1, max: 86400, hidden: true),
+      FieldSpec(
+        key: 'sound',
+        type: FieldType.bool,
+        labelMs: 'Bunyi',
+        required: false,
+        hintMs: 'Tidak: video senyap. Tidak pernah berbunyi semasa azan, iqamah, solat, siaran langsung atau tilawah.', // lang-ok: BM source of the hint lookup
+      ),
       FieldSpec(key: 'days', type: FieldType.days, labelMs: 'Hari dipaparkan'),
       FieldSpec(key: 'from', type: FieldType.date, labelMs: 'Tarikh mula', required: false),
       FieldSpec(key: 'to', type: FieldType.date, labelMs: 'Tarikh tamat', required: false),
@@ -449,6 +496,11 @@ bool _validDateTime(String v) {
       x.minute == t[1];
 }
 
+/// Core checkText: direction overrides and isolates (U+202A-202E, U+2066-2069)
+/// are removed, then the text is trimmed. Arabic and U+200E/U+200F stay.
+final RegExp _bidiControls = RegExp('[\u202A-\u202E\u2066-\u2069]');
+String _txt(String v) => v.replaceAll(_bidiControls, '').trim();
+
 /// Core's `validateContent(kind, item)`: accepts exactly the items core
 /// accepts. `id`, `updatedAt` and `updatedBy` are allowed and ignored; an
 /// optional field may be absent but not null; text is judged trimmed.
@@ -475,17 +527,17 @@ ValidationResult validateContent(String kind, Object? item, {S? s}) {
       case FieldType.multiline:
         if (v is! String) {
           err = f.required && (v == null) ? l.valRequired : l.valMustText;
-        } else if (v.trim().length > f.maxLength) {
+        } else if (_txt(v).length > f.maxLength) {
           err = l.valTooLong(f.maxLength);
-        } else if (f.required && v.trim().isEmpty) {
+        } else if (f.required && _txt(v).isEmpty) {
           err = l.valRequired;
         }
       case FieldType.ref:
         if (v is! String) {
           err = v == null ? l.valRequired : l.valMustText;
-        } else if (v.trim().length > maxContentText) {
+        } else if (_txt(v).length > maxContentText) {
           err = l.valTooLong(maxContentText);
-        } else if (f.required && v.trim().isEmpty) {
+        } else if (f.required && _txt(v).isEmpty) {
           err = l.valRequired;
         }
       case FieldType.date:
@@ -528,10 +580,10 @@ ValidationResult validateContent(String kind, Object? item, {S? s}) {
       case FieldType.timezone:
         if (v is! String) {
           err = v == null ? l.valRequired : l.valMustText;
-        } else if (v.trim().length > maxContentText) {
+        } else if (_txt(v).length > maxContentText) {
           err = l.valTooLong(maxContentText);
         } else {
-          final tz = v.trim();
+          final tz = _txt(v);
           if (tz.isEmpty) errors.add(SettingError(f.key, l.valRequired));
           // Core accepts any zone Node's Intl knows (an imported Brunei, Tehran
           // or Kuwait clock is stored as such); the app checks the shape and
@@ -546,6 +598,8 @@ ValidationResult validateContent(String kind, Object? item, {S? s}) {
     errors.add(SettingError(fromKey, l.valFromBeforeTo));
     errors.add(SettingError(toKey, l.valFromBeforeTo));
   }
+
+  if (kind == 'video') errors.addAll(videoCrossErrors(item, l));
 
   for (final k in item.keys) {
     if (k == 'id' || k == 'updatedAt' || k == 'updatedBy') continue;
@@ -565,6 +619,7 @@ Map<String, dynamic> cleanItem(ContentKindSpec spec, Map<String, dynamic> raw) {
     if (v is String) v = v.trim();
     final empty = v == null || (v is String && v.isEmpty);
     if (empty && !f.required) continue;
+    if (f.omitWhen != null && v == f.omitWhen) continue;
     if (!raw.containsKey(f.key) && v == null) continue;
     out[f.key] = v;
   }

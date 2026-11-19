@@ -30,6 +30,7 @@ export function boxView(over: Partial<BoxStateView> = {}): BoxStateView {
     keyFp: KEY_FP,
     pub,
     name: 'MAXCOM 4F2A',
+    version: '2026.11.13',
     state: 'setup',
     reason: 'none',
     linked: false,

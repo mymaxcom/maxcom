@@ -21,18 +21,21 @@
 .stage[data-kind='content'] .screen--shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 7.708rem minmax(0, 1fr) auto auto auto;
+  grid-template-rows: minmax(7.708rem, auto) minmax(0, 1fr) auto auto auto;
   grid-template-areas: 'head' 'band' 'ticker' 'emerg' 'bar';
   row-gap: 0;
   padding: 0 3.333rem 1.875rem;
 }
+/* The brand is a grid item of the head row (row height `auto`, 7.708 rem at least): a name that wraps to a second line
+   makes the head taller and the card region starts below it, so the date line can never run into the card's top line. */
 .stage[data-kind='content'] .region-brand {
-  position: absolute;
-  left: 3.333rem;
-  top: 2.708rem;
+  grid-area: head;
+  align-self: start;
+  position: relative;
   z-index: 2;
   max-width: 34rem;
-  margin: 0;
+  margin: 2.708rem 0 0;
+  padding-bottom: 0.6rem;
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -41,12 +44,20 @@
 .stage:is([data-kind='content'], [data-kind='live']) .brand-name {
   display: block;
   min-width: 0;
-  font-size: 1.563rem;
+  --bn-fs: 1.563rem;
+  --bn-ls: 0.3em;
+  font-size: calc(var(--bn-fs) * var(--bn-fk, 1));
   font-weight: 800;
-  letter-spacing: 0.3em;
+  letter-spacing: calc(var(--bn-ls) * var(--bn-lk, 1));
   line-height: 1.25;
   text-transform: uppercase;
 }
+/* A long surau name (ContentShell counts its characters): the size and the tracking shrink in steps so it stays on one
+   line when it can (17 to 22 letters); a longer one may take two lines and the head grows. The template sets --bn-fs and
+   --bn-ls, the steps only scale them. An Arabic name gets no tracking (it would break the joined letters). */
+.stage[data-kind='content'] .region-brand.name-t1 .brand-name { --bn-fk: 0.93; --bn-lk: 0.4; }
+.stage[data-kind='content'] .region-brand.name-t2 .brand-name { --bn-fk: 0.86; --bn-lk: 0.25; }
+.stage[data-kind='content'] .region-brand.name-ar .brand-name { --bn-lk: 0; }
 /* The name over the day's dates (Gregorian, then Hijri when Tetapan gives one). The date is the quiet line: body
    case, the text colour, one size under the name; it keeps one line and may run past the name's width, never under the
    chip (the head leaves it about 48 rem). */
@@ -54,9 +65,9 @@
 .stage[data-kind='content'] .shell-date {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.9rem;
   margin-top: 0.4rem;
-  font-size: 1.354rem;
+  font-size: 1.625rem;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0.01em;
@@ -64,12 +75,11 @@
   color: var(--text);
   opacity: 0.86;
 }
-.stage[data-kind='content'] .shell-date .sep { flex: none; width: 0.36rem; height: 0.36rem; border-radius: 50%; background: var(--accent); }
-.stage[data-kind='content'] .shell-hijri { font-weight: 500; }
+.stage[data-kind='content'] .shell-date .sep { flex: none; width: 0.43rem; height: 0.43rem; border-radius: 50%; background: var(--accent); }
 .stage[data-kind='content'] .shell-top {
   position: absolute;
   top: 1.563rem;
-  right: 3.333rem;
+  inset-inline-end: 3.333rem;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -77,7 +87,7 @@
 }
 .stage:is([data-kind='content'], [data-kind='live']) .region-clock.clock--compact { display: flex; align-items: baseline; gap: 0.5rem; }
 .stage:is([data-kind='content'], [data-kind='live']) .clock--compact .hm { font-size: 4.375rem; font-weight: 800; line-height: 0.92; letter-spacing: -0.01em; }
-.stage:is([data-kind='content'], [data-kind='live']) .clock--compact small { font-size: 1.563rem; font-weight: 700; margin-left: 0.2rem; opacity: 0.9; }
+.stage:is([data-kind='content'], [data-kind='live']) .clock--compact small { font-size: 1.563rem; font-weight: 700; margin-inline-start: 0.2rem; opacity: 0.9; }
 /* The next-prayer chip (theme round 2, rules 4 to 6): the name and the time, then an inner pill with a small hourglass
    and the hours and minutes left (no words). For three minutes after a prayer time the pill says "Masuk waktu" instead
    (.is-now). The inner pill takes the theme's ink on its accent, or --chip-cd-bg / --chip-cd-ink when a theme sets them. */
@@ -95,7 +105,7 @@
 }
 .stage:is([data-kind='content'], [data-kind='live']) .chip-k { font-size: 1.458rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
 .stage:is([data-kind='content'], [data-kind='live']) .chip-t { font-size: 2.292rem; font-weight: 800; line-height: 1; letter-spacing: 0; }
-.stage:is([data-kind='content'], [data-kind='live']) .chip-ap { font-size: 1.146rem; font-weight: 800; margin-left: 0.3rem; }
+.stage:is([data-kind='content'], [data-kind='live']) .chip-ap { font-size: 1.146rem; font-weight: 800; margin-inline-start: 0.3rem; }
 .stage:is([data-kind='content'], [data-kind='live']) .chip-cd {
   display: flex;
   align-items: center;
@@ -143,7 +153,7 @@
 .stage[data-kind='content'] .strip .pcell.is-minor .pcell-time { font-size: 2.188rem; opacity: 0.78; }
 .stage[data-kind='content'] .strip .pcell.is-current { background: var(--accent); color: var(--ink); }
 
-/* The strip and the emergency band stay above a full-stage body (the poster covers the whole stage). */
+/* The strip and the emergency band stay above a full-stage body (the poster stage covers the whole stage). */
 .stage[data-kind='content'] .screen--shell .strip,
 .stage[data-kind='content'] .screen--shell .emergency-band,
 .stage[data-kind='content'] .screen--shell .ticker { position: relative; z-index: 2; }
@@ -157,14 +167,12 @@
   color: var(--accent);
 }
 
-/* ---- Poster (full height, operator 2026-11-17 "Option 2"): the frame is the whole stage, edge to edge, over a blurred
-   copy of the poster (.poster-fill) that fills the bands the picture leaves. No strip, no ticker on this screen. The
-   picture is always whole (never cropped or stretched) and as large as the stage allows: PosterScreen sets --poster-ar
-   (width over height) once it has loaded, and the height is the smaller of the stage height and the stage width
-   (100rem, 1 rem is 1 % of the stage width) over that ratio. So a portrait poster runs top to bottom, centred; a 16:9
-   poster fills every edge; a wider one runs side to side, centred vertically. The img box hugs the picture, so a theme
-   line on it sits on the picture's own edge. The top row (brand, date line, chip, clock) stays where it is, drawn over
-   the picture, readable through its text-shadow and a soft scrim behind the row (::after on the poster stage). */
+/* ---- Poster (2026.11.13): the picture frame starts just below the header row (brand, date line, chip, clock) and runs
+   down to near the bottom edge, over a blurred copy of the poster (.poster-fill) that fills the bands the picture
+   leaves. No strip, no ticker on this screen. Per poster, "Regangkan" (data-stretch, absent = true) either pulls the
+   picture to the frame's exact width and height (object-fit fill) or keeps it whole in its own proportions (contain;
+   PosterScreen sets --poster-ar, width over height, once it has loaded). A theme line on the img sits on the picture's
+   own edge. The header is readable over the blurred fill through its text-shadow. */
 .stage[data-screen='poster'] .content { grid-area: auto; position: absolute; inset: 0; width: auto; margin: 0; z-index: 0; }
 .poster-stage { position: absolute; inset: 0; overflow: hidden; }
 .poster-fill {
@@ -176,32 +184,56 @@
 }
 .poster-frame {
   position: absolute;
-  inset: 0;
+  /* Just below the header row: --poster-top is the header's real bottom (PosterScreen measures it; the constant is the
+     fallback), then a small gap; small even insets left, right and bottom. */
+  top: calc(var(--poster-top, 7.9rem) + 0.833rem);
+  inset-inline-start: 0.833rem;
+  inset-inline-end: 0.833rem;
+  bottom: 0.833rem;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+/* Regangkan = yes (the default, data-stretch not "false"): the picture is pulled to the frame's exact width and height. */
 .poster-frame img {
   display: block;
-  height: min(100%, calc(100rem / var(--poster-ar, 0.707)));
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+/* Regangkan = no: whole, in its own proportions, as large as the frame allows (the frame is 98.333rem wide). */
+.poster-frame[data-stretch='false'] img {
+  height: min(100%, calc(98.333rem / var(--poster-ar, 0.707)));
   width: auto;
   max-width: 100%;
   object-fit: contain;
 }
-/* The scrim behind the top row only, in the theme's own ground (--glass-rgb: dark in the dark themes, the light page in
-   Minimal and Old School, whose header text is dark), gone by 12.5rem so the rest of the poster is untouched. */
-.poster-stage::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 12.5rem;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgb(var(--glass-rgb) / 0.7) 0, rgb(var(--glass-rgb) / 0.35) 7.292rem, rgb(var(--glass-rgb) / 0) 12.5rem);
-}
 .stage[data-screen='poster'] .region-brand,
 .stage[data-screen='poster'] .region-clock.clock--compact { text-shadow: 0 0.104rem 0.938rem rgb(0 0 0 / 0.5); }
+
+/* ---- Video (2026.11.13): the whole stage is the picture; the header row is drawn over it on a soft theme-tinted scrim
+   behind the header row only. No strip, no ticker, no text of its own. A 16:9 file fills the stage (cover), another shape stays
+   whole (contain) over the dark backdrop; a YouTube player fills the stage and letterboxes itself. --video-top is the header's
+   real bottom (VideoScreen measures it; the constant is the fallback). Chrome 91: no :has, no container queries. ---- */
+.stage[data-screen='video'] .content { grid-area: auto; position: absolute; inset: 0; width: auto; margin: 0; z-index: 0; }
+.video-stage { position: absolute; inset: 0; overflow: hidden; background: #000; }
+.video-back { position: absolute; inset: 0; background: rgb(var(--glass-rgb, 0 0 0) / 1); }
+.video-el { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; }
+.video-el[data-fit='cover'] { object-fit: cover; }
+.video-el[data-fit='contain'] { object-fit: contain; }
+.video-scrim {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
+  top: 0;
+  height: calc(var(--video-top, 7.9rem) + 1.25rem);
+  pointer-events: none;
+  background: linear-gradient(180deg, rgb(var(--glass-rgb, 0 0 0) / 0.8) 0%, rgb(var(--glass-rgb, 0 0 0) / 0.55) 65%, rgb(var(--glass-rgb, 0 0 0) / 0) 100%);
+}
+.stage[data-screen='video'] .region-brand,
+.stage[data-screen='video'] .shell-top { z-index: 3; }
+.stage[data-screen='video'] .region-brand,
+.stage[data-screen='video'] .region-clock.clock--compact { text-shadow: 0 0.104rem 0.938rem rgb(0 0 0 / 0.5); }
 
 /* ---- Kuliah ---- */
 /* Theme round 2, maximise the screen (operator 2026-11-16): the same layout as round 2 at larger sizes, so the block
@@ -242,8 +274,8 @@
   position: absolute;
   top: 1.563rem;
   bottom: 1.563rem;
-  left: 1.563rem;
-  right: 1.042rem;
+  inset-inline-start: 1.563rem;
+  inset-inline-end: 1.042rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -284,7 +316,7 @@
 .hadis.is-len-m { --tier: 0.82; }
 .hadis.is-len-s { --tier: 0.7; }
 .hadis > :last-child { margin-bottom: auto; }
-.hadis .eyebrow .hadis-part { margin-left: 1.2rem; letter-spacing: 0.08em; opacity: 0.8; }
+.hadis .eyebrow .hadis-part { margin-inline-start: 1.2rem; letter-spacing: 0.08em; opacity: 0.8; }
 .hadis-ar {
   margin: 0.313rem 0 0;
   font-size: calc(4.896rem * var(--tier, 1) * var(--scale, 1) * var(--fit, 1) * var(--ar-scale, 1));
@@ -411,9 +443,9 @@
 .stage[data-tarjamah='beside'] .arab-hadis > .ah-src,
 .stage[data-tarjamah='beside'] .arab-hadis > .ah-credit { grid-column: 1 / -1; }
 .stage[data-tarjamah='beside'] .aa-text { grid-column: 2; grid-row: 2; margin-top: 0; }
-.stage[data-tarjamah='beside'] .aa-tr { grid-column: 1; grid-row: 2; margin-top: 0; text-align: left; }
+.stage[data-tarjamah='beside'] .aa-tr { grid-column: 1; grid-row: 2; margin-top: 0; text-align: start; }
 .stage[data-tarjamah='beside'] .ah-ar { grid-column: 2; grid-row: 1; }
-.stage[data-tarjamah='beside'] .ah-ms { grid-column: 1; grid-row: 1; margin-top: 0; text-align: left; }
+.stage[data-tarjamah='beside'] .ah-ms { grid-column: 1; grid-row: 1; margin-top: 0; text-align: start; }
 
 /* Ubah suai "Jajaran" (data-align) on the Arabic-led screens and the zikir page. The block follows the chosen side and
    the translation, the surah line, the source and the meta are set flush to it. Arabic lines keep their own start edge
@@ -439,8 +471,8 @@
 .zk-beads circle { fill: var(--accent); }
 .zk-ar {
   position: absolute;
-  left: 8rem;
-  right: 8rem;
+  inset-inline-start: 8rem;
+  inset-inline-end: 8rem;
   top: 50%;
   transform: translateY(-62%);
   text-align: center;
@@ -450,9 +482,9 @@
 }
 /* The meaning line hangs under the Arabic: its offset grows with the Arabic's own size (text size and Arabic size). */
 .zk-ms { position: absolute; left: 8rem; right: 8rem; top: calc(50% + 6.2rem * var(--scale, 1) * var(--ar-scale, 1)); text-align: center; font-size: calc(1.771rem * var(--scale, 1) * var(--fit, 1)); font-weight: 600; opacity: 0.85; }
-.zk-side { position: absolute; left: 1.042rem; top: 50%; transform: translateY(-50%); width: 21.875rem; }
+.zk-side { position: absolute; inset-inline-start: 1.042rem; top: 50%; transform: translateY(-50%); width: 21.875rem; }
 .zk-pg { display: block; margin-top: 0.8rem; font-size: 1.4rem; font-weight: 700; opacity: 0.8; }
-.zk-count { position: absolute; right: 2.083rem; top: 50%; transform: translateY(-50%); width: 17.708rem; text-align: center; }
+.zk-count { position: absolute; inset-inline-end: 2.083rem; top: 50%; transform: translateY(-50%); width: 17.708rem; text-align: center; }
 .zk-count b { display: block; font-size: 10.417rem; font-weight: 800; line-height: 1; color: var(--accent); }
 .zk-count span { display: block; font-size: 2.083rem; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; }
 

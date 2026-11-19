@@ -30,9 +30,9 @@ String cameraUseOff(AppLang l) => _t(
     );
 String cameraOffNoteNew(AppLang l) => _t(
       l,
-      'Hidupkan untuk menyiarkan kuliah dari kamera IP yang dipasang di surau.',
-      'Turn on to broadcast lectures from the IP camera installed in the surau.',
-      'فعّلها لبث الدروس من كاميرا IP المركّبة في المصلى.',
+      'Hidupkan untuk menyiarkan kuliah dari kamera IP atau CCTV di surau. Masukkan alamat RTSP, atau guna Cari kamera di rangkaian (ONVIF).',
+      'Switch on to stream a kuliah from an IP camera or CCTV at the surau. Enter the RTSP address, or use Find cameras on the network (ONVIF).',
+      'فعّلها لبث درس من كاميرا IP أو CCTV في المصلى. أدخل عنوان RTSP، أو استخدم «البحث عن كاميرات في الشبكة» (ONVIF).',
     );
 String cameraOffNoteKept(AppLang l, String name) => _t(
       l,
@@ -44,9 +44,9 @@ String cameraDelete(AppLang l) => _t(l, 'Padam tetapan kamera', 'Delete camera s
 String cameraDeleteTitle(AppLang l) => _t(l, 'Padam tetapan kamera?', 'Delete camera settings?', 'حذف إعدادات الكاميرا؟');
 String cameraDeleteBody(AppLang l) => _t(
       l,
-      'Alamat dan kata laluan kamera dipadam dari MAXCOM dan sandaran awan. Anda perlu memasukkannya semula untuk menggunakan kamera ini.',
-      'The camera address and password are deleted from MAXCOM and the cloud backup. You must enter them again to use this camera.',
-      'يُحذف عنوان الكاميرا وكلمة مرورها من MAXCOM ومن النسخة الاحتياطية في السحابة. عليك إدخالهما من جديد لاستخدام هذه الكاميرا.',
+      'Alamat dan kata laluan kamera dipadam dari MAXCOM, dan alamatnya dari sandaran awan. Anda perlu memasukkannya semula untuk menggunakan kamera ini.',
+      'The camera address and password are deleted from MAXCOM, and the address from the cloud backup. You must enter them again to use this camera.',
+      'يُحذف عنوان الكاميرا وكلمة مرورها من MAXCOM، ويُحذف العنوان من النسخة الاحتياطية في السحابة. عليك إدخالهما من جديد لاستخدام هذه الكاميرا.',
     );
 String cameraDeleteConfirm(AppLang l) => _t(l, 'Padam', 'Delete', 'حذف');
 String cameraNameLabel(AppLang l) => _t(l, 'Nama kamera', 'Camera name', 'اسم الكاميرا');
@@ -165,15 +165,27 @@ String cameraPassHide(AppLang l) => _t(l, 'Sembunyi kata laluan', 'Hide password
 String cameraPassKept(AppLang l) => _t(l, 'Kata laluan disimpan', 'Password saved', 'كلمة المرور محفوظة');
 String cameraPassHelpKept(AppLang l) => _t(
       l,
-      'Disimpan bersulit di kotak MAXCOM dan sandaran awan. Tidak dipaparkan semula.',
-      'Saved encrypted on the MAXCOM box and the cloud backup. It is not shown again.',
-      'تُحفظ مشفّرة في صندوق MAXCOM وفي النسخة الاحتياطية بالسحابة. ولا تُعرض مرة أخرى.',
+      'Disimpan bersulit di kotak MAXCOM sahaja, tidak di awan. Tidak dipaparkan semula.',
+      'Saved encrypted on the MAXCOM box only, never in the cloud. It is not shown again.',
+      'تُحفظ مشفّرة في صندوق MAXCOM فقط، ولا تُحفظ في السحابة. ولا تُعرض مرة أخرى.',
     );
 String cameraPassHelpNew(AppLang l) => _t(
       l,
-      'Disimpan bersulit di kotak MAXCOM dan sandaran awan.',
-      'Saved encrypted on the MAXCOM box and the cloud backup.',
-      'تُحفظ مشفّرة في صندوق MAXCOM وفي النسخة الاحتياطية بالسحابة.',
+      'Disimpan bersulit di kotak MAXCOM sahaja, tidak di awan.',
+      'Saved encrypted on the MAXCOM box only, never in the cloud.',
+      'تُحفظ مشفّرة في صندوق MAXCOM فقط، ولا تُحفظ في السحابة.',
+    );
+String cameraPassNeeded(AppLang l) => _t(
+      l,
+      'Kata laluan kamera perlu ditaip semula',
+      'The camera password must be typed again',
+      'يجب كتابة كلمة مرور الكاميرا من جديد',
+    );
+String cameraPassNeededHelp(AppLang l) => _t(
+      l,
+      'Alamat dan nama pengguna dipulihkan dari sandaran awan. Kata laluan tidak pernah disimpan di awan.',
+      'The address and user name were restored from the cloud backup. The password is never kept in the cloud.',
+      'استُعيد العنوان واسم المستخدم من النسخة الاحتياطية في السحابة. لا تُحفظ كلمة المرور في السحابة أبدًا.',
     );
 String cameraPassHelpChanging(AppLang l) => _t(
       l,
@@ -302,6 +314,63 @@ String cameraNetworkNotice(AppLang l) => _t(
       'The phone or box that pulls the video must be on the same surau Wi-Fi as the camera. The internet is not needed to broadcast to the surau screen.',
       'يجب أن يكون الهاتف أو الصندوق الذي يسحب الفيديو على شبكة Wi-Fi المصلى نفسها التي تتصل بها الكاميرا. لا حاجة إلى الإنترنت للبث إلى شاشة المصلى.',
     );
+/// The camera routes live only on the box (the sealed login is there): over the cloud, or on a 404, this is shown.
+String cameraAtSurauOnly(AppLang l) => _t(
+      l,
+      'Tetapan kamera hanya boleh dibuat di surau. Sambung telefon ke Wi-Fi surau, kemudian buka halaman ini semula. Di sini anda boleh masukkan alamat RTSP kamera atau guna ${cameraDiscover(l)} (ONVIF).',
+      "Camera settings can only be made at the surau. Connect the phone to the surau Wi-Fi, then open this page again. There you can enter the camera's RTSP address or use ${cameraDiscover(l)} (ONVIF).",
+      'يمكن ضبط إعدادات الكاميرا في المصلى فقط. صِل الهاتف بشبكة Wi-Fi الخاصة بالمصلى، ثم افتح هذه الصفحة مرة أخرى. هناك يمكنك إدخال عنوان RTSP للكاميرا أو استخدام «${cameraDiscover(l)}» (ONVIF).',
+    );
+/// Over the cloud: the change was sealed and sent, the box has not applied it yet.
+String cameraCloudPending(AppLang l) => _t(
+      l,
+      'Dihantar ke kotak. Akan digunakan selepas kotak menerima (biasanya dalam 2 minit).',
+      'Sent to the box. It will be used once the box receives it (usually within 2 minutes).',
+      'أُرسلت إلى الصندوق. سيُستخدم بعد أن يستلمها الصندوق (عادةً خلال دقيقتين).',
+    );
+/// Over the cloud: the ONVIF search scans the surau network, so it is offered there only.
+String cameraDiscoverSurauOnly(AppLang l) => _t(
+      l,
+      'Cari kamera (ONVIF) hanya di Wi-Fi surau.',
+      'Finding cameras (ONVIF) works only on the surau Wi-Fi.',
+      'البحث عن الكاميرات (ONVIF) متاح فقط على شبكة Wi-Fi الخاصة بالمصلى.',
+    );
+/// Over the cloud: the test needs the box next to the camera.
+String cameraTestSurauOnly(AppLang l) => _t(
+      l,
+      'Uji kamera hanya di Wi-Fi surau.',
+      'The camera test works only on the surau Wi-Fi.',
+      'اختبار الكاميرا متاح فقط على شبكة Wi-Fi الخاصة بالمصلى.',
+    );
+/// Over the cloud with no box linked to it: there is nobody to send the setting to.
+String cameraCloudNoBox(AppLang l) => _t(
+      l,
+      'Kotak belum disambung ke awan, jadi kamera hanya boleh ditetapkan di Wi-Fi surau.',
+      'The box is not linked to the cloud, so the camera can only be set on the surau Wi-Fi.',
+      'الصندوق غير متصل بالسحابة، لذا يمكن ضبط الكاميرا على شبكة Wi-Fi الخاصة بالمصلى فقط.',
+    );
+/// The box looked at a change sent through the cloud and did not use it: a fixed code in, the person's words out.
+String cameraCloudRefused(AppLang l, String? code) => switch (code) {
+      'bad_address' => _t(
+          l,
+          'Kotak tidak menerima alamat itu. Gunakan alamat rtsp:// dengan alamat IPv4 persendirian di rangkaian surau.',
+          'The box did not accept that address. Use an rtsp:// address with a private IPv4 address on the surau network.',
+          'لم يقبل الصندوق هذا العنوان. استخدم عنوان rtsp:// بعنوان IPv4 خاص في شبكة المصلى.',
+        ),
+      'bad_login' => _t(
+          l,
+          'Kotak tidak menerima nama pengguna atau kata laluan itu. Semak aksara yang digunakan.',
+          'The box did not accept that username or password. Check the characters used.',
+          'لم يقبل الصندوق اسم المستخدم أو كلمة المرور. تحقق من الأحرف المستخدمة.',
+        ),
+      'password_again' => cameraPassAgain(l),
+      _ => _t(
+          l,
+          'Kotak tidak dapat menggunakan tetapan itu. Cuba hantar semula.',
+          'The box could not use that setting. Try sending it again.',
+          'تعذر على الصندوق استخدام هذا الإعداد. حاول إرساله مرة أخرى.',
+        ),
+    };
 String cameraLoadFailed(AppLang l) => _t(
       l,
       'Tetapan kamera tidak dapat dimuatkan.',
@@ -450,6 +519,22 @@ String liveCameraSourceFailed(AppLang l) => _t(
       'تعذّر جلب عنوان الكاميرا الخارجية من الصندوق. تُستخدم كاميرا الهاتف.',
     );
 String liveAudioStatusReceived(AppLang l) => _t(l, 'Diterima', 'Received', 'مستلَم');
+String liveMicNewToast(AppLang l, String name) => _t(
+      l,
+      'Mikrofon baharu: $name. Digunakan untuk siaran.',
+      'New microphone: $name. Used for the live.',
+      'ميكروفون جديد: $name. يُستخدم في البث.',
+    );
+String liveMicUnplugged(AppLang l, String name) => _t(
+      l,
+      'Mikrofon $name dicabut. Kembali ke mikrofon peranti.',
+      'Microphone $name was unplugged. Back to the device microphone.',
+      'تم فصل الميكروفون $name. العودة إلى ميكروفون الجهاز.',
+    );
+/// The system gave no product name: the microphone is named by its kind, in the app language (F12).
+String liveMicBuiltinName(AppLang l) => _t(l, 'Mikrofon peranti', 'Device microphone', 'ميكروفون الجهاز');
+String liveMicExternalName(AppLang l) => _t(l, 'Mikrofon luaran', 'External microphone', 'ميكروفون خارجي');
+String liveMicUndo(AppLang l) => _t(l, 'Batal', 'Undo', 'تراجع');
 String liveAudioStatusReady(AppLang l) => _t(l, 'Sedia', 'Ready', 'جاهز');
 String liveCameraUnreachableShort(AppLang l) =>
     _t(l, 'Kamera tidak dapat dihubungi', 'The camera cannot be reached', 'تعذّر الوصول إلى الكاميرا');
@@ -625,7 +710,25 @@ String liveSectionOutputsSummaryIpad(AppLang l) => _t(
       'Surau screen, YouTube, recording on this iPad',
       'شاشة المصلى، YouTube، التسجيل على هذا الـ iPad',
     );
-String liveSectionSettings(AppLang l) => _t(l, 'Tetapan siaran', 'Broadcast settings', 'إعدادات البث');
+String liveSectionSettings(AppLang l) => _t(l, 'Tetapan siaran', 'Live settings', 'إعدادات البث');
+/// Konfigurasi's one pointer row (and its search hit): the four live features moved to the Siaran langsung page.
+String liveSettingsMovedRow(AppLang l) => _t(
+      l,
+      'Tetapan siaran kini di menu Siaran langsung',
+      'Live settings are now in the Live broadcast menu',
+      'إعدادات البث أصبحت الآن في قائمة البث المباشر',
+    );
+String liveSettingsMovedHint(AppLang l) => _t(
+      l,
+      'Kamera luaran, siaran di skrin, YouTube dan rakaman',
+      'External camera, live on the screen, YouTube and recording',
+      'الكاميرا الخارجية، البث على الشاشة، YouTube، التسجيل',
+    );
+/// Words that find the pointer row besides the feature names and hints.
+const List<String> liveSettingsMovedWords = [
+  'kamera', 'camera', 'rtsp', 'onvif', 'youtube', 'rakaman', 'recording', 'siaran', 'live', 'cctv', 'ip cam',
+  'البث', 'كاميرا', 'الكاميرا', 'تسجيل', 'يوتيوب',
+];
 String liveSectionSettingsSummary(AppLang l, bool cameraOn) => _t(
       l,
       'Kamera luaran ${cameraOn ? 'hidup' : 'dimatikan'}, skrin, YouTube, rakaman',

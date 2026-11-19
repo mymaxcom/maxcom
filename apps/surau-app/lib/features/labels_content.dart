@@ -13,6 +13,7 @@ const Map<String, String> contentKindLabelsEn = {
   'pengumuman': 'Announcement',
   'ticker': 'Scrolling text',
   'poster': 'Poster',
+  'video': 'Video',
   'programKhas': 'Special event',
   'takwim': 'Calendar day',
   'hadis': 'Hadith',
@@ -31,6 +32,7 @@ const Map<String, String> contentKindPluralsEn = {
   'pengumuman': 'Announcements',
   'ticker': 'Scrolling text',
   'poster': 'Posters',
+  'video': 'Videos',
   'programKhas': 'Special events',
   'takwim': 'Calendar',
   'hadis': 'Hadith',
@@ -70,10 +72,23 @@ const Map<String, String> contentFieldLabelsEn = {
   'ticker.to': 'End date',
   'poster.title': 'Poster title',
   'poster.assetId': 'Poster picture',
+  'poster.stretch': 'Stretch picture',
   'poster.days': 'Days shown',
   'poster.from': 'Start date',
   'poster.to': 'End date',
   'poster.order': 'Order',
+  'video.title': 'Video title',
+  'video.source': 'Source',
+  'video.assetId': 'Video file',
+  'video.youtubeId': 'YouTube video',
+  'video.durationSec': 'Length',
+  'video.startSec': 'Start',
+  'video.endSec': 'End',
+  'video.sound': 'Sound',
+  'video.days': 'Days shown',
+  'video.from': 'Start date',
+  'video.to': 'End date',
+  'video.order': 'Order',
   'programKhas.title': 'Event name',
   'programKhas.at': 'Event date and time',
   'programKhas.showFrom': 'Show from',
@@ -117,6 +132,8 @@ const Map<String, String> contentFieldHintsEn = {
   'takwim.hijriLabel': 'Example: 12 Rabi al-Awwal 1448',
   'hadis.source': 'Example: Narrated by al-Bukhari',
   'worldTime.city': 'Example: Makkah',
+  'poster.stretch': 'Yes: the picture fills the space, its shape may change. No: the whole picture, in its own shape.',
+  'video.sound': 'No: the video is silent. It never sounds during azan, iqamah, prayer, a live or a recitation.',
 };
 
 const Map<String, String> _slotLabelsEn = {
@@ -137,6 +154,7 @@ const Map<String, Map<String, String>> contentChoiceLabelsEn = {
   'pengumuman.priority': {'1': 'Normal', '2': 'Important', '3': 'Urgent'},
   'tugasan.role': {'imam': 'Imam', 'bilal': 'Bilal', 'khatib': 'Khatib', 'ajk': 'Committee on duty'},
   'tilawahSlot.before': _slotLabelsEn,
+  'video.source': {'upload': 'Upload', 'youtube': 'YouTube', 'rakaman': 'Recording'},
 };
 
 /// The seven days and "every day", by day key.
@@ -170,6 +188,7 @@ const Map<String, String> contentKindLabelsAr = {
   'pengumuman': 'إعلان',
   'ticker': 'نص متحرك',
   'poster': 'ملصق',
+  'video': 'فيديو',
   'programKhas': 'برنامج خاص',
   'takwim': 'يوم في التقويم',
   'hadis': 'حديث',
@@ -187,6 +206,7 @@ const Map<String, String> contentKindPluralsAr = {
   'pengumuman': 'الإعلانات',
   'ticker': 'النص المتحرك',
   'poster': 'الملصقات',
+  'video': 'الفيديو',
   'programKhas': 'البرامج الخاصة',
   'takwim': 'التقويم',
   'hadis': 'الأحاديث',
@@ -225,10 +245,23 @@ const Map<String, String> contentFieldLabelsAr = {
   'ticker.to': 'تاريخ الانتهاء',
   'poster.title': 'عنوان الملصق',
   'poster.assetId': 'صورة الملصق',
+  'poster.stretch': 'تمديد الصورة',
   'poster.days': 'أيام العرض',
   'poster.from': 'تاريخ البدء',
   'poster.to': 'تاريخ الانتهاء',
   'poster.order': 'الترتيب',
+  'video.title': 'عنوان الفيديو',
+  'video.source': 'المصدر',
+  'video.assetId': 'ملف الفيديو',
+  'video.youtubeId': 'فيديو يوتيوب',
+  'video.durationSec': 'المدة',
+  'video.startSec': 'البداية',
+  'video.endSec': 'النهاية',
+  'video.sound': 'الصوت',
+  'video.days': 'أيام العرض',
+  'video.from': 'تاريخ البدء',
+  'video.to': 'تاريخ الانتهاء',
+  'video.order': 'الترتيب',
   'programKhas.title': 'اسم البرنامج',
   'programKhas.at': 'تاريخ البرنامج ووقته',
   'programKhas.showFrom': 'العرض من',
@@ -271,6 +304,8 @@ const Map<String, String> contentFieldHintsAr = {
   'takwim.hijriLabel': 'مثال: 12 ربيع الأول 1448',
   'hadis.source': 'مثال: رواه البخاري',
   'worldTime.city': 'مثال: مكة المكرمة',
+  'poster.stretch': 'نعم: تملأ الصورة المساحة وقد يتغير شكلها. لا: الصورة كاملة بشكلها الأصلي.',
+  'video.sound': 'لا: يكون الفيديو صامتًا. ولا يُسمع صوته أثناء الأذان والإقامة والصلاة والبث المباشر والتلاوة.',
 };
 
 const Map<String, String> _slotLabelsAr = {
@@ -290,6 +325,7 @@ const Map<String, Map<String, String>> contentChoiceLabelsAr = {
   'pengumuman.priority': {'1': 'عادي', '2': 'مهم', '3': 'عاجل'},
   'tugasan.role': {'imam': 'الإمام', 'bilal': 'المؤذن', 'khatib': 'الخطيب', 'ajk': 'عضو اللجنة المناوب'},
   'tilawahSlot.before': _slotLabelsAr,
+  'video.source': {'upload': 'رفع', 'youtube': 'يوتيوب', 'rakaman': 'تسجيل'},
 };
 
 const Map<String, String> dayLabelsAr = {

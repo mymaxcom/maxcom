@@ -59,6 +59,7 @@ const List<String> requiredExtraScreens = [
   'camera_test_path',
   'camera_password_change',
   'settings_ayat_card',
+  'settings_ayat_card_manual',
   'settings_system',
   'enrol_pin_set',
   'enrol_pin_new',

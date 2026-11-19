@@ -62,6 +62,7 @@ export const LIVE_WARNINGS = [
   'audio_mix_failed',
   'audio_all_muted',
   'camera_no_audio',
+  'reencode_unsupported',
 ] as const;
 export type LiveWarning = (typeof LIVE_WARNINGS)[number];
 
@@ -82,6 +83,10 @@ export interface LiveStatus {
    * start), and the external-camera and audio-mix warnings of plan 4.7.
    */
   warnings: string[];
+  /** The box's ffmpeg can encode H.264 ("Kod semula" works); additive, absent on an older box. */
+  relayReencode?: boolean;
+  /** The live notice text was edited in this live (same value as `KioskLive.noticeRev`); absent until then. */
+  noticeRev?: number;
   /** The picture source of the running live; optional while an older box or session does not report it. */
   video?: LiveVideoSource;
   /** Per-source health of the audio mix, as the box knows it (a phone live fills its own screen from its engine). */
@@ -96,8 +101,52 @@ export interface LiveStatus {
     health: 'noData' | 'bad' | 'ok' | 'good' | null;
     watchUrl: string | null;
     lastError: string | null;
+    /**
+     * The device-code sign-in the server itself is carrying (release 2026.11.13): `pending` with the code to show,
+     * or the `denied` / `expired` outcome for a couple of minutes after it ended; null when nothing is pending.
+     * Absent on an older box. Never holds a token or the device code.
+     */
+    signIn?: YoutubeSignInState | null;
+    /**
+     * Release 2026.11.13: false when this server cannot sign in or out (the cloud: the grant is held by the surau's
+     * box, sign-in is at the surau). Absent means it can (a box, or an older server).
+     */
+    signInHere?: boolean;
+    /**
+     * The sign-in in three states, not two (additive; absent on an older box). Here the broadcast already owns `state`,
+     * so the account view is one object; `GET /api/live/youtube/status` carries the same four fields flat.
+     */
+    account?: YoutubeAccountView;
   };
 }
+
+/** `signedIn`, `signedOut` (a real sign-out, or Google withdrew the grant) or `unknown` (the box cannot tell right now: never shown as signed out). */
+export interface YoutubeAccountView {
+  state: YoutubeAccountState;
+  /** `reauthorise` (Google withdrew the grant), `signed_out`, or for `unknown` `token_unreadable`, `handover_pending`, `cloud_unreachable`. */
+  reason: YoutubeAccountReason | null;
+  /** The last time the sign-in was seen working; kept across restarts so `unknown` can still name the channel. */
+  lastGood: YoutubeLastGood | null;
+  /** When Google withdrew the grant (ISO time), persisted across restarts; null otherwise. */
+  revokedAt: string | null;
+}
+
+export type YoutubeAccountState = 'signedIn' | 'signedOut' | 'unknown';
+export type YoutubeAccountReason = 'reauthorise' | 'signed_out' | 'token_unreadable' | 'handover_pending' | 'cloud_unreachable';
+export interface YoutubeLastGood {
+  signedIn: true;
+  channelTitle: string | null;
+  /** ISO time the sign-in was last seen working. */
+  at: string;
+}
+
+/** Where the sign-in code is typed: always Google's own page (a box and an app never use any other address). */
+export const GOOGLE_DEVICE_URL = 'https://www.google.com/device';
+
+/** The server-held YouTube sign-in as every app sees it. */
+export type YoutubeSignInState =
+  | { state: 'pending'; userCode: string; verificationUrl: string; expiresAt: string }
+  | { state: 'denied' | 'expired' };
 
 /** What the kiosk needs to know about the live. */
 export interface KioskLive {
@@ -113,4 +162,6 @@ export interface KioskLive {
   waiting?: boolean;
   /** The MediaMTX path the kiosk's WHEP reads: `surau-kiosk` only while the audio leg runs, else `surau`. A change means: reconnect. */
   path?: 'surau' | 'surau-kiosk';
+  /** The surau's live notice text was edited (changes with every edit); the apps re-read `GET /api/live/notice`. Absent: never edited in this live. */
+  noticeRev?: number;
 }

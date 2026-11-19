@@ -57,7 +57,7 @@ const noNetwork = (async () => {
 // ---------------------------------------------------------------------------------------------------------------
 // plumbing
 
-type Method = 'GET' | 'PUT' | 'POST' | 'DELETE';
+type Method = 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE';
 
 interface Res {
   status: number;
@@ -412,7 +412,7 @@ const OVERRIDES: Record<string, (v: SurauCtx, k: SurauCtx) => Req[]> = {
 function requestsFor(rule: RouteRule, v: SurauCtx, k: SurauCtx): Req[] {
   const o = OVERRIDES[key(rule)];
   if (o !== undefined) return o(v, k);
-  const body = rule.method === 'POST' || rule.method === 'PUT' ? { payload: {} } : {};
+  const body = rule.method === 'POST' || rule.method === 'PUT' || rule.method === 'PATCH' ? { payload: {} } : {};
   return [{ method: rule.method, url: rule.sample, ...body }];
 }
 
@@ -1334,13 +1334,11 @@ describe('suspension: a suspended surau\'s site and phones are refused, others a
 describe('known leaks that are not a row of the walk', () => {
   // Was a LEAK: the `youtube` change_log row had no surau_id and landed under the default 'sdm'. The cloud's YouTube service is
   // still one for every surau until Task 9 moves YouTube onto the box.
-  it('a youtube sign-out by a surau files its audit row under that surau, not under the default sdm', async () => {
+  it('a youtube sign-out on the cloud is refused (2026.11.13: the grant is held by the box) and files no row under any surau', async () => {
     const before = count(R.db, "SELECT COUNT(*) AS n FROM change_log WHERE entity = 'youtube'");
     const res = await send(R.app, R.b.admin, { method: 'POST', url: '/api/live/youtube/signout', payload: {} });
-    expect(res.status).toBeLessThan(500);
-    const rows = R.db.prepare("SELECT surau_id FROM change_log WHERE entity = 'youtube' ORDER BY id DESC LIMIT ?").all(Math.max(1, count(R.db, "SELECT COUNT(*) AS n FROM change_log WHERE entity = 'youtube'") - before));
-    expect(rows.length).toBeGreaterThan(0);
-    for (const r of rows) expect(r.surau_id).toBe(R.b.id);
+    expect(res.status).toBe(409);
+    expect(count(R.db, "SELECT COUNT(*) AS n FROM change_log WHERE entity = 'youtube'")).toBe(before);
   });
 });
 

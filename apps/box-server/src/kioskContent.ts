@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { UNSTATED_SOURCE, attributionOf, dateOf, hadisPool, klDateOf, klInstant, tzOf } from '@surau/core';
 import type { AyatCard, ContentKind, Hadis, HadisSettings, ImageRef, ImageSlotKey, KioskContent, KioskHadis, KuliahView, Settings, TugasanView } from '@surau/core';
 import { resolveImageId } from './imageAdjust.ts';
+import { getAssetPath } from './assets/store.ts';
 import { buildTabung } from './finance/tabung.ts';
 import { getItem, listItems } from './content/store.ts';
 import { readAudioIndex } from './islamic/fetch.ts';
@@ -63,6 +64,22 @@ function quranOf(dataDir: string): QuranText | null {
   return quran;
 }
 
+/**
+ * The KL date the "Pilihan harian" Quran reading started for this surau: stored once (sync_state) the first day the
+ * card is built in daily mode, then read back; day 0 shows Al-Fatihah 1-3.
+ */
+export function ayatDailyAnchor(db: DatabaseSync, surauId: string, today: string): string {
+  const key = `ayat_daily_anchor:${surauId}`;
+  try {
+    db.prepare('INSERT OR IGNORE INTO sync_state (key, value) VALUES (?, ?)').run(key, today);
+    const row = db.prepare('SELECT value FROM sync_state WHERE key = ?').get(key);
+    const v = row === undefined ? null : String(row.value);
+    return v !== null && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : today;
+  } catch {
+    return today;
+  }
+}
+
 function ayatSettingsOf(settings: Settings): AyatSettings {
   const a = feat(settings, 'ayatCard') ?? {};
   const pick = a.pick === 'manual' || a.pick === 'random' ? a.pick : 'daily';
@@ -100,6 +117,10 @@ export function buildKioskContent(db: DatabaseSync, dataDir: string, now: Date, 
     .map(({ pictureAssetId, ...rest }) => ({ ...rest, ...withImg('pictureAssetId', img('pengumuman', pictureAssetId)) }));
   const ticker = list(db, 'ticker').filter((t) => t.from <= today && today <= t.to);
   const posters = list(db, 'poster').map((p) => ({ ...p, assetId: img('poster', p.assetId) ?? '' })).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  // Videos: an upload whose file this box lacks (the item arrived by sync from another box) is left out, never a black screen.
+  const videos = list(db, 'video')
+    .filter((v) => v.source !== 'upload' || (v.assetId !== undefined && getAssetPath(db, dataDir, v.assetId) !== null))
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   const programKhas = list(db, 'programKhas')
     .filter((p) => p.showTo >= today)
     .map(({ assetId, ...rest }) => ({ ...rest, ...withImg('assetId', img('programKhas', assetId)) }));
@@ -145,7 +166,9 @@ export function buildKioskContent(db: DatabaseSync, dataDir: string, now: Date, 
 
   const quran = quranOf(dataDir);
   const ayatSettings = ayatSettingsOf(settings);
-  const ayatOn = (date: string): AyatCard | null => (quran ? ayatForDay(quran, ayatSettings, date) : null);
+  // the daily reading carries on from the day it started (kept once per surau, so restarts and the whole day agree)
+  const anchor = ayatSettings.pick === 'daily' && quran ? ayatDailyAnchor(db, surauId, today) : today;
+  const ayatOn = (date: string): AyatCard | null => (quran ? ayatForDay(quran, ayatSettings, date, anchor) : null);
 
   return {
     date: today,
@@ -153,6 +176,7 @@ export function buildKioskContent(db: DatabaseSync, dataDir: string, now: Date, 
     pengumuman,
     ticker,
     posters,
+    videos,
     programKhas,
     takwim,
     hadisToday,

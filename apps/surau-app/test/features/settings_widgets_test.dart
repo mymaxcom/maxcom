@@ -90,34 +90,99 @@ void main() {
     expect(tester.widget<ChoiceChip>(k('setting-cacheMaxMb-250')).selected, isTrue);
   }, skip: !kOpsBuild);
 
-  testWidgets('surah search finds 18. Al-Kahf; the range clamps to the surah and to five verses', (tester) async {
+  testWidgets('Kad Ayat: the verses are drawn only for "Pilih sendiri"; the other modes keep them hidden', (tester) async {
     final h = await open(tester, 'ayatCard');
+    // the default is the daily selection: three modes with a sentence each, no surah and no verses
+    expect(k('setting-pick-daily'), findsOneWidget);
+    expect(find.text('Membaca Al-Quran mengikut turutan, hingga 3 ayat sehari, bersambung esok.'), findsOneWidget);
+    expect(find.text('Satu ayat rawak daripada seluruh Al-Quran, bertukar setiap hari.'), findsOneWidget);
+    expect(find.text('Ayat yang anda pilih dipaparkan setiap hari sehingga anda menukarnya.'), findsOneWidget);
+    expect(k('setting-surah'), findsNothing);
+    expect(k('setting-ayatFrom-value'), findsNothing);
+    await tester.tap(k('setting-pick-random'));
+    await settle(tester);
+    expect(k('setting-surah'), findsNothing);
+    await tester.tap(k('setting-pick-manual'));
+    await settle(tester);
+    expect(k('setting-surah'), findsOneWidget);
+    expect(k('setting-ayatFrom-value'), findsOneWidget);
+    expect(k('setting-ayatCount-3'), findsOneWidget);
+    expect(k('setting-ayatCount-4'), findsNothing, reason: 'three verses at most');
+    expect(await saved(tester, h, 'ayatCard'), {'pick': 'manual'});
+  });
+
+  testWidgets('Kad Ayat: surah search finds 18. Al-Kahfi; a new surah starts at verse 1; start and count never leave the surah or pass 3 verses', (tester) async {
+    final h = await open(tester, 'ayatCard', stored: {'pick': 'manual'});
     await reveal(tester, k('setting-surah'));
     await tester.tap(k('setting-surah'));
     await settle(tester);
     await tester.enterText(k('picker-search'), 'kahf');
     await settle(tester);
-    expect(find.text('18. Al-Kahf'), findsOneWidget);
+    expect(find.text('18. Al-Kahfi'), findsOneWidget);
     expect(k('picker-2'), findsNothing);
-    await tester.tap(find.text('18. Al-Kahf'));
+    await tester.tap(find.text('18. Al-Kahfi'));
     await settle(tester);
-    expect(find.text('18. Al-Kahf'), findsOneWidget);
+    expect(find.text('18. Al-Kahfi'), findsOneWidget);
     expect(find.text('110 ayat'), findsOneWidget);
-    // 255 is past Al-Kahf: both ends came back to its last verse.
     Text v(String key) => tester.widget<Text>(k('setting-$key-value'));
-    expect(v('ayatFrom').data, '110');
-    expect(v('ayatTo').data, '110');
-    expect(tester.widget<InkWell>(k('setting-ayatFrom-plus')).onTap, isNull, reason: 'the last verse');
+    ChoiceChip chip(int n) => tester.widget<ChoiceChip>(k('setting-ayatCount-$n'));
+    // the old range (255) meant nothing in Al-Kahfi: verse 1, one verse
+    expect(v('ayatFrom').data, '1');
+    expect(chip(1).selected, isTrue);
+    expect(find.text('Dipaparkan di TV: Surah Al-Kahfi (110): ayat 1'), findsOneWidget);
 
-    // Five verses at most: stepping the start down drags the end with it.
-    for (var i = 0; i < 6; i++) {
-      await reveal(tester, k('setting-ayatFrom-minus'));
-      await tester.tap(k('setting-ayatFrom-minus'));
-      await settle(tester);
-    }
-    expect(v('ayatFrom').data, '104');
-    expect(v('ayatTo').data, '108');
-    expect(await saved(tester, h, 'ayatCard'), {'surah': 18, 'ayatFrom': 104, 'ayatTo': 108});
+    await reveal(tester, k('setting-ayatCount-3'));
+    await tester.tap(k('setting-ayatCount-3'));
+    await settle(tester);
+    expect(chip(3).selected, isTrue);
+    expect(v('ayatFrom').data, '1', reason: 'the count never moves the start');
+    expect(find.text('Dipaparkan di TV: Surah Al-Kahfi (110): ayat 1 hingga 3'), findsOneWidget);
+
+    // type the start verse
+    await reveal(tester, k('setting-ayatFrom-edit'));
+    await tester.tap(k('setting-ayatFrom-edit'));
+    await settle(tester);
+    await tester.enterText(k('setting-ayatFrom-input'), '111');
+    await tester.tap(k('setting-ayatFrom-input-ok'));
+    await settle(tester);
+    expect(find.text('Masukkan nombor antara 1 dan 110'), findsOneWidget);
+    await tester.enterText(k('setting-ayatFrom-input'), '109');
+    await tester.tap(k('setting-ayatFrom-input-ok'));
+    await settle(tester);
+    // 109 and 110 are the last two verses: the count shrinks to fit, 3 is off
+    expect(v('ayatFrom').data, '109');
+    expect(chip(2).selected, isTrue);
+    expect(chip(3).onSelected, isNull, reason: 'past the end of the surah');
+    expect(find.text('Surah ini tamat pada ayat 110.'), findsOneWidget);
+    expect(tester.widget<InkWell>(k('setting-ayatFrom-plus')).onTap, isNotNull);
+    await tester.tap(k('setting-ayatFrom-plus'));
+    await settle(tester);
+    expect(v('ayatFrom').data, '110');
+    expect(chip(1).selected, isTrue);
+    expect(tester.widget<InkWell>(k('setting-ayatFrom-plus')).onTap, isNull, reason: 'the last verse');
+    expect(await saved(tester, h, 'ayatCard'), {'surah': 18, 'ayatFrom': 110, 'ayatTo': 110});
+  });
+
+  testWidgets('Kad Ayat: an old stored range of 5 verses shows start and 3 verses with a note, and touching the count fixes it', (tester) async {
+    final h = await open(tester, 'ayatCard', stored: {'pick': 'manual', 'surah': 2, 'ayatFrom': 10, 'ayatTo': 14});
+    await reveal(tester, k('setting-ayatCount-3'));
+    expect(tester.widget<Text>(k('setting-ayatFrom-value')).data, '10');
+    expect(tester.widget<ChoiceChip>(k('setting-ayatCount-3')).selected, isTrue);
+    expect(find.text('Julat lama dipendekkan kepada 3 ayat.'), findsOneWidget);
+    // touching the count rewrites both ends inside the rule and drops the note
+    await tester.tap(k('setting-ayatCount-2'));
+    await settle(tester);
+    expect(find.text('Julat lama dipendekkan kepada 3 ayat.'), findsNothing);
+    expect(await saved(tester, h, 'ayatCard'), {'ayatTo': 11});
+  });
+
+  testWidgets('Kad Ayat: saving another setting of a box with an old 5-verse range is not blocked', (tester) async {
+    final h = await open(tester, 'ayatCard', stored: {'pick': 'manual', 'surah': 2, 'ayatFrom': 10, 'ayatTo': 14});
+    await reveal(tester, k('setting-showTranslation'));
+    await tester.tap(k('setting-showTranslation'));
+    await settle(tester);
+    expect(find.text('Paling banyak 3 ayat sekali paparan'), findsNothing);
+    expect(await saved(tester, h, 'ayatCard'), {'showTranslation': false});
   });
 
   testWidgets('reciter: a known name writes its folder; Lain-lain shows the folder row and checks it', (tester) async {
@@ -276,18 +341,21 @@ void main() {
     expect(await saved(tester, h, 'tarawih'), {'hijriMonth': 2});
   });
 
-  testWidgets('Lanjutan card: absent without system:read, and in the public build even for a superadmin', (tester) async {
+  testWidgets('Lanjutan card: absent without system:read', (tester) async {
     await open(tester, 'liveYoutube');
     expect(k('lanjutan-card'), findsNothing);
     expect(find.text('Video ke YouTube'), findsNothing, reason: 'hidden, not read-only');
     expect(find.text('Kadar bit maksimum (kbps)'), findsNothing);
-    if (!kOpsBuild) {
-      await open(tester, 'liveYoutube', roles: const ['admin', 'superadmin']);
-      expect(k('lanjutan-card'), findsNothing);
-      expect(find.text('Video ke YouTube'), findsNothing);
-      return;
-    }
+  });
 
+  // One app per test: a second app opened in the same test leaves the first one's timer pending.
+  testWidgets('Lanjutan card: absent in the public build even for a superadmin', (tester) async {
+    await open(tester, 'liveYoutube', roles: const ['admin', 'superadmin']);
+    expect(k('lanjutan-card'), findsNothing);
+    expect(find.text('Video ke YouTube'), findsNothing);
+  }, skip: kOpsBuild);
+
+  testWidgets('Lanjutan card: shown to a superadmin in the ops build, and a stored phone relay does not dim it', (tester) async {
     await open(tester, 'liveYoutube', roles: const ['admin', 'superadmin']);
     await reveal(tester, k('lanjutan-card'));
     expect(find.text('Video ke YouTube'), findsOneWidget);
@@ -298,7 +366,7 @@ void main() {
     // relayFrom is hidden (planned): a stored 'phone' must not dim the card, no control could undo it.
     expect(find.text('Tidak digunakan bila Telefon terus dipilih'), findsNothing);
     expect(k('lanjutan-dim-note'), findsNothing);
-  });
+  }, skip: !kOpsBuild);
 
   testWidgets('relayFrom is hidden from Tetapan (planned), the stored value untouched', (tester) async {
     await open(tester, 'liveYoutube');
@@ -398,6 +466,11 @@ void main() {
         await expectGoldens(tester, h.app, name);
       }, skip: !kOpsBuild && roles.contains('superadmin')); // the Lanjutan goldens are ops-build pictures
     }
+  });
+
+  testWidgets('settings_ayat_card_manual', (tester) async {
+    final h = await open(tester, 'ayatCard', stored: {'pick': 'manual', 'surah': 18, 'ayatFrom': 10, 'ayatTo': 12});
+    await expectGoldens(tester, h.app, 'settings_ayat_card_manual');
   });
 
   for (final scale in [1.0, 1.3]) {

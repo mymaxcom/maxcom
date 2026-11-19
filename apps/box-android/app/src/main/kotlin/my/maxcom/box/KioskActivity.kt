@@ -170,7 +170,7 @@ class KioskActivity : Activity() {
         loadedToken = token
         start.visibility = View.GONE
         view.requestFocus()
-        view.loadUrl("http://127.0.0.1:$port/")
+        view.loadUrl(UrlPolicy.kioskUrl(port))
     }
 
     // Destroys the page and goes back through the start screen (health check) to a fresh WebView.
