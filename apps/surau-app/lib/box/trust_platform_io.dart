@@ -20,6 +20,44 @@ String _pem(Uint8List der) {
   return '-----BEGIN CERTIFICATE-----\n${lines.join('\n')}\n-----END CERTIFICATE-----\n';
 }
 
+/// Makes [hc] open the address [addressOf] gives for a host name (see
+/// [createClient]); every other host connects as usual.
+void routeNames(
+  HttpClient hc,
+  SecurityContext ctx,
+  Duration connect,
+  String? Function(String host) addressOf,
+) {
+  hc.findProxy = (url) => addressOf(url.host) != null
+      ? 'DIRECT'
+      : HttpClient.findProxyFromEnvironment(url);
+  hc.connectionFactory = (Uri url, String? proxyHost, int? proxyPort) {
+    if (proxyHost != null) return Socket.startConnect(proxyHost, proxyPort!);
+    final ip = addressOf(url.host);
+    if (url.scheme != 'https') {
+      return Socket.startConnect(ip ?? url.host, url.port);
+    }
+    // HttpClient does not add TLS to a socket from a factory: do it here,
+    // with the URL's host as the name and only the pinned root as trust.
+    Socket? raw;
+    var cancelled = false;
+    final secured = () async {
+      raw = await Socket.connect(ip ?? url.host, url.port, timeout: connect);
+      if (cancelled) {
+        raw!.destroy();
+        throw const SocketException('cancelled');
+      }
+      return SecureSocket.secure(raw!, host: url.host, context: ctx);
+    }();
+    return Future.value(
+      ConnectionTask.fromSocket(secured, () {
+        cancelled = true;
+        raw?.destroy();
+      }),
+    );
+  };
+}
+
 /// Trusts only [caDer], no system roots. Without a CA there is no client:
 /// a plain one would trust the system roots instead of the surau's own CA.
 ///
@@ -42,36 +80,7 @@ http.Client createClient(
   }
   final hc = HttpClient(context: ctx);
   hc.connectionTimeout = connect;
-  if (addressOf != null) {
-    hc.findProxy = (url) => addressOf(url.host) != null
-        ? 'DIRECT'
-        : HttpClient.findProxyFromEnvironment(url);
-    hc.connectionFactory = (Uri url, String? proxyHost, int? proxyPort) {
-      if (proxyHost != null) return Socket.startConnect(proxyHost, proxyPort!);
-      final ip = addressOf(url.host);
-      if (url.scheme != 'https') {
-        return Socket.startConnect(ip ?? url.host, url.port);
-      }
-      // HttpClient does not add TLS to a socket from a factory: do it here,
-      // with the URL's host as the name and only the pinned root as trust.
-      Socket? raw;
-      var cancelled = false;
-      final secured = () async {
-        raw = await Socket.connect(ip ?? url.host, url.port, timeout: connect);
-        if (cancelled) {
-          raw!.destroy();
-          throw const SocketException('cancelled');
-        }
-        return SecureSocket.secure(raw!, host: url.host, context: ctx);
-      }();
-      return Future.value(
-        ConnectionTask.fromSocket(secured, () {
-          cancelled = true;
-          raw?.destroy();
-        }),
-      );
-    };
-  }
+  if (addressOf != null) routeNames(hc, ctx, connect, addressOf);
   return IOClient(hc);
 }
 
@@ -122,17 +131,23 @@ Future<Uint8List> fetchUnverified(
 /// over a connection that trusts ONLY [caDer] (no system roots). The
 /// handshake therefore succeeded under the enrolled root CA check; a failed
 /// handshake, a non-https [origin] or a missing certificate gives null.
+///
+/// [addressOf] works as in [createClient]: the box's local name may open the
+/// address discovery found for it, the certificate still being checked for
+/// the name in [origin] against [caDer].
 Future<Uint8List?> fetchPinnedLeaf(
   Uri origin,
   Uint8List caDer, {
   required Duration connect,
   required Duration read,
+  String? Function(String host)? addressOf,
 }) async {
   if (origin.scheme != 'https') return null;
   final HttpClient hc;
   try {
     final ctx = SecurityContext(withTrustedRoots: false)..setTrustedCertificatesBytes(utf8.encode(_pem(caDer)));
     hc = HttpClient(context: ctx);
+    if (addressOf != null) routeNames(hc, ctx, connect, addressOf);
   } on Object {
     return null;
   }

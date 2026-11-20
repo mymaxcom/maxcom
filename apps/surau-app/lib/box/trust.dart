@@ -147,13 +147,14 @@ class TrustStore {
   /// The leaf certificate (DER) the enrolled box presents right now,
   /// received over a connection pinned to the CA kept at enrolment. Null
   /// where the browser decides trust (web), when no CA is kept, or when the
-  /// pinned handshake fails. Used only by the Android preview WebView.
+  /// pinned handshake fails. Used only by the Android preview WebView. A
+  /// box origin that is a local name opens the address [routes] holds for it.
   Future<Uint8List?> boxLeaf(EnrolledBox b, CaDerSource cas) async {
     final sha = b.caSha256;
     if (!pinsCa || sha == null) return null;
     final der = await cas.loadCaDer(sha);
     if (der == null) return null;
-    return platform.fetchPinnedLeaf(b.box, der, connect: connect, read: read);
+    return platform.fetchPinnedLeaf(b.box, der, connect: connect, read: read, addressOf: routes.addressOf);
   }
 
   /// A system-trust [BoxClient] for the public MAXCOM cloud, for the ops

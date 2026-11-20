@@ -8,9 +8,10 @@
 
 import 'dart:typed_data';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../app/theme.dart' show SurauColors;
 import 'preview_message.dart';
 import 'preview_tls.dart';
 
@@ -23,6 +24,7 @@ class PlatformPreview extends StatefulWidget {
     this.theme,
     this.onSslError,
     this.pinnedLeaf,
+    this.onLoadError,
   });
 
   final Uri url;
@@ -36,6 +38,9 @@ class PlatformPreview extends StatefulWidget {
   /// The box's current leaf certificate over the pinned connection.
   final LeafFetcher? pinnedLeaf;
 
+  /// Called when the page itself failed to load (the main frame only).
+  final VoidCallback? onLoadError;
+
   @override
   State<PlatformPreview> createState() => _PlatformPreviewState();
 }
@@ -46,9 +51,19 @@ class _PlatformPreviewState extends State<PlatformPreview> {
   /// The leaf the pinned connection received before this load.
   Uint8List? _expectedLeaf;
 
+  /// True from the start of a load until the page finished or failed: the
+  /// app's own panel covers the frame, never a blank white WebView.
+  bool _loading = true;
+
+  /// The origin actually loaded: always the current [PlatformPreview.url]
+  /// (the address given by the caller), so a moved box is followed.
   bool _sameOrigin(String url) {
     final u = Uri.tryParse(url);
     return u != null && u.scheme == widget.url.scheme && u.host == widget.url.host && u.port == widget.url.port;
+  }
+
+  void _settled() {
+    if (mounted && _loading) setState(() => _loading = false);
   }
 
   @override
@@ -60,7 +75,17 @@ class _PlatformPreviewState extends State<PlatformPreview> {
         NavigationDelegate(
           // The preview never leaves the box.
           onNavigationRequest: (r) => _sameOrigin(r.url) ? NavigationDecision.navigate : NavigationDecision.prevent,
-          onPageFinished: (_) => _postToken(),
+          onPageFinished: (_) {
+            _settled();
+            _postToken();
+          },
+          onWebResourceError: (e) {
+            // Sub-resources may fail without the page failing; only the page
+            // itself (timeout, unreachable) is the preview failing.
+            if (e.isForMainFrame != true) return;
+            _settled();
+            if (mounted) widget.onLoadError?.call();
+          },
           onSslAuthError: _onSslAuthError,
         ),
       );
@@ -77,6 +102,7 @@ class _PlatformPreviewState extends State<PlatformPreview> {
       _expectedLeaf = null;
     }
     if (!mounted || url != widget.url) return;
+    if (!_loading) setState(() => _loading = true);
     await _controller.loadRequest(url);
   }
 
@@ -158,5 +184,16 @@ class _PlatformPreviewState extends State<PlatformPreview> {
   }
 
   @override
-  Widget build(BuildContext context) => WebViewWidget(controller: _controller);
+  Widget build(BuildContext context) => Stack(
+        fit: StackFit.expand,
+        children: [
+          WebViewWidget(controller: _controller),
+          if (_loading)
+            const ColoredBox(
+              key: ValueKey('preview-loading'),
+              color: SurauColors.glass,
+              child: Center(child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3))),
+            ),
+        ],
+      );
 }

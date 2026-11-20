@@ -196,6 +196,7 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
     },
   },
   youtubeCatchUp: { replaceGappyLive: { ui: 'segment', choices: ['ask', 'never', 'always'] } },
+  videos: { volume: { ui: 'slider', min: 0, max: 100, step: 5, unit: '%' } },
   beeps: { volume: { ui: 'slider', min: 0, max: 100, step: 5, unit: '%' } },
   liveOnKiosk: { volume: { ui: 'slider', min: 0, max: 100, step: 5, unit: '%' } },
   liveCamera: {

@@ -113,6 +113,32 @@ describe('check-public-apk.mjs', () => {
     expect(r.code).toBe(1);
     expect(r.out).toContain('.ops');
   });
+  it('scans a Play bundle (.aab): clean passes, ops id or MAXCOM_OPS anywhere is refused, --kind reads its module manifest', () => {
+    const bm = (id: string) => Buffer.from(`\n\n${id}\n`);
+    const cleanAab = join(dir, 'clean.aab');
+    const opsIdAab = join(dir, 'opsid.aab');
+    const flagAab = join(dir, 'flag.aab');
+    const markerAab = join(dir, 'marker.aab');
+    writeFileSync(cleanAab, makeZip({ 'base/manifest/AndroidManifest.xml': bm('my.maxcom.app'), 'base/lib/arm64-v8a/libapp.so': so(Buffer.from('nothing')) }, true));
+    writeFileSync(opsIdAab, makeZip({ 'base/manifest/AndroidManifest.xml': bm('my.maxcom.app.ops'), 'base/a.bin': Buffer.from('nothing') }, true));
+    writeFileSync(flagAab, makeZip({ 'base/manifest/AndroidManifest.xml': bm('my.maxcom.app'), 'base/lib/arm64-v8a/libapp.so': so(Buffer.from('MAXCOM_OPS')) }, true));
+    writeFileSync(markerAab, makeZip({ 'base/manifest/AndroidManifest.xml': bm('my.maxcom.app'), 'base/lib/arm64-v8a/libapp.so': so(Buffer.from('superadmin-badge')) }, true));
+    const ok = run([cleanAab, '--markers', markers]);
+    expect(ok.code).toBe(0);
+    expect(run(['--kind', cleanAab]).out.trim()).toBe('public');
+    expect(run(['--kind', opsIdAab]).out.trim()).toBe('ops');
+    const a = run([opsIdAab, '--markers', markers]);
+    expect(a.code).toBe(1);
+    expect(a.out).toContain('my.maxcom.app.ops');
+    const b = run([flagAab, '--markers', markers]);
+    expect(b.code).toBe(1);
+    expect(b.out).toContain('MAXCOM_OPS');
+    expect(run([markerAab, '--markers', markers]).code).toBe(1);
+    // the same flag text in a plain APK is not an extra rule (APK behaviour is unchanged)
+    const flagApk = join(dir, 'flag.apk');
+    writeFileSync(flagApk, makeZip({ 'AndroidManifest.xml': manifest('my.maxcom.app'), [lib]: so(Buffer.from('MAXCOM_OPS')) }));
+    expect(run([flagApk, '--markers', markers]).code).toBe(0);
+  });
   it('scans a plain main.dart.js file and a folder', () => {
     const jsDir = mkdtempSync(join(tmpdir(), 'cpajs-'));
     try {

@@ -98,6 +98,8 @@ void main() {
 
   testWidgets('changing a control re-posts to the preview and saves nothing', (tester) async {
     final h = await open(tester);
+    await tester.ensureVisible(k('theme-screen-kuliah'));
+    await tester.pump();
     await tester.tap(k('theme-screen-kuliah'));
     await settle(tester);
     expect(lastTheme(h).screen, 'kuliah');
@@ -123,6 +125,8 @@ void main() {
         'minimal': {'semua': {'shade': 70}, 'skrin': <String, Object?>{}},
       },
     };
+    await tester.ensureVisible(k('theme-screen-kuliah'));
+    await tester.pump();
     await tester.tap(k('theme-screen-kuliah'));
     await settle(tester);
     tester.widget<Slider>(k('ctl-shade')).onChanged!(30);
@@ -144,6 +148,8 @@ void main() {
 
   testWidgets('Simpan from a cached read sends nothing and says so', (tester) async {
     final h = await open(tester);
+    await tester.ensureVisible(k('theme-screen-kuliah'));
+    await tester.pump();
     await tester.tap(k('theme-screen-kuliah'));
     await settle(tester);
     tester.widget<Slider>(k('ctl-shade')).onChanged!(30);
@@ -161,6 +167,8 @@ void main() {
 
   testWidgets('a value equal to the theme default is still written; Ikut tema removes it', (tester) async {
     final h = await open(tester);
+    await tester.ensureVisible(k('theme-screen-kuliah'));
+    await tester.pump();
     await tester.tap(k('theme-screen-kuliah'));
     await settle(tester);
     await reveal(tester, k('ctl-font-jakarta'));
@@ -199,6 +207,8 @@ void main() {
 
   testWidgets('Guna untuk semua skrin then Simpan: semua filled, skrin empty', (tester) async {
     final h = await open(tester);
+    await tester.ensureVisible(k('theme-screen-kuliah'));
+    await tester.pump();
     await tester.tap(k('theme-screen-kuliah'));
     await settle(tester);
     tester.widget<Slider>(k('ctl-shade')).onChanged!(40);
@@ -228,6 +238,8 @@ void main() {
         'skrin': {'kuliah': {'shade': 20}, 'hadis': {'scale': 'L'}, 'ayat': {'align': 'kiri'}},
       },
     });
+    await tester.ensureVisible(k('theme-screen-kuliah'));
+    await tester.pump();
     await tester.tap(k('theme-screen-kuliah'));
     await settle(tester);
     await reveal(tester, k('theme-apply-all'));
@@ -253,6 +265,8 @@ void main() {
       },
       'minimal': {'semua': {'shade': 5}, 'skrin': <String, Object?>{}},
     });
+    await tester.ensureVisible(k('theme-screen-kuliah'));
+    await tester.pump();
     await tester.tap(k('theme-screen-kuliah'));
     await settle(tester);
     expect(tester.widget<ChoiceChip>(k('ctl-align-kiri')).selected, isTrue);
@@ -302,12 +316,18 @@ void main() {
 
   testWidgets('a content screen pins the calm clock; Iqamah pins the iqamah clock', (tester) async {
     final h = await open(tester);
+    await tester.ensureVisible(k('theme-screen-hadis'));
+    await tester.pump();
     await tester.tap(k('theme-screen-hadis'));
     await settle(tester);
     expect(formatKl(h.previewRequests.last.now!), '2026-11-03T10:30:00+08:00');
+    await tester.ensureVisible(k('theme-screen-iqamah'));
+    await tester.pump();
     await tester.tap(k('theme-screen-iqamah'));
     await settle(tester);
     expect(formatKl(h.previewRequests.last.now!), '2026-11-03T16:25:00+08:00');
+    await tester.ensureVisible(k('theme-screen-masuk-waktu'));
+    await tester.pump();
     await tester.tap(k('theme-screen-masuk-waktu'));
     await settle(tester);
     expect(formatKl(h.previewRequests.last.now!), '2026-11-03T16:20:05+08:00');
@@ -351,6 +371,8 @@ void main() {
         'skrin': {'kuliah': {'shade': 40, 'scale': 'L'}},
       },
     });
+    await tester.ensureVisible(k('theme-screen-kuliah'));
+    await tester.pump();
     await tester.tap(k('theme-screen-kuliah'));
     await settle(tester);
     await expectGoldens(tester, h.app, 'theme_editor');

@@ -42,6 +42,37 @@ String sourceLeafLabel(String name, AppLang lang) =>
 String? settingHelp(String name, AppLang lang) =>
     _pick(lang, settingHelpAr[name], settingHelpEn[name], settingHelpMs[name]);
 
+// A setting name shared by several features ('volume') keeps one generic label;
+// these say what it is in one feature, keyed '<feature>.<name>' (ar, en, ms).
+const Map<String, (String, String, String)> _featureSettingLabels = {
+  'videos.volume': ('مستوى صوت الفيديو', 'Video volume', 'Kelantangan video'),
+};
+const Map<String, (String, String, String)> _featureSettingHelps = {
+  'videos.volume': (
+    "للفيديوهات التي يكون مفتاح 'الصوت' فيها مفعّلًا.",
+    "For videos whose 'Sound' switch is on.",
+    "Untuk video yang suisnya 'Bunyi' dihidupkan.",
+  ),
+};
+
+String _pickFeature((String, String, String) t, AppLang lang) => switch (lang) {
+      AppLang.ar => t.$1,
+      AppLang.en => t.$2,
+      AppLang.ms => t.$3,
+    };
+
+/// [settingLabel] for a setting of [feature]; the feature's own wording when it has one.
+String featureSettingLabel(String feature, String name, AppLang lang) {
+  final t = _featureSettingLabels['$feature.$name'];
+  return t == null ? settingLabel(name, lang) : _pickFeature(t, lang);
+}
+
+/// [settingHelp] for a setting of [feature]; the feature's own sentence when it has one.
+String? featureSettingHelp(String feature, String name, AppLang lang) {
+  final t = _featureSettingHelps['$feature.$name'];
+  return t == null ? settingHelp(name, lang) : _pickFeature(t, lang);
+}
+
 /// Heading of a settings group.
 String groupLabel(String group, AppLang lang) =>
     _pick(lang, groupLabelsAr[group], groupLabelsEn[group], groupLabelsMs[group]) ?? group;

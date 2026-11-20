@@ -19,6 +19,7 @@ import 'package:surau_app/app/deps.dart';
 import 'package:surau_app/app/providers.dart';
 import 'package:surau_app/app/router.dart';
 import 'package:surau_app/box/box_client.dart';
+import 'package:surau_app/box/routes.dart';
 import 'package:surau_app/content/adjusted_picture.dart';
 import 'package:surau_app/content/asset_picker.dart';
 import 'package:surau_app/content/image_bg.dart';
@@ -453,10 +454,12 @@ class ShellHarness {
     this.wideLogo = false,
     this.showName = true,
     List<Override> overrides = const [],
+    String? boxName,
+    this.routes,
   }) : settings = settingsJson(features),
        health = health ?? Map.of(healthyJson) {
     box = FakeBox(_handle);
-    final enrolled = fixtureBox(roles: roles);
+    final enrolled = fixtureBox(roles: roles, name: boxName);
     final info = SurauInfo.fromJson(hasLogo ? fixtureInfoWithLogoJson(showName: showName) : fixtureInfoJson);
     if (hasLogo) {
       settings['surauInfo'] = {
@@ -483,6 +486,7 @@ class ShellHarness {
       toLocal: fixedToLocal,
       initialBox: enrolled,
       initialSurau: info,
+      routes: routes,
     );
     container = ProviderContainer(
       overrides: [
@@ -517,6 +521,9 @@ class ShellHarness {
     );
     addTearDown(container.dispose);
   }
+
+  /// Where the box's local name points; null leaves the table off.
+  final BoxRoutes? routes;
 
   /// When true the surau has a logo: `/api/surau/info` names it, the
   /// `surauInfo` setting holds its asset id, and both `/surau-logo` and

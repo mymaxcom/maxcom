@@ -337,30 +337,39 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
               ),
             );
           }
+          // The preview and the screen chips take at most half of the body
+          // and scroll inside it, so the controls below always keep room to
+          // be used, whatever the phone, the keyboard or the preview's state.
           return ShellPage(
             title: s.themeEditTitle(title),
-            body: Column(
-              key: const ValueKey('theme-editor-narrow'),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 380), child: preview)),
-                      const SizedBox(height: 8),
-                      ThemeScreenChips(selected: _screen, changed: changed, onSelect: (id) => setState(() => _screen = id)),
-                    ],
+            body: LayoutBuilder(
+              builder: (context, body) => Column(
+                key: const ValueKey('theme-editor-narrow'),
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: body.hasBoundedHeight ? body.maxHeight * 0.5 : double.infinity),
+                    child: SingleChildScrollView(
+                      key: const ValueKey('theme-editor-top'),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 380), child: preview)),
+                          const SizedBox(height: 8),
+                          ThemeScreenChips(selected: _screen, changed: changed, onSelect: (id) => setState(() => _screen = id)),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                const Divider(height: 16),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                    children: [controls, const SizedBox(height: 12), if (canWrite) saveButton],
+                  const Divider(height: 16),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                      children: [controls, const SizedBox(height: 12), if (canWrite) saveButton],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },

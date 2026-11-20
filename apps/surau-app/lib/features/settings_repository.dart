@@ -186,13 +186,14 @@ class SettingsRepository {
   /// Fields the Pentadbir MAXCOM owns (scope `system`) and hidden fields are
   /// left out unless [includeSystem] (the person holds `system:write`): the
   /// box refuses a patch that carries one for anyone else, which made every
-  /// reset of Siaran YouTube and Tilawah fail (K3).
-  Future<Map<String, dynamic>> resetToDefaults(String feature, {bool includeSystem = false}) {
+  /// reset of Siaran YouTube and Tilawah fail (K3). Top-level keys in [without]
+  /// (settings the box does not know yet) are left out too.
+  Future<Map<String, dynamic>> resetToDefaults(String feature, {bool includeSystem = false, Set<String> without = const {}}) {
     final f = features.where((x) => x.key == feature).firstOrNull;
     if (f == null) {
       throw SettingsSaveError.of(SettingsFailure.notFound, SettingsMsg.notFound);
     }
-    return save(feature, defaultsPatch(f, includeSystem: includeSystem));
+    return save(feature, defaultsPatch(f, includeSystem: includeSystem)..removeWhere((k, _) => without.contains(k)));
   }
 }
 

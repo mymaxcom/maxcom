@@ -34,8 +34,15 @@ class KioskSourceScanTest {
         assertTrue(webView.contains("HOST_BRIDGE_NAME)"))
         assertTrue(webView.contains("const val HOST_BRIDGE_NAME = \"MaxcomHost\""))
         assertEquals(1, Regex("@JavascriptInterface").findAll(webView).count())
-        assertTrue(webView.contains("fun exit()"))
-        assertTrue(webView.contains("view.post { gate.exit(view.url, onExit) }"))
+        // exit needs the key: there is no way to call it without one.
+        assertFalse(webView.contains("fun exit()"))
+        assertTrue(webView.contains("fun exit(key: String?)"))
+        assertTrue(webView.contains("view.post { gate.exit(view.url, key, onExit) }"))
+        // The key is random per view, given to the kiosk origin's main frame only, and never logged.
+        assertTrue(webView.contains("java.security.SecureRandom().nextBytes(bytes)"))
+        assertTrue(webView.contains("if (url != null && policy.allows(url)) v.evaluateJavascript("))
+        assertEquals(1, Regex("evaluateJavascript").findAll(webView).count())
+        for (l in webView.lines().filter { it.contains("Log.") }) assertFalse(l.contains("hostKey", ignoreCase = true))
     }
 
     @Test
@@ -45,7 +52,13 @@ class KioskSourceScanTest {
         assertTrue(webView.contains("onCreateWindow"))
         assertTrue(webView.contains("request.deny()"))
         assertTrue(webView.contains("callback.invoke(origin, false, false)"))
-        assertEquals(3, Regex("policy\\.allows").findAll(webView).count())
+        // navigation, request, page start, and the bridge key (given to the kiosk origin only)
+        assertEquals(4, Regex("policy\\.allows\\(").findAll(webView).count())
+        // The video player's exception: one frame check and one resource check, both closed to the main frame.
+        assertEquals(1, Regex("policy\\.allowsPlayerFrame\\(").findAll(webView).count())
+        assertEquals(1, Regex("policy\\.allowsPlayerResource\\(").findAll(webView).count())
+        assertTrue(webView.contains("return request.isForMainFrame || !policy.allowsPlayerFrame(url)"))
+        assertTrue(webView.contains("if (!request.isForMainFrame && policy.allowsPlayerResource(url)) return null"))
     }
 
     @Test

@@ -253,6 +253,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   /// The folded or open state of the idle sections (kept while the screen lives).
   final Map<String, bool> _open = {};
 
+  /// What the destination strip shows, published after each build so the "Destinasi siaran" sheet (its own
+  /// route) follows every change while it is open; null when the strip is not shown.
+  final ValueNotifier<_Dest?> _dest = ValueNotifier<_Dest?>(null);
+
+  /// The sheet is open (it may outlive this screen: see [dispose]).
+  bool _sheetOpen = false;
+
   /// This live started with the external camera (so "Tukar ke kamera luaran" can offer the way back).
   bool _startedExternal = false;
 
@@ -324,6 +331,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       });
     }
     _sub?.cancel();
+    if (_sheetOpen) {
+      // The sheet is still up (a root route): it closes itself on a null value; _openDestSheet releases the notifier.
+      final d = _dest;
+      WidgetsBinding.instance.addPostFrameCallback((_) => d.value = null);
+    } else {
+      _dest.dispose();
+    }
     super.dispose();
   }
 
@@ -390,6 +404,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
   /// A tap on the chip: written to the surau setting (optimistic, put back with a message when the box refuses).
   Future<void> _setWanted(bool next, {required bool boxKnows}) async {
+    // The sheet can outlive this screen, and its enabled flag arrives one frame late: one write at a time.
+    if (!mounted || _pendingWanted != null) return;
     if (!boxKnows) {
       setState(() => _localWanted = next);
       return;
@@ -417,6 +433,63 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     } finally {
       if (mounted) setState(() => _pendingWanted = null);
     }
+  }
+
+  /// "Destinasi siaran": the full text of each destination, the YouTube switch and Sambung, opened from any pill.
+  Future<void> _openDestSheet() async {
+    if (_dest.value == null || _sheetOpen) return;
+    _sheetOpen = true;
+    var popping = false;
+    try {
+      await _showDestSheet(() => popping, () => popping = true);
+    } finally {
+      _sheetOpen = false;
+      // The screen went first (see dispose): the notifier is ours to release now that the sheet is gone.
+      if (!mounted) _dest.dispose();
+    }
+  }
+
+  Future<void> _showDestSheet(bool Function() popping, VoidCallback markPopping) {
+    return showModalBottomSheet<void>(
+      context: context,
+      // over the whole app, the navigation bar included (mockup live-dest-strip, option A)
+      useRootNavigator: true,
+      isScrollControlled: true,
+      showDragHandle: false,
+      barrierColor: SurauColors.glass.withValues(alpha: 0.45),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) => ValueListenableBuilder<_Dest?>(
+        valueListenable: _dest,
+        builder: (context, dest, _) {
+          if (dest == null) {
+            // The strip went away (a live started, another device's live, the screen closed): so does its sheet,
+            // popped once.
+            if (!popping()) {
+              markPopping();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (sheetContext.mounted && ModalRoute.of(sheetContext)?.isCurrent == true) {
+                  Navigator.of(sheetContext).pop();
+                }
+              });
+            }
+            return const SizedBox.shrink();
+          }
+          return _DestSheet(
+            dest: dest,
+            onYoutube: dest.youtubeEnabled
+                ? (_) {
+                    if (!mounted) return;
+                    unawaited(_setWanted(!dest.wanted, boxKnows: dest.boxKnows));
+                  }
+                : null,
+            onConnect: () {
+              Navigator.of(sheetContext).pop();
+              if (mounted) setState(() => _open['set'] = true);
+            },
+          );
+        },
+      ),
+    );
   }
 
   /// Mula siaran with YouTube chosen but not usable: ask, never start TV only silently.
@@ -1262,20 +1335,22 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // The destinations, always visible right above "Mula siaran" (not inside the folded card).
     final signedIn = box.youtube.signedIn;
     final unknownYoutube = box.youtube.phase == YoutubeAccountPhase.unknown;
-    final destinations = (!live && !readOnly && (kioskFeature || youtubeFeature))
-        ? _Destinations(
+    final _Dest? dest = (!live && !readOnly && (kioskFeature || youtubeFeature))
+        ? (
             kiosk: kioskFeature,
-            youtube: youtubeFeature
-                ? (
-                    on: youtubeChosen,
-                    label: youtubeChosen
-                        ? ((box.youtube.channel ?? '').isEmpty ? s.liveDestOnPlain : s.liveDestOn(bidiIsolate(box.youtube.channel!)))
-                        : s.liveDestOff,
-                    enabled: canChoose && _pendingWanted == null && !busy && !_starting,
-                    onTap: () => unawaited(_setWanted(!wanted, boxKnows: boxKnowsChoice)),
-                  )
-                : null,
-            kioskLabel: s.liveKiosk,
+            youtube: youtubeFeature,
+            youtubeState: unknownYoutube
+                ? _DestState.unknown
+                : !signedIn
+                ? _DestState.warn
+                : (youtubeChosen ? _DestState.on : _DestState.off),
+            youtubeOn: youtubeChosen,
+            youtubeLabel: youtubeChosen
+                ? ((box.youtube.channel ?? '').isEmpty ? s.liveDestOnPlain : s.liveDestOn(bidiIsolate(box.youtube.channel!)))
+                : s.liveDestOff,
+            youtubeEnabled: canChoose && _pendingWanted == null && !busy && !_starting,
+            wanted: wanted,
+            boxKnows: boxKnowsChoice,
             recordingOn: recordingOn,
             recordingLabel: recordingOn ? s.liveDestRec : s.liveDestRecOff,
             note: !youtubeFeature
@@ -1290,9 +1365,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             connectLabel: !signedIn && (!unknownYoutube || (box.youtube.channel ?? '').isEmpty) && canSettings
                 ? s.liveDestLink
                 : null,
-            onConnect: () => setState(() => _open['set'] = true),
           )
         : null;
+    // The open sheet is its own route: it reads the same values once this frame is built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _dest.value = dest;
+    });
+    final destinations = dest == null ? null : _DestStrip(dest: dest, onOpen: _openDestSheet);
     final picker = _KuliahTile(
       choice: choice,
       kuliah: choice?.byId(_kuliahId),
@@ -1683,115 +1762,158 @@ Color _toneInkOf(RowTone t) => switch (t) {
   RowTone.idle => SurauColors.muted,
 };
 
-/// "Skrin surau / YouTube / Rakaman" as chips with a visible on or off state,
-/// and the one-line note that makes a screen-only start a visible choice.
-class _Destinations extends StatelessWidget {
-  const _Destinations({
-    required this.kiosk,
-    required this.youtube,
-    required this.kioskLabel,
-    required this.recordingOn,
-    required this.recordingLabel,
-    required this.note,
-    required this.noteIsSkip,
-    required this.connectLabel,
-    required this.onConnect,
-  });
+/// How a destination pill reads at a glance: its colour and the small badge on its icon.
+enum _DestState {
+  /// Chosen and usable: green with a check.
+  on,
 
-  final bool kiosk;
-  final ({bool on, String label, bool enabled, VoidCallback onTap})? youtube;
-  final String kioskLabel;
-  final bool recordingOn;
-  final String recordingLabel;
-  final String? note;
-  final bool noteIsSkip;
-  final String? connectLabel;
-  final VoidCallback onConnect;
+  /// Not chosen: grey with a dash.
+  off,
+
+  /// YouTube not connected (or its access withdrawn): amber with "!", Sambung is in the sheet.
+  warn,
+
+  /// YouTube cannot be checked now: grey with "?".
+  unknown,
+}
+
+/// Everything the strip and its sheet show (a record: equal values publish no change to an open sheet).
+typedef _Dest = ({
+  bool kiosk,
+  bool youtube,
+  _DestState youtubeState,
+  bool youtubeOn,
+  String youtubeLabel,
+  bool youtubeEnabled,
+  bool wanted,
+  bool boxKnows,
+  bool recordingOn,
+  String recordingLabel,
+  String? note,
+  bool noteIsSkip,
+  String? connectLabel,
+});
+
+/// "Skrin / YouTube / Rakam" in one row of equal pills right above "Mula siaran"; any pill opens the sheet.
+class _DestStrip extends StatelessWidget {
+  const _DestStrip({required this.dest, required this.onOpen});
+
+  final _Dest dest;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final y = youtube;
-    return Column(
-      key: const ValueKey('live-destinations'),
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (kiosk) _DestChip(key: const ValueKey('live-dest-kiosk'), label: kioskLabel, on: true),
-            if (y != null)
-              _DestChip(
-                key: const ValueKey('live-dest-youtube'),
-                label: y.label,
-                on: y.on,
-                onTap: y.enabled ? y.onTap : null,
-              ),
-            _DestChip(key: const ValueKey('live-dest-recording'), label: recordingLabel, on: recordingOn),
-          ],
+    final s = S.of(context);
+    final hint = s.liveDestTapHint;
+    // The note (not connected, cannot check, or off by choice: screen only) is said in the pill's label too.
+    final ytSpoken = switch (dest.youtubeState) {
+      _DestState.warn || _DestState.unknown || _DestState.off when dest.note != null =>
+        '${_noStop(dest.youtubeLabel)}. ${dest.note}',
+      _ => dest.youtubeLabel,
+    };
+    final pills = <Widget>[
+      if (dest.kiosk)
+        _DestPill(
+          key: const ValueKey('live-dest-kiosk'),
+          icon: Icons.desktop_windows_outlined,
+          label: s.liveDestShortKiosk,
+          spoken: s.liveKiosk,
+          hint: hint,
+          state: _DestState.on,
+          onTap: onOpen,
         ),
-        if (note != null) ...[
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                Icons.info_outline_rounded,
-                size: 18,
-                color: noteIsSkip ? LiveColors.waitingInk : SurauColors.muted,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  note!,
-                  key: ValueKey(noteIsSkip ? 'live-dest-skip' : 'live-dest-none'),
-                  style: text.bodySmall!.copyWith(color: noteIsSkip ? LiveColors.waitingInk : SurauColors.muted),
-                ),
-              ),
-              if (connectLabel != null)
-                TextButton(
-                  key: const ValueKey('live-dest-connect'),
-                  onPressed: onConnect,
-                  child: Text(connectLabel!),
-                ),
-            ],
-          ),
+      if (dest.youtube)
+        _DestPill(
+          key: const ValueKey('live-dest-youtube'),
+          icon: Icons.smart_display_rounded,
+          label: s.liveDestShortYoutube,
+          spoken: ytSpoken,
+          hint: hint,
+          state: dest.youtubeState,
+          onTap: onOpen,
+        ),
+      _DestPill(
+        key: const ValueKey('live-dest-recording'),
+        icon: Icons.radio_button_checked_rounded,
+        label: s.liveDestShortRecording,
+        spoken: dest.recordingLabel,
+        hint: hint,
+        state: dest.recordingOn ? _DestState.on : _DestState.off,
+        onTap: onOpen,
+      ),
+    ];
+    return Row(
+      key: const ValueKey('live-destinations'),
+      children: [
+        for (var i = 0; i < pills.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(child: pills[i]),
         ],
       ],
     );
   }
 }
 
-class _DestChip extends StatelessWidget {
-  const _DestChip({super.key, required this.label, required this.on, this.onTap});
+String _noStop(String text) => text.endsWith('.') ? text.substring(0, text.length - 1) : text;
 
+class _DestPill extends StatelessWidget {
+  const _DestPill({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.spoken,
+    required this.hint,
+    required this.state,
+    required this.onTap,
+  });
+
+  final IconData icon;
   final String label;
-  final bool on;
-  final VoidCallback? onTap;
+  final String spoken;
+  final String hint;
+  final _DestState state;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final ink = on ? LiveColors.healthyInk : SurauColors.muted;
-    return Material(
-      color: on ? ink.withValues(alpha: 0.12) : Colors.transparent,
-      shape: StadiumBorder(side: BorderSide(color: on ? ink : SurauColors.line)),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(12, 6, 14, 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(on ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, size: 20, color: ink),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(label, style: Theme.of(context).textTheme.labelLarge!.copyWith(color: ink)),
-                ),
-              ],
+    final (ink, border, fill) = switch (state) {
+      _DestState.on => (LiveColors.healthyInk, LiveColors.healthyInk, LiveColors.healthyInk.withValues(alpha: 0.10)),
+      _DestState.warn => (LiveColors.waitingInk, LiveColors.waiting, LiveColors.waitingSoft),
+      _DestState.off || _DestState.unknown => (SurauColors.muted, SurauColors.line, Colors.transparent),
+    };
+    const radius = BorderRadius.all(Radius.circular(14));
+    return Semantics(
+      button: true,
+      label: spoken,
+      hint: hint,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Material(
+        color: fill,
+        shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: border)),
+        child: InkWell(
+          borderRadius: radius,
+          onTap: onTap,
+          child: SizedBox(
+            height: 48,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.symmetric(horizontal: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _BadgedIcon(icon: icon, color: ink, state: state),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                      style: Theme.of(context).textTheme.labelMedium!.copyWith(color: ink),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1799,6 +1921,258 @@ class _DestChip extends StatelessWidget {
     );
   }
 }
+
+/// A 22 px icon with the 16 px status badge on its top end corner.
+class _BadgedIcon extends StatelessWidget {
+  const _BadgedIcon({required this.icon, required this.color, required this.state});
+
+  final IconData icon;
+  final Color color;
+  final _DestState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = switch (state) {
+      _DestState.on => LiveColors.healthy,
+      _DestState.warn => LiveColors.waiting,
+      _DestState.off || _DestState.unknown => SurauColors.outline,
+    };
+    const mark = TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, height: 1);
+    final Widget glyph = switch (state) {
+      _DestState.on => const Icon(Icons.check_rounded, size: 11, color: Colors.white),
+      _DestState.off => const Icon(Icons.remove_rounded, size: 11, color: Colors.white),
+      _DestState.warn => const Text('!', style: mark, textScaler: TextScaler.noScaling),
+      _DestState.unknown => const Text('?', style: mark, textScaler: TextScaler.noScaling),
+    };
+    return SizedBox(
+      width: 22,
+      height: 22,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, size: 22, color: color),
+          PositionedDirectional(
+            end: -7,
+            top: -6,
+            child: Container(
+              key: ValueKey('live-dest-badge-${state.name}'),
+              width: 16,
+              height: 16,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: bg,
+                shape: BoxShape.circle,
+                border: Border.all(color: SurauColors.card, width: 2),
+              ),
+              child: glyph,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The sheet behind the strip: each destination's full text, the YouTube switch, the note and Sambung.
+class _DestSheet extends StatelessWidget {
+  const _DestSheet({required this.dest, required this.onYoutube, required this.onConnect});
+
+  final _Dest dest;
+  final ValueChanged<bool>? onYoutube;
+  final VoidCallback onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final text = Theme.of(context).textTheme;
+    final note = dest.note;
+    final warnNote = note != null && dest.connectLabel != null;
+    final noteInk = dest.noteIsSkip || warnNote ? LiveColors.waitingInk : SurauColors.muted;
+    final blocks = <Widget>[
+      if (dest.kiosk)
+        _DestSheetRow(
+          icon: Icons.desktop_windows_outlined,
+          title: s.liveKiosk,
+          subtitle: s.liveKioskHint,
+          trailing: const _DestTick(on: true),
+        ),
+      if (dest.youtube)
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // One node for the screen reader: the row's text with the switch state.
+            MergeSemantics(
+              child: _DestSheetRow(
+                icon: Icons.smart_display_rounded,
+                title: dest.youtubeLabel,
+                trailing: SizedBox(
+                  width: 60,
+                  height: 48,
+                  child: Center(
+                    child: Switch(
+                      key: const ValueKey('live-dest-youtube-switch'),
+                      value: dest.youtubeOn,
+                      onChanged: onYoutube,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (note != null)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 58, bottom: 10),
+                child: Container(
+                  decoration: warnNote
+                      ? const BoxDecoration(
+                          color: LiveColors.waitingSoft,
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                        )
+                      : null,
+                  padding: warnNote ? const EdgeInsetsDirectional.only(start: 10, end: 4) : EdgeInsets.zero,
+                  constraints: BoxConstraints(minHeight: warnNote ? 48 : 0),
+                  child: Row(
+                    children: [
+                      if (warnNote) ...[
+                        const Icon(Icons.warning_amber_rounded, size: 20, color: LiveColors.waitingInk),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          note,
+                          key: ValueKey(dest.noteIsSkip ? 'live-dest-skip' : 'live-dest-none'),
+                          style: text.bodySmall!.copyWith(color: noteInk),
+                        ),
+                      ),
+                      if (dest.connectLabel != null)
+                        TextButton(
+                          key: const ValueKey('live-dest-connect'),
+                          style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                          onPressed: onConnect,
+                          child: Text(dest.connectLabel!),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      _DestSheetRow(
+        icon: Icons.radio_button_checked_rounded,
+        title: dest.recordingLabel,
+        subtitle: dest.recordingOn ? s.liveRecordingWithLive : null,
+        trailing: _DestTick(on: dest.recordingOn),
+      ),
+    ];
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        key: const ValueKey('live-dest-sheet'),
+        padding: const EdgeInsetsDirectional.fromSTEB(20, 8, 20, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(top: 4, bottom: 10),
+                decoration: const BoxDecoration(
+                  color: SurauColors.line,
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Semantics(header: true, child: Text(s.liveDestSheetTitle, style: text.titleMedium)),
+            ),
+            for (var i = 0; i < blocks.length; i++)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: i < blocks.length - 1 ? const Border(bottom: BorderSide(color: SurauColors.line)) : null,
+                ),
+                child: blocks[i],
+              ),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              key: const ValueKey('live-dest-close'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                foregroundColor: SurauColors.teal,
+                side: const BorderSide(color: SurauColors.teal),
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(s.actionClose),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DestSheetRow extends StatelessWidget {
+  const _DestSheetRow({required this.icon, required this.title, this.subtitle, required this.trailing});
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 64),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: SurauColors.tealSoft,
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
+              child: Icon(icon, color: SurauColors.teal, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title, style: text.titleSmall),
+                  if (subtitle != null) Text(subtitle!, style: text.bodySmall!.copyWith(color: SurauColors.muted)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            trailing,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The green check (on) or the grey ring (off) beside a destination with no switch.
+class _DestTick extends StatelessWidget {
+  const _DestTick({required this.on});
+
+  final bool on;
+
+  @override
+  Widget build(BuildContext context) => Icon(
+    on ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+    size: 24,
+    color: on ? LiveColors.healthy : SurauColors.outline,
+  );
+}
+
 
 class _CardHead extends StatelessWidget {
   const _CardHead(this.title);

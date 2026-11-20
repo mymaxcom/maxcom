@@ -38,31 +38,51 @@ class ReleaseStore(
         return assets.version
     }
 
-    /** True when nothing is installed or the installed version is older than the bundled one. Newer on disk wins. */
-    fun needsUnpack(bundledVersion: String): Boolean {
+    /**
+     * True when nothing is installed, the installed version is older than the bundled one, or both carry the
+     * same version name but the installed folder was not made from the bundled archive ([bundledSha256]; an
+     * old one-line `.ok` records no archive and counts as different). Newer on disk wins.
+     */
+    fun needsUnpack(bundledVersion: String, bundledSha256: String): Boolean {
         val have = installed() ?: return true
-        return VersionOrder.compare(have, bundledVersion) < 0
+        val order = VersionOrder.compare(have, bundledVersion)
+        if (order != 0) return order < 0
+        return recordedSha256(have) != bundledSha256.lowercase()
     }
 
     fun isComplete(version: String): Boolean =
         VersionOrder.isValid(version) && File(File(releases, version), ".ok").isFile
 
+    /** The archive sha256 `.ok` records for [version], or null for an old one-line `.ok`, a missing or odd one. */
+    private fun recordedSha256(version: String): String? {
+        if (!VersionOrder.isValid(version)) return null
+        val ok = File(File(releases, version), ".ok")
+        if (!ok.isFile || ok.length() > 1024) return null
+        val lines = try { ok.readText(Charsets.US_ASCII).lines() } catch (_: IOException) { return null }
+        val sha = lines.getOrNull(1)?.trim()?.lowercase() ?: return null
+        return if (Regex("[0-9a-f]{64}").matches(sha)) sha else null
+    }
+
     /**
      * Unpacks [archive] (gzip tar) to `releases/<version>.part`, checks the whole stream against
-     * [expectedSha256], makes the workspace links from `release.json`, renames the folder and writes
-     * `.ok`. On any failure the `.part` folder is removed and the error rethrown; a finished release
-     * is left alone (a second call is a no-op).
+     * [expectedSha256], makes the workspace links from `release.json`, swaps the folder in and writes
+     * `.ok` (version and archive sha256) last. A finished release made from the same archive is left alone
+     * (a second call is a no-op); one made from a different archive of the same version is replaced only
+     * after the new tree is verified: the old folder is renamed to `<version>.old`, the new one takes its
+     * name, `.ok` is written, then `.old` is deleted. On any failure before the swap the `.part` folder is
+     * removed, the error rethrown and the old tree left untouched.
      */
     fun unpack(archive: InputStream, expectedSha256: String, version: String, progress: (done: Int) -> Unit) {
         require(VersionOrder.isValid(version)) { "bad version" }
         val expected = expectedSha256.lowercase()
         require(Regex("[0-9a-f]{64}").matches(expected)) { "bad sha256" }
         val finalDir = File(releases, version)
-        if (File(finalDir, ".ok").isFile) return
+        if (File(finalDir, ".ok").isFile && recordedSha256(version) == expected) return
         releases.mkdirs()
         val part = File(releases, "$version.part")
+        val old = File(releases, "$version.old")
         deleteTree(part)
-        deleteTree(finalDir) // a folder without .ok is the debris of a crash between rename and .ok
+        deleteTree(old)
         try {
             val digest = MessageDigest.getInstance("SHA-256")
             val hashed = DigestInputStream(archive, digest)
@@ -93,8 +113,23 @@ class ReleaseStore(
             if (actual != expected) throw IOException("sha256 mismatch")
 
             makeWorkspaceLinks(part, version)
-            if (!part.renameTo(finalDir)) throw IOException("cannot rename ${part.name}")
-            File(finalDir, ".ok").writeText("$version\n")
+
+            // The new tree is complete and verified: only now touch what is in the way.
+            var movedOld = false
+            if (finalDir.exists() || links.readLink(finalDir) != null) {
+                if (File(finalDir, ".ok").isFile) {
+                    if (!finalDir.renameTo(old)) throw IOException("cannot move ${finalDir.name} aside")
+                    movedOld = true
+                } else {
+                    deleteTree(finalDir) // no .ok: the debris of a crash between rename and .ok
+                }
+            }
+            if (!part.renameTo(finalDir)) {
+                if (movedOld) old.renameTo(finalDir) // put the old tree back; it is still complete
+                throw IOException("cannot rename ${part.name}")
+            }
+            File(finalDir, ".ok").writeText("$version\n$expected\n")
+            deleteTree(old)
         } catch (t: Throwable) {
             deleteTree(part)
             throw t
@@ -129,9 +164,9 @@ class ReleaseStore(
         }
     }
 
-    /** Removes every `*.part` folder and a stale `current.tmp`, left by a power cut. */
+    /** Removes every `*.part` and `*.old` folder and a stale `current.tmp`, left by a power cut. */
     fun cleanParts() {
-        releases.listFiles()?.filter { it.name.endsWith(".part") }?.forEach { deleteTree(it) }
+        releases.listFiles()?.filter { it.name.endsWith(".part") || it.name.endsWith(".old") }?.forEach { deleteTree(it) }
         deleteTree(currentTmp)
         File(root, "previous.txt.tmp").delete()
     }

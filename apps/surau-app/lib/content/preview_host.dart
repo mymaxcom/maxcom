@@ -12,9 +12,10 @@ import 'preview_tls.dart';
 export 'preview_message.dart';
 
 class PreviewHost extends StatelessWidget {
-  const PreviewHost(this.box, this.token, {super.key, this.now, this.utcOffsetMinutes = 480, this.onSslError, this.poster, this.theme, this.pinnedLeaf});
+  const PreviewHost(this.box, this.token, {super.key, this.now, this.utcOffsetMinutes = 480, this.onSslError, this.poster, this.theme, this.pinnedLeaf, this.onLoadError});
 
-  /// The box origin, e.g. `https://<box-ip>:8443`.
+  /// The origin to load, e.g. `https://<box-ip>:8443`: on Android the
+  /// address the app has proven for the box now (see preview_target.dart).
   final Uri box;
 
   /// A valid session token. A new value is posted to the page again.
@@ -39,6 +40,10 @@ class PreviewHost extends StatelessWidget {
   /// connection, to compare with what the WebView is shown.
   final LeafFetcher? pinnedLeaf;
 
+  /// Android only: the page itself could not be loaded (timeout, host
+  /// unreachable); the caller shows its own notice instead of the browser's.
+  final VoidCallback? onLoadError;
+
   /// One poster the page should show on its own (the poster editor's
   /// preview), posted right after the token; null for the normal rotation.
   final PreviewPoster? poster;
@@ -56,5 +61,6 @@ class PreviewHost extends StatelessWidget {
         theme: theme,
         onSslError: onSslError,
         pinnedLeaf: pinnedLeaf,
+        onLoadError: onLoadError,
       );
 }

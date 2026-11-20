@@ -63,7 +63,11 @@ class SettingsForm extends StatelessWidget {
     this.lanjutanKey,
     this.others = const {},
     this.relayReencode,
+    this.unsupported = const {},
   });
+
+  /// Top-level setting names the box did not send (an older box): not drawn, so nothing is sent to a box that would refuse them.
+  final Set<String> unsupported;
 
   /// Whether the box can encode H.264 (`relayReencode` of the live status); null = the box does not say (an older box): every choice stays on.
   final bool? relayReencode;
@@ -124,6 +128,7 @@ class SettingsForm extends StatelessWidget {
       final v = values[key];
       // Phase B's stop flag is set by the fleet tools, never typed here.
       if (key == 'suspendedAt') continue;
+      if (unsupported.contains(key)) continue;
       // A value another control owns (autoTone.override: Ubah suai's accent) is kept but not offered.
       if (fieldMeta(feature.key, key)?.hidden == true) continue;
       // A value that matters only in another mode (the verses of a Kad Ayat that is not "Pilih sendiri") is kept, not drawn.
@@ -332,7 +337,7 @@ class SettingsForm extends StatelessWidget {
   }) {
     final lang = appLangOf(context);
     final ro = readOnly || meta.readOnly;
-    final help = settingHelp(name, lang);
+    final help = featureSettingHelp(feature.key, name, lang);
     switch (meta.ui) {
       case 'slider':
         return SliderField(
@@ -522,8 +527,8 @@ class SettingsForm extends StatelessWidget {
     required void Function(Object? value) onChanged,
   }) {
     final lang = appLangOf(context);
-    final help = settingHelp(name, lang);
-    final label = settingLabel(name, lang);
+    final help = featureSettingHelp(feature.key, name, lang);
+    final label = featureSettingLabel(feature.key, name, lang);
     final error = errors[path];
     final meta = fieldMeta(feature.key, path);
     if (meta != null) {

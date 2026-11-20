@@ -3723,6 +3723,12 @@ abstract class S {
   /// **'Pratonton tidak dapat disambung dengan selamat. Cuba lagi.'**
   String get previewTlsFailed;
 
+  /// No description provided for @previewLoadFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pratonton tidak dapat dipaparkan. Semak sambungan rangkaian, kemudian cuba lagi.'**
+  String get previewLoadFailed;
+
   /// No description provided for @previewTlsExpected.
   ///
   /// In ms, this message translates to:
@@ -4676,6 +4682,36 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Rakaman: Tidak'**
   String get liveDestRecOff;
+
+  /// No description provided for @liveDestShortKiosk.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin'**
+  String get liveDestShortKiosk;
+
+  /// No description provided for @liveDestShortYoutube.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube'**
+  String get liveDestShortYoutube;
+
+  /// No description provided for @liveDestShortRecording.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakam'**
+  String get liveDestShortRecording;
+
+  /// No description provided for @liveDestSheetTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Destinasi siaran'**
+  String get liveDestSheetTitle;
+
+  /// No description provided for @liveDestTapHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ketik untuk butiran.'**
+  String get liveDestTapHint;
 
   /// No description provided for @liveSignInOpenGoogle.
   ///

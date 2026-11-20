@@ -35,6 +35,20 @@ object StartTexts {
     private fun of(t: Triple<String, String, String>, detail: List<String> = emptyList(), hint: Triple<String, String, String>? = null) =
         StartText(t.first, detail, hint?.first, t.second, t.third, hint?.second, hint?.third)
 
+    // Shown when the service has not reported anything for about a minute (the system ignored the start request).
+    private val NO_SERVICE = Triple(
+        "Perkhidmatan MAXCOM belum dapat dimulakan.",
+        "The MAXCOM service could not be started.",
+        "تعذّر تشغيل خدمة MAXCOM.",
+    )
+    private val NO_SERVICE_HINT = Triple(
+        "Peranti ini mungkin menyekat aplikasi latar belakang. Sila jalankan semula skrip pemasangan dari komputer riba.",
+        "This device may be blocking background apps. Please run the install script again from the laptop.",
+        "قد يمنع هذا الجهاز تطبيقات الخلفية. يرجى تشغيل سكربت التثبيت مرة أخرى من الحاسوب المحمول.",
+    )
+
+    fun serviceNotStarted(): StartText = of(NO_SERVICE, hint = NO_SERVICE_HINT)
+
     fun forStatus(status: BoxStatus, healthPending: Boolean = false): StartText = when (status) {
         BoxStatus.Idle -> of(PREPARING)
         is BoxStatus.Preparing ->

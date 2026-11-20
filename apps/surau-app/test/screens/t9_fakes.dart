@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/app/shell.dart';
 import 'package:surau_app/app/theme.dart';
+import 'package:surau_app/box/routes.dart';
 import 'package:surau_app/l10n/generated/s.dart';
 import 'package:surau_app/main.dart';
 
@@ -140,8 +141,10 @@ Future<T9App> pumpT9(
   List<String> roles = const ['admin'],
   void Function(ShellHarness h)? setup,
   GoldenSize size = GoldenSize.phone,
+  String? boxName,
+  BoxRoutes? routes,
 }) async {
-  final h = ShellHarness(roles: roles);
+  final h = ShellHarness(roles: roles, boxName: boxName, routes: routes);
   installT9Routes(h);
   setup?.call(h);
   h.unlock();

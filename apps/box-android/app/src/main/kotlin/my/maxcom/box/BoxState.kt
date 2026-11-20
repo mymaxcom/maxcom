@@ -34,6 +34,9 @@ object BoxReducer {
 
     val INITIAL = BoxSnapshot(BoxStatus.Idle, null, PORT)
 
+    /** True while the service has never reported anything: the value is still the initial one, not a later Idle. */
+    fun neverReported(s: BoxSnapshot): Boolean = s === INITIAL
+
     fun reduce(s: BoxSnapshot, e: BoxEvent): BoxSnapshot = when (e) {
         is BoxEvent.ServiceStarted -> BoxSnapshot(BoxStatus.Preparing("Memulakan", 0, 0), e.newToken, PORT)
         is BoxEvent.Step -> BoxSnapshot(BoxStatus.Preparing(e.step, e.done, e.total), s.kioskToken, s.port)
@@ -70,7 +73,8 @@ object BoxState {
     }
 
     fun addListener(l: (BoxSnapshot) -> Unit) {
-        listeners.add(l)
+        // The service calls this on every onStartCommand: adding the same listener again must be a no-op.
+        listeners.addIfAbsent(l)
     }
 
     fun removeListener(l: (BoxSnapshot) -> Unit) {

@@ -127,8 +127,9 @@ describe('install-android-box.ps1 (static)', () => {
     // eslint-disable-next-line no-control-regex
     expect(/[^\x00-\x7F]/.test(text)).toBe(false);
   });
-  it('never removes, disables or hides a package and never asks for root', () => {
-    expect(text).not.toMatch(/uninstall|pm\s+disable|pm\s+hide|adb\s+root|\bsu\b|\bsudo\b/i);
+  it('never removes, disables or hides a package and exploits nothing (only an existing su 0 is ever used)', () => {
+    expect(text).not.toMatch(/uninstall|pm\s+disable|pm\s+hide|adb\s+root|\bsudo\b|\bsu\s+-c|\bsu\s+root|magisk|supersu|chmod|setuid/i);
+    expect(text).toContain("'su', '0'");
   });
   it('downloads nothing and evaluates no strings', () => {
     expect(text).not.toMatch(/Invoke-WebRequest|Invoke-RestMethod|DownloadFile|Invoke-Expression|\biex\b/);
@@ -295,7 +296,7 @@ describe.runIf(win)('install-android-box.ps1 (run, fake adb)', () => {
     expect(r2.out).toContain('SDK 26');
   });
 
-  it('step 7 is LANGKAU without the background service, AMARAN when it needs root, SET when it works; never uses root', () => {
+  it('step 7 is LANGKAU without the background service, GAGAL when refused (no su), SET when it works', () => {
     const none = setup('bg-none', baseRules());
     const r0 = run(installScript, ['-Serial', SERIAL, '-Adb', none.adb, '-ApkDir', none.apkDir, '-DryRun', '-DebugBuild'], none.env);
     expect(r0.out).toMatch(/^LANGKAU\s+7\s/m);
@@ -307,10 +308,15 @@ describe.runIf(win)('install-android-box.ps1 (run, fake adb)', () => {
       { re: '^shell service call background', out: "Result: Parcel(ffffffff 00000000 '........')\nException: Permission Denial\n" },
     ]));
     const r1 = run(installScript, ['-Serial', SERIAL, '-Adb', deny.adb, '-ApkDir', deny.apkDir, '-Version', '2026.11.1', '-Yes', '-DebugBuild', '-HealthWaitSec', '20'], deny.env);
-    expect(r1.out).toMatch(/^AMARAN\s+7\s.*root/m);
-    expect(r1.status).toBe(0);
+    expect(r1.out).toMatch(/^GAGAL\s+7\s.*TIDAK akan bermula sendiri/m);
+    expect(r1.out).toContain('jalankan semula dengan -CheckOnly selepas dibetulkan');
+    expect(r1.status).toBe(1);
+    // the later steps still ran (the box was started), the script ends with the error
+    expect(r1.out).toMatch(/^OK\s+9\s/m);
+    expect(r1.out).toContain('GAGAL: langkah 7 tidak lengkap');
     const all = joinedCalls(calls(deny.log));
-    expect(all.filter((l) => /\bsu\b|\broot\b/.test(l))).toEqual([]);
+    // only the read-only "su 0 id" probe is tried; with no working su nothing is written through it
+    expect(all.filter((l) => /\bsu\b/.test(l))).toEqual([`-s ${SERIAL} shell su 0 id`]);
     expect(all.filter((l) => l.includes('service call background 3 i32 1 s16 my.maxcom.box'))).toHaveLength(1);
 
     const ok = setup('bg-ok', baseRules([
@@ -320,6 +326,90 @@ describe.runIf(win)('install-android-box.ps1 (run, fake adb)', () => {
     ]));
     const r2 = run(installScript, ['-Serial', SERIAL, '-Adb', ok.adb, '-ApkDir', ok.apkDir, '-Version', '2026.11.1', '-Yes', '-DebugBuild', '-HealthWaitSec', '20'], ok.env);
     expect(r2.out).toMatch(/^SET\s+7\s/m);
+    expect(r2.status).toBe(0);
+  });
+
+  it('step 7 retries through an existing su 0 when the shell user is refused, and says so', () => {
+    const s = setup('bg-su', baseRules([
+      { re: '^shell service check background$', out: 'Service background: found\n' },
+      { re: '^shell dumpsys background$', out: '', seq: [wl('my.example.guard'), wl('my.example.guard', 'my.maxcom.box')] },
+      { re: '^shell su 0 id$', out: 'uid=0(root) gid=0(root)\n' },
+      { re: '^shell su 0 service call background', out: "Result: Parcel(00000000 00000000 '........')\n" },
+      { re: '^shell service call background', out: "Result: Parcel(ffffffff 00000000 '........')\nException: Permission Denial\n" },
+    ]));
+    const r = run(installScript, ['-Serial', SERIAL, '-Adb', s.adb, '-ApkDir', s.apkDir, '-Version', '2026.11.1', '-Yes', '-DebugBuild', '-HealthWaitSec', '20'], s.env);
+    expect(r.out).toMatch(/mencuba semula melalui su 0/);
+    // the exact su command line is printed before it runs
+    expect(r.out).toContain(`adb -s ${SERIAL} shell su 0 service call background 3 i32 2 s16 my.example.guard s16 my.maxcom.box`);
+    // an install run points at -CheckOnly only when it ends GAGAL; this one succeeded
+    expect(r.out).not.toContain('jalankan semula dengan -CheckOnly');
+    expect(r.out).toMatch(/^SET\s+7\s.*my\.example\.guard, my\.maxcom\.box \(melalui su 0\)/m);
+    expect(r.status).toBe(0);
+    const calls7 = joinedCalls(calls(s.log)).filter((l) => l.includes('service call'));
+    expect(calls7).toEqual([
+      `-s ${SERIAL} shell service call background 3 i32 2 s16 my.example.guard s16 my.maxcom.box`,
+      `-s ${SERIAL} shell su 0 service call background 3 i32 2 s16 my.example.guard s16 my.maxcom.box`,
+    ]);
+  });
+
+  it('step 7 with su present but still refused ends GAGAL and exit 1', () => {
+    const s = setup('bg-su-deny', baseRules([
+      { re: '^shell service check background$', out: 'Service background: found\n' },
+      dumpBg(),
+      { re: '^shell su 0 id$', out: 'uid=0(root) gid=0(root)\n' },
+      { re: '^shell (su 0 )?service call background', out: "Result: Parcel(ffffffff 00000000 '........')\nException: Permission Denial\n" },
+    ]));
+    const r = run(installScript, ['-Serial', SERIAL, '-Adb', s.adb, '-ApkDir', s.apkDir, '-Version', '2026.11.1', '-Yes', '-DebugBuild', '-HealthWaitSec', '20'], s.env);
+    expect(r.status).toBe(1);
+    expect(r.out).toMatch(/^GAGAL\s+7\s/m);
+  });
+
+  describe('-CheckOnly (after any APK update)', () => {
+    const svcFound: Rule = { re: '^shell service check background$', out: 'Service background: found\n' };
+    const running: Rule = { re: '^shell dumpsys activity services my\\.maxcom\\.box$', out: '* ServiceRecord{1 u0 my.maxcom.box/.BoxService}\n  isForeground=true\n' };
+    const chk = (name: string, over: Rule[]) => {
+      const s = setup(name, baseRules(over));
+      const r = run(installScript, ['-Serial', SERIAL, '-Adb', s.adb, '-CheckOnly'], s.env);
+      return { r, all: joinedCalls(calls(s.log)) };
+    };
+    it('passes when the package is whitelisted and the box service runs; changes nothing', () => {
+      const { r, all } = chk('co-ok', [svcFound, dumpBg('my.maxcom.box'), running]);
+      expect(r.status).toBe(0);
+      expect(r.out).toContain('Semakan lulus');
+      expect(all.filter((l) => /install|service call|put |grant|whitelist \+|am start|set-home/.test(l))).toEqual([]);
+    });
+    it('fails (exit 1) when the package is not in the whitelist, and writes nothing', () => {
+      const { r, all } = chk('co-missing', [svcFound, dumpBg('my.example.guard'), running]);
+      expect(r.status).toBe(1);
+      expect(r.out).toMatch(/^GAGAL\s+7\s.*tiada dalam senarai putih/m);
+      // already in -CheckOnly: no hint to run -CheckOnly again
+      expect(r.out).not.toContain('jalankan semula dengan -CheckOnly');
+      expect(all.filter((l) => l.includes('service call'))).toEqual([]);
+    });
+    it('fails when the box service is not running', () => {
+      const { r } = chk('co-norun', [svcFound, dumpBg('my.maxcom.box')]);
+      expect(r.status).toBe(1);
+      expect(r.out).toMatch(/^GAGAL\s+K\s.*tidak berjalan/m);
+      // the box-service result is not labelled as the whitelist step, and no -CheckOnly hint inside -CheckOnly
+      expect(r.out).not.toMatch(/^GAGAL\s+7\s.*tidak berjalan/m);
+      expect(r.out).not.toContain('dengan -CheckOnly');
+    });
+    it('a box without the vendor service and without a running box service exits 1', () => {
+      const { r } = chk('co-novendor-norun', []);
+      expect(r.status).toBe(1);
+      expect(r.out).toMatch(/^LANGKAU\s+7\s/m);
+      expect(r.out).toMatch(/^GAGAL\s+K\s/m);
+    });
+    it('the header help states when the exit code is 0 or 1', () => {
+      const text = readFileSync(installScript, 'utf8');
+      expect(text).toContain('a box without the vendor service whose box service is not running');
+      expect(text).toContain('Exit 0 when the whitelist is fine or not needed AND the box');
+    });
+    it('a box without the vendor service only needs the box service running', () => {
+      const ok = chk('co-novendor', [running]);
+      expect(ok.r.status).toBe(0);
+      expect(ok.r.out).toMatch(/^LANGKAU\s+7\s/m);
+    });
   });
 
   describe('step 7 merges the awbms whitelist (the call SETS the whole list)', () => {
@@ -347,24 +437,24 @@ describe.runIf(win)('install-android-box.ps1 (run, fake adb)', () => {
       expect(all).toEqual([`-s ${SERIAL} shell service call background 3 i32 1 s16 my.maxcom.box`]);
       expect(r.out).toMatch(/^SET\s+7\s/m);
     });
-    it('unparseable section: AMARAN and no write', () => {
+    it('unparseable section: GAGAL, exit 1 and no write', () => {
       const { r, all } = go('bg-unparse', [{ re: '^shell dumpsys background$', out: 'nothing useful here\n' }]);
       expect(all).toEqual([]);
-      expect(r.out).toMatch(/^AMARAN\s+7\s/m);
-      expect(r.status).toBe(0);
+      expect(r.out).toMatch(/^GAGAL\s+7\s/m);
+      expect(r.status).toBe(1);
     });
-    it('an existing entry with a space or semicolon: AMARAN and no write', () => {
+    it('an existing entry with a space or semicolon: GAGAL and no write', () => {
       const a = go('bg-bad1', [dumpBg('my.example.guard', 'bad entry')]);
       expect(a.all).toEqual([]);
-      expect(a.r.out).toMatch(/^AMARAN\s+7\s/m);
+      expect(a.r.out).toMatch(/^GAGAL\s+7\s/m);
       const b = go('bg-bad2', [dumpBg('evil.pkg;rm')]);
       expect(b.all).toEqual([]);
-      expect(b.r.out).toMatch(/^AMARAN\s+7\s/m);
+      expect(b.r.out).toMatch(/^GAGAL\s+7\s/m);
     });
-    it('re-read missing an entry: AMARAN naming old and new lists', () => {
+    it('re-read missing an entry: GAGAL naming old and new lists', () => {
       const { r, all } = go('bg-lost', [rereadSeq(wl('my.example.guard'), wl('my.maxcom.box'))]);
       expect(all).toHaveLength(1);
-      expect(r.out).toMatch(/^AMARAN\s+7\s.*Lama: \[my\.example\.guard\].*Baharu: \[my\.maxcom\.box\]/m);
+      expect(r.out).toMatch(/^GAGAL\s+7\s.*Lama: \[my\.example\.guard\].*Baharu: \[my\.maxcom\.box\]/m);
     });
   });
 

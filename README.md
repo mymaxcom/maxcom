@@ -15,6 +15,19 @@ under its licence (CC BY-NC-SA 4.0, see "Licence" below). Downloads: [mymaxcom.m
 
 ### Kemas kini 2026.11.13 / Update 2026.11.13
 
+**Build 3 (20 November 2026).** Fixes found on a surau's own devices: YouTube videos play on Android TV boxes; a
+video that cannot play no longer holds a slide; a new Video volume setting; on TV boxes that block background apps the
+box still starts by itself after a power cut; the TV preview in the app works after the box changes its network
+address; no browser translate prompt on the Windows TV screen. If you installed 2026.11.13 before the evening of 20
+November, install it again: it updates in place and keeps all data.
+
+*Binaan 3 (20 November 2026): pembetulan yang ditemui pada peranti surau sendiri: video YouTube dimainkan pada kotak
+TV Android; video yang tidak dapat dimainkan tidak lagi menahan slaid; tetapan baharu Kelantangan video; pada kotak TV
+yang menyekat aplikasi latar belakang, kotak tetap hidup sendiri selepas bekalan elektrik terputus; pratonton TV dalam
+aplikasi berfungsi selepas alamat rangkaian kotak berubah; tiada lagi gesaan terjemahan pelayar pada skrin TV Windows.
+Jika anda memasang 2026.11.13 sebelum petang 20 November, pasang semula: ia dikemas kini di tempat yang sama dan semua
+data kekal.*
+
 - **Videos on the TV screen.** A new Video content kind (upload from the phone, a YouTube link, or a clip of a surau
   recording), played full screen on the TV, YouTube videos included, on the Android and the Windows box.
 - **YouTube: sign in once.** The sign-in is kept on the MAXCOM at the surau. "Cannot be checked right now" is shown

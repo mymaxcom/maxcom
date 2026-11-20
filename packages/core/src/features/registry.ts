@@ -266,7 +266,8 @@ export const FEATURES: readonly FeatureDef[] = [
   def('ticker', 'kandungan', false, true, { speed: 'normal' }, 'Teks bergerak', 'Ticker', 'النص المتحرك'),
   def('posters', 'kandungan', false, true, { durationSeconds: 15, order: 3 }, 'Poster', 'Posters', 'الملصقات'),
   // Video: each video plays to its own end (slot = video length, at most 10 min); `durationSeconds` is not used.
-  def('videos', 'kandungan', false, true, { order: 11 }, 'Video', 'Video', 'الفيديو'),
+  // `volume` (0..100) is the sound level of a video whose own sound switch is on.
+  def('videos', 'kandungan', false, true, { order: 11, volume: 40 }, 'Video', 'Video', 'الفيديو'),
   def('programKhas', 'kandungan', false, true, { durationSeconds: 15, order: 4, daysAhead: 7, hideAfterMinutes: 5 }, 'Program khas', 'Special programmes', 'البرامج الخاصة'),
   def('takwim', 'kandungan', false, true, { durationSeconds: 15, order: 5, count: 3 }, 'Takwim', 'Calendar', 'التقويم'),
   def('hadis', 'kandungan', false, true,
@@ -289,7 +290,7 @@ export const FEATURES: readonly FeatureDef[] = [
     'Kad ayat', 'Verse card', 'بطاقة الآية'),
   def('zikirSelepasSolat', 'quran', false, true, { durationSeconds: 20, minutesAfterSolat: 10 }, 'Zikir selepas solat', 'Post-prayer zikir', 'أذكار بعد الصلاة'),
   def('quranReader', 'quran', false, true, {}, 'Pembaca Al-Quran', 'Quran reader', 'قارئ القرآن'),
-  def('tilawah', 'quran', false, false, { reciter: 'Husary_64kbps', volume: 60, cacheMaxMb: 300 }, 'Tilawah', 'Recitation', 'التلاوة'),
+  def('tilawah', 'quran', false, false, { reciter: 'Husary_64kbps', volume: 40, cacheMaxMb: 300 }, 'Tilawah', 'Recitation', 'التلاوة'),
 
   def('beeps', 'audio', false, true, { volume: 70 }, 'Bunyi amaran', 'Beeps', 'أصوات التنبيه'),
 

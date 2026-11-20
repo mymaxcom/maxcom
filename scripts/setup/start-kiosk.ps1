@@ -180,6 +180,7 @@ $edgeArgs = @(
   '--no-default-browser-check',
   '--kiosk-idle-timeout-minutes=0',
   '--autoplay-policy=no-user-gesture-required',
+  '--disable-features=Translate',
   "--user-data-dir=$profileDir"
 )
 

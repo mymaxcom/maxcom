@@ -72,4 +72,22 @@ class BoxStateTest {
         assertFalse(s.toString().contains("aaaa"))
         assertTrue(s.toString().contains("token=set"))
     }
+
+    @Test
+    fun addingTheSameListenerTwiceIsANoOpAndOneRemoveClearsIt() {
+        var calls = 0
+        val l: (BoxSnapshot) -> Unit = { calls++ }
+        BoxState.addListener(l)
+        BoxState.addListener(l)
+        try {
+            BoxState.send(BoxEvent.ServerStarting)
+            assertEquals(1, calls)
+            BoxState.removeListener(l)
+            BoxState.send(BoxEvent.ServerRunning)
+            assertEquals(1, calls)
+        } finally {
+            BoxState.removeListener(l)
+            BoxState.send(BoxEvent.ServiceStopped)
+        }
+    }
 }

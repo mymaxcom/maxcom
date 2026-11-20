@@ -54,7 +54,7 @@ function wantsPreview(rawUrl: string): boolean {
 
 /**
  * `onSend` hook: security headers everywhere, `no-store` on any `/api` answer that set no cache
- * policy. The kiosk page HTML (a 200 text/html GET outside /api and /app) gets KIOSK_CSP. The one framing relaxation: the kiosk page HTML (a 200 text/html GET outside /api and /app) with
+ * policy. The kiosk page HTML (a 200 text/html GET outside /api and /app, and the 304 that revalidates it) gets KIOSK_CSP. The one framing relaxation: the kiosk page HTML (a 200 text/html GET outside /api and /app) with
  * `?preview=1` may be framed by its own origin (the app's preview screen); nothing else may.
  */
 export function registerSecurityHeaders(app: FastifyInstance): void {
@@ -66,7 +66,14 @@ export function registerSecurityHeaders(app: FastifyInstance): void {
     const isGet = request.method === 'GET' || request.method === 'HEAD';
     const outsideApiAndApp = !(path === '/api' || path.startsWith('/api/') || path === '/app' || path.startsWith('/app/'));
     const isHtml = String(reply.getHeader('content-type') ?? '').toLowerCase().startsWith('text/html');
-    const kioskDocument = isGet && outsideApiAndApp && reply.statusCode === 200 && isHtml;
+    // A 304 (the browser revalidates the page on every load: Cache-Control no-cache) has no content type, and its
+    // headers REPLACE the ones stored with the cached page. So it must carry the same policy as the 200, or the cached
+    // kiosk page falls back to the plain policy: the video frame is then blocked and the preview cannot be framed.
+    // The kiosk document is every path without a file extension (the page and its SPA routes) and any *.html.
+    const documentPath = !/\.[A-Za-z0-9]{1,8}$/.test(path) || path.toLowerCase().endsWith('.html');
+    const fresh = reply.statusCode === 200 && isHtml;
+    const notModified = reply.statusCode === 304 && documentPath;
+    const kioskDocument = isGet && outsideApiAndApp && (fresh || notModified);
     if (kioskDocument) reply.header('Content-Security-Policy', KIOSK_CSP);
     if (kioskDocument && wantsPreview(rawUrl)) {
       reply.header('Content-Security-Policy', KIOSK_CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'"));

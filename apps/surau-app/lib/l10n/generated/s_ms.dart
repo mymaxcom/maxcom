@@ -2096,6 +2096,10 @@ class SMs extends S {
       'Pratonton tidak dapat disambung dengan selamat. Cuba lagi.';
 
   @override
+  String get previewLoadFailed =>
+      'Pratonton tidak dapat dipaparkan. Semak sambungan rangkaian, kemudian cuba lagi.';
+
+  @override
   String get previewTlsExpected => 'Sijil dijangka (SHA-256)';
 
   @override
@@ -2640,6 +2644,21 @@ class SMs extends S {
 
   @override
   String get liveDestRecOff => 'Rakaman: Tidak';
+
+  @override
+  String get liveDestShortKiosk => 'Skrin';
+
+  @override
+  String get liveDestShortYoutube => 'YouTube';
+
+  @override
+  String get liveDestShortRecording => 'Rakam';
+
+  @override
+  String get liveDestSheetTitle => 'Destinasi siaran';
+
+  @override
+  String get liveDestTapHint => 'Ketik untuk butiran.';
 
   @override
   String get liveSignInOpenGoogle => 'Buka halaman Google';

@@ -59,6 +59,11 @@ describe('validateFeatureSettings', () => {
     expect(validateFeatureSettings('zone', { autofetch: true }).ok).toBe(false);
     expect(validateFeatureSettings('tarawih', { hijriMonth: 13 }).ok).toBe(false);
     expect(validateFeatureSettings('beeps', { volume: 101 }).ok).toBe(false);
+    expect(validateFeatureSettings('videos', { volume: 101 }).ok).toBe(false);
+    expect(validateFeatureSettings('videos', { volume: -1 }).ok).toBe(false);
+    expect(validateFeatureSettings('videos', { volume: 40.5 }).ok).toBe(false);
+    expect(validateFeatureSettings('videos', { volume: 0 }).ok).toBe(true);
+    expect(validateFeatureSettings('videos', { volume: 100 }).ok).toBe(true);
     expect(validateFeatureSettings('masukWaktu', { screenSeconds: 601 }).ok).toBe(false);
     expect(validateFeatureSettings('masukWaktu', { beep: 'yes' }).ok).toBe(false);
     expect(validateFeatureSettings('ticker', { enabled: 1 }).ok).toBe(false);
@@ -109,8 +114,9 @@ describe('content feature defaults', () => {
       surah: 2, ayatFrom: 255, ayatTo: 255, showTranslation: true, textSize: 'm',
     });
     expect(s.zikirSelepasSolat).toMatchObject({ durationSeconds: 20, minutesAfterSolat: 10 });
-    expect(s.tilawah).toMatchObject({ enabled: false, reciter: 'Husary_64kbps', volume: 60, cacheMaxMb: 300 });
+    expect(s.tilawah).toMatchObject({ enabled: false, reciter: 'Husary_64kbps', volume: 40, cacheMaxMb: 300 });
     expect(s.beeps).toMatchObject({ volume: 70 });
+    expect(s.videos).toMatchObject({ volume: 40 });
   });
   it('falls back to defaults for bad stored values', () => {
     expect(resolveSettings({ kuliahCard: { order: 'first' } } as any).kuliahCard.order).toBe(1);

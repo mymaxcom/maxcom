@@ -2086,6 +2086,10 @@ class SEn extends S {
       'The preview could not connect safely. Try again.';
 
   @override
+  String get previewLoadFailed =>
+      'The preview could not be shown. Check the network connection, then try again.';
+
+  @override
   String get previewTlsExpected => 'Expected certificate (SHA-256)';
 
   @override
@@ -2629,6 +2633,21 @@ class SEn extends S {
 
   @override
   String get liveDestRecOff => 'Recording: No';
+
+  @override
+  String get liveDestShortKiosk => 'Screen';
+
+  @override
+  String get liveDestShortYoutube => 'YouTube';
+
+  @override
+  String get liveDestShortRecording => 'Record';
+
+  @override
+  String get liveDestSheetTitle => 'Broadcast destinations';
+
+  @override
+  String get liveDestTapHint => 'Tap for details.';
 
   @override
   String get liveSignInOpenGoogle => 'Open the Google page';

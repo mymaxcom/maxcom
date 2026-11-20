@@ -16,6 +16,12 @@ export const VIDEO_START_MS = 15_000;
 /** The YouTube handshake: `listening` is repeated every second, at most this many times, until the player answers once. */
 export const YT_HANDSHAKE_TRIES = 10;
 
+/** The sound level (0..100) of a video whose own switch is on: the `videos.volume` setting, 40 when it is missing or bad. */
+export function videoVolumeOf(settings: unknown): number {
+  const v = (settings as { videos?: { volume?: unknown } } | null | undefined)?.videos?.volume;
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(100, Math.max(0, Math.round(v))) : 40;
+}
+
 /** Whether the browser says it has no internet; an unknown answer counts as online (the stall rule catches the rest). */
 export function offlineNow(): boolean {
   try {
@@ -32,7 +38,8 @@ export function offlineNow(): boolean {
  * blurred copy of itself. Plays to the end (at most 10 minutes), then reports `onFinished` so the rotation moves on; so it
  * does on an error, on a stall of more than 10 seconds and when a YouTube item has no internet.
  *
- * It sounds only when the item's own switch is on. It exists only while the main screen does, so a prayer phase or a live
+ * It sounds only when the item's own switch is on, at the `videos.volume` setting (the file's element volume; the YouTube
+ * player's `setVolume` command). It exists only while the main screen does, so a prayer phase or a live
  * removes it at once (the player is unmounted, not paused); a recitation (tilawah) removes it the same way.
  */
 export function VideoScreen({ content, itemId, view, onRendered, onFinished }: CardProps) {
@@ -44,11 +51,21 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
   const file = v?.source === 'upload' ? assetSrc(v.assetId) : null;
   const embed = v && isYoutube
     ? youtubeEmbedUrl(v.youtubeId ?? '', {
-        muted: v.sound !== true,
+        // always muted at the start, whatever the item's sound switch says: the sound is switched on by commands once the
+        // player answers (volume first, then unMute), so a sound-on item never plays loud at the player's own volume.
+        // The address therefore does not depend on the switch: toggling it must not reload the frame.
+        muted: true,
         ...(v.source === 'rakaman' && v.startSec !== undefined ? { start: v.startSec } : {}),
         ...(v.source === 'rakaman' && v.endSec !== undefined ? { end: v.endSec } : {}),
       })
     : null;
+  const volume = videoVolumeOf(view.settings);
+  const sound = v?.sound === true;
+  // The latest sound switch and level, for the player's message handler and commands (they outlive a render).
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
   const [failed, setFailed] = useState(false);
   const [ratio, setRatio] = useState<number | null>(null);
   const playable = !!v && !failed && !tilawahBusy && (isYoutube ? embed !== null && online : file !== null);
@@ -119,8 +136,10 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
       if (e.origin !== YT_ORIGIN || e.source !== frame.current?.contentWindow) return;
       const sig = readPlayerMessage(e.data);
       if (!sig) return;
+      const first = !heard.current;
       heard.current = true;
       stopShake();
+      if (first) soundOn();
       if (sig.error || sig.state === 0) {
         calm();
         finish();
@@ -135,6 +154,36 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playable, isYoutube, itemId, preview]);
+  // A command to the YouTube player over the same postMessage channel.
+  const command = (func: string, args: unknown[] = []): void => {
+    try {
+      frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args, id: 1, channel: 'widget' }), YT_ORIGIN);
+    } catch {
+      /* a frame that is gone */
+    }
+  };
+  // The frame starts muted (mute=1). An item with sound gets its level first (0..100) and only then the sound, in that order;
+  // an item without sound is left muted and gets nothing.
+  const soundOn = (): void => {
+    if (!soundRef.current) return;
+    command('setVolume', [volumeRef.current]);
+    command('unMute');
+  };
+  // The switch or the level changing while the item plays: the frame is not reloaded, the running player is told.
+  const lastSound = useRef(sound);
+  const lastVolume = useRef(volume);
+  useEffect(() => {
+    const switched = lastSound.current !== sound;
+    const leveled = lastVolume.current !== volume;
+    lastSound.current = sound;
+    lastVolume.current = volume;
+    if (!playable || !isYoutube || preview || !heard.current) return; // not heard yet: its first answer applies the current state
+    if (switched) {
+      if (sound) soundOn();
+      else command('mute');
+    } else if (leveled && sound) command('setVolume', [volume]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sound, volume, playable, isYoutube, preview]);
   const shakeHands = (): void => {
     try {
       const w = frame.current?.contentWindow;
@@ -148,9 +197,12 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
   };
   const onFrameLoad = (): void => {
     // The widget handshake, repeated like the official API does until the player answers once (it may not be ready
-    // at the first try). The watchdog set at mount judges a player that never answers.
+    // at the first try). The watchdog set at mount judges a player that never answers. Every real load of the frame (the
+    // first, or a reload of it) is a new player: it starts muted and has heard nothing from us, so the handshake and the
+    // watchdog begin again.
     stopShake();
-    if (heard.current) return;
+    heard.current = false;
+    if (!preview) kick(VIDEO_START_MS);
     shakeHands();
     let tries = 1;
     shake.current = window.setInterval(() => {
@@ -179,8 +231,11 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
     };
   }, [itemId, playable]);
   useLayoutEffect(() => {
-    if (el.current) el.current.muted = v?.sound !== true;
-  }, [v?.sound, itemId]);
+    if (!el.current) return;
+    // the level first, then the sound: the element never plays unmuted at its own default volume
+    el.current.volume = volume / 100;
+    el.current.muted = !sound;
+  }, [sound, itemId, volume, playable]);
 
   const stageRef = useRef<HTMLElement>(null);
   const [top, setTop] = useState<number | null>(null);
@@ -245,6 +300,7 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
           title=""
           src={embed}
           allow="autoplay; encrypted-media"
+          sandbox="allow-scripts allow-same-origin allow-presentation"
           referrerpolicy="strict-origin-when-cross-origin"
           tabIndex={-1}
           aria-hidden="true"

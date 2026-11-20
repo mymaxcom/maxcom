@@ -337,6 +337,28 @@ describe('IPv6 loopback listener (S1)', () => {
     expect((await get(`http://[::1]:${l.httpPort}/api/health`)).status).toBe(200);
   });
 
+  it('[::1] listener starts without a false warning and is closed with the app', async () => {
+    if (!(await ipv6)) return;
+    const warnings: string[] = [];
+    const warn = console.warn;
+    console.warn = (...a: unknown[]) => { warnings.push(a.join(' ')); };
+    let l: Listeners;
+    try {
+      l = await startListeners({
+        dbPath: ':memory:', staticDir: null, tls: null,
+        plan: { http: { host: '127.0.0.1', port: 0 }, http6: { host: '::1' }, https: null, warnings: [] }, env: {},
+      });
+    } finally {
+      console.warn = warn;
+    }
+    started.push(l);
+    expect(warnings.filter((w) => w.includes('[::1]'))).toEqual([]);
+    expect((await get(`http://[::1]:${l.httpPort}/api/health`)).status).toBe(200);
+    await l.app.close();
+    await expect(get(`http://[::1]:${l.httpPort}/api/health`)).rejects.toThrow();
+    await expect(get(`http://127.0.0.1:${l.httpPort}/api/health`)).rejects.toThrow();
+  });
+
   it('a [::1] port already taken by another process: the box refuses to start with a clear message (F9)', async () => {
     if (!(await ipv6)) return;
     const blocker = net.createServer();

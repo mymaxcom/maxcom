@@ -25,7 +25,15 @@ fun keystoreProperty(name: String): String =
         )
 
 // Box version YYYY.MM.N from -PboxVersion=. A release build without it fails; debug uses 0.0.0.
-val wantsRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+// The requested names also hold option values such as --tests "ReleaseStoreTest": drop every argument that starts
+// with '--' and the value that follows it, and anything with '*' or '.' (a test filter), so only task names remain.
+val requestedTasks: List<String> = run {
+    val names = gradle.startParameter.taskNames
+    names.filterIndexed { i, t ->
+        !t.startsWith("--") && !(i > 0 && names[i - 1].startsWith("--")) && t.none { it == '*' || it == '.' }
+    }
+}
+val wantsRelease = requestedTasks.any { it.contains("Release", ignoreCase = true) }
 val boxVersion: String = (findProperty("boxVersion") as String?)
     ?: if (wantsRelease) {
         throw GradleException("boxVersion tiada: beri -PboxVersion=YYYY.MM.N untuk binaan keluaran. (Release build needs -PboxVersion.)")
@@ -43,12 +51,31 @@ val boxBuild: Int = ((findProperty("boxBuild") as String?)?.toIntOrNull() ?: 0).
     if (it !in 0..9) throw GradleException("boxBuild mesti 0 hingga 9, diberi: $it")
 }
 
-// versionCode = ((YY * 10000 + MM * 100 + N) * 100) + build * 10 + abi; abi 1 = armeabi-v7a, 2 = arm64-v8a.
+// versionCode = ((YY * 10000 + MM * 100 + N) * 100) + build * 10 + index; index 1 = armeabi-v7a APK, 2 = arm64-v8a APK,
+// 3 = the Google Play app bundle (one code for every ABI split Play makes from it). Same build: the bundle code is the
+// highest of the three; the next build (build + 1) is always higher than all of them. Example 2026.11.13 b2: APKs
+// 26111321 and 26111322, bundle 26111323 (b1 was 26111311 and 26111312).
 val baseCode: Int = versionMatch?.let { m ->
     val (year, month, n) = m.destructured
     (year.toInt() % 100) * 10000 + month.toInt() * 100 + n.toInt()
 } ?: 0
 val abiIndex = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2)
+val bundleIndex = 3
+
+// A bundle is built in its own Gradle run: Play cuts the ABI splits itself, and the APK-only abi splits below are
+// switched off for it. Asking for an APK task and a bundle task together would give APKs without the splits.
+fun lastSegment(task: String) = task.substringAfterLast(':')
+val wantsBundle = requestedTasks.any { lastSegment(it).startsWith("bundle", ignoreCase = true) }
+val wantsApk = requestedTasks.any {
+    val t = lastSegment(it)
+    t.startsWith("assemble", ignoreCase = true) || t.startsWith("install", ignoreCase = true)
+}
+if (wantsBundle && wantsApk) {
+    throw GradleException(
+        "Jangan jalankan tugas APK (assemble/install) dan tugas bundle dalam satu larian Gradle. " +
+            "(Run assemble* and bundle* in separate Gradle invocations: the per-ABI splits apply to APKs only.)"
+    )
+}
 
 android {
     namespace = "my.maxcom.box"
@@ -63,23 +90,35 @@ android {
         applicationId = "my.maxcom.box"
         minSdk = 28
         targetSdk = 35
-        versionCode = maxOf(baseCode * 100 + boxBuild * 10, 1)
+        // The bundle's code (no ABI filter). The per-ABI APK outputs override it in androidComponents below.
+        versionCode = maxOf(baseCode * 100 + boxBuild * 10 + bundleIndex, 1)
         versionName = boxVersion
     }
 
-    // One APK per ABI, no universal APK (plan decision 3).
+    // One APK per ABI, no universal APK (plan decision 3). Off for a bundle: Play makes the ABI splits from the .aab.
     splits {
         abi {
-            isEnable = true
+            isEnable = !wantsBundle
             reset()
             include("armeabi-v7a", "arm64-v8a")
             isUniversalApk = false
         }
     }
 
+    // App bundle (Google Play): the device gets only its own ABI's libraries.
+    bundle {
+        abi {
+            enableSplit = true
+        }
+    }
+
     packaging {
         jniLibs {
-            // Libraries are extracted to nativeLibraryDir at install; the bytes must stay those of the pins.
+            // node, mediamtx and ffmpeg ship as lib*.so and are EXECUTED from nativeLibraryDir, so they must be
+            // extracted to disk at install. useLegacyPackaging = true does that for both outputs: AGP writes
+            // android:extractNativeLibs="true" into the merged manifest (same as the source manifest) and leaves
+            // the bundle's uncompressNativeLibraries setting off, so Play delivers the libraries compressed and
+            // the installer extracts them. The bytes must stay those of the pins.
             useLegacyPackaging = true
             keepDebugSymbols += "**/*.so"
         }
@@ -117,6 +156,7 @@ kotlin {
 }
 
 // Per-ABI version code and file name MAX-Kiosk-Server-<version>[-b<build>]-<abi>.apk (plan decision 3; the build is in the name when above 0).
+// With the abi splits off (a bundle) no output has an ABI filter: it keeps the bundle code from defaultConfig.
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->

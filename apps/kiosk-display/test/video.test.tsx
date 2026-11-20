@@ -169,6 +169,153 @@ describe('VideoScreen: an uploaded file', () => {
   });
 });
 
+describe('VideoScreen: volume (videos.volume)', () => {
+  const withVolume = (volume: number): ViewOpts => ({ settings: { videos: { volume } } });
+
+  it('defaults to 40 and sets the file volume only as a level (sound still follows the item switch)', () => {
+    const { container } = render(<VideoScreen {...props('v-up', content([{ ...upload, sound: true }]))} />);
+    const v = container.querySelector('video')!;
+    expect(v.muted).toBe(false);
+    expect(v.volume).toBeCloseTo(0.4, 5);
+  });
+
+  it('sets the file volume from the setting, and follows a change', () => {
+    const c = content([{ ...upload, sound: true }]);
+    const { container, rerender } = render(<VideoScreen {...props('v-up', c, withVolume(75))} />);
+    expect(container.querySelector('video')!.volume).toBeCloseTo(0.75, 5);
+    rerender(<VideoScreen {...props('v-up', c, withVolume(10))} />);
+    expect(container.querySelector('video')!.volume).toBeCloseTo(0.1, 5);
+  });
+
+  it('keeps a file without the item sound switch muted, whatever the volume', () => {
+    const { container } = render(<VideoScreen {...props('v-up', content([upload]), withVolume(90))} />);
+    expect(container.querySelector('video')!.muted).toBe(true);
+  });
+
+  const commands = (post: ReturnType<typeof vi.fn>) =>
+    post.mock.calls.map((c) => JSON.parse(String(c[0])) as { event: string; func?: string; args?: unknown[] }).filter((m) => m.func === 'setVolume');
+  const hear = (f: HTMLIFrameElement, info = 1) =>
+    act(() => { window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ event: 'onStateChange', info }), origin: YT_ORIGIN, source: f.contentWindow })); });
+
+  it('sends setVolume to a YouTube player once it answers, and again when the setting changes', () => {
+    setOnline(true);
+    const c = content([{ ...yt, sound: true }]);
+    const { container, rerender } = render(<VideoScreen {...props('v-yt', c, withVolume(55))} />);
+    const f = container.querySelector('iframe')!;
+    const post = vi.fn();
+    Object.defineProperty(f, 'contentWindow', { value: { postMessage: post }, configurable: true });
+    expect(commands(post)).toEqual([]);
+    hear(f);
+    expect(commands(post)).toEqual([{ event: 'command', func: 'setVolume', args: [55], id: 1, channel: 'widget' }]);
+    hear(f);
+    expect(commands(post)).toHaveLength(1);
+    rerender(<VideoScreen {...props('v-yt', c, withVolume(20))} />);
+    expect(commands(post).map((m) => m.args)).toEqual([[55], [20]]);
+  });
+
+  it('sends no volume to a YouTube item without sound', () => {
+    setOnline(true);
+    const { container } = render(<VideoScreen {...props('v-yt', content([yt]), withVolume(55))} />);
+    const f = container.querySelector('iframe')!;
+    const post = vi.fn();
+    Object.defineProperty(f, 'contentWindow', { value: { postMessage: post }, configurable: true });
+    hear(f);
+    expect(commands(post)).toEqual([]);
+  });
+});
+
+describe('VideoScreen: YouTube sound commands', () => {
+  const withVolume = (volume: number): ViewOpts => ({ settings: { videos: { volume } } });
+  const funcs = (post: ReturnType<typeof vi.fn>) =>
+    post.mock.calls.map((c) => JSON.parse(String(c[0])) as { event: string; func?: string; args?: unknown[] })
+      .filter((m) => m.event === 'command' && ['setVolume', 'unMute', 'mute'].includes(String(m.func)))
+      .map((m) => (m.func === 'setVolume' ? `setVolume:${String(m.args?.[0])}` : String(m.func)));
+  const setup = (item: KioskVideo, volume = 55) => {
+    setOnline(true);
+    const c = content([item]);
+    const r = render(<VideoScreen {...props('v-yt', c, withVolume(volume))} />);
+    const f = r.container.querySelector('iframe')!;
+    const post = vi.fn();
+    Object.defineProperty(f, 'contentWindow', { value: { postMessage: post }, configurable: true });
+    const hear = (info = 1) =>
+      act(() => { window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ event: 'onStateChange', info }), origin: YT_ORIGIN, source: f.contentWindow })); });
+    return { ...r, c, f, post, hear };
+  };
+
+  it('a sound-on item: setVolume first, then unMute, once the player answers', () => {
+    const { post, hear } = setup({ ...yt, sound: true });
+    expect(funcs(post)).toEqual([]);
+    hear();
+    expect(funcs(post)).toEqual(['setVolume:55', 'unMute']);
+    hear();
+    expect(funcs(post)).toEqual(['setVolume:55', 'unMute']);
+  });
+
+  it('a sound-off item stays muted and gets no unMute and no volume', () => {
+    const { post, hear } = setup(yt);
+    hear();
+    expect(funcs(post)).toEqual([]);
+  });
+
+  it('switching the sound on while it plays posts the commands in order and does not reload the frame', () => {
+    const { container, rerender, c, f, post, hear } = setup(yt);
+    const src = f.getAttribute('src');
+    hear();
+    rerender(<VideoScreen {...props('v-yt', content([{ ...yt, sound: true }]), withVolume(55))} />);
+    expect(container.querySelector('iframe')).toBe(f);
+    expect(f.getAttribute('src')).toBe(src);
+    expect(funcs(post)).toEqual(['setVolume:55', 'unMute']);
+    rerender(<VideoScreen {...props('v-yt', c, withVolume(55))} />);
+    expect(funcs(post)).toEqual(['setVolume:55', 'unMute', 'mute']);
+    expect(f.getAttribute('src')).toBe(src);
+  });
+
+  it('a volume change while it plays sends setVolume only', () => {
+    const { rerender, f, post, hear } = setup({ ...yt, sound: true });
+    hear();
+    rerender(<VideoScreen {...props('v-yt', content([{ ...yt, sound: true }]), withVolume(20))} />);
+    expect(funcs(post)).toEqual(['setVolume:55', 'unMute', 'setVolume:20']);
+    expect(f.isConnected).toBe(true);
+  });
+
+  it('the first answer uses the switch and level as they are then, not as they were when it mounted', () => {
+    const { rerender, post, hear } = setup(yt, 30);
+    rerender(<VideoScreen {...props('v-yt', content([{ ...yt, sound: true }]), withVolume(70))} />);
+    expect(funcs(post)).toEqual([]); // not heard yet: nothing to command
+    hear();
+    expect(funcs(post)).toEqual(['setVolume:70', 'unMute']);
+  });
+
+  it('a real reload of the frame starts the handshake again and re-applies the sound to the new player', () => {
+    vi.useFakeTimers();
+    const { f, post, hear } = setup({ ...yt, sound: true });
+    const listening = () => post.mock.calls.filter((c) => String(c[0]).includes('"listening"')).length;
+    fireEvent.load(f);
+    hear();
+    expect(listening()).toBe(1);
+    expect(funcs(post)).toEqual(['setVolume:55', 'unMute']);
+    fireEvent.load(f); // the frame loaded again: a new player, muted, deaf to us
+    expect(listening()).toBe(2);
+    hear();
+    expect(funcs(post)).toEqual(['setVolume:55', 'unMute', 'setVolume:55', 'unMute']);
+  });
+
+  it('a reloaded frame that never answers is given up (the watch starts again)', () => {
+    vi.useFakeTimers();
+    const p = props('v-yt', content([yt]));
+    setOnline(true);
+    const { container } = render(<VideoScreen {...p} />);
+    const f = container.querySelector('iframe')!;
+    fireEvent.load(f);
+    act(() => { window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ event: 'onStateChange', info: 1 }), origin: YT_ORIGIN, source: f.contentWindow })); });
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(p.onFinished).not.toHaveBeenCalled();
+    fireEvent.load(f);
+    act(() => { vi.advanceTimersByTime(VIDEO_START_MS + 500); });
+    expect(p.onFinished).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('VideoScreen: YouTube', () => {
   it('frames only the nocookie player with autoplay, no controls and mute by default', () => {
     setOnline(true);
@@ -186,10 +333,10 @@ describe('VideoScreen: YouTube', () => {
     expect(u.searchParams.get('modestbranding')).toBe('1');
   });
 
-  it('asks for sound only when the item does', () => {
+  it('always starts muted, even when the item has sound (the sound is switched on by commands)', () => {
     setOnline(true);
     const { container } = render(<VideoScreen {...props('v-yt', content([{ ...yt, sound: true }]))} />);
-    expect(new URL(container.querySelector('iframe')!.getAttribute('src')!).searchParams.get('mute')).toBe('0');
+    expect(new URL(container.querySelector('iframe')!.getAttribute('src')!).searchParams.get('mute')).toBe('1');
   });
 
   it('plays a recording clip between its start and end', () => {

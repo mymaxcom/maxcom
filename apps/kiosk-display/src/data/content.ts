@@ -349,11 +349,52 @@ export function useContent(view: KioskView): ContentView {
       if (!after || after.index === nat.index) return null;
       // the following slot starts at the instant of the skip (fixed), or at its own start when that instant is past
       const at = skipped.get(cur.startedAt.getTime()) as number;
-      cur = { ...after, startedAt: at < end.getTime() ? new Date(at) : after.startedAt };
-      nat = after;
+      if (at >= end.getTime()) {
+        cur = after;
+        nat = after;
+        continue;
+      }
+      // An early skip: the slots that follow run from the skip instant, each for its own time, until the clock's own
+      // next boundary (a video given up must not leave the next card up for the rest of the video's long slot).
+      const slots = rotation.filter((s) => Number.isFinite(s.durationSeconds) && s.durationSeconds > 0);
+      const nowMs = view.now.getTime();
+      // The slot given up (same feature, item and part) and every one that gives itself up in this run is not shown again
+      // before the clock's own boundary, however often the run wraps round the rotation.
+      const same = (a: Slot, b: Slot): boolean => a.feature === b.feature && a.itemId === b.itemId && a.page === b.page;
+      const out: Slot[] = [nat.slot];
+      const left = (): number => slots.filter((s) => !out.some((o) => same(o, s))).length;
+      // every turn of the run either moves the time on by a slot's own length or passes an excluded slot (at most one lap)
+      const minSec = slots.reduce((m, s) => Math.min(m, s.durationSeconds), Infinity);
+      const maxHops = Math.min(20_000, Math.ceil((end.getTime() - at) / (minSec * 1000)) * 2 + slots.length * 2 + 2);
+      let t = at;
+      let i = after.index;
+      let run: NonNullable<typeof cur> | null = null;
+      let last: NonNullable<typeof cur> | null = null; // the last slot that was shown and has run its time out
+      for (let hops = 0; hops <= maxHops && t < end.getTime() && left() > 0; hops++) {
+        const s = slots[i % slots.length]!;
+        const idx = i % slots.length;
+        i = (i + 1) % slots.length;
+        if (out.some((o) => same(o, s))) continue;
+        const next = skipped.get(t);
+        if (next !== undefined) {
+          out.push(s); // a video in this run that gave itself up: the one after it starts from that instant
+          t = Math.max(next, t + 1);
+          continue;
+        }
+        // the only slot left to show is kept up from its start until the clock's boundary (no spinning through itself)
+        const stop = t + s.durationSeconds * 1000;
+        if (left() === 1 || nowMs < stop || stop >= end.getTime()) {
+          run = { slot: s, index: idx, startedAt: new Date(t) };
+          break;
+        }
+        last = { slot: s, index: idx, startedAt: new Date(t) };
+        t = stop;
+      }
+      // Nothing is left that can still be shown: the last slot of the run stays (it has started), else nothing.
+      return run ?? last;
     }
     return cur;
-  }, [natural, skipped, rotation, cycle.cycleStartSec, view.tz]);
+  }, [natural, skipped, rotation, cycle.cycleStartSec, view.tz, view.now]);
 
   const zikir = useMemo(() => {
     const days = today ? [today] : [];

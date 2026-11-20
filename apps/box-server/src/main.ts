@@ -243,6 +243,20 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
     });
   });
 
+  // the [::1] listener is created after app.listen (Fastify refuses addHook once listening), so its close hook is
+  // registered here and reads this variable
+  let server6: http.Server | null = null;
+  let closing = false;
+  app.addHook('onClose', async () => {
+    closing = true;
+    const s6 = server6;
+    if (!s6?.listening) return;
+    await new Promise<void>((done) => {
+      s6.close(() => done());
+      s6.closeAllConnections();
+    });
+  });
+
   await app.listen({ host: o.plan.http.host, port: o.plan.http.port });
   const httpPort = (app.server.address() as AddressInfo).port;
 
@@ -250,22 +264,27 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
   // loopback in front of the kiosk. A host without IPv6 simply has no second listener (logged once).
   const handler6 = httpHandler as http.RequestListener | null;
   if (o.plan.http6 && handler6 !== null && o.plan.http.host === '127.0.0.1') {
-    const server6 = http.createServer(handler6);
-    hardenServer(server6);
+    const candidate6 = http.createServer(handler6);
+    hardenServer(candidate6);
     try {
       await new Promise<void>((done, fail) => {
-        server6.once('error', fail);
-        server6.listen({ host: o.plan.http6?.host ?? '::1', port: httpPort }, () => {
-          server6.off('error', fail);
+        candidate6.once('error', fail);
+        candidate6.listen({ host: o.plan.http6?.host ?? '::1', port: httpPort }, () => {
+          candidate6.off('error', fail);
           done();
         });
       });
-      app.addHook('onClose', async () => {
+      // a runtime error on this listener is logged, never an unhandled 'error' that ends the process
+      candidate6.on('error', (error) => console.warn(`WARNING: HTTP [::1]:${httpPort}: ${(error as Error).message}`));
+      if (closing) {
+        // app.close() ran while [::1] was still binding: its hook saw nothing to close, so close it here
         await new Promise<void>((done) => {
-          server6.close(() => done());
-          server6.closeAllConnections();
+          candidate6.close(() => done());
+          candidate6.closeAllConnections();
         });
-      });
+      } else {
+        server6 = candidate6;
+      }
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code ?? 'error';
       if (code === 'EADDRINUSE') {

@@ -19,6 +19,7 @@ import android.widget.FrameLayout
 import java.util.concurrent.Executors
 import my.maxcom.box.core.HealthClient
 import my.maxcom.box.core.KeyCombo
+import my.maxcom.box.core.ServiceStartWatch
 import my.maxcom.box.core.UrlPolicy
 
 /**
@@ -39,7 +40,31 @@ class KioskActivity : Activity() {
     private var healthPending = true
     private var active = false
 
+    private val watch = ServiceStartWatch()
+    private var messageShown = false
+
     private val listener: (BoxSnapshot) -> Unit = { snap -> main.post { if (active) render(snap) } }
+
+    // While the service has never reported, ask for it again now and then and show a message after a minute.
+    private val tick = object : Runnable {
+        override fun run() {
+            if (!active) return
+            val snap = BoxState.get()
+            if (!BoxReducer.neverReported(snap)) {
+                watch.disarm()
+                return
+            }
+            val now = SystemClock.elapsedRealtime()
+            if (watch.retryDue(now)) {
+                watch.tried(now)
+                Log.i(TAG, "service start retry " + watch.retryCount)
+                startBox()
+            }
+            if (watch.messageDue(now) && !messageShown) render(snap)
+            main.removeCallbacks(this) // render() re-arms the tick itself; never keep two queued
+            main.postDelayed(this, TICK_MS)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(null)
@@ -59,8 +84,17 @@ class KioskActivity : Activity() {
         render(BoxState.get())
     }
 
+    override fun onResume() {
+        super.onResume()
+        // The first request in onStart may have been dropped by the system: ask again while nothing has reported.
+        if (BoxReducer.neverReported(BoxState.get())) startBox()
+    }
+
     override fun onStop() {
         active = false
+        main.removeCallbacks(tick)
+        watch.disarm()
+        messageShown = false
         BoxState.removeListener(listener)
         polling = false
         super.onStop()
@@ -114,8 +148,23 @@ class KioskActivity : Activity() {
             dropPage()
         }
         if (web == null) {
-            start.show(StartTexts.forStatus(snap.status, healthPending))
+            val silent = BoxReducer.neverReported(snap) && watch.messageDue(SystemClock.elapsedRealtime())
+            messageShown = silent
+            start.show(if (silent) StartTexts.serviceNotStarted() else StartTexts.forStatus(snap.status, healthPending))
             if (running) pollHealth(snap.port, token!!)
+        }
+        watchService(snap)
+    }
+
+    // Arms the retry timer while the service has never reported; stops it as soon as it has.
+    private fun watchService(snap: BoxSnapshot) {
+        main.removeCallbacks(tick)
+        if (BoxReducer.neverReported(snap)) {
+            watch.arm(SystemClock.elapsedRealtime())
+            main.postDelayed(tick, TICK_MS)
+        } else {
+            watch.disarm()
+            messageShown = false
         }
     }
 
@@ -207,6 +256,7 @@ class KioskActivity : Activity() {
     private companion object {
         const val TAG = "MAXCOM"
         const val POLL_MS = 1500L
+        const val TICK_MS = 1000L
         val COMBO = listOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_DOWN,

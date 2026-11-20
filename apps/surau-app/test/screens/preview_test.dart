@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/app/router.dart';
 import 'package:surau_app/app/theme.dart';
+import 'package:surau_app/box/routes.dart';
 import 'package:surau_app/screens/preview_screen.dart';
 
 import '../features/fakes.dart' show fixtureInfoJson;
@@ -245,6 +246,41 @@ void main() {
         matchesGoldenFile('preview_ssl_${size.name}.png'),
       );
     }
+  });
+
+  testWidgets('a named box with a proven address is previewed at that address, and follows a change', (tester) async {
+    final routes = BoxRoutes()..set('box1-surau.local', '192.0.2.7');
+    final host = _FakeHost();
+    await pumpT9(
+      tester,
+      PreviewScreen(previewBuilder: host.build),
+      location: AppRoutes.preview,
+      boxName: 'box1-surau.local',
+      routes: routes,
+    );
+    expect(host.last.box, Uri.parse('https://192.0.2.7:8443'), reason: 'the proven address, the stored port');
+    final before = host.requests.length;
+
+    routes.set('box1-surau.local', '192.0.2.9');
+    await settle(tester);
+    expect(host.requests.length, greaterThan(before));
+    expect(host.last.box, Uri.parse('https://192.0.2.9:8443'));
+
+    routes.remove('box1-surau.local');
+    await settle(tester);
+    expect(host.last.box, Uri.parse('https://127.0.0.1:8443'), reason: 'no route: the stored origin');
+  });
+
+  testWidgets('a named box without a route is previewed at its stored origin', (tester) async {
+    final host = _FakeHost();
+    await pumpT9(
+      tester,
+      PreviewScreen(previewBuilder: host.build),
+      location: AppRoutes.preview,
+      boxName: 'box1-surau.local',
+      routes: BoxRoutes(),
+    );
+    expect(host.last.box, Uri.parse('https://127.0.0.1:8443'));
   });
 
   testWidgets('the host gets a pinned-leaf fetcher only when the app has one', (tester) async {

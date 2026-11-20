@@ -84,7 +84,7 @@ export const REACH: Record<string, Record<string, Reach>> = {
   },
   ticker: { enabled: by(`${K}screens/Main.tsx`), speed: by(`${K}content/Ticker.tsx`) },
   posters: { enabled: by(ROT), durationSeconds: by(ROT), order: by(ROT) },
-  videos: { enabled: by(ROT), order: by(ROT) },
+  videos: { enabled: by(ROT), order: by(ROT), volume: by(`${K}screens/content/VideoScreen.tsx`) },
   programKhas: {
     enabled: by(ROT), durationSeconds: by(ROT), order: by(ROT), hideAfterMinutes: by(ROT),
     daysAhead: { none: 'hidden', why: 'planned (Dirancang), hidden from Tetapan (FieldMeta hidden): a programme shows by its own show-from and show-to dates, nothing reads the window' },

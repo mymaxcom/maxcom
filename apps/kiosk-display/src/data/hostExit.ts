@@ -1,7 +1,8 @@
 /**
  * The host exit bridge: lets an admin at the box leave the kiosk and reach the box OS.
  *
- * Android: the app's WebView offers `window.MaxcomHost.exit()`.
+ * Android: the app's WebView offers `window.MaxcomHost.exit(key)`; the key is `window.__mxHostKey`, which the app sets in
+ * this page's main frame only (a frame from another origin, the video player, sees the bridge but not the key).
  * Windows: the kiosk start script opens a loopback listener and launches the page as
  * `http://localhost:<box port>/#mxhost=<port>.<token>` (localhost, not a bare IP: the YouTube player
  * refuses a bare-IP page origin); a POST of the token to the helper at `http://127.0.0.1:<port>/exit` closes the kiosk.
@@ -12,7 +13,9 @@ const STORE_KEY = 'maxcom-mxhost';
 const HASH_RE = /(?:^|[#&])mxhost=(\d{1,5})\.([0-9a-fA-F]{64})(?:&|$)/;
 
 export interface HostBridgeWindow {
-  MaxcomHost?: { exit?: () => void };
+  MaxcomHost?: { exit?: (key?: string) => void };
+  /** Set by the Android app in this page's main frame only; the bridge refuses a call without it. */
+  __mxHostKey?: string;
 }
 
 export interface HostTarget {
@@ -93,7 +96,7 @@ export async function exitToHost(
 ): Promise<ExitOutcome> {
   try {
     if (typeof w.MaxcomHost?.exit === 'function') {
-      w.MaxcomHost.exit();
+      w.MaxcomHost.exit(w.__mxHostKey);
       return 'android';
     }
   } catch {

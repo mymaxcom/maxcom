@@ -110,6 +110,7 @@ describe('kiosk scripts static checks', () => {
       '--no-default-browser-check',
       '--kiosk-idle-timeout-minutes=0',
       '--autoplay-policy=no-user-gesture-required',
+      '--disable-features=Translate',
       '--user-data-dir=$profileDir',
     ]) {
       expect(s).toContain(a);
@@ -164,6 +165,7 @@ describe.runIf(win)('start-kiosk.ps1 runs', () => {
       '--no-default-browser-check',
       '--kiosk-idle-timeout-minutes=0',
       '--autoplay-policy=no-user-gesture-required',
+      '--disable-features=Translate',
       `--user-data-dir=${join(local, 'MAXCOM', 'kiosk-profile')}`,
     ]);
     expect(new URL(args[1]!).hostname).toBe('localhost');

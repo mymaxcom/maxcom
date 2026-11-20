@@ -3,11 +3,13 @@
 // toggle, the reasons YouTube is off, a retrying leg, the stop confirm
 // and summary, and the six goldens at the three sizes.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/providers.dart' show settingsProvider;
 import 'package:surau_app/features/common/bidi.dart';
@@ -86,8 +88,47 @@ Future<void> _openSection(WidgetTester tester, String key) async {
 
 Finder get _youtubeChip => find.byKey(const ValueKey('live-dest-youtube'));
 
-bool _chipTappable(WidgetTester tester) =>
-    tester.widget<InkWell>(find.descendant(of: _youtubeChip, matching: find.byType(InkWell))).onTap != null;
+/// The YouTube pill's spoken text when the surau chose screen only (signed in).
+const _offSpoken = 'YouTube: Tidak. YouTube tidak dipilih: siaran hanya ke skrin surau.';
+Finder get _destSheet => find.byKey(const ValueKey('live-dest-sheet'));
+Finder get _youtubeSwitch => find.byKey(const ValueKey('live-dest-youtube-switch'));
+
+/// What a destination pill says to a screen reader (its full text).
+String _pillLabel(WidgetTester tester, [String k = 'youtube']) => tester
+    .widget<Semantics>(find.descendant(of: find.byKey(ValueKey('live-dest-$k')), matching: find.byType(Semantics)).first)
+    .properties
+    .label!;
+
+/// Taps a destination pill: the "Destinasi siaran" sheet opens.
+Future<void> _openDest(WidgetTester tester, [String k = 'youtube']) async {
+  await tester.tap(find.byKey(ValueKey('live-dest-$k')));
+  await settle(tester);
+  expect(_destSheet, findsOneWidget);
+}
+
+Future<void> _closeDest(WidgetTester tester) async {
+  final close = find.byKey(const ValueKey('live-dest-close'));
+  await tester.ensureVisible(close);
+  await tester.tap(close);
+  await settle(tester);
+  expect(_destSheet, findsNothing);
+}
+
+/// The YouTube switch in the sheet: open, toggle, close.
+Future<void> _toggleYoutube(WidgetTester tester) async {
+  await _openDest(tester);
+  await tester.tap(_youtubeSwitch);
+  await settle(tester);
+  await _closeDest(tester);
+}
+
+/// Whether the YouTube choice can be changed (the switch in the sheet is enabled); the sheet is closed again.
+Future<bool> _chipTappable(WidgetTester tester) async {
+  await _openDest(tester);
+  final enabled = tester.widget<Switch>(_youtubeSwitch).onChanged != null;
+  await _closeDest(tester);
+  return enabled;
+}
 
 PublisherState _running({
   OutputState youtube = OutputState.up,
@@ -259,8 +300,7 @@ void main() {
 
   testWidgets('YouTube toggled off is not sent', (tester) async {
     final t = await _open(tester);
-    await tester.tap(_youtubeChip);
-    await settle(tester);
+    await _toggleYoutube(tester);
     await tester.tap(_start);
     await settle(tester);
     expect(t.pub.started.last.outputs.youtube, isFalse);
@@ -271,7 +311,7 @@ void main() {
     await _openSection(tester, 'out');
     expect(find.text('Tiada internet: YouTube dimatikan'), findsOneWidget);
     // the choice is the surau's: a block never greys it
-    expect(_chipTappable(tester), isTrue);
+    expect(await _chipTappable(tester), isTrue);
     await tester.tap(_start);
     await settle(tester);
     // never TV only silently: the person is asked first
@@ -311,7 +351,7 @@ void main() {
     await _openSection(tester, 'out');
     expect(find.text('Log masuk YouTube dahulu'), findsOneWidget);
     expect(find.text('Minta Pentadbir log masuk YouTube'), findsNothing);
-    expect(_chipTappable(tester), isTrue);
+    expect(await _chipTappable(tester), isTrue);
     await reveal(tester, find.byKey(const ValueKey('live-youtube-account')));
     expect(find.byKey(const ValueKey('live-youtube-account')), findsOneWidget);
   });
@@ -1040,8 +1080,12 @@ void main() {
         await t.h.container.read(appLangProvider.notifier).set(AppLang.ar);
         await settle(tester);
         expect(
-          tester.widget<Text>(find.descendant(of: find.byKey(const ValueKey('live-dest-youtube')), matching: find.byType(Text))).data,
+          _pillLabel(tester),
           '\u2068YouTube\u2069: نعم، ${bidiIsolate(channel)}');
+        // the full text is in the sheet now: the golden shows it there
+        final full = _pillLabel(tester);
+        await _openDest(tester);
+        expect(find.descendant(of: _destSheet, matching: find.text(full)), findsOneWidget);
         await expectGoldens(tester, t.h.app, 'live_youtube_chip_ar_$tag');
       });
 
@@ -1063,8 +1107,62 @@ void main() {
         tester,
         box: const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf')),
       );
-      expect(find.textContaining('tidak dapat disemak sekarang'), findsWidgets);
+      // the grey "?" on the YouTube pill, the reason in its label (and in the sheet)
+      expect(
+        find.descendant(of: _youtubeChip, matching: find.byKey(const ValueKey('live-dest-badge-unknown'))),
+        findsOneWidget,
+      );
+      expect(
+        _pillLabel(tester),
+        'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}. '
+        'YouTube: tidak dapat disemak sekarang (kali terakhir: ${bidiIsolate('Surau D'Waqaf')})',
+      );
       await expectGoldens(tester, t.h.app, 'live_youtube_unknown');
+    });
+
+    // Option A of the destinations mockup (docs/design/mockups/live-dest-strip), at its 390 x 844 phone.
+    Future<void> at390(WidgetTester tester, _Live t, String name) async {
+      tester.view.physicalSize = const Size(390, 844) * goldenPixelRatio;
+      tester.view.devicePixelRatio = goldenPixelRatio;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await settle(tester);
+      await expectLater(find.byWidget(t.h.app), matchesGoldenFile('$name.png'));
+    }
+
+    testWidgets('live_dest_strip_on_390', (tester) async {
+      final t = await _open(tester);
+      await at390(tester, t, 'live_dest_strip_on_390');
+    });
+
+    testWidgets('live_dest_strip_signin_390', (tester) async {
+      final t = await _open(tester, box: const LiveBoxStatus());
+      await at390(tester, t, 'live_dest_strip_signin_390');
+    });
+
+    testWidgets('live_dest_sheet_390', (tester) async {
+      final t = await _open(tester);
+      tester.view.physicalSize = const Size(390, 844) * goldenPixelRatio;
+      await settle(tester);
+      await _openDest(tester);
+      await at390(tester, t, 'live_dest_sheet_390');
+    });
+
+    testWidgets('live_dest_sheet_signin_390', (tester) async {
+      final t = await _open(tester, box: const LiveBoxStatus());
+      tester.view.physicalSize = const Size(390, 844) * goldenPixelRatio;
+      await settle(tester);
+      await _openDest(tester);
+      await at390(tester, t, 'live_dest_sheet_signin_390');
+    });
+
+    testWidgets('live_dest_sheet_ar_390', (tester) async {
+      final t = await _open(tester, box: const LiveBoxStatus());
+      await t.h.container.read(appLangProvider.notifier).set(AppLang.ar);
+      tester.view.physicalSize = const Size(390, 844) * goldenPixelRatio;
+      await settle(tester);
+      await _openDest(tester);
+      await at390(tester, t, 'live_dest_sheet_ar_390');
     });
 
     testWidgets('live_recordings_pending', (tester) async {
@@ -1079,33 +1177,207 @@ void main() {
 
   group('[PP-L2] the destinations above Mula siaran', () {
     Finder chip(String k) => find.byKey(ValueKey('live-dest-$k'));
-    Text chipText(WidgetTester tester, String k) =>
-        tester.widget<Text>(find.descendant(of: chip(k), matching: find.byType(Text)));
+    Finder badge(String k, String state) =>
+        find.descendant(of: chip(k), matching: find.byKey(ValueKey('live-dest-badge-$state')));
+    final channelOn = 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}';
 
-    testWidgets('[PP-L2] the chips are visible without opening any card; ticking YouTube changes at once', (tester) async {
+    testWidgets('[PP-L2] the pills are visible without opening any card; the switch in the sheet changes YouTube at once', (
+      tester,
+    ) async {
       await _open(tester);
       expect(chip('kiosk'), findsOneWidget);
-      expect(chipText(tester, 'youtube').data, 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}');
+      expect(_pillLabel(tester), channelOn);
+      await _openDest(tester);
+      expect(find.descendant(of: _destSheet, matching: find.text(channelOn)), findsOneWidget);
       expect(find.byKey(const ValueKey('live-dest-skip')), findsNothing);
-      await tester.tap(chip('youtube'));
+      await tester.tap(_youtubeSwitch);
       await settle(tester);
-      expect(chipText(tester, 'youtube').data, 'YouTube: Tidak');
+      // the open sheet follows the change: the switch, the text and the note
+      expect(tester.widget<Switch>(_youtubeSwitch).value, isFalse);
+      expect(find.descendant(of: _destSheet, matching: find.text('YouTube: Tidak')), findsOneWidget);
       expect(
         find.text('YouTube tidak dipilih: siaran hanya ke skrin surau.'),
         findsOneWidget,
         reason: 'a screen-only start is a visible choice',
       );
-      await tester.tap(chip('youtube'));
+      await tester.tap(_youtubeSwitch);
       await settle(tester);
-      expect(chipText(tester, 'youtube').data, 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}');
+      expect(tester.widget<Switch>(_youtubeSwitch).value, isTrue);
       expect(find.byKey(const ValueKey('live-dest-skip')), findsNothing);
+      await _closeDest(tester);
+      expect(_pillLabel(tester), channelOn);
     });
 
     testWidgets('[PP-L2] YouTube not connected says so, with a way to the account card', (tester) async {
       await _open(tester, roles: const ['admin'], box: const LiveBoxStatus());
+      // amber "!" on the pill without a tap
+      expect(badge('youtube', 'warn'), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-dest-connect')), findsNothing, reason: 'in the sheet only');
+      await _openDest(tester);
       expect(find.text('YouTube belum disambungkan'), findsOneWidget);
       expect(find.byKey(const ValueKey('live-dest-connect')), findsOneWidget);
       expect(find.byKey(const ValueKey('live-dest-skip')), findsNothing);
+      // Sambung closes the sheet and opens Tetapan siaran (the account card), as the note's button did
+      await tester.tap(find.byKey(const ValueKey('live-dest-connect')));
+      await settle(tester);
+      expect(_destSheet, findsNothing);
+      await reveal(tester, find.byKey(const ValueKey('live-youtube-account')));
+      expect(find.byKey(const ValueKey('live-youtube-account')), findsOneWidget);
+    });
+
+    testWidgets('[PP-L2] one row: every pill on the same line, 48 px tall and equally wide', (tester) async {
+      await _open(tester);
+      final rects = [for (final k in ['kiosk', 'youtube', 'recording']) tester.getRect(chip(k))];
+      for (final r in rects) {
+        expect(r.top, rects.first.top);
+        expect(r.height, 48);
+        expect(r.width, moreOrLessEquals(rects.first.width, epsilon: 0.5));
+      }
+      expect(find.byKey(const ValueKey('live-dest-none')), findsNothing, reason: 'the note row is in the sheet now');
+      expect(find.byKey(const ValueKey('live-dest-skip')), findsNothing);
+    });
+
+    testWidgets('[PP-L2] badges: on, off, "!" not signed in, "?" cannot check', (tester) async {
+      final t = await _open(tester);
+      expect(badge('kiosk', 'on'), findsOneWidget);
+      expect(badge('youtube', 'on'), findsOneWidget);
+      expect(badge('recording', 'on'), findsOneWidget);
+      await _toggleYoutube(tester);
+      expect(badge('youtube', 'off'), findsOneWidget);
+      t.box.set(const LiveBoxStatus());
+      await settle(tester);
+      expect(badge('youtube', 'warn'), findsOneWidget);
+      t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf')));
+      await settle(tester);
+      expect(badge('youtube', 'unknown'), findsOneWidget);
+    });
+
+    for (final k in ['kiosk', 'youtube', 'recording']) {
+      testWidgets('[PP-L2] the $k pill opens Destinasi siaran', (tester) async {
+        await _open(tester);
+        await _openDest(tester, k);
+        expect(find.text('Destinasi siaran'), findsOneWidget);
+        expect(find.descendant(of: _destSheet, matching: find.text('Skrin surau')), findsOneWidget);
+        expect(find.descendant(of: _destSheet, matching: find.text(channelOn)), findsOneWidget);
+        expect(find.descendant(of: _destSheet, matching: find.text('Rakaman: Ya')), findsOneWidget);
+        expect(_youtubeSwitch, findsOneWidget);
+        await _closeDest(tester);
+      });
+    }
+
+    testWidgets('[PP-L2] the switch is greyed while the box has not answered, as the chip was', (tester) async {
+      final t = await _open(tester);
+      t.h.settings['liveYoutube'] = {'nextLiveOn': true};
+      t.h.container.invalidate(settingsProvider);
+      await settle(tester);
+      final answer = Completer<http.Response>();
+      t.h.handlers['PUT /api/live/youtube/next-live'] = (r) => answer.future;
+      await _openDest(tester);
+      expect(tester.widget<Switch>(_youtubeSwitch).onChanged, isNotNull);
+      await tester.tap(_youtubeSwitch);
+      await tester.pump();
+      await tester.pump();
+      expect(tester.widget<Switch>(_youtubeSwitch).onChanged, isNull, reason: 'one write at a time');
+      expect(tester.widget<Switch>(_youtubeSwitch).value, isFalse, reason: 'the tap shows at once');
+      answer.complete(jsonResponse(200, {'nextLiveOn': false}));
+      await settle(tester);
+      expect(tester.widget<Switch>(_youtubeSwitch).onChanged, isNotNull);
+      expect(badge('youtube', 'off'), findsOneWidget, reason: 'the pill behind the sheet follows');
+    });
+
+    testWidgets('[PP-L2] Sambung only where it was: none when signed in, none when unknown with a last channel', (
+      tester,
+    ) async {
+      final t = await _open(tester);
+      await _openDest(tester);
+      expect(find.byKey(const ValueKey('live-dest-connect')), findsNothing);
+      // the open sheet follows the box: signed out, Sambung appears (Siaran Langsung holds live:settings)
+      t.box.set(const LiveBoxStatus());
+      await settle(tester);
+      expect(find.text('YouTube belum disambungkan'), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-dest-connect')), findsOneWidget);
+      t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('live-dest-connect')), findsNothing);
+      expect(find.byKey(const ValueKey('live-dest-skip')), findsOneWidget, reason: 'the unknown note, amber');
+    });
+
+    testWidgets('[PP-L2] each pill speaks its full text and a hint', (tester) async {
+      await _open(tester);
+      final handle = tester.ensureSemantics();
+      expect(
+        tester.getSemantics(chip('youtube')),
+        matchesSemantics(label: channelOn, hint: 'Ketik untuk butiran.', isButton: true, hasTapAction: true),
+      );
+      expect(tester.getSemantics(chip('kiosk')), matchesSemantics(label: 'Skrin surau', hint: 'Ketik untuk butiran.', isButton: true, hasTapAction: true));
+      expect(tester.getSemantics(chip('recording')), matchesSemantics(label: 'Rakaman: Ya', hint: 'Ketik untuk butiran.', isButton: true, hasTapAction: true));
+      handle.dispose();
+    });
+
+    testWidgets('[PP-L2] the open sheet closes itself when the strip goes (another device starts a live)', (
+      tester,
+    ) async {
+      final t = await _open(tester);
+      await _openDest(tester);
+      const other = OtherLive(sessionId: 's9', starter: 'iPad Ustaz Ali', video: 'phone');
+      t.box.set(_signedIn.copyWith(otherLive: other));
+      await settle(tester);
+      expect(_destSheet, findsNothing);
+      expect(find.byKey(const ValueKey('live-destinations')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('[PP-L2] the open sheet closes itself when this phone starts a live', (tester) async {
+      final t = await _open(tester);
+      await _openDest(tester);
+      t.pub.emit(_running());
+      await settle(tester);
+      expect(_destSheet, findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('[PP-L2] leaving the page with the sheet open: the sheet goes, nothing throws', (tester) async {
+      final t = await _open(tester);
+      await _openDest(tester);
+      t.h.router.go('/');
+      await settle(tester);
+      expect(find.byType(LiveScreen), findsNothing);
+      expect(_destSheet, findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('[PP-L2] the YouTube row is one screen-reader node: its text with the switch state', (tester) async {
+      await _open(tester);
+      await _openDest(tester);
+      final handle = tester.ensureSemantics();
+      expect(
+        tester.getSemantics(_youtubeSwitch),
+        matchesSemantics(
+          label: channelOn,
+          hasToggledState: true,
+          isToggled: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          isFocusable: true,
+          hasTapAction: true,
+          hasFocusAction: true,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('[PP-L2] Arabic at 360 px: the strip mirrors and nothing overflows', (tester) async {
+      final t = await _open(tester);
+      await t.h.container.read(appLangProvider.notifier).set(AppLang.ar);
+      tester.view.physicalSize = const Size(360, 780) * goldenPixelRatio;
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      // right to left: the screen pill is on the right
+      expect(tester.getCenter(chip('kiosk')).dx, greaterThan(tester.getCenter(chip('recording')).dx));
+      expect(tester.getRect(chip('kiosk')).top, tester.getRect(chip('recording')).top);
+      await _openDest(tester);
+      expect(find.text('وجهات البث'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('[PP-L2] during a live the header says where it goes', (tester) async {
@@ -1124,7 +1396,7 @@ void main() {
         tester.getBottomLeft(find.byKey(const ValueKey('live-destinations'))).dy,
         lessThanOrEqualTo(tester.getTopLeft(_start).dy),
       );
-      expect(tester.getSize(chip('youtube')).height, greaterThanOrEqualTo(44));
+      expect(tester.getSize(chip('youtube')).height, greaterThanOrEqualTo(48));
     });
 
     testWidgets('[PP-L2] another device live: read only, no chips', (tester) async {
@@ -1136,7 +1408,7 @@ void main() {
 
     testWidgets('[PP-L2] no internet: the YouTube chip stays tappable (the choice is not greyed)', (tester) async {
       await _open(tester, box: _signedIn.copyWith(internet: false));
-      expect(_chipTappable(tester), isTrue);
+      expect(await _chipTappable(tester), isTrue);
     });
 
     testWidgets('[PP-L2] a screen-only live says so', (tester) async {
@@ -1152,22 +1424,20 @@ void main() {
       tester,
     ) async {
       final t = await _open(tester);
-      await tester.tap(chip('youtube'));
-      await settle(tester);
-      expect(chipText(tester, 'youtube').data, 'YouTube: Tidak');
+      await _toggleYoutube(tester);
+      expect(_pillLabel(tester), _offSpoken);
       t.box.set(const LiveBoxStatus());
       await settle(tester);
-      expect(chipText(tester, 'youtube').data, 'YouTube: Tidak');
+      // signed out, the pill also says why (amber "!"): the choice part is unchanged
+      expect(_pillLabel(tester), 'YouTube: Tidak. YouTube belum disambungkan');
       t.box.set(_signedIn);
       await settle(tester);
-      expect(chipText(tester, 'youtube').data, 'YouTube: Tidak');
+      expect(_pillLabel(tester), _offSpoken);
     });
   });
 
   group('[W5] the surau-wide YouTube choice (liveYoutube.nextLiveOn)', () {
-    Finder chip() => find.byKey(const ValueKey('live-dest-youtube'));
-    String chipLabel(WidgetTester tester) =>
-        tester.widget<Text>(find.descendant(of: chip(), matching: find.byType(Text))).data!;
+    String chipLabel(WidgetTester tester) => _pillLabel(tester);
     Object? stored(_Live t) => (t.h.settings['liveYoutube']! as Map)['nextLiveOn'];
 
     // A newer box carries the field in its settings; the harness merges a PUT as the box does.
@@ -1191,15 +1461,14 @@ void main() {
     testWidgets('the chip shows the setting, and a tap writes it to the box', (tester) async {
       final t = await openOn(tester);
       expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}');
-      await tester.tap(chip());
-      await settle(tester);
-      expect(chipLabel(tester), 'YouTube: Tidak');
+      await _toggleYoutube(tester);
+      expect(chipLabel(tester), _offSpoken);
       expect(stored(t), false, reason: 'written to the surau setting, not kept in memory');
     });
 
     testWidgets('a second device sees the same choice (the setting, read fresh)', (tester) async {
       final t = await openOn(tester, on: false);
-      expect(chipLabel(tester), 'YouTube: Tidak');
+      expect(chipLabel(tester), _offSpoken);
       // another admin sets it on; this phone reads the settings again (a change event or a resume)
       await boxSets(tester, t, true);
       expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}');
@@ -1208,8 +1477,7 @@ void main() {
     testWidgets('a refused write puts the chip back and says so', (tester) async {
       final t = await openOn(tester);
       t.h.failPuts = 5;
-      await tester.tap(chip());
-      await settle(tester);
+      await _toggleYoutube(tester);
       expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}');
       expect(find.text('Pilihan YouTube tidak dapat disimpan. Cuba lagi.'), findsOneWidget);
       expect(stored(t), true);
@@ -1222,11 +1490,17 @@ void main() {
         tester,
         box: const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf')),
       );
+      expect(
+        chipLabel(tester),
+        'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}. '
+        'YouTube: tidak dapat disemak sekarang (kali terakhir: ${bidiIsolate('Surau D'Waqaf')})',
+      );
+      await _openDest(tester);
       expect(find.text('YouTube: tidak dapat disemak sekarang (kali terakhir: ${bidiIsolate('Surau D'Waqaf')})'), findsWidgets);
       expect(find.text('Log masuk YouTube dahulu'), findsNothing);
       expect(find.byKey(const ValueKey('live-dest-connect')), findsNothing);
-      expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}');
-      expect(_chipTappable(tester), isTrue);
+      await _closeDest(tester);
+      expect(await _chipTappable(tester), isTrue);
       expect(stored(t), true);
     });
 
@@ -1242,11 +1516,10 @@ void main() {
       t.h.handlers['PUT /api/settings/liveYoutube'] = (r) async => jsonResponse(403, {
         'errors': ['forbidden'],
       });
-      await tester.tap(chip());
-      await settle(tester);
+      await _toggleYoutube(tester);
       expect(puts, ['{"on":false}']);
       expect(find.text('Pilihan YouTube tidak dapat disimpan. Cuba lagi.'), findsNothing);
-      expect(chipLabel(tester), 'YouTube: Tidak');
+      expect(chipLabel(tester), _offSpoken);
     });
 
     testWidgets('an older box (route 404) falls back to the settings field', (tester) async {
@@ -1254,14 +1527,14 @@ void main() {
       t.h.handlers['PUT /api/live/youtube/next-live'] = (r) async => jsonResponse(404, {
         'errors': ['tiada'],
       });
-      await tester.tap(chip());
-      await settle(tester);
+      await _toggleYoutube(tester);
       expect(stored(t), false);
       expect(find.text('Pilihan YouTube tidak dapat disimpan. Cuba lagi.'), findsNothing);
     });
 
     testWidgets('unknown with no last good channel still offers Sambung', (tester) async {
       await _open(tester, roles: const ['admin'], box: const LiveBoxStatus(youtube: YoutubeAccount.unknown()));
+      await _openDest(tester);
       expect(find.byKey(const ValueKey('live-dest-connect')), findsOneWidget);
     });
 

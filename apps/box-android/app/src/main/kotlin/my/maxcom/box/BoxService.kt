@@ -356,7 +356,7 @@ class BoxService : Service() {
 
             val have = store.installed()
             val usable = have != null && store.isComplete(have)
-            if (store.needsUnpack(store.bundled(bundled)) || !usable) {
+            if (store.needsUnpack(store.bundled(bundled), sha) || !usable) {
                 if (have != null && usable) {
                     val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC).format(Instant.now())
                     DbBackup.make(paths.db, File(paths.data, "backups"), have, stamp)

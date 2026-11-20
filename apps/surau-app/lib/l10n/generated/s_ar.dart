@@ -2071,6 +2071,10 @@ class SAr extends S {
   String get previewTlsFailed => 'تعذّر الاتصال الآمن بالمعاينة. أعد المحاولة.';
 
   @override
+  String get previewLoadFailed =>
+      'تعذّر عرض المعاينة. تحقق من اتصال الشبكة ثم أعد المحاولة.';
+
+  @override
   String get previewTlsExpected => 'الشهادة المتوقعة (SHA-256)';
 
   @override
@@ -2610,6 +2614,21 @@ class SAr extends S {
 
   @override
   String get liveDestRecOff => 'التسجيل: لا';
+
+  @override
+  String get liveDestShortKiosk => 'الشاشة';
+
+  @override
+  String get liveDestShortYoutube => 'YouTube';
+
+  @override
+  String get liveDestShortRecording => 'تسجيل';
+
+  @override
+  String get liveDestSheetTitle => 'وجهات البث';
+
+  @override
+  String get liveDestTapHint => 'اضغط للتفاصيل.';
 
   @override
   String get liveSignInOpenGoogle => 'افتح صفحة Google';

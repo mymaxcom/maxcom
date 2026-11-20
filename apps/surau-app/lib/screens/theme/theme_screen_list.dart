@@ -43,7 +43,8 @@ class _Dot extends StatelessWidget {
   );
 }
 
-/// Phone: one wrapped row of chips.
+/// Phone: one row of chips that scrolls sideways, so the screens never take
+/// more than one line of a small display and the controls keep their room.
 class ThemeScreenChips extends StatelessWidget {
   const ThemeScreenChips({super.key, required this.selected, required this.changed, required this.onSelect});
 
@@ -54,19 +55,24 @@ class ThemeScreenChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children: [
-        for (final id in themeEditorScreens)
-          ChoiceChip(
-            key: ValueKey('theme-screen-$id'),
-            selected: selected == id,
-            onSelected: (_) => onSelect(id),
-            avatar: changed.contains(id) ? const _Dot() : null,
-            label: Text(themeScreenName(s, id)),
-          ),
-      ],
+    return SingleChildScrollView(
+      key: const ValueKey('theme-screen-chips'),
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final id in themeEditorScreens)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 8),
+              child: ChoiceChip(
+                key: ValueKey('theme-screen-$id'),
+                selected: selected == id,
+                onSelected: (_) => onSelect(id),
+                avatar: changed.contains(id) ? const _Dot() : null,
+                label: Text(themeScreenName(s, id)),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

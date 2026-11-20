@@ -51,7 +51,8 @@ fun opsKeystoreProperty(name: String): String =
 
 android {
     namespace = "my.maxcom.app"
-    compileSdk = flutter.compileSdkVersion
+    // Pinned, not flutter.compileSdkVersion: Google Play needs API 36 and the toolchain (AGP 9.1.0) tops out there.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -62,7 +63,7 @@ android {
     defaultConfig {
         applicationId = "my.maxcom.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         if (isOpsBuild) {
@@ -124,6 +125,14 @@ tasks.configureEach {
 
 gradle.taskGraph.whenReady {
     val wantsRelease = allTasks.any { it.name.contains("Release") }
+    // Google Play takes the public app only: an Android App Bundle of the ops flavour is refused outright.
+    val wantsBundle = allTasks.any { it.name.startsWith("bundle") }
+    if (wantsBundle && isOpsBuild) {
+        throw GradleException(
+            "MAXCOM Ops tidak boleh dibundel untuk Google Play: aplikasi ops ialah binaan persendirian (APK sahaja). " +
+                "(Ops flavour must never be bundled for Play: build the public app without --dart-define=MAXCOM_OPS=true.)"
+        )
+    }
     if (wantsRelease && isOpsBuild && !opsKeystorePropertiesFile.exists()) {
         throw GradleException(
             "key-ops.properties tiada: ${opsKeystorePropertiesFile.path} tidak dijumpai. " +

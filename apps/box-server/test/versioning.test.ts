@@ -268,7 +268,9 @@ describe('build scripts default -Version from versions.json (static)', () => {
     expect(app).toMatch(/--check --key admin-client-android/);
     expect(app.indexOf('--check --key admin-client-android')).toBeLessThan(app.indexOf('& $flutter build'));
     expect(app).toContain('--dart-define=MAXCOM_VERSION=$appVersion');
-    expect((app.match(/& \$flutter build [^\n]*\$defineVersion/g) ?? []).length).toBe(3);
+    expect((app.match(/& \$flutter build [^\n]*\$defineVersion/g) ?? []).length).toBe(4); // web, apk debug, apk release, opt-in -PlayBundle appbundle
+    expect(app).toContain('& $flutter build appbundle --release "--build-number=$playCode" $defineVersion');
+    expect(app).toContain("$playCode = [int]$pubLine.Matches[0].Groups[1].Value + 9000"); // above every per-ABI APK code
   });
   it('build-app: the public command line is unchanged without -Ops; -Ops is private, scanned and checked (Plan 14 Task 24)', () => {
     // the release build is the same line plus an empty splat unless -Ops

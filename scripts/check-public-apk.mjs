@@ -3,7 +3,8 @@
 //
 //   node scripts/check-public-apk.mjs <apk|zip|file|folder>... [--markers <file>]   public scan
 //   node scripts/check-public-apk.mjs <ops.apk> --expect-ops [--markers <file>]     positive control
-//   node scripts/check-public-apk.mjs --kind <apk>                                  prints ops | public
+//   node scripts/check-public-apk.mjs --kind <apk|aab>                              prints ops | public
+//   An .aab (Play bundle) is scanned like an APK, and additionally must not contain the ops package id or MAXCOM_OPS.
 //
 // Public scan: every file inside the APK (and every plain file or folder given, for
 // build/web/main.dart.js) is searched for each marker in apps/surau-app/ops-markers.txt, as UTF-8
@@ -22,7 +23,12 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_MARKERS = resolve(HERE, '..', 'apps', 'surau-app', 'ops-markers.txt');
 const OPS_ID = 'my.maxcom.app.ops';
 const PUBLIC_ID = 'my.maxcom.app';
+const OPS_FLAG = 'MAXCOM_OPS';
 const MAX_ENTRY = 512 * 1024 * 1024;
+
+// An APK keeps its manifest at the root; an Android App Bundle (.aab, the Play upload) keeps one per module as
+// <module>/manifest/AndroidManifest.xml (protobuf, but the package id is still plain UTF-8).
+export const isManifestEntry = (name) => name === 'AndroidManifest.xml' || name.endsWith('/manifest/AndroidManifest.xml');
 
 export function parseMarkers(text) {
   return [...new Set(text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '' && !l.startsWith('#')))];
@@ -90,7 +96,7 @@ function collect(path, into) {
 
 /** "ops" | "public" | "unknown" from the binary AndroidManifest.xml of an APK. */
 export function apkKind(apkPath) {
-  const entry = readZip(readFileSync(apkPath)).find((e) => e.name === 'AndroidManifest.xml');
+  const entry = readZip(readFileSync(apkPath)).find((e) => isManifestEntry(e.name));
   if (!entry) return 'unknown';
   if (hasText(entry.data, OPS_ID)) return 'ops';
   if (hasText(entry.data, PUBLIC_ID)) return 'public';
@@ -107,7 +113,7 @@ export function scan(paths, markers) {
   const found = new Set();
   const kinds = {};
   for (const f of files) {
-    if (f.inner === 'AndroidManifest.xml') kinds[f.zip] = hasText(f.data, OPS_ID) ? 'ops' : hasText(f.data, PUBLIC_ID) ? 'public' : 'unknown';
+    if (f.inner !== null && isManifestEntry(f.inner)) kinds[f.zip] = hasText(f.data, OPS_ID) ? 'ops' : hasText(f.data, PUBLIC_ID) ? 'public' : 'unknown';
     for (const m of markers) {
       if (hasText(f.data, m)) {
         hits.push({ marker: m, entry: f.name });
@@ -150,6 +156,8 @@ function main(argv) {
     console.error(`GAGAL: ${e.message}`);
     return 2;
   }
+  // A Play bundle (.aab) must also hold neither the private ops package id nor the ops build flag name anywhere.
+  if (!expectOps && paths.some((p) => p.toLowerCase().endsWith('.aab'))) markers = [...new Set([...markers, OPS_ID, OPS_FLAG])];
   let res;
   try { res = scan(paths, markers); } catch (e) {
     console.error(`GAGAL: ${e.message}`);

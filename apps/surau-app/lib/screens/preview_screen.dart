@@ -18,7 +18,9 @@ import '../features/labels.dart' show appLangOfS;
 import '../app/providers.dart';
 import '../app/shell.dart';
 import '../app/theme.dart';
+import '../content/preview_guard.dart';
 import '../content/preview_host.dart';
+import '../content/preview_target.dart';
 import '../content/preview_tls.dart';
 import '../features/common/help_card.dart';
 import '../features/common/time_words.dart';
@@ -337,6 +339,8 @@ class PreviewRequest {
     this.pinnedLeaf,
   });
 
+  /// The origin to load: the address the app has proven for the box now
+  /// (see content/preview_target.dart), else the enrolled one.
   final Uri box;
   final String token;
   final DateTime? now;
@@ -361,16 +365,22 @@ class PreviewRequest {
 typedef PreviewBuilder = Widget Function(BuildContext context, PreviewRequest request);
 
 /// The real host: a WebView on Android, an iframe on the web.
-Widget defaultPreviewBuilder(BuildContext context, PreviewRequest r) => PreviewHost(
-  r.box,
-  r.token,
-  key: ValueKey('preview-${r.generation}-${r.now?.millisecondsSinceEpoch}-${r.poster?.assetId ?? ''}'),
-  now: r.now,
-  utcOffsetMinutes: r.utcOffsetMinutes,
-  poster: r.poster,
-  theme: r.theme,
-  onSslError: r.onSslError,
-  pinnedLeaf: r.pinnedLeaf,
+/// A page that cannot be loaded ends in the app's own notice with a retry,
+/// not the browser's error page.
+Widget defaultPreviewBuilder(BuildContext context, PreviewRequest r) => PreviewGuard(
+  resetKey: Object.hash(r.box, r.generation),
+  builder: (context, onLoadError, attempt) => PreviewHost(
+    r.box,
+    r.token,
+    key: ValueKey('preview-${r.generation}-$attempt-${r.now?.millisecondsSinceEpoch}-${r.poster?.assetId ?? ''}'),
+    now: r.now,
+    utcOffsetMinutes: r.utcOffsetMinutes,
+    poster: r.poster,
+    theme: r.theme,
+    onSslError: r.onSslError,
+    pinnedLeaf: r.pinnedLeaf,
+    onLoadError: onLoadError,
+  ),
 );
 
 class PreviewScreen extends ConsumerStatefulWidget {
@@ -402,6 +412,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
     final text = Theme.of(context).textTheme;
     final deps = ref.watch(appDepsProvider);
     final box = ref.watch(enrolledBoxProvider);
+    final target = ref.watch(previewTargetProvider);
     final session = ref.watch(sessionProvider);
     final bundleRead = ref.watch(boxJsonProvider(bundlePath));
     final bundle = bundleRead.value?.value;
@@ -461,19 +472,19 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
           ],
           const SizedBox(height: 16),
           _TvFrame(
-            child: box == null || session == null
+            child: box == null || target == null || session == null
                 ? _Notice(t.previewNoSession)
                 : _sslError
                 ? _TlsFailed(onRetry: _reload)
                 : widget.previewBuilder(
                     context,
                     PreviewRequest(
-                      box: box.box,
+                      box: target.origin,
                       token: session.token,
                       now: now,
                       utcOffsetMinutes: offset,
                       generation: _generation,
-                      pinnedLeaf: deps.boxLeaf == null ? null : () => deps.boxLeaf!(box),
+                      pinnedLeaf: deps.boxLeaf == null ? null : () => deps.boxLeaf!(target.leafBox),
                       onSslError: (expected, presented) {
                         if (mounted && !_sslError) {
                           setState(() {

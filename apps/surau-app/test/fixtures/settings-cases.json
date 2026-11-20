@@ -1,5 +1,5 @@
 {
- "coreSourceHash": "2799021570641f4607226875da67ec7042e16f2f22b553b2a8781ddd070c023b",
+ "coreSourceHash": "6d096dced588ee01a777cb720af4fb3e939c2ec0e3a3c31abb1b33cb61395b64",
  "cases": [
   {
    "key": "prayerBar",
@@ -12930,7 +12930,8 @@
    "key": "videos",
    "note": "defaults",
    "patch": {
-    "order": 11
+    "order": 11,
+    "volume": 40
    },
    "ok": true
   },
@@ -12939,7 +12940,8 @@
    "note": "reset",
    "patch": {
     "enabled": true,
-    "order": 11
+    "order": 11,
+    "volume": 40
    },
    "ok": true
   },
@@ -13028,6 +13030,62 @@
    "note": "order null",
    "patch": {
     "order": null
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "volume min",
+   "patch": {
+    "volume": 0
+   },
+   "ok": true
+  },
+  {
+   "key": "videos",
+   "note": "volume max",
+   "patch": {
+    "volume": 100
+   },
+   "ok": true
+  },
+  {
+   "key": "videos",
+   "note": "volume min-1",
+   "patch": {
+    "volume": -1
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "volume max+1",
+   "patch": {
+    "volume": 101
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "volume fraction",
+   "patch": {
+    "volume": 0.5
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "volume as text",
+   "patch": {
+    "volume": "40"
+   },
+   "ok": false
+  },
+  {
+   "key": "videos",
+   "note": "volume null",
+   "patch": {
+    "volume": null
    },
    "ok": false
   },
@@ -15187,7 +15245,7 @@
    "note": "defaults",
    "patch": {
     "reciter": "Husary_64kbps",
-    "volume": 60,
+    "volume": 40,
     "cacheMaxMb": 300
    },
    "ok": true
@@ -15198,7 +15256,7 @@
    "patch": {
     "enabled": false,
     "reciter": "Husary_64kbps",
-    "volume": 60,
+    "volume": 40,
     "cacheMaxMb": 300
    },
    "ok": true
@@ -15327,7 +15385,7 @@
    "key": "tilawah",
    "note": "volume as text",
    "patch": {
-    "volume": "60"
+    "volume": "40"
    },
    "ok": false
   },

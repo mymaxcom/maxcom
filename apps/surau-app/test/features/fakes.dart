@@ -251,6 +251,7 @@ Future<http.Response> happyBox(http.Request r) async {
 EnrolledBox fixtureBox({
   List<String> roles = const ['admin'],
   bool appLock = true,
+  String? name,
 }) => EnrolledBox(
   box: Uri.parse('https://127.0.0.1:8443'),
   boxId: '0123456789abcdef',
@@ -260,6 +261,7 @@ EnrolledBox fixtureBox({
   roles: roles,
   caSha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
   appLock: appLock,
+  name: name,
 );
 
 /// Captures the URIs a help card tried to open.

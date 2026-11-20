@@ -234,12 +234,166 @@ class ReleaseStoreTest {
     @Test
     fun needsUnpackNewerOnDiskWins() {
         val s = store()
-        assertTrue(s.needsUnpack("2026.11.2"))
-        unpack(s, releaseArchive("2026.11.10").gz(), "2026.11.10")
+        val any = "0".repeat(64)
+        assertTrue(s.needsUnpack("2026.11.2", any))
+        val gz = releaseArchive("2026.11.10").gz()
+        unpack(s, gz, "2026.11.10")
         s.switchTo("2026.11.10")
-        assertFalse(s.needsUnpack("2026.11.2"))
-        assertFalse(s.needsUnpack("2026.11.10"))
-        assertTrue(s.needsUnpack("2026.12.1"))
+        assertFalse(s.needsUnpack("2026.11.2", any))
+        assertFalse(s.needsUnpack("2026.11.10", sha256Hex(gz)))
+        assertTrue(s.needsUnpack("2026.12.1", any))
+    }
+
+    // --- same version name, different build of the archive ---
+
+    private fun buildB(version: String, marker: String) = releaseArchive(version).file("./marker.txt", marker).gz()
+
+    private fun marker(version: String) = File(File(releases(), version), "marker.txt")
+
+    private fun okLines(version: String) = File(File(releases(), version), ".ok").readText().lines().filter { it.isNotEmpty() }
+
+    @Test
+    fun okRecordsTheVersionAndTheArchiveHash() {
+        val gz = buildB("2026.11.13", "a")
+        unpack(store(), gz, "2026.11.13")
+        assertEquals(listOf("2026.11.13", sha256Hex(gz)), okLines("2026.11.13"))
+    }
+
+    @Test
+    fun sameVersionOldOneLineOkIsRedoneOnce() {
+        val s = store()
+        val oldBuild = buildB("2026.11.13", "test build")
+        unpack(s, oldBuild, "2026.11.13")
+        s.switchTo("2026.11.13")
+        File(File(releases(), "2026.11.13"), ".ok").writeText("2026.11.13\n") // what an older app wrote
+        val release = buildB("2026.11.13", "release build")
+        assertTrue(s.needsUnpack("2026.11.13", sha256Hex(release)))
+        unpack(s, release, "2026.11.13")
+        assertEquals("release build", marker("2026.11.13").readText())
+        assertEquals(listOf("2026.11.13", sha256Hex(release)), okLines("2026.11.13"))
+        assertFalse(s.needsUnpack("2026.11.13", sha256Hex(release)))
+        assertEquals(listOf("2026.11.13"), children())
+        assertEquals("2026.11.13", s.installed())
+    }
+
+    @Test
+    fun sameVersionAndSameHashIsNotUnpackedAgain() {
+        val s = store()
+        val gz = buildB("2026.11.13", "x")
+        unpack(s, gz, "2026.11.13")
+        s.switchTo("2026.11.13")
+        assertFalse(s.needsUnpack("2026.11.13", sha256Hex(gz)))
+        assertFalse(s.needsUnpack("2026.11.13", sha256Hex(gz).uppercase()))
+        val boom = object : InputStream() {
+            override fun read(): Int = throw AssertionError("same archive must not be read again")
+        }
+        s.unpack(boom, sha256Hex(gz), "2026.11.13") { }
+        assertEquals("x", marker("2026.11.13").readText())
+    }
+
+    @Test
+    fun sameVersionOtherHashNeedsUnpackAndReplaces() {
+        val s = store()
+        unpack(s, buildB("2026.11.13", "one"), "2026.11.13")
+        s.switchTo("2026.11.13")
+        val two = buildB("2026.11.13", "two")
+        assertTrue(s.needsUnpack("2026.11.13", sha256Hex(two)))
+        unpack(s, two, "2026.11.13")
+        assertEquals("two", marker("2026.11.13").readText())
+        assertEquals("2026.11.13", s.installed())
+        assertTrue(s.isComplete("2026.11.13"))
+        assertEquals(listOf("2026.11.13"), children()) // no .old, no .part left
+        s.switchTo("2026.11.13") // same version again: previous.txt stays untouched
+        assertFalse(File(root, "previous.txt").exists())
+    }
+
+    @Test
+    fun installedNewerOrOlderOrAbsentStillDecidesByVersion() {
+        val s = store()
+        val any = "f".repeat(64)
+        assertTrue(s.needsUnpack("2026.11.13", any)) // nothing installed
+        unpack(s, buildB("2026.11.13", "x"), "2026.11.13")
+        s.switchTo("2026.11.13")
+        assertFalse(s.needsUnpack("2026.11.12", any)) // on disk is newer: no unpack even with a different hash
+        assertTrue(s.needsUnpack("2026.11.14", any)) // on disk is older
+    }
+
+    @Test
+    fun hashMismatchDuringAReplaceLeavesTheOldTreeInUse() {
+        val s = store()
+        unpack(s, buildB("2026.11.13", "old"), "2026.11.13")
+        s.switchTo("2026.11.13")
+        val before = okLines("2026.11.13")
+        val two = buildB("2026.11.13", "two")
+        assertThrows(IOException::class.java) { unpack(s, two, "2026.11.13", "0".repeat(64)) }
+        assertEquals("old", marker("2026.11.13").readText())
+        assertEquals(before, okLines("2026.11.13"))
+        assertEquals("2026.11.13", s.installed())
+        assertTrue(s.isComplete("2026.11.13"))
+        assertEquals(listOf("2026.11.13"), children())
+        // a hostile archive of the same version does not disturb it either
+        assertThrows(BadEntry::class.java) { unpack(s, TarBuilder().file("../x", "1").gz(), "2026.11.13") }
+        assertEquals("old", marker("2026.11.13").readText())
+    }
+
+    @Test
+    fun crashAfterMovingTheOldFolderAwayIsRedoneOnNextStart() {
+        val s = store()
+        unpack(s, buildB("2026.11.13", "old"), "2026.11.13")
+        s.switchTo("2026.11.13")
+        // The power went between "old -> .old" and "part -> final": no final folder, `current` dangles.
+        assertTrue(File(releases(), "2026.11.13").renameTo(File(releases(), "2026.11.13.old")))
+        val next = store() // a fresh start
+        next.cleanParts()
+        assertEquals(emptyList<String>(), children())
+        assertEquals("2026.11.13", next.installed())
+        assertFalse(next.isComplete("2026.11.13"))
+        val two = buildB("2026.11.13", "two")
+        assertTrue(next.needsUnpack("2026.11.13", sha256Hex(two)))
+        unpack(next, two, "2026.11.13")
+        next.switchTo("2026.11.13")
+        assertEquals("two", marker("2026.11.13").readText())
+        assertTrue(next.isComplete("2026.11.13"))
+    }
+
+    @Test
+    fun crashAfterTheSwapBeforeOkIsRedoneToo() {
+        val s = store()
+        unpack(s, buildB("2026.11.13", "old"), "2026.11.13")
+        s.switchTo("2026.11.13")
+        // New tree in place, `.ok` not yet written, `.old` not yet deleted.
+        File(File(releases(), "2026.11.13"), ".ok").delete()
+        File(releases(), "2026.11.13.old/inner").mkdirs()
+        val next = store()
+        next.cleanParts()
+        assertEquals(listOf("2026.11.13"), children())
+        assertFalse(next.isComplete("2026.11.13"))
+        val two = buildB("2026.11.13", "two")
+        assertTrue(next.needsUnpack("2026.11.13", sha256Hex(two)))
+        unpack(next, two, "2026.11.13")
+        assertEquals("two", marker("2026.11.13").readText())
+        assertTrue(next.isComplete("2026.11.13"))
+    }
+
+    @Test
+    fun cleanPartsAlsoRemovesLeftoverOldFolders() {
+        File(releases(), "2026.11.3.old/x").mkdirs()
+        File(releases(), "2026.11.3.part/x").mkdirs()
+        File(releases(), "2026.11.2").mkdirs()
+        store().cleanParts()
+        assertEquals(listOf("2026.11.2"), children())
+    }
+
+    @Test
+    fun pruneKeepsTheLiveFolderOfASameVersionReplace() {
+        val s = store()
+        unpack(s, buildB("2026.11.13", "one"), "2026.11.13")
+        s.switchTo("2026.11.13")
+        unpack(s, buildB("2026.11.13", "two"), "2026.11.13")
+        s.switchTo("2026.11.13")
+        s.prune(setOf("2026.11.13"))
+        assertEquals(listOf("2026.11.13"), children())
+        assertEquals("two", marker("2026.11.13").readText())
     }
 
     @Test

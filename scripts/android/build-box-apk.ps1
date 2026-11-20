@@ -29,6 +29,9 @@
 .PARAMETER SkipAppBuild Passed to build-release.ps1 (the kiosk dist must already exist).
 .PARAMETER FfmpegDir    A folder holding jniLibs\<abi>\libffmpeg.so and runtime-manifest.json for each ABI
                         (<FfmpegDir>\<abi>\...); used instead of building ffmpeg.
+.PARAMETER PlayBundle   Opt-in, release only: after the APKs, also gradlew :app:bundleRelease; the Android App Bundle is checked
+                        (scripts\check-public-apk.mjs: no my.maxcom.app.ops, no MAXCOM_OPS) and copied to
+                        <OutDir>\MAX-Kiosk-Server-<version>[-b<N>]-play.aab with a .sha256. Without it nothing changes.
 .PARAMETER LoadFunctionsOnly  Test hook: define the functions and return.
 #>
 param(
@@ -41,6 +44,7 @@ param(
   [int[]]$DevPorts = @(5173, 8787),
   [switch]$SkipAppBuild,
   [string]$FfmpegDir = '',
+  [switch]$PlayBundle,
   [switch]$LoadFunctionsOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -161,6 +165,7 @@ if ($LoadFunctionsOnly) { return }
 # ---------------------------------------------------------------------------------------------
 # Checks before anything is touched
 # ---------------------------------------------------------------------------------------------
+if ($PlayBundle -and $Debug) { Fail '-PlayBundle tidak boleh bersama -Debug.' }
 if ($Version -ne '' -and $Version -notmatch '^20[0-9]{2}\.(0[1-9]|1[0-2])\.[1-9][0-9]?$') { Fail "-Version mesti berbentuk YYYY.MM.N dengan N antara 1 dan 99, diberi: $Version" }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\')
@@ -193,6 +198,7 @@ if ($DryRun) {
   Write-Host 'DRYRUN 5 semak setiap APK: sha256 setiap lib/<abi>/*.so melawan runtime-manifest.json, tiada ABI kedua, arkib melawan release.sha256, apksigner verify'
   Write-Host "DRYRUN   $(if ($Debug) { 'binaan nyahpepijat: tiada pin penandatangan' } else { 'sijil penandatangan melawan signingCertSha256 dalam android-pins.json' })"
   Write-Host "DRYRUN 6 tulis <apk>.sha256 dalam $OutDir dan cetak versi, saiz, sha256"
+  if ($PlayBundle) { Write-Host "DRYRUN 7 -PlayBundle: gradlew.bat :app:bundleRelease -PboxVersion=$Version, semak bundle dengan check-public-apk.mjs (tiada my.maxcom.app.ops atau MAXCOM_OPS), salin ke $OutDir\MAX-Kiosk-Server-$Version$buildTag-play.aab dan tulis .sha256" }
   Write-Host 'DRYRUN tiada apa yang ditulis atau dibina.'
   exit 0
 }
@@ -342,3 +348,34 @@ foreach ($a in $abis) {
 if ($allErrs.Count -gt 0) { Fail "semakan APK gagal ($($allErrs.Count) masalah); tiada APK diterbitkan untuk ABI yang gagal." }
 Write-Host '6/6 siap'
 foreach ($r in $results) { Write-Host "APK $Version $($r.Path) saiz $($r.Size) sha256 $($r.Sha)" }
+
+# Opt-in: the Android App Bundle for Play, from the same inputs, checked before it is copied.
+if ($PlayBundle) {
+  Write-Host "7/7 bundle Play: gradlew :app:bundleRelease"
+  $bundleDir = Join-Path $project 'app\build\outputs\bundle\release'
+  if (Test-Path -LiteralPath $bundleDir) { Get-ChildItem -LiteralPath $bundleDir -Filter '*.aab' -File | Remove-Item -Force }
+  Push-Location $project
+  try {
+    & (Join-Path $project 'gradlew.bat') ':app:bundleRelease' "-PboxVersion=$Version" "-PboxBuild=$boxBuild" '--console=plain'
+    if ($LASTEXITCODE -ne 0) { Fail 'gradlew :app:bundleRelease gagal.' }
+  } finally { Pop-Location }
+  $aabs = @(Get-ChildItem -LiteralPath $bundleDir -Filter '*.aab' -File -ErrorAction SilentlyContinue)
+  if ($aabs.Count -ne 1) { Fail "tepat satu bundle .aab dijangka dalam $bundleDir, dijumpai $($aabs.Count)" }
+  $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+  if (-not $nodeCmd) { Fail 'node tiada pada PATH (perlu untuk semakan bundle).' }
+  # This product has no ops build: the marker list holds only the two ops strings the bundle must never carry.
+  $opsOnly = Join-Path ([System.IO.Path]::GetTempPath()) ('maxcom-aab-markers-' + [guid]::NewGuid().ToString('N') + '.txt')
+  [System.IO.File]::WriteAllText($opsOnly, "my.maxcom.app.ops`nMAXCOM_OPS`n", (New-Object System.Text.UTF8Encoding($false)))
+  try {
+    $co = @(& $nodeCmd.Source (Join-Path $repo 'scripts\check-public-apk.mjs') $aabs[0].FullName --markers $opsOnly)
+    $coCode = $LASTEXITCODE
+  } finally { Remove-Item -LiteralPath $opsOnly -Force -ErrorAction SilentlyContinue }
+  foreach ($l in $co) { Write-Host $l }
+  if ($coCode -ne 0) { Fail 'bundle Play mengandungi bahan ops. Tidak disalin.' }
+  $aabName = "MAX-Kiosk-Server-$Version$buildTag-play.aab"
+  $aabDst = Join-Path $OutDir $aabName
+  Copy-Item -LiteralPath $aabs[0].FullName -Destination $aabDst -Force
+  $aabSha = Get-FileSha256 $aabDst
+  [System.IO.File]::WriteAllText("$aabDst.sha256", "$aabSha  $aabName`n", (New-Object System.Text.UTF8Encoding($false)))
+  Write-Host "AAB $Version $aabDst saiz $((Get-Item -LiteralPath $aabDst).Length) sha256 $aabSha"
+}

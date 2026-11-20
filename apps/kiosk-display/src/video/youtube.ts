@@ -5,7 +5,8 @@ const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 
 /**
  * The embed address of a video: autoplay, no controls, no related videos at the end, inline; `mute` follows the
- * item's sound switch (and is forced on by the caller where sound is not allowed). `enablejsapi` lets the page hear the
+ * caller's choice: the kiosk always asks for `muted` and switches the sound on by player commands once the player has
+ * answered (level first, then unMute), so the address does not change with the item's sound switch. `enablejsapi` lets the page hear the
  * player end or fail (postMessage). A clip (`start`, `end` in seconds) only for a recording. Null for a bad id.
  */
 export function youtubeEmbedUrl(id: string, opts: { muted: boolean; start?: number; end?: number; origin?: string }): string | null {

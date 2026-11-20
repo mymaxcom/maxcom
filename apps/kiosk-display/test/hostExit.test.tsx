@@ -67,8 +67,10 @@ describe('exitToHost', () => {
   it('prefers the Android bridge', async () => {
     const exit = vi.fn();
     const f = vi.fn();
-    expect(await exitToHost({ MaxcomHost: { exit } }, f as unknown as typeof fetch)).toBe('android');
+    expect(await exitToHost({ MaxcomHost: { exit }, __mxHostKey: 'k'.repeat(64) }, f as unknown as typeof fetch)).toBe('android');
     expect(exit).toHaveBeenCalledOnce();
+    // the key the app gave this page's main frame goes with the call (the bridge refuses a call without it)
+    expect(exit).toHaveBeenCalledWith('k'.repeat(64));
     expect(f).not.toHaveBeenCalled();
   });
   it('posts the token to the loopback listener', async () => {

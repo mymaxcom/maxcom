@@ -10,7 +10,7 @@ import 'preview_message.dart';
 import 'preview_tls.dart';
 
 class PlatformPreview extends StatefulWidget {
-  const PlatformPreview({super.key, required this.url, required this.token, this.poster, this.theme, this.onSslError, this.pinnedLeaf});
+  const PlatformPreview({super.key, required this.url, required this.token, this.poster, this.theme, this.onSslError, this.pinnedLeaf, this.onLoadError});
 
   final Uri url;
   final String token;
@@ -22,6 +22,9 @@ class PlatformPreview extends StatefulWidget {
 
   /// Not used on the web.
   final LeafFetcher? pinnedLeaf;
+
+  /// Not used on the web.
+  final VoidCallback? onLoadError;
 
   @override
   State<PlatformPreview> createState() => _PlatformPreviewState();

@@ -249,4 +249,171 @@ describe('useContent skip: the slot after a skipped one gets a fixed start', () 
       localStorage.removeItem('surau.content');
     }
   });
+
+  it('gives the slot after an early skip only its own time, then the one after it, not the rest of the video slot', async () => {
+    const { renderHook, waitFor, act } = await import('@testing-library/preact');
+    const { useContent } = await import('../src/data/content.ts');
+    const { makeView } = await import('./helpers.tsx');
+    // one long video among two cards: a failed video must not leave the next card up for the video's whole slot
+    const long = { ...seeded, posters: [...seeded.posters, { ...seeded.posters[0]!, id: 'p2', order: 2 }], videos: [{ ...vid('va', 1), durationSec: 600 }] };
+    localStorage.setItem('surau.content', JSON.stringify({ content: long, fetchedAt: Date.now() }));
+    try {
+      const base = makeView('2026-11-03', '12:00').now.getTime();
+      const view = (sec: number) => ({ ...makeView('2026-11-03', '12:00'), now: new Date(base + sec * 1000) });
+      const hook = renderHook((v) => useContent(v), { initialProps: view(0) });
+      await waitFor(() => expect(hook.result.current.content).not.toBeNull());
+      let t = 0;
+      for (; t < 5000; t++) {
+        hook.rerender(view(t));
+        if (hook.result.current.current?.slot.feature === 'videos') break;
+      }
+      const video = hook.result.current.current!;
+      expect(video.slot.durationSeconds).toBe(600);
+      const t0 = t;
+      hook.rerender(view(t0 + 2));
+      act(() => hook.result.current.skip!(hook.result.current.current!.startedAt));
+      const next = hook.result.current.current!;
+      expect(next.slot.feature).not.toBe('videos');
+      expect(next.startedAt.getTime()).toBe(base + (t0 + 2) * 1000);
+      // within its own time it stays; one second past it the rotation has moved on, long before the video slot ends
+      hook.rerender(view(t0 + 2 + next.slot.durationSeconds - 1));
+      expect(hook.result.current.current!.startedAt.getTime()).toBe(next.startedAt.getTime());
+      hook.rerender(view(t0 + 2 + next.slot.durationSeconds + 1));
+      const later = hook.result.current.current!;
+      expect(later.startedAt.getTime()).toBe(base + (t0 + 2 + next.slot.durationSeconds) * 1000);
+      expect(later.slot.feature === next.slot.feature && later.slot.itemId === next.slot.itemId && later.slot.page === next.slot.page).toBe(false);
+      // the video that was given up is not the one that comes back
+      expect(later.slot.feature).not.toBe('videos');
+      expect(later.startedAt.getTime()).toBeLessThan(base + (t0 + 600) * 1000);
+      hook.unmount();
+    } finally {
+      localStorage.removeItem('surau.content');
+    }
+  });
+});
+
+describe('useContent skip: a video given up does not come back inside its own slot', () => {
+  const asset = (c: string) => c.repeat(64);
+  const vid = (id: string, order: number) => ({
+    id, updatedAt: '2026-11-01T00:00:00Z', updatedBy: 't', title: id, source: 'upload', assetId: asset(id === 'va' ? 'a' : 'b'), days: ['umum'], order, durationSec: 600,
+  });
+  const poster = (id: string, order: number) => ({ id, updatedAt: 'x', updatedBy: 't', title: id, assetId: asset('c'), days: ['umum'], order });
+  const world = (videos: unknown[], posters: unknown[]) => ({ ...content, posters, videos });
+
+  async function setup(c: unknown) {
+    const { renderHook, waitFor, act } = await import('@testing-library/preact');
+    const { useContent } = await import('../src/data/content.ts');
+    const { makeView } = await import('./helpers.tsx');
+    localStorage.setItem('surau.content', JSON.stringify({ content: c, fetchedAt: Date.now() }));
+    const base = makeView('2026-11-03', '12:00').now.getTime();
+    const view = (sec: number) => ({ ...makeView('2026-11-03', '12:00'), now: new Date(base + sec * 1000) });
+    const hook = renderHook((v) => useContent(v), { initialProps: view(0) });
+    await waitFor(() => expect(hook.result.current.content).not.toBeNull());
+    // the first instant at which a video is showing
+    let t = 0;
+    for (; t < 5000; t++) {
+      hook.rerender(view(t));
+      if (hook.result.current.current?.slot.feature === 'videos') break;
+    }
+    return { hook, view, base, act, t0: t };
+  }
+
+  it('[video + one card]: the skipped video stays away until the natural boundary and the card is held, not spun', async () => {
+    const { hook, view, base, act, t0 } = await setup(world([vid('va', 1)], [poster('p1', 1)]));
+    try {
+      const video = hook.result.current.current!;
+      expect(video.slot.durationSeconds).toBe(600);
+      const boundary = video.startedAt.getTime() + 600_000;
+      hook.rerender(view(t0 + 2));
+      act(() => hook.result.current.skip!(hook.result.current.current!.startedAt));
+      const held = hook.result.current.current!;
+      expect(held.slot.itemId).toBe('p1');
+      let startedAts = new Set<number>();
+      for (let dt = 2; base + (t0 + dt) * 1000 < boundary; dt += 7) {
+        hook.rerender(view(t0 + dt));
+        const cur = hook.result.current.current!;
+        expect(cur.slot.itemId).not.toBe('va');
+        expect(cur.startedAt.getTime()).toBeLessThanOrEqual(base + (t0 + dt) * 1000);
+        expect(cur.index).toBe(held.index);
+        startedAts.add(cur.startedAt.getTime());
+      }
+      expect([...startedAts]).toEqual([held.startedAt.getTime()]);
+      startedAts = new Set();
+      // at the boundary the clock's own slot takes over again
+      hook.rerender(view(t0 + 601));
+      expect(hook.result.current.current!.startedAt.getTime()).toBeGreaterThanOrEqual(boundary);
+      hook.unmount();
+    } finally {
+      localStorage.removeItem('surau.content');
+    }
+  });
+
+  it('[video + two cards]: the cards take turns from the skip, the video does not return before its boundary', async () => {
+    const { hook, view, base, act, t0 } = await setup(world([vid('va', 1)], [poster('p1', 1), poster('p2', 2)]));
+    try {
+      const video = hook.result.current.current!;
+      const boundary = video.startedAt.getTime() + 600_000;
+      hook.rerender(view(t0 + 2));
+      act(() => hook.result.current.skip!(hook.result.current.current!.startedAt));
+      const seen = new Set<string>();
+      for (let dt = 2; base + (t0 + dt) * 1000 < boundary; dt += 3) {
+        hook.rerender(view(t0 + dt));
+        const cur = hook.result.current.current!;
+        expect(cur.slot.itemId).not.toBe('va');
+        expect(cur.startedAt.getTime()).toBeLessThanOrEqual(base + (t0 + dt) * 1000);
+        seen.add(String(cur.slot.itemId));
+      }
+      expect([...seen].sort()).toEqual(['p1', 'p2']);
+      hook.unmount();
+    } finally {
+      localStorage.removeItem('surau.content');
+    }
+  });
+
+  it('[video only]: nothing else to show after a skip, so nothing is shown (no spin, no return) until the boundary', async () => {
+    const { hook, view, base, act, t0 } = await setup(world([vid('va', 1)], []));
+    try {
+      const video = hook.result.current.current!;
+      const boundary = video.startedAt.getTime() + 600_000;
+      hook.rerender(view(t0 + 2));
+      act(() => hook.result.current.skip!(hook.result.current.current!.startedAt));
+      for (let dt = 2; base + (t0 + dt) * 1000 < boundary; dt += 29) {
+        hook.rerender(view(t0 + dt));
+        expect(hook.result.current.current).toBeNull();
+      }
+      hook.unmount();
+    } finally {
+      localStorage.removeItem('surau.content');
+    }
+  });
+
+  it('chained skips of two videos end on the card, never on a video that gave itself up', async () => {
+    const { hook, view, base, act, t0 } = await setup(world([vid('va', 1), vid('vb', 2)], [poster('p1', 1)]));
+    try {
+      const first = hook.result.current.current!;
+      const boundary = first.startedAt.getTime() + 600_000;
+      const gone = new Set<string>([String(first.slot.itemId)]);
+      hook.rerender(view(t0 + 2));
+      act(() => hook.result.current.skip!(hook.result.current.current!.startedAt));
+      // the one that follows may be the other video: it gives itself up too
+      let cur = hook.result.current.current!;
+      if (cur.slot.feature === 'videos') {
+        expect(gone.has(String(cur.slot.itemId))).toBe(false);
+        gone.add(String(cur.slot.itemId));
+        hook.rerender(view(t0 + 4));
+        act(() => hook.result.current.skip!(hook.result.current.current!.startedAt));
+        cur = hook.result.current.current!;
+      }
+      expect(cur.slot.feature).toBe('posters');
+      for (let dt = 5; base + (t0 + dt) * 1000 < boundary; dt += 11) {
+        hook.rerender(view(t0 + dt));
+        const now = hook.result.current.current!;
+        expect(gone.has(String(now.slot.itemId))).toBe(false);
+        expect(now.startedAt.getTime()).toBeLessThanOrEqual(base + (t0 + dt) * 1000);
+      }
+      hook.unmount();
+    } finally {
+      localStorage.removeItem('surau.content');
+    }
+  });
 });

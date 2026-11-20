@@ -15,6 +15,7 @@ import '../../l10n/generated/s.dart';
 import '../../screens/preview_screen.dart';
 import '../image_ref.dart' show ImageRef;
 import '../kinds.dart';
+import '../preview_target.dart';
 import '../preview_message.dart';
 import 'content_form.dart';
 
@@ -118,7 +119,8 @@ class PosterPreviewDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
-    final box = ref.watch(enrolledBoxProvider);
+    final target = ref.watch(previewTargetProvider);
+    final deps = ref.watch(appDepsProvider);
     final session = ref.watch(sessionProvider);
     final builder = ref.watch(previewBuilderProvider);
     final width = MediaQuery.sizeOf(context).width;
@@ -170,7 +172,7 @@ class PosterPreviewDialog extends ConsumerWidget {
                 clipBehavior: Clip.antiAlias,
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: box == null || session == null
+                  child: target == null || session == null
                       ? Center(
                           child: Padding(
                             padding: const EdgeInsets.all(24),
@@ -184,11 +186,12 @@ class PosterPreviewDialog extends ConsumerWidget {
                       : builder(
                           context,
                           PreviewRequest(
-                            box: box.box,
+                            box: target.origin,
                             token: session.token,
                             now: null,
                             generation: 0,
                             poster: poster,
+                            pinnedLeaf: deps.boxLeaf == null ? null : () => deps.boxLeaf!(target.leafBox),
                             onSslError: (_, _) {},
                           ),
                         ),

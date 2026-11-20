@@ -6,14 +6,19 @@
         Refuses to run while a dev server listens on :5173 or :8787 (a build would corrupt it).
   -Apk  flutter build apk --release --split-per-abi. Needs apps/surau-app/android/key.properties
         (see key.properties.example); never signs with the debug key. Prints path, size, sha256.
-        Copies the arm64-v8a APK to dist/android/MAX-Admin-Client-<version>-arm64-v8a.apk with a .sha256 beside it.
+        Copies the arm64-v8a APK to dist/android/MAX-Admin-Client-<version>[-b<N>]-arm64-v8a.apk with a .sha256 beside it
+        (-b<N> only when builds.json at the repo root gives admin-client-android a number above 0, e.g. 2026.11.13-b1).
   -Debug  with -Apk: flutter build apk --debug --target-platform android-arm64 (no key.properties);
-        copies app-debug.apk to MAX-Admin-Client-<version>-arm64-v8a-debug.apk the same way.
+        copies app-debug.apk to MAX-Admin-Client-<version>[-b<N>]-arm64-v8a-debug.apk the same way.
   -Ops  with -Apk: the private MAXCOM Ops build (Plan 14 section 3.4): --dart-define=MAXCOM_OPS=true, package my.maxcom.app.ops,
         signed ONLY with android\key-ops.properties (never key.properties). The APK is MOVED to
         ~\maxcom-work\secret\ops-builds\<version>\MAXCOM-Ops-<version>-arm64-v8a.apk (+ .sha256) and build\app\outputs is deleted,
         so no ops file stays where the public step reads. Refuses -Web, -Debug, and an output folder inside the repo, under dist\, on a
         Drive path, or outside ~\maxcom-work\secret (-OpsOutDir may pick another folder under it). Nothing is published.
+  -PlayBundle  with -Apk (public only: not with -Ops or -Debug): ALSO runs flutter build appbundle --release with the same
+        dart-defines, checks the bundle with check-public-apk.mjs (markers, package id, my.maxcom.app.ops, MAXCOM_OPS) and
+        copies it to dist/android/MAX-Admin-Client-<version>[-b<N>]-play.aab with a .sha256. Without the switch the commands are
+        exactly the ones of a normal -Apk build.
   Public -Apk: the APK and its package id are checked by scripts\check-public-apk.mjs BEFORE the copy to dist\android; a marker hit
         or a .ops package id stops the build. -Web scans build\web the same way before it is copied.
   Version: versions.json key admin-client-android (bump with node scripts\set-version.mjs admin-client-android <YYYY.MM.N>).
@@ -25,6 +30,7 @@ param(
   [switch]$Apk,
   [switch]$Debug,
   [switch]$Ops,
+  [switch]$PlayBundle,
   [string]$OpsOutDir = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -35,6 +41,9 @@ if ($Ops -and $Web) { Fail '-Ops tidak boleh bersama -Web: binaan web sentiasa a
 if ($Ops -and -not $Apk) { Fail '-Ops memerlukan -Apk.' }
 if ($Ops -and $Debug) { Fail '-Ops tidak boleh bersama -Debug.' }
 if ($OpsOutDir -ne '' -and -not $Ops) { Fail '-OpsOutDir hanya dengan -Ops.' }
+if ($PlayBundle -and -not $Apk) { Fail '-PlayBundle memerlukan -Apk.' }
+if ($PlayBundle -and $Ops) { Fail '-PlayBundle tidak boleh bersama -Ops: bundle Play sentiasa awam.' }
+if ($PlayBundle -and $Debug) { Fail '-PlayBundle tidak boleh bersama -Debug.' }
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $appDir = Join-Path $root 'apps\surau-app'
@@ -59,6 +68,20 @@ if (-not $nodeCmd) { Fail 'node tiada pada PATH.' }
 $svOut = @(& $nodeCmd.Source (Join-Path $PSScriptRoot 'set-version.mjs') --check --key admin-client-android --root $root)
 if ($LASTEXITCODE -ne 0) { Fail "versi tidak sepadan dengan versions.json:`n$($svOut -join "`n")" }
 $defineVersion = "--dart-define=MAXCOM_VERSION=$appVersion"
+
+# internal build of this product's current version (builds.json, optional; not listed = 0): rides in the public APK
+# name when above 0. Read here, before any flutter build, so a bad builds.json fails at once.
+$build = 0
+$buildsFile = Join-Path $root 'builds.json'
+if (Test-Path -LiteralPath $buildsFile -PathType Leaf) {
+  try { $builds = Get-Content -LiteralPath $buildsFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch { Fail 'builds.json bukan JSON yang sah.' }
+  $bp = $builds.PSObject.Properties['admin-client-android']
+  if ($null -ne $bp) {
+    if ([string]$bp.Value -notmatch '^[0-9]\z') { Fail 'builds.json: admin-client-android mesti nombor 0 hingga 9' }
+    $build = [int]$bp.Value
+  }
+}
+$buildTag = if ($build -gt 0) { "-b$build" } else { '' }
 
 function Test-Under([string]$child, [string]$parent) {
   $c = [System.IO.Path]::GetFullPath($child).TrimEnd('\') + '\'
@@ -211,7 +234,7 @@ if ($Apk) {
   if ((Invoke-Check @($apkPath)) -ne 0) { Fail 'APK awam mengandungi bahan ops. Tidak disalin ke dist.' }
   $distDir = Join-Path $root 'dist\android'
   New-Item -ItemType Directory -Path $distDir -Force | Out-Null
-  $apkName = "MAX-Admin-Client-$apkVersion-arm64-v8a$suffix.apk"
+  $apkName = "MAX-Admin-Client-$apkVersion$buildTag-arm64-v8a$suffix.apk"
   $dest = Join-Path $distDir $apkName
   Copy-Item -LiteralPath $apkPath -Destination $dest -Force
   $item = Get-Item $dest
@@ -220,5 +243,35 @@ if ($Apk) {
   Write-Host "APK: $dest"
   Write-Host ('Saiz: {0:N1} MB' -f ($item.Length / 1MB))
   Write-Host "sha256: $hash"
+
+  # Opt-in: the Android App Bundle for Play, built from the same public sources and defines, and checked before the copy.
+  if ($PlayBundle) {
+    $bundlePath = Join-Path $appDir 'build\app\outputs\bundle\release\app-release.aab'
+    if (Test-Path $bundlePath) { Remove-Item -LiteralPath $bundlePath -Force }
+    Push-Location $appDir
+    try {
+      # One bundle carries every ABI under ONE version code. It must be higher than the per-ABI codes of the sideload APKs
+      # (build number + 1000..4000), or a phone that has an APK could not move to the Play version: build number + 9000.
+      # The reverse does not hold: a phone that has taken the Play bundle cannot later take a sideload APK (its code is
+      # lower, Android refuses the downgrade), so that phone stays on Play.
+      $pubLine = Select-String -LiteralPath (Join-Path $appDir 'pubspec.yaml') -Pattern '^version:\s*\S+\+(\d+)\s*$' | Select-Object -First 1
+      if (-not $pubLine) { Fail 'pubspec.yaml tiada nombor binaan (version: x+N).' }
+      $playCode = [int]$pubLine.Matches[0].Groups[1].Value + 9000
+      & $flutter build appbundle --release "--build-number=$playCode" $defineVersion
+      if ($LASTEXITCODE -ne 0) { Fail 'flutter build appbundle gagal.' }
+    } finally { Pop-Location }
+    if (-not (Test-Path $bundlePath)) { Fail "bundle tiada: $bundlePath" }
+    $bkind = ((@(& $nodeCmd.Source $checkScript --kind $bundlePath)) -join '').Trim()
+    if ($bkind -ne 'public') { Fail "id pakej bundle ialah '$bkind', bukan my.maxcom.app. Tidak disalin ke dist." }
+    if ((Invoke-Check @($bundlePath)) -ne 0) { Fail 'bundle Play mengandungi bahan ops. Tidak disalin ke dist.' }
+    $aabName = "MAX-Admin-Client-$apkVersion$buildTag-play.aab"
+    $aabDest = Join-Path $distDir $aabName
+    Copy-Item -LiteralPath $bundlePath -Destination $aabDest -Force
+    $aabHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $aabDest).Hash.ToLower()
+    [System.IO.File]::WriteAllText("$aabDest.sha256", "$aabHash  $aabName`n", (New-Object System.Text.ASCIIEncoding))
+    Write-Host "AAB: $aabDest"
+    Write-Host ('Saiz: {0:N1} MB' -f ((Get-Item $aabDest).Length / 1MB))
+    Write-Host "sha256: $aabHash"
+  }
 }
 exit 0

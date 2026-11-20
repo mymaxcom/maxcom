@@ -42,6 +42,33 @@ async function frame(url: string): Promise<{ csp: string[]; xfo: string[]; statu
 }
 
 describe('kiosk page preview framing', () => {
+  // The browser revalidates the page on every load; the 304 headers replace the cached ones, so they must match the 200.
+  it('a 304 for the kiosk page carries the same policy as its 200 (plain and preview), not the default one', async () => {
+    for (const [url, want, xfo] of [['/', KIOSK, 'DENY'], ['/?preview=1', SELF, 'SAMEORIGIN'], ['/some/route?preview=1', SELF, 'SAMEORIGIN']] as const) {
+      const first = await app.inject({ method: 'GET', url });
+      expect(first.statusCode, url).toBe(200);
+      const etag = first.headers.etag as string | undefined;
+      const lastModified = first.headers['last-modified'] as string | undefined;
+      expect(etag ?? lastModified, url).toBeTruthy();
+      const again = await app.inject({
+        method: 'GET',
+        url,
+        headers: { ...(etag ? { 'if-none-match': etag } : {}), ...(lastModified ? { 'if-modified-since': lastModified } : {}) },
+      });
+      expect(again.statusCode, url).toBe(304);
+      expect(many(again.headers['content-security-policy']), url).toEqual([want]);
+      expect(many(again.headers['x-frame-options']), url).toEqual([xfo]);
+      expect(want).toContain('frame-src https://www.youtube-nocookie.com');
+    }
+  });
+
+  it('a 304 for a script or an API answer keeps the default policy', async () => {
+    const first = await app.inject({ method: 'GET', url: '/a.js' });
+    const again = await app.inject({ method: 'GET', url: '/a.js', headers: { 'if-none-match': String(first.headers.etag ?? ''), 'if-modified-since': String(first.headers['last-modified'] ?? '') } });
+    expect(again.statusCode).toBe(304);
+    expect(many(again.headers['content-security-policy'])).toEqual([NONE]);
+  });
+
   it('relaxes to same origin for /?preview=1, with one header each', async () => {
     const r = await frame('/?preview=1');
     expect(r.status).toBe(200);

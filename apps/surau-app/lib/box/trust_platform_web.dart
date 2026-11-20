@@ -51,4 +51,5 @@ Future<Uint8List?> fetchPinnedLeaf(
   Uint8List caDer, {
   required Duration connect,
   required Duration read,
+  String? Function(String host)? addressOf,
 }) async => null;

@@ -105,6 +105,7 @@ class SettingsFeatureScreen extends ConsumerWidget {
         ),
         readOnly: !canWrite,
         scrollToLanjutan: scrollToLanjutan,
+        unsupported: unsupportedByBox(f.key, box is Map ? box.cast<String, dynamic>() : const {}),
       );
     } else if (read.isLoading) {
       body = const Padding(
@@ -153,6 +154,16 @@ class SettingsFeatureScreen extends ConsumerWidget {
   }
 }
 
+/// Settings added after the first box release, by feature: a box that does not send one does not know it,
+/// so the form neither draws it nor sends it (an older box answers 400 to an unknown field).
+const Map<String, Set<String>> _newerSettings = {
+  'videos': {'volume'},
+};
+
+/// The newer settings of [feature] that the box's own answer [box] lacks.
+Set<String> unsupportedByBox(String feature, Map<String, dynamic> box) =>
+    {for (final k in _newerSettings[feature] ?? const <String>{}) if (!box.containsKey(k)) k};
+
 /// The box's values over the registry defaults (deep), with `enabled`, so
 /// the form never shows a hole and a diff against it is only what changed.
 Map<String, dynamic> _merge(FeatureDef f, Map<String, dynamic> box) {
@@ -192,7 +203,11 @@ class _FeatureForm extends ConsumerStatefulWidget {
     required this.original,
     required this.readOnly,
     this.scrollToLanjutan = false,
+    this.unsupported = const {},
   });
+
+  /// Settings this box did not send (an older box): not drawn, not reset.
+  final Set<String> unsupported;
 
   final FeatureDef feature;
   final Map<String, dynamic> original;
@@ -384,7 +399,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
     );
     if (!ok || !mounted) return;
     await _run((repo) async {
-      await repo.resetToDefaults(f.key, includeSystem: canSee(ref.read(rolesProvider), 'system:write'));
+      await repo.resetToDefaults(f.key, includeSystem: canSee(ref.read(rolesProvider), 'system:write'), without: widget.unsupported);
       if (mounted) toast(context, s.settingsResetDone);
     });
   }
@@ -559,6 +574,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
             lanjutanKey: _lanjutanKey,
             others: _othersOf(ref),
             relayReencode: f.key == 'liveYoutube' ? ref.watch(relayReencodeProvider).value : null,
+            unsupported: widget.unsupported,
           ),
         if (_error != null && fieldError == null) ...[
           ErrorLine(_error!),

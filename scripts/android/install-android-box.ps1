@@ -10,12 +10,18 @@
     4 notification permission (SDK 33 and later)
     5 battery exemption
     6 child process limit (Android 12 and later)
-    7 Allwinner "background" service whitelist (only when that service exists; run as the shell user)
+    7 Allwinner "background" service whitelist (only when that service exists). REQUIRED there: the vendor service drops
+      service starts and boot broadcasts of an app that is not in its user whitelist, so the box would hang on its splash
+      after a power cut. The call runs as the shell user; when that is refused and the box has its own working su
+      binary (su 0 id answers uid=0) it is retried through su 0 (the exact command is printed; both su calls stop after 20 s,
+      a timeout counts as no su) and the output says so. A package still missing at the
+      end prints GAGAL on step 7, the later steps still run, and the script exits 1.
     8 with -SetHome: HOME is my.maxcom.box/.KioskActivity
     9 start the activity, forward a free local port to 8787, wait for health, remove the forward
    10 print the box address
    11 with -DisableNetworkAdbAfter: switch network ADB off (unproven on hardware, see the note printed)
-  The script never removes or disables a package, and never asks for root. Every adb argument is an array element.
+  The script never removes or disables a package and exploits nothing; the only privilege it ever uses is an existing su
+  binary on the box, and only for step 7. Every adb argument is an array element.
   -DryRun still reads from the device but prints, instead of running, every call that changes state.
 .PARAMETER Serial   Device serial or ip:port (required, alias -Device). Must be listed by "adb devices".
 .PARAMETER ApkDir   Folder with MAX-Kiosk-Server-<version>-<abi>.apk and .sha256 (default <repo>\dist\android).
@@ -24,6 +30,12 @@
 .PARAMETER Apksigner Path of apksigner(.bat) (default: newest build-tools under the Android SDK).
 .PARAMETER DebugBuild The APK is a debug build: no signer pin is checked (LANGKAU).
 .PARAMETER HealthWaitSec  Seconds to wait for health at step 9 (default 180).
+.PARAMETER CheckOnly  Changes nothing: step 0, then checks that the vendor background whitelist holds the package and that
+                      the box service is running. Run it after ANY APK update, also one done by hand (adb install -r):
+                      an update by hand skips step 7. Two checks print: step 7 (the whitelist; LANGKAU when the box has no vendor
+                      service) and K (the box service is running). Exit 0 when the whitelist is fine or not needed AND the box
+                      service runs; exit 1 when either fails (a box without the vendor service whose box service is not running
+                      also exits 1).
 #>
 param(
   [Parameter(Mandatory = $true)][Alias('Device')][string]$Serial,
@@ -33,6 +45,7 @@ param(
   [switch]$DisableNetworkAdbAfter,
   [switch]$Yes,
   [switch]$DryRun,
+  [switch]$CheckOnly,
   [string]$Adb = '',
   [string]$Apksigner = '',
   [switch]$DebugBuild,
@@ -43,8 +56,9 @@ $ProgressPreference = 'SilentlyContinue'
 $Pkg = 'my.maxcom.box'
 $HomeComponent = 'my.maxcom.box/.KioskActivity'
 $script:Warnings = 0
+$SuTimeoutSec = 20
 
-function Say([string]$status, [int]$n, [string]$text) { Write-Host ("{0,-8} {1,2}  {2}" -f $status, $n, $text) }
+function Say([string]$status, $n, [string]$text) { Write-Host ("{0,-8} {1,2}  {2}" -f $status, $n, $text) }
 function Fail([int]$n, [string]$m) { Write-Host ("GAGAL: langkah {0}: {1}" -f $n, $m); exit 1 }
 
 # ---- adb plumbing: argument arrays only, always -s <serial> after the device check ----
@@ -73,6 +87,11 @@ function Adb-ChangeTimed([string[]]$a, [int]$seconds) {
     Write-Host ('DRYRUN adb -s ' + $Serial + ' ' + ($a -join ' '))
     return [pscustomobject]@{ Code = 0; Text = ''; Dry = $true }
   }
+  return Invoke-AdbTimed $a $seconds
+}
+# Read-only call with a time limit; a timeout is Code 124 (used for the su probe, which can wait on a prompt on the TV).
+function Adb-ReadTimed([string[]]$a, [int]$seconds) { return Invoke-AdbTimed $a $seconds }
+function Invoke-AdbTimed([string[]]$a, [int]$seconds) {
   $job = Start-Job -ScriptBlock {
     param($exe, [string[]]$argv)
     $ErrorActionPreference = 'Continue'
@@ -137,6 +156,75 @@ function Test-Health([int]$port) {
   } catch { return $false }
 }
 
+# ---- step 7 helpers (used by the install run and by -CheckOnly) ----
+# The vendor call SETS the whole awbms user whitelist (i32 = list length), so the list is read first and merged.
+# This step is REQUIRED on a box that has the service: a package outside that list loses its service starts and boot
+# broadcasts, so the box hangs on its splash after a power cut. A missing entry at the end is an ERROR, not a warning.
+function Get-AwbmsWhitelist {
+  $d = Adb-Read @('shell', 'dumpsys', 'background')
+  if ($d.Code -ne 0) { return $null }
+  $m = [regex]::Match($d.Text, '(?m)^[ \t]*User Whitelist:[ \t]*\r?\n[ \t.]*\[([^\]\r\n]*)\]')
+  if (-not $m.Success) { return $null }
+  $items = @($m.Groups[1].Value.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+  return [pscustomobject]@{ List = $items }
+}
+function Test-VendorCallAccepted($w) {
+  if ($w.PSObject.Properties.Name -contains 'Dry') { return $true }
+  return ($w.Code -eq 0 -and $w.Text -match 'Result: Parcel\(\s*0{8}\b' -and $w.Text -notmatch 'Exception|denied|Permission')
+}
+# An existing su binary on the box may be used when the shell user is refused. Nothing is exploited or installed.
+function Test-BoxHasSu {
+  # A root-manager prompt on the TV can wait for ever: limit the probe, and treat a timeout as no su.
+  $r = Adb-ReadTimed @('shell', 'su', '0', 'id') $SuTimeoutSec
+  return ($r.Code -eq 0 -and $r.Text -match 'uid=0\(')
+}
+function Fail-Whitelist([string]$why) {
+  $again = ' Beritahu Pentadbir MAXCOM; jalankan semula dengan -CheckOnly selepas dibetulkan.'
+  if ($CheckOnly) { $again = ' Beritahu Pentadbir MAXCOM.' }
+  Say 'GAGAL' 7 ($why + ' Kotak ini TIDAK akan bermula sendiri selepas bekalan elektrik terputus (aplikasi tersangkut pada skrin pembukaan) sehingga pakej ' + $Pkg + ' berada dalam senarai putih perkhidmatan background.' + $again)
+  $script:Step7Failed = $true
+}
+function Invoke-Step7([bool]$ReadOnly) {
+  $svc = Adb-Read @('shell', 'service', 'check', 'background')
+  if ($svc.Text -notmatch 'Service background:\s*found') { Say 'LANGKAU' 7 'perkhidmatan background tiada pada peranti ini'; return }
+  $pkgRe = '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$'
+  $cur = Get-AwbmsWhitelist
+  if ($null -eq $cur) {
+    Fail-Whitelist 'senarai putih perkhidmatan background tidak dapat dibaca daripada dumpsys background, jadi tiada apa-apa ditulis (supaya aplikasi lain dalam senarai tidak tercicir) dan kemasukan pakej tidak dapat disahkan.'
+    return
+  }
+  if ($cur.List -contains $Pkg) { Say 'OK' 7 'sudah dalam senarai putih perkhidmatan background'; return }
+  if ($ReadOnly) { Fail-Whitelist ('pakej ' + $Pkg + ' tiada dalam senarai putih (' + ($cur.List -join ', ') + ').'); return }
+  if (@($cur.List | Where-Object { $_ -notmatch $pkgRe }).Count -gt 0) {
+    Fail-Whitelist ('senarai putih sedia ada mengandungi nama yang tidak sah (' + ($cur.List -join ', ') + '), jadi tiada apa-apa ditulis.')
+    return
+  }
+  $merged = @($cur.List) + @($Pkg)
+  $callArgs = @('service', 'call', 'background', '3', 'i32', [string]$merged.Count)
+  foreach ($e in $merged) { $callArgs += @('s16', $e) }
+  $w = Adb-Change (@('shell') + $callArgs)
+  $viaSu = $false
+  if (-not (Test-VendorCallAccepted $w) -and (Test-BoxHasSu)) {
+    Say 'SET' 7 'perkhidmatan background menolak pengguna shell; su sedia ada pada kotak dijumpai, mencuba semula melalui su 0'
+    $suArgs = @('shell', 'su', '0') + $callArgs
+    Write-Host ('adb -s ' + $Serial + ' ' + ($suArgs -join ' '))
+    $w = Adb-ChangeTimed $suArgs $SuTimeoutSec
+    $viaSu = $true
+  }
+  if (-not (Test-VendorCallAccepted $w)) {
+    Fail-Whitelist 'perkhidmatan background Allwinner menolak arahan (pengguna shell, dan tiada su yang berfungsi atau su tidak menjawab dalam masa). Skrip ini tidak menggunakan lubang root vendor.'
+    return
+  }
+  $how = ''
+  if ($viaSu) { $how = ' (melalui su 0)' }
+  if ($w.PSObject.Properties.Name -contains 'Dry') { Say 'SET' 7 ('senarai putih perkhidmatan background digabungkan (arahan dicetak)' + $how); return }
+  $chk = Get-AwbmsWhitelist
+  $missing = @()
+  if ($null -ne $chk) { $missing = @($merged | Where-Object { $chk.List -notcontains $_ }) }
+  if ($null -ne $chk -and $missing.Count -eq 0) { Say 'SET' 7 ('senarai putih perkhidmatan background digabungkan: ' + ($merged -join ', ') + $how); return }
+  $now = if ($null -eq $chk) { 'tidak dapat dibaca' } else { $chk.List -join ', ' }
+  Fail-Whitelist ('senarai putih berubah di luar jangkaan. Lama: [' + ($cur.List -join ', ') + ']. Baharu: [' + $now + '].')
+}
 # ---- input checks that need no device ----
 if ($Serial -notmatch '^[A-Za-z0-9._:\-]{3,64}$') { Fail 0 'nilai -Serial tidak sah (hanya huruf, angka, titik, noktah bertindih, sengkang)' }
 if ($Version -ne '' -and $Version -notmatch '^\d{4}\.\d{1,2}\.\d{1,6}$') { Fail 0 '-Version mesti dalam bentuk YYYY.MM.N' }
@@ -163,6 +251,17 @@ if ($state -eq '') { Fail 0 "peranti $Serial tiada dalam senarai adb devices" }
 if ($state -eq 'unauthorized') { Fail 0 "peranti $Serial belum membenarkan komputer ini: terima kotak Nyahpepijat USB pada skrin TV, kemudian cuba lagi" }
 if ($state -ne 'device') { Fail 0 "peranti $Serial dalam keadaan '$state', bukan 'device'" }
 Say 'OK' 0 "adb ditemui dan peranti $Serial sah"
+
+if ($CheckOnly) {
+  $script:Step7Failed = $false
+  Invoke-Step7 $true
+  $sv = Adb-Read @('shell', 'dumpsys', 'activity', 'services', $Pkg)
+  if ($sv.Text -match [regex]::Escape($Pkg + '/.BoxService')) { Say 'OK' 'K' 'perkhidmatan kotak berjalan' }
+  else { Say 'GAGAL' 'K' ('perkhidmatan kotak (' + $Pkg + '/.BoxService) tidak berjalan. Mulakan aplikasi pada TV dan jalankan semula semakan ini.'); $script:Step7Failed = $true }
+  if ($script:Step7Failed) { Write-Host 'GAGAL: semakan tidak lulus.'; exit 1 }
+  Write-Host 'Semakan lulus.'
+  exit 0
+}
 
 # ---- step 1 ----
 $abiList = (Adb-Read @('shell', 'getprop', 'ro.product.cpu.abilist')).Text.Trim()
@@ -281,50 +380,8 @@ if ($sdk -ge 31) {
 } else { Say 'LANGKAU' 6 "SDK $sdk tiada had proses hantu" }
 
 # ---- step 7 ----
-# The vendor call SETS the whole awbms user whitelist (i32 = list length), so the list is read first and merged.
-function Get-AwbmsWhitelist {
-  $d = Adb-Read @('shell', 'dumpsys', 'background')
-  if ($d.Code -ne 0) { return $null }
-  $m = [regex]::Match($d.Text, '(?m)^[ \t]*User Whitelist:[ \t]*\r?\n[ \t.]*\[([^\]\r\n]*)\]')
-  if (-not $m.Success) { return $null }
-  $items = @($m.Groups[1].Value.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
-  return [pscustomobject]@{ List = $items }
-}
-$svc = Adb-Read @('shell', 'service', 'check', 'background')
-if ($svc.Text -match 'Service background:\s*found') {
-  $pkgRe = '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$'
-  $cur = Get-AwbmsWhitelist
-  if ($null -eq $cur) {
-    Say 'AMARAN' 7 ('senarai putih perkhidmatan background tidak dapat dibaca daripada dumpsys background, jadi tiada apa-apa ditulis (supaya aplikasi lain dalam senarai tidak tercicir). Pemasangan diteruskan.')
-    $script:Warnings++
-  } elseif ($cur.List -contains $Pkg) {
-    Say 'OK' 7 'sudah dalam senarai putih perkhidmatan background'
-  } elseif (@($cur.List | Where-Object { $_ -notmatch $pkgRe }).Count -gt 0) {
-    Say 'AMARAN' 7 ('senarai putih sedia ada mengandungi nama yang tidak sah (' + ($cur.List -join ', ') + '), jadi tiada apa-apa ditulis. Pemasangan diteruskan.')
-    $script:Warnings++
-  } else {
-    $merged = @($cur.List) + @($Pkg)
-    $callArgs = @('shell', 'service', 'call', 'background', '3', 'i32', [string]$merged.Count)
-    foreach ($e in $merged) { $callArgs += @('s16', $e) }
-    $w = Adb-Change $callArgs
-    if ($w.PSObject.Properties.Name -contains 'Dry') { Say 'SET' 7 'senarai putih perkhidmatan background digabungkan (arahan dicetak)' }
-    elseif ($w.Code -eq 0 -and $w.Text -match 'Result: Parcel\(\s*0{8}\b' -and $w.Text -notmatch 'Exception|denied|Permission') {
-      $chk = Get-AwbmsWhitelist
-      $missing = @()
-      if ($null -ne $chk) { $missing = @($merged | Where-Object { $chk.List -notcontains $_ }) }
-      if ($null -ne $chk -and $missing.Count -eq 0) { Say 'SET' 7 ('senarai putih perkhidmatan background digabungkan: ' + ($merged -join ', ')) }
-      else {
-        $now = if ($null -eq $chk) { 'tidak dapat dibaca' } else { $chk.List -join ', ' }
-        Say 'AMARAN' 7 ('senarai putih berubah di luar jangkaan. Lama: [' + ($cur.List -join ', ') + ']. Baharu: [' + $now + ']. Semak peranti.')
-        $script:Warnings++
-      }
-    } else {
-      Say 'AMARAN' 7 ('perkhidmatan background Allwinner menolak arahan tanpa hak root. Skrip ini tidak menggunakan lubang root vendor. ' +
-        'Tetapkan senarai putih itu dengan cara lain yang dibenarkan, atau beritahu Pentadbir MAXCOM. Pemasangan diteruskan.')
-      $script:Warnings++
-    }
-  }
-} else { Say 'LANGKAU' 7 'perkhidmatan background tiada pada peranti ini' }
+$script:Step7Failed = $false
+Invoke-Step7 $false
 
 # ---- step 8 ----
 if ($SetHome) {
@@ -375,4 +432,5 @@ if ($DisableNetworkAdbAfter) {
 } else { Say 'LANGKAU' 11 'tanpa -DisableNetworkAdbAfter: ADB rangkaian tidak diubah' }
 
 if ($script:Warnings -gt 0) { Write-Host ("Selesai dengan {0} amaran." -f $script:Warnings) } else { Write-Host 'Selesai.' }
+if ($script:Step7Failed) { Write-Host 'GAGAL: langkah 7 tidak lengkap: senarai putih perkhidmatan background (lihat di atas).'; exit 1 }
 exit 0

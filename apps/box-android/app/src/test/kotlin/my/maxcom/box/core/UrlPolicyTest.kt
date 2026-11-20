@@ -86,6 +86,75 @@ class UrlPolicyTest {
     }
 
     @Test
+    fun playerFrameIsOnlyTheEmbedDocument() {
+        assertTrue(policy.allowsPlayerFrame("https://www.youtube-nocookie.com/embed/abcDEF123_-"))
+        assertTrue(policy.allowsPlayerFrame("https://www.youtube-nocookie.com/embed/abcDEF123_-?autoplay=1&mute=1"))
+        val refused = listOf(
+            "http://www.youtube-nocookie.com/embed/abcDEF123_-",
+            "https://youtube-nocookie.com/embed/abcDEF123_-",
+            "https://www.youtube.com/embed/abcDEF123_-",
+            "https://www.youtube.com/watch?v=abcDEF123_-",
+            "https://www.youtube-nocookie.com/",
+            "https://www.youtube-nocookie.com/embed/",
+            "https://www.youtube-nocookie.com/embed/short",
+            "https://www.youtube-nocookie.com/embed/abcDEF123_-/x",
+            "https://www.youtube-nocookie.com/embed/../watch",
+            "https://www.youtube-nocookie.com:443/embed/abcDEF123_-",
+            "https://www.youtube-nocookie.com:8443/embed/abcDEF123_-",
+            "https://user@www.youtube-nocookie.com/embed/abcDEF123_-",
+            "https://www.youtube-nocookie.com@evil.example/embed/abcDEF123_-",
+            "https://www.youtube-nocookie.com.evil.example/embed/abcDEF123_-",
+            "https://WWW.YOUTUBE-NOCOOKIE.COM/embed/abcDEF123_-",
+            "https://www.youtube-nocookie.com./embed/abcDEF123_-",
+            "//www.youtube-nocookie.com/embed/abcDEF123_-",
+            "javascript:alert(1)",
+            "",
+        )
+        for (u in refused) assertFalse("should refuse frame: $u", policy.allowsPlayerFrame(u))
+        // The kiosk origin's own check does not open for the player.
+        assertFalse(policy.allows("https://www.youtube-nocookie.com/embed/abcDEF123_-"))
+    }
+
+    @Test
+    fun playerResourcesAreHttpsOnThePlayerHostsOnly() {
+        val allowed = listOf(
+            "https://www.youtube-nocookie.com/embed/abcDEF123_-",
+            "https://www.youtube.com/s/player/abc/player_ias.vflset/en_US/base.js",
+            "https://rr3---sn-abc.googlevideo.com/videoplayback?x=1",
+            "https://i.ytimg.com/vi/abcDEF123_-/hqdefault.jpg",
+            "https://yt3.ggpht.com/a/x=s68",
+            "https://www.gstatic.com/x.js",
+            "https://googlevideo.com/x",
+        )
+        for (u in allowed) assertTrue("should allow: $u", policy.allowsPlayerResource(u))
+        val refused = listOf(
+            "http://www.youtube.com/x",
+            "https://evil.example/x",
+            "https://youtube.com.evil.example/x",
+            "https://evilyoutube.com/x",
+            "https://notgooglevideo.com/x",
+            "https://www.youtube.com:8443/x",
+            "https://www.youtube.com:443/x",
+            "https://user@www.youtube.com/x",
+            "https://www.youtube.com@evil.example/x",
+            "https://www.YouTube.com/x",
+            "https://www.youtube.com./x",
+            "https://10.168.1.5/x",
+            "https://[::1]/x",
+            "https://localhost/x",
+            "https://com/x",
+            "wss://www.youtube.com/x",
+            "blob:https://www.youtube.com/x",
+            "data:text/html,x",
+            "file:///data/x",
+            "intent://x",
+            "",
+            "https://www.youtube.com/" + "a".repeat(9000),
+        )
+        for (u in refused) assertFalse("should refuse: $u", policy.allowsPlayerResource(u))
+    }
+
+    @Test
     fun kioskUrlIsTheLocalhostOriginAndAllowed() {
         assertEquals("http://localhost:8787/", UrlPolicy.kioskUrl(8787))
         assertTrue(policy.allows(UrlPolicy.kioskUrl(8787)))

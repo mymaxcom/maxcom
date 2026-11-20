@@ -170,6 +170,19 @@ describe('scripts/build-app.ps1 (static checks)', () => {
     expect(assigned.filter((v) => params.includes(v))).toEqual([]);
   });
 
+  it('puts the internal build from builds.json (admin-client-android) in the public APK name', () => {
+    expect(text).toContain("'builds.json'");
+    expect(text).toContain("PSObject.Properties['admin-client-android']");
+    expect(text).toMatch(/\$buildTag = if \(\$build -gt 0\) \{ "-b\$build" \} else \{ '' \}/);
+    expect(text).toContain('MAX-Admin-Client-$apkVersion$buildTag-arm64-v8a$suffix.apk');
+    expect(text).toContain('MAXCOM-Ops-$apkVersion-arm64-v8a.apk');
+    // read and checked before any flutter build, and the tag exists before the name is built
+    const tagAt = text.indexOf('$buildTag = if');
+    expect(tagAt).toBeGreaterThan(-1);
+    expect(tagAt).toBeLessThan(text.indexOf('& $flutter build'));
+    expect(tagAt).toBeLessThan(text.indexOf('MAX-Admin-Client-$apkVersion$buildTag'));
+  });
+
   it('holds no password or keystore secret', () => {
     expect(text).not.toMatch(/(storePassword|keyPassword)\s*=\s*['"]?\w/i);
     expect(text).not.toMatch(/-storepass|-keypass/i);

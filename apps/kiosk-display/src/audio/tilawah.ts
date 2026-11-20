@@ -152,7 +152,7 @@ export function tilawahPlanOf(
 export function useTilawah(view: KioskView, content: KioskContent | null, impl?: Player): void {
   const own = useRef<Player | null>(null);
   const settingsVolume = (view.settings as unknown as { tilawah?: { volume?: unknown } }).tilawah?.volume;
-  const volume = typeof settingsVolume === 'number' ? settingsVolume : 60;
+  const volume = typeof settingsVolume === 'number' ? settingsVolume : 40;
 
   const plan = useMemo(() => tilawahPlanOf(view, content), [view.now, view.state.today, view.settings, view.hijri, content]);
 

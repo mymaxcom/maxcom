@@ -9,6 +9,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart' show previewBuilderProvider;
 import '../../app/theme.dart';
 import '../../content/preview_host.dart';
+import '../../content/preview_target.dart';
 import '../../features/theme/theme_style.dart';
 import '../../l10n/generated/s.dart';
 import '../preview_screen.dart';
@@ -40,7 +41,7 @@ class ThemePreviewFrame extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = S.of(context);
-    final box = ref.watch(enrolledBoxProvider);
+    final target = ref.watch(previewTargetProvider);
     final session = ref.watch(sessionProvider);
     final deps = ref.watch(appDepsProvider);
     final builder = ref.watch(previewBuilderProvider);
@@ -53,7 +54,7 @@ class ThemePreviewFrame extends ConsumerWidget {
       clipBehavior: Clip.antiAlias,
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: box == null || session == null
+        child: target == null || session == null
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -67,13 +68,13 @@ class ThemePreviewFrame extends ConsumerWidget {
             : builder(
                 context,
                 PreviewRequest(
-                  box: box.box,
+                  box: target.origin,
                   token: session.token,
                   now: now,
                   utcOffsetMinutes: utcOffsetMinutes,
                   generation: 0,
                   theme: PreviewThemeRequest(theme: theme, screen: screen, entry: entry, staged: staged, pack: pack),
-                  pinnedLeaf: deps.boxLeaf == null ? null : () => deps.boxLeaf!(box),
+                  pinnedLeaf: deps.boxLeaf == null ? null : () => deps.boxLeaf!(target.leafBox),
                   onSslError: (_, _) {},
                 ),
               ),
