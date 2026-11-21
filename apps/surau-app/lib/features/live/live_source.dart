@@ -577,10 +577,18 @@ class AudioContext {
     this.muted = false,
     this.lang = AppLang.ms,
     this.micLabel,
+    this.micUnavailable,
+    this.trrsHint = false,
   });
 
   /// The name of the microphone plugged in and in use (null = the device's own).
   final String? micLabel;
+
+  /// A microphone was wanted but the system would not route to it: the live uses the phone's own.
+  final String? micUnavailable;
+
+  /// Headphones are in the jack but no microphone: a 4-pole (TRRS) plug is needed.
+  final bool trrsHint;
 
   /// `phone` or `ipad`.
   final String dev;
@@ -791,6 +799,12 @@ List<AudioNotice> buildAudioNotices({
   final micOn = ext && mix.deviceMic.enabled;
   final boxOn = mix.boxInput.enabled;
   final src = ctx.micShort;
+  final unavail = ctx.micUnavailable;
+  if (unavail != null) {
+    out.add(AudioNotice('bad', null, body: liveMicUnavailable(lang, unavail)));
+  } else if (ctx.trrsHint && !ctx.ipad) {
+    out.add(AudioNotice('help', null, body: liveMicTrrsHint(lang)));
+  }
   if (mixAllMuted(mix, muted: ctx.muted) && (ext || boxOn || ctx.muted)) {
     out.add(AudioNotice('gold', liveAudioAllMuted(lang), body: liveAudioAllMutedBody(lang)));
   }

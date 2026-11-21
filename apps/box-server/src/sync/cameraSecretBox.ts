@@ -101,9 +101,10 @@ export class CameraSecretSync {
     // every request a box sends to the cloud says which theme contract it supports (as the sync agent does)
     const headers: Record<string, string> = { Authorization: `Bearer ${link.token}`, ...BOX_REPORT_HEADERS };
     const init: RequestInit = { method, headers, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) };
-    if (body !== undefined) {
+    // a write with nothing to say still sends `{}` as JSON (never a bodyless POST, PUT or DELETE); a GET sends nothing
+    if (body !== undefined || method !== 'GET') {
       headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(body);
+      init.body = JSON.stringify(body ?? {});
     }
     try {
       const res = await this.fetchImpl(`${link.base}${path}`, init);

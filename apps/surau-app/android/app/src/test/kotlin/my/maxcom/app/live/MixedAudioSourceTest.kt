@@ -246,7 +246,7 @@ class MixedAudioSourceTest {
         feeder.start()
         val aligner = AudioAligner(rate16, 2000)
         val mic = FakeCapture(2000)
-        val src = MixedAudioSource(cam, aligner, 16000, captureFactory = { _, _, _ -> mic })
+        val src = MixedAudioSource(cam, aligner, 16000, captureFactory = { _, _, _ -> mic }, useAgc = false)
         src.setMicEnabled(true)
         assertTrue(src.init(rate16, false, false, false))
         val sink = Collect()

@@ -18,6 +18,7 @@ import '../content/asset_picker.dart';
 import '../content/editors/content_form.dart';
 import '../content/image_ref.dart' show ImageSlot;
 import '../content/kinds.dart';
+import '../content/play_now.dart';
 import '../content/video_rules.dart' show clockOf;
 import '../features/labels.dart' show appLangOf, appLangOfS;
 import '../features/registry.g.dart' show surahs;
@@ -477,6 +478,7 @@ class _ItemRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
+            if (canWrite && spec.key == 'video') PlayNowButton(itemId: id, compact: true),
             if (canWrite)
               IconButton(
                 key: ValueKey('delete-$id'),

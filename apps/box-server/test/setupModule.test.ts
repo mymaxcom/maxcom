@@ -704,4 +704,180 @@ J ([ordered]@{
     expect(r.json.trick).toMatch(/GAGAL/);
     expect(r.json.missing).toMatch(/tidak dijumpai/);
   });
+
+  describe('Set-MaxcomMicAccess (Windows microphone privacy for LOCAL SERVICE), fake registry', () => {
+    const CAP = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone';
+    /** A fake provider over an in-memory store keyed by the full key path; `hive` says whether HKU\S-1-5-19 is mounted, `stale` whether an earlier run left HKU\MAXCOM-LOCALSERVICE mounted. */
+    const fake = (seed: Record<string, string>, hive: boolean, loadable = false, stale = false) => `
+$store = @{}
+$seed = ConvertFrom-Json ${q(JSON.stringify(seed))}
+foreach ($p in $seed.PSObject.Properties) { $store[$p.Name] = [string]$p.Value }
+$log = New-Object System.Collections.ArrayList
+$prov = @{
+  Get = { param($Path, $Name) if ($store.ContainsKey($Path)) { return $store[$Path] } else { return $null } }
+  Set = { param($Path, $Name, $Value) $store[$Path] = $Value; [void]$log.Add($Path) }
+  Exists = { param($Path) if ($Path -eq 'HKU\\S-1-5-19') { return ${hive ? '$true' : '$false'} } elseif ($Path -eq 'HKU\\MAXCOM-LOCALSERVICE') { return ${stale ? '$true' : '$false'} } else { return $true } }
+  Load = { ${loadable ? "return 'HKU\\MAXCOM-LOCALSERVICE'" : 'return $null'} }
+  Unload = { [void]$log.Add('unload') }
+}
+`;
+    const MACHINE = `HKLM\\${CAP}`;
+    const LS = `HKU\\S-1-5-19\\${CAP}`;
+    const LSNP = `${LS}\\NonPackaged`;
+
+    it('already allowed everywhere: nothing changes, nothing is written', () => {
+      const r = ps(`${fake({ [MACHINE]: 'Allow', [LS]: 'Allow', [LSNP]: 'Allow' }, true)}
+$c = Set-MaxcomMicAccess -Provider $prov
+J ([ordered]@{ n = @($c).Count; writes = @($log).Count })`);
+      expect(r.json).toEqual({ n: 0, writes: 0 });
+    });
+
+    it('a machine level Deny is NOT flipped: a NOTA line says the whole PC blocks microphones and how to allow it; the LOCAL SERVICE keys that are missing are created as Allow', () => {
+      const r = ps(`${fake({ [MACHINE]: 'Deny' }, true)}
+$c = @(Set-MaxcomMicAccess -Provider $prov)
+J ([ordered]@{ lines = $c; machine = $store['${MACHINE}']; ls = $store['${LS}']; np = $store['${LSNP}']; wroteMachine = (@($log | Where-Object { $_ -eq '${MACHINE}' }).Count) })`);
+      expect(r.json.machine).toBe('Deny');
+      expect(r.json.wroteMachine).toBe(0);
+      expect(r.json.ls).toBe('Allow');
+      expect(r.json.np).toBe('Allow');
+      expect(r.json.lines).toHaveLength(3);
+      expect(r.json.lines[0]).toMatch(/^NOTA: Windows menyekat mikrofon untuk seluruh PC ini/);
+      expect(r.json.lines[0]).toContain('Settings, Privacy, Microphone');
+      expect(r.json.lines[1]).toMatch(/LOCAL SERVICE.*tiada diubah kepada Allow/);
+    });
+
+    it('a machine level that is not set is left alone (the Windows default allows); a LOCAL SERVICE Deny is fixed; a second run changes nothing', () => {
+      const r = ps(`${fake({ [LS]: 'Deny', [LSNP]: 'Allow' }, true)}
+$first = @(Set-MaxcomMicAccess -Provider $prov)
+$second = @(Set-MaxcomMicAccess -Provider $prov)
+J ([ordered]@{ first = $first; second = $second.Count; machineWritten = $store.ContainsKey('${MACHINE}'); ls = $store['${LS}'] })`);
+      expect(r.json.first).toHaveLength(1);
+      expect(r.json.first[0]).toMatch(/Deny diubah kepada Allow/);
+      expect(r.json.second).toBe(0);
+      expect(r.json.machineWritten).toBe(false);
+      expect(r.json.ls).toBe('Allow');
+    });
+
+    it('the LOCAL SERVICE hive is not mounted: it is loaded, written and unloaded again', () => {
+      const loaded = ps(`${fake({}, false, true)}
+$c = @(Set-MaxcomMicAccess -Provider $prov)
+J ([ordered]@{ n = $c.Count; keys = @($store.Keys | Sort-Object); last = $log[$log.Count - 1] })`);
+      expect(loaded.json.n).toBe(2);
+      expect(loaded.json.keys.every((k: string) => k.startsWith('HKU\\MAXCOM-LOCALSERVICE\\'))).toBe(true);
+      expect(loaded.json.last).toBe('unload');
+    });
+
+    it('not mounted and it cannot be loaded: a GAGAL line says so and NO key is written (nothing is created under the unmounted HKU\\S-1-5-19)', () => {
+      const r = ps(`${fake({}, false, false)}
+$prov.LastError = { 'ERROR: Access is denied.' }
+$c = @(Set-MaxcomMicAccess -Provider $prov)
+J ([ordered]@{ lines = $c; keys = @($store.Keys); writes = @($log).Count })`);
+      expect(r.json.keys).toEqual([]);
+      expect(r.json.writes).toBe(0);
+      expect(r.json.lines).toHaveLength(1);
+      expect(r.json.lines[0]).toMatch(/^GAGAL: profil LOCAL SERVICE tidak dapat dimuatkan \(ERROR: Access is denied\.\).*tiada kunci ditulis/);
+    });
+
+    it('a Load that throws is a GAGAL line too, and still nothing is written', () => {
+      const r = ps(`${fake({}, false, false)}
+$prov.Load = { throw 'boom' }
+$c = @(Set-MaxcomMicAccess -Provider $prov)
+J ([ordered]@{ lines = $c; keys = @($store.Keys) })`);
+      expect(r.json.keys).toEqual([]);
+      expect(r.json.lines.some((l: string) => /^GAGAL: hive LOCAL SERVICE tidak dapat dimuatkan: boom/.test(l))).toBe(true);
+    });
+
+    it('a hive an earlier run left mounted is unloaded first, then loaded again and written', () => {
+      const r = ps(`${fake({}, false, true, true)}
+$c = @(Set-MaxcomMicAccess -Provider $prov)
+J ([ordered]@{ n = $c.Count; log = @($log | ForEach-Object { if ($_ -eq 'unload') { 'unload' } else { 'write' } }) })`);
+      expect(r.json.n).toBe(2);
+      // unload (the stale one), the two writes, unload (this run's)
+      expect(r.json.log).toEqual(['unload', 'write', 'write', 'unload']);
+    });
+
+    it('an unload that fails after writing (or of the stale mount) is a GAGAL line, not swallowed', () => {
+      const after = ps(`${fake({}, false, true)}
+$prov.Unload = { return $false }
+$prov.LastError = { 'ERROR: Access is denied.' }
+$c = @(Set-MaxcomMicAccess -Provider $prov)
+J ([ordered]@{ lines = $c })`);
+      expect(after.json.lines).toHaveLength(3);
+      expect(after.json.lines[2]).toMatch(/^GAGAL: hive LOCAL SERVICE tidak dapat dilepaskan.*Access is denied/);
+      const thrown = ps(`${fake({}, false, true, true)}
+$prov.Unload = { throw 'locked' }
+$c = @(Set-MaxcomMicAccess -Provider $prov)
+J ([ordered]@{ lines = $c })`);
+      expect(thrown.json.lines.filter((l: string) => l.startsWith('GAGAL:')).length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('the REAL provider: Load does not throw when reg.exe fails (stderr is not a terminating error under ErrorActionPreference Stop, Windows PowerShell 5.1); it answers null and says why; Unload of nothing answers false', () => {
+      const dir = sub('hive');
+      const notAHive = join(dir, 'not-a-hive.dat');
+      writeFileSync(notAHive, 'this is not a registry hive');
+      const r = ps(`$prov = Get-MaxcomRegistryProvider -HiveFile ${q(notAHive)}
+$err = ''
+$loaded = 'unset'
+try { $loaded = & $prov.Load } catch { $err = [string]$_.Exception.Message }
+$why = & $prov.LastError
+$un = & $prov.Unload
+J ([ordered]@{ err = $err; loadedIsNull = ($null -eq $loaded); why = $why; unload = $un; psv = $PSVersionTable.PSVersion.Major })`);
+      expect(r.json.psv).toBe(5);
+      expect(r.json.err).toBe('');
+      expect(r.json.loadedIsNull).toBe(true);
+      expect(String(r.json.why).length).toBeGreaterThan(0);
+      expect(r.json.unload).toBe(false);
+      // a hive file that is not there at all is also a quiet null with a reason
+      const gone = ps(`$prov = Get-MaxcomRegistryProvider -HiveFile ${q(join(dir, 'missing.dat'))}
+$loaded = & $prov.Load
+J ([ordered]@{ loadedIsNull = ($null -eq $loaded); why = (& $prov.LastError) })`);
+      expect(gone.json.loadedIsNull).toBe(true);
+      expect(String(gone.json.why)).toMatch(/missing\.dat/);
+    });
+
+    it('the old way of calling reg.exe really is a terminating error here (why Invoke-MaxcomReg exists)', () => {
+      const dir = sub('hive2');
+      const notAHive = join(dir, 'x.dat');
+      writeFileSync(notAHive, 'x');
+      const r = ps(`$old = ''
+try { & (Join-Path $env:SystemRoot 'System32\\reg.exe') load 'HKU\\MAXCOM-PROBE-OLD' ${q(notAHive)} 2>&1 | Out-Null; $old = 'no throw' } catch { $old = 'threw' }
+$new = Invoke-MaxcomReg @('load', 'HKU\\MAXCOM-PROBE-OLD', ${q(notAHive)})
+J ([ordered]@{ old = $old; code = $new.Code; text = $new.Text })`);
+      expect(r.json.old).toBe('threw');
+      expect(r.json.code).not.toBe(0);
+    });
+
+    it('a key that cannot be written is a GAGAL line and the rest is still done', () => {
+      const r = ps(`${fake({}, true)}
+$prov.Set = { param($Path, $Name, $Value) if ($Path -like '*NonPackaged') { throw 'denied' } else { $store[$Path] = $Value } }
+$c = @(Set-MaxcomMicAccess -Provider $prov)
+J ([ordered]@{ lines = $c; ls = $store['${LS}'] })`);
+      expect(r.json.ls).toBe('Allow');
+      expect(r.json.lines).toHaveLength(2);
+      expect(r.json.lines[1]).toMatch(/^GAGAL: akses mikrofon LOCAL SERVICE/);
+    });
+
+    describe('setup.ps1 Step-MicAccess', () => {
+      const setupSrc = readFileSync(fileURLToPath(new URL('../../../scripts/setup/setup.ps1', import.meta.url)), 'utf8');
+      const fn = setupSrc.slice(setupSrc.indexOf('function Step-MicAccess'), setupSrc.indexOf('function Step-StartCheck'));
+      const run = (lines: string[]) => ps(`${fn}
+function Set-MaxcomMicAccess { return @(${lines.map((l) => `'${l}'`).join(', ')}) }
+$out = ''
+$ret = 'unset'
+try { $ret = Step-MicAccess } catch { $out = [string]$_.Exception.Message }
+J ([ordered]@{ ret = [string]$ret; threw = $out })`);
+
+      it('a GAGAL line makes the step fail with the message (never SET); a change is SET; only a notice or nothing is OK', () => {
+        const bad = run(['GAGAL: profil LOCAL SERVICE tidak dapat dimuatkan (x)']);
+        expect(bad.json.ret).toBe('unset');
+        expect(bad.json.threw).toContain('GAGAL: profil LOCAL SERVICE tidak dapat dimuatkan (x)');
+        expect(bad.json.threw).toContain('Settings, Privacy, Microphone');
+        const mixed = run(['akses mikrofon untuk LOCAL SERVICE (x): tiada diubah kepada Allow', 'GAGAL: lain']);
+        expect(mixed.json.threw).toContain('GAGAL: lain');
+        expect(run(['akses mikrofon untuk LOCAL SERVICE (x): tiada diubah kepada Allow']).json).toMatchObject({ ret: 'True', threw: '' });
+        expect(run(['NOTA: Windows menyekat mikrofon untuk seluruh PC ini']).json).toMatchObject({ ret: 'False', threw: '' });
+        expect(run([]).json).toMatchObject({ ret: 'False', threw: '' });
+      });
+    });
+  });
 });

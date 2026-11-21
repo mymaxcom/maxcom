@@ -513,6 +513,24 @@ void main() {
       expect(isBoxLocalOnly('PUT', '/api/settings/clock'), isFalse);
     });
 
+    test('[AS4] the recording pieces belong to the surau\'s own box: with the box away they are LiveOnly, never sent to the cloud', () async {
+      expect(isBoxLocalOnly('POST', '/api/live/recordings/L1/pieces/1'), isTrue);
+      expect(isBoxLocalOnly('POST', '/api/live/recordings/L1/join'), isTrue);
+      expect(isBoxLocalOnly('DELETE', '/api/live/recordings/L1'), isTrue);
+      expect(isBoxLocalOnly('GET', '/api/live/recordings-x'), isFalse);
+      expect(isBoxLocalOnly('GET', '/api/live/status'), isFalse);
+      await expectLater(
+        away.postRaw('/api/live/recordings/L1/pieces/1', Uint8List.fromList([1, 2, 3]), 'video/mp4'),
+        throwsA(isA<LiveOnly>().having((e) => e.path, 'path', '/api/live/recordings/L1/pieces/1')),
+      );
+      await expectLater(
+        away.post('/api/live/recordings/L1/join', const {'count': 2}),
+        throwsA(isA<LiveOnly>()),
+      );
+      expect(cloud.seen, isEmpty);
+      expect(transport.connects, 0, reason: 'the cloud is not even connected to');
+    });
+
     test('[K8] a POST that was sent and timed out is not re-sent through the cloud: Uncertain', () async {
       final slow = FakeBox((r) async => throw TimeoutException('no answer'));
       final gw2 = BoxGateway(

@@ -15,7 +15,7 @@ const cmd = readFileSync(cmdPath, 'utf8');
 const isWin = process.platform === 'win32';
 
 const CHECK_IDS = [
-  'health_http', 'theme', 'health_https', 'release', 'cert_days', 'fw_webrtc', 'fw_srt', 'fw_https', 'tools', 'task_box',
+  'health_http', 'theme', 'mic_access', 'health_https', 'release', 'cert_days', 'fw_webrtc', 'fw_srt', 'fw_https', 'tools', 'task_box',
   'task_renew', 'task_firewall', 'task_kiosk', 'box_account', 'acl_data', 'acl_root', 'disk', 'log_warnings', 'box_id',
 ];
 const PFX_PASS = 'SECRET-PFX-PASS-9f3a1c7e-do-not-print';
@@ -144,7 +144,7 @@ async function startFakeBox(e: Env, version = '2026.11.1', extra: Record<string,
   const code = [
     "const http = require('node:http');",
     "http.createServer((q, s) => {",
-    "  if (q.url === '/api/health') { s.setHeader('content-type', 'application/json'); s.end(JSON.stringify({ ok: true, version: process.env.FAKE_VERSION, ...JSON.parse(process.env.FAKE_EXTRA || '{}') })); return; }",
+    "  if (q.url.split('?')[0] === '/api/health') { s.setHeader('content-type', 'application/json'); s.end(JSON.stringify({ ok: true, version: process.env.FAKE_VERSION, ...JSON.parse(process.env.FAKE_EXTRA || '{}') })); return; }",
     "  s.statusCode = 404; s.end('x');",
     "}).listen(Number(process.env.FAKE_PORT), '127.0.0.1');",
   ].join('\n');
@@ -168,12 +168,12 @@ async function startFakeBox(e: Env, version = '2026.11.1', extra: Record<string,
 interface Check { id: string; state: 'ok' | 'fail' | 'skip'; text: string }
 interface Report { ok: boolean; checks: Check[] }
 
-function runDoctor(args: string[], timeout = 120_000) {
+function runDoctor(args: string[], timeout = 120_000, env: Record<string, string> = {}) {
   const t0 = Date.now();
   const r = spawnSync(
     'powershell.exe',
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', doctorPath, ...args],
-    { encoding: 'utf8', timeout },
+    { encoding: 'utf8', timeout, env: { ...process.env, ...env } },
   );
   return { status: r.status, out: `${r.stdout ?? ''}`, err: `${r.stderr ?? ''}`, ms: Date.now() - t0 };
 }
@@ -231,6 +231,65 @@ describe.runIf(isWin)('doctor.ps1 runs', () => {
     const text = runDoctor(['-InstallRoot', bad.root, '-SkipSystemChecks']);
     expect(text.out).toContain('GAGAL: theme: Tema tidak sah: TV memakai tema asas. Buka apl MAXCOM, Tetapan, Templat paparan.');
   }, 120_000);
+
+  it('the mic_access check: sound arrives is ok; denied fails with the fix; no devices seen while Windows lists one fails; none anywhere is ok', async () => {
+    const run = async (mic: unknown, endpoints: string) => {
+      const e = await makeEnv();
+      await startFakeBox(e, '2026.11.1', mic === undefined ? {} : { mic });
+      const r = runDoctor(['-InstallRoot', e.root, '-Json', '-SkipSystemChecks'], 120_000, { MAXCOM_DOCTOR_CAPTURE_ENDPOINTS: endpoints });
+      return { status: r.status, check: byId(parse(r.out), 'mic_access'), out: r.out };
+    };
+    const ok = await run({ devices: 1, code: 'ok' }, '1');
+    expect(ok.check.state).toBe('ok');
+    expect(ok.check.text).toContain('bunyi sampai');
+    const denied = await run({ devices: 1, code: 'access_denied' }, '1');
+    expect(denied.status).toBe(1);
+    expect(denied.check.state).toBe('fail');
+    expect(denied.check.text).toContain('Windows tidak membenarkan MAXCOM menggunakan Mic-in.');
+    const hidden = await run({ devices: 0, code: 'no_device' }, '2');
+    expect(hidden.check.state).toBe('fail');
+    expect(hidden.check.text).toContain('Windows menyenaraikan 2 peranti rakaman tetapi kotak tidak melihat satu pun');
+    const none = await run({ devices: 0, code: 'no_device' }, '0');
+    expect(none.check).toMatchObject({ state: 'ok', text: 'Mic-in: tiada peranti rakaman pada PC ini' });
+    const untested = await run({ devices: 1, code: 'untested' }, '1');
+    expect(untested.check.state).toBe('ok');
+    const old = await run(undefined, '1'); // an older box reports nothing: not a failure
+    expect(old.check.state).toBe('skip');
+  }, 240_000);
+
+  it('the mic_access check gives each answer its own advice: no_tool, list_failed, device_unavailable, silent, and a machine-wide Deny is named', async () => {
+    const run = async (mic: unknown, endpoints: string, machine = 'Allow') => {
+      const e = await makeEnv();
+      await startFakeBox(e, '2026.11.1', { mic });
+      const r = runDoctor(['-InstallRoot', e.root, '-Json', '-SkipSystemChecks'], 120_000, { MAXCOM_DOCTOR_CAPTURE_ENDPOINTS: endpoints, MAXCOM_DOCTOR_MIC_MACHINE: machine });
+      return byId(parse(r.out), 'mic_access');
+    };
+    const noTool = await run({ devices: 0, code: 'no_tool' }, '1');
+    expect(noTool.state).toBe('fail');
+    expect(noTool.text).toContain('alat siaran (ffmpeg) tiada');
+    expect(noTool.text).not.toContain('Windows tidak membenarkan');
+    const listFailed = await run({ devices: 0, code: 'list_failed' }, '1');
+    expect(listFailed.state).toBe('fail');
+    expect(listFailed.text).toContain('senarai peranti rakaman kotak tidak dapat dibaca');
+    expect(listFailed.text).not.toContain('Windows tidak membenarkan');
+    const busy = await run({ devices: 1, code: 'device_unavailable' }, '1');
+    expect(busy.state).toBe('fail');
+    expect(busy.text).toContain('tidak dapat membukanya');
+    expect(busy.text).toContain('tidak sedang digunakan');
+    expect(busy.text).not.toContain('Windows tidak membenarkan');
+    const silent = await run({ devices: 1, code: 'silent' }, '1');
+    expect(silent.state).toBe('fail');
+    expect(silent.text).toContain('disambung dan tidak dibisukan');
+    expect(silent.text).not.toContain('Windows tidak membenarkan');
+    // access denied while the whole PC blocks microphones: the advice names the machine-wide setting
+    const denyAll = await run({ devices: 1, code: 'access_denied' }, '1', 'Deny');
+    expect(denyAll.state).toBe('fail');
+    expect(denyAll.text).toContain('Windows menyekat mikrofon untuk seluruh PC ini');
+    expect(denyAll.text).toContain('Let desktop apps access your microphone');
+    const denyOne = await run({ devices: 1, code: 'access_denied' }, '1', 'Allow');
+    expect(denyOne.text).toContain('Windows tidak membenarkan MAXCOM menggunakan Mic-in.');
+    expect(denyOne.text).not.toContain('seluruh PC');
+  }, 400_000);
 
   it('text mode prints OK / LANGKAU lines in BM and never the pfx.pass content', async () => {
     const e = await makeEnv();

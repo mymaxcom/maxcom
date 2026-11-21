@@ -121,6 +121,8 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'GET', pattern: /^\/api\/content\/.+$/, permission: 'content:read', sample: '/api/content/announcements', tenant: 'required' },
   { method: 'PUT', pattern: /^\/api\/content\/.+$/, permission: 'content:write', sample: '/api/content/announcements/x', tenant: 'required' },
   { method: 'DELETE', pattern: /^\/api\/content\/.+$/, permission: 'content:write', sample: '/api/content/announcements/x', tenant: 'required' },
+  // "Main sekarang": the TV plays this video item at once (a box only)
+  { method: 'POST', pattern: /^\/api\/content\/video\/[^/]+\/play-now$/, permission: 'content:write', sample: '/api/content/video/x/play-now', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/assets$/, permission: 'assets:write', sample: '/api/assets', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/assets\/video$/, permission: 'assets:write', sample: '/api/assets/video', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/assets\/video\/storage$/, permission: 'assets:write', sample: '/api/assets/video/storage', tenant: 'required' },
@@ -201,6 +203,11 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
 
   { method: 'POST', pattern: /^\/api\/live\/start$/, permission: 'live:control', sample: '/api/live/start', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/live\/stop$/, permission: 'live:control', sample: '/api/live/stop', tenant: 'required' },
+  // the recording of a live, joined on the box (web and iPad): the device that ran the live, or a live administrator (checked in the route)
+  { method: 'POST', pattern: /^\/api\/live\/recordings\/[^/]+\/pieces\/[^/]+$/, permission: 'live:control', sample: '/api/live/recordings/abcdef123456/pieces/0', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/live\/recordings\/[^/]+\/join$/, permission: 'live:control', sample: '/api/live/recordings/abcdef123456/join', tenant: 'required' },
+  { method: 'GET', pattern: /^\/api\/live\/recordings\/[^/]+\/file$/, permission: 'live:control', sample: '/api/live/recordings/abcdef123456/file', tenant: 'required' },
+  { method: 'DELETE', pattern: /^\/api\/live\/recordings\/[^/]+$/, permission: 'live:control', sample: '/api/live/recordings/abcdef123456', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/status$/, permission: 'live:control', sample: '/api/live/status', tenant: 'required' },
   // the surau's live notice: any live:control holder reads and edits it (last edit wins); the frame is one still of the running picture
   { method: 'GET', pattern: /^\/api\/live\/notice$/, permission: 'live:control', sample: '/api/live/notice', tenant: 'required' },

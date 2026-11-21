@@ -118,7 +118,6 @@ void main() {
       expect(u2.locked, isTrue);
       expect(u2.pinLockedUntil, DateTime.utc(2026, 11, 18, 4));
       expect(u2.needs, ['locked', 'no_device', 'phone']);
-      expect(u2.needsPhone, isTrue);
       expect(u2.needsNoDevice, isTrue);
       expect(u2.needsPhoneDuplicate, isFalse);
       expect(u2.suggestDeactivate, isTrue);
@@ -409,6 +408,34 @@ void main() {
       expect(u.id, 'u9');
       expect(u.ref, 'U-0009');
       expect(u.phone, '+60120000009');
+    });
+
+    test('findUserJustAdded finds the newest person of that name with no number made in the last ten minutes', () async {
+      Map<String, dynamic> person(String id, String name, String made, {String? phone, bool deleted = false}) => {
+            'id': id,
+            'name': name,
+            'roles': ['ajk'],
+            'active': true,
+            'pinRequired': true,
+            'createdAt': made,
+            if (phone != null) 'phone': phone,
+            if (deleted) 'deleted': true,
+          };
+      routes['GET /api/users'] = (_) => jsonResponse(200, {
+        'users': [
+          person('old', 'Haji Osman', '2026-11-18T01:00:00.000Z'),
+          person('numbered', 'Haji Osman', '2026-11-18T03:00:00.000Z', phone: '+60120000009'),
+          person('gone', 'Haji Osman', '2026-11-18T03:00:30.000Z', deleted: true),
+          person('other', 'Kak Siti', '2026-11-18T03:00:40.000Z'),
+          person('first', 'Haji Osman', '2026-11-18T02:58:00.000Z'),
+          person('new', 'Haji Osman', '2026-11-18T03:00:50.000Z'),
+        ],
+      });
+      final now = DateTime.parse('2026-11-18T03:01:00.000Z');
+      expect((await api().findUserJustAdded(' Haji   Osman ', now: now))?.id, 'new');
+      expect(await api().findUserJustAdded('Tiada Orang', now: now), isNull);
+      // an hour later the same list holds nobody "just added"
+      expect(await api().findUserJustAdded('Haji Osman', now: now.add(const Duration(hours: 1))), isNull);
     });
 
     test('[PP-A1] revokeInactive sends the ids and reads revoked and skipped', () async {

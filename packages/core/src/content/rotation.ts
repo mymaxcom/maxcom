@@ -7,7 +7,8 @@ import type { PhaseInterval, SolatName } from '../kiosk/state.ts';
 import { hadisPlan } from './hadisDisplay.ts';
 import { TABUNG_SHOWING_MAX_PAGES, tabungFeatured, tabungPageCount, tabungPages } from './tabungPages.ts';
 import type { KioskContent, KioskHadis, TilawahSlot } from './types.ts';
-import { videoSlotSeconds } from './video.ts';
+import { AFTER_PRAYERS, videoSlotSeconds } from './video.ts';
+import type { AfterPrayer } from './video.ts';
 
 export type SlotFeature =
   | 'kuliahCard' | 'pengumuman' | 'posters' | 'videos' | 'programKhas' | 'takwim'
@@ -196,6 +197,8 @@ function buildLayout(content: KioskContent, settings: Settings, now: Date): Layo
         const visible = (content.videos ?? [])
           .filter((v) => v.days.includes('umum') || v.days.includes(dayKey))
           .filter((v) => (v.from === undefined || v.from <= today) && (v.to === undefined || today <= v.to))
+          // an item tied to a prayer (afterPrayer) is never in the rotation: videoAfterPrayerSlots plays it
+          .filter((v) => v.afterPrayer === undefined)
           .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
         return visible.map((v): Slot => ({ feature, itemId: v.id, durationSeconds: videoSlotSeconds(v) }));
       }
@@ -335,4 +338,71 @@ export function tilawahWindow(
     if (startsAt.getTime() <= t && t < endsAt.getTime()) return { slot, startsAt, endsAt };
   }
   return null;
+}
+
+/** One showing of a video tied to a prayer: it plays from `startsAt` for `durationSeconds`, once. */
+export interface AfterPrayerSlot {
+  itemId: string;
+  prayer: AfterPrayer;
+  startsAt: Date;
+  durationSeconds: number;
+}
+
+/**
+ * Where each video with `afterPrayer` plays today (2026.11.14). The anchor of a prayer is the end of its `solat`
+ * phase (a Friday zohor is the Jumaat solat); with the zikir screen on for it (`zikirSelepasSolat` on, its minutes above
+ * 0 and zikir items in the content) the video starts when the zikir screen ends, else right at the end of the solat
+ * phase. A prayer with no solat phase falls back to the end of its last phase, or its own time. Videos of one prayer
+ * follow each other in order. Each item appears once, so it plays once a day; it respects `days`, `from` and `to`, and
+ * the videos feature. A showing that would start inside a prayer phase (the zikir screen cut short by the next prayer's
+ * countdown, say) is left out. Whether it still fits before the next phase or recitation is the caller's room rule.
+ */
+export function videoAfterPrayerSlots(
+  content: KioskContent, settings: Settings, now: Date, day: PrayerDay | null | undefined, hijriMonth?: number,
+): AfterPrayerSlot[] {
+  const vf = feat(settings, 'videos');
+  if (!vf || !on(vf) || !day) return [];
+  const tz = tzOf(settings);
+  const today = dateOf(now, tz);
+  if (day.date !== today) return [];
+  const tied = (content.videos ?? []).filter((v) => v.afterPrayer !== undefined);
+  if (tied.length === 0) return [];
+  const dayKey = DAY_KEYS[klWeekday(today)] ?? 'ahad';
+  const visible = tied
+    .filter((v) => v.days.includes('umum') || v.days.includes(dayKey))
+    .filter((v) => (v.from === undefined || v.from <= today) && (v.to === undefined || today <= v.to))
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  if (visible.length === 0) return [];
+  let intervals: PhaseInterval[];
+  try {
+    for (const t of Object.values(day.times)) klInstant(day.date, t);
+    intervals = buildDayIntervals(day, settings, hijriMonth);
+  } catch {
+    return [];
+  }
+  const z = feat(settings, 'zikirSelepasSolat');
+  const zikirMins = z && on(z) && content.zikir.length > 0 ? Math.max(0, num(z.minutesAfterSolat, 10)) : 0;
+  const out: AfterPrayerSlot[] = [];
+  for (const prayer of AFTER_PRAYERS) {
+    const mine = visible.filter((v) => v.afterPrayer === prayer);
+    if (mine.length === 0) continue;
+    const of = intervals.filter((i) => i.prayer === prayer || (prayer === 'zohor' && i.prayer === 'jumaat'));
+    const solat = of.find((i) => i.phase === 'solat');
+    let anchor: number;
+    if (solat) {
+      anchor = solat.end.getTime() + zikirMins * MIN;
+    } else {
+      anchor = instantOf(today, day.times[prayer], tz).getTime();
+      for (const i of of) if (i.phase !== 'tarawih') anchor = Math.max(anchor, i.end.getTime());
+    }
+    let at = anchor;
+    for (const v of mine) {
+      const durationSeconds = videoSlotSeconds(v);
+      if (!intervals.some((i) => i.start.getTime() <= at && at < i.end.getTime())) {
+        out.push({ itemId: v.id, prayer, startsAt: new Date(at), durationSeconds });
+      }
+      at += durationSeconds * SEC;
+    }
+  }
+  return out;
 }

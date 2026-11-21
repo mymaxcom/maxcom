@@ -242,6 +242,21 @@ void main() {
     expect(find.text('Padam peranti ini'), findsOneWidget);
   });
 
+  testWidgets('[PP-A6b] Tukar nombor: an empty field clears the number with {"phone": ""}', (tester) async {
+    final h = await openPerson(tester, 'u2');
+    h.handlers['PUT /api/users/u2/phone'] = (r) async => jsonResponse(200, {'ok': true});
+    await tester.tap(find.byKey(const ValueKey('user-phone-edit')));
+    await settle(tester);
+    expect(find.text('Nombor telefon untuk WhatsApp (pilihan)'), findsOneWidget);
+    expect(find.text('Digunakan untuk menghantar notis dan pautan melalui WhatsApp. Boleh dikosongkan.'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('user-phone-field')), '');
+    await tester.tap(find.byKey(const ValueKey('user-phone-save')));
+    await settle(tester);
+    final sent = h.box.seen.lastWhere((r) => r.url.path == '/api/users/u2/phone');
+    expect(jsonDecode(sent.body), {'phone': ''});
+    expect(find.text('Nombor telefon dibuang.'), findsOneWidget);
+  });
+
   testWidgets('[PP-A6b] Tukar nombor: 012-000 0001 is sent as +60120000001; a bad number sends nothing; a taken one names the other ID', (tester) async {
     final h = await openPerson(tester, 'u2');
     await tester.tap(find.byKey(const ValueKey('user-phone-edit')));
@@ -271,9 +286,10 @@ void main() {
     expect(find.text('Nombor telefon disimpan.'), findsOneWidget);
   });
 
-  testWidgets('[PP-A6b] no number: Nombor telefon diperlukan with Isi nombor; WhatsApp names the number before it opens', (tester) async {
+  testWidgets('[PP-A6b] no number: Tiada nombor telefon with Isi nombor; WhatsApp names the number before it opens', (tester) async {
     final h = await openPerson(tester, 'u1');
-    expect(find.text('Nombor telefon diperlukan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Tiada nombor telefon'), findsOneWidget);
     expect(find.text('Isi nombor'), findsOneWidget);
     expect(find.byKey(const ValueKey('user-whatsapp')), findsNothing);
 

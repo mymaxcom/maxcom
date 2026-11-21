@@ -85,6 +85,7 @@ const Map<String, String> contentFieldLabelsEn = {
   'video.startSec': 'Start',
   'video.endSec': 'End',
   'video.sound': 'Sound',
+  'video.afterPrayer': 'Play after the post-prayer zikir',
   'video.days': 'Days shown',
   'video.from': 'Start date',
   'video.to': 'End date',
@@ -155,6 +156,7 @@ const Map<String, Map<String, String>> contentChoiceLabelsEn = {
   'tugasan.role': {'imam': 'Imam', 'bilal': 'Bilal', 'khatib': 'Khatib', 'ajk': 'Committee on duty'},
   'tilawahSlot.before': _slotLabelsEn,
   'video.source': {'upload': 'Upload', 'youtube': 'YouTube', 'rakaman': 'Recording'},
+  'video.afterPrayer': {'subuh': 'Subuh', 'zohor': 'Zohor', 'asar': 'Asar', 'maghrib': 'Maghrib', 'isyak': 'Isyak'},
 };
 
 /// The seven days and "every day", by day key.
@@ -258,6 +260,7 @@ const Map<String, String> contentFieldLabelsAr = {
   'video.startSec': 'البداية',
   'video.endSec': 'النهاية',
   'video.sound': 'الصوت',
+  'video.afterPrayer': 'التشغيل بعد ذكر الصلاة',
   'video.days': 'أيام العرض',
   'video.from': 'تاريخ البدء',
   'video.to': 'تاريخ الانتهاء',
@@ -326,6 +329,7 @@ const Map<String, Map<String, String>> contentChoiceLabelsAr = {
   'tugasan.role': {'imam': 'الإمام', 'bilal': 'المؤذن', 'khatib': 'الخطيب', 'ajk': 'عضو اللجنة المناوب'},
   'tilawahSlot.before': _slotLabelsAr,
   'video.source': {'upload': 'رفع', 'youtube': 'يوتيوب', 'rakaman': 'تسجيل'},
+  'video.afterPrayer': {'subuh': 'الفجر', 'zohor': 'الظهر', 'asar': 'العصر', 'maghrib': 'المغرب', 'isyak': 'العشاء'},
 };
 
 const Map<String, String> dayLabelsAr = {

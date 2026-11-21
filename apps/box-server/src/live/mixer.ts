@@ -72,12 +72,52 @@ export interface MixArgsInput {
   rtspPass?: string;
   /** Path the mix is published to (default `surau`). */
   outputPath?: string;
+  /**
+   * The level control (default true): the quiet-sound lift PER INPUT (before the mix) and the safety limiter on the final
+   * mix. False when the box's ffmpeg lacks the filters, and for diagnosis.
+   */
+  leveller?: boolean;
+  /**
+   * The phone/tablet comes from the Android app, which levels its own microphone: its feed (the `ingest` unit and the
+   * `deviceMic` source) is not lifted again. Everything else (web/iPad feed, box Mic-in, IP camera sound) is.
+   */
+  appLevelled?: boolean;
 }
 
 export const MIX_PATHS = { camera: 'surau-cam', ingest: 'surau-in', deviceMic: 'surau-mic' } as const;
 export const MONITOR_RATE = 16000;
 export const MAX_DELAY_MS = 10_000;
 const DEFAULT_SOURCE_RATE = 48000;
+
+/* The level control of the box path, split in two parts (design 2026-11-21: one job per stage, no stacking).
+   LIFT: a quiet-sound lift on EACH INPUT before the mix (before its `volume`), only on inputs that are not levelled yet (the
+   web/iPad feed, the box Mic-in, the IP camera sound). The Android app levels its own microphone, so its feed (the
+   `ingest` unit and `deviceMic` while the session source is 'android') skips it (`appLevelled`). LIMITER: one safety
+   `alimiter` on the final mix for everything (limit 0.89 = -1 dBFS, 5 ms attack, `level=0` = no makeup). The monitor tap is
+   built from the raw sources before both.
+   LIFT is a `compand` (attack 100 ms, decay 300 ms, soft-knee 2, no delay) whose curve leaves normal sound alone: unity at
+   about -22 dBFS RMS and above, quiet speech (-34 .. -28) pulled to about -21 .. -20, room noise (white, -43 and below)
+   raised by at most +3 dB. Measured on the input level (a mono source is 3 dB lower after the existing stereo `aformat`, which
+   is outside this stage) with the real ffmpeg 8.1.2 and 9.0.2 (identical to 0.1 dB), `volumedetect` mean, input -> output:
+   300 Hz sine of the given RMS through LIFT + LIMITER:
+     -60 -> -56.3   -50 -> -46.7   -46 -> -42.6   -43 -> -39.2   -40 -> -35.1   -37 -> -28.7   -34 -> -21.5
+     -31 -> -20.3   -28 -> -20.1   -25 -> -21.1   -22 -> -21.3   -21 -> -20.8   -18 -> -18.0   -15 -> -15.0   -9 -> -9.0
+   white noise (anoisesrc): -60 -> -57.2   -50 -> -48.1   -46 -> -44.2   -43 -> -40.8   -40 -> -36.3   -37 -> -28.6
+   the 36 s sample (mono AAC tablet live):
+     speech 15-27 s mean  -31.1 -> -20.8 dBFS   (target -19 +-3)
+     noise 28-36 s mean   -40.2 -> -38.0 dBFS   (+2.2)
+     0-12 s mean (noise with a few -35 dBFS speech-like blips)  -38.5 -> -29.6 dBFS
+     whole-file peak       -8.1 ->  -1.0 dBFS   (no clip)
+   Known limits: a pure tone at -43 / -40 reads +3.9 / +5.0 (white noise passes the +3 / +5 limits); between the tone levels
+   -40 and -34 the measured slope is about 2.3:1 (lifting speech out of room noise needs it); the curve points are not
+   monotone (-28 -> -17.5, -21 -> -21.0) because compand's envelope ripple pulls the measured plateau down.
+   The Android box ffmpeg must have `compand` and `alimiter` (scripts/android/ffmpeg-features.json); without either the
+   mixer runs with no leveller at all (levellerProbe.ts, and a "No such filter" relaunch). */
+export const LIFT =
+  'compand=attacks=0.1:decays=0.3:points=-90/-90|-55/-55|-43/-53.91|-40/-44.06|-34/-18.98|-28/-17.48|-21/-20.98|-15/-14.91|-9/-8.91|0/0:soft-knee=2';
+export const LIMITER = 'alimiter=limit=0.89:attack=5:release=50:level=0';
+/** One input through LIFT then the final limiter (what a lifted input sees); used by tests and measurements. */
+export const LEVELLER = `${LIFT},${LIMITER}`;
 
 const USER_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const PASS_RE = /^[A-Za-z0-9]{8,128}$/;
@@ -158,11 +198,15 @@ export function mixArgs(i: MixArgsInput): string[] {
   const norm = `aformat=sample_rates=${DEFAULT_SOURCE_RATE}:channel_layouts=stereo`;
   const tap = `aresample=${MONITOR_RATE},aformat=sample_fmts=s16:channel_layouts=mono`;
   const g: string[] = [];
+  const on = i.leveller !== false;
+  // the safety limiter sits on the final mix (everything); the quiet-sound lift sits on each input that is not levelled yet
+  const level = on ? `,${LIMITER}` : '';
+  const lift = (levelled: boolean): string => (on && !levelled ? `${LIFT},` : '');
   // a unit without an audio track: the silent reference is a SOURCE FILTER inside the graph (the Android ffmpeg has no
   // avdevice, so no `-f lavfi` input); it keeps channel 0 of the monitor and the graph shape
   const paced = i.added.length === 0 ? ',arealtime' : '';
   g.push(i.unitHasAudio ? `[${unitIdx}:a]asplit=2[m0][r0]` : `anullsrc=r=${DEFAULT_SOURCE_RATE}:cl=stereo${paced},asplit=2[m0][r0]`);
-  g.push(`[r0]volume@unit=volume=${unitVolume},${norm}[c0]`);
+  g.push(`[r0]${lift(i.appLevelled === true && i.unit === 'ingest')}volume@unit=volume=${unitVolume},${norm}[c0]`);
   g.push(`[m0]${tap}[t0]`);
   const mixIn = ['[c0]'];
   const taps = ['[t0]'];
@@ -172,13 +216,13 @@ export function mixArgs(i: MixArgsInput): string[] {
     const delay = intIn(`${a.id} delay`, a.initialDelayMs, 0, MAX_DELAY_MS);
     g.push(`[${idx}:a]adelay@${a.id}=delays=${Math.max(1, delay)}:all=1,asplit=2[m${n + 1}][r${n + 1}]`);
     const vol = factor(a.volume); // validated even while held out
-    g.push(`[r${n + 1}]volume@${a.id}=volume=${held ? '0.00' : vol},${norm}[c${n + 1}]`);
+    g.push(`[r${n + 1}]${lift(i.appLevelled === true && a.id === 'deviceMic')}volume@${a.id}=volume=${held ? '0.00' : vol},${norm}[c${n + 1}]`);
     g.push(`[m${n + 1}]${tap}[t${n + 1}]`);
     mixIn.push(`[c${n + 1}]`);
     taps.push(`[t${n + 1}]`);
   });
   const zmq = i.control === 'zmq' ? `,azmq=bind_address=tcp\\\\://127.0.0.1\\\\:${zmqPort}` : '';
-  g.push(mixIn.length > 1 ? `${mixIn.join('')}amix=inputs=${mixIn.length}:normalize=0,aresample=async=1${zmq}[mix]` : `[c0]aresample=async=1${zmq}[mix]`);
+  g.push(mixIn.length > 1 ? `${mixIn.join('')}amix=inputs=${mixIn.length}:normalize=0,aresample=async=1${zmq}${level}[mix]` : `[c0]aresample=async=1${zmq}${level}[mix]`);
   g.push(taps.length > 1 ? `${taps.join('')}amerge=inputs=${taps.length},aformat=sample_fmts=s16[mon]` : '[t0]aformat=sample_fmts=s16[mon]');
 
   args.push('-filter_complex', g.join(';'));
@@ -347,6 +391,19 @@ export interface MixerOptions {
   outputPath?: string;
   deviceName?: string;
   device?: number;
+  /**
+   * The leveller (compand + alimiter) on the mix. `true`/`false` force it; left out, the mixer asks `levellerProbe` once
+   * before its first start (no probe: on). A box whose ffmpeg lacks either filter runs without it, never without the live.
+   */
+  leveller?: boolean;
+  /** true: both filters exist; false: one is missing; null/throws: could not tell (then the leveller is tried and the "No such filter" fallback guards it). */
+  levellerProbe?: () => Promise<boolean | null>;
+  /** Called once when a run proved the leveller filters missing ("No such filter"), so the owner can remember it for later Mixers. Must not throw. */
+  onLevellerMissing?: () => void;
+  /** The phone/tablet is the Android app (session source 'android'): its feed is levelled by the app, not lifted here. */
+  appLevelled?: boolean;
+  /** One-line warnings (default: console.warn). */
+  warn?: (message: string) => void;
   /** Injectable for tests. */
   spawnFn?: SpawnFn;
   zmqSend?: (port: number, message: string) => Promise<unknown>;
@@ -376,6 +433,9 @@ function childEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+/** ffmpeg's words for a filter this build does not have (only the two of the leveller count). */
+const LEVELLER_MISSING_RE = /(?:no such filter|unknown filter)\W+(?:compand|alimiter)(?![a-z])/i;
+
 const MONITOR_CAP_BYTES = 1024 * 1024;
 
 export class Mixer {
@@ -402,6 +462,12 @@ export class Mixer {
   private startedAt = 0;
   private channelsNow: VolumeTarget[] = ['unit'];
   private zmqNow: number | undefined;
+  /** Leveller in the graph now: null until the probe answered. */
+  private levellerOn: boolean | null;
+  /** A run died on a missing leveller filter: relaunch at once without it (once). */
+  private relaunchNoLeveller = false;
+  /** The leveller probe is pending: no launch from any other path until it settles (the one launch after it uses the latest cfg). */
+  private probing = false;
 
   constructor(o: MixerOptions) {
     this.o = o;
@@ -410,6 +476,15 @@ export class Mixer {
     this.redact = createRedactor([o.rtspPass ?? '']);
     this.monitor = this.sink;
     this.zmqNow = o.zmqPort;
+    this.levellerOn = o.leveller ?? (o.levellerProbe === undefined ? true : null);
+  }
+
+  private warn(message: string): void {
+    try {
+      (this.o.warn ?? ((m: string) => console.warn(m)))(message);
+    } catch {
+      /* a logger must not stop the live */
+    }
   }
 
   status(): MixerStatus {
@@ -431,7 +506,24 @@ export class Mixer {
     if (this.cfg !== null || this.stopped) return;
     this.cfg = { ...cfg, added: cfg.added.map((a) => ({ ...a })) };
     this.state = 'starting';
-    this.launch();
+    if (this.levellerOn !== null || this.o.levellerProbe === undefined) {
+      this.launch();
+      return;
+    }
+    // ask the box's ffmpeg once for compand + alimiter before the first run
+    this.probing = true;
+    void Promise.resolve()
+      .then(() => (this.o.levellerProbe as () => Promise<boolean | null>)())
+      .catch(() => null)
+      .then((has) => {
+        this.probing = false;
+        if (this.stopped) return;
+        if (has === false) {
+          this.warn('mixer: this ffmpeg has no compand/alimiter filter, the live runs without the level control');
+          this.levellerOn = false;
+        } else this.levellerOn = true;
+        this.launch();
+      });
   }
 
   /** Delay of an added source, in ms (T0: a runtime adelay change; values below 1 become 1). */
@@ -540,10 +632,13 @@ export class Mixer {
       rtspUser: this.o.rtspUser,
       rtspPass: this.o.rtspPass,
       outputPath: this.o.outputPath,
+      leveller: this.levellerOn !== false,
+      appLevelled: this.o.appLevelled === true,
     });
   }
 
   private restartNow(): void {
+    if (this.probing) return; // the launch after the probe reads the latest cfg/lost state
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     const c = this.child;
@@ -570,7 +665,7 @@ export class Mixer {
   }
 
   private launch(): void {
-    if (this.stopped || this.cfg === null) return;
+    if (this.stopped || this.cfg === null || this.probing) return;
     let args: string[];
     try {
       if (this.o.zmqPortFn !== undefined) this.zmqNow = this.o.zmqPortFn();
@@ -613,6 +708,16 @@ export class Mixer {
         if (line === '') continue;
         this.stderrTail.push(line);
         if (this.stderrTail.length > 12) this.stderrTail.shift();
+        if (this.levellerOn === true && LEVELLER_MISSING_RE.test(line)) {
+          this.levellerOn = false;
+          this.relaunchNoLeveller = true;
+          this.warn('mixer: ffmpeg has no compand/alimiter filter, relaunching the live without the level control');
+          try {
+            this.o.onLevellerMissing?.();
+          } catch {
+            /* a callback must not stop the live */
+          }
+        }
       }
     });
     let settled = false;
@@ -621,6 +726,12 @@ export class Mixer {
       settled = true;
       if (this.child === proc) this.child = null;
       if (this.stopped) return;
+      if (this.relaunchNoLeveller) {
+        this.relaunchNoLeveller = false;
+        this.restarts++;
+        this.launch();
+        return;
+      }
       if (this.planned) {
         this.restarts++;
         this.launch();

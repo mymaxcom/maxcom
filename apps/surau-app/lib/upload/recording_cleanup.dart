@@ -183,6 +183,8 @@ class CleanupRecord {
     this.auditedAt,
     this.skipPasses = 0,
     this.keptAt,
+    this.ask = false,
+    this.choice,
   });
 
   factory CleanupRecord.fromJson(Map<String, dynamic> j) => CleanupRecord(
@@ -202,6 +204,8 @@ class CleanupRecord {
     auditedAt: _time(j['auditedAt']),
     skipPasses: (j['skipPasses'] as num? ?? 0).toInt(),
     keptAt: _time(j['keptAt']),
+    ask: j['ask'] == true,
+    choice: j['choice'] == 'keep' || j['choice'] == 'delete' ? j['choice'] as String : null,
   );
 
   static DateTime? _time(Object? v) =>
@@ -232,6 +236,16 @@ class CleanupRecord {
   /// Set after [cleanupSkipPasses] such passes: the files stay for good.
   final DateTime? keptAt;
 
+  /// 2026.11.14: the live's pieces were joined into one file and nothing is deleted by itself: once YouTube has the
+  /// whole of it the person is asked once, "Simpan rakaman di peranti?" (see [needsAnswer]).
+  final bool ask;
+
+  /// The person's answer, `keep` or `delete`; null until they have answered.
+  final String? choice;
+
+  /// YouTube has verified the copy and the person has not answered yet: the app asks now.
+  bool get needsAnswer => ask && verifiedAt != null && choice == null && deletedAt == null && keptAt == null;
+
   CleanupPhase get phase => deletedAt != null
       ? CleanupPhase.deleted
       : keptAt != null
@@ -260,6 +274,7 @@ class CleanupRecord {
     Object? auditedAt = _keep,
     int? skipPasses,
     Object? keptAt = _keep,
+    Object? choice = _keep,
   }) => CleanupRecord(
     sessionId: sessionId,
     kuliahId: kuliahId,
@@ -285,6 +300,8 @@ class CleanupRecord {
         : auditedAt as DateTime?,
     skipPasses: skipPasses ?? this.skipPasses,
     keptAt: identical(keptAt, _keep) ? this.keptAt : keptAt as DateTime?,
+    ask: ask,
+    choice: identical(choice, _keep) ? this.choice : choice as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -304,6 +321,8 @@ class CleanupRecord {
     'auditedAt': auditedAt?.toUtc().toIso8601String(),
     'skipPasses': skipPasses,
     'keptAt': keptAt?.toUtc().toIso8601String(),
+    'ask': ask,
+    'choice': choice,
   };
 
   @override
@@ -368,6 +387,8 @@ class RecordingCleanup {
     required int durationSec,
     required int? youtubeSeconds,
     required String? liveVideoId,
+    bool ask = false,
+    bool keepForGood = false,
   }) async {
     if (durationSec <= 0) return;
     final known = await records();
@@ -396,8 +417,21 @@ class RecordingCleanup {
         bytes: bytes,
         youtubeSeconds: youtubeSeconds,
         liveVideoId: liveVideoId,
+        ask: ask,
+        // nothing is deleted by itself: the answer is already `keep` (a failed join, the browser's pieces)
+        choice: ask && keepForGood ? 'keep' : null,
       ),
     );
+  }
+
+  /// The person's answer to "Simpan rakaman di peranti?": `keep` leaves the file for good, `delete` lets the
+  /// clean-up remove it now (it still asks YouTube once more right before). Ignored unless the copy is verified.
+  Future<void> choose(String sessionId, String choice) async {
+    if (choice != 'keep' && choice != 'delete') return;
+    final r = (await records())[sessionId];
+    if (r == null || !r.needsAnswer) return;
+    await _put(r.copyWith(choice: choice, lastCheckAt: null));
+    if (choice == 'delete') await run();
   }
 
   /// One pass: verify what can be verified, delete what is due. Safe to call
@@ -450,6 +484,11 @@ class RecordingCleanup {
     CleanupSettings s,
     List<UploadJob> open,
   ) async {
+    // The person chose to keep it: it stays for good.
+    if (r.ask && r.choice == 'keep') {
+      await _put(r.copyWith(keptAt: now().toUtc()));
+      return;
+    }
     final own = [
       for (final j in open)
         if (j.sessionId == r.sessionId) j,
@@ -470,7 +509,12 @@ class RecordingCleanup {
       await _put(r);
       justVerified = true;
     } else {
-      if (now().isBefore(r.deleteAt(s.keepDays)!)) return;
+      // Asked recordings wait for the person, not for the kept days.
+      if (r.ask) {
+        if (r.choice != 'delete') return;
+      } else if (now().isBefore(r.deleteAt(s.keepDays)!)) {
+        return;
+      }
       if (_throttled(r)) return;
       final c = await _check(r, ids, s);
       r = c.record;
@@ -483,7 +527,12 @@ class RecordingCleanup {
       // the video ids YouTube was just asked about are the ones noted
       r = r.copyWith(videoIds: ids);
     }
-    if (justVerified && now().isBefore(r.deleteAt(s.keepDays)!)) return;
+    if (r.ask) {
+      // nothing is deleted by itself: only after the person said Delete
+      if (r.choice != 'delete') return;
+    } else if (justVerified && now().isBefore(r.deleteAt(s.keepDays)!)) {
+      return;
+    }
     // the live may have started while YouTube was being asked
     if (await recordingNow()) return;
     await _delete(r);

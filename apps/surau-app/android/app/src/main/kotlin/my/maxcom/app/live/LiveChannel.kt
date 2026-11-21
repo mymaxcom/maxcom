@@ -3,7 +3,6 @@ package my.maxcom.app.live
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.view.WindowManager
@@ -31,15 +30,6 @@ class LiveChannel private constructor(
         const val METHOD = "my.maxcom/live"
         const val EVENTS = "my.maxcom/live/events"
         const val PREVIEW = "my.maxcom/live/preview"
-
-        private val MIC_TYPES = setOf(
-            AudioDeviceInfo.TYPE_BUILTIN_MIC,
-            AudioDeviceInfo.TYPE_WIRED_HEADSET,
-            AudioDeviceInfo.TYPE_USB_DEVICE,
-            AudioDeviceInfo.TYPE_USB_HEADSET,
-            // Bluetooth SCO and BLE headsets are not listed: the system does not route the recording to them, so a
-            // headset connecting must not look like a new microphone (it would switch the built-in one on).
-        )
 
         /** Call from `configureFlutterEngine`, which runs during `onCreate`. */
         fun register(flutter: FlutterEngine, activity: FragmentActivity) {
@@ -90,11 +80,13 @@ class LiveChannel private constructor(
             // in `source.url`, goes to the engine and is not stored, logged or echoed back.
             "setSource" -> {
                 val err = engine.setSource(specOf(call))
+                refreshService()
                 if (err != null) result.error(err, null, null) else result.success(null)
             }
             "setMix" -> {
                 val kind = VideoKind.parse((call.argument<Map<String, Any?>>("source"))?.get("kind") as? String)
                 val err = engine.setAudioMix(AudioMixCfg.fromMap(call.argument<Map<String, Any?>>("mix"), kind))
+                refreshService()
                 if (err != null) result.error(err, null, null) else result.success(null)
             }
             "setAvOffset" -> {
@@ -113,6 +105,13 @@ class LiveChannel private constructor(
             "clapStop" -> { engine.clapStop(); result.success(null) }
             // The microphones the system offers now (the Live tab reads this every few seconds to notice a plugged-in one).
             "audioInputs" -> result.success(audioInputs())
+            // Which microphone the live records from: a `type:product` id, "own" or null (automatic). Reasons only.
+            "setMic" -> {
+                engine.setPreferredMic(call.argument<String>("id"))
+                result.success(null)
+            }
+            // A plain 3-pole plug in a 4-pole jack: headphones are seen, no microphone.
+            "headphonesWithoutMic" -> result.success(AudioRecordPort.headphonesWithoutMic(activity.getSystemService(Context.AUDIO_SERVICE) as? AudioManager))
             else -> result.notImplemented()
         }
     }
@@ -123,18 +122,11 @@ class LiveChannel private constructor(
      */
     private fun audioInputs(): List<Map<String, Any?>> {
         val am = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val out = LinkedHashMap<String, Map<String, Any?>>()
-        for (d in am.getDevices(AudioManager.GET_DEVICES_INPUTS)) {
-            if (!d.isSource || d.type !in MIC_TYPES) continue
-            val builtin = d.type == AudioDeviceInfo.TYPE_BUILTIN_MIC
-            val product = d.productName?.toString()?.trim().orEmpty()
+        return AudioRecordPort.inputs(am).map { r ->
             // a neutral kind, never a words: the app names "builtin" and a nameless "external" in its own language;
             // a USB or wired microphone keeps its product name
-            val kind = if (builtin) "builtin" else "external"
-            val name = if (builtin) "" else product
-            out.putIfAbsent("${d.type}:$product", mapOf("id" to "${d.type}:$product", "name" to name, "kind" to kind, "builtin" to builtin))
+            mapOf("id" to r.id, "name" to r.name, "kind" to r.kind, "builtin" to r.builtin)
         }
-        return out.values.toList()
     }
 
     private fun specOf(call: MethodCall): SourceSpec = SourceLogic.specFrom(
@@ -176,6 +168,12 @@ class LiveChannel private constructor(
         permissionLauncher.launch(wanted.toTypedArray())
     }
 
+    /** A source or microphone change during the live: the service takes the types of what is in use now. */
+    private fun refreshService() {
+        if (!engine.live) return
+        try { LiveService.start(activity, engine.foregroundNeeds()) } catch (_: RuntimeException) {}
+    }
+
     private fun start(call: MethodCall, result: MethodChannel.Result) {
         val srtMap = call.argument<Map<String, Any?>>("srt")
         val srt = srtMap?.let {
@@ -200,7 +198,7 @@ class LiveChannel private constructor(
         }
         // The foreground service first: the camera and microphone must be held by it.
         try {
-            LiveService.start(activity)
+            LiveService.start(activity, engine.foregroundNeeds())
         } catch (e: RuntimeException) {
             result.error("service_failed", null, null)
             return

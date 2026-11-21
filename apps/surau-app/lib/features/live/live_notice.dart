@@ -89,172 +89,122 @@ class LiveNoticeInput {
 }
 
 /// One field of a notice: control and direction-override characters become
-/// spaces, runs of whitespace become one space, any word that contains `://`
-/// is dropped, at most 160 characters. Null when nothing is left.
+/// spaces, the WhatsApp format marks (`*` bold, `_` italic, `~` strike, the
+/// backtick for mono) are removed so a name cannot open a format run, runs of
+/// whitespace become one space, any word that is a link is dropped (`://`, a
+/// word starting `www.`, or a dot followed by letters and a slash such as
+/// `bit.ly/x`), at most 160 characters. Null when nothing is left.
 String? _clean(String? v) {
   if (v == null) return null;
-  final flat = v.replaceAll(RegExp(r'[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]'), ' ');
-  var t = flat.split(RegExp(r'\s+')).where((w) => w.isNotEmpty && !w.contains('://')).join(' ');
+  final flat = v.replaceAll(RegExp(r'[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069*_~`]'), ' ');
+  var t = flat.split(RegExp(r'\s+')).where((w) => w.isNotEmpty && !_isLink(w)).join(' ');
   if (t.runes.length > 160) t = String.fromCharCodes(t.runes.take(160)).trimRight();
   return t.isEmpty ? null : t;
 }
 
-enum _Part { none, morning, noon, evening, night, tomorrow }
+final RegExp _schemeLessLink = RegExp(r'(^www\.)|(\.[A-Za-z]{2,}/)', caseSensitive: false);
+
+/// A word WhatsApp would turn into a link: with a scheme, `www.`, or `name.tld/path`.
+bool _isLink(String w) => w.contains('://') || _schemeLessLink.hasMatch(w);
 
 const Set<String> _knownSlots = {'subuh', 'zohor', 'asar', 'maghrib', 'isyak'};
 
-/// When the kuliah is, in words. A Maghrib or Isyak kuliah of today is always
-/// the night (Maghrib can start before 19:00); every other slot of today goes
-/// by its start hour; tomorrow is tomorrow; any other day, or no time, is none.
-_Part _when(String? slot, DateTime? start, DateTime now) {
-  if (start == null) return _Part.none;
-  final days = DateTime.utc(start.year, start.month, start.day)
-      .difference(DateTime.utc(now.year, now.month, now.day))
-      .inDays;
-  if (days == 1) return _Part.tomorrow;
-  if (days != 0) return _Part.none;
-  if (slot == 'maghrib' || slot == 'isyak') return _Part.night;
-  final h = start.hour;
-  if (h < 12) return _Part.morning;
-  if (h < 15) return _Part.noon;
-  if (h < 19) return _Part.evening;
-  return _Part.night;
-}
-
-/// A title that already begins with the word for "book": the sentence then
-/// does not add it a second time. Compared after trimming, without case.
-final RegExp _kitabWord = RegExp(r'^(kitab|book|\u0643\u062A\u0627\u0628)(\s|$)', caseSensitive: false);
-
-bool _startsWithKitab(String title) => _kitabWord.hasMatch(title.trim());
+/// [t] in WhatsApp bold.
+String _b(String t) => '*$t*';
 
 /// The notice for [i] in [lang], or null when `i.videoId` is not a valid id
-/// (the caller then offers no button). [now] is the phone's local time.
+/// (the caller then offers no button). [now] is kept for callers; the text
+/// no longer carries a time word. Shape (BM): the greeting; then
+/// `Ikuti *slot* di *surau* bersama *penceramah*.`; then `Tajuk: *tajuk*`;
+/// then the link. A missing part is left out with its joining word, never an
+/// empty `**`.
 String? liveNoticeText(LiveNoticeInput i, AppLang lang, DateTime now) {
   if (!isLiveVideoId(i.videoId)) return null;
   final slotKey = (i.slot ?? '').trim().toLowerCase();
   final slot = _knownSlots.contains(slotKey) ? slotKey : (slotKey.isEmpty ? null : 'other');
   final label = _clean(i.label);
   final speaker = _clean(i.speaker);
-  final kitab = _clean(i.kitab);
-  final topic = _clean(i.topic);
+  final title = _clean(i.topic) ?? _clean(i.kitab);
   final surau = _clean(i.surau);
-  final noKuliah =
-      slot == null && label == null && i.start == null && speaker == null && kitab == null && topic == null;
-  final part = _when(slot, i.start, now);
-  final line = switch (lang) {
-    AppLang.ms => _ms(noKuliah, slot, label, part, speaker, kitab, topic, surau),
-    AppLang.en => _en(noKuliah, slot, label, part, speaker, kitab, topic, surau),
-    AppLang.ar => _ar(noKuliah, slot, label, part, speaker, kitab, topic, surau),
-  };
-  final greeting = lang == AppLang.ar
-      ? 'السلام عليكم ورحمة الله.'
-      : "Assalamu'alaikum warahmatullah.";
-  return '$greeting\n$line\n${liveWatchLink(i.videoId)}';
+  final noKuliah = slot == null && label == null && i.start == null && speaker == null && title == null;
+  final w = _words[lang]!;
+  final name = noKuliah
+      ? null
+      : switch (slot) {
+          'subuh' => w.slots[0],
+          'zohor' => w.slots[1],
+          'asar' => w.slots[2],
+          'maghrib' => w.slots[3],
+          'isyak' => w.slots[4],
+          _ => label ?? w.kuliah,
+        };
+  final b = StringBuffer(name == null ? w.live : '${w.follow} ${_b(name)}');
+  if (surau != null) b.write(' ${w.at} ${_b(surau)}');
+  if (speaker != null) b.write(' ${w.withWord} ${_b(speaker)}');
+  b.write('.');
+  final lines = <String>[
+    lang == AppLang.ar ? 'السلام عليكم ورحمة الله.' : "Assalamu'alaikum warahmatullah.",
+    b.toString(),
+    if (title != null) '${w.title}: ${_b(title)}',
+    liveWatchLink(i.videoId),
+  ];
+  return lines.join('\n');
 }
 
-String _ms(bool noKuliah, String? slot, String? label, _Part part, String? speaker, String? kitab, String? topic, String? surau) {
-  if (noKuliah) {
-    return surau == null
-        ? 'Ikuti siaran langsung dalam talian menerusi pautan berikut:'
-        : 'Ikuti siaran langsung dari $surau dalam talian menerusi pautan berikut:';
-  }
-  final name = switch (slot) {
-    'subuh' => 'Kuliah Subuh',
-    'zohor' => 'Kuliah Zohor',
-    'asar' => 'Kuliah Asar',
-    'maghrib' => 'Kuliah Maghrib',
-    'isyak' => 'Kuliah Isyak',
-    _ => label ?? 'kuliah',
-  };
-  final time = switch (part) {
-    _Part.morning => 'pagi ini',
-    _Part.noon => 'tengah hari ini',
-    _Part.evening => 'petang ini',
-    _Part.night => 'malam ini',
-    _Part.tomorrow => 'esok',
-    _Part.none => null,
-  };
-  final b = StringBuffer('Ikuti $name');
-  if (time != null) b.write(' $time');
-  if (speaker != null) b.write(' disampaikan oleh $speaker');
-  if (kitab != null) {
-    b.write(_startsWithKitab(kitab) ? ' membicarakan $kitab' : ' membicarakan kitab $kitab');
-  } else if (topic != null) {
-    b.write(' membicarakan tajuk $topic');
-  }
-  b.write(' secara langsung dalam talian menerusi pautan berikut:');
-  return b.toString();
+/// The standard name of [slot] (`subuh` .. `isyak`) in [lang] ("Kuliah Maghrib"), or null for any other slot.
+String? liveSlotName(String? slot, AppLang lang) {
+  final i = ['subuh', 'zohor', 'asar', 'maghrib', 'isyak'].indexOf((slot ?? '').trim().toLowerCase());
+  return i < 0 ? null : _words[lang]!.slots[i];
 }
 
-String _en(bool noKuliah, String? slot, String? label, _Part part, String? speaker, String? kitab, String? topic, String? surau) {
-  if (noKuliah) {
-    return surau == null
-        ? 'Join the live stream at the link below:'
-        : 'Join the live stream from $surau at the link below:';
-  }
-  final name = switch (slot) {
-    'subuh' => 'the Subuh talk',
-    'zohor' => 'the Zohor talk',
-    'asar' => 'the Asar talk',
-    'maghrib' => 'the Maghrib talk',
-    'isyak' => 'the Isyak talk',
-    _ => label ?? 'the talk',
-  };
-  final time = switch (part) {
-    _Part.morning => 'this morning',
-    _Part.noon || _Part.evening => 'this afternoon',
-    _Part.night => 'tonight',
-    _Part.tomorrow => 'tomorrow',
-    _Part.none => null,
-  };
-  final b = StringBuffer('Join $name');
-  if (time != null) b.write(' $time');
-  if (speaker != null) b.write(', delivered by $speaker');
-  if (kitab != null) {
-    b.write(_startsWithKitab(kitab) ? ', on $kitab' : ', on the book $kitab');
-  } else if (topic != null) {
-    b.write(', on the topic $topic');
-  }
-  b.write(', live online at the link below:');
-  return b.toString();
+class _Words {
+  const _Words({
+    required this.follow,
+    required this.live,
+    required this.at,
+    required this.withWord,
+    required this.title,
+    required this.kuliah,
+    required this.slots,
+  });
+  final String follow;
+  final String live;
+  final String at;
+  final String withWord;
+  final String title;
+  final String kuliah;
+  final List<String> slots;
 }
 
-String _ar(bool noKuliah, String? slot, String? label, _Part part, String? speaker, String? kitab, String? topic, String? surau) {
-  if (noKuliah) {
-    return surau == null
-        ? 'تابعوا البث المباشر عبر الرابط التالي:'
-        : 'تابعوا البث المباشر من $surau عبر الرابط التالي:';
-  }
-  final name = switch (slot) {
-    'subuh' => 'درس الفجر',
-    'zohor' => 'درس الظهر',
-    'asar' => 'درس العصر',
-    'maghrib' => 'درس المغرب',
-    'isyak' => 'درس العشاء',
-    _ => label ?? 'الدرس',
-  };
-  final time = switch (part) {
-    _Part.morning => 'هذا الصباح',
-    _Part.noon || _Part.evening => 'بعد ظهر اليوم',
-    _Part.night => 'الليلة',
-    _Part.tomorrow => 'غدا',
-    _Part.none => null,
-  };
-  final b = StringBuffer('تابعوا $name');
-  if (time != null) b.write(' $time');
-  if (speaker != null) b.write(' يلقيه $speaker');
-  if (kitab != null) {
-    b.write(
-      _startsWithKitab(kitab)
-          ? ' في شرح $kitab'
-          : ' في شرح كتاب $kitab',
-    );
-  } else if (topic != null) {
-    b.write(' في موضوع $topic');
-  }
-  b.write(' في بث مباشر عبر الرابط التالي:');
-  return b.toString();
-}
+const Map<AppLang, _Words> _words = {
+  AppLang.ms: _Words(
+    follow: 'Ikuti',
+    live: 'Ikuti siaran langsung',
+    at: 'di',
+    withWord: 'bersama',
+    title: 'Tajuk',
+    kuliah: 'Kuliah',
+    slots: ['Kuliah Subuh', 'Kuliah Zohor', 'Kuliah Asar', 'Kuliah Maghrib', 'Kuliah Isyak'],
+  ),
+  AppLang.en: _Words(
+    follow: 'Join',
+    live: 'Join the live stream',
+    at: 'at',
+    withWord: 'with',
+    title: 'Title',
+    kuliah: 'Talk',
+    slots: ['Subuh Talk', 'Zohor Talk', 'Asar Talk', 'Maghrib Talk', 'Isyak Talk'],
+  ),
+  AppLang.ar: _Words(
+    follow: 'تابعوا',
+    live: 'تابعوا البث المباشر',
+    at: 'في',
+    withWord: 'مع',
+    title: 'الموضوع',
+    kuliah: 'الدرس',
+    slots: ['درس الفجر', 'درس الظهر', 'درس العصر', 'درس المغرب', 'درس العشاء'],
+  ),
+};
 
 /// [text] with the watch link of [videoId] on its own last line when it no
 /// longer contains it (the person deleted it while editing).

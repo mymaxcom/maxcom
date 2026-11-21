@@ -197,6 +197,59 @@ Test-Run 'theme' {
   else { Add-Check 'theme' 'ok' 'tema paparan sah' }
 }
 
+function Get-CaptureEndpointCount {
+  # Audio capture endpoints (microphone, Mic-in) that Windows lists as present; a test names the number in the environment.
+  if ($env:MAXCOM_DOCTOR_CAPTURE_ENDPOINTS -match '^[0-9]+$') { return [int]$env:MAXCOM_DOCTOR_CAPTURE_ENDPOINTS }
+  try {
+    $n = @(Get-PnpDevice -Class AudioEndpoint -PresentOnly -ErrorAction Stop | Where-Object { $_.InstanceId -like '*{0.0.1.00000000}*' -and $_.Status -eq 'OK' }).Count
+    return $n
+  } catch { return 0 }
+}
+
+function Get-MachineMicValue {
+  # The machine-wide microphone privacy value ('Allow', 'Deny' or empty); a test names it in the environment.
+  if ($null -ne $env:MAXCOM_DOCTOR_MIC_MACHINE) { return [string]$env:MAXCOM_DOCTOR_MIC_MACHINE }
+  try {
+    $i = Get-ItemProperty -LiteralPath 'Registry::HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone' -Name 'Value' -ErrorAction Stop
+    return [string]$i.Value
+  } catch { return '' }
+}
+
+# Mic-in of the box: the box runs as LOCAL SERVICE, and Windows microphone privacy is per account. The box answers (health
+# ?mic=1, this machine only) how many capture devices it sees and whether a 1-second probe got sound. Each answer has its own advice.
+Test-Run 'mic_access' {
+  if ($null -eq $script:HealthData) { Add-Check 'mic_access' 'skip' 'kotak tidak menjawab (lihat health_http)'; return }
+  $fix = 'Windows tidak membenarkan MAXCOM menggunakan Mic-in. Jalankan Pasang MAXCOM sekali lagi (ia membenarkan akses mikrofon untuk akaun kotak), atau buka Windows Settings, Privacy, Microphone dan benarkan akses.'
+  $machineDeny = 'Windows menyekat mikrofon untuk seluruh PC ini. Buka Windows Settings, Privacy, Microphone dan hidupkan "Microphone access" dan "Let desktop apps access your microphone".'
+  $r = Get-Json "http://127.0.0.1:$port/api/health?mic=1" 0
+  $m = $null
+  if ($r.Ok -and $null -ne $r.Data.PSObject.Properties['mic']) { $m = $r.Data.mic }
+  if ($null -eq $m) { Add-Check 'mic_access' 'skip' 'kotak ini tidak melaporkan Mic-in'; return }
+  $seen = [int]$m.devices
+  $endpoints = Get-CaptureEndpointCount
+  $deny = ((Get-MachineMicValue) -eq 'Deny')
+  # the privacy advice names the whole-PC block when that is what Windows has set
+  $privacy = $(if ($deny) { $machineDeny } else { $fix })
+  switch ([string]$m.code) {
+    'ok' { Add-Check 'mic_access' 'ok' "Mic-in: kotak melihat $seen peranti rakaman dan bunyi sampai (ujian 1 saat)"; return }
+    'untested' { Add-Check 'mic_access' 'ok' "Mic-in: kotak melihat $seen peranti rakaman; ujian bunyi dilangkau (siaran sedang berjalan atau peranti belum dipilih)"; return }
+    'access_denied' { Add-Check 'mic_access' 'fail' "kotak melihat $seen peranti rakaman tetapi Windows tidak membenarkan akses. $privacy"; return }
+    'device_unavailable' { Add-Check 'mic_access' 'fail' "kotak melihat $seen peranti rakaman tetapi tidak dapat membukanya. Semak mikrofon disambung dan tidak sedang digunakan oleh aplikasi lain, kemudian cuba lagi."; return }
+    'silent' { Add-Check 'mic_access' 'fail' (("kotak melihat $seen peranti rakaman tetapi tiada bunyi sampai. Semak mikrofon disambung dan tidak dibisukan. " + $(if ($deny) { $machineDeny } else { '' })).TrimEnd()); return }
+    'no_tool' { Add-Check 'mic_access' 'fail' 'alat siaran (ffmpeg) tiada pada kotak, jadi Mic-in tidak dapat diuji. Jalankan Pasang MAXCOM sekali lagi.'; return }
+    'list_failed' { Add-Check 'mic_access' 'fail' 'senarai peranti rakaman kotak tidak dapat dibaca. Cuba Semak MAXCOM sekali lagi; jika kekal, mulakan semula kotak.'; return }
+    'no_device' {
+      if ($endpoints -gt 0) { Add-Check 'mic_access' 'fail' "Windows menyenaraikan $endpoints peranti rakaman tetapi kotak tidak melihat satu pun. $privacy"; return }
+      Add-Check 'mic_access' 'ok' 'Mic-in: tiada peranti rakaman pada PC ini'
+      return
+    }
+    default {
+      if ($endpoints -gt 0) { Add-Check 'mic_access' 'fail' "Windows menyenaraikan $endpoints peranti rakaman tetapi kotak tidak melihat satu pun. $privacy"; return }
+      Add-Check 'mic_access' 'ok' 'Mic-in: tiada peranti rakaman pada PC ini'
+    }
+  }
+}
+
 if ($skipSys) { Add-Check 'health_https' 'skip' $sysSkipText }
 else {
   Test-Run 'health_https' {

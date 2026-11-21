@@ -744,7 +744,7 @@ export function applyFeedEntry(db: DatabaseSync, e: FeedEntry, ctx: ApplyCtx): E
         if (existing === undefined && incoming !== null && incoming.src === 'b' && primary && numberTaken(db, ctx.surauId, 'user', 'b', incoming.no)) {
           return { status: 'refused', reason: 'id_taken' };
         }
-        putUserSynced(db, e.entityId, { name: after.name as string, roles: after.roles as never, active, ...(typeof after.deleted === 'boolean' ? { deleted: after.deleted } : {}), ...(typeof after.phone === 'string' ? { phone: after.phone } : {}) }, e.actor, meta, ctx.surauId);
+        putUserSynced(db, e.entityId, { name: after.name as string, roles: after.roles as never, active, ...(typeof after.deleted === 'boolean' ? { deleted: after.deleted } : {}), ...(typeof after.phone === 'string' || after.phone === null ? { phone: after.phone } : {}) }, e.actor, meta, ctx.surauId);
         if (ctx.role === 'cloud') settleEntryNo(db, 'user', e.entityId, userSurau(db, e.entityId), incoming, primary);
         return done('applied');
       }

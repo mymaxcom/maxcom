@@ -272,8 +272,9 @@ export class WorkerOutboxSender {
       const res = await (config.fetchImpl ?? fetch)(`${config.url.replace(/\/+$/, '')}${call.path}`, {
         method: call.method,
         redirect: 'manual',
-        headers: { Authorization: `Bearer ${config.token}`, ...(call.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
-        ...(call.body !== undefined ? { body: JSON.stringify(call.body) } : {}),
+        // a PUT or DELETE with nothing to say still sends `{}` as JSON (never a bodyless write)
+        headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(call.body ?? {}),
         signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       });
       status = res.status;

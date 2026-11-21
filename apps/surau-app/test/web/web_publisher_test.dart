@@ -294,7 +294,7 @@ void main() {
       final a = c['audio']! as Map;
       expect(a['echoCancellation'], false);
       expect(a['noiseSuppression'], false);
-      expect(a['autoGainControl'], false);
+      expect(a['autoGainControl'], true);
     });
 
     testWidgets('portrait asks for a 16:9 1280x720 track', (t) async {

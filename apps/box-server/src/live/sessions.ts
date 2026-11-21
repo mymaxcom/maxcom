@@ -27,6 +27,8 @@ import type { AlignerOptions } from './align.ts';
 import { cameraPullUrl, cameraSecrets } from './camera.ts';
 import { EncoderCapability } from './encoder.ts';
 import type { EncoderProbe } from './encoder.ts';
+import { LevellerCapability } from './levellerProbe.ts';
+import type { LevellerProbe } from './levellerProbe.ts';
 import type { CameraRecord, CameraTestResult } from './camera.ts';
 import type { FirewallState } from './firewall.ts';
 import type { LiveRuntime, MediamtxPath } from './mediamtx.ts';
@@ -121,6 +123,8 @@ export interface LiveSessionsDeps {
   frameOptions?: Partial<import('./noticeFrame.ts').FrameGrabberOptions>;
   /** Test hook: replaces the H.264 encoder probe (default: runs `ffmpeg -h encoder=libx264` once per ffmpeg path). */
   encoderProbe?: EncoderProbe;
+  /** Test hook: replaces the compand/alimiter probe of the mixer's leveller (default: `ffmpeg -h filter=...` once per ffmpeg path). */
+  levellerProbe?: LevellerProbe;
   /** Pause between tries to set the publisher user and passphrase again after a MediaMTX respawn (default 500). */
   reprovisionMs?: number;
   /** The saved external camera (B1); also set later with `attachCamera`. Only the box reads the full address. */
@@ -396,6 +400,7 @@ export class LiveSessions {
 
   private readonly d: LiveSessionsDeps;
   private readonly encoder: EncoderCapability;
+  private readonly leveller: LevellerCapability;
   private camera: CameraSource | null;
   private cameraBusy: (() => boolean) | null = null;
   private readonly timing: CombinerTimings;
@@ -410,6 +415,7 @@ export class LiveSessions {
   constructor(deps: LiveSessionsDeps) {
     this.d = deps;
     this.encoder = new EncoderCapability(deps.encoderProbe);
+    this.leveller = new LevellerCapability(deps.levellerProbe);
     this.camera = deps.camera ?? null;
     this.timing = { ...COMBINER_DEFAULTS, ...(deps.combiner ?? {}) };
     this.monitorMs = deps.monitorMs ?? 2000;
@@ -634,7 +640,11 @@ export class LiveSessions {
   status(): LiveStatus {
     const rt = this.d.runtime;
     const s = this.session;
-    const yt = this.d.youtube?.status();
+    const raw = this.d.youtube?.status();
+    // No session means no live: a broadcast still held open for a restart (grace window) or not yet completed is not
+    // "live" to anyone asking. Never `live` (or `testing`) with `session: null`; its health is not a live health either.
+    const yt: LiveStatus['youtube'] | undefined =
+      raw !== undefined && s === null && (raw.state === 'live' || raw.state === 'testing') ? { ...raw, state: 'complete', health: null } : raw;
     return {
       session:
         s === null
@@ -1043,6 +1053,8 @@ export class LiveSessions {
 
       this.startRelay(session, settings.liveYoutube);
       this.audit('live', id, actor, null, {
+        // who ran it: the recording pieces of this live are accepted from this device (live/recordings.ts)
+        deviceId,
         kuliahId: session.kuliahId,
         source: session.source,
         outputs: session.outputs,
@@ -1155,7 +1167,9 @@ export class LiveSessions {
     this.publishKiosk();
     // the broadcast lingers only for a kuliah (a later start of the same kuliah carries on with it); never after an
     // ad-hoc live (two of those are not one recording) and never after an emergency stop (it must end at once)
-    const job = this.teardown(s, reason !== 'shutdown' && opts.emergency !== true && s.kuliahId !== null);
+    // Only a person's stop keeps it open (a restart of the same kuliah): a session the box ended itself (ingest or camera
+    // gone, controller lost, timeout) or a shutdown completes the broadcast at once.
+    const job = this.teardown(s, reason === 'stopped' && opts.emergency !== true && s.kuliahId !== null);
     this.track(job);
     if (opts.background !== true) await job;
     return { stopped: true };
@@ -1558,6 +1572,9 @@ export class LiveSessions {
       rtspUser: s.mixUser,
       rtspPass: s.mixPass,
       ...(win ? { zmqPortFn: () => randomInt(20000, 40000) } : {}),
+      appLevelled: s.source === 'android',
+      levellerProbe: () => this.leveller.check(ffmpegPath, this.d.mixOptions?.argsPrefix ?? []),
+      onLevellerMissing: () => this.leveller.markMissing(ffmpegPath),
       ...(input !== null ? { deviceName: input.deviceName, ...(input.device !== undefined ? { device: input.device } : {}) } : {}),
       // the camera can be gone for minutes: keep retrying with short pauses, never give up
       backoffMaxMs: 5000,

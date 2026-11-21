@@ -86,7 +86,7 @@ function tmp(): string {
 
 const NAME_019 = '019-multi-surau';
 /** Migrations numbered after 019 (themes 2026.11.9, renumbered from 019): they run in the same call. */
-const AFTER_019 = ['020-site-theme-support', '021-camera-secret', '022-people-relook', '023-youtube-box', '024-outbox-camera-mark', '025-poster-stretch-keep', '026-parked-settings'];
+const AFTER_019 = ['020-site-theme-support', '021-camera-secret', '022-people-relook', '023-youtube-box', '024-outbox-camera-mark', '025-poster-stretch-keep', '026-parked-settings', '027-deleted-people-phone', '028-box-name-follows-surau'];
 
 /** The four tables db.ts created BEFORE migration 019 (old keys). */
 const LEGACY_TABLES = `

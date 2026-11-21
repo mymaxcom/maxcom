@@ -1670,6 +1670,34 @@ void main() {
       expect(find.byKey(const ValueKey('dash-live-notice-banner')), findsNothing);
     });
 
+    testWidgets('[W22-3] the banner and the share buttons follow the box session, not the YouTube state', (tester) async {
+      final t = await _open(tester, roles: const ['admin']);
+      var session = true;
+      t.h.handlers['GET /api/live/notice'] = (r) async => jsonResponse(200, {
+        'active': true,
+        'videoId': 'AAAAAAAAAAA',
+        'watchUrl': 'https://www.youtube.com/live/AAAAAAAAAAA',
+        'kuliah': {'title': 'Kuliah Maghrib', 'speaker': 'Ustaz Ahmad', 'time': '19:15'},
+      });
+      // the box: a session while it runs; afterwards session null although YouTube still says live
+      t.h.handlers['GET /api/live/status'] = (r) async => jsonResponse(200, {
+        'session': session ? {'id': 's1'} : null,
+        'youtube': {'state': 'live'},
+      });
+      t.h.container.invalidate(liveBoxNoticeProvider);
+      t.h.router.go('/');
+      await settle(tester);
+      expect(find.byKey(const ValueKey('dash-live-notice-banner')), findsOneWidget, reason: 'session running');
+      expect(find.byKey(const ValueKey('dash-live-notice-share')), findsOneWidget);
+
+      session = false;
+      t.h.container.invalidate(liveBoxNoticeProvider);
+      await settle(tester);
+      expect(find.byKey(const ValueKey('dash-live-notice-banner')), findsNothing, reason: 'session over');
+      expect(find.byKey(const ValueKey('dash-live-notice-share')), findsNothing);
+      expect(find.text('Siaran sedang berlangsung.'), findsNothing);
+    });
+
     testWidgets('[PP-L1] a live another device started with a watch link shows the notice to live:control', (tester) async {
       const other = OtherLive(sessionId: 's9', starter: 'iPad Ustaz Ali', video: 'phone');
       await _open(tester, box: _signedIn.copyWith(watchUrl: watch, otherLive: other));

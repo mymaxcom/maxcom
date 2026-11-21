@@ -27,6 +27,7 @@ import '../../app/theme.dart';
 import '../../l10n/generated/s.dart';
 import '../../screens/widgets/pieces.dart';
 import '../common/ltr.dart';
+import '../common/surau_logo.dart' show surauLogoProvider;
 import '../finance/share.dart';
 import '../shell/permissions.dart';
 import '../people/phone.dart';
@@ -34,6 +35,7 @@ import 'live_controller.dart' show liveBoxProvider;
 import 'live_notice.dart';
 import 'live_notice_box.dart';
 import 'live_notice_card.dart';
+import 'live_notice_card_data.dart';
 import 'live_notice_share.dart';
 
 /// Opens the sheet. [input] is the notice built on this device (the live this
@@ -193,22 +195,41 @@ class _LiveNoticeSheetState extends ConsumerState<LiveNoticeSheet> {
   Future<Uint8List?> _pictureBytes() async {
     if (!_picture) return null;
     final s = S.of(context);
-    final id = _videoId;
     try {
-      Uint8List? still;
-      if (_box?.frame == true) still = await fetchBoxNoticeFrame(ref.read(gatewayProvider));
-      if (still == null && id != null) {
-        still = await ref.read(liveNoticeImageFetchProvider)(liveThumbnailUri(id));
-      }
+      final gateway = ref.read(gatewayProvider);
+      // The box's own frame of the live when it answers; otherwise today's kuliah card made here. Never a
+      // YouTube thumbnail or any other picture.
+      final still = await fetchBoxNoticeFrame(gateway);
       final input = widget.input;
       final k = _box?.kuliah;
+      final speaker = k?.speaker ?? input?.speaker;
+      final start = input?.start;
+      final time = k?.time ?? (start == null ? null : _hhmm(start));
       final fields = liveCardFields(
         badge: s.liveNoticeCardBadge,
         surau: ref.read(surauInfoProvider)?.name,
-        title: k?.title ?? input?.label,
-        speaker: k?.speaker ?? input?.speaker,
+        slot: liveSlotName(input?.slot, _lang) ?? k?.title ?? input?.label,
+        title: input?.topic ?? input?.kitab,
+        speaker: speaker,
+        time: time,
       );
-      final out = await ref.read(liveNoticeCardProvider)(fields: fields, background: still, rtl: _lang == AppLang.ar);
+      Uint8List? photo;
+      Uint8List? logo;
+      if (still == null) {
+        photo = fields.hasKuliah ? await penceramahPhotoFor(gateway, speaker) : null;
+        try {
+          logo = await ref.read(surauLogoProvider.future);
+        } on Object {
+          logo = null;
+        }
+      }
+      final out = await ref.read(liveNoticeCardProvider)(
+        fields: fields,
+        background: still,
+        photo: photo,
+        logo: logo,
+        rtl: _lang == AppLang.ar,
+      );
       if (out.isEmpty) throw StateError('empty');
       return out;
     } on Object {
@@ -216,6 +237,9 @@ class _LiveNoticeSheetState extends ConsumerState<LiveNoticeSheet> {
       return null;
     }
   }
+
+  static String _hhmm(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Future<void> _shareOut({required bool toWhatsApp}) async {
     if (_busy) return;

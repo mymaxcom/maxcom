@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -28,9 +27,20 @@ class LiveService : Service() {
         // A kuliah is short; the lock is released at stop and, as a backstop, after 8 hours.
         private const val WAKE_LOCK_MS = 8L * 60 * 60 * 1000
 
-        fun start(context: Context) {
-            ContextCompat.startForegroundService(context, Intent(context, LiveService::class.java))
+        /**
+         * Starts (or, when the source or the microphone changes during the live, refreshes) the foreground service
+         * with only the types the live uses: see [LiveForeground].
+         */
+        fun start(context: Context, needs: ForegroundNeeds = ForegroundNeeds.BOTH) {
+            val intent = Intent(context, LiveService::class.java)
+                .putExtra(LiveForeground.EXTRA_CAMERA, needs.camera)
+                .putExtra(LiveForeground.EXTRA_MICROPHONE, needs.microphone)
+            ContextCompat.startForegroundService(context, intent)
         }
+
+        /** Called (main thread) when the system refused the foreground state; the argument is the exception name. */
+        @Volatile
+        var onForegroundFailed: ((String) -> Unit)? = null
 
         fun stop(context: Context) {
             context.stopService(Intent(context, LiveService::class.java))
@@ -61,13 +71,15 @@ class LiveService : Service() {
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+            val needs = ForegroundNeeds(
+                camera = intent?.getBooleanExtra(LiveForeground.EXTRA_CAMERA, true) ?: true,
+                microphone = intent?.getBooleanExtra(LiveForeground.EXTRA_MICROPHONE, true) ?: true,
             )
+            val types = LiveForeground.types(needs, Build.VERSION.SDK_INT)
+            Diag.log("service_types", "camera=${LiveForeground.hasCamera(types)} mic=${LiveForeground.hasMicrophone(types)}")
+            if (!enterForeground { startForeground(NOTIFICATION_ID, notification, types) }) return START_NOT_STICKY
         } else {
-            startForeground(NOTIFICATION_ID, notification)
+            if (!enterForeground { startForeground(NOTIFICATION_ID, notification) }) return START_NOT_STICKY
         }
         if (wakeLock == null) {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -77,6 +89,22 @@ class LiveService : Service() {
             }
         }
         return START_NOT_STICKY
+    }
+
+    /**
+     * Goes to the foreground. The system can refuse (a missing permission, the app not allowed to start a service of
+     * this type now): that must not crash the live. The reason is logged, the service stops, and [onForegroundFailed]
+     * tells the engine, so the stream is not left running without the protection of a foreground service.
+     */
+    private fun enterForeground(go: () -> Unit): Boolean = try {
+        go()
+        true
+    } catch (e: RuntimeException) {
+        // SecurityException, ForegroundServiceStartNotAllowedException, IllegalStateException
+        Diag.log("service_foreground_failed", e.javaClass.simpleName)
+        onForegroundFailed?.invoke(e.javaClass.simpleName)
+        stopSelf()
+        false
     }
 
     override fun onDestroy() {

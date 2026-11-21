@@ -35,6 +35,7 @@ import { AuthError, MSG, setServerBoxId, setUsersRole } from './auth/users.ts';
 import { backfillIds } from './auth/ids.ts';
 import { certInfo } from './tls.ts';
 import { boxNameOf } from './boxName.ts';
+import { followSurauName } from './setup/boxNaming.ts';
 import type { TlsMaterial } from './tls.ts';
 import { hkdfSync, randomBytes } from 'node:crypto';
 import type { FirewallState } from './live/firewall.ts';
@@ -46,6 +47,8 @@ import { AudioInputs, registerAudioInputRoutes } from './live/audioInputs.ts';
 import { registerCameraRoutes } from './live/cameraRoutes.ts';
 import { registerLiveRoutes } from './live/routes.ts';
 import { LiveSessions } from './live/sessions.ts';
+import { Recordings, registerRecordingRoutes } from './live/recordings.ts';
+import type { RecordingOptions } from './live/recordings.ts';
 import type { RelayOptions } from './live/relay.ts';
 import type { LiveSessionsDeps, YoutubeLeg } from './live/sessions.ts';
 import { createWebrtcProxy } from './live/webrtcProxy.ts';
@@ -63,6 +66,7 @@ import { withBroadcastLog } from './live/youtube/boxLeg.ts';
 import type { YoutubeService } from './live/youtube/api.ts';
 import { isIP } from 'node:net';
 import { registerContentRoutes } from './content/routes.ts';
+import { registerPlayNowRoute } from './content/playNow.ts';
 import { openDb } from './db.ts';
 import { createChangeBus } from './events.ts';
 import { createHadeethEnc, lazyHadeethEnc } from './hadis/hadeethenc.ts';
@@ -181,6 +185,8 @@ export interface AppOptions {
    */
   liveTools?: LiveToolsOption | null;
   /** The media-ports firewall check (main.ts supplies the real one on Windows); left out, the state is unknown. */
+  /** Test hooks of the recording merge (free space, the join runner, the ffmpeg path, limits, the keep time). */
+  liveRecordings?: Partial<Omit<RecordingOptions, 'dataDir'>>;
   liveFirewall?: { check(): Promise<FirewallState>; state(): FirewallState } | null;
   /** Live session tuning and the YouTube leg (Task 4 supplies `youtube`); tests shorten the timers. */
   live?: { monitorMs?: number; noVideoMs?: number; idleTimeoutMs?: number; youtubeGraceMs?: number; reprovisionMs?: number; youtube?: YoutubeLeg | null; relay?: Partial<RelayOptions>; frame?: LiveSessionsDeps['frameOptions']; encoderProbe?: (ffmpegPath: string) => Promise<boolean | null> };
@@ -667,6 +673,18 @@ data: ${JSON.stringify(live)}
     sendLive(liveSessions.kioskLive(), false);
     const unsubscribe = bus.on((version) => send(version), surauId);
     const unsubscribeLive = bus.onLive((live) => sendLive(live), surauId);
+    const sendPlayNow = (itemId: string): void => {
+      if (res.writableEnded || res.destroyed) return;
+      if (!stillValid()) {
+        cleanup();
+        return;
+      }
+      res.write(`event: play-now
+data: ${JSON.stringify({ itemId })}
+
+`);
+    };
+    const unsubscribePlayNow = bus.onPlayNow((itemId) => sendPlayNow(itemId), surauId);
     const timer = setInterval(() => {
       if (res.writableEnded || res.destroyed) return;
       if (!stillValid()) {
@@ -683,6 +701,7 @@ data: ${JSON.stringify(live)}
       cleaned = true;
       unsubscribe();
       unsubscribeLive();
+      unsubscribePlayNow();
       clearInterval(timer);
       clientCleanups.delete(cleanup);
       sseClients--;
@@ -757,6 +776,8 @@ data: ${JSON.stringify(live)}
       const versionBefore = getVersion(db, surauId);
       const before = prayerFeature ? getSettings(db, surauId)[feature as 'zone'] : undefined;
       const settings = putFeature(db, feature, patch, actorOf(request), deviceOf(request), surauId);
+      // the box name follows a new surau name (a box only: the cloud has no box name of its own)
+      if (feature === 'surauInfo' && role === 'box' && surauId === LOCAL_SURAU_ID) followSurauName(db, boxId, boxNameOf(tlsNow()));
       if (prayerFeature) afterPrayerSettings(db, feature, before, settings[feature as 'zone'], prayerDeps, surauId);
       const versionAfter = getVersion(db, surauId);
       if (versionAfter !== versionBefore) bus.emit(versionAfter, surauId);
@@ -882,16 +903,21 @@ data: ${JSON.stringify(live)}
     const themes = { contract: THEME_CONTRACT, builtIn: [...KIOSK_TEMPLATE_IDS] };
     // what this release supports (the app hides the Video kind and the poster stretch switch on a server without them)
     // The cloud lists `tvLangAr` for a surau only when its linked box has reported it too (an older box would refuse the value).
-    const featuresFor = (sid: string | null): string[] => SERVER_FEATURES.filter((f) => role === 'box' || f !== 'tvLangAr' || (sid !== null && surauBoxesHave(db, sid, f)));
+    // `videoAfterPrayer` is the same: an older box would refuse a video item carrying `afterPrayer`.
+    // `videoPlayNow` too: an older box has no play-now route.
+    const featuresFor = (sid: string | null): string[] => SERVER_FEATURES.filter((f) => role === 'box' || (f !== 'tvLangAr' && f !== 'videoAfterPrayer' && f !== 'videoPlayNow') || (sid !== null && surauBoxesHave(db, sid, f)));
     const withCloud = <T extends object>(o: T): T & { cloud?: string } => (cloudOrigin === undefined ? o : { ...o, cloud: cloudOrigin });
     // the numbered local name (public: it is a certificate DNS name), null on a legacy root; not on the cloud
     const localName = role === 'box' ? boxNameOf(tlsNow()) : null;
     // The theme state is for the box's own machine (the setup doctor reads it on loopback) and for an admin; a caller across the network learns nothing about the theme.
     // Proxy-aware (a caller behind cloudflared reaches us from 127.0.0.1 too) and only on a box: the cloud has no display of its own.
     const onThisMachine = role === 'box' && isDirectLoopback(request);
+    // The doctor's Mic-in question (`?mic=1`, this machine only): devices seen and whether sound reaches the box. No names.
+    const micAsked = onThisMachine && (request.query as { mic?: unknown } | null)?.mic === '1';
+    const mic = micAsked ? await audioInputs.check().catch(() => ({ devices: 0, code: 'list_failed' as const })) : null;
     if (!identityCan(request.auth, 'health:read')) {
       // Anonymous: only that it is up, and (cloud) for the surau of the named linked box; never a list of sites.
-      return withCloud({ ok: true, version: getVersion(db, publicSurauOf(db, request, role) ?? NEUTRAL_SURAU_ID), name: localName, themes, features: featuresFor(publicSurauOf(db, request, role)), ...(onThisMachine ? { themeOk: themeOk(db) } : {}) });
+      return withCloud({ ok: true, version: getVersion(db, publicSurauOf(db, request, role) ?? NEUTRAL_SURAU_ID), name: localName, themes, features: featuresFor(publicSurauOf(db, request, role)), ...(onThisMachine ? { themeOk: themeOk(db) } : {}), ...(mic !== null ? { mic } : {}) });
     }
     const scope = healthScopeOf(db, request, role);
     const surauId = scope.surauId;
@@ -1058,6 +1084,20 @@ data: ${JSON.stringify(live)}
   });
   registerLiveRoutes(app, { sessions: liveSessions, proxy: webrtcProxy, lanIps, youtube: youtubeService, youtubeFor, cloud: role === 'cloud' });
   if (role === 'box') registerAudioInputRoutes(app, { db, inputs: audioInputs });
+  // the recording of a live, joined on the box (pieces from the web and iPad app); 7 days at most, swept at start and hourly
+  if (role === 'box') {
+    const recordings = new Recordings({ dataDir, ffmpegPath: () => live?.runtime.tools.ffmpeg ?? null, now, log: (m) => app.log.warn(m), ...(opts.liveRecordings ?? {}) });
+    registerRecordingRoutes(app, { db, recordings });
+    if (realDataDir) {
+      const sweep = (): void => {
+        try { recordings.sweep(); } catch { /* a sweep that cannot run is not a reason to stop */ }
+      };
+      sweep();
+      const t = setInterval(sweep, 60 * 60 * 1000);
+      t.unref();
+      app.addHook('onClose', async () => clearInterval(t));
+    }
+  }
   // the external camera: sealed address, the box's own test (a box with a data folder only)
   if (role === 'box' && realDataDir) {
     // every address of every local interface is the box itself (the certificate list alone misses some)
@@ -1102,6 +1142,16 @@ data: ${JSON.stringify(live)}
   registerCameraRelayCloudRoutes(app, { role, db, now, masterKey: role === 'cloud' && realDataDir ? loadBoxKey(dataDir) : null });
   registerPrayerRoutes(app, prayerDeps);
   registerContentRoutes(app, { db, bus, dataDir, actorOf });
+  // "Main sekarang": a box only (the cloud has no relay for content actions; the app shows the button on the surau Wi-Fi)
+  if (role === 'box') {
+    registerPlayNowRoute(app, {
+      db,
+      bus,
+      now,
+      liveOnTv: () => liveSessions.kioskLive().live,
+      surauOf: reqSurau,
+    });
+  }
   registerAssetRoutes(app, { db, dataDir, actorOf, role });
   if (role === 'box') {
     // Videos are stored on the box only (never on the cloud). A stored video no item points at, older than a day, goes at start.

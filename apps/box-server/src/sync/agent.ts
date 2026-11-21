@@ -590,9 +590,11 @@ export class SyncAgent {
   /** A signed `POST /wake` (best effort: the answer only tells how long to wait). */
   private async wake(key: SyncKeyData): Promise<void> {
     try {
+      // nothing to say, but never a bodyless POST: `{}` as JSON
       const res = await this.send(`${this.workerBase(key)}/wake`, {
         method: 'POST',
-        headers: this.signedHeaders(key, (ts) => wakeMessage(this.o.boxId, ts)),
+        headers: { 'Content-Type': 'application/json', ...this.signedHeaders(key, (ts) => wakeMessage(this.o.boxId, ts)) },
+        body: '{}',
       });
       await res.arrayBuffer().catch(() => undefined);
     } catch {
@@ -865,9 +867,10 @@ export class SyncAgent {
         if (typeof o.id !== 'string') continue;
         const local = this.o.db.prepare('SELECT phone, deleted_at, surau_id FROM users WHERE id = ?').get(o.id);
         if (local === undefined || String(local.surau_id) === '*') continue;
-        if (typeof o.phone === 'string' && local.phone === null) {
+        // never for a deleted person: a deleted person holds no number, here or on the cloud
+        if (typeof o.phone === 'string' && local.phone === null && local.deleted_at === null && o.deleted !== true) {
           const e164 = normalisePhone(o.phone);
-          if (e164 !== null) this.o.db.prepare('UPDATE users SET phone = ? WHERE id = ? AND phone IS NULL').run(e164, o.id);
+          if (e164 !== null) this.o.db.prepare('UPDATE users SET phone = ? WHERE id = ? AND phone IS NULL AND deleted_at IS NULL').run(e164, o.id);
         }
         if (o.deleted === true && local.deleted_at === null) {
           const at = typeof o.editedAt === 'string' && o.editedAt !== '' ? o.editedAt : served;

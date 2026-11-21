@@ -161,6 +161,8 @@ class _Rig {
     String? liveVideoId,
     List<String>? names,
     int bytes = 5000,
+    bool ask = false,
+    bool keepForGood = false,
   }) async {
     remover.prints[session] = RecordingFootprint(
       names: names ?? ['MAXCOM-2026-11-06-k1-$session.mp4'],
@@ -172,6 +174,8 @@ class _Rig {
       durationSec: duration,
       youtubeSeconds: youtubeSeconds,
       liveVideoId: liveVideoId,
+      ask: ask,
+      keepForGood: keepForGood,
     );
   }
 
@@ -902,6 +906,87 @@ void main() {
       r.clock.add(const Duration(days: 5));
       await r.cleanup.run();
       expect(r.remover.removed, isEmpty);
+    });
+  });
+
+  group('the one question after the joined recording (2026.11.14)', () {
+    test('a joined recording is verified but never deleted by itself, however long it waits', () async {
+      await r.record('s1', youtubeSeconds: 1800, liveVideoId: 'live1', ask: true);
+      await r.cleanup.run();
+      final v = (await r.rec('s1'))!;
+      expect(v.verifiedAt, isNotNull);
+      expect(v.needsAnswer, isTrue, reason: 'the app asks now');
+      r.clock.add(const Duration(days: 60));
+      await r.cleanup.run();
+      expect(r.remover.removed, isEmpty);
+      expect((await r.rec('s1'))!.needsAnswer, isTrue);
+    });
+
+    test('Delete removes it now, after YouTube is asked once more, and notes the deletion', () async {
+      await r.record('s1', youtubeSeconds: 1800, liveVideoId: 'live1', ask: true);
+      await r.cleanup.run();
+      expect(r.verifyCalls, hasLength(1));
+      await r.cleanup.choose('s1', 'delete');
+      expect(r.verifyCalls, hasLength(2), reason: 'asked again right before the file goes');
+      expect(r.remover.removed, ['s1']);
+      final d = (await r.rec('s1'))!;
+      expect(d.phase, CleanupPhase.deleted);
+      expect(d.needsAnswer, isFalse);
+      expect(r.audit.rows, hasLength(1));
+    });
+
+    test('Delete is not carried out when YouTube no longer confirms the video', () async {
+      await r.record('s1', youtubeSeconds: 1800, liveVideoId: 'live1', ask: true);
+      await r.cleanup.run();
+      r.answers['live1'] = const VideoCheck(videoId: 'live1', exists: false, processed: false);
+      await r.cleanup.choose('s1', 'delete');
+      expect(r.remover.removed, isEmpty);
+      expect((await r.rec('s1'))!.verifiedAt, isNull, reason: 'back to waiting for a new verification');
+    });
+
+    test('Keep leaves it for good: never deleted, never asked again', () async {
+      await r.record('s1', youtubeSeconds: 1800, liveVideoId: 'live1', ask: true);
+      await r.cleanup.run();
+      await r.cleanup.choose('s1', 'keep');
+      r.clock.add(const Duration(days: 90));
+      await r.cleanup.run();
+      await r.cleanup.run();
+      expect(r.remover.removed, isEmpty);
+      final k = (await r.rec('s1'))!;
+      expect(k.phase, CleanupPhase.kept);
+      expect(k.needsAnswer, isFalse);
+    });
+
+    test('nothing is asked before YouTube has confirmed, and an answer then does nothing', () async {
+      await r.record('s1', youtubeSeconds: 1700, liveVideoId: 'live1', ask: true);
+      await r.cleanup.run();
+      expect((await r.rec('s1'))!.needsAnswer, isFalse);
+      await r.cleanup.choose('s1', 'delete');
+      expect(r.remover.removed, isEmpty);
+      expect((await r.rec('s1'))!.choice, isNull);
+    });
+
+    test('a join that failed, or the browser\'s pieces, are kept for good: never asked, never deleted', () async {
+      await r.record('s1', youtubeSeconds: 1800, liveVideoId: 'live1', ask: true, keepForGood: true);
+      await r.cleanup.run();
+      r.clock.add(const Duration(days: 60));
+      await r.cleanup.run();
+      final k = (await r.rec('s1'))!;
+      expect(k.needsAnswer, isFalse);
+      expect(k.phase, CleanupPhase.kept);
+      expect(r.remover.removed, isEmpty);
+    });
+
+    test('only keep or delete are answers; a record from before this release still follows the kept days', () async {
+      await r.record('s1', youtubeSeconds: 1800, liveVideoId: 'live1', ask: true);
+      await r.cleanup.run();
+      await r.cleanup.choose('s1', 'maybe');
+      expect((await r.rec('s1'))!.choice, isNull);
+      await r.record('s2', youtubeSeconds: 1800, liveVideoId: 'live2');
+      await r.cleanup.run();
+      r.clock.add(const Duration(days: 2));
+      await r.cleanup.run();
+      expect(r.remover.removed, ['s2'], reason: 'the old rule: after the kept days, by itself');
     });
   });
 }

@@ -475,4 +475,24 @@ void main() {
       expect(calls.last.arguments.toString().contains(_secret), isFalse);
     },
   );
+
+  test('setMicrophone sends the chosen microphone id to the engine', () async {
+    expect(await pub.setMicrophone('3:Headset Mic'), isTrue);
+    expect(calls.last.method, 'setMic');
+    expect(args(calls.last)['id'], '3:Headset Mic');
+    expect(await pub.setMicrophone(null), isTrue);
+    expect(args(calls.last)['id'], isNull);
+  });
+
+  test('micRouted shows the device the system really routed, and a refusal by name', () async {
+    await event({'type': 'micRouted', 'id': '3:Headset Mic', 'name': 'Headset Mic', 'kind': 'external', 'unavailable': null});
+    expect(pub.current.micRoute?.name, 'Headset Mic');
+    expect(pub.current.micRoute?.kind, 'external');
+    expect(pub.current.micUnavailable, isNull);
+    await event({'type': 'micRouted', 'id': '15:', 'name': '', 'kind': 'builtin', 'unavailable': 'Headset Mic'});
+    expect(pub.current.micRoute?.kind, 'builtin');
+    expect(pub.current.micUnavailable, 'Headset Mic');
+    await event({'type': 'micRouted', 'id': '15:', 'name': '', 'kind': 'builtin', 'unavailable': null});
+    expect(pub.current.micUnavailable, isNull);
+  });
 }

@@ -299,15 +299,16 @@ void main() {
       expect(find.byKey(const ValueKey('users-no-admin-phone')), findsNothing);
     });
 
-    testWidgets('[PP-A5] Perlu tindakan first: locked, no device, no phone; one row for two needs; goldens', (tester) async {
+    testWidgets('[PP-A5] Perlu tindakan first: locked, no device, shared number; no row for a missing number; goldens', (tester) async {
       final h = await openPeople(tester);
       tallView(tester);
       await settle(tester);
       final needs = find.byKey(const ValueKey('users-needs'));
       expect(find.descendant(of: needs, matching: find.text('Perlu tindakan')), findsOneWidget);
-      // Encik Rahman: locked AND no phone number, one row naming both, the action of the first need.
+      // Encik Rahman: locked (the old `phone` need is ignored), the action of the first need.
       expect(find.descendant(of: needs, matching: find.text('Encik Rahman')), findsOneWidget);
-      expect(find.text('PIN dikunci dan Nombor telefon diperlukan'), findsOneWidget);
+      // A server `phone` need (an older box) is ignored: the number is optional.
+      expect(find.text('PIN dikunci'), findsOneWidget);
       expect(find.byKey(const ValueKey('users-unlock-u3')), findsOneWidget);
       expect(find.byKey(const ValueKey('users-phone-u3')), findsNothing);
       // Kak Siti: added 4 days ago (server clock), no phone yet.
@@ -315,7 +316,8 @@ void main() {
       expect(find.byKey(const ValueKey('users-qr-u6')), findsOneWidget);
       // Ustaz Ahmad U-0001: no phone number.
       expect(find.byKey(const ValueKey('users-phone-u1')), findsOneWidget);
-      expect(find.text('Isi nombor'), findsOneWidget);
+      expect(find.text('Nombor telefon sama dengan pengguna lain'), findsOneWidget);
+      expect(find.text('Nombor telefon diperlukan'), findsNothing);
       // The 90-day suggestion opens the person.
       expect(find.text('${isolate('Ustaz Ahmad')} tidak menggunakan aplikasi lebih 90 hari. Nyahaktifkan?'), findsOneWidget);
 
@@ -452,7 +454,7 @@ void main() {
       expect(find.text('Haji Osman dipadam.'), findsOneWidget);
     });
 
-    testWidgets('[PP-A5] Buka kunci unlocks; Kod QR opens the enrol page; Isi nombor opens the phone sheet', (tester) async {
+    testWidgets('[PP-A5] Buka kunci unlocks; Kod QR opens the enrol page; Tukar nombor opens the phone sheet', (tester) async {
       final h = await openPeople(tester);
       tallView(tester);
       await settle(tester);
@@ -601,7 +603,7 @@ Map<String, Object?> peopleActivity() => {
   'limits': {'deviceDays': 60, 'tvDays': 30, 'noDeviceDays': 3, 'userDays': 90, 'deactivatedDays': 365},
   'devices': <Object?>[],
   'users': [
-    {'id': 'u1', 'ref': 'U-0001', 'createdAt': '2026-01-02T08:00:00.000Z', 'deviceCount': 2, 'lastActiveAt': '2026-11-18T08:00:00.000Z', 'locked': false, 'needs': ['phone'], 'suggestDeactivate': false},
+    {'id': 'u1', 'ref': 'U-0001', 'createdAt': '2026-01-02T08:00:00.000Z', 'deviceCount': 2, 'lastActiveAt': '2026-11-18T08:00:00.000Z', 'locked': false, 'needs': ['phone_duplicate'], 'suggestDeactivate': false},
     {'id': 'u2', 'ref': 'U-0002', 'createdAt': '2026-01-03T08:00:00.000Z', 'deviceCount': 1, 'lastActiveAt': '2026-11-17T08:00:00.000Z', 'locked': false, 'needs': <String>[], 'suggestDeactivate': false},
     {'id': 'u3', 'ref': 'U-0003', 'createdAt': '2026-01-04T08:00:00.000Z', 'createdByName': 'Ustaz Ahmad', 'createdByRef': 'U-0001', 'deviceCount': 2, 'lastActiveAt': '2026-11-15T08:00:00.000Z', 'locked': true, 'pinLockedUntil': '2026-11-18T09:27:00.000Z', 'needs': ['locked', 'phone'], 'suggestDeactivate': false},
     {'id': 'u5', 'ref': 'U-0005', 'createdAt': '2026-01-05T08:00:00.000Z', 'deviceCount': 1, 'lastActiveAt': '2026-08-13T08:00:00.000Z', 'locked': false, 'needs': <String>[], 'suggestDeactivate': true},

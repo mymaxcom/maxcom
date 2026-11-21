@@ -1309,7 +1309,7 @@ class SAr extends S {
 
   @override
   String userDeactivateHint(String name) {
-    return 'تُحذف جميع أجهزة $name ورموزه. يبقى الاسم في السجل والسجلات المالية.';
+    return 'تُلغى جميع أجهزة $name ورموزه. يبقى الاسم في السجل والسجلات المالية.';
   }
 
   @override
@@ -8276,7 +8276,7 @@ class SAr extends S {
 
   @override
   String userDeleteBody(String name, String ref) {
-    return 'لن يتمكن $name ($ref) من الدخول بعد الآن ويختفي من جميع القوائم. تُحذف جميع أجهزته. يحتفظ سجل التغييرات والسجلات المالية بهذا الاسم وبـ ID.';
+    return 'لن يتمكن $name ($ref) من الدخول بعد الآن ويختفي من جميع القوائم. تُلغى جميع أجهزته ويُحذف رقم هاتفه. يحتفظ سجل التغييرات والسجلات المالية بهذا الاسم وبـ ID.';
   }
 
   @override
@@ -8320,10 +8320,16 @@ class SAr extends S {
   String get phoneLabel => 'رقم الهاتف';
 
   @override
-  String get phoneHint => 'مثال: 012-000 0000';
+  String get phoneLabelOptional => 'رقم الهاتف للواتساب (اختياري)';
 
   @override
-  String get phoneRequired => 'رقم الهاتف مطلوب';
+  String get phoneNone => 'لا يوجد رقم هاتف';
+
+  @override
+  String get phoneCleared => 'تمت إزالة رقم الهاتف.';
+
+  @override
+  String get phoneHint => 'مثال: 012-000 0000';
 
   @override
   String get phoneInvalid =>
@@ -8333,9 +8339,6 @@ class SAr extends S {
   String phoneTaken(String ref) {
     return 'هذا الرقم مستخدم بالفعل من قبل مستخدم آخر ($ref).';
   }
-
-  @override
-  String get phoneNeeded => 'رقم الهاتف مطلوب';
 
   @override
   String get phoneFill => 'أدخل الرقم';
@@ -8426,6 +8429,19 @@ class SAr extends S {
 
   @override
   String get videoSourceRakaman => 'تسجيل';
+
+  @override
+  String get videoAfterPrayerLabel => 'التشغيل بعد ذكر الصلاة';
+
+  @override
+  String get videoAfterPrayerNone => 'لا';
+
+  @override
+  String get videoAfterPrayerZohor => 'الظهر (الجمعة في يوم الجمعة)';
+
+  @override
+  String get videoAfterPrayerHint =>
+      'عند الاختيار يخرج هذا الفيديو من التناوب المعتاد. يعرضه التلفاز مرة واحدة يوميا بعد شاشة أذكار تلك الصلاة، في الأيام والتواريخ المختارة.';
 
   @override
   String get videoPick => 'اختر فيديو من الهاتف';
@@ -8557,4 +8573,110 @@ class SAr extends S {
 
   @override
   String get videoFetching => 'جارٍ جلب العنوان من يوتيوب...';
+
+  @override
+  String get errcNoMicDevice => 'لم يُعثر على مدخل ميكروفون في جهاز MAXCOM.';
+
+  @override
+  String get errcMicAccessDenied =>
+      'لا يسمح Windows لـ MAXCOM باستخدام مدخل الميكروفون. شغّل فحص MAXCOM.';
+
+  @override
+  String get errcMicListFailed =>
+      'تعذّرت قراءة قائمة مداخل الميكروفون. حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get errcMicNoTool =>
+      'أداة الصوت في MAXCOM غير موجودة على هذا الجهاز، لذلك لا يمكن استخدام مدخل الميكروفون.';
+
+  @override
+  String get errcPlayLiveRunning => 'بث مباشر يعمل الآن على شاشة التلفاز.';
+
+  @override
+  String get errcPlayPrayerPhase => 'لا يمكن تشغيله أثناء وقت الصلاة.';
+
+  @override
+  String get videoPlayNow => 'تشغيل الآن';
+
+  @override
+  String get videoPlayNowDone => 'الفيديو يعمل الآن على شاشة التلفاز.';
+
+  @override
+  String get dashBoxName => 'اسم MAXCOM';
+
+  @override
+  String get boxNameRenameTitle => 'تغيير اسم MAXCOM';
+
+  @override
+  String get boxNameFollowsHint =>
+      'يتبع هذا الاسم اسم المصلى ما لم تغيّره بنفسك.';
+
+  @override
+  String get phoneWhatsAppHint =>
+      'يُستخدم لإرسال الإشعارات والروابط عبر واتساب. يمكن تركه فارغًا.';
+
+  @override
+  String get recKeepTitle => 'هل تريد حفظ التسجيل على هذا الجهاز؟';
+
+  @override
+  String get recKeepBody =>
+      'لدى يوتيوب نسخة كاملة من هذا البث. يمكنك الاحتفاظ بالتسجيل على هذا الجهاز أو حذفه لتوفير المساحة.';
+
+  @override
+  String get recKeepKeep => 'احتفاظ';
+
+  @override
+  String get recKeepDelete => 'حذف';
+
+  @override
+  String get liveRecJoinedNote => 'تم دمج التسجيل في ملف واحد.';
+
+  @override
+  String get liveRecJoinFailedNote =>
+      'تعذّر دمج التسجيل. يُحتفظ بكل جزء كما هو.';
+
+  @override
+  String get liveRecAskLaterNote =>
+      'عندما يؤكد يوتيوب البث كاملًا، سيُطرح عليك سؤال عن الاحتفاظ بالتسجيل على هذا الجهاز.';
+
+  @override
+  String get liveRecKeptUnconfirmedNote =>
+      'لم تتأكد نسخة يوتيوب بعد، لذلك يُحتفظ بالتسجيل على هذا الجهاز.';
+
+  @override
+  String get liveRecSavedAsk => 'هل تم حفظ التسجيل في الملفات/التنزيلات؟';
+
+  @override
+  String get liveRecSavedYes => 'نعم';
+
+  @override
+  String get liveRecSavedNo => 'ليس بعد';
+
+  @override
+  String get liveRecSavedNotYetNote =>
+      'لم يُحذف شيء. يبقى التسجيل على هذا الجهاز وفي الصندوق؛ وتنتهي صلاحية النسخة في الصندوق تلقائيًا بعد 7 أيام. اضغط حفظ التسجيل مرة أخرى في أي وقت.';
+
+  @override
+  String get liveRecSaveTooBigNote =>
+      'هذا الملف أكبر من أن يتحمله هذا المتصفح. لم يُحذف شيء؛ يمكن حفظ كل جزء على حدة.';
+
+  @override
+  String get liveRecJoinNeedsWifiNote =>
+      'تعذّر الوصول إلى الصندوق. اتصل بشبكة Wi-Fi الخاصة بالمصلى ثم حاول مرة أخرى. يُحتفظ بكل جزء كما هو.';
+
+  @override
+  String get liveRecJoinedUntrackedNote =>
+      'تم دمج التسجيل، لكن تعذّر تدوين اسمه. الملف موجود في Movies/MAXCOM.';
+
+  @override
+  String get errcMicDeviceUnavailable =>
+      'تعذّر فتح مدخل الميكروفون. تأكد من توصيل الميكروفون وأنه غير مستخدم من برنامج آخر.';
+
+  @override
+  String get errcMicSilent =>
+      'مدخل الميكروفون لا يرسل أي صوت. تأكد من توصيل الميكروفون وأنه غير مكتوم.';
+
+  @override
+  String get liveRecBadPieceNote =>
+      'ملف التسجيل غير صالح ولم يقبله الصندوق. يُحتفظ بكل جزء كما هو.';
 }

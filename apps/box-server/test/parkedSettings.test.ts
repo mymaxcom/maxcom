@@ -222,10 +222,10 @@ describe('the cloud lists tvLangAr for a surau only when its box reported it (Q2
     expect(await featuresOf(r)).toEqual(['video', 'posterStretch']);
     r.stripFeatures.on = false;
     await r.box.syncAgent!.runOnce();
-    expect(await featuresOf(r)).toEqual(['video', 'posterStretch', 'tvLangAr']);
+    expect(await featuresOf(r)).toEqual(['video', 'posterStretch', 'tvLangAr', 'videoAfterPrayer', 'videoPlayNow']);
     // a caller that names no box gets the neutral answer: no Arabic
     expect(((await r.cloud.app.inject({ method: 'GET', url: '/api/health' })).json().features as string[])).toEqual(['video', 'posterStretch']);
     // a box always lists its own features
-    expect(((await r.box.inject({ method: 'GET', url: '/api/health' })).json().features as string[])).toEqual(['video', 'posterStretch', 'tvLangAr']);
+    expect(((await r.box.inject({ method: 'GET', url: '/api/health' })).json().features as string[])).toEqual(['video', 'posterStretch', 'tvLangAr', 'videoAfterPrayer', 'videoPlayNow']);
   });
 });

@@ -62,6 +62,9 @@ abstract class MicDevices {
 
   /// Also read the list this often (null = only on [changes]).
   Duration? get pollEvery;
+
+  /// Android: a plain 3-pole plug in a 4-pole jack shows as headphones with no microphone.
+  Future<bool> headphonesWithoutMic() async => false;
 }
 
 /// Android: the system's input devices through the live channel.
@@ -74,6 +77,15 @@ class ChannelMicDevices implements MicDevices {
 
   @override
   Stream<void> get changes => const Stream.empty();
+
+  @override
+  Future<bool> headphonesWithoutMic() async {
+    try {
+      return await _channel.invokeMethod<bool>('headphonesWithoutMic') ?? false;
+    } on Object {
+      return false;
+    }
+  }
 
   @override
   Future<List<MicInfo>> list() async {
@@ -154,7 +166,10 @@ class MicToast {
 }
 
 class MicAutoState {
-  const MicAutoState({this.mic, this.toast});
+  const MicAutoState({this.mic, this.toast, this.trrsHint = false});
+
+  /// Headphones are plugged in but no microphone: the person needs a 4-pole (TRRS) plug.
+  final bool trrsHint;
 
   /// The plugged-in microphone in use; null = the device's own.
   final MicInfo? mic;
@@ -244,6 +259,7 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
       byKey.putIfAbsent(m.key, () => m);
     }
     final list = byKey.values.toList();
+    await _trrs(dev, list);
     // no microphone permission yet: the browser gives empty labels. Wait.
     if (list.isEmpty || list.any((m) => m.label.trim().isEmpty && m.kind.isEmpty)) return;
     final store = ref.read(seenMicsStoreProvider);
@@ -284,6 +300,12 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     }
   }
 
+  /// Headphones without a microphone seen and no external microphone listed: say the plug must be 4-pole (TRRS).
+  Future<void> _trrs(MicDevices dev, List<MicInfo> list) async {
+    final hint = list.every((m) => m.kind != 'external') && await dev.headphonesWithoutMic();
+    if (hint != state.trrsHint) state = MicAutoState(mic: state.mic, toast: state.toast, trrsHint: hint);
+  }
+
   List<String> _capped(List<String> keys) => keys.length <= seenMicsCap ? keys : keys.sublist(keys.length - seenMicsCap);
 
   Future<bool> _use(MicInfo mic, {required bool announce}) async {
@@ -292,7 +314,7 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     final ctl = _control;
     if (ctl != null && !await ctl.setMicrophone(mic.deviceId)) return false;
     final prev = state.mic;
-    state = MicAutoState(mic: mic, toast: state.toast);
+    state = MicAutoState(mic: mic, toast: state.toast, trrsHint: state.trrsHint);
     if (!announce) return true;
     final wasOff = ref.read(liveSourceProvider).external && !before.enabled;
     if (wasOff) await src.setDeviceMic(const AudioSourceMix(enabled: true, volume: 100));
@@ -302,6 +324,7 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     state = MicAutoState(
       mic: mic,
       toast: MicToast(++_seq, MicToastKind.added, mic.label, undo: canUndo, micKind: mic.kind),
+      trrsHint: state.trrsHint,
     );
     return true;
   }
@@ -310,7 +333,7 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     _returning = gone;
     _undo = null;
     await _control?.setMicrophone(null);
-    state = MicAutoState(toast: MicToast(++_seq, MicToastKind.unplugged, gone.label, micKind: gone.kind));
+    state = MicAutoState(toast: MicToast(++_seq, MicToastKind.unplugged, gone.label, micKind: gone.kind), trrsHint: state.trrsHint);
   }
 
   /// "Batal": back to the microphone and the on or off state before; the
@@ -320,8 +343,9 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     if (u == null) return;
     _undo = null;
     final ctl = _control;
-    if (ctl != null) await ctl.setMicrophone(u.mic?.deviceId);
-    state = MicAutoState(mic: u.mic);
+    // Android: "own" keeps the device microphone chosen (null would pick the plugged-in one again)
+    if (ctl != null) await ctl.setMicrophone(u.mic?.deviceId ?? ctl.ownMicrophoneId);
+    state = MicAutoState(mic: u.mic, trrsHint: state.trrsHint);
     final m = u.mix;
     if (m != null) await ref.read(liveSourceProvider.notifier).setDeviceMic(m);
   }

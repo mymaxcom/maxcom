@@ -33,6 +33,8 @@ import '../shell/live_camera_gateway.dart' show AudioSourceMix, LiveAudioMix;
 import '../shell/permissions.dart';
 import '../../upload/upload_queue.dart' show NoRecordings;
 import '../upload/cleanup_providers.dart';
+import '../upload/join_providers.dart';
+import '../../upload/recording_join.dart' show JoinOutcome, JoinSave;
 import '../upload/upload_widgets.dart';
 import 'live_controller.dart';
 import 'live_fold.dart';
@@ -601,7 +603,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final summaryNotice = _noticeInput(watchUrl, ref.read(liveKuliahProvider).value?.byId(kuliahId));
     // Android: the names the engine wrote bind the recording to this live.
     if (recorded && !web) await _rememberRecordings(boxSession);
-    final cleanupKeepDays = await _registerCleanup(
+    // The pieces of this live become ONE file (the old per-piece clean-up is replaced by one question later).
+    final join = recorded ? await _joinPieces(web: web, boxSession: boxSession, publisherSession: publisherSession) : null;
+    final cleanupCovered = await _registerCleanup(
+      join: join,
       recorded: recorded,
       web: web,
       boxSession: boxSession,
@@ -634,9 +639,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         web: web,
         kuliah: ref.read(liveKuliahProvider).value?.byId(kuliahId),
         watchUrl: watchUrl,
-        cleanupKeepDays: cleanupKeepDays,
+        recordingNotes: recorded ? _recordingNotes(join, cleanupCovered, web: web) : const [],
         onWatch: (url) => ref.read(appDepsProvider).openUrl(Uri.parse(url)),
-        onSave: () => ref.read(liveBoxProvider.notifier).savePending(),
+        onSave: () => _saveRecording(),
         onShareNotice: summaryNotice == null
             ? null
             : () => showLiveNoticeSheet(sheetContext, ref, input: summaryNotice),
@@ -675,11 +680,117 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     }
   }
 
-  /// Tells the clean-up which files this live recorded (Plan 6 Task 13), and
-  /// answers the kept days when YouTube's live leg alone covered the whole
-  /// recording and the clean-up will therefore delete it, else null. The
-  /// clean-up registers only files the app itself recorded.
-  Future<int?> _registerCleanup({
+  /// Joins the pieces of the live that just ended into one file (Android: on the phone with MediaMuxer; web: the box
+  /// joins the pieces the browser uploads). Never throws; a failure keeps every piece.
+  Future<JoinOutcome> _joinPieces({
+    required bool web,
+    required String? boxSession,
+    required String? publisherSession,
+  }) async {
+    try {
+      if (!web) {
+        final files = ref.read(sessionFilesProvider);
+        if (boxSession == null || files == null) return const JoinOutcome.nothing();
+        final names = await files.names(boxSession);
+        final out = await ref.read(androidRecordingJoinerProvider).join(names);
+        if (!out.joined) return out;
+        // The phone has already removed the pieces and named the joined file: that name is the truth from now on, so a
+        // failed save is tried again and never turns the join into a failure. The joined file is the recording of this
+        // live (upload, clean-up and the question use it); pieces the phone could not remove stay in the record too.
+        final record = [out.name!, ...out.leftoverNames];
+        for (var attempt = 0; attempt < 2; attempt++) {
+          try {
+            await files.save(boxSession, record);
+            return out;
+          } on Object {
+            // try once more
+          }
+        }
+        return out.untracked();
+      }
+      final joiner = ref.read(webRecordingJoinProvider);
+      if (joiner == null || boxSession == null || publisherSession == null) return const JoinOutcome.nothing();
+      final out = await joiner.upload(liveId: boxSession, sessionId: publisherSession);
+      ref
+          .read(webJoinedProvider.notifier)
+          .set(out.joined ? WebJoined(liveId: boxSession, sessionId: publisherSession, fileName: out.name!) : null);
+      return out;
+    } on Object {
+      return const JoinOutcome.failed('join_failed');
+    }
+  }
+
+  /// "Simpan rakaman": the joined file (web) in one tap, else the pieces one by one as before.
+  Future<void> _saveRecording() async {
+    final joined = ref.read(webJoinedProvider);
+    final joiner = ref.read(webRecordingJoinProvider);
+    if (joined != null && joiner != null) {
+      final r = await joiner.saveJoined(liveId: joined.liveId, sessionId: joined.sessionId);
+      if (r == JoinSave.handedOver) {
+        // A click on a download link does not prove the browser kept the file: nothing is deleted until the person says so.
+        if (!mounted) return;
+        final yes = await _askSavedInDownloads();
+        if (yes == true) {
+          await joiner.confirmSaved(liveId: joined.liveId, sessionId: joined.sessionId);
+          ref.read(webJoinedProvider.notifier).set(null);
+        } else if (mounted) {
+          await _tell(S.of(context).liveRecSavedNotYetNote);
+        }
+        return;
+      }
+      if (r == JoinSave.tooBig && mounted) await _tell(S.of(context).liveRecSaveTooBigNote);
+    }
+    await ref.read(liveBoxProvider.notifier).savePending();
+  }
+
+  /// "Is the recording saved in Files/Downloads?" Yes deletes the local pieces and the box copy; Not yet keeps both.
+  Future<bool?> _askSavedInDownloads() {
+    final s = S.of(context);
+    return showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (d) => AlertDialog(
+        content: Text(s.liveRecSavedAsk, key: const ValueKey('rec-saved-ask')),
+        actions: [
+          TextButton(
+            key: const ValueKey('rec-saved-no'),
+            onPressed: () => Navigator.of(d, rootNavigator: true).pop(false),
+            child: Text(s.liveRecSavedNo),
+          ),
+          FilledButton(
+            key: const ValueKey('rec-saved-yes'),
+            onPressed: () => Navigator.of(d, rootNavigator: true).pop(true),
+            child: Text(s.liveRecSavedYes),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _tell(String text) {
+    final s = S.of(context);
+    return showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (d) => AlertDialog(
+        content: Text(text, key: const ValueKey('rec-tell')),
+        actions: [
+          FilledButton(onPressed: () => Navigator.of(d, rootNavigator: true).pop(), child: Text(s.actionClose)),
+        ],
+      ),
+    );
+  }
+
+  /// The words under the summary about the recording: joined or not, and what happens with it.
+  List<String> _recordingNotes(JoinOutcome? join, bool? covered, {required bool web}) => recordingNotesFor(join, covered, web: web);
+
+  /// Tells the clean-up which files this live recorded (Plan 6 Task 13). Nothing of it is deleted by itself any more
+  /// (2026.11.14): once YouTube has the whole of it and the file is one joined file, the person is asked once. A failed
+  /// join keeps everything for good. Answers true when the live leg alone covered the whole recording (the question
+  /// will come), false when not, null when the clean-up is not in use.
+  Future<bool?> _registerCleanup({
+    required JoinOutcome? join,
     required bool recorded,
     required bool web,
     required String? boxSession,
@@ -694,18 +805,22 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     try {
       final session = catchUpSessionId(web: web, publisherSession: publisherSession, boxSession: boxSession);
       if (session == null) return null;
+      // Web: the pieces go with the save of the joined file; the app cannot delete what the browser saved: nothing to ask.
+      final keepForGood = web || (join?.failed ?? false);
       await cleanup.register(
         sessionId: session,
         kuliahId: kuliahId,
         durationSec: durationSec,
         youtubeSeconds: youtubeSeconds,
         liveVideoId: liveVideoId,
+        ask: true,
+        keepForGood: keepForGood,
       );
       final rec = (await cleanup.records())[session];
       final s = ref.read(cleanupSettingsProvider);
-      if (rec == null || !rec.liveCovered || !s.enabled) return null;
+      if (rec == null || !s.enabled) return null;
       unawaited(cleanup.run());
-      return s.keepDays;
+      return rec.liveCovered;
     } on Object {
       return null;
     }
@@ -1074,7 +1189,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       camBack: camBack,
       muted: _state.muted,
       lang: lang,
-      micLabel: ref.watch(micAutoProvider.select((m) => m.mic))?.nameIn(lang),
+      micLabel: _routedMicName(ref.watch(micAutoProvider.select((m) => m.mic)), _state.micRoute, lang),
+      micUnavailable: _state.micUnavailable,
+      trrsHint: ref.watch(micAutoProvider.select((m) => m.trrsHint)),
     );
     final rows = buildAudioRows(source: view, ctx: ctx, info: info);
     final audioNotices = buildAudioNotices(source: view, ctx: ctx, info: info);
@@ -2816,7 +2933,7 @@ class LiveSummarySheet extends StatelessWidget {
     required this.onSave,
     this.onCatchUp,
     this.onShareNotice,
-    this.cleanupKeepDays,
+    this.recordingNotes = const [],
   });
 
   final int durationSec;
@@ -2840,10 +2957,8 @@ class LiveSummarySheet extends StatelessWidget {
   /// should close and the upload screen open.
   final Future<bool> Function(BuildContext sheetContext)? onCatchUp;
 
-  /// Set when the live leg gave YouTube the whole recording and the clean-up
-  /// will delete it from this device after this many days (0: as soon as
-  /// YouTube confirms).
-  final int? cleanupKeepDays;
+  /// What to say about the recording: `joined`, `joinFailed`, `askLater`, `keptUnconfirmed`.
+  final List<String> recordingNotes;
 
   @override
   Widget build(BuildContext context) {
@@ -2930,26 +3045,32 @@ class LiveSummarySheet extends StatelessWidget {
                     ),
                   ],
                 ),
-              if (cleanupKeepDays != null && recorded && !short) ...[
+              for (final k in recordingNotes) ...[
                 const SizedBox(height: 12),
                 Row(
-                  key: const ValueKey('live-cleanup-note'),
+                  key: ValueKey('live-rec-note-$k'),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.auto_delete_rounded,
+                    Icon(
+                      const {'joinFailed', 'joinNeedsWifi', 'badPiece', 'joinedUntracked'}.contains(k)
+                          ? Icons.warning_amber_rounded
+                          : (k == 'joined' ? Icons.merge_type_rounded : Icons.info_outline_rounded),
                       size: 20,
                       color: SurauColors.teal,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        cleanupKeepDays == 0
-                            ? s.liveCleanupNow
-                            : s.liveCleanupAfterDays(cleanupKeepDays!),
-                        style: text.bodyMedium!.copyWith(
-                          color: SurauColors.muted,
-                        ),
+                        switch (k) {
+                          'joined' => s.liveRecJoinedNote,
+                          'joinFailed' => s.liveRecJoinFailedNote,
+                          'joinNeedsWifi' => s.liveRecJoinNeedsWifiNote,
+                          'badPiece' => s.liveRecBadPieceNote,
+                          'joinedUntracked' => s.liveRecJoinedUntrackedNote,
+                          'askLater' => s.liveRecAskLaterNote,
+                          _ => s.liveRecKeptUnconfirmedNote,
+                        },
+                        style: text.bodyMedium!.copyWith(color: SurauColors.muted),
                       ),
                     ),
                   ],
@@ -3163,4 +3284,33 @@ class ReplaceLiveSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// The microphone name under the meter: the device the system really routed (Android), else the one picked up by
+/// the watcher. The built-in microphone is the device's own (no name).
+String? _routedMicName(MicInfo? picked, MicRouteInfo? routed, AppLang lang) {
+  if (routed != null) {
+    if (routed.kind == 'builtin') return null;
+    return MicInfo(deviceId: routed.id, label: routed.name, kind: routed.kind).nameIn(lang);
+  }
+  return picked?.nameIn(lang);
+}
+
+/// The words under the summary about the recording: joined or not, and what happens with it. When the join failed
+/// the person is never told "you will be asked" or "kept, not confirmed": every piece is simply kept, and nobody is asked.
+List<String> recordingNotesFor(JoinOutcome? join, bool? covered, {required bool web}) {
+  final failed = join != null && join.failed;
+  return [
+    if (join != null && join.joined) 'joined',
+    if (join != null && join.joined && !join.tracked) 'joinedUntracked',
+    if (failed)
+      switch (join.error) {
+        'box_away' => 'joinNeedsWifi',
+        'bad_piece' => 'badPiece',
+        _ => 'joinFailed',
+      },
+    if (!failed && !web && covered == true) 'askLater',
+    if (!failed && !web && covered == false) 'keptUnconfirmed',
+  ];
 }

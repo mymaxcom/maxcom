@@ -189,7 +189,7 @@ void main() {
     'liveOnlyRestoreUser', 'liveOnlyPhone', 'idLabel', 'idPending', 'searchNameOrId', 'userDelete', 'userDeleteTitle',
     'userDeleteBody', 'userDeleted', 'userDeleteSelf', 'userDeleteLastAdmin', 'userRestore', 'userRestored',
     'auditUserDeleted', 'auditDeviceDeleted', 'auditPhoneChanged', 'autoCleanNote', 'autoCleanSoon', 'phoneLabel',
-    'phoneHint', 'phoneRequired', 'phoneInvalid', 'phoneTaken', 'phoneNeeded', 'phoneFill', 'phoneDuplicate',
+    'phoneHint', 'phoneLabelOptional', 'phoneNone', 'phoneCleared', 'phoneInvalid', 'phoneTaken', 'phoneFill', 'phoneDuplicate',
     'phoneSaved', 'phoneEdit', 'phonePrivate', 'waTo', 'waUnavailable',
   ];
 
@@ -212,7 +212,7 @@ void main() {
     expect(ms['devicesEnrolViaCloud'], 'Anda di luar rangkaian surau. Kod QR hanya boleh dibuat di Wi-Fi surau.');
     expect(ms['enrolQrCodeLabel'], 'Kod semakan');
     expect(ms['enrolQrCopy'], 'Salin kod');
-    expect(ms['userDeactivateHint'], 'Semua peranti dan kod {name} dipadam. Nama kekal dalam log dan rekod kewangan.');
+    expect(ms['userDeactivateHint'], 'Semua peranti dan kod {name} dibatalkan. Nama kekal dalam log dan rekod kewangan.');
   });
 
   test('[PP-A1] no phone number outside the fake range in the people text', () {

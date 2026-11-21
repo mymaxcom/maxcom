@@ -6,6 +6,6 @@
   "decoders": ["aac", "opus", "h264", "pcm_alaw", "pcm_mulaw"],
   "parsers": ["h264", "aac", "opus"],
   "bsfs": ["h264_mp4toannexb", "aac_adtstoasc", "extract_extradata"],
-  "filters": ["aresample", "aformat", "anull", "anullsrc", "amix", "adelay", "volume", "asplit", "amerge", "arealtime"],
+  "filters": ["aresample", "aformat", "anull", "anullsrc", "amix", "adelay", "volume", "asplit", "amerge", "arealtime", "compand", "alimiter"],
   "externalLibs": ["libopus", "mbedtls"]
 }

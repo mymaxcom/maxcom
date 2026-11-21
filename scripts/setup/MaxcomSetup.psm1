@@ -1060,6 +1060,163 @@ function Write-InstallState {
   return $file
 }
 
+# ---------------------------------------------------------------------------------------------
+# Microphone privacy (Mic-in of the box)
+# ---------------------------------------------------------------------------------------------
+
+# The LOCAL SERVICE profile hive is mounted under this name while it is edited (and found again if an earlier run left it mounted).
+$script:MicMount = 'HKU\MAXCOM-LOCALSERVICE'
+# Test hook: a hive file to load instead of the LOCAL SERVICE profile, and the last reg.exe complaint (read by LastError).
+$script:MicHiveFile = $null
+$script:MicRegError = ''
+
+function Invoke-MaxcomReg {
+  <#
+    Runs reg.exe and returns @{ Code; Text }. Windows PowerShell 5.1 turns a native program's stderr into a terminating
+    error when $ErrorActionPreference is Stop (this module's setting), so the program is started as a process with its
+    output in files: nothing reaches the error stream, whatever reg.exe prints, and the exit code is what counts.
+  #>
+  param([Parameter(Mandatory)][string[]]$Arguments)
+  $o = $null
+  $e = $null
+  try {
+    $o = [System.IO.Path]::GetTempFileName()
+    $e = [System.IO.Path]::GetTempFileName()
+    $line = (@($Arguments | ForEach-Object { if ($_ -match '[\s"]' -or $_ -eq '') { '"' + $_ + '"' } else { $_ } }) -join ' ')
+    $p = Start-Process -FilePath (Get-SystemTool 'reg.exe') -ArgumentList $line -Wait -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+    $text = ''
+    foreach ($f in @($e, $o)) {
+      $t = [System.IO.File]::ReadAllText($f).Trim()
+      if ($t -ne '') { $text = $t; break }
+    }
+    $code = -1
+    if ($null -ne $p -and $null -ne $p.ExitCode) { $code = [int]$p.ExitCode }
+    return @{ Code = $code; Text = $text }
+  } catch {
+    return @{ Code = -1; Text = [string]$_.Exception.Message }
+  } finally {
+    foreach ($f in @($o, $e)) { if ($null -ne $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
+  }
+}
+
+function Get-MaxcomRegistryProvider {
+  <#
+    The real registry, as the small operations Set-MaxcomMicAccess needs. A test passes its own.
+    Load and Unload never throw when reg.exe fails: Load answers $null (and LastError says why), Unload answers $false.
+    -HiveFile is a test hook: a file to load as the hive instead of the LOCAL SERVICE profile.
+  #>
+  param([string]$HiveFile = '')
+  $script:MicHiveFile = $(if ($HiveFile -ne '') { $HiveFile } else { $null })
+  return @{
+    # value of one name under a key path ('HKLM\...' or 'HKU\...'), or $null when the key or the name is missing
+    Get = {
+      param([string]$Path, [string]$Name)
+      $item = Get-ItemProperty -LiteralPath ('Registry::' + $Path) -Name $Name -ErrorAction SilentlyContinue
+      if ($null -eq $item) { return $null }
+      return [string]$item.$Name
+    }
+    Set = {
+      param([string]$Path, [string]$Name, [string]$Value)
+      $full = 'Registry::' + $Path
+      if (-not (Test-Path -LiteralPath $full)) { [void](New-Item -Path $full -Force) }
+      Set-ItemProperty -LiteralPath $full -Name $Name -Value $Value -Type String
+    }
+    Exists = {
+      param([string]$Path)
+      return (Test-Path -LiteralPath ('Registry::' + $Path))
+    }
+    # the LOCAL SERVICE profile hive is only mounted while a process of that account runs: mount the file when it is not
+    Load = {
+      $script:MicRegError = ''
+      $dat = $script:MicHiveFile
+      if ($null -eq $dat) { $dat = Join-Path $env:SystemRoot 'ServiceProfiles\LocalService\NTUSER.DAT' }
+      if (-not (Test-Path -LiteralPath $dat)) { $script:MicRegError = 'fail profil LOCAL SERVICE tiada: ' + $dat; return $null }
+      $r = Invoke-MaxcomReg @('load', $script:MicMount, $dat)
+      if ($r.Code -ne 0) { $script:MicRegError = $r.Text; return $null }
+      return $script:MicMount
+    }
+    Unload = {
+      $script:MicRegError = ''
+      [GC]::Collect()
+      [GC]::WaitForPendingFinalizers()
+      # a handle released a moment ago can still hold the hive: a few tries
+      for ($i = 0; $i -lt 4; $i++) {
+        $r = Invoke-MaxcomReg @('unload', $script:MicMount)
+        if ($r.Code -eq 0) { return $true }
+        $script:MicRegError = $r.Text
+        Start-Sleep -Milliseconds 500
+      }
+      return $false
+    }
+    LastError = { return [string]$script:MicRegError }
+  }
+}
+
+function Set-MaxcomMicAccess {
+  <#
+    Windows microphone privacy is per account (CapabilityAccessManager ConsentStore). The box runs as LOCAL SERVICE
+    (S-1-5-19), so dshow capture of the Mic-in is silent unless the microphone is allowed for that account too.
+    Idempotent. LOCAL SERVICE: ...\microphone and ...\microphone\NonPackaged are set to Allow when they are not already
+    (a missing key is created). A machine-wide Deny (the whole PC blocks microphones) is NOT changed: that is the owner's
+    choice for every program; a NOTA line says so and how to allow it.
+    Returns the lines to show: the changes made, 'NOTA: ...' notices and 'GAGAL: ...' problems (empty when everything was
+    already right). A key that cannot be written is a GAGAL line and the others are still done. When the LOCAL SERVICE
+    hive is not mounted and cannot be loaded, nothing is written under it (a GAGAL line says so). A hive an earlier run left
+    mounted is unloaded first. Never undone by the uninstall: the setting belongs to Windows.
+  #>
+  param([hashtable]$Provider = $null)
+  if ($null -eq $Provider) { $Provider = Get-MaxcomRegistryProvider }
+  $cap = 'SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone'
+  $changes = New-Object System.Collections.ArrayList
+  $why = {
+    if ($Provider.ContainsKey('LastError')) { $m = [string](& $Provider.LastError); if ($m -ne '') { return (' (' + $m + ')') } }
+    return ''
+  }
+
+  $machine = 'HKLM\' + $cap
+  $now = & $Provider.Get $machine 'Value'
+  if ($now -eq 'Deny') {
+    [void]$changes.Add('NOTA: Windows menyekat mikrofon untuk seluruh PC ini (Deny peringkat mesin), jadi Mic-in kotak akan senyap. MAXCOM tidak mengubahnya. Buka Windows Settings, Privacy, Microphone dan hidupkan "Microphone access" dan "Let desktop apps access your microphone".')
+  }
+
+  $hive = 'HKU\S-1-5-19'
+  $loaded = $null
+  $usable = $true
+  if (-not (& $Provider.Exists $hive)) {
+    # an earlier run that could not unload leaves its mount behind: release it before mounting again
+    if (& $Provider.Exists $script:MicMount) {
+      $u = $null
+      try { $u = & $Provider.Unload } catch { $u = $false }
+      if ($u -is [bool] -and -not $u) { [void]$changes.Add('GAGAL: sambungan hive LOCAL SERVICE daripada larian lama tidak dapat dilepaskan' + (& $why)) }
+    }
+    try { $loaded = & $Provider.Load } catch { $loaded = $null; [void]$changes.Add('GAGAL: hive LOCAL SERVICE tidak dapat dimuatkan: ' + $_.Exception.Message) }
+    if ($null -ne $loaded -and $loaded -ne '') { $hive = [string]$loaded }
+    else {
+      $usable = $false
+      [void]$changes.Add('GAGAL: profil LOCAL SERVICE tidak dapat dimuatkan' + (& $why) + '; akses mikrofon untuk LOCAL SERVICE tidak ditetapkan (tiada kunci ditulis)')
+    }
+  }
+  if ($usable) {
+    try {
+      foreach ($sub in @($cap, ($cap + '\NonPackaged'))) {
+        $path = $hive + '\' + $sub
+        $cur = & $Provider.Get $path 'Value'
+        if ($cur -eq 'Allow') { continue }
+        $was = $(if ($null -eq $cur) { 'tiada' } else { $cur })
+        try { & $Provider.Set $path 'Value' 'Allow'; [void]$changes.Add("akses mikrofon untuk LOCAL SERVICE ($sub): $was diubah kepada Allow") }
+        catch { [void]$changes.Add("GAGAL: akses mikrofon LOCAL SERVICE ($sub) tidak dapat diubah: " + $_.Exception.Message) }
+      }
+    } finally {
+      if ($null -ne $loaded -and $loaded -ne '') {
+        $u = $null
+        try { $u = & $Provider.Unload } catch { $u = $false }
+        if ($u -is [bool] -and -not $u) { [void]$changes.Add('GAGAL: hive LOCAL SERVICE tidak dapat dilepaskan selepas ditulis' + (& $why) + '; larian seterusnya akan melepaskannya') }
+      }
+    }
+  }
+  return $changes.ToArray()
+}
+
 Export-ModuleMember -Function @(
   'Get-MaxcomPaths', 'Test-MaxcomElevated', 'Resolve-SetupScript', 'Write-Step', 'Invoke-Step',
   'Get-UntrustedWriters', 'Test-SafeInstallRoot', 'Get-InstallRootProblem',
@@ -1068,5 +1225,6 @@ Export-ModuleMember -Function @(
   'Test-BundleManifest', 'Get-BundleManifestProblem', 'Test-ArchiveEntries', 'Get-ArchiveEntryProblem',
   'Expand-Release', 'Get-ReleaseName', 'Get-ReleaseBuild', 'Get-ArchiveBuild', 'New-WorkspaceLinks', 'Switch-Current', 'Remove-JunctionSafe', 'Remove-TreeSafe',
   'Get-PrivateIPv4', 'Get-PortOwner', 'Read-InstallState', 'Write-InstallState',
-  'ConvertTo-FullPath', 'Test-IsReparsePoint', 'Get-LinkTarget'
+  'ConvertTo-FullPath', 'Test-IsReparsePoint', 'Get-LinkTarget',
+  'Get-MaxcomRegistryProvider', 'Set-MaxcomMicAccess', 'Invoke-MaxcomReg'
 )

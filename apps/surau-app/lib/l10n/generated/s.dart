@@ -2418,7 +2418,7 @@ abstract class S {
   /// No description provided for @userDeactivateHint.
   ///
   /// In ms, this message translates to:
-  /// **'Semua peranti dan kod {name} dipadam. Nama kekal dalam log dan rekod kewangan.'**
+  /// **'Semua peranti dan kod {name} dibatalkan. Nama kekal dalam log dan rekod kewangan.'**
   String userDeactivateHint(String name);
 
   /// No description provided for @userDeactivateTitle.
@@ -14520,7 +14520,7 @@ abstract class S {
   /// No description provided for @userDeleteBody.
   ///
   /// In ms, this message translates to:
-  /// **'{name} ({ref}) tidak lagi boleh masuk dan hilang dari semua senarai. Semua perantinya dipadam. Log perubahan dan rekod kewangan kekal dengan nama dan ID ini.'**
+  /// **'{name} ({ref}) tidak lagi boleh masuk dan hilang dari semua senarai. Semua perantinya dibatalkan dan nombor telefonnya dipadam. Log perubahan dan rekod kewangan kekal dengan nama dan ID ini.'**
   String userDeleteBody(String name, String ref);
 
   /// No description provided for @userDeleted.
@@ -14589,17 +14589,29 @@ abstract class S {
   /// **'Nombor telefon'**
   String get phoneLabel;
 
+  /// No description provided for @phoneLabelOptional.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon untuk WhatsApp (pilihan)'**
+  String get phoneLabelOptional;
+
+  /// No description provided for @phoneNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada nombor telefon'**
+  String get phoneNone;
+
+  /// No description provided for @phoneCleared.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nombor telefon dibuang.'**
+  String get phoneCleared;
+
   /// No description provided for @phoneHint.
   ///
   /// In ms, this message translates to:
   /// **'Contoh: 012-000 0000'**
   String get phoneHint;
-
-  /// No description provided for @phoneRequired.
-  ///
-  /// In ms, this message translates to:
-  /// **'Nombor telefon diperlukan'**
-  String get phoneRequired;
 
   /// No description provided for @phoneInvalid.
   ///
@@ -14612,12 +14624,6 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Nombor ini sudah digunakan oleh pengguna lain ({ref}).'**
   String phoneTaken(String ref);
-
-  /// No description provided for @phoneNeeded.
-  ///
-  /// In ms, this message translates to:
-  /// **'Nombor telefon diperlukan'**
-  String get phoneNeeded;
 
   /// No description provided for @phoneFill.
   ///
@@ -14768,6 +14774,30 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Rakaman'**
   String get videoSourceRakaman;
+
+  /// No description provided for @videoAfterPrayerLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Main selepas zikir solat'**
+  String get videoAfterPrayerLabel;
+
+  /// No description provided for @videoAfterPrayerNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak'**
+  String get videoAfterPrayerNone;
+
+  /// No description provided for @videoAfterPrayerZohor.
+  ///
+  /// In ms, this message translates to:
+  /// **'Zohor (Jumaat pada hari Jumaat)'**
+  String get videoAfterPrayerZohor;
+
+  /// No description provided for @videoAfterPrayerHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jika dipilih, video ini keluar daripada putaran biasa. TV memainkannya sekali sehari, selepas skrin zikir solat itu, mengikut hari dan tarikh yang dipilih.'**
+  String get videoAfterPrayerHint;
 
   /// No description provided for @videoPick.
   ///
@@ -14984,6 +15014,186 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Mengambil tajuk daripada YouTube...'**
   String get videoFetching;
+
+  /// No description provided for @errcNoMicDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada Mic-in dikesan pada MAXCOM.'**
+  String get errcNoMicDevice;
+
+  /// No description provided for @errcMicAccessDenied.
+  ///
+  /// In ms, this message translates to:
+  /// **'Windows tidak membenarkan MAXCOM menggunakan Mic-in. Jalankan Semak MAXCOM.'**
+  String get errcMicAccessDenied;
+
+  /// No description provided for @errcMicListFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Senarai Mic-in tidak dapat dibaca. Cuba semula sebentar lagi.'**
+  String get errcMicListFailed;
+
+  /// No description provided for @errcMicNoTool.
+  ///
+  /// In ms, this message translates to:
+  /// **'Alat bunyi MAXCOM tiada, jadi Mic-in tidak boleh digunakan.'**
+  String get errcMicNoTool;
+
+  /// No description provided for @errcPlayLiveRunning.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran langsung sedang berjalan di skrin TV.'**
+  String get errcPlayLiveRunning;
+
+  /// No description provided for @errcPlayPrayerPhase.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak boleh dimainkan semasa waktu solat.'**
+  String get errcPlayPrayerPhase;
+
+  /// No description provided for @videoPlayNow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Main sekarang'**
+  String get videoPlayNow;
+
+  /// No description provided for @videoPlayNowDone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video dimainkan di skrin TV sekarang.'**
+  String get videoPlayNowDone;
+
+  /// No description provided for @dashBoxName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama MAXCOM'**
+  String get dashBoxName;
+
+  /// No description provided for @boxNameRenameTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar nama MAXCOM'**
+  String get boxNameRenameTitle;
+
+  /// No description provided for @boxNameFollowsHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama ini mengikut nama surau melainkan anda menukarnya sendiri.'**
+  String get boxNameFollowsHint;
+
+  /// No description provided for @phoneWhatsAppHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Digunakan untuk menghantar notis dan pautan melalui WhatsApp. Boleh dikosongkan.'**
+  String get phoneWhatsAppHint;
+
+  /// No description provided for @recKeepTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Simpan rakaman di peranti?'**
+  String get recKeepTitle;
+
+  /// No description provided for @recKeepBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube sudah mempunyai salinan penuh siaran ini. Anda boleh menyimpan rakaman di peranti ini atau memadamnya untuk menjimatkan ruang.'**
+  String get recKeepBody;
+
+  /// No description provided for @recKeepKeep.
+  ///
+  /// In ms, this message translates to:
+  /// **'Simpan'**
+  String get recKeepKeep;
+
+  /// No description provided for @recKeepDelete.
+  ///
+  /// In ms, this message translates to:
+  /// **'Padam'**
+  String get recKeepDelete;
+
+  /// No description provided for @liveRecJoinedNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman digabungkan menjadi satu fail.'**
+  String get liveRecJoinedNote;
+
+  /// No description provided for @liveRecJoinFailedNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman tidak dapat digabungkan. Setiap bahagian disimpan seperti asalnya.'**
+  String get liveRecJoinFailedNote;
+
+  /// No description provided for @liveRecAskLaterNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Apabila YouTube mengesahkan siaran penuh, anda akan ditanya sama ada mahu menyimpan rakaman di peranti ini.'**
+  String get liveRecAskLaterNote;
+
+  /// No description provided for @liveRecKeptUnconfirmedNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Salinan YouTube belum disahkan, jadi rakaman disimpan di peranti ini.'**
+  String get liveRecKeptUnconfirmedNote;
+
+  /// No description provided for @liveRecSavedAsk.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman sudah disimpan dalam Fail/Downloads?'**
+  String get liveRecSavedAsk;
+
+  /// No description provided for @liveRecSavedYes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ya'**
+  String get liveRecSavedYes;
+
+  /// No description provided for @liveRecSavedNo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Belum'**
+  String get liveRecSavedNo;
+
+  /// No description provided for @liveRecSavedNotYetNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada apa yang dipadam. Rakaman kekal di peranti ini dan di MAXCOM; salinan di MAXCOM luput sendiri selepas 7 hari. Tekan Simpan rakaman sekali lagi bila-bila masa.'**
+  String get liveRecSavedNotYetNote;
+
+  /// No description provided for @liveRecSaveTooBigNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail ini terlalu besar untuk pelayar ini. Tiada apa yang dipadam; setiap bahagian boleh disimpan satu per satu.'**
+  String get liveRecSaveTooBigNote;
+
+  /// No description provided for @liveRecJoinNeedsWifiNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM tidak dapat dicapai. Sambung ke Wi-Fi surau, kemudian cuba lagi. Setiap bahagian disimpan seperti asalnya.'**
+  String get liveRecJoinNeedsWifiNote;
+
+  /// No description provided for @liveRecJoinedUntrackedNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman sudah digabungkan, tetapi namanya belum dapat dicatat. Fail itu ada di Movies/MAXCOM.'**
+  String get liveRecJoinedUntrackedNote;
+
+  /// No description provided for @errcMicDeviceUnavailable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mic-in tidak dapat dibuka. Pastikan mikrofon dipasang dan tidak digunakan oleh program lain.'**
+  String get errcMicDeviceUnavailable;
+
+  /// No description provided for @errcMicSilent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mic-in tidak menghantar bunyi. Pastikan mikrofon dipasang dan tidak senyap (mute).'**
+  String get errcMicSilent;
+
+  /// No description provided for @liveRecBadPieceNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail rakaman tidak sah dan tidak diterima oleh MAXCOM. Setiap bahagian disimpan seperti asalnya.'**
+  String get liveRecBadPieceNote;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

@@ -375,7 +375,8 @@ class WebPublisher implements LivePublisher, LiveMicControl {
       'resizeMode': 'crop-and-scale',
       'frameRate': 30,
     },
-    // A PA microphone: no processing.
+    // A PA microphone: echo cancellation and noise suppression stay off on purpose. The browser's automatic gain is on:
+    // a tablet or phone microphone records speech about 10 dB too quiet (measured -31 dBFS RMS, clear speech is -18).
     'audio': _audioConstraints(micId),
   };
 
@@ -383,7 +384,7 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     if (micId != null) 'deviceId': {'exact': micId},
     'echoCancellation': false,
     'noiseSuppression': false,
-    'autoGainControl': false,
+    'autoGainControl': true,
   };
 
   /// The microphone the person's device switched to by itself (a USB or
@@ -1031,6 +1032,9 @@ class WebPublisher implements LivePublisher, LiveMicControl {
   /// sound comes from [deviceId] (null = the default one) from now on. A live
   /// goes on over the same connection (the track is replaced); false when the
   /// microphone could not be opened (nothing changes).
+  @override
+  String? get ownMicrophoneId => null;
+
   @override
   Future<bool> setMicrophone(String? deviceId) async {
     final prev = _micId;

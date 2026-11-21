@@ -210,12 +210,10 @@ describe('[PP-COMPAT] an older app against this box', () => {
     const app = buildApp(join(dir, 'box.db'), { dataDir: dir });
     apps.push(app);
     const admin = await loginAs(app, 'admin');
-    // The one deliberate refusal: a person is added with a phone number now (decision of this release). An older app
-    // sends none and gets a coded, readable 400, not a crash; its other requests below are unchanged.
-    const bare = await app.inject({ method: 'POST', url: '/api/users', headers: admin.headers, payload: { name: 'Kak Aminah Contoh', roles: ['ajk'] } });
-    expect(bare.statusCode, bare.body).toBe(400);
-    expect(bare.json()).toMatchObject({ code: 'phone_required' });
-    expect(Array.isArray(bare.json().errors)).toBe(true);
+    // The phone number is optional: an older app that sends none adds the person with no number.
+    const bare = await app.inject({ method: 'POST', url: '/api/users', headers: admin.headers, payload: { name: 'Kak Aminah Tanpa', roles: ['ajk'] } });
+    expect(bare.statusCode, bare.body).toBe(201);
+    expect(bare.json().phone).toBeNull();
     const make = await app.inject({ method: 'POST', url: '/api/users', headers: admin.headers, payload: { name: 'Kak Aminah Contoh', roles: ['ajk'], phone: '+60 12-000 0011' } });
     expect(make.statusCode, make.body).toBe(201);
     const id = String(make.json().id);

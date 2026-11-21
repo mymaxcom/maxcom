@@ -43,10 +43,17 @@ const List<(String, String)> boxLocalOnly = [
   ('PUT', '/api/settings/appLock'),
 ];
 
+/// Path prefixes (any method) that belong to the surau's own box: the pieces of a live recording are hundreds of
+/// megabytes and the cloud has no such route, so they must never travel there (2026.11.14).
+const List<String> boxLocalOnlyPrefixes = [
+  '/api/live/recordings',
+];
+
 /// Whether `METHOD path` may only be sent to the surau's own box.
 bool isBoxLocalOnly(String method, String path) {
   final p = path.split('?').first;
-  return boxLocalOnly.any((e) => e.$1 == method.toUpperCase() && e.$2 == p);
+  return boxLocalOnly.any((e) => e.$1 == method.toUpperCase() && e.$2 == p) ||
+      boxLocalOnlyPrefixes.any((x) => p == x || p.startsWith('$x/'));
 }
 
 /// One entry of the list: what the person cannot do without a connection.

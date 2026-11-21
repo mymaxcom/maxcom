@@ -24,7 +24,10 @@ import kotlin.math.min
    state, a stall watchdog hook) talks to a small [RtspConnector]; [RtspVideoSource] is the RootEncoder VideoSource that
    owns the decoder and the Surface. On loss the decoder stops feeding but the SurfaceTexture keeps the last frame;
    [CameraLinkState.LOST] and [lostSinceMs] are what the engine reads to draw "Siaran akan bersambung sebentar lagi" and
-   to stop after 10 minutes (K2). */
+   to stop after 10 minutes (K2).
+
+   The library's widgets (its Rtsp view classes) are not used, so [DecoderHelper] initialises the library's
+   MediaCodecHelper itself before the first decoder starts; without it every decoder fails and no video frame appears. */
 
 /** The user's transport choice: "Automatik" (TCP then UDP), "TCP", "UDP". */
 enum class TransportMode {
@@ -331,10 +334,74 @@ interface VideoSink {
     fun stop()
 }
 
+/**
+ * Runs [init] until it has succeeded once per process and never throws: a failure is reported once through [warn] and
+ * swallowed (the decoder start then fails as it would have and the existing error path reports it).
+ */
+class OnceInit(private val init: () -> Unit, private val warn: (Throwable) -> Unit) {
+    private val done = AtomicBoolean(false)
+    private val warned = AtomicBoolean(false)
+
+    // Synchronized: a second caller waits until the first init has finished, so no decoder starts before the helper is ready.
+    // A failed init is tried again at the next call (the next decoder start); the warning is given once.
+    @Synchronized
+    fun ensure() {
+        if (done.get()) return
+        try {
+            init()
+            done.set(true)
+        } catch (t: Throwable) {
+            if (!warned.compareAndSet(false, true)) return
+            try {
+                warn(t)
+            } catch (_: Throwable) {
+            }
+        }
+    }
+}
+
+/** The library's decoder needs MediaCodecHelper initialised first; its own widgets do it, we use none of them. */
+object DecoderHelper {
+    private const val TAG = "DecoderHelper"
+
+    /** Context of the first caller; one init per process is enough (the helper guards itself too). */
+    @Volatile private var ctx: android.content.Context? = null
+    private val once = OnceInit(
+        init = {
+            // Same call as the library widget's initView: application context and an empty glRenderer string.
+            com.limelight.binding.video.MediaCodecHelper.initialize(ctx!!, "")
+        },
+        warn = { android.util.Log.w(TAG, "MediaCodecHelper init failed: $it") },
+    )
+
+    fun ensure(context: android.content.Context?) {
+        if (context == null) return
+        ctx = context.applicationContext ?: context
+        once.ensure()
+    }
+}
+
 /** MediaCodec decoding onto [surface] through the library's decoder thread. */
-class LibVideoSink(private val surface: Surface, private val width: Int, private val height: Int) : VideoSink {
+class LibVideoSink(
+    private val width: Int,
+    private val height: Int,
+    private val ensureHelper: () -> Unit,
+    private val startDecoder: (mime: String, width: Int, height: Int, queue: VideoFrameQueue) -> () -> Unit,
+) : VideoSink {
+    constructor(surface: Surface, width: Int, height: Int, context: android.content.Context? = null) : this(
+        width, height,
+        ensureHelper = { DecoderHelper.ensure(context) },
+        startDecoder = { mime, w, h, q ->
+            val t = VideoDecoderSurfaceThread(
+                surface, mime, w, h, 0, q, object : VideoDecodeThread.VideoDecoderListener {},
+            )
+            t.start()
+            ({ t.stopAsync() })
+        },
+    )
+
     @Volatile private var queue: VideoFrameQueue? = null
-    @Volatile private var thread: VideoDecoderSurfaceThread? = null
+    @Volatile private var stopDecoder: (() -> Unit)? = null
     @Volatile private var h265 = false
 
     override fun configure(mime: String, sps: ByteArray?, pps: ByteArray?, vps: ByteArray?) {
@@ -351,11 +418,8 @@ class LibVideoSink(private val surface: Surface, private val width: Int, private
             v.copyInto(data, sps.size + pps.size)
             q.push(FrameQueue.VideoFrame(codec(), true, data, 0, data.size, 0))
         }
-        val t = VideoDecoderSurfaceThread(
-            surface, mime, width, height, 0, q, object : VideoDecodeThread.VideoDecoderListener {},
-        )
-        thread = t
-        t.start()
+        ensureHelper()
+        stopDecoder = startDecoder(mime, width, height, q)
     }
 
     private fun codec() = if (h265) VideoCodecType.H265 else VideoCodecType.H264
@@ -367,8 +431,8 @@ class LibVideoSink(private val surface: Surface, private val width: Int, private
     }
 
     override fun stop() {
-        thread?.stopAsync()
-        thread = null
+        stopDecoder?.invoke()
+        stopDecoder = null
         queue = null
     }
 }

@@ -189,4 +189,40 @@ class RtspVideoSourceTest {
         c.stop()
         assertEquals(ConnectEnd.STOPPED, c.run(RtspTransport.TCP, ev))
     }
+
+    @Test
+    fun helperIsInitialisedBeforeTheDecoderStarts() {
+        val order = ArrayList<String>()
+        val sink = LibVideoSink(640, 480, { order.add("init") }, { _, _, _, _ -> order.add("start"); { order.add("stop") } })
+        sink.configure("video/avc", null, null, null)
+        assertEquals(listOf("init", "start"), order)
+        sink.configure("video/avc", null, null, null)
+        assertEquals(listOf("init", "start", "stop", "init", "start"), order)
+    }
+
+    @Test
+    fun helperInitRunsAtMostOncePerProcessAcrossSinks() {
+        var inits = 0
+        val once = OnceInit({ inits++ }, {})
+        repeat(3) {
+            val sink = LibVideoSink(640, 480, { once.ensure() }, { _, _, _, _ -> {} })
+            sink.configure("video/avc", null, null, null)
+            sink.configure("video/hevc", null, null, null)
+        }
+        assertEquals(1, inits)
+    }
+
+    @Test
+    fun aThrowingHelperInitDoesNotPropagateAndWarnsOnce() {
+        var warns = 0
+        var starts = 0
+        val once = OnceInit({ throw IllegalStateException("boom") }, { warns++ })
+        val sink = LibVideoSink(640, 480, { once.ensure() }, { _, _, _, _ -> starts++; {} })
+        sink.configure("video/avc", null, null, null)
+        sink.configure("video/avc", null, null, null)
+        assertEquals(1, warns)
+        assertEquals(2, starts)
+        // a throwing warn callback must not escape either
+        OnceInit({ throw Error("x") }, { throw RuntimeException("y") }).ensure()
+    }
 }

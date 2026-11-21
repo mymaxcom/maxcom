@@ -24,6 +24,9 @@ final _locales = <String, S>{
 /// (validation messages); the app shows that sentence. Anything the box sends
 /// that is not here and not in [kErrorCodeTexts] fails the guard below.
 const _serverSentenceCodes = <String>{
+  // Statuses of the Mic-in check result (`code: 'ok' | 'untested'`), not errors: the app never shows them as a refusal.
+  'ok',
+  'untested',
   'invalid', // content validators: one sentence per field
   'bad_asset', // asset checks: one sentence per cause
   'bad_body', // shape of a body: wording differs per route
@@ -133,6 +136,29 @@ void main() {
       expect(texts.length, 3);
     });
 
+    test('[A5] the Mic-in device_unavailable and silent codes have their own texts in ms, en and ar', () {
+      final ms = _locales['ms']!;
+      expect(
+        errorText(ms, const BoxError(409, 'x', code: 'device_unavailable')),
+        'Mic-in tidak dapat dibuka. Pastikan mikrofon dipasang dan tidak digunakan oleh program lain.',
+      );
+      expect(
+        errorText(ms, const BoxError(409, 'x', code: 'silent')),
+        'Mic-in tidak menghantar bunyi. Pastikan mikrofon dipasang dan tidak senyap (mute).',
+      );
+      final seen = <String>{};
+      for (final e in _locales.entries) {
+        final a = errorText(e.value, const BoxError(409, 'x', code: 'device_unavailable'));
+        final b = errorText(e.value, const BoxError(409, 'x', code: 'silent'));
+        expect(a, e.value.errcMicDeviceUnavailable, reason: e.key);
+        expect(b, e.value.errcMicSilent, reason: e.key);
+        expect(a, isNot('x'), reason: e.key);
+        expect(a, isNot(b), reason: e.key);
+        seen..add(a)..add(b);
+      }
+      expect(seen.length, 6, reason: 'three languages, two codes, all different');
+    });
+
     test('[A5] a lockout fills the minutes from Retry-After', () {
       final s = _locales['en']!;
       const err = BoxError(423, 'PIN dikunci', code: 'locked', retryAfterSec: 900);
@@ -203,6 +229,22 @@ void main() {
           final text = c.value(l.value, const {'count': 2, 'minutes': 5});
           expect(text.trim(), isNotEmpty, reason: '${c.key}/${l.key}');
         }
+      }
+    });
+
+    test('[W25] the Windows Mic-in and play-now refusals read in plain words in every language', () {
+      final ms = _locales['ms']!;
+      expect(errorText(ms, const BoxError(409, 'x', code: 'no_device')), 'Tiada Mic-in dikesan pada MAXCOM.');
+      expect(
+        errorText(ms, const BoxError(409, 'x', code: 'access_denied')),
+        'Windows tidak membenarkan MAXCOM menggunakan Mic-in. Jalankan Semak MAXCOM.',
+      );
+      expect(errorText(ms, const BoxError(409, 'x', code: 'prayer_phase')), 'Tidak boleh dimainkan semasa waktu solat.');
+      expect(errorText(ms, const BoxError(409, 'x', code: 'live_running')), 'Siaran langsung sedang berjalan di skrin TV.');
+      for (final code in ['no_device', 'access_denied', 'list_failed', 'no_tool', 'live_running', 'prayer_phase']) {
+        final texts = {for (final s in _locales.values) errorText(s, BoxError(409, 'ayat pelayan', code: code))};
+        expect(texts.length, 3, reason: code);
+        expect(texts, isNot(contains('ayat pelayan')), reason: code);
       }
     });
 

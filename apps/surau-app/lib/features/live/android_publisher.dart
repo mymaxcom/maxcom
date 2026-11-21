@@ -35,7 +35,7 @@ class _MetricsWatcher with WidgetsBindingObserver {
   void didChangeMetrics() => onTurn();
 }
 
-class AndroidPublisher implements LivePublisher, LiveSourceControl {
+class AndroidPublisher implements LivePublisher, LiveSourceControl, LiveMicControl {
   AndroidPublisher({
     this.segmentMinutes = 15,
     this.videoBitrateKbps = 2500,
@@ -401,6 +401,24 @@ class AndroidPublisher implements LivePublisher, LiveSourceControl {
     return _codeRe.hasMatch(m) ? m : 'error';
   }
 
+  /// The microphone the live records from: a `type:product` id, [LiveMicControl.deviceOwn] (the device's own) or null
+  /// (automatic: an attached wired or USB microphone, else the device's own). The engine applies it with
+  /// `AudioRecord.setPreferredDevice` and answers with a `micRouted` event.
+  @override
+  String? get ownMicrophoneId => LiveMicControl.deviceOwn;
+
+  @override
+  Future<bool> setMicrophone(String? deviceId) async {
+    try {
+      await methodChannel.invokeMethod<void>('setMic', {'id': deviceId});
+      return true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   void _onEvent(dynamic e) {
     if (e is! Map) return;
     switch (e['type']) {
@@ -465,6 +483,26 @@ class AndroidPublisher implements LivePublisher, LiveSourceControl {
       case 'ended':
         final reason = _code(e['reason']);
         if (reason != null) _emit(_state.copyWith(endReason: reason));
+      case 'micRouted':
+        final id = e['id'];
+        final un = e['unavailable'];
+        final name = e['name'];
+        final kind = e['kind'];
+        final unName = un is String && un.length <= 120 ? un : null;
+        _emit(
+          _state.copyWith(
+            micRoute: id is String && id.length <= 200
+                ? MicRouteInfo(
+                    id: id,
+                    name: name is String && name.length <= 120 ? name : '',
+                    kind: kind == 'external' ? 'external' : 'builtin',
+                  )
+                : null,
+            clearMicRoute: id is! String,
+            micUnavailable: unName,
+            clearMicUnavailable: un is! String,
+          ),
+        );
       case 'clap':
         final c = _byName(ClapPhase.values, e['state']);
         if (c != null) _emit(_state.copyWith(clap: c));

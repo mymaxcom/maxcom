@@ -209,9 +209,38 @@ function toUser(row: Row): User {
   };
 }
 
-/** Secret-free snapshot for change_log. */
-export function snapshot(u: User): Record<string, unknown> {
-  return { id: u.id, name: u.name, roles: u.roles, active: u.active, hasPin: !u.pinRequired, ...(u.no !== null && u.noSrc !== null ? { no: u.no, noSrc: u.noSrc } : {}), ...(u.deleted ? { deleted: true } : {}), ...(u.phone !== null && u.surauId !== '*' ? { phone: u.phone } : {}) };
+/**
+ * Secret-free snapshot for change_log. A person without a number carries no `phone` key (an entry without the key
+ * leaves the stored number on the receiving side); `phoneCleared` writes `phone: null` for the one change that
+ * clears a number, so the clear travels to the other side.
+ */
+export function snapshot(u: User, phoneCleared = false): Record<string, unknown> {
+  return {
+    id: u.id,
+    name: u.name,
+    roles: u.roles,
+    active: u.active,
+    hasPin: !u.pinRequired,
+    ...(u.no !== null && u.noSrc !== null ? { no: u.no, noSrc: u.noSrc } : {}),
+    ...(u.deleted ? { deleted: true } : {}),
+    ...(u.phone !== null && u.surauId !== '*' ? { phone: u.phone } : phoneCleared && u.phone === null && u.surauId !== '*' ? { phone: null } : {}),
+  };
+}
+
+/**
+ * Remove the `phone` key from every change_log row of one person (before and after). The rows keep their id, rev,
+ * edited_at, op_id and origin, so cursors, the push marker and the op-id uniqueness are untouched; the outbox trigger
+ * fires on INSERT only. Used when the person is deleted: a deleted person's number is erased everywhere on this side.
+ * Caller owns the tx.
+ */
+export function scrubPhoneFromHistory(db: DatabaseSync, id: string): void {
+  db.prepare(
+    `UPDATE change_log SET
+       before_json = CASE WHEN before_json IS NOT NULL AND json_valid(before_json) THEN json_remove(before_json, '$.phone') ELSE before_json END,
+       after_json = CASE WHEN after_json IS NOT NULL AND json_valid(after_json) THEN json_remove(after_json, '$.phone') ELSE after_json END
+     WHERE entity = 'users' AND entity_id = ?
+       AND (before_json LIKE '%"phone"%' OR after_json LIKE '%"phone"%')`,
+  ).run(id);
 }
 
 export interface AuthUser extends User {
@@ -405,6 +434,17 @@ export function checkPhone(raw: unknown): string {
   return e164;
 }
 
+/**
+ * A phone number is optional: absent, null or a blank string means no number (`null`). Any other value is checked as
+ * `checkPhone` does (400 `bad_phone`; a non-string value is a bad number, never echoed).
+ */
+export function checkOptionalPhone(raw: unknown): string | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'string') throw new AuthError(400, 'bad_phone', 'Nombor telefon tidak sah');
+  if (raw.trim().length === 0) return null;
+  return checkPhone(raw);
+}
+
 /** The other person of the same surau (not deleted, a deactivated one still counts) who holds this number. */
 export function phoneOwner(db: DatabaseSync, surauId: string, phone: string, exceptId: string): { id: string; ref: string | null } | null {
   const r = db.prepare('SELECT id, no, no_src FROM users WHERE surau_id = ? AND phone = ? AND deleted_at IS NULL AND id <> ? ORDER BY created_at, id LIMIT 1').get(surauId, phone, exceptId);
@@ -418,36 +458,38 @@ function refuseTakenPhone(db: DatabaseSync, surauId: string, phone: string, exce
 }
 
 /**
- * Change a person's phone number (Pentadbir). The same number is a no-op with no log row. Caller checked tenant and
- * `*`. The change row carries the number as the sync transport; audit readers never see it (`phoneChanged` only).
+ * Change a person's phone number (Pentadbir); a null, absent or blank value CLEARS it (stored NULL). The same value is
+ * a no-op with no log row (so clearing an empty number writes nothing). Caller checked tenant and `*`. The change row
+ * carries the number (or an explicit `phone: null` for a clear) as the sync transport; audit readers never see it
+ * (`phoneChanged` only).
  */
 export function setUserPhone(db: DatabaseSync, id: string, raw: unknown, actor: string): User {
-  const phone = checkPhone(raw);
+  const phone = checkOptionalPhone(raw);
   return tx(db, () => {
     const before = requireUser(db, id);
     if (before.phone === phone) return before;
-    refuseTakenPhone(db, before.surauId, phone, id);
+    if (phone !== null) refuseTakenPhone(db, before.surauId, phone, id);
     db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, id);
     stampRow(db, 'users', id);
     const after = requireUser(db, id);
-    logChange(db, actor, 'users', id, snapshot(before), snapshot(after), undefined, before.surauId);
+    logChange(db, actor, 'users', id, snapshot(before), snapshot(after, phone === null), undefined, before.surauId);
     bumpFor(db, before.surauId);
     return after;
   });
 }
 
-export function createUser(db: DatabaseSync, input: { name: string; roles: Role[]; phone?: string }, actor: string, surauId: string): User {
+export function createUser(db: DatabaseSync, input: { name: string; roles: Role[]; phone?: string | null }, actor: string, surauId: string): User {
   return tx(db, () => createUserIn(db, input, actor, surauId));
 }
 
 /** `createUser` for a caller that already owns the transaction (setup and recovery create the user and its device together). */
-export function createUserIn(db: DatabaseSync, input: { name: string; roles: Role[]; phone?: string }, actor: string, surauId: string): User {
+export function createUserIn(db: DatabaseSync, input: { name: string; roles: Role[]; phone?: string | null }, actor: string, surauId: string): User {
   const name = checkName(input.name);
   const roles = checkRoles(input.roles);
   guardSuperadmin(db, undefined, { roles, active: true });
   const id = randomUUID();
   const filedUnder = roles.some((r) => r === 'superadmin' || r === 'support') ? '*' : surauId;
-  const phone = input.phone === undefined ? null : checkPhone(input.phone);
+  const phone = checkOptionalPhone(input.phone);
   if (phone !== null) refuseTakenPhone(db, filedUnder, phone, id);
   const now = new Date().toISOString();
   db.prepare(
@@ -636,16 +678,18 @@ export function deactivateUser(db: DatabaseSync, id: string, actor: string): voi
 /**
  * Padam: soft delete. In the caller's transaction the person is deactivated when active (every device, session and
  * open code revoked, so they cannot sign in), then `deleted_at` and `deleted_by` are set and one change row records
- * `deleted: true`. Nothing is physically removed. A deleted person is a no-op. Caller checked tenant, `*` and the
- * last-Pentadbir rules.
+ * `deleted: true`. Nothing is physically removed, except the phone number: it is set to NULL in the same transaction
+ * and removed from the change history of the person (the delete row itself carries no phone). A deleted person is a
+ * no-op. Caller checked tenant, `*` and the last-Pentadbir rules.
  */
 export function deleteUserRows(db: DatabaseSync, id: string, actor: string, now: string, meta?: ChangeMeta): void {
   const before = requireUser(db, id);
   if (before.deleted) return;
   if (before.active) deactivateUserRows(db, id, actor, now, meta === undefined ? undefined : { ...meta, opId: undefined });
-  db.prepare('UPDATE users SET active = 0, deleted_at = ?, deleted_by = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE id = ?').run(now, actor, now, id);
+  db.prepare('UPDATE users SET active = 0, deleted_at = ?, deleted_by = ?, deactivated_at = COALESCE(deactivated_at, ?), phone = NULL WHERE id = ?').run(now, actor, now, id);
   stampRow(db, 'users', id, meta);
   logChange(db, actor, 'users', id, snapshot(before), { ...snapshot(requireUser(db, id)), active: false, deleted: true }, meta, userSurau(db, id));
+  scrubPhoneFromHistory(db, id);
 }
 
 /** The body of `deleteUser` for a caller that owns the transaction. */
@@ -660,22 +704,18 @@ export function deleteUserIn(db: DatabaseSync, id: string, actor: string): void 
 /**
  * Pulihkan: a deleted person comes back DEACTIVATED with no devices (Aktifkan semula and a new code bring them in).
  * `deactivated_at` is set to now, so the 365-day clean-up clock starts again and the hourly clean-up never deletes
- * them within the hour. 404 for a person who is not deleted. Caller checked tenant and `*`.
+ * them within the hour. 404 for a person who is not deleted. Caller checked tenant and `*`. A deleted person has no
+ * phone number (the delete erased it), so the person comes back with none and nothing can clash with another number.
  */
 export function restoreUser(db: DatabaseSync, id: string, actor: string, meta?: ChangeMeta): User {
-  return tx(db, () => {
-    // REST and CLI restore keep one person, one number; the replicated path (restoreUserRows) stays lenient and flags a duplicate
-    const row = requireUser(db, id);
-    if (row.deleted && row.phone !== null) refuseTakenPhone(db, row.surauId, row.phone, id);
-    return restoreUserRows(db, id, actor, new Date().toISOString(), meta);
-  });
+  return tx(db, () => restoreUserRows(db, id, actor, new Date().toISOString(), meta));
 }
 
 /** The body of `restoreUser` for a caller that owns the transaction (a replicated restore). */
 export function restoreUserRows(db: DatabaseSync, id: string, actor: string, now: string, meta?: ChangeMeta): User {
   const before = requireUser(db, id);
   if (!before.deleted) throw new AuthError(404, 'not_found', 'Tidak dijumpai');
-  db.prepare('UPDATE users SET deleted_at = NULL, deleted_by = NULL, active = 0, deactivated_at = ? WHERE id = ?').run(now, id);
+  db.prepare('UPDATE users SET deleted_at = NULL, deleted_by = NULL, active = 0, deactivated_at = ?, phone = NULL WHERE id = ?').run(now, id);
   stampRow(db, 'users', id, meta);
   const after = requireUser(db, id);
   const own = userSurau(db, id);
@@ -728,7 +768,7 @@ export function activateUser(db: DatabaseSync, id: string, actor: string): User 
 export function putUserSynced(
   db: DatabaseSync,
   id: string,
-  input: { name: string; roles: Role[]; active: boolean; deleted?: boolean; phone?: string },
+  input: { name: string; roles: Role[]; active: boolean; deleted?: boolean; phone?: string | null },
   actor: string,
   meta: ChangeMeta,
   surauId: string,
@@ -739,27 +779,39 @@ export function putUserSynced(
   // Same guard as the admin routes: the surau must never be left without an active admin.
   // A deleted person stays inactive whatever arrives; an absent `deleted` key never undeletes (an older peer's later edit).
   const wasDeleted = existing?.deleted === true;
-  // A number that arrives by sync is kept when it normalises (a duplicate is kept and flagged, never refused); absent leaves the stored one.
-  const syncedPhone = typeof input.phone === 'string' ? normalisePhone(input.phone) : null;
+  // A number that arrives by sync is kept when it normalises (a duplicate is kept and flagged, never refused); absent
+  // (an older peer) or one that does not normalise leaves the stored one; an explicit null (a cleared number) clears it.
+  // A deleted person, or one deleted by this entry, never holds a number: whatever arrives, the stored one is erased.
+  const syncedPhone: string | null | undefined = input.phone === null ? null : typeof input.phone === 'string' ? normalisePhone(input.phone) ?? undefined : undefined;
+  const erasePhone = wasDeleted || input.deleted === true;
   const active = wasDeleted || input.deleted === true ? false : input.active;
   if (existing?.active && holdsAdmin(existing.roles) && (!active || !holdsAdmin(roles)) && activeAdminCountForSync(db, surauId) <= 1) {
     throw new AuthError(409, 'last_admin', 'Mesti ada sekurang-kurangnya seorang pentadbir aktif');
   }
   guardSuperadmin(db, existing, { roles, active }, meta);
   const now = new Date().toISOString();
+  let legacyNumber = false;
   if (existing === undefined) {
     db.prepare(
       `INSERT INTO users (id, name, roles_json, active, created_at, created_by, surau_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).run(id, name, JSON.stringify(roles), active ? 1 : 0, meta.editedAt ?? now, actor, roles.some((r) => r === 'superadmin' || r === 'support') ? '*' : surauId);
     if (!active) db.prepare('UPDATE users SET deactivated_at = ? WHERE id = ?').run(now, id);
-    if (syncedPhone !== null) db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(syncedPhone, id);
+    if (typeof syncedPhone === 'string' && !erasePhone) db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(syncedPhone, id);
     stampRow(db, 'users', id, meta);
     logChange(db, actor, 'users', id, undefined, snapshot(requireUser(db, id)), meta, userSurau(db, id));
     if (input.deleted === true) deleteUserRows(db, id, actor, now, meta);
   } else {
     const before = existing;
     db.prepare('UPDATE users SET name = ?, roles_json = ? WHERE id = ?').run(name, JSON.stringify(roles), id);
-    if (syncedPhone !== null && syncedPhone !== before.phone) db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(syncedPhone, id);
+    if (wasDeleted) {
+      // a person already deleted here (an older number from before this rule) ends with no number
+      if (before.phone !== null) {
+        db.prepare('UPDATE users SET phone = NULL WHERE id = ?').run(id);
+        legacyNumber = true;
+      }
+    } else if (!erasePhone && syncedPhone !== undefined && syncedPhone !== before.phone) {
+      db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(syncedPhone, id);
+    }
     endSessionsOnSuperadminGain(db, id, before.roles.includes('superadmin'), roles.includes('superadmin'));
     syncUserScope(db, id, before.roles.includes('superadmin'), roles.includes('superadmin'));
     if (input.deleted === true && !wasDeleted) {
@@ -771,8 +823,10 @@ export function putUserSynced(
     } else {
       if (active && !before.active) db.prepare('UPDATE users SET active = 1, deactivated_at = NULL WHERE id = ?').run(id);
       stampRow(db, 'users', id, meta);
-      logChange(db, actor, 'users', id, snapshot(before), snapshot(requireUser(db, id)), meta, userSurau(db, id));
+      logChange(db, actor, 'users', id, snapshot(before), snapshot(requireUser(db, id), syncedPhone === null && before.phone !== null && !erasePhone), meta, userSurau(db, id));
     }
+    // the rows logged above for a person deleted earlier still show the old number: erase it from the history too
+    if (legacyNumber) scrubPhoneFromHistory(db, id);
   }
   bumpFor(db, userSurau(db, id));
 }

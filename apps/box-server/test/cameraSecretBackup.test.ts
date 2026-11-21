@@ -111,6 +111,29 @@ describe('B5 camera address backup', () => {
     expect(file).not.toContain('10.168.1.20');
   });
 
+  it('clearing the camera sends a DELETE that carries {} as JSON (never a bodyless write), and the cloud removes the backup', async () => {
+    const r = await rig();
+    expect((await saveOnBox(r.a)).statusCode).toBe(200);
+    await until(() => rows(r) === 1 && !pendingOf(r.a));
+    const seen: Array<{ method: string; path: string; type: string | null; body: unknown }> = [];
+    const real = r.a.hook.impl;
+    r.a.hook.impl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      seen.push({ method: init?.method ?? 'GET', path: new URL(String(input)).pathname, type: new Headers(init?.headers).get('content-type'), body: init?.body });
+      return real(input, init);
+    }) as typeof fetch;
+    expect((await clearOnBox(r.a)).statusCode).toBe(200);
+    await until(() => rows(r) === 0 && !pendingOf(r.a));
+    const del = seen.find((x) => x.method === 'DELETE');
+    expect(del).toMatchObject({ path: ROUTE, type: 'application/json', body: '{}' });
+  });
+
+  it('the cloud answers a DELETE that carries {} as JSON like a bodyless one', async () => {
+    const r = await rig();
+    const withJson = await r.cloud.app.inject({ method: 'DELETE', url: ROUTE, headers: { ...r.a.site.headers, 'content-type': 'application/json' }, payload: '{}' });
+    expect(withJson.statusCode).toBe(200);
+    expect(withJson.json()).toEqual({ removed: false });
+  });
+
   it('a replaced box of the same surau restores the camera; another surau gets 404 and cannot touch it', async () => {
     const r = await rig();
     await saveOnBox(r.a);

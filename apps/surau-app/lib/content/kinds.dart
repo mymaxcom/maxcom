@@ -24,7 +24,7 @@ export '../features/labels_content.dart' show dayLabelsMs;
 /// sha256 of core content/schema.ts + content/types.ts (CRLF as LF) this
 /// port was written against; kinds_test fails when core moved on.
 const String contentSourceHash =
-    '1e51c9e566ee1e47240b90745b0d8a727608cf45e5042795b49040b281d19391';
+    '6e2f6007cf3919cd55252b439145690c6a0fdecd128efef2486b6596b12db85a';
 
 enum FieldType {
   text,
@@ -44,6 +44,9 @@ enum FieldType {
 }
 
 enum AssetKind { image, audio }
+
+/// The prayers a video can be set to play after (the shared contract's `afterPrayer`).
+const List<String> videoAfterPrayers = ['subuh', 'zohor', 'asar', 'maghrib', 'isyak'];
 
 const int maxContentText = 2000;
 const int maxTickerText = 300;
@@ -303,6 +306,17 @@ const List<ContentKindSpec> contentKinds = [
         labelMs: 'Bunyi',
         required: false,
         hintMs: 'Tidak: video senyap. Tidak pernah berbunyi semasa azan, iqamah, solat, siaran langsung atau tilawah.', // lang-ok: BM source of the hint lookup
+      ),
+      // Release 2026.11.14: the video leaves the rotation and plays once a day after this prayer's zikir screen.
+      // Absent = normal rotation. Shown by the video editor's own chooser (hidden here).
+      FieldSpec(
+        key: 'afterPrayer',
+        type: FieldType.enumOf,
+        labelMs: 'Main selepas zikir solat',
+        required: false,
+        hidden: true,
+        choices: videoAfterPrayers,
+        choiceLabels: slotLabelsMs,
       ),
       FieldSpec(key: 'days', type: FieldType.days, labelMs: 'Hari dipaparkan'),
       FieldSpec(key: 'from', type: FieldType.date, labelMs: 'Tarikh mula', required: false),

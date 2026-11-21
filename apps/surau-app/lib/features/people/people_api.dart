@@ -124,26 +124,35 @@ class PeopleApi {
 
   /// `PUT /api/users/<id>/phone`. [phone] is what was typed; it is normalised
   /// to E.164 here and [BadPhone] is thrown (nothing sent) when it cannot be.
-  /// Live-only.
+  /// An empty [phone] clears the number (`{"phone": ""}`). Live-only.
   Future<void> setPhone(String id, String phone) async {
     final path = '/api/users/$id/phone';
+    if (phone.trim().isEmpty) {
+      await _newRoute(() => _gw(path).put(path, {'phone': ''}));
+      return;
+    }
     final e164 = normalisePhone(phone);
     if (e164 == null) throw const BadPhone();
     await _newRoute(() => _gw(path).put(path, {'phone': e164}));
   }
 
-  /// `POST /api/users`: a new person. The phone is required, as on the box.
-  /// Live-only (an old route: a 404 is not "update").
+  /// `POST /api/users`: a new person. The phone is optional: null or empty
+  /// sends no `phone` field. Live-only (an old route: a 404 is not "update").
   Future<UserDto> createUser({
     required String name,
     required List<String> roles,
-    required String phone,
+    String? phone,
   }) async {
     const path = '/api/users';
     final clean = _name(name);
-    final e164 = normalisePhone(phone);
-    if (e164 == null) throw const BadPhone();
-    final out = await _gw(path).post(path, {'name': clean, 'roles': roles, 'phone': e164});
+    final typed = phone?.trim() ?? '';
+    final body = <String, dynamic>{'name': clean, 'roles': roles};
+    if (typed.isNotEmpty) {
+      final e164 = normalisePhone(typed);
+      if (e164 == null) throw const BadPhone();
+      body['phone'] = e164;
+    }
+    final out = await _gw(path).post(path, body);
     return UserDto.fromJson(out);
   }
 
@@ -158,6 +167,27 @@ class PeopleApi {
       if (!user.deleted && user.phone == e164) return user;
     }
     return null;
+  }
+
+  /// The person just added with no phone number, after an uncertain answer:
+  /// the same name, no number, not deleted and made in the last ten minutes
+  /// (the newest when several match). Null when the box holds none, or when
+  /// the list is not live.
+  Future<UserDto?> findUserJustAdded(String name, {DateTime? now}) async {
+    const path = '/api/users';
+    final clean = _name(name);
+    final read = await _gw(path).get(path);
+    if (read.stale) return null;
+    final at = now ?? DateTime.now();
+    UserDto? found;
+    for (final u in (read.value['users'] as List? ?? const [])) {
+      final user = UserDto.fromJson(u as Map<String, dynamic>);
+      final made = user.createdAt;
+      if (user.deleted || user.phone != null || user.name != clean || made == null) continue;
+      if (at.difference(made).abs() > const Duration(minutes: 10)) continue;
+      if (found == null || made.isAfter(found.createdAt!)) found = user;
+    }
+    return found;
   }
 
   // ---- devices ----

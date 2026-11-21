@@ -15,6 +15,7 @@
 // stub, and tests); the IndexedDB store is `recordings_store_web.dart`.
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'recordings_store_stub.dart'
     if (dart.library.js_interop) 'recordings_store_web.dart'
@@ -91,6 +92,14 @@ abstract class RecordingsStore {
 
   /// Hands the file to the browser as a download (one tap each).
   Future<void> save(String id);
+
+  /// The bytes of one finished file; null when it is not there. Holds the whole file in memory: for a recording
+  /// of an hour use [blobOf] instead.
+  Future<Uint8List?> read(String id);
+
+  /// The finished file as one object that can be handed over without copying it into Dart memory: a browser
+  /// `Blob` on the web store, the bytes in the in-memory one. Null when it is not there.
+  Future<Object?> blobOf(String id);
 
   Future<void> markSaved(String id);
 
@@ -189,6 +198,26 @@ class MemoryRecordingsStore implements RecordingsStore {
     final s = _segs[id];
     if (s != null) onSave?.call(s.info.fileName, s.chunks);
   }
+
+  @override
+  Future<Uint8List?> read(String id) async {
+    final s = _segs[id];
+    if (s == null) return null;
+    final out = BytesBuilder(copy: false);
+    for (final c in s.chunks) {
+      if (c is Uint8List) {
+        out.add(c);
+      } else if (c is List<int>) {
+        out.add(c);
+      } else {
+        return null;
+      }
+    }
+    return out.takeBytes();
+  }
+
+  @override
+  Future<Object?> blobOf(String id) => read(id);
 
   @override
   Future<void> markSaved(String id) async {

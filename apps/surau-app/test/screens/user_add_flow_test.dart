@@ -138,6 +138,7 @@ class _Fake {
 class _ShareSpy {
   final List<String> texts = [];
   final List<Uri> wa = [];
+  final List<String> waTexts = [];
   bool waOpens = true;
 
   UserAddShare get share => UserAddShare(
@@ -147,6 +148,10 @@ class _ShareSpy {
     },
     openWhatsApp: (u) async {
       wa.add(u);
+      return waOpens;
+    },
+    openWhatsAppText: (t) async {
+      waTexts.add(t);
       return waOpens;
     },
   );
@@ -288,11 +293,9 @@ void main() {
     expect(find.byKey(const ValueKey('add-bottom-bar')), findsOneWidget);
   });
 
-  testWidgets('[PP-A7b] phone required, invalid number refused, no role blocks: nothing is sent', (tester) async {
+  testWidgets('[PP-A7b] an invalid number is refused, no role blocks: nothing is sent', (tester) async {
     final (_, fake, _) = await openAdd(tester);
     await tester.enterText(find.byKey(const ValueKey('add-name')), 'Encik Rahman');
-    await save(tester);
-    expect(find.text('Nombor telefon diperlukan'), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey('add-phone')), '12345');
     await save(tester);
     expect(find.textContaining('Nombor telefon tidak sah'), findsOneWidget);
@@ -302,6 +305,38 @@ void main() {
     expect(find.text('Pilih sekurang-kurangnya satu peranan.'), findsOneWidget);
     expect(fake.creates, 0);
     expect(fake.begins, 0);
+  });
+
+  testWidgets('[PP-A7b] the phone number is optional: an empty field sends no phone and the person is saved', (tester) async {
+    final (_, fake, spy) = await openAdd(tester, lockOn: true);
+    expect(find.text('Nombor telefon untuk WhatsApp (pilihan)'), findsOneWidget);
+    expect(find.text('Digunakan untuk menghantar notis dan pautan melalui WhatsApp. Boleh dikosongkan.'), findsOneWidget);
+    fake.createAnswer = () => jsonResponse(200, {
+      'id': 'u9',
+      'name': 'Encik Rahman',
+      'roles': ['ajk'],
+      'active': true,
+      'pinRequired': true,
+      'ref': 'U-0006',
+      'phone': null,
+    });
+    await fillStep1(tester, phone: '');
+    await save(tester);
+    expect(fake.creates, 1);
+    expect(fake.createBody, {'name': 'Encik Rahman', 'roles': ['ajk']});
+    expect(fake.createBody!.containsKey('phone'), isFalse);
+    expect(find.text('Langkah 2 daripada 3'), findsOneWidget);
+
+    // No number: WhatsApp's own picker with the text, no recipient and no "opens to" line.
+    await tapKey(tester, 'add-wa');
+    expect(find.byKey(const ValueKey('add-wa-opens-to')), findsNothing);
+    await tester.tap(find.text('Teruskan'));
+    await settle(tester);
+    expect(spy.wa, isEmpty);
+    expect(spy.waTexts, hasLength(1));
+    expect(lastLine(spy.waTexts.single), sharePayloadFixture());
+    expect(spy.waTexts.single, contains('Encik Rahman'));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('[PP-A7b] a taken number shows the other ID and nothing more is called', (tester) async {
@@ -595,4 +630,19 @@ void main() {
     expect(find.textContaining('\u206630:00'), findsWidgets, reason: 'the countdown is isolated left to right');
     await expectGoldens(tester, h.app, 'user_add_step2_ar', sizes: const [GoldenSize.phone]);
   });
+
+  for (final (name, lang, label, hint) in [
+    ('bm', AppLang.ms, 'Nombor telefon untuk WhatsApp (pilihan)', 'Digunakan untuk menghantar notis dan pautan melalui WhatsApp. Boleh dikosongkan.'),
+    ('en', AppLang.en, 'Phone number for WhatsApp (optional)', 'Used to send notices and links through WhatsApp. You can leave it empty.'),
+    ('ar', AppLang.ar, 'رقم الهاتف للواتساب (اختياري)', 'يُستخدم لإرسال الإشعارات والروابط عبر واتساب. يمكن تركه فارغًا.'),
+  ]) {
+    testWidgets('[W25-3] the phone field says it is for WhatsApp and optional, $name', (tester) async {
+      final (h, _, _) = await openAdd(tester, lockOn: true, lang: lang);
+      expect(find.text(label), findsOneWidget);
+      expect(find.text(hint), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('add-phone')));
+      await settle(tester);
+      await expectGoldens(tester, h.app, 'user_add_phone_whatsapp_$name', sizes: const [GoldenSize.phone]);
+    });
+  }
 }

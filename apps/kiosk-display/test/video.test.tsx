@@ -370,6 +370,67 @@ describe('VideoScreen: YouTube', () => {
     expect(p.onFinished).toHaveBeenCalledTimes(1);
   });
 
+  it('a player error code (embedding refused, video gone) hands the screen on AT ONCE and removes the frame', () => {
+    setOnline(true);
+    vi.useFakeTimers();
+    for (const code of [2, 5, 100, 101, 150]) {
+      const p = props('v-yt', content([yt]));
+      const { container, unmount } = render(<VideoScreen {...p} />);
+      const f = container.querySelector('iframe')!;
+      act(() => { window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ event: 'onError', info: code }), origin: YT_ORIGIN, source: f.contentWindow })); });
+      // no timer has run: the report is immediate, and the frame (with its error page) is gone
+      expect(p.onFinished).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('iframe')).toBeNull();
+      expect(p.onRendered).toHaveBeenLastCalledWith(false);
+      unmount();
+    }
+  });
+
+  it('the player that ended hands the screen on at once and its frame is removed', () => {
+    setOnline(true);
+    const p = props('v-yt', content([yt]));
+    const { container } = render(<VideoScreen {...p} />);
+    const f = container.querySelector('iframe')!;
+    act(() => { window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ event: 'onStateChange', info: 0 }), origin: YT_ORIGIN, source: f.contentWindow })); });
+    expect(p.onFinished).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('a page rule that blocks the player frame (CSP frame-src) gives the item up at once, not after the watchdog', () => {
+    setOnline(true);
+    vi.useFakeTimers();
+    const p = props('v-yt', content([yt]));
+    const { container } = render(<VideoScreen {...p} />);
+    expect(container.querySelector('iframe')).not.toBeNull();
+    const violation = (blocked: string, directive: string) => {
+      const e = new Event('securitypolicyviolation') as Event & Record<string, unknown>;
+      Object.assign(e, { blockedURI: blocked, effectiveDirective: directive });
+      act(() => { document.dispatchEvent(e); });
+    };
+    // an unrelated block (an image, or another host's frame) does not touch the video
+    violation('https://img.example/x.png', 'img-src');
+    violation('https://other.example/embed', 'frame-src');
+    expect(p.onFinished).not.toHaveBeenCalled();
+    violation(`${YT_ORIGIN}/embed/dQw4w9WgXcQ?autoplay=1`, 'frame-src');
+    expect(p.onFinished).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('iframe')).toBeNull();
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(p.onFinished).toHaveBeenCalledTimes(1);
+  });
+
+  it('a new showing of the same item after a failure is tried afresh and can fail again at once', () => {
+    setOnline(true);
+    const p = props('v-yt', content([yt]));
+    const { container, rerender } = render(<VideoScreen {...p} />);
+    const err = () => act(() => { window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ event: 'onError', info: 150 }), origin: YT_ORIGIN, source: container.querySelector('iframe')!.contentWindow })); });
+    err();
+    expect(p.onFinished).toHaveBeenCalledTimes(1);
+    rerender(<VideoScreen {...p} startedAt={new Date(p.startedAt!.getTime() + 600_000)} />);
+    expect(container.querySelector('iframe')).not.toBeNull();
+    err();
+    expect(p.onFinished).toHaveBeenCalledTimes(2);
+  });
+
   it('gives up when the player keeps buffering for more than 10 seconds', () => {
     setOnline(true);
     vi.useFakeTimers();

@@ -5,6 +5,7 @@
 // every page shows under its title, and the health poll that keeps data
 // fresh while the app is in front.
 
+import '../upload/recording_cleanup.dart' show CleanupRecord;
 import '../features/live/live_notice_box.dart' show liveBoxNoticeProvider;
 import 'dart:async';
 
@@ -26,7 +27,8 @@ import '../features/live/live_fold.dart';
 import '../features/shell/menu.dart';
 import '../features/unlock/session_keeper.dart';
 import '../features/shell/connection_icons.dart';
-import '../features/upload/cleanup_providers.dart' show recordingCleanupProvider;
+import '../features/upload/cleanup_providers.dart' show cleanupRecordsProvider, recordingCleanupProvider;
+import '../features/upload/keep_prompt.dart';
 import '../features/upload/upload_widgets.dart' show catchUpActiveCountProvider;
 import '../l10n/generated/s.dart';
 import '../sync/sync_providers.dart';
@@ -117,6 +119,22 @@ class _AppShellState extends ConsumerState<AppShell>
     }
   }
 
+  bool _askingKeep = false;
+
+  void _askKeep(Map<String, CleanupRecord>? records) {
+    if (_askingKeep || !mounted) return;
+    final r = recordToAsk(records);
+    if (r == null) return;
+    _askingKeep = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (mounted) await askKeepRecording(context, ref, r);
+      } finally {
+        _askingKeep = false;
+      }
+    });
+  }
+
   void _startPolling() {
     final every = ref.read(appDepsProvider).healthPollInterval;
     if (every == null || _poll != null) return;
@@ -134,6 +152,8 @@ class _AppShellState extends ConsumerState<AppShell>
     // YouTube at most once an hour per recording and deletes only what the
     // app recorded and YouTube has).
     ref.listen(recordingCleanupProvider, (_, _) {});
+    // Once the joined recording is verified on YouTube the person is asked, once, whether to keep it.
+    ref.listen(cleanupRecordsProvider, (_, next) => _askKeep(next.value));
 
     final items = menuFor(
       ref.watch(rolesProvider),

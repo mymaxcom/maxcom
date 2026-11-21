@@ -42,7 +42,7 @@ export function offlineNow(): boolean {
  * player's `setVolume` command). It exists only while the main screen does, so a prayer phase or a live
  * removes it at once (the player is unmounted, not paused); a recitation (tilawah) removes it the same way.
  */
-export function VideoScreen({ content, itemId, view, onRendered, onFinished }: CardProps) {
+export function VideoScreen({ content, itemId, startedAt, view, onRendered, onFinished }: CardProps) {
   const v = content.videos?.find((x) => x.id === itemId);
   const preview = isPreview();
   const tilawahBusy = tilawahPlanOf(view, content) !== null;
@@ -82,9 +82,17 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
     finished.current = true;
     onFinished?.();
   };
+  // A new showing (another item, or the same item at a new start) is a fresh try: the report and the failure are re-armed.
+  const showing = startedAt ? startedAt.getTime() : 0;
   useEffect(() => {
     finished.current = false;
-  }, [itemId]);
+    setFailed(false);
+  }, [itemId, showing]);
+  // Gives the item up at once: the frame or file is removed (not left standing with an error page in it) and the rotation moves on.
+  const giveUp = (): void => {
+    setFailed(true);
+    finish();
+  };
   useEffect(() => {
     if (v && !playable) finish();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,10 +110,7 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
   const stall = useRef<number | null>(null);
   const kick = (ms: number = VIDEO_STALL_MS): void => {
     if (stall.current !== null) window.clearTimeout(stall.current);
-    stall.current = window.setTimeout(() => {
-      setFailed(true);
-      finish();
-    }, ms);
+    stall.current = window.setTimeout(giveUp, ms);
   };
   const calm = (): void => {
     if (stall.current !== null) window.clearTimeout(stall.current);
@@ -142,7 +147,7 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
       if (first) soundOn();
       if (sig.error || sig.state === 0) {
         calm();
-        finish();
+        giveUp();
       } else if (sig.state === 1) calm();
       else if (sig.state === 3 || sig.state === 5 || sig.state === -1) kick();
     };
@@ -152,6 +157,23 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
       stopShake();
       calm();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playable, isYoutube, itemId, preview]);
+  // A page rule that blocks the player frame (Content-Security-Policy frame-src) never loads it and never answers: the
+  // browser reports it on the page at once, so the item is given up at once, not after the start watchdog.
+  useEffect(() => {
+    if (!playable || !isYoutube || preview) return undefined;
+    const onBlocked = (e: Event): void => {
+      const v = e as Event & { blockedURI?: string; blockedURL?: string; effectiveDirective?: string; violatedDirective?: string };
+      const target = v.blockedURI ?? v.blockedURL ?? '';
+      const directive = v.effectiveDirective ?? v.violatedDirective ?? '';
+      if (target.startsWith(YT_ORIGIN) && /^(frame|child)-src/.test(directive)) {
+        calm();
+        giveUp();
+      }
+    };
+    document.addEventListener('securitypolicyviolation', onBlocked);
+    return () => document.removeEventListener('securitypolicyviolation', onBlocked);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playable, isYoutube, itemId, preview]);
   // A command to the YouTube player over the same postMessage channel.
@@ -284,10 +306,7 @@ export function VideoScreen({ content, itemId, view, onRendered, onFinished }: C
             if (n.videoWidth > 0 && n.videoHeight > 0) setRatio(n.videoWidth / n.videoHeight);
           }}
           onEnded={finish}
-          onError={() => {
-            setFailed(true);
-            finish();
-          }}
+          onError={giveUp}
           onPlaying={calm}
           onTimeUpdate={calm}
           onWaiting={() => kick()}

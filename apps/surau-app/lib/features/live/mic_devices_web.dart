@@ -12,6 +12,9 @@ MicDevices? browserMicDevices() => BrowserMicDevices();
 
 class BrowserMicDevices implements MicDevices {
   @override
+  Future<bool> headphonesWithoutMic() async => false;
+
+  @override
   Duration? get pollEvery => const Duration(seconds: 10);
 
   @override

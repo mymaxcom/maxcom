@@ -101,10 +101,11 @@ class ManifestTest {
     }
 
     @Test
-    fun leanbackAndTouchscreenNotRequired() {
+    fun leanbackRequiredAndTouchscreenNot() {
         val features = manifest.getElementsByTagName("uses-feature").elements()
             .associate { it.getAttributeNS(ns, "name") to it.getAttributeNS(ns, "required") }
-        assertEquals("false", features["android.software.leanback"])
+        // a TV app: required, so a store lists it for TV devices only
+        assertEquals("true", features["android.software.leanback"])
         assertEquals("false", features["android.hardware.touchscreen"])
     }
 

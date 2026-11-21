@@ -27,6 +27,7 @@ import '../../screens/widgets/box_read.dart';
 import '../../screens/widgets/pieces.dart';
 import '../kinds.dart';
 import '../video_rules.dart';
+import '../play_now.dart';
 import '../video_services.dart';
 import 'content_form.dart';
 
@@ -155,6 +156,8 @@ class _VideoEditorState extends ConsumerState<VideoEditor> {
   /// The item as it will be sent: only the fields of the chosen source, text trimmed, empty optional ones dropped.
   Map<String, dynamic> get _item {
     final keep = <String>{'title', 'source', 'days', 'from', 'to', 'order', 'sound'};
+    // A box without `videoAfterPrayer` refuses the field: it is not sent there.
+    if (ref.read(boxSupportsProvider('videoAfterPrayer'))) keep.add('afterPrayer');
     switch (_source) {
       case 'upload':
         keep.addAll(['assetId', 'durationSec']);
@@ -445,6 +448,8 @@ class _VideoEditorState extends ConsumerState<VideoEditor> {
     final uploading = _stage != _Stage.idle;
     final canSave = _errors(s).isEmpty && !readOnly && !uploading;
     final cloud = _viaCloud;
+    // Only a box that knows `afterPrayer` (health feature `videoAfterPrayer`) is offered the option.
+    final afterPrayerOk = ref.watch(boxSupportsProvider('videoAfterPrayer'));
 
     Widget field(String key) => FieldEditor(
       spec: _spec.field(key),
@@ -495,6 +500,26 @@ class _VideoEditorState extends ConsumerState<VideoEditor> {
         const SizedBox(height: 20),
         field('to'),
         const SizedBox(height: 20),
+        if (afterPrayerOk) ...[
+          ChoiceChips(
+            fieldKey: 'afterPrayer',
+            label: s.videoAfterPrayerLabel,
+            hint: s.videoAfterPrayerHint,
+            choices: const ['none', ...videoAfterPrayers],
+            labelOf: (c) => switch (c) {
+              'subuh' => s.hadisTvPrayerSubuh,
+              'zohor' => s.videoAfterPrayerZohor,
+              'asar' => s.hadisTvPrayerAsar,
+              'maghrib' => s.hadisTvPrayerMaghrib,
+              'isyak' => s.hadisTvPrayerIsyak,
+              _ => s.videoAfterPrayerNone,
+            },
+            value: _values['afterPrayer'] is String ? _values['afterPrayer'] as String : 'none',
+            readOnly: readOnly,
+            onChanged: (v) => _set('afterPrayer', v == 'none' ? null : v),
+          ),
+          const SizedBox(height: 20),
+        ],
         field('order'),
         const SizedBox(height: 20),
         OutlinedButton.icon(
@@ -503,6 +528,7 @@ class _VideoEditorState extends ConsumerState<VideoEditor> {
           icon: const Icon(Icons.tv_outlined),
           label: Text(s.videoPreview),
         ),
+        if (widget.itemId != null && !widget.readOnly) PlayNowButton(itemId: widget.itemId!),
         const SizedBox(height: 20),
         if (_error != null) ...[ErrorLine(_error!), const SizedBox(height: 16)],
         if (uploading) ...[

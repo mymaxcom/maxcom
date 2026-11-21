@@ -39,7 +39,9 @@ async function adminCall(config: WorkerAdminConfig, method: 'GET' | 'DELETE', pa
     return await (config.fetchImpl ?? fetch)(`${config.url.replace(/\/+$/, '')}${path}`, {
       method,
       redirect: 'manual',
-      headers: { Authorization: `Bearer ${config.token}` },
+      // a DELETE with nothing to say still sends `{}` as JSON; a GET sends nothing
+      headers: { Authorization: `Bearer ${config.token}`, ...(method === 'GET' ? {} : { 'Content-Type': 'application/json' }) },
+      ...(method === 'GET' ? {} : { body: '{}' }),
       signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
   } catch {

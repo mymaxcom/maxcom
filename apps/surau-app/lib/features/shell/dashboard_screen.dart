@@ -32,6 +32,7 @@ import '../common/time_words.dart';
 import '../prayer_year.dart';
 import '../sync/sync_actions.dart';
 import '../sync/sync_status_chip.dart' show showSyncSheet, stampWords;
+import 'box_name_dialog.dart';
 import 'connection_icons.dart';
 import 'permissions.dart';
 import 'read_cache.dart';
@@ -450,6 +451,15 @@ class _SystemDetailsState extends ConsumerState<_SystemDetails> {
         label: s.statusTitle,
         value: way,
       ),
+      if (h?.name != null)
+        _StatusRow(
+          key: const ValueKey('status-box-name'),
+          icon: Icons.dns_outlined,
+          label: s.dashBoxName,
+          value: h!.name!,
+          // Whoever may change the settings renames the box, straight to the box (the cloud has no relay for it).
+          onTap: admin && !ref.watch(isCloudGatewayProvider) ? () => showBoxNameDialog(context, ref, h.name!) : null,
+        ),
       _StatusRow(
         key: const ValueKey('status-prayer-data'),
         icon: Icons.calendar_month_outlined,

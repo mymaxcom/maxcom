@@ -160,12 +160,36 @@ function Test-ApkSigner {
   return $errs.ToArray()
 }
 
+# Google Play 16 KB page rule: every arm64-v8a .so in an APK or AAB must have each LOAD p_align >= 0x4000
+# (check-elf-align.ps1). Returns error strings, one per failing line (empty = pass).
+function Test-Apk16k {
+  param([Parameter(Mandatory = $true)][string]$File, [Parameter(Mandatory = $true)][string]$Abi)
+  $psx = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $o = @(& $psx -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check-elf-align.ps1') -Path $File -Abi $Abi)
+  if ($LASTEXITCODE -eq 0) { return @() }
+  return @($o | Where-Object { $_ -match '^(FAIL|GAGAL)' } | ForEach-Object { "16 KB: $_" })
+}
+
+# The ABIs found under <module>/lib/<abi>/ in an AAB must be exactly -Want. Returns error strings.
+function Test-AabAbis {
+  param([Parameter(Mandatory = $true)][string]$Aab, [Parameter(Mandatory = $true)][string[]]$Want)
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $found = @{}
+  $zip = [System.IO.Compression.ZipFile]::OpenRead($Aab)
+  try { foreach ($e in $zip.Entries) { if ($e.FullName -match '(^|/)lib/([^/]+)/[^/]+\.so$') { $found[$Matches[2]] = $true } } } finally { $zip.Dispose() }
+  $errs = New-Object System.Collections.ArrayList
+  foreach ($w in $Want) { if (-not $found.ContainsKey($w)) { [void]$errs.Add("ABI tiada dalam bundle: $w") } }
+  foreach ($k in $found.Keys) { if ($Want -notcontains $k) { [void]$errs.Add("ABI tidak dijangka dalam bundle: $k") } }
+  return $errs.ToArray()
+}
+
 if ($LoadFunctionsOnly) { return }
 
 # ---------------------------------------------------------------------------------------------
 # Checks before anything is touched
 # ---------------------------------------------------------------------------------------------
 if ($PlayBundle -and $Debug) { Fail '-PlayBundle tidak boleh bersama -Debug.' }
+if ($PlayBundle -and $Abi -ne 'both') { Fail '-PlayBundle perlu -Abi both (bundle Play membawa armeabi-v7a dan arm64-v8a).' }
 if ($Version -ne '' -and $Version -notmatch '^20[0-9]{2}\.(0[1-9]|1[0-2])\.[1-9][0-9]?$') { Fail "-Version mesti berbentuk YYYY.MM.N dengan N antara 1 dan 99, diberi: $Version" }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\')
@@ -195,10 +219,10 @@ if ($DryRun) {
   Write-Host "DRYRUN 2 untuk $($abis -join ', '): fetch-box-runtimes.ps1$(if ($SkipFetch) { ' (dilangkau: -SkipFetch)' }); libffmpeg.so daripada $(if ($FfmpegDir) { $FfmpegDir } else { 'build-ffmpeg-android.ps1 bila belum ada' })"
   Write-Host "DRYRUN 3 kosongkan dan isi $main\jniLibs\<abi>\ dan assets\{box\$assetName (same bytes as $archiveName), box\release.json, box\release.sha256, runtime\<abi>\libmap.json, runtime\cert.pem, runtime\VERSIONS.md, licences\}"
   Write-Host "DRYRUN 4 gradlew.bat :app:$task -PboxVersion=$Version$(if (-not $Debug) { '  (ditolak tanpa apps\box-android\key.properties)' })"
-  Write-Host 'DRYRUN 5 semak setiap APK: sha256 setiap lib/<abi>/*.so melawan runtime-manifest.json, tiada ABI kedua, arkib melawan release.sha256, apksigner verify'
+  Write-Host 'DRYRUN 5 semak setiap APK: sha256 setiap lib/<abi>/*.so melawan runtime-manifest.json, tiada ABI kedua, arkib melawan release.sha256, apksigner verify, arm64-v8a: setiap LOAD p_align >= 0x4000 (halaman 16 KB)'
   Write-Host "DRYRUN   $(if ($Debug) { 'binaan nyahpepijat: tiada pin penandatangan' } else { 'sijil penandatangan melawan signingCertSha256 dalam android-pins.json' })"
   Write-Host "DRYRUN 6 tulis <apk>.sha256 dalam $OutDir dan cetak versi, saiz, sha256"
-  if ($PlayBundle) { Write-Host "DRYRUN 7 -PlayBundle: gradlew.bat :app:bundleRelease -PboxVersion=$Version, semak bundle dengan check-public-apk.mjs (tiada my.maxcom.app.ops atau MAXCOM_OPS), salin ke $OutDir\MAX-Kiosk-Server-$Version$buildTag-play.aab dan tulis .sha256" }
+  if ($PlayBundle) { Write-Host "DRYRUN 7 -PlayBundle: gradlew.bat :app:bundleRelease -PboxVersion=$Version, semak bundle: kedua-dua ABI (armeabi-v7a, arm64-v8a) dan arm64 p_align 16 KB, lalu check-public-apk.mjs (tiada my.maxcom.app.ops atau MAXCOM_OPS), salin ke $OutDir\MAX-Kiosk-Server-$Version$buildTag-play.aab dan tulis .sha256" }
   Write-Host 'DRYRUN tiada apa yang ditulis atau dibina.'
   exit 0
 }
@@ -337,6 +361,7 @@ foreach ($a in $abis) {
   $apk = Join-Path $project "app\build\outputs\apk\$buildType\MAX-Kiosk-Server-$Version$buildTag-$a$suffix.apk"
   if (-not (Test-Path -LiteralPath $apk -PathType Leaf)) { Fail "APK tiada selepas gradle: $apk" }
   $errs = @(Test-ApkIntegrity -Apk $apk -Abi $a -Manifest $manifests[$a] -ArchiveName $assetName -ArchiveSha256 $archiveSha)
+  if ($a -eq 'arm64-v8a') { $errs += @(Test-Apk16k -File $apk -Abi $a) }
   $errs += @(Test-ApkSigner -Apk $apk -Pin $signerPin -Release (-not $Debug) -ApkSignerJar $apksignerJar -Java $java.Source)
   if ($errs.Count -gt 0) { foreach ($e in $errs) { Write-Host "GAGAL: [$a] $e" }; $allErrs += $errs; continue }
   $dst = Join-Path $OutDir (Split-Path -Leaf $apk)
@@ -372,6 +397,10 @@ if ($PlayBundle) {
   } finally { Remove-Item -LiteralPath $opsOnly -Force -ErrorAction SilentlyContinue }
   foreach ($l in $co) { Write-Host $l }
   if ($coCode -ne 0) { Fail 'bundle Play mengandungi bahan ops. Tidak disalin.' }
+  # Play needs both ABIs in the one bundle (Android TV apps with native code): exactly these two, every arm64 library 16 KB aligned.
+  $aabErrs = @(Test-AabAbis -Aab $aabs[0].FullName -Want @('armeabi-v7a', 'arm64-v8a'))
+  $aabErrs += @(Test-Apk16k -File $aabs[0].FullName -Abi 'arm64-v8a')
+  if ($aabErrs.Count -gt 0) { foreach ($e in $aabErrs) { Write-Host "GAGAL: [aab] $e" }; Fail 'bundle Play gagal semakan ABI atau halaman 16 KB. Tidak disalin.' }
   $aabName = "MAX-Kiosk-Server-$Version$buildTag-play.aab"
   $aabDst = Join-Path $OutDir $aabName
   Copy-Item -LiteralPath $aabs[0].FullName -Destination $aabDst -Force

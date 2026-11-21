@@ -69,7 +69,7 @@ Widget _card({CleanupRecord? cleanup, int keepDays = 1}) => UploadJobCard(
   keepDays: keepDays,
 );
 
-Widget _summary({int? keep, int duration = 1800, int? yt = 1800}) =>
+Widget _summary({int duration = 1800, int? yt = 1800}) =>
     LiveSummarySheet(
       durationSec: duration,
       youtubeSeconds: yt,
@@ -79,7 +79,6 @@ Widget _summary({int? keep, int duration = 1800, int? yt = 1800}) =>
       watchUrl: 'https://www.youtube.com/watch?v=abc',
       onWatch: (_) {},
       onSave: () {},
-      cleanupKeepDays: keep,
     );
 
 void main() {
@@ -168,51 +167,9 @@ void main() {
   });
 
   group('live summary', () {
-    testWidgets('a live that covered it: deleted after 1 day', (tester) async {
-      await tester.pumpWidget(_wrap(_summary(keep: 1)));
-      expect(
-        find.text(
-          'Rakaman akan dipadam selepas 1 hari kerana YouTube sudah menerima siaran penuh',
-        ),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('7 days', (tester) async {
-      await tester.pumpWidget(_wrap(_summary(keep: 7)));
-      expect(find.textContaining('selepas 7 hari'), findsOneWidget);
-    });
-
-    testWidgets('keepDays 0: as soon as YouTube confirms', (tester) async {
-      await tester.pumpWidget(_wrap(_summary(keep: 0)));
-      expect(
-        find.text(
-          'Rakaman akan dipadam sebaik sahaja YouTube mengesahkan siaran penuh',
-        ),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('not set (feature off or not covered): no line', (tester) async {
+    testWidgets('the sheet no longer carries a clean-up days line (the one question after YouTube replaces it)', (tester) async {
       await tester.pumpWidget(_wrap(_summary()));
       expect(find.byKey(const ValueKey('live-cleanup-note')), findsNothing);
-    });
-
-    testWidgets('a live with a gap never promises a deletion', (tester) async {
-      await tester.pumpWidget(_wrap(_summary(keep: 1, yt: 1000)));
-      expect(find.byKey(const ValueKey('live-cleanup-note')), findsNothing);
-    });
-
-    testWidgets('English singular and plural', (tester) async {
-      await tester.pumpWidget(
-        _wrap(_summary(keep: 1), locale: const Locale('en')),
-      );
-      expect(find.textContaining('after 1 day because'), findsOneWidget);
-      await tester.pumpWidget(
-        _wrap(_summary(keep: 3), locale: const Locale('en')),
-      );
-      await tester.pump();
-      expect(find.textContaining('after 3 days because'), findsOneWidget);
     });
   });
 

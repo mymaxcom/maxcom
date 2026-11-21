@@ -9,6 +9,9 @@ import android.hardware.camera2.CameraManager
 import android.graphics.Color
 import android.graphics.SurfaceTexture
 import android.hardware.display.DisplayManager
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.media.MediaFormat
 import android.net.Uri
 import android.os.BatteryManager
@@ -29,7 +32,6 @@ import com.pedro.encoder.input.gl.render.filters.`object`.TextObjectFilterRender
 import com.pedro.encoder.input.sources.OrientationConfig
 import com.pedro.encoder.input.sources.OrientationForced
 import com.pedro.encoder.input.sources.audio.AudioSource
-import com.pedro.encoder.input.sources.audio.MicrophoneSource
 import com.pedro.encoder.input.sources.video.Camera2Source
 import com.pedro.encoder.input.sources.video.VideoSource
 import com.pedro.encoder.input.video.CameraHelper
@@ -242,7 +244,7 @@ class LiveEngine private constructor(private val app: Context) {
     private val stopWaiters = mutableListOf<() -> Unit>()
 
     private var camera: Camera2Source? = null
-    private var mic: MicrophoneSource? = null
+    private var mic: RoutedMicSource? = null
     private var stream: MultiStream? = null
     private var previewView: TextureView? = null
     private var previewing = false
@@ -278,6 +280,9 @@ class LiveEngine private constructor(private val app: Context) {
     var prepared = false; private set
     var live = false; private set
 
+    /** What the foreground service must hold for the sources in use now (the phone's camera, its microphone). */
+    fun foregroundNeeds(): ForegroundNeeds = ForegroundNeeds.of(videoKind, mixCfg)
+
     private var wantKiosk = false
     private var wantYoutube = false
     private val attempts = mutableMapOf("kiosk" to 0, "youtube" to 0)
@@ -306,6 +311,49 @@ class LiveEngine private constructor(private val app: Context) {
     private fun emit(e: Map<String, Any?>) {
         val s = sink ?: return
         main.post { s.send(e) }
+    }
+
+    // ---- which microphone the live records from ----
+
+    private val audioManager: AudioManager? = app.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
+    /** The microphone the app wants and the one the system routed; shared by both audio sources. */
+    val micRouting = MicRouting().also { r ->
+        r.onRouted = { routed, unavailable ->
+            emit(
+                mapOf(
+                    "type" to "micRouted",
+                    "id" to routed?.id, "name" to routed?.name, "kind" to routed?.kind,
+                    // a name only (never a device number); null = the wanted microphone is in use
+                    "unavailable" to unavailable,
+                ),
+            )
+        }
+    }
+
+    private val micDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) = check(addedDevices)
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) = check(removedDevices)
+
+        /** Only a real microphone coming or going, and only when the set of microphones really changed, re-opens the capture. */
+        private fun check(devices: Array<out AudioDeviceInfo>) {
+            if (devices.none { it.isSource && it.type in AudioRecordPort.MIC_TYPES }) return
+            micRouting.micsChanged(AudioRecordPort.inputs(audioManager).map { it.id }.toSet())
+        }
+    }
+
+    init {
+        micRouting.seedMics(AudioRecordPort.inputs(audioManager).map { it.id }.toSet())
+        try { audioManager?.registerAudioDeviceCallback(micDeviceCallback, main) } catch (_: RuntimeException) {}
+        // The system refused the foreground service: the live may stop when the screen locks. The screen already has
+        // a notice for that risk (`screenLockRisk`), so the person is told in words, never a crash.
+        LiveService.onForegroundFailed = { warn("screenLockRisk", true) }
+    }
+
+    /** The app's choice: a `type:product` id, `own` (the device's own microphone) or null (automatic). */
+    fun setPreferredMic(id: String?) {
+        micRouting.prefer(id?.takeIf { it.isNotBlank() && it.length <= 200 })
     }
 
     private fun phase(v: String) = emit(mapOf("type" to "phase", "value" to v))
@@ -357,13 +405,13 @@ class LiveEngine private constructor(private val app: Context) {
     private fun buildSources(spec: SourceSpec): Built {
         if (spec.video == VideoKind.PHONE) {
             val cam = Camera2Source(app)
-            val mc = MicrophoneSource()
+            val mc = RoutedMicSource(micRouting, audioManager)
             return Built(cam, mc)
         }
         val ext = spec.camera ?: throw IllegalArgumentException("camera_source_missing")
         val audio = RtspAudioSource(AUDIO_RATE)
         val al = AudioAligner(ALIGN_RATE, ALIGN_MAX_LAG_MS)
-        val mixed = MixedAudioSource(audio, al, ALIGN_RATE)
+        val mixed = MixedAudioSource(audio, al, ALIGN_RATE, routing = micRouting, am = audioManager)
         val holder = arrayOfNulls<RtspVideoSource>(1)
         val video = RtspVideoSource(
             url = ext.url, user = null, password = null, mode = ext.transport, audio = audio,
@@ -393,7 +441,7 @@ class LiveEngine private constructor(private val app: Context) {
         mixCfg = spec.mix
         if (spec.video == VideoKind.PHONE) {
             camera = built.video as Camera2Source
-            mic = built.audio as MicrophoneSource
+            mic = built.audio as RoutedMicSource
             rtspVideo = null; rtspAudio = null; mixedAudio = null; aligner = null; extCam = null
             camW = 0; camH = 0
         } else {
@@ -1057,7 +1105,7 @@ class LiveEngine private constructor(private val app: Context) {
                 }
             }
             main.post { onCameraSize(size?.first ?: 0, size?.second ?: 0) }
-            val s = LibVideoSink(surface, cw, ch)
+            val s = LibVideoSink(surface, cw, ch, app.applicationContext)
             inner = s
             s.configure(mime, sps, pps, vps)
         }

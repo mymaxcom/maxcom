@@ -14,6 +14,10 @@ void main() {
   test('scheme 2 names pass; the older scheme and renamed copies never do', () {
     expect(isRecordingName('MAXCOM-2026-11-06-1015-siaran-01.mp4'), isTrue);
     expect(isRecordingName('MAXCOM-2026-11-06-2359-kuliah_1-12.mp4'), isTrue);
+    // the one joined file of a live (2026.11.14)
+    expect(isRecordingName('MAXCOM-2026-11-21-1930-subuh-all.mp4'), isTrue);
+    expect(isRecordingName('MAXCOM-2026-11-21-1930-subuh-.mp4'), isFalse);
+    expect(isRecordingName('MAXCOM-2026-11-21-1930-subuh-all (1).mp4'), isFalse);
     // older scheme: untouched for ever
     expect(isRecordingName('MAXCOM-2026-11-06-siaran-01.mp4'), isFalse);
     // MediaStore's own rename

@@ -1,7 +1,7 @@
 // The exact recording files of each live session (Plan 6 gate 2, Q-H1/Q-M1).
 //
 // On Android the live engine reports the names it wrote (naming scheme 2,
-// `MAXCOM-<date>-<HHmm>-<prefix>-<nn>.mp4`) when a live ends. They are stored
+// `MAXCOM-<date>-<HHmm>-<prefix>-<nn>.mp4`; the one joined file of a live ends `-all`) when a live ends. They are stored
 // here, by session id, and are the ONLY way the clean-up and the catch-up
 // upload find a recording: never a scan by prefix or date. No names stored
 // for a session means no footprint, no automatic upload and no deletion.
@@ -11,7 +11,7 @@
 import '../store/local_store.dart';
 
 final RegExp _recordingName = RegExp(
-  r'^MAXCOM-\d{4}-\d{2}-\d{2}-([01]\d|2[0-3])[0-5]\d-[A-Za-z0-9_-]{1,40}-\d{1,4}\.mp4$',
+  r'^MAXCOM-\d{4}-\d{2}-\d{2}-([01]\d|2[0-3])[0-5]\d-[A-Za-z0-9_-]{1,40}-(\d{1,4}|all)\.mp4$',
 );
 
 /// True only for a name the recorder writes (scheme 2). The older scheme

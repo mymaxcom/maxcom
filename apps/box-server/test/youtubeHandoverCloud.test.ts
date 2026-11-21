@@ -222,6 +222,19 @@ describe('the one-time handover of an old cloud grant', () => {
     expect(r.g.calls.filter((c) => c.path.startsWith('/youtube/'))).toEqual([]);
   });
 
+  it('a POST with an empty JSON body ({} and Content-Type application/json, as the box sends it) is answered like a bodyless one', async () => {
+    const r = await rig();
+    const withJson = await r.cloud.app.inject({ method: 'POST', url: '/api/sync/youtube/handover', headers: { ...r.a.headers, 'content-type': 'application/json' }, payload: '{}' });
+    const bodyless = await handover(r, r.a);
+    expect(withJson.statusCode).toBe(200);
+    expect(withJson.json()).toMatchObject({ boxId: expect.any(String), sealed: expect.anything() });
+    expect(bodyless.statusCode).toBe(200); // the same offer again (still unacknowledged)
+    const r2 = await rig({ grant: false });
+    const none = await r2.cloud.app.inject({ method: 'POST', url: '/api/sync/youtube/handover', headers: { ...r2.a.headers, 'content-type': 'application/json' }, payload: '{}' });
+    expect(none.statusCode).toBe(404);
+    expect(none.json()).toMatchObject({ code: 'none' });
+  });
+
   it('only to a site of that surau: another surau, a revoked site and a device session get nothing', async () => {
     const r = await rig();
     const b = r.site(BOX_B, OTHER);

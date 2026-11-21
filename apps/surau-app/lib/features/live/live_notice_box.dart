@@ -6,14 +6,13 @@
 //
 // An older box has no such route: every read here then answers null and the
 // screens fall back to the notice built on the device (live_notice.dart), no
-// frame, a thumbnail card. The answer is parsed defensively: anything that is
+// frame, the kuliah card made on the device. The answer is parsed defensively: anything that is
 // not a valid public watch link is no notice.
 
 import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 
 import '../../app/providers.dart';
 import '../people/phone.dart' show isE164;
@@ -105,14 +104,31 @@ final liveBoxNoticeProvider = FutureProvider<BoxLiveNotice?>((ref) async {
   ref.watch(dataVersionProvider);
   // someone edited the text: the notice is read again
   ref.watch(liveBoxProvider.select((b) => b.noticeRev));
+  // a session opened or ended (here or on another device): the notice is read again
+  ref.watch(liveBoxProvider.select((b) => b.sessionId != null || b.otherLive != null));
   final gateway = ref.watch(gatewayProvider);
   if (gateway == null || !can(ref.watch(rolesProvider), 'live:control')) return null;
   try {
-    return BoxLiveNotice.fromJson(await gateway.getFresh('/api/live/notice'));
+    final notice = BoxLiveNotice.fromJson(await gateway.getFresh('/api/live/notice'));
+    if (notice == null) return null;
+    // The notice follows the BOX's live session: when the session is over the banner and the share buttons go, even
+    // if YouTube still says the broadcast is live. A status that does not answer, or does not say, keeps the notice.
+    if (await _boxSessionOver(gateway)) return null;
+    return notice;
   } on Object {
     return null;
   }
 });
+
+/// True when `GET /api/live/status` answers with `session: null` (no live session on the box).
+Future<bool> _boxSessionOver(BoxGateway gateway) async {
+  try {
+    final status = await gateway.getFresh('/api/live/status');
+    return status.containsKey('session') && status['session'] == null;
+  } on Object {
+    return false;
+  }
+}
 
 /// Saves [text] as the notice's edited text, or null for "back to the
 /// original". Returns false when the box did not take it (an older box, no
@@ -141,25 +157,6 @@ Future<Uint8List?> fetchBoxNoticeFrame(BoxGateway? gateway) async {
     return null;
   }
 }
-
-/// Fetches the picture at [uri] (the YouTube thumbnail); null on any failure.
-/// Tests override it.
-typedef NoticeImageFetch = Future<Uint8List?> Function(Uri uri);
-
-final liveNoticeImageFetchProvider = Provider<NoticeImageFetch>((ref) {
-  return (uri) async {
-    if (uri.scheme != 'https' || uri.host != 'i.ytimg.com') return null;
-    try {
-      final r = await http.get(uri).timeout(const Duration(seconds: 8));
-      return r.statusCode == 200 && r.bodyBytes.isNotEmpty ? r.bodyBytes : null;
-    } on Object {
-      return null;
-    }
-  };
-});
-
-/// The YouTube live thumbnail address of [videoId].
-Uri liveThumbnailUri(String videoId) => Uri.parse('https://i.ytimg.com/vi/$videoId/hqdefault_live.jpg');
 
 /// The signed-in person's own phone number (E.164) from their profile, or
 /// null. `GET /api/auth/me` first (a box that carries `user.phone`), else the

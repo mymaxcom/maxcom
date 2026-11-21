@@ -1170,6 +1170,19 @@ function Step-Power {
   return $false
 }
 
+function Step-MicAccess {
+  # The box runs as LOCAL SERVICE: Windows microphone privacy must allow that account or the Mic-in is silent in a live.
+  # Every line is shown; a GAGAL line makes the step fail (never SET) with the message.
+  $lines = @(Set-MaxcomMicAccess)
+  foreach ($c in $lines) { Write-Host "  $c" }
+  $bad = @($lines | Where-Object { $_ -like 'GAGAL:*' })
+  if ($bad.Count -gt 0) {
+    throw ('Mic-in kotak mungkin senyap. ' + ($bad -join ' ') + ' Buka Windows Settings, Privacy, Microphone dan benarkan akses, kemudian jalankan Semak MAXCOM.')
+  }
+  $changed = @($lines | Where-Object { $_ -notlike 'NOTA:*' })
+  return ($changed.Count -gt 0)
+}
+
 function Step-StartCheck {
   $S = $script:S
   $P = $S.P
@@ -1224,13 +1237,21 @@ function Invoke-Main {
     [void](Invoke-Step -Name $n[6] -DryRun:$d -Describe "buat atau semak sijil kotak untuk $($S.Ip)" -Action { Step-Certificates })
     [void](Invoke-Step -Name $n[7] -DryRun:$d -Describe "peraturan tembok api TCP $($S.HttpsPort)" -Action { Step-Firewall })
     [void](Invoke-Step -Name $n[8] -DryRun:$d -Describe "daftar tugas, menu Start dan senarai Apps (skrin: $($S.Kiosk))" -Action { Step-Tasks })
-    [void](Invoke-Step -Name $n[9] -DryRun:$d -Describe "tetapan kuasa ($($S.Power))" -Action { Step-Power })
+    if ($d) {
+      [void](Invoke-Step -Name $n[9] -DryRun:$d -Describe "tetapan kuasa ($($S.Power)) dan akses mikrofon Windows untuk Mic-in kotak" -Action { Step-Power })
+    } else {
+      [void](Invoke-Step -Name $n[9] -Describe 'tetapan kuasa' -Action { Step-Power })
+      # a microphone problem is reported (GAGAL line) but does not stop the box from starting
+      try { [void](Invoke-Step -Name ($n[9] + ' (mikrofon)') -Describe 'akses mikrofon Windows untuk Mic-in kotak' -Action { Step-MicAccess }) }
+      catch { $script:MicFailed = $true }
+    }
     [void](Invoke-Step -Name $n[10] -DryRun:$d -Describe 'mulakan kotak dan jalankan Semak MAXCOM' -Action { Step-StartCheck })
   }
 
   if ($d) { Write-Host 'DRYRUN selesai. Tiada apa diubah.'; return 0 }
   if ($lay) { Write-Host 'Susunan fail MAX Kiosk Server selesai (LayoutOnly: tiada tugas, tembok api atau sijil).'; return 0 }
   Write-Host 'Pemasangan MAX Kiosk Server selesai.'
+  if ($script:MicFailed) { Write-Host 'AMARAN: akses mikrofon untuk Mic-in kotak tidak dapat ditetapkan (lihat baris GAGAL di atas). Betulkan dan jalankan Pasang MAXCOM sekali lagi, kemudian Semak MAXCOM.' }
   Write-Host ("Alamat kotak: https://{0}:{1}/" -f $S.Ip, $S.HttpsPort)
   Write-Host ("Fail sijil akar (pasang pada telefon dan iPad): {0}" -f (Join-Path $P.Pki 'root-ca.cer'))
   if ($S.MigrateFrom -ne '' -or (Get-StateValue 'migratedFrom')) {

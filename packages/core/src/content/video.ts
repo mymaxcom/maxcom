@@ -33,6 +33,15 @@ export type VideoErrorCode = (typeof VIDEO_ERROR_CODES)[number];
 export type VideoSource = 'upload' | 'youtube' | 'rakaman';
 export const VIDEO_SOURCES: readonly VideoSource[] = ['upload', 'youtube', 'rakaman'];
 
+/**
+ * `afterPrayer` (2026.11.14): the five prayers a video may be tied to. An item with one is not in the normal rotation:
+ * the TV plays it once a day right after that prayer's zikir screen (after the solat phase when there is no zikir
+ * screen); on a Friday `zohor` means after Jumaat.
+ */
+export const AFTER_PRAYERS = ['subuh', 'zohor', 'asar', 'maghrib', 'isyak'] as const;
+export type AfterPrayer = (typeof AFTER_PRAYERS)[number];
+export const isAfterPrayer = (v: unknown): v is AfterPrayer => typeof v === 'string' && (AFTER_PRAYERS as readonly string[]).includes(v);
+
 const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 export const isYoutubeId = (v: unknown): v is string => typeof v === 'string' && YT_ID.test(v);
 
@@ -73,7 +82,9 @@ export function videoSlotSeconds(v: { durationSec?: number; startSec?: number; e
 /**
  * What this server release supports that an older one does not, as `features` in `GET /api/health` (anonymous and
  * signed in). The app shows the Video kind and the poster "Regangkan gambar" switch only when its server lists them, and
- * Arabic (العربية) in "Bahasa skrin TV" only when it lists `tvLangAr` (the settings validation accepts lang 'ar').
+ * Arabic (العربية) in "Bahasa skrin TV" only when it lists `tvLangAr` (the settings validation accepts lang 'ar'), and
+ * the video option "Main selepas zikir solat" only when it lists `videoAfterPrayer` (the video item accepts `afterPrayer`),
+ * and the "Main sekarang" button on a video item only when it lists `videoPlayNow` (`POST /api/content/video/<id>/play-now`).
  */
-export const SERVER_FEATURES = ['video', 'posterStretch', 'tvLangAr'] as const;
+export const SERVER_FEATURES = ['video', 'posterStretch', 'tvLangAr', 'videoAfterPrayer', 'videoPlayNow'] as const;
 export type ServerFeature = (typeof SERVER_FEATURES)[number];

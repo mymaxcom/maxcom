@@ -41,13 +41,13 @@ final _input = LiveNoticeInput(
 
 const _bmText =
     "Assalamu'alaikum warahmatullah.\n"
-    'Ikuti Kuliah Maghrib malam ini disampaikan oleh Ustaz Ahmad membicarakan Kitab Contoh '
-    'secara langsung dalam talian menerusi pautan berikut:\n'
+    'Ikuti *Kuliah Maghrib* di *Surau Perintis Contoh* bersama *Ustaz Ahmad*.\n'
+    'Tajuk: *Kitab Contoh*\n'
     '$_link';
 
 final Uint8List _jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]);
 final Uint8List _frame = Uint8List.fromList([0xFF, 0xD8, 0xAA, 0xAA]);
-final Uint8List _thumb = Uint8List.fromList([0xFF, 0xD8, 0xBB, 0xBB]);
+final Uint8List _photo = Uint8List.fromList([0xFF, 0xD8, 0xCC, 0xCC]);
 
 class _Shared {
   _Shared(this.text, this.picture, this.toWhatsApp);
@@ -82,17 +82,18 @@ class FakePlatform implements LiveNoticePlatform {
 }
 
 class _Card {
-  _Card(this.fields, this.background);
+  _Card(this.fields, this.background, this.photo, this.logo);
   final LiveCardFields fields;
   final Uint8List? background;
+  final Uint8List? photo;
+  final Uint8List? logo;
 }
 
 class _T {
-  _T(this.h, this.platform, this.cards, this.fetched, this.patches, this.clip);
+  _T(this.h, this.platform, this.cards, this.patches, this.clip);
   final ShellHarness h;
   final FakePlatform platform;
   final List<_Card> cards;
-  final List<Uri> fetched;
   final List<Object?> patches;
   final List<String> clip;
 }
@@ -130,12 +131,11 @@ Future<_T> _open(
   List<Map<String, Object?>>? users,
   Object? cardFails,
   bool frameOk = true,
-  bool thumbOk = true,
+  bool photoOk = true,
   GoldenSize size = GoldenSize.phone,
 }) async {
   final p = platform ?? FakePlatform();
   final cards = <_Card>[];
-  final fetched = <Uri>[];
   final patches = <Object?>[];
   final clip = <String>[];
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (c) async {
@@ -146,14 +146,10 @@ Future<_T> _open(
   final List<Override> overrides = [
     livePublisherProvider.overrideWithValue(FakePublisher()),
     liveNoticePlatformProvider.overrideWithValue(p),
-    liveNoticeCardProvider.overrideWithValue(({required fields, background, rtl = false}) async {
+    liveNoticeCardProvider.overrideWithValue(({required fields, background, photo, logo, rtl = false}) async {
       if (cardFails != null) throw cardFails;
-      cards.add(_Card(fields, background));
+      cards.add(_Card(fields, background, photo, logo));
       return _jpeg;
-    }),
-    liveNoticeImageFetchProvider.overrideWithValue((uri) async {
-      fetched.add(uri);
-      return thumbOk ? _thumb : null;
     }),
   ];
   final h = await pumpShell(tester, roles: roles, overrides: overrides, size: size);
@@ -173,6 +169,15 @@ Future<_T> _open(
   h.handlers['GET /api/live/notice/frame.jpg'] = (r) async => frameOk
       ? http.Response.bytes(_frame, 200, headers: {'content-type': 'image/jpeg'})
       : jsonResponse(404, {'errors': ['tiada']});
+  // The penceramah the kuliah names: one with a photo, one without. (The photo bytes are the harness's own
+  // route for `fixtureAssetPhoto`, answered here so the test can tell them.)
+  h.content['penceramah'] = [
+    {'id': 'p1', 'name': 'Ustaz Ahmad', 'photoAssetId': fixtureAssetPhoto},
+    {'id': 'p2', 'name': 'Ustaz Tanpa Gambar'},
+  ];
+  h.handlers['GET /assets/$fixtureAssetPhoto'] = (r) async => photoOk
+      ? http.Response.bytes(_photo, 200, headers: {'content-type': 'image/jpeg'})
+      : jsonResponse(404, {'errors': ['tiada']});
   // The dashboard behind the sheet read the notice before these answers were set.
   h.container.invalidate(liveBoxNoticeProvider);
   if (lang != AppLang.ms) await h.container.read(appLangProvider.notifier).set(lang);
@@ -186,7 +191,7 @@ Future<_T> _open(
     ),
   );
   await settle(tester);
-  return _T(h, p, cards, fetched, patches, clip);
+  return _T(h, p, cards, patches, clip);
 }
 
 Finder get _field => find.byKey(const ValueKey('live-notice-field'));
@@ -236,13 +241,13 @@ void main() {
 
     testWidgets('the language follows the phone (Arabic and English)', (tester) async {
       await _open(tester, lang: AppLang.ar);
-      expect(tester.widget<Text>(_preview).data, contains('تابعوا درس المغرب الليلة يلقيه Ustaz Ahmad'));
+      expect(tester.widget<Text>(_preview).data, contains('تابعوا *درس المغرب* في *Surau Perintis Contoh* مع *Ustaz Ahmad*'));
       expect(find.text('إشعار البث المباشر'), findsOneWidget);
     });
 
     testWidgets('English phone gets the English text', (tester) async {
       await _open(tester, lang: AppLang.en);
-      expect(tester.widget<Text>(_preview).data, contains('Join the Maghrib talk tonight, delivered by Ustaz Ahmad'));
+      expect(tester.widget<Text>(_preview).data, contains('Join *Maghrib Talk* at *Surau Perintis Contoh* with *Ustaz Ahmad*'));
       expect(find.text('Share to WhatsApp'), findsOneWidget);
     });
 
@@ -315,6 +320,8 @@ void main() {
       box['editedBy'] = 'Kak Siti';
       rev = 2;
       await tester.runAsync(ctrl.pollOnce);
+      // the notice read also asks the status whether the box session still runs: one more round trip
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
       await settle(tester);
       expect(tester.widget<Text>(_preview).data, 'Teks Kak Siti.\n$_link');
       expect(tester.widget<Text>(find.byKey(const ValueKey('live-notice-edited-by'))).data, startsWith('Diubah oleh Kak Siti, '));
@@ -543,44 +550,93 @@ void main() {
     });
   });
 
-  group('[W6b] the picture card: the box frame, then the thumbnail, then a plain card', () {
-    testWidgets('CCTV through the box: the card is made from the box frame, not the thumbnail', (tester) async {
+  group('[W22-4] the picture card: the box frame, else today\'s kuliah card, never a thumbnail', () {
+    testWidgets('CCTV through the box: the card is made from the box frame', (tester) async {
       final t = await _open(tester, box: _boxNotice(), withInput: false);
       await _tap(tester, _primary);
       expect(t.cards.single.background, _frame);
-      expect(t.fetched, isEmpty);
+      expect(t.cards.single.photo, isNull, reason: 'the frame is the picture');
       expect(
         t.cards.single.fields,
-        const LiveCardFields(badge: 'SIARAN LANGSUNG', surau: 'Surau D\'Waqaf', title: 'Kuliah Maghrib', speaker: 'Ustaz Ahmad'),
+        const LiveCardFields(
+          badge: 'SIARAN LANGSUNG',
+          surau: 'Surau D\'Waqaf',
+          slot: 'Kuliah Maghrib',
+          speaker: 'Ustaz Ahmad',
+          time: '19:15',
+        ),
       );
     });
 
-    testWidgets('frame 404: the YouTube thumbnail', (tester) async {
+    testWidgets('frame 404: the kuliah card with the penceramah photo, no background, no outside request', (tester) async {
       final t = await _open(tester, box: _boxNotice(), frameOk: false);
       await _tap(tester, _primary);
-      expect(t.cards.single.background, _thumb);
-      expect(t.fetched.single.toString(), 'https://i.ytimg.com/vi/$_id/hqdefault_live.jpg');
+      final c = t.cards.single;
+      expect(c.background, isNull, reason: 'never a YouTube thumbnail');
+      expect(c.photo, _photo);
+      expect(c.fields.slot, 'Kuliah Maghrib');
+      expect(c.fields.speaker, 'Ustaz Ahmad');
+      expect(c.fields.surau, 'Surau D\'Waqaf');
+      expect(c.fields.time, '19:15');
+      expect(t.platform.shares.single.picture, _jpeg);
+      expect(t.h.box.byPath('/api/live/notice/frame.jpg'), isNotNull);
     });
 
-    testWidgets('frame 404 and no thumbnail: the plain branded card', (tester) async {
-      final t = await _open(tester, box: _boxNotice(), frameOk: false, thumbOk: false);
+    testWidgets('the card carries the phone\'s own kuliah: slot name, title, time', (tester) async {
+      final t = await _open(tester, frameOk: false);
+      await _tap(tester, _primary);
+      final c = t.cards.single;
+      expect(c.background, isNull);
+      expect(c.fields.slot, 'Kuliah Maghrib');
+      expect(c.fields.title, 'Kitab Contoh', reason: 'the kitab stands in when there is no topic');
+      expect(c.fields.speaker, 'Ustaz Ahmad');
+      expect(c.fields.time, '19:15');
+      expect(c.photo, _photo);
+    });
+
+    testWidgets('a penceramah without a photo: the card is made without one', (tester) async {
+      final t = await _open(
+        tester,
+        box: _boxNotice(kuliah: {'title': 'Kuliah Maghrib', 'speaker': 'Ustaz Tanpa Gambar', 'time': '19:15'}),
+        frameOk: false,
+        withInput: false,
+      );
+      await _tap(tester, _primary);
+      expect(t.cards.single.photo, isNull);
+      expect(t.cards.single.background, isNull);
+      expect(t.platform.shares.single.picture, _jpeg);
+    });
+
+    testWidgets('a photo the box cannot give: the card is made without one', (tester) async {
+      final t = await _open(tester, box: _boxNotice(), frameOk: false, photoOk: false, withInput: false);
+      await _tap(tester, _primary);
+      expect(t.cards.single.photo, isNull);
+      expect(t.platform.shares.single.picture, _jpeg);
+    });
+
+    testWidgets('no kuliah for the live: a plain card with the surau name, no photo, no thumbnail', (tester) async {
+      final t = await _open(tester, box: _boxNotice(kuliah: {}), frameOk: false, withInput: false);
+      await _tap(tester, _primary);
+      final c = t.cards.single;
+      expect(c.background, isNull);
+      expect(c.photo, isNull);
+      expect(c.fields, const LiveCardFields(badge: 'SIARAN LANGSUNG', surau: 'Surau D\'Waqaf'));
+      expect(c.fields.hasKuliah, isFalse);
+      expect(t.platform.shares.single.picture, _jpeg);
+    });
+
+    testWidgets('the card fields follow the phone language (slot name)', (tester) async {
+      final t = await _open(tester, frameOk: false, lang: AppLang.en);
+      await _tap(tester, _primary);
+      expect(t.cards.single.fields.slot, 'Maghrib Talk');
+      expect(t.cards.single.fields.badge, 'LIVE NOW');
+    });
+
+    testWidgets('an older box (no frame route): the kuliah card', (tester) async {
+      final t = await _open(tester, frameOk: false);
       await _tap(tester, _primary);
       expect(t.cards.single.background, isNull);
-      expect(t.platform.shares.single.picture, _jpeg, reason: 'still a picture');
-    });
-
-    testWidgets('a box that says no frame is not asked for one', (tester) async {
-      final t = await _open(tester, box: _boxNotice(frame: false));
-      await _tap(tester, _primary);
-      expect(t.h.box.byPath('/api/live/notice/frame.jpg'), isNull);
-      expect(t.cards.single.background, _thumb);
-    });
-
-    testWidgets('an older box: no frame request, the thumbnail card', (tester) async {
-      final t = await _open(tester);
-      await _tap(tester, _primary);
-      expect(t.h.box.byPath('/api/live/notice/frame.jpg'), isNull);
-      expect(t.cards.single.background, _thumb);
+      expect(t.cards.single.fields.hasKuliah, isTrue);
     });
 
     test('the fields carry nothing but the notice words: no number, no address; a missing one keeps its role', () {
@@ -626,17 +682,17 @@ void main() {
   });
 
   group('[W6b] who sees what, on which device', () {
-    testWidgets('Android phone, phone camera (no box notice): local text, thumbnail card, WhatsApp button', (tester) async {
-      final t = await _open(tester);
+    testWidgets('Android phone, phone camera (no box notice): local text, kuliah card, WhatsApp button', (tester) async {
+      final t = await _open(tester, frameOk: false);
       expect(_primaryLabel(tester), 'Kongsi ke WhatsApp');
       await _tap(tester, _primary);
       expect(t.platform.shares.single.text, _bmText);
-      expect(t.cards.single.background, _thumb);
+      expect(t.cards.single.background, isNull);
     });
 
     testWidgets('Android phone, CCTV through the box: the box text and the box frame', (tester) async {
       final t = await _open(tester, box: _boxNotice(), withInput: false);
-      expect(tester.widget<Text>(_preview).data, contains('Ikuti Kuliah Maghrib'));
+      expect(tester.widget<Text>(_preview).data, contains('Ikuti *Kuliah Maghrib*'));
       expect(tester.widget<Text>(_preview).data, contains(_link));
       await _tap(tester, _primary);
       expect(t.cards.single.background, _frame);

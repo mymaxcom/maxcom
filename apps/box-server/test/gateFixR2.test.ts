@@ -117,18 +117,20 @@ describe('[G-S4] a device name is cleaned at enrolment', () => {
 });
 
 describe('[G-Q2] restore and activate refuse a number a live person holds', () => {
-  it('[G-Q2] REST restore answers 409 phone_taken; the sync path stays lenient', async () => {
+  it('[G-Q2] a deleted person holds no number, so a restore cannot clash with the person who now holds it', async () => {
     const app = make();
     const admin = await loginAs(app, 'admin');
     const db = app.surau.db;
     const x = createUser(db, { name: 'Kak Siti', roles: ['ajk'], phone: '+60120000011' }, 'test', 'sdm');
     deleteUserIn(db, x.id, 'test');
-    createUser(db, { name: 'Kak Mah', roles: ['ajk'], phone: '+60120000011' }, 'test', 'sdm');
+    expect(db.prepare('SELECT phone FROM users WHERE id = ?').get(x.id)?.phone).toBeNull();
+    const other = createUser(db, { name: 'Kak Mah', roles: ['ajk'], phone: '+60120000011' }, 'test', 'sdm');
     const r = await call(app, admin, 'POST', `/api/users/${x.id}/restore`, {});
-    expect(r.statusCode).toBe(409);
-    expect(r.json().code).toBe('phone_taken');
-    expect(() => restoreUser(db, x.id, 'test')).toThrowError(/digunakan/);
-    expect(db.prepare('SELECT deleted_at FROM users WHERE id = ?').get(x.id)?.deleted_at).not.toBeNull();
+    expect(r.statusCode).toBe(200);
+    const back = db.prepare('SELECT deleted_at, phone FROM users WHERE id = ?').get(x.id);
+    expect(back?.deleted_at).toBeNull();
+    expect(back?.phone).toBeNull();
+    expect(db.prepare('SELECT phone FROM users WHERE id = ?').get(other.id)?.phone).toBe('+60120000011');
   });
 
   it('[G-Q2] activate refuses 409 phone_taken when a live person now holds the number', async () => {

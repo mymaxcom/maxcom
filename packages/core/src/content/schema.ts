@@ -2,7 +2,7 @@ import { DAY_KEYS } from '../features/registry.ts';
 import { validateImageRef } from '../image.ts';
 import type { ImageRef, ImageSlotKey } from '../image.ts';
 import type { ContentKind, ContentItemOf, HadisExt } from './types.ts';
-import { VIDEO_LIMITS, VIDEO_SOURCES, isYoutubeId } from './video.ts';
+import { AFTER_PRAYERS, VIDEO_LIMITS, VIDEO_SOURCES, isYoutubeId } from './video.ts';
 
 export * from './video.ts';
 
@@ -252,6 +252,7 @@ function buildVideo(src: Record<string, unknown>, errors: string[]): ContentItem
   const from = src.from === undefined ? undefined : checkDate('from', src.from, errors);
   const to = src.to === undefined ? undefined : checkDate('to', src.to, errors);
   const order = checkInt('order', src.order, 0, 1000000, errors);
+  const afterPrayer = src.afterPrayer === undefined ? undefined : checkEnum('afterPrayer', src.afterPrayer, AFTER_PRAYERS, errors);
   const durationSec = src.durationSec === undefined ? undefined : checkInt('durationSec', src.durationSec, 1, 86400, errors);
   const startSec = src.startSec === undefined ? undefined : checkInt('startSec', src.startSec, 0, 86400, errors);
   const endSec = src.endSec === undefined ? undefined : checkInt('endSec', src.endSec, 1, 86400, errors);
@@ -290,6 +291,7 @@ function buildVideo(src: Record<string, unknown>, errors: string[]): ContentItem
   if (startSec !== undefined) out.startSec = startSec;
   if (endSec !== undefined) out.endSec = endSec;
   if (sound !== undefined) out.sound = sound;
+  if (afterPrayer !== undefined) out.afterPrayer = afterPrayer;
   if (from !== undefined) out.from = from;
   if (to !== undefined) out.to = to;
   return out as unknown as ContentItemOf<'video'>;

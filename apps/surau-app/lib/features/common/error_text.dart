@@ -30,6 +30,15 @@ int _int(Map<String, dynamic> d, String key, [int fallback = 0]) {
 final Map<String, ErrorCodeText> kErrorCodeTexts = <String, ErrorCodeText>{
   // Session, PIN and unlock.
   'no_session': (s, d) => s.errorSessionExpired,
+  // Windows Mic-in (audio inputs list and level probe) and play now.
+  'no_device': (s, d) => s.errcNoMicDevice,
+  'access_denied': (s, d) => s.errcMicAccessDenied,
+  'device_unavailable': (s, d) => s.errcMicDeviceUnavailable,
+  'silent': (s, d) => s.errcMicSilent,
+  'list_failed': (s, d) => s.errcMicListFailed,
+  'no_tool': (s, d) => s.errcMicNoTool,
+  'live_running': (s, d) => s.errcPlayLiveRunning,
+  'prayer_phase': (s, d) => s.errcPlayPrayerPhase,
   // Video upload (2026.11.13).
   'too_big': (s, d) => s.errVideoTooBig,
   'too_long': (s, d) => s.errVideoTooLong,

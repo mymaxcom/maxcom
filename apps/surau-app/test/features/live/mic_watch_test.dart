@@ -16,6 +16,11 @@ import 'package:surau_app/features/shell/live_camera_gateway.dart';
 
 class _Devices implements MicDevices {
   List<MicInfo> now = [];
+  bool headphones = false;
+
+  @override
+  Future<bool> headphonesWithoutMic() async => headphones;
+
   final _c = StreamController<void>.broadcast();
 
   @override
@@ -48,6 +53,9 @@ class _MemStore implements LiveSourceStore {
 
 class _Pub extends FakePublisher implements LiveMicControl {
   final List<String?> mics = [];
+
+  @override
+  String? get ownMicrophoneId => null;
   bool refuse = false;
   int failFirst = 0;
   int attempts = 0;
@@ -359,5 +367,30 @@ void main() {
       expect(MicAutoNotifier.toastText(t.st.toast!, AppLang.en), 'New microphone: External microphone. Used for the live.');
       t.close();
     });
+  });
+
+  test('Android: a new wired headset microphone (3.5 mm) is picked up like a USB one, then unplugged', () async {
+    final t = _T(micOn: true);
+    await t.boot();
+    const wired = MicInfo(deviceId: '3:Headset Mic', label: 'Headset Mic', kind: 'external');
+    await t.change([_builtIn, wired]);
+    expect(t.mics, ['3:Headset Mic']);
+    expect(t.st.label, 'Headset Mic');
+    expect(t.st.toast!.kind, MicToastKind.added);
+    await t.change([_builtIn]);
+    expect(t.mics, ['3:Headset Mic', null]);
+    expect(t.st.toast!.kind, MicToastKind.unplugged);
+    t.close();
+  });
+
+  test('headphones without a microphone in the jack: the 4-pole (TRRS) hint shows, and goes with a real microphone', () async {
+    final t = _T();
+    t.devices.headphones = true;
+    await t.boot();
+    expect(t.st.trrsHint, isTrue);
+    t.devices.headphones = false;
+    await t.change([_builtIn, const MicInfo(deviceId: '3:Headset Mic', label: 'Headset Mic', kind: 'external')]);
+    expect(t.st.trrsHint, isFalse);
+    t.close();
   });
 }

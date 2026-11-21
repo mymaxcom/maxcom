@@ -8,6 +8,7 @@
 import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
+import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
 
@@ -254,6 +255,24 @@ class IndexedDbRecordingsStore implements RecordingsStore {
   }
 
   @override
+  Future<Uint8List?> read(String id) async {
+    final db = await _db;
+    final rec = await _get(db, id);
+    if (rec == null) return null;
+    final blob = rec['blob'] as web.Blob?;
+    if (blob == null) return null;
+    final buf = await blob.arrayBuffer().toDart;
+    return buf.toDart.asUint8List();
+  }
+
+  @override
+  Future<Object?> blobOf(String id) async {
+    final db = await _db;
+    final rec = await _get(db, id);
+    return rec?['blob'] as web.Blob?;
+  }
+
+  @override
   Future<void> markSaved(String id) async {
     final db = await _db;
     final rec = await _get(db, id);
@@ -289,4 +308,10 @@ Future<void> anchorDownload(String fileName, Object blob) async {
   a.click();
   a.remove();
   Timer(const Duration(seconds: 60), () => web.URL.revokeObjectURL(url));
+}
+
+/// Hands [bytes] to the browser as a download named [fileName] (the joined recording, one tap).
+Future<void> saveBytesToDevice(String fileName, Uint8List bytes, String mime) async {
+  final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: mime));
+  await anchorDownload(fileName, blob);
 }

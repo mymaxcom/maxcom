@@ -106,12 +106,45 @@ class UploadChannel private constructor(private val context: Context) :
             "status" -> result.success(status())
             "network" -> result.success(network())
             "findSegments" -> result.success(findSegments(call.argument<List<String>>("names") ?: emptyList()))
+            // Joins the pieces of one live into one file (MediaMuxer, no re-encode), then removes the pieces.
+            "mergeRecordings" -> {
+                val names = call.argument<List<String>>("names")
+                if (names == null) result.error("bad_args", null, null) else mergeRecordings(names, result)
+            }
             "deleteRecordings" -> {
                 val names = call.argument<List<String>>("names")
                 if (names == null) result.error("bad_args", null, null) else result.success(deleteRecordings(names))
             }
             else -> result.notImplemented()
         }
+    }
+
+    private val mergeFlight = SingleFlight()
+
+    private fun mergeRecordings(names: List<String>, result: MethodChannel.Result) {
+        // One join at a time (two would share the same temporary file): the second is told to wait.
+        if (!mergeFlight.tryEnter()) {
+            result.success(mapOf("merged" to false, "error" to "busy"))
+            return
+        }
+        Thread({
+            val answer: Map<String, Any?> = try {
+                val env = AndroidMergeEnv(context, ::findSegments, ::deleteRecordings)
+                when (val r = RecordingMerger.merge(env, names)) {
+                    is MergeResult.Nothing -> mapOf("merged" to false, "name" to r.name)
+                    is MergeResult.Merged -> mapOf(
+                        "merged" to true, "name" to r.name, "bytes" to r.bytes, "durationMs" to r.durationMs,
+                        "pieces" to r.pieces, "leftover" to r.leftover, "leftoverNames" to r.leftoverNames,
+                    )
+                    is MergeResult.Failed -> mapOf("merged" to false, "error" to r.code)
+                }
+            } catch (_: Exception) {
+                mapOf("merged" to false, "error" to "join_failed")
+            } finally {
+                mergeFlight.leave()
+            }
+            main.post { try { result.success(answer) } catch (_: RuntimeException) {} }
+        }, "maxcom-merge").start()
     }
 
     private fun enqueue(call: MethodCall, result: MethodChannel.Result) {

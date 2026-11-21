@@ -54,7 +54,7 @@ const Map<String, Object?> healthyJson = {
   'daysAhead': 212,
   'assetsBytes': 1048576,
   // a box of 2026.11.13 or newer
-  'features': ['video', 'posterStretch', 'tvLangAr'],
+  'features': ['video', 'posterStretch', 'tvLangAr', 'videoAfterPrayer'],
 };
 
 Map<String, Object?> settingsJson([Map<String, bool> features = const {}]) => {

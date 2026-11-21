@@ -7,11 +7,38 @@ feature can be switched on or off.
 *MAXCOM ialah perisian percuma untuk surau, masjid dan musalla: paparan waktu solat, kuliah, pengumuman dan
 kandungan Islam, dengan aplikasi pentadbir untuk telefon dan iPad. Berfungsi tanpa internet.*
 
-## MAXCOM R2 (2026.11.13)
+## MAXCOM R2 (2026.11.14)
 
-MAXCOM R2 is the current release, now at version 2026.11.13: a free, open source system for surau and masjid, used
+MAXCOM R2 is the current release, now at version 2026.11.14: a free, open source system for surau and masjid, used
 under its licence (CC BY-NC-SA 4.0, see "Licence" below). Downloads: [mymaxcom.my](https://mymaxcom.my) or the
 [Releases](https://github.com/mymaxcom/maxcom/releases) of this repository.
+
+### Kemas kini 2026.11.14 / Update 2026.11.14
+
+- **Videos, right away or after the prayer.** Play a registered video on the TV straight away from the admin app (on
+  the surau Wi-Fi), or once a day after a prayer's zikir; a video that fails is dropped from the TV at once.
+- **A clearer, louder live broadcast.** The app levels the speaker's voice; the box lifts quiet sound from an iPad, the
+  box microphone or the camera and limits the mix so it does not distort.
+- **The right microphone.** 3.5 mm jack and USB microphones are picked up correctly; the broadcast follows a microphone
+  that is plugged in or unplugged; the Windows box Mic-in gets microphone access at setup and clear messages.
+- **External camera from the phone** now sends its picture in a live broadcast.
+- **One recording after the broadcast**, joined from its pieces, with one keep or delete question after YouTube has
+  confirmed the broadcast.
+- **WhatsApp message and picture**: speaker and title in bold, the surau named; a frame from the live or today's kuliah
+  card as the picture.
+- **Phone number optional**; deleting a person erases their number.
+- **Box names** set automatically from the surau name, following a rename, editable in the app.
+- **Kiosk for 32-bit and 64-bit Android TV boxes.**
+- **Security and reliability improvements.**
+
+*Kemas kini 2026.11.14: video boleh dimainkan serta-merta atau sekali sehari selepas zikir solat; suara siaran langsung
+lebih jelas dan kuat; mikrofon bicu 3.5 mm dan USB dikesan dengan betul, dan Mic-in kotak Windows diberi akses semasa
+pemasangan; kamera luaran dari telefon kini menghantar gambar; rakaman dicantum menjadi satu video selepas siaran;
+mesej WhatsApp lebih kemas dengan nama surau; nombor telefon adalah pilihan dan dipadam bersama orangnya; nama kotak
+ditetapkan secara automatik; kiosk untuk kotak TV Android 32-bit dan 64-bit.*
+
+Upgrading from 2026.11.13: update the MAX Kiosk Server first (every box of a surau together), then the MAX Admin
+Client. No new YouTube sign-in is needed. On an iPad, reload the web app after the box is updated.
 
 ### Kemas kini 2026.11.13 / Update 2026.11.13
 

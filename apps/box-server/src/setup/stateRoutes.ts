@@ -14,6 +14,7 @@ import { getSettings, surauPublicInfo } from '../settingsStore.ts';
 import { enrolCloudOrigin } from '../sync/sites.ts';
 import type { TlsMaterial } from '../tls.ts';
 import { boxNameOf } from '../boxName.ts';
+import { followSurauName } from './boxNaming.ts';
 import { boxVersion } from '../productVersion.ts';
 import { issueNonce, recoveryCodeExists } from './codes.ts';
 import { buildBoxQr } from './identity.ts';
@@ -205,6 +206,12 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
   // name changed (checked on a slow timer: no hook into settingsStore).
   let lastJson = '';
   const syncBoxJson = (): void => {
+    // the box name follows the surau name and the local name (a change of either is picked up here at the latest)
+    try {
+      followSurauName(db, boxId, boxNameOf(tlsNow()));
+    } catch {
+      /* the database may be closing */
+    }
     if (!deps.realDataDir) return;
     try {
       const next = { boxName: boxName(db, boxId), surauName: hasSurauInfo() ? surauPublicInfo(db, undefined, LOCAL_SURAU_ID).name : null };

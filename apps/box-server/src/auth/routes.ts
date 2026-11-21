@@ -46,7 +46,7 @@ import {
   notStarChangeSql,
   renameUser,
   restoreUser,
-  checkPhone,
+  checkOptionalPhone,
   setUserPhone,
   logChange,
   requireSuperadminTarget,
@@ -369,8 +369,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       requireSuperadminManage(request, [], b.roles as string[]);
       requireOpsRolesCliOnly(db, request, [], b.roles as string[]);
     }
-    // Every person added through the app has a phone number (E.164, Malaysia by default); a refusal never echoes it.
-    const phone = checkPhone(b.phone);
+    // The phone number is optional: absent, null or blank adds the person with none. A given one is E.164 (Malaysia by
+    // default) and a refusal never echoes it.
+    const phone = checkOptionalPhone(b.phone);
     const user = createUser(db, { name: str(b.name), roles: b.roles as Role[], phone }, actor(request), reqSurau(request));
     return reply.code(201).send(user);
   });
@@ -390,10 +391,12 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     return setRoles(db, id, roles as Role[], actor(request));
   });
 
-  // Nombor telefon: Pentadbir only (users:manage). 400 bad_phone / phone_required, 409 phone_taken with the other person's ID only.
+  // Nombor telefon: Pentadbir only (users:manage). A null or blank `phone` clears the number; a body without the key
+  // is refused, so an empty request never erases a number. 400 bad_phone, 409 phone_taken with the other person's ID only.
   app.put('/api/users/:id/phone', SMALL_BODY, async (request) => {
     const { id } = request.params as { id: string };
     const b = body(request);
+    if (!Object.hasOwn(b, 'phone')) throw new AuthError(400, 'bad_phone', 'Nombor telefon tidak sah');
     tenantUser(request, id);
     guardTarget(db, request, id);
     return setUserPhone(db, id, b.phone, actor(request));

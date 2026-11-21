@@ -103,6 +103,12 @@ export interface Video extends ContentBase {
   endSec?: number;
   /** `Bunyi`: absent means false (silent). Never sounds during a prayer phase, a live or tilawah. */
   sound?: boolean;
+  /**
+   * 2026.11.14: absent = the item rotates as usual. Present = it is NOT in the rotation; the TV plays it once each day
+   * (within `days`, `from`, `to`) right after the "Zikir selepas solat" screen of that prayer (right after the solat
+   * phase when the zikir is off or has no screen). On a Friday `zohor` means after Jumaat.
+   */
+  afterPrayer?: 'subuh' | 'zohor' | 'asar' | 'maghrib' | 'isyak';
   days: ('umum' | DayKey)[];
   from?: string;
   to?: string;

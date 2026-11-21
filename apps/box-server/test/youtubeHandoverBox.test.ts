@@ -139,6 +139,29 @@ describe('the grant moves to the box with no re-sign-in', () => {
     expect(r.g.count('/revoke')).toBe(0);
   });
 
+  it('every write the box sends to the cloud is JSON: the bodyless handover POST sends {} with Content-Type application/json, and the cloud answers it normally', async () => {
+    const r = await rig();
+    const seen: Array<{ method: string; path: string; type: string | null; body: unknown }> = [];
+    const real = r.hook.impl;
+    r.hook.impl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      seen.push({ method: init?.method ?? 'GET', path: new URL(String(input)).pathname, type: new Headers(init?.headers).get('content-type'), body: init?.body });
+      return real(input, init);
+    }) as typeof fetch;
+    await link(r).cycle();
+    const writes = seen.filter((x) => x.method !== 'GET');
+    expect(writes.map((x) => `${x.method} ${x.path}`)).toEqual(expect.arrayContaining(['POST /api/sync/youtube/handover', 'POST /api/sync/youtube/handover/ack', 'PUT /api/sync/youtube/flag']));
+    expect(writes.find((x) => x.path === '/api/sync/youtube/handover')).toMatchObject({ type: 'application/json', body: '{}' });
+    for (const w of writes) {
+      expect([w.method, w.path, w.type]).toEqual([w.method, w.path, 'application/json']);
+      expect([w.method, w.path, typeof w.body]).toEqual([w.method, w.path, 'string']);
+    }
+    // a GET still sends no body and no content type
+    for (const g of seen.filter((x) => x.method === 'GET')) expect(g).toMatchObject({ type: null, body: undefined });
+    // and the cloud took it: the grant moved
+    expect(existsSync(cloudToken(r))).toBe(false);
+    expect(await boxStatus(r, (await loginAs(r.h.app, 'admin')).headers)).toMatchObject({ signedIn: true, heldBy: 'box' });
+  });
+
   it('no handover while the client fetch fails in this start: the cloud copy stays; once fetched, the handover proceeds', async () => {
     const r = await rig();
     const realFetch = r.hook.impl;

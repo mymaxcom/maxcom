@@ -201,6 +201,8 @@ interface Hub {
   listeners: Set<(version: number) => void>;
   /** `live` event subscribers (Plan 5 Task 6): handed the parsed JSON, validated by data/live.ts. */
   liveListeners: Set<(data: unknown) => void>;
+  /** `play-now` event subscribers ("Main sekarang"): handed the parsed JSON, validated by the subscriber. */
+  playNowListeners: Set<(data: unknown) => void>;
   es: EventSource | null;
   timer: ReturnType<typeof setTimeout> | null;
   delay: number;
@@ -241,6 +243,21 @@ function openHub(ES: typeof EventSource, hub: Hub): void {
         }
       }
     });
+    cur.addEventListener('play-now', (ev: Event) => {
+      let data: unknown;
+      try {
+        data = JSON.parse((ev as MessageEvent<string>).data);
+      } catch {
+        return; // ignore malformed event
+      }
+      for (const fn of [...hub.playNowListeners]) {
+        try {
+          fn(data);
+        } catch {
+          // a bad subscriber never breaks the change stream
+        }
+      }
+    });
     cur.onerror = () => {
       cur.close();
       if (hub.stopped || hub.es !== cur) return;
@@ -255,7 +272,7 @@ function openHub(ES: typeof EventSource, hub: Hub): void {
 function hubFor(ES: typeof EventSource): Hub {
   let hub = hubs.get(ES);
   if (!hub) {
-    hub = { listeners: new Set(), liveListeners: new Set(), es: null, timer: null, delay: BACKOFF_START_MS, stopped: false };
+    hub = { listeners: new Set(), liveListeners: new Set(), playNowListeners: new Set(), es: null, timer: null, delay: BACKOFF_START_MS, stopped: false };
     hubs.set(ES, hub);
     openHub(ES, hub);
   }
@@ -263,7 +280,7 @@ function hubFor(ES: typeof EventSource): Hub {
 }
 
 function release(ES: typeof EventSource, hub: Hub): void {
-  if (hub.listeners.size > 0 || hub.liveListeners.size > 0) return;
+  if (hub.listeners.size > 0 || hub.liveListeners.size > 0 || hub.playNowListeners.size > 0) return;
   hub.stopped = true;
   if (hub.timer !== null) clearTimeout(hub.timer);
   hub.timer = null;
@@ -304,6 +321,25 @@ export function subscribeLive(
   mine.liveListeners.add(onLive);
   return () => {
     if (!mine.liveListeners.delete(onLive)) return;
+    release(ES, mine);
+  };
+}
+
+/**
+ * Subscribes to the box's `play-now` events ("Main sekarang") on the same shared stream. The payload is the parsed JSON,
+ * unvalidated: the subscriber checks `{ itemId }`. Preview never opens the stream.
+ */
+export function subscribePlayNow(
+  onPlayNow: (data: unknown) => void,
+  opts: { EventSourceImpl?: typeof EventSource } = {},
+): () => void {
+  if (isPreview()) return () => {};
+  const ES = opts.EventSourceImpl ?? globalThis.EventSource;
+  if (!ES) return () => {};
+  const mine = hubFor(ES);
+  mine.playNowListeners.add(onPlayNow);
+  return () => {
+    if (!mine.playNowListeners.delete(onPlayNow)) return;
     release(ES, mine);
   };
 }

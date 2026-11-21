@@ -1325,7 +1325,7 @@ class SMs extends S {
 
   @override
   String userDeactivateHint(String name) {
-    return 'Semua peranti dan kod $name dipadam. Nama kekal dalam log dan rekod kewangan.';
+    return 'Semua peranti dan kod $name dibatalkan. Nama kekal dalam log dan rekod kewangan.';
   }
 
   @override
@@ -8369,7 +8369,7 @@ class SMs extends S {
 
   @override
   String userDeleteBody(String name, String ref) {
-    return '$name ($ref) tidak lagi boleh masuk dan hilang dari semua senarai. Semua perantinya dipadam. Log perubahan dan rekod kewangan kekal dengan nama dan ID ini.';
+    return '$name ($ref) tidak lagi boleh masuk dan hilang dari semua senarai. Semua perantinya dibatalkan dan nombor telefonnya dipadam. Log perubahan dan rekod kewangan kekal dengan nama dan ID ini.';
   }
 
   @override
@@ -8414,10 +8414,16 @@ class SMs extends S {
   String get phoneLabel => 'Nombor telefon';
 
   @override
-  String get phoneHint => 'Contoh: 012-000 0000';
+  String get phoneLabelOptional => 'Nombor telefon untuk WhatsApp (pilihan)';
 
   @override
-  String get phoneRequired => 'Nombor telefon diperlukan';
+  String get phoneNone => 'Tiada nombor telefon';
+
+  @override
+  String get phoneCleared => 'Nombor telefon dibuang.';
+
+  @override
+  String get phoneHint => 'Contoh: 012-000 0000';
 
   @override
   String get phoneInvalid =>
@@ -8427,9 +8433,6 @@ class SMs extends S {
   String phoneTaken(String ref) {
     return 'Nombor ini sudah digunakan oleh pengguna lain ($ref).';
   }
-
-  @override
-  String get phoneNeeded => 'Nombor telefon diperlukan';
 
   @override
   String get phoneFill => 'Isi nombor';
@@ -8521,6 +8524,19 @@ class SMs extends S {
 
   @override
   String get videoSourceRakaman => 'Rakaman';
+
+  @override
+  String get videoAfterPrayerLabel => 'Main selepas zikir solat';
+
+  @override
+  String get videoAfterPrayerNone => 'Tidak';
+
+  @override
+  String get videoAfterPrayerZohor => 'Zohor (Jumaat pada hari Jumaat)';
+
+  @override
+  String get videoAfterPrayerHint =>
+      'Jika dipilih, video ini keluar daripada putaran biasa. TV memainkannya sekali sehari, selepas skrin zikir solat itu, mengikut hari dan tarikh yang dipilih.';
 
   @override
   String get videoPick => 'Pilih video daripada telefon';
@@ -8651,4 +8667,111 @@ class SMs extends S {
 
   @override
   String get videoFetching => 'Mengambil tajuk daripada YouTube...';
+
+  @override
+  String get errcNoMicDevice => 'Tiada Mic-in dikesan pada MAXCOM.';
+
+  @override
+  String get errcMicAccessDenied =>
+      'Windows tidak membenarkan MAXCOM menggunakan Mic-in. Jalankan Semak MAXCOM.';
+
+  @override
+  String get errcMicListFailed =>
+      'Senarai Mic-in tidak dapat dibaca. Cuba semula sebentar lagi.';
+
+  @override
+  String get errcMicNoTool =>
+      'Alat bunyi MAXCOM tiada, jadi Mic-in tidak boleh digunakan.';
+
+  @override
+  String get errcPlayLiveRunning =>
+      'Siaran langsung sedang berjalan di skrin TV.';
+
+  @override
+  String get errcPlayPrayerPhase => 'Tidak boleh dimainkan semasa waktu solat.';
+
+  @override
+  String get videoPlayNow => 'Main sekarang';
+
+  @override
+  String get videoPlayNowDone => 'Video dimainkan di skrin TV sekarang.';
+
+  @override
+  String get dashBoxName => 'Nama MAXCOM';
+
+  @override
+  String get boxNameRenameTitle => 'Tukar nama MAXCOM';
+
+  @override
+  String get boxNameFollowsHint =>
+      'Nama ini mengikut nama surau melainkan anda menukarnya sendiri.';
+
+  @override
+  String get phoneWhatsAppHint =>
+      'Digunakan untuk menghantar notis dan pautan melalui WhatsApp. Boleh dikosongkan.';
+
+  @override
+  String get recKeepTitle => 'Simpan rakaman di peranti?';
+
+  @override
+  String get recKeepBody =>
+      'YouTube sudah mempunyai salinan penuh siaran ini. Anda boleh menyimpan rakaman di peranti ini atau memadamnya untuk menjimatkan ruang.';
+
+  @override
+  String get recKeepKeep => 'Simpan';
+
+  @override
+  String get recKeepDelete => 'Padam';
+
+  @override
+  String get liveRecJoinedNote => 'Rakaman digabungkan menjadi satu fail.';
+
+  @override
+  String get liveRecJoinFailedNote =>
+      'Rakaman tidak dapat digabungkan. Setiap bahagian disimpan seperti asalnya.';
+
+  @override
+  String get liveRecAskLaterNote =>
+      'Apabila YouTube mengesahkan siaran penuh, anda akan ditanya sama ada mahu menyimpan rakaman di peranti ini.';
+
+  @override
+  String get liveRecKeptUnconfirmedNote =>
+      'Salinan YouTube belum disahkan, jadi rakaman disimpan di peranti ini.';
+
+  @override
+  String get liveRecSavedAsk => 'Rakaman sudah disimpan dalam Fail/Downloads?';
+
+  @override
+  String get liveRecSavedYes => 'Ya';
+
+  @override
+  String get liveRecSavedNo => 'Belum';
+
+  @override
+  String get liveRecSavedNotYetNote =>
+      'Tiada apa yang dipadam. Rakaman kekal di peranti ini dan di MAXCOM; salinan di MAXCOM luput sendiri selepas 7 hari. Tekan Simpan rakaman sekali lagi bila-bila masa.';
+
+  @override
+  String get liveRecSaveTooBigNote =>
+      'Fail ini terlalu besar untuk pelayar ini. Tiada apa yang dipadam; setiap bahagian boleh disimpan satu per satu.';
+
+  @override
+  String get liveRecJoinNeedsWifiNote =>
+      'MAXCOM tidak dapat dicapai. Sambung ke Wi-Fi surau, kemudian cuba lagi. Setiap bahagian disimpan seperti asalnya.';
+
+  @override
+  String get liveRecJoinedUntrackedNote =>
+      'Rakaman sudah digabungkan, tetapi namanya belum dapat dicatat. Fail itu ada di Movies/MAXCOM.';
+
+  @override
+  String get errcMicDeviceUnavailable =>
+      'Mic-in tidak dapat dibuka. Pastikan mikrofon dipasang dan tidak digunakan oleh program lain.';
+
+  @override
+  String get errcMicSilent =>
+      'Mic-in tidak menghantar bunyi. Pastikan mikrofon dipasang dan tidak senyap (mute).';
+
+  @override
+  String get liveRecBadPieceNote =>
+      'Fail rakaman tidak sah dan tidak diterima oleh MAXCOM. Setiap bahagian disimpan seperti asalnya.';
 }

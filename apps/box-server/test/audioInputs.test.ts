@@ -241,6 +241,90 @@ describe('level probe', () => {
   });
 });
 
+describe('Mic-in codes (Windows privacy for the LOCAL SERVICE account)', () => {
+  const sound = 'x mean_volume: -30.0 dB\nx max_volume: -6.5 dB';
+  const silent = 'x mean_volume: -91.0 dB\nx max_volume: -91.0 dB';
+  const probe = (answer: string) => vi.fn<Runner>(async (_f, args) => ({ output: args.includes('volumedetect') ? answer : REAL, ok: true }));
+
+  it('no capture device found is the code no_device; a failed list is list_failed; no ffmpeg is no_tool', async () => {
+    expect(await make({}, 'Error opening input file dummy.').inputs.view()).toMatchObject({ available: false, code: 'no_device' });
+    expect(await make({ run: async () => ({ output: '', ok: false }) }).inputs.view()).toMatchObject({ code: 'list_failed' });
+    expect(await make({ ffmpegPath: () => null }).inputs.view()).toMatchObject({ code: 'no_tool' });
+    expect((await make().inputs.view()).code).toBeUndefined();
+  });
+
+  it('devices found and sound arrives: no code on the level, check says ok', async () => {
+    const { inputs } = make({ run: probe(sound) });
+    await inputs.view();
+    expect(await inputs.level()).toEqual({ level: { meanDb: -30, maxDb: -6.5 } });
+    expect(await inputs.check()).toEqual({ devices: 1, code: 'ok' });
+  });
+
+  it('devices found but digital silence (-91 dB): silent, with the plugged-in and not-muted text (not the privacy fix)', async () => {
+    const { inputs } = make({ run: probe(silent) });
+    await inputs.view();
+    expect(await inputs.level()).toEqual({ level: { meanDb: -91, maxDb: -91 }, reason: AUDIO_INPUT_MSG.silent, code: 'silent' });
+    expect(AUDIO_INPUT_MSG.silent).toContain('disambung');
+    expect(AUDIO_INPUT_MSG.silent).toContain('dibisukan');
+    expect((await make({ run: probe(silent) }).inputs.check())).toEqual({ devices: 1, code: 'silent' });
+  });
+
+  it('only a real access error is access_denied (the Windows sentence)', async () => {
+    for (const text of ['Error opening input: Access is denied.', 'Could not run graph 0x80070005', 'dshow: Permission denied']) {
+      const denied = vi.fn<Runner>(async (_f, args) => ({ output: args.includes('volumedetect') ? text : REAL, ok: true }));
+      const { inputs } = make({ run: denied });
+      await inputs.view();
+      expect(await inputs.level(), text).toMatchObject({ level: null, code: 'access_denied', reason: AUDIO_INPUT_MSG.accessDenied });
+    }
+    expect(AUDIO_INPUT_MSG.accessDenied).toBe('Windows tidak membenarkan MAXCOM menggunakan Mic-in. Jalankan Semak MAXCOM.');
+  });
+
+  it('a device that cannot be opened for another reason (busy, unplugged, renamed) is device_unavailable, not access_denied', async () => {
+    for (const text of ['[dshow @ 1] Could not run graph (sometimes caused by a device already in use, or a format setting)\nError opening input: I/O error', 'Error opening input file audio=Mic.', '']) {
+      const busy = vi.fn<Runner>(async (_f, args) => ({ output: args.includes('volumedetect') ? text : REAL, ok: true }));
+      const { inputs } = make({ run: busy });
+      await inputs.view();
+      expect(await inputs.level(), text).toMatchObject({ level: null, code: 'device_unavailable', reason: AUDIO_INPUT_MSG.deviceUnavailable });
+      expect(await make({ run: busy }).inputs.check(), text).toEqual({ devices: 1, code: 'device_unavailable' });
+    }
+  });
+
+  it('the answer is cleared when the problem is gone, and when there is no input any more', async () => {
+    let answer = 'Error opening input: Access is denied.';
+    let t = 1_000_000;
+    const run = vi.fn<Runner>(async (_f, args) => ({ output: args.includes('volumedetect') ? answer : REAL, ok: true }));
+    const { inputs } = make({ run, now: () => t });
+    await inputs.view();
+    expect((await inputs.level()).code).toBe('access_denied');
+    answer = sound;
+    t += 5000;
+    expect(await inputs.level()).toEqual({ level: { meanDb: -30, maxDb: -6.5 } });
+    answer = silent;
+    t += 5000;
+    expect((await inputs.level()).code).toBe('silent');
+  });
+
+  it('check is throttled: the last answer stands for 30 s (no new ffmpeg run), then a new one is made', async () => {
+    const run = probe(sound);
+    const { inputs, tick } = make({ run });
+    expect(await inputs.check()).toEqual({ devices: 1, code: 'ok' });
+    const calls = run.mock.calls.length;
+    expect(calls).toBeGreaterThan(0);
+    // many asks at once and soon after: all served from the first answer
+    tick(5_000);
+    await Promise.all([inputs.check(), inputs.check(), inputs.check()]);
+    expect(run.mock.calls.length).toBe(calls);
+    tick(31_000);
+    expect(await inputs.check()).toEqual({ devices: 1, code: 'ok' });
+    expect(run.mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it('check: no device is no_device (the doctor compares it with what Windows lists); a live running is untested', async () => {
+    expect(await make({}, 'Error opening input file dummy.').inputs.check()).toEqual({ devices: 0, code: 'no_device' });
+    expect(await make({ isLive: () => true }).inputs.check()).toEqual({ devices: 1, code: 'untested' });
+  });
+});
+
 describe('routes', () => {
   async function app(platform: 'windows' | 'android' = 'windows') {
     const db = new DatabaseSync(':memory:');

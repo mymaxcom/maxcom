@@ -1314,7 +1314,7 @@ class SEn extends S {
 
   @override
   String userDeactivateHint(String name) {
-    return 'All devices and codes of $name are deleted. The name stays in the log and finance records.';
+    return 'All devices and codes of $name are cancelled. The name stays in the log and finance records.';
   }
 
   @override
@@ -8362,7 +8362,7 @@ class SEn extends S {
 
   @override
   String userDeleteBody(String name, String ref) {
-    return '$name ($ref) can no longer sign in and disappears from every list. All of their devices are deleted. The change log and finance records keep this name and ID.';
+    return '$name ($ref) can no longer sign in and disappears from every list. All of their devices are cancelled and their phone number is erased. The change log and finance records keep this name and ID.';
   }
 
   @override
@@ -8406,10 +8406,16 @@ class SEn extends S {
   String get phoneLabel => 'Phone number';
 
   @override
-  String get phoneHint => 'Example: 012-000 0000';
+  String get phoneLabelOptional => 'Phone number for WhatsApp (optional)';
 
   @override
-  String get phoneRequired => 'A phone number is required';
+  String get phoneNone => 'No phone number';
+
+  @override
+  String get phoneCleared => 'Phone number removed.';
+
+  @override
+  String get phoneHint => 'Example: 012-000 0000';
 
   @override
   String get phoneInvalid =>
@@ -8419,9 +8425,6 @@ class SEn extends S {
   String phoneTaken(String ref) {
     return 'This number is already used by another user ($ref).';
   }
-
-  @override
-  String get phoneNeeded => 'Phone number needed';
 
   @override
   String get phoneFill => 'Fill in the number';
@@ -8513,6 +8516,19 @@ class SEn extends S {
 
   @override
   String get videoSourceRakaman => 'Recording';
+
+  @override
+  String get videoAfterPrayerLabel => 'Play after the post-prayer zikir';
+
+  @override
+  String get videoAfterPrayerNone => 'No';
+
+  @override
+  String get videoAfterPrayerZohor => 'Zohor (Jumaat on Friday)';
+
+  @override
+  String get videoAfterPrayerHint =>
+      'When chosen, this video leaves the normal rotation. The TV plays it once a day, after that prayer\'s zikir screen, on the days and dates chosen.';
 
   @override
   String get videoPick => 'Choose a video from the phone';
@@ -8645,4 +8661,111 @@ class SEn extends S {
 
   @override
   String get videoFetching => 'Getting the title from YouTube...';
+
+  @override
+  String get errcNoMicDevice => 'No Mic-in was found on the MAXCOM box.';
+
+  @override
+  String get errcMicAccessDenied =>
+      'Windows does not allow MAXCOM to use the Mic-in. Run MAXCOM Check.';
+
+  @override
+  String get errcMicListFailed =>
+      'The list of Mic-in inputs could not be read. Try again in a moment.';
+
+  @override
+  String get errcMicNoTool =>
+      'The MAXCOM sound tool is missing, so the Mic-in cannot be used.';
+
+  @override
+  String get errcPlayLiveRunning =>
+      'A live broadcast is running on the TV screen.';
+
+  @override
+  String get errcPlayPrayerPhase => 'It cannot be played during prayer time.';
+
+  @override
+  String get videoPlayNow => 'Play now';
+
+  @override
+  String get videoPlayNowDone => 'The video is playing on the TV now.';
+
+  @override
+  String get dashBoxName => 'MAXCOM name';
+
+  @override
+  String get boxNameRenameTitle => 'Rename MAXCOM';
+
+  @override
+  String get boxNameFollowsHint =>
+      'This name follows the surau name unless you change it yourself.';
+
+  @override
+  String get phoneWhatsAppHint =>
+      'Used to send notices and links through WhatsApp. You can leave it empty.';
+
+  @override
+  String get recKeepTitle => 'Keep the recording on this device?';
+
+  @override
+  String get recKeepBody =>
+      'YouTube has the whole broadcast. You can keep the recording on this device or delete it to save space.';
+
+  @override
+  String get recKeepKeep => 'Keep';
+
+  @override
+  String get recKeepDelete => 'Delete';
+
+  @override
+  String get liveRecJoinedNote => 'The recording was joined into one file.';
+
+  @override
+  String get liveRecJoinFailedNote =>
+      'The recording could not be joined. Every part is kept as it was.';
+
+  @override
+  String get liveRecAskLaterNote =>
+      'When YouTube confirms the whole broadcast, you will be asked whether to keep the recording on this device.';
+
+  @override
+  String get liveRecKeptUnconfirmedNote =>
+      'The YouTube copy is not confirmed yet, so the recording is kept on this device.';
+
+  @override
+  String get liveRecSavedAsk => 'Is the recording saved in Files/Downloads?';
+
+  @override
+  String get liveRecSavedYes => 'Yes';
+
+  @override
+  String get liveRecSavedNo => 'Not yet';
+
+  @override
+  String get liveRecSavedNotYetNote =>
+      'Nothing was deleted. The recording stays on this device and on MAXCOM; the copy on MAXCOM expires by itself after 7 days. Press Save recording again at any time.';
+
+  @override
+  String get liveRecSaveTooBigNote =>
+      'This file is too big for this browser. Nothing was deleted; each part can be saved one by one.';
+
+  @override
+  String get liveRecJoinNeedsWifiNote =>
+      'MAXCOM could not be reached. Join the surau Wi-Fi and try again. Every part is kept as it was.';
+
+  @override
+  String get liveRecJoinedUntrackedNote =>
+      'The recording was joined, but its name could not be noted. The file is in Movies/MAXCOM.';
+
+  @override
+  String get errcMicDeviceUnavailable =>
+      'Mic-in could not be opened. Make sure the microphone is plugged in and not used by another program.';
+
+  @override
+  String get errcMicSilent =>
+      'Mic-in is sending no sound. Make sure the microphone is plugged in and not muted.';
+
+  @override
+  String get liveRecBadPieceNote =>
+      'A recording file is not valid and MAXCOM did not accept it. Every part is kept as it was.';
 }

@@ -1,9 +1,6 @@
 package my.maxcom.app.live
 
-import android.annotation.SuppressLint
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
+import android.media.AudioManager
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import com.pedro.encoder.Frame
@@ -116,6 +113,15 @@ class MixerCore(
     private val micGain = GainRamp(sampleRate, 0f)
     private var delayedBuf = ShortArray(0)
 
+    /**
+     * Speech AGC on the RAW microphone (after the delay, before the user's volume, so the slider still works and 0%
+     * stays exact silence). Null = off (tests).
+     */
+    @Volatile var micAgc: SpeechAgc? = null
+
+    /** Peak limiter (-1 dBFS) on the SUM of camera and microphone. Null = off (tests): the sum is only clamped. */
+    @Volatile var sumLimiter: PeakLimiter? = null
+
     @Volatile var cameraVolume = 100
         set(v) {
             field = v.coerceIn(0, 100)
@@ -208,7 +214,10 @@ class MixerCore(
         cameraTransition(cameraLive)
         val micOn = mic != null && micEnabled
         // A microphone coming back must not play the stale tail of the delay line first.
-        if (micOn && !lastMicOn) delayLine.clear()
+        if (micOn && !lastMicOn) {
+            delayLine.clear()
+            micAgc?.reset()
+        }
         lastMicOn = micOn
         if (mic != null && micOn) delayLine.process(mic, delayedOut) else java.util.Arrays.fill(delayedOut, 0, n, 0.toShort())
 
@@ -224,10 +233,16 @@ class MixerCore(
         var pc = 0
         var pm = 0
         var po = 0
+        val agc = micAgc
+        val lim = sumLimiter
         for (i in 0 until n) {
             val r = ref[i].toInt()
             val d = delayedOut[i].toInt()
-            val mix = r * camGain.next() + d * micGain.next()
+            // delay -> AGC on the raw microphone -> user volume / hold-out ramp -> sum with the camera -> limiter on the sum
+            val leveled = if (agc != null) agc.processSample(d.toFloat()) else d.toFloat()
+            val m = leveled * micGain.next()
+            var mix = r * camGain.next() + m
+            if (lim != null) mix = lim.process(mix)
             val s = Math.round(mix).coerceIn(-32768, 32767)
             out[i] = s.toShort()
             pc = max(pc, abs(r))
@@ -256,36 +271,60 @@ interface PcmCapture {
     fun stop()
 }
 
-class AudioRecordCapture(private val sampleRate: Int, private val echo: Boolean, private val ns: Boolean) : PcmCapture {
-    private var rec: AudioRecord? = null
+class AudioRecordCapture(
+    private val sampleRate: Int,
+    private val echo: Boolean,
+    private val ns: Boolean,
+    private val routing: MicRouting? = null,
+    private val am: AudioManager? = null,
+    private val portFactory: () -> RecordPort = { AudioRecordPort(am) },
+    private val inputs: () -> List<MicRoute> = { AudioRecordPort.inputs(am) },
+) : PcmCapture {
+    private var port: RecordPort? = null
     private var aec: AcousticEchoCanceler? = null
     private var nsEff: NoiseSuppressor? = null
 
-    @SuppressLint("MissingPermission")
     override fun start(): Boolean {
+        var opened: RecordPort? = null
         return try {
-            val minBuf = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            if (minBuf <= 0) return false
-            val r = AudioRecord(
-                MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT, minBuf * 4,
-            )
-            if (r.state != AudioRecord.STATE_INITIALIZED) {
-                r.release()
-                return false
+            val res = MicOpener.open(portFactory, inputs, sampleRate, routing?.wantedId)
+            val p = res.port ?: return false
+            opened = p
+            try {
+                if (echo && AcousticEchoCanceler.isAvailable()) aec = AcousticEchoCanceler.create(p.sessionId)?.also { it.enabled = true }
+                if (ns && NoiseSuppressor.isAvailable()) nsEff = NoiseSuppressor.create(p.sessionId)?.also { it.enabled = true }
+            } catch (_: Exception) {
             }
-            if (echo && AcousticEchoCanceler.isAvailable()) aec = AcousticEchoCanceler.create(r.audioSessionId)?.also { it.enabled = true }
-            if (ns && NoiseSuppressor.isAvailable()) nsEff = NoiseSuppressor.create(r.audioSessionId)?.also { it.enabled = true }
-            r.startRecording()
-            rec = r
+            port = p
+            routing?.report(res.routed, res.unavailableName)
+            if (res.pending && routing != null) {
+                // The system has not named the device yet: judge it when it does (null is "unknown", never a failure).
+                var last: String? = null
+                p.setOnRoutedChanged { r ->
+                    if (r != null && r.id != last) {
+                        last = r.id
+                        routing.report(r, MicOpener.unavailableFor(res.target, res.targetName, r))
+                    }
+                }
+            }
             true
         } catch (_: Exception) {
+            // Opened but not finished: release the recorder and effects so nothing leaks.
+            if (port != null) {
+                stop()
+            } else {
+                try {
+                    opened?.close()
+                } catch (_: Exception) {
+                }
+                stop() // the effects, if any were created
+            }
             false
         }
     }
 
     override fun read(out: ShortArray): Int {
-        val r = rec ?: return -1
+        val r = port ?: return -1
         var got = 0
         while (got < out.size) {
             val n = r.read(out, got, out.size - got)
@@ -297,11 +336,7 @@ class AudioRecordCapture(private val sampleRate: Int, private val echo: Boolean,
 
     override fun stop() {
         try {
-            rec?.stop()
-        } catch (_: Exception) {
-        }
-        try {
-            rec?.release()
+            port?.close()
         } catch (_: Exception) {
         }
         try {
@@ -312,7 +347,7 @@ class AudioRecordCapture(private val sampleRate: Int, private val echo: Boolean,
             nsEff?.release()
         } catch (_: Exception) {
         }
-        rec = null
+        port = null
         aec = null
         nsEff = null
     }
@@ -330,8 +365,11 @@ class MixedAudioSource(
     private val camera: RtspAudioSource?,
     private val aligner: AudioAligner?,
     private val alignerRate: Int = 16000,
-    private val captureFactory: (rate: Int, echo: Boolean, ns: Boolean) -> PcmCapture = { r, e, n -> AudioRecordCapture(r, e, n) },
+    private val routing: MicRouting? = null,
+    private val am: AudioManager? = null,
+    private val captureFactory: (rate: Int, echo: Boolean, ns: Boolean) -> PcmCapture = { r, e, n -> AudioRecordCapture(r, e, n, routing, am) },
     private val nowNanos: () -> Long = System::nanoTime,
+    private val useAgc: Boolean = true,
 ) : AudioSource() {
     @Volatile var onAlignChange: ((AlignState, Int) -> Unit)? = null
     /** The fixed offset ("Imbangan masa audio") used when the camera has no audio track. */
@@ -401,6 +439,8 @@ class MixedAudioSource(
         c.micVolume = pendingMicVol
         c.micEnabled = pendingMicOn
         c.hasCamera = camera != null
+        c.micAgc = if (useAgc) SpeechAgc(sampleRate) else null
+        c.sumLimiter = if (useAgc) PeakLimiter(sampleRate) else null
         core = c
         aligner?.onChange = { st, d ->
             c.setDelayMs(d)
@@ -452,7 +492,19 @@ class MixedAudioSource(
         val chunkNanos = chunk.toLong() * 1_000_000_000L / rate
         var next = nowNanos()
         var micOn = false
+        var routeSeen = routing?.version ?: 0
         while (running) {
+            // A microphone plugged or unplugged, or another one chosen: open the capture again on the right device.
+            val rv = routing?.version ?: 0
+            if (rv != routeSeen) {
+                routeSeen = rv
+                micFailed = false
+                if (micOn) {
+                    capture?.stop()
+                    capture = null
+                    micOn = false
+                }
+            }
             // The microphone follows the switch: opened when added, released when removed.
             if (c.micEnabled && !micOn && !micFailed) {
                 val cap = captureFactory(rate, echoCanceler, noiseSuppressor)

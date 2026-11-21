@@ -231,6 +231,8 @@ class PublisherState {
     this.audio,
     this.endReason,
     this.clap = ClapPhase.idle,
+    this.micRoute,
+    this.micUnavailable,
   });
 
   static const PublisherState initial = PublisherState();
@@ -263,6 +265,12 @@ class PublisherState {
   /// The "Uji tepukan" clip.
   final ClapPhase clap;
 
+  /// Android: the microphone the system really routed the recording to (id, name, kind); null until known.
+  final MicRouteInfo? micRoute;
+
+  /// Android: the name of a microphone that was wanted but could not be routed (the live uses the phone's own).
+  final String? micUnavailable;
+
   bool get isLive => phase == PublisherPhase.live;
 
   /// [clearExternal] drops [camera] and [audio] (back to the phone camera);
@@ -282,6 +290,10 @@ class PublisherState {
     PublisherAudio? audio,
     String? endReason,
     ClapPhase? clap,
+    MicRouteInfo? micRoute,
+    bool clearMicRoute = false,
+    String? micUnavailable,
+    bool clearMicUnavailable = false,
     bool clearExternal = false,
     bool clearEndReason = false,
   }) => PublisherState(
@@ -299,7 +311,25 @@ class PublisherState {
     audio: clearExternal ? null : (audio ?? this.audio),
     endReason: clearEndReason ? null : (endReason ?? this.endReason),
     clap: clap ?? this.clap,
+    micRoute: clearMicRoute ? null : (micRoute ?? this.micRoute),
+    micUnavailable: clearMicUnavailable ? null : (micUnavailable ?? this.micUnavailable),
   );
+}
+
+/// The microphone the system routed the live to (Android `micRouted` event).
+class MicRouteInfo {
+  const MicRouteInfo({required this.id, required this.name, required this.kind});
+  final String id;
+  final String name;
+
+  /// `builtin` or `external`.
+  final String kind;
+
+  @override
+  bool operator ==(Object other) => other is MicRouteInfo && other.id == id && other.name == name && other.kind == kind;
+
+  @override
+  int get hashCode => Object.hash(id, name, kind);
 }
 
 /// What [LivePublisher.prepare] sets up before anything is sent.
@@ -454,6 +484,12 @@ abstract interface class LiveSourceControl {
 /// device (the browser one; on Android the system picks the new microphone
 /// by itself). The screen asks `publisher is LiveMicControl`.
 abstract interface class LiveMicControl {
+  /// Android: the device's own microphone, even when a wired or USB one is attached.
+  static const String deviceOwn = 'own';
+
+  /// What [setMicrophone] takes for "the device's own microphone" (Android: [deviceOwn]; the browser: null).
+  String? get ownMicrophoneId;
+
   /// The sound comes from [deviceId] from now on (null = the device's own
   /// default). A running live and its recording carry on. False when the
   /// microphone could not be opened; nothing changes then.

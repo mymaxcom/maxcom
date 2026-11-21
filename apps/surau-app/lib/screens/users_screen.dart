@@ -1,8 +1,9 @@
 // Pengguna: every person of the surau, the ones who need something first.
 //
 //  - "Perlu tindakan": a locked PIN (Buka kunci), no phone 3 days after being
-//    added (Kod QR), no phone number or a number shared with someone else
-//    (Isi nombor), and the 90-day "Nyahaktifkan?" suggestion. A person with
+//    added (Kod QR), a phone number shared with someone else (Tukar nombor),
+//    and the 90-day "Nyahaktifkan?" suggestion. A missing number is not a
+//    need: the number is optional. A person with
 //    two needs is ONE row naming both, with the action of the first.
 //  - "Semua pengguna aktif (n)": name, ID under it, device count and the last
 //    use in the server's words, role chips.
@@ -76,7 +77,7 @@ bool userMatches(UserDto u, String query) {
 }
 
 /// The needs the screen knows of, in the order a row names them.
-const List<String> _needOrder = ['locked', 'no_device', 'phone', 'phone_duplicate'];
+const List<String> _needOrder = ['locked', 'no_device', 'phone_duplicate'];
 
 /// Two or three letters of [name] for the round mark of a row.
 String initialsOf(String name) {
@@ -450,7 +451,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     String words(String need) => switch (need) {
       'locked' => s.usersLocked,
       'no_device' => s.usersNoDeviceYet(_daysSinceAdded(activity, a)),
-      'phone' => s.phoneNeeded,
       _ => s.phoneDuplicate,
     };
     final all = [for (final n in needs) words(n)];
@@ -468,11 +468,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         key: ValueKey('users-qr-${u.id}'),
         label: s.usersQrButton,
         onPressed: () => context.go(AppRoutes.userEnrolFor(u.id)),
-      ),
-      'phone' => _SmallButton(
-        key: ValueKey('users-phone-${u.id}'),
-        label: s.phoneFill,
-        onPressed: () => _phone(u),
       ),
       _ => _SmallButton(
         key: ValueKey('users-phone-${u.id}'),

@@ -1,7 +1,7 @@
 // Tambah pengguna in three steps (`/users/new`): from a name to a phone that
 // is in.
 //
-// 1. The person: name, phone number (required, E.164 by `normalisePhone`),
+// 1. The person: name, phone number (optional, E.164 by `normalisePhone`),
 //    what they will do (AJK ticked), and one folded line for the device name
 //    and how long the code is good for (30 minutes here; the plain Daftar
 //    peranti page keeps 10). "Simpan dan buat kod QR" creates the person, then
@@ -61,13 +61,19 @@ class UserAddShare {
   const UserAddShare({
     this.shareText = _shareText,
     this.openWhatsApp = _openWhatsApp,
+    this.openWhatsAppText = _openWhatsAppText,
   });
 
   final Future<share.ShareResult> Function(String text) shareText;
   final Future<bool> Function(Uri waUri) openWhatsApp;
 
+  /// WhatsApp's own picker with the text and no recipient (a person with no
+  /// phone number).
+  final Future<bool> Function(String text) openWhatsAppText;
+
   static Future<share.ShareResult> _shareText(String text) => share.shareText(text);
   static Future<bool> _openWhatsApp(Uri uri) => share.openWhatsApp(uri);
+  static Future<bool> _openWhatsAppText(String text) => share.openWhatsAppShare(text);
 }
 
 final userAddShareProvider = Provider<UserAddShare>((ref) => const UserAddShare());
@@ -145,10 +151,11 @@ class _UserAddFlowState extends ConsumerState<UserAddFlow> {
     final s = S.of(context);
     final rawPhone = _phone.text.trim();
     final e164 = rawPhone.isEmpty ? null : normalisePhone(rawPhone);
+    // The phone number is optional: empty is accepted, a typed one must be valid.
     final device = _deviceName(s);
     setState(() {
       _nameError = nameProblem(s, _name.text);
-      _phoneError = rawPhone.isEmpty ? s.phoneRequired : (e164 == null ? s.phoneInvalid : null);
+      _phoneError = rawPhone.isNotEmpty && e164 == null ? s.phoneInvalid : null;
       _roleError = _roles.isEmpty ? s.userRoleRequired : null;
       _deviceError = nameIsValid(device) ? null : s.nameInvalid;
       if (_deviceError != null) _deviceOpen = true;
@@ -157,7 +164,7 @@ class _UserAddFlowState extends ConsumerState<UserAddFlow> {
     if (_nameError != null || _phoneError != null || _roleError != null || _deviceError != null) return;
     setState(() => _busy = true);
     final api = ref.read(peopleApiProvider);
-    final phone164 = e164!;
+    final phone164 = e164;
     UserDto? created;
     try {
       try {
@@ -168,8 +175,10 @@ class _UserAddFlowState extends ConsumerState<UserAddFlow> {
         );
       } on Uncertain {
         // The box may have saved the person: look, and go on when it did.
+        // Without a phone number, look by the name and the time, so a second
+        // tap does not add the same person twice.
         try {
-          created = await api.findUserByPhone(phone164);
+          created = phone164 == null ? await api.findUserJustAdded(_name.text) : await api.findUserByPhone(phone164);
         } catch (_) {
           created = null;
         }
@@ -194,7 +203,7 @@ class _UserAddFlowState extends ConsumerState<UserAddFlow> {
     ref.invalidate(boxJsonProvider(usersPath));
     if (!mounted) return;
     _user = user;
-    _e164 = phone164;
+    _e164 = phone164 ?? '';
     // A surau person's code is made by the box on the surau Wi-Fi only.
     if (ref.read(isCloudGatewayProvider)) {
       _savedNoQr(user);
@@ -361,7 +370,7 @@ class _UserAddFlowState extends ConsumerState<UserAddFlow> {
       title: s.addShareConfirmTitle(name),
       body: s.addShareConfirmBody(name),
       confirm: s.shareContinue,
-      extra: whatsApp
+      extra: whatsApp && _e164.isNotEmpty
           ? Text(
               s.waOpensTo(ltr(formatPhone(_e164))),
               key: const ValueKey('add-wa-opens-to'),
@@ -376,7 +385,11 @@ class _UserAddFlowState extends ConsumerState<UserAddFlow> {
     if (!_shareAllowed || !await _confirmOne(whatsApp: true) || !mounted) return;
     var opened = false;
     try {
-      opened = await ref.read(userAddShareProvider).openWhatsApp(whatsAppUri(_e164, _shareMessage(s)));
+      final out = ref.read(userAddShareProvider);
+      // With no phone number WhatsApp opens its own picker with the text.
+      opened = _e164.isEmpty
+          ? await out.openWhatsAppText(_shareMessage(s))
+          : await out.openWhatsApp(whatsAppUri(_e164, _shareMessage(s)));
     } catch (_) {
       opened = false;
     }
@@ -532,8 +545,10 @@ class _UserAddFlowState extends ConsumerState<UserAddFlow> {
         maxLength: 24,
         inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ()\-.٠-٩۰-۹]'))],
         decoration: InputDecoration(
-          labelText: s.phoneLabel,
-          helperText: s.phoneHint,
+          labelText: s.phoneLabelOptional,
+          hintText: s.phoneHint,
+          helperText: s.phoneWhatsAppHint,
+          helperMaxLines: 3,
           errorText: _phoneError,
           errorMaxLines: 3,
           counterText: '',

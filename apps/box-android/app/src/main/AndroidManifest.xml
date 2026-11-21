@@ -11,9 +11,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- An Android TV app: the store offers it to TV devices only. A sideloaded APK installs regardless. -->
     <uses-feature
         android:name="android.software.leanback"
-        android:required="false" />
+        android:required="true" />
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />

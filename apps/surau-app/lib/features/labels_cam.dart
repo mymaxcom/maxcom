@@ -534,6 +534,18 @@ String liveMicUnplugged(AppLang l, String name) => _t(
 /// The system gave no product name: the microphone is named by its kind, in the app language (F12).
 String liveMicBuiltinName(AppLang l) => _t(l, 'Mikrofon peranti', 'Device microphone', 'ميكروفون الجهاز');
 String liveMicExternalName(AppLang l) => _t(l, 'Mikrofon luaran', 'External microphone', 'ميكروفون خارجي');
+String liveMicUnavailable(AppLang l, String name) => _t(
+      l,
+      'Mikrofon $name tidak dapat digunakan; siaran menggunakan mikrofon peranti.',
+      'The microphone $name cannot be used; the live uses the device microphone.',
+      'تعذّر استخدام الميكروفون $name؛ يستخدم البث ميكروفون الجهاز.',
+    );
+String liveMicTrrsHint(AppLang l) => _t(
+      l,
+      'Fon kepala dikesan tanpa mikrofon. Gunakan mikrofon 4-kutub (TRRS) atau penyesuai TRRS.',
+      'Headphones are detected without a microphone. Use a 4-pole (TRRS) microphone or a TRRS adapter.',
+      'تم اكتشاف سماعات بدون ميكروفون. استخدم ميكروفونًا رباعي الأقطاب (TRRS) أو محوّل TRRS.',
+    );
 String liveMicUndo(AppLang l) => _t(l, 'Batal', 'Undo', 'تراجع');
 String liveAudioStatusReady(AppLang l) => _t(l, 'Sedia', 'Ready', 'جاهز');
 String liveCameraUnreachableShort(AppLang l) =>

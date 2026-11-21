@@ -25,7 +25,17 @@ export interface AudioInputsView {
   devices: Array<{ name: string; usable: boolean }>;
   selected: string | null;
   reason?: string;
+  /** Why not available: `no_device` (nothing to capture from), `list_failed` (the device list could not be read). */
+  code?: AudioInputCode;
 }
+
+/**
+ * Coded answers of Mic-in: `no_device` (no capture device found), `list_failed`, `access_denied` (ffmpeg says Windows refuses
+ * the device: an access error), `device_unavailable` (the device cannot be opened for another reason: busy, unplugged,
+ * renamed) and `silent` (it opens but the probe is digital silence, -91 dB: unplugged or muted). The app maps each code
+ * to its own text; `access_denied` is "Windows tidak membenarkan MAXCOM menggunakan Mic-in. Jalankan Semak MAXCOM."
+ */
+export type AudioInputCode = 'no_device' | 'list_failed' | 'access_denied' | 'device_unavailable' | 'silent' | 'no_tool';
 
 export const AUDIO_INPUT_MSG = {
   android: 'Kotak Android belum menyokong Mic-in',
@@ -36,7 +46,16 @@ export const AUDIO_INPUT_MSG = {
   unusable: 'Nama input audio itu tidak boleh digunakan.',
   tooMany: 'Terlalu banyak percubaan. Cuba sebentar lagi.',
   liveBusy: 'Siaran sedang berjalan. Aras bunyi tidak boleh diukur sekarang.',
+  accessDenied: 'Windows tidak membenarkan MAXCOM menggunakan Mic-in. Jalankan Semak MAXCOM.',
+  deviceUnavailable: 'Mic-in tidak dapat dibuka. Semak mikrofon disambung dan tidak sedang digunakan oleh aplikasi lain.',
+  silent: 'Tiada bunyi dari mikrofon. Semak mikrofon disambung dan tidak dibisukan.',
 } as const;
+
+/** What ffmpeg prints when Windows really refuses the capture device (microphone privacy, wrong account). A device that is busy, missing or renamed prints other errors and is `device_unavailable`. */
+const ACCESS_ERROR = /access is denied|permission denied|0x80070005/i;
+
+/** Digital silence from volumedetect (-inf is read as -91): the sound never reaches the box. */
+export const SILENT_DB = -90;
 
 /** Strips ffmpeg's `[in#0 @ 0000..] ` / `[dshow @ 0000..] ` prefix. */
 const PREFIX = /^\[[^\]]*\]\s*/;
@@ -168,6 +187,8 @@ export interface AudioInputOptions {
   minRefreshMs?: number;
   /** Minimum ms between two level probes (default 1500). */
   minLevelMs?: number;
+  /** The doctor's check answer is reused for this long (default 30 s). */
+  minCheckMs?: number;
   now?: () => number;
   run?: Runner;
   /** True while a live runs: the device may be in use, no probe then. */
@@ -191,7 +212,10 @@ export class AudioInputs {
   private loaded = false;
   private lastLevelAt = 0;
   private lastLevel: { meanDb: number; maxDb: number } | null = null;
+  private lastProblem: 'access_denied' | 'device_unavailable' | 'silent' | null = null;
   private probing = false;
+  private lastCheck: { at: number; answer: { devices: number; code: 'ok' | AudioInputCode | 'untested' } } | null = null;
+  private checking: Promise<{ devices: number; code: 'ok' | AudioInputCode | 'untested' }> | null = null;
 
   constructor(o: AudioInputOptions) {
     this.o = o;
@@ -277,12 +301,12 @@ export class AudioInputs {
   async view(force = false): Promise<AudioInputsView> {
     const base = { platform: this.platform } as const;
     if (this.platform !== 'windows') return { ...base, available: false, devices: [], selected: null, reason: AUDIO_INPUT_MSG.android };
-    if (this.o.ffmpegPath() === null) return { ...base, available: false, devices: [], selected: null, reason: AUDIO_INPUT_MSG.noTool };
+    if (this.o.ffmpegPath() === null) return { ...base, available: false, devices: [], selected: null, reason: AUDIO_INPUT_MSG.noTool, code: 'no_tool' };
     const s = await this.list(force);
     const devices = s.devices.map((d) => ({ name: d.name, usable: d.usable }));
     const current = this.boxInput();
-    if (s.failed) return { ...base, available: false, devices, selected: null, reason: AUDIO_INPUT_MSG.listFailed };
-    if (!s.devices.some((d) => d.usable)) return { ...base, available: false, devices, selected: null, reason: AUDIO_INPUT_MSG.none };
+    if (s.failed) return { ...base, available: false, devices, selected: null, reason: AUDIO_INPUT_MSG.listFailed, code: 'list_failed' };
+    if (!s.devices.some((d) => d.usable)) return { ...base, available: false, devices, selected: null, reason: AUDIO_INPUT_MSG.none, code: 'no_device' };
     return { ...base, available: true, devices, selected: current?.deviceName ?? null };
   }
 
@@ -291,22 +315,77 @@ export class AudioInputs {
    * repeated in between). Chosen over reusing the combiner monitor because it works before the live starts, which
    * is when the operator checks the input; while a live runs the device is the combiner's, so no probe then.
    */
-  async level(): Promise<{ level: { meanDb: number; maxDb: number } | null; reason?: string }> {
+  async level(): Promise<{ level: { meanDb: number; maxDb: number } | null; reason?: string; code?: AudioInputCode }> {
     const input = this.boxInput();
     const ff = this.o.ffmpegPath();
-    if (input === null || ff === null) return { level: null, reason: AUDIO_INPUT_MSG.none };
+    if (input === null || ff === null) {
+      this.lastProblem = null;
+      this.lastLevel = null;
+      return { level: null, reason: AUDIO_INPUT_MSG.none, code: ff === null ? 'no_tool' : 'no_device' };
+    }
     if (this.o.isLive?.() === true) return { level: null, reason: AUDIO_INPUT_MSG.liveBusy };
     const t = this.now();
-    if (this.probing || t - this.lastLevelAt < (this.o.minLevelMs ?? 1500)) return { level: this.lastLevel };
+    if (this.probing || t - this.lastLevelAt < (this.o.minLevelMs ?? 1500)) return this.levelAnswer();
     this.probing = true;
     this.lastLevelAt = t;
+    // a probe that throws leaves no stale answer behind
+    this.lastProblem = null;
+    this.lastLevel = null;
     try {
       const r = await this.run(ff, levelArgs(input.deviceName), 6000);
       this.lastLevel = parseVolumeDetect(r.output);
+      if (this.lastLevel === null) {
+        // no reading at all: Windows refused the device (ffmpeg says so), or it cannot be opened (busy, unplugged, renamed)
+        this.lastProblem = ACCESS_ERROR.test(r.output) ? 'access_denied' : 'device_unavailable';
+      } else if (this.lastLevel.maxDb <= SILENT_DB) {
+        // it opened but gives digital silence: not plugged in, or muted
+        this.lastProblem = 'silent';
+      }
     } finally {
       this.probing = false;
     }
-    return { level: this.lastLevel };
+    return this.levelAnswer();
+  }
+
+  private levelAnswer(): { level: { meanDb: number; maxDb: number } | null; reason?: string; code?: AudioInputCode } {
+    switch (this.lastProblem) {
+      case 'access_denied':
+        return { level: this.lastLevel, reason: AUDIO_INPUT_MSG.accessDenied, code: 'access_denied' };
+      case 'device_unavailable':
+        return { level: this.lastLevel, reason: AUDIO_INPUT_MSG.deviceUnavailable, code: 'device_unavailable' };
+      case 'silent':
+        return { level: this.lastLevel, reason: AUDIO_INPUT_MSG.silent, code: 'silent' };
+      default:
+        return { level: this.lastLevel };
+    }
+  }
+
+  /**
+   * The doctor's question (loopback health `?mic=1`): how many capture devices the box sees and, with one 1-second probe of
+   * the chosen or only device, whether sound reaches it. `untested` while a live runs (the device is the combiner's).
+   */
+  async check(): Promise<{ devices: number; code: 'ok' | AudioInputCode | 'untested' }> {
+    // the doctor may ask often (and the route is open to the machine's own programs): the last answer stands for 30 s
+    const t = this.now();
+    if (this.lastCheck !== null && t - this.lastCheck.at < (this.o.minCheckMs ?? 30_000)) return this.lastCheck.answer;
+    if (this.checking !== null) return this.checking;
+    this.checking = this.checkNow().then((answer) => {
+      this.lastCheck = { at: this.now(), answer };
+      return answer;
+    }).finally(() => {
+      this.checking = null;
+    });
+    return this.checking;
+  }
+
+  private async checkNow(): Promise<{ devices: number; code: 'ok' | AudioInputCode | 'untested' }> {
+    const v = await this.view(true);
+    const usable = v.devices.filter((d) => d.usable).length;
+    if (v.code !== undefined) return { devices: v.devices.length, code: v.code };
+    if (this.boxInput() === null) return { devices: usable, code: 'untested' };
+    const l = await this.level();
+    if (l.code !== undefined) return { devices: usable, code: l.code };
+    return { devices: usable, code: l.reason !== undefined ? 'untested' : 'ok' };
   }
 }
 

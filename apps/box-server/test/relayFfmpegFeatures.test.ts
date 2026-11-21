@@ -178,7 +178,7 @@ describe('feature list file', () => {
       decoders: ['h264', 'aac', 'pcm_alaw', 'pcm_mulaw'],
       parsers: [],
       bsfs: [],
-      filters: ['aresample', 'aformat', 'anullsrc', 'amix', 'adelay', 'volume', 'asplit', 'amerge', 'arealtime'],
+      filters: ['aresample', 'aformat', 'anullsrc', 'amix', 'adelay', 'volume', 'asplit', 'amerge', 'arealtime', 'compand', 'alimiter'],
       externalLibs: [],
     };
     for (const [kind, names] of Object.entries(need)) {

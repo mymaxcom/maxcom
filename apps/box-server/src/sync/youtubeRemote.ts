@@ -156,9 +156,10 @@ export class RemoteYoutubeLeg implements YoutubeLeg {
     try {
       const headers: Record<string, string> = { Authorization: `Bearer ${key.siteToken}`, ...BOX_REPORT_HEADERS };
       const init: RequestInit = { method, headers, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) };
-      if (body !== undefined) {
+      // a write with nothing to say still sends `{}` as JSON (never a bodyless POST); a GET sends nothing
+      if (body !== undefined || method !== 'GET') {
         headers['Content-Type'] = 'application/json';
-        init.body = JSON.stringify(body);
+        init.body = JSON.stringify(body ?? {});
       }
       res = await this.fetchImpl(`${this.baseUrl(key)}${path}`, init);
       if (res.body) {

@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events';
+import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import type { Server } from 'node:net';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Mixer, delayCommand, demuxMonitor, mixArgs, monitorChannels, stdinLine, volumeCommand, zmqMessage, zmqRequest } from '../src/live/mixer.ts';
+import { LEVELLER, LIFT, LIMITER, Mixer, delayCommand, demuxMonitor, mixArgs, monitorChannels, stdinLine, volumeCommand, zmqMessage, zmqRequest } from '../src/live/mixer.ts';
 import type { MixArgsInput } from '../src/live/mixer.ts';
 
 const base: MixArgsInput = {
@@ -146,6 +147,47 @@ describe('mixArgs: the rules proven in T0', () => {
     expect(monitorChannels([mic, box])).toEqual(['unit', 'deviceMic', 'boxInput']);
   });
 
+  it('the lift sits on each input before its volume, the limiter once on the final mix, the monitor taps the raw sources', () => {
+    const one = graph(mixArgs({ ...base }));
+    expect(one).toContain(`[r0]${LIFT},volume@unit=`);
+    expect(one).toContain(`[c0]aresample=async=1,${LIMITER}[mix]`);
+    const many = graph(mixArgs({ ...base, added: [mic, box], deviceName: 'Line In' }));
+    expect(many).toContain(`amix=inputs=3:normalize=0,aresample=async=1,${LIMITER}[mix]`);
+    expect(many).toContain(`[r1]${LIFT},volume@deviceMic=`);
+    expect(many).toContain(`[r2]${LIFT},volume@boxInput=`);
+    expect(many.split(LIFT)).toHaveLength(4); // unit, mic, box: one each
+    for (const g of [one, many]) {
+      expect(g.split(LIMITER)).toHaveLength(2); // once, on the mix only
+      expect(g).toMatch(/\[m0\]aresample=16000[^;]*\[t0\]/);
+      expect(g.split(';').find((x) => x.endsWith('[mon]'))).toMatch(/^\[t0\]/);
+      expect(g.split(';').find((x) => x.endsWith('[mon]'))).not.toMatch(/compand|alimiter/);
+    }
+    expect(LEVELLER).toBe(`${LIFT},${LIMITER}`);
+    expect(LIMITER).toContain('alimiter=limit=0.89');
+    expect(LIMITER).toContain('level=0');
+    expect(Number(/attack=(\d+)/.exec(LIMITER)?.[1])).toBeLessThanOrEqual(5);
+  });
+
+  it('the Android app levels its own mic: its ingest unit and deviceMic are not lifted, the camera sound and box input are', () => {
+    const ing = graph(mixArgs({ ...base, unit: 'ingest', platform: 'android', appLevelled: true, added: [mic] }));
+    expect(ing).not.toContain('compand');
+    expect(ing).toContain(LIMITER); // the safety limiter stays on the mix
+    const cam = graph(mixArgs({ ...base, platform: 'windows', appLevelled: true, added: [mic, box], deviceName: 'Line In' }));
+    expect(cam).toContain(`[r0]${LIFT},volume@unit=`); // IP camera sound
+    expect(cam).toContain('[r1]volume@deviceMic=');
+    expect(cam).toContain(`[r2]${LIFT},volume@boxInput=`);
+    // a web session (not appLevelled) lifts the ingest feed
+    expect(graph(mixArgs({ ...base, unit: 'ingest', platform: 'android', added: [mic] }))).toContain(`[r0]${LIFT},volume@unit=`);
+  });
+
+  it('leveller:false leaves the mix as before (no compand, no alimiter anywhere)', () => {
+    expect(graph(mixArgs({ ...base, leveller: false }))).toContain('[c0]aresample=async=1[mix]');
+    const g = graph(mixArgs({ ...base, leveller: false, added: [mic] }));
+    expect(g).toContain('amix=inputs=2:normalize=0,aresample=async=1[mix]');
+    expect(g).not.toMatch(/alimiter|compand/);
+    expect(graph(mixArgs({ ...base, leveller: true }))).toContain('alimiter');
+  });
+
   it('the mix is published as Opus 48 kHz stereo and the monitor is s16le 16 kHz on stdout', () => {
     const a = mixArgs({ ...base, added: [mic] });
     expect(a).toEqual(expect.arrayContaining(['-c:a', 'libopus', '-ar', '48000', '-ac', '2', '-f', 'rtsp']));
@@ -173,7 +215,7 @@ describe('mixArgs: the rules proven in T0', () => {
   describe('control channel', () => {
     it('zmq: azmq bound to loopback on the given port, no stdin read (-nostdin)', () => {
       const a = mixArgs({ ...base, control: 'zmq', zmqPort: 45123, added: [mic] });
-      expect(graph(a)).toContain('azmq=bind_address=tcp\\\\://127.0.0.1\\\\:45123[mix]');
+      expect(graph(a)).toContain(`azmq=bind_address=tcp\\\\://127.0.0.1\\\\:45123,${LIMITER}[mix]`);
       expect(graph(a)).not.toMatch(/0\.0\.0\.0|\*/);
       expect(a).toContain('-nostdin');
     });
@@ -517,6 +559,146 @@ describe('zmqRequest (fake azmq peer)', () => {
   });
 });
 
+describe('Mixer leveller fallback (a box must never lose the live to the leveller)', () => {
+  const hasLift = (args: string[]): boolean => args.join(' ').includes('compand');
+
+  it('the probe is asked once before the first run; a box with both filters runs with the leveller', async () => {
+    const { spawnFn, procs } = fakeSpawn();
+    const probe = vi.fn(async () => true);
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, levellerProbe: probe, backoffBaseMs: 1 });
+    m.start(cfg);
+    expect(procs).toHaveLength(0); // not started before the probe answered
+    await tick();
+    expect(procs).toHaveLength(1);
+    expect(hasLift(procs[0]!.args)).toBe(true);
+    procs[0]!.exit(1);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(procs).toHaveLength(2);
+    expect(probe).toHaveBeenCalledTimes(1);
+    await m.stop();
+  });
+
+  it('the probe says a filter is missing: no compand and no alimiter in the args, one warning', async () => {
+    const { spawnFn, procs } = fakeSpawn();
+    const warn = vi.fn();
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, levellerProbe: async () => false, warn });
+    m.start(cfg);
+    await tick();
+    expect(procs).toHaveLength(1);
+    expect(procs[0]!.args.join(' ')).not.toMatch(/compand|alimiter/);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(m.buildArgs().join(' ')).not.toMatch(/compand|alimiter/);
+    await m.stop();
+  });
+
+  it('a probe that cannot tell or throws still starts the live (with the leveller; the relaunch guards it)', async () => {
+    for (const probe of [async () => null, async (): Promise<boolean | null> => Promise.reject(new Error('boom'))]) {
+      const { spawnFn, procs } = fakeSpawn();
+      const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, levellerProbe: probe });
+      m.start(cfg);
+      await tick();
+      expect(procs).toHaveLength(1);
+      expect(hasLift(procs[0]!.args)).toBe(true);
+      await m.stop();
+    }
+  });
+
+  it('"No such filter" on stderr: relaunch once at once without the leveller, and it stays off', async () => {
+    const { spawnFn, procs } = fakeSpawn();
+    const warn = vi.fn();
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, backoffBaseMs: 60_000, warn });
+    m.start(cfg);
+    expect(hasLift(procs[0]!.args)).toBe(true);
+    procs[0]!.stderr.write("[AVFilterGraph @ 0x1] No such filter: 'compand'\nError initializing complex filters.\n");
+    await tick();
+    procs[0]!.exit(1);
+    await tick();
+    expect(procs).toHaveLength(2); // no backoff wait
+    expect(procs[1]!.args.join(' ')).not.toMatch(/compand|alimiter/);
+    expect(warn).toHaveBeenCalledTimes(1);
+    await m.stop();
+  });
+
+  it('a "No such filter" for something else (a command target) does not switch the leveller off', async () => {
+    const { spawnFn, procs } = fakeSpawn();
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, backoffBaseMs: 1 });
+    m.start(cfg);
+    procs[0]!.stderr.write("No such filter: 'volume@zzz'\n");
+    await tick();
+    expect(m.buildArgs().join(' ')).toContain('compand');
+    await m.stop();
+  });
+
+  it('a restart-triggering call while the probe is pending spawns nothing; the one launch after it is the only spawn', async () => {
+    const { spawnFn, procs } = fakeSpawn();
+    let release: (v: boolean | null) => void = () => undefined;
+    const probe = vi.fn(() => new Promise<boolean | null>((r) => (release = r)));
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, levellerProbe: probe });
+    m.start({ ...cfg, added: [{ id: 'deviceMic', initialDelayMs: 1000, volume: 80 }] });
+    m.setSourceAvailable('deviceMic', false); // restart path
+    m.switchUnit('ingest'); // restart path
+    expect(procs).toHaveLength(0);
+    await tick(); // the probe is now running and still pending
+    expect(procs).toHaveLength(0);
+    release(true);
+    await tick();
+    expect(procs).toHaveLength(1); // exactly one, built from the latest state
+    expect(procs[0]!.args.join(' ')).toContain('surau-in');
+    expect(procs[0]!.args.join(' ')).not.toContain('surau-mic');
+    await m.stop();
+    expect(procs[0]!.exitCode).not.toBeNull(); // stop() killed it
+    expect(procs).toHaveLength(1);
+  });
+
+  it('stop() while the probe is pending: no spawn at all', async () => {
+    const { spawnFn, procs } = fakeSpawn();
+    let release: (v: boolean | null) => void = () => undefined;
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, levellerProbe: () => new Promise<boolean | null>((r) => (release = r)) });
+    m.start(cfg);
+    await tick();
+    await m.stop();
+    release(true);
+    await tick();
+    expect(procs).toHaveLength(0);
+  });
+
+  it('"No such filter" calls onLevellerMissing once; a Mixer built after it (capability answers false) has no leveller and the probe is not run again', async () => {
+    const { LevellerCapability } = await import('../src/live/levellerProbe.ts');
+    const rawProbe = vi.fn(async () => null as boolean | null);
+    const cap = new LevellerCapability(rawProbe);
+    const { spawnFn, procs } = fakeSpawn();
+    const mk = (): Mixer => new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, backoffBaseMs: 60_000, warn: () => undefined, levellerProbe: () => cap.check('ffmpeg'), onLevellerMissing: () => cap.markMissing('ffmpeg') });
+    const m1 = mk();
+    m1.start(cfg);
+    await tick();
+    expect(hasLift(procs[0]!.args)).toBe(true); // inconclusive probe: tried with the leveller
+    procs[0]!.stderr.write("No such filter: 'alimiter'\n");
+    await tick();
+    procs[0]!.exit(1);
+    await tick();
+    expect(hasLift(procs[1]!.args)).toBe(false);
+    await m1.stop();
+    expect(rawProbe).toHaveBeenCalledTimes(1);
+    const m2 = mk();
+    m2.start(cfg);
+    await tick();
+    expect(hasLift(procs[procs.length - 1]!.args)).toBe(false);
+    expect(rawProbe).toHaveBeenCalledTimes(1);
+    await m2.stop();
+  });
+
+  it('leveller:false in the options skips the probe', async () => {
+    const { spawnFn, procs } = fakeSpawn();
+    const probe = vi.fn(async () => true);
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, leveller: false, levellerProbe: probe });
+    m.start(cfg);
+    expect(procs).toHaveLength(1);
+    expect(hasLift(procs[0]!.args)).toBe(false);
+    expect(probe).not.toHaveBeenCalled();
+    await m.stop();
+  });
+});
+
 describe('Mixer restart (round 2 review fixes)', () => {
   it('announces every launch on the monitor so readers can drop a partial frame', async () => {
     const { spawnFn, procs } = fakeSpawn();
@@ -544,5 +726,72 @@ describe('Mixer restart (round 2 review fixes)', () => {
     await m.setDelay('deviceMic', 700);
     expect(zmqSend.mock.calls[0]![0]).toBe(31002);
     await m.stop();
+  });
+});
+
+const FFMPEG = ((): string | null => {
+  for (const c of [process.env.MAXCOM_TEST_FFMPEG, 'ffmpeg']) {
+    if (c === undefined || c === '') continue;
+    try {
+      if (spawnSync(c, ['-version'], { windowsHide: true }).status === 0) return c;
+    } catch {
+      /* try the next */
+    }
+  }
+  return null;
+})();
+
+describe.skipIf(FFMPEG === null)('LIFT + LIMITER with the real ffmpeg', () => {
+  const run = (src: string, af: string): string => {
+    const r = spawnSync(FFMPEG as string, ['-hide_banner', '-nostats', '-f', 'lavfi', '-i', src, '-af', af, '-f', 'null', '-'], { encoding: 'utf8', windowsHide: true });
+    return r.stderr;
+  };
+  const meanOf = (src: string, af: string): number => {
+    const err = run(src, af);
+    const m = /mean_volume: (-?[\d.]+) dB/.exec(err);
+    expect(m, err).not.toBeNull();
+    return Number((m as RegExpExecArray)[1]);
+  };
+  /** The source scaled to the given RMS (dBFS), through `chain`; returns the output mean level. */
+  const level = (src: string, rms: number, chain: string): number => meanOf(src, `volume=${rms - meanOf(src, 'volumedetect')}dB,${chain},volumedetect`);
+  const SINE = 'sine=frequency=300:duration=4:sample_rate=48000';
+  const NOISE = 'anoisesrc=color=white:amplitude=0.5:duration=6:sample_rate=48000:seed=7';
+  // speech-like: a 200 Hz carrier with a 3 Hz syllable swell
+  const SPEECH = "aevalsrc=exprs='0.4*sin(2*PI*200*t)*(0.55+0.45*sin(2*PI*3*t))':s=48000:d=6";
+  const tone = (rms: number, chain: string = LEVELLER): number => level(SINE, rms, chain);
+  const noise = (rms: number, chain: string = LEVELLER): number => level(NOISE, rms, chain);
+  const speech = (rms: number, chain: string = LEVELLER): number => level(SPEECH, rms, chain);
+
+  it('a quiet -34 dBFS tone is lifted to about -20 (+-2)', () => {
+    const out = tone(-34);
+    expect(out).toBeGreaterThan(-22.2);
+    expect(out).toBeLessThan(-18);
+  });
+  it('-28 dBFS is lifted to about -19 (+-2)', () => {
+    const out = tone(-28);
+    expect(out).toBeGreaterThan(-21);
+    expect(out).toBeLessThan(-17);
+  });
+  it('normal level is left alone: -21 stays -21, -15 stays -15, -9 stays -9 (+-1.5)', () => {
+    expect(Math.abs(tone(-21) + 21)).toBeLessThan(1.5);
+    expect(Math.abs(tone(-15) + 15)).toBeLessThan(1.5);
+    expect(Math.abs(tone(-9) + 9)).toBeLessThan(1.5);
+  });
+  it('room noise is not lifted: -43 dBFS noise rises at most 3 dB, -40 at most 5 dB', () => {
+    expect(noise(-43)).toBeLessThanOrEqual(-43 + 3);
+    expect(noise(-40)).toBeLessThanOrEqual(-40 + 5);
+  });
+  it('a -18 dBFS speech-like signal stays -18 (+-2) through the lift, and untouched through the limiter alone (the app-levelled path)', () => {
+    expect(Math.abs(speech(-18) + 18)).toBeLessThan(2);
+    expect(Math.abs(speech(-18, LIMITER) + 18)).toBeLessThan(0.5);
+  });
+  it('an app-levelled path (limiter only) leaves -40 dBFS room noise alone', () => {
+    expect(Math.abs(noise(-40, LIMITER) + 40)).toBeLessThan(0.5);
+  });
+  it('the safety limiter holds a full-scale input under about -0.5 dBFS and adds no makeup gain', () => {
+    const err = run(SINE, `${LIMITER},volumedetect`);
+    const peak = Number((/max_volume: (-?[\d.]+) dB/.exec(err) as RegExpExecArray)[1]);
+    expect(peak).toBeLessThanOrEqual(-0.5);
+    expect(Math.abs(tone(-30, LIMITER) + 30)).toBeLessThan(0.5);
   });
 });

@@ -143,8 +143,9 @@ export function peopleActivity(db: DatabaseSync, surauId: string, now: Date, rol
     const needs: UserNeed[] = [];
     if (locked) needs.push('locked');
     if (own.length === 0 && daysSince(createdAt, now) >= NO_DEVICE_DAYS) needs.push('no_device');
-    if (typeof u.phone !== 'string' || u.phone.length === 0) needs.push('phone');
-    else if ((phoneCount.get(`${String(u.surau_id)}|${u.phone}`) ?? 0) > 1) needs.push('phone_duplicate');
+    // No number is normal (the number is optional), so it is never flagged; the `phone` value stays in `UserNeed` so an
+    // older app that knows it still parses the answer.
+    if (typeof u.phone === 'string' && u.phone.length > 0 && (phoneCount.get(`${String(u.surau_id)}|${u.phone}`) ?? 0) > 1) needs.push('phone_duplicate');
     const roles = parseRoles(u.roles_json);
     const holdsAdmin = roles.includes('admin') || roles.includes('superadmin');
     const lastActiveAt = cloud ? null : own.reduce<string | null>((best, d) => {

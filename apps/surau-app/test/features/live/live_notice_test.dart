@@ -42,156 +42,154 @@ void _clean(String t, {String? reason}) {
 }
 
 void main() {
-  group('[PP-L1b] the binding sentences', () {
-    test('[PP-L1b] BM: the three lines, character for character, with the kitab word once', () {
-      final t = _text(_full(), AppLang.ms);
+  group('[W22-2] the notice names the surau and bolds the penceramah and the title', () {
+    test('[W22-2] BM: the four lines, character for character', () {
       expect(
-        t,
+        _text(_full(), AppLang.ms),
         "Assalamu'alaikum warahmatullah.\n"
-        'Ikuti Kuliah Maghrib malam ini disampaikan oleh Ustaz Ahmad membicarakan Kitab Contoh '
-        'secara langsung dalam talian menerusi pautan berikut:\n'
+        'Ikuti *Kuliah Maghrib* di *Surau Perintis Contoh* bersama *Ustaz Ahmad*.\n'
+        'Tajuk: *Tajuk Contoh*\n'
         '$_link',
       );
     });
 
-    test('[PP-L1b] BM: a title that does not begin with Kitab gets the word', () {
-      final t = _text(_full(kitab: 'Contoh Fiqh'), AppLang.ms);
-      expect(t, contains('membicarakan kitab Contoh Fiqh secara langsung'));
-      expect(_text(_full(kitab: '  kitab Tauhid '), AppLang.ms), contains('membicarakan kitab Tauhid secara'));
-      expect(_text(_full(kitab: 'Kitabun Contoh'), AppLang.ms), contains('membicarakan kitab Kitabun Contoh'));
-    });
-
-    test('[PP-L1b] EN: the sentence, and the book word once', () {
+    test('[W22-2] EN: the four lines, character for character', () {
       expect(
         _text(_full(), AppLang.en),
         "Assalamu'alaikum warahmatullah.\n"
-        'Join the Maghrib talk tonight, delivered by Ustaz Ahmad, on Kitab Contoh, '
-        'live online at the link below:\n'
+        'Join *Maghrib Talk* at *Surau Perintis Contoh* with *Ustaz Ahmad*.\n'
+        'Title: *Tajuk Contoh*\n'
         '$_link',
       );
-      expect(_text(_full(kitab: 'Contoh Fiqh'), AppLang.en), contains('on the book Contoh Fiqh, live online'));
-      expect(_text(_full(kitab: 'Book of Contoh'), AppLang.en), contains(', on Book of Contoh, live'));
     });
 
-    test('[PP-L1b] AR: the sentence, and the book word once', () {
+    test('[W22-2] AR: the four lines, Latin names stay as typed inside the bold marks', () {
       expect(
         _text(_full(), AppLang.ar),
         'السلام عليكم ورحمة الله.\n'
-        'تابعوا درس المغرب الليلة يلقيه Ustaz Ahmad في شرح Kitab Contoh في بث مباشر عبر الرابط التالي:\n'
+        'تابعوا *درس المغرب* في *Surau Perintis Contoh* مع *Ustaz Ahmad*.\n'
+        'الموضوع: *Tajuk Contoh*\n'
         '$_link',
       );
-      expect(_text(_full(kitab: 'Contoh Fiqh'), AppLang.ar), contains('في شرح كتاب Contoh Fiqh في بث'));
-      expect(_text(_full(kitab: 'كتاب التوحيد'), AppLang.ar), contains('في شرح كتاب التوحيد في بث'));
-    });
-  });
-
-  group('[PP-L1b] Maghrib and Isyak are always tonight', () {
-    test('[PP-L1b] a Maghrib kuliah at 18:45 and an Isyak kuliah say malam ini, tonight, الليلة', () {
-      for (final (slot, h, m) in [('maghrib', 18, 45), ('isyak', 20, 30), ('isyak', 9, 0)]) {
-        final i = _full(slot: slot, start: DateTime(2026, 11, 18, h, m));
-        expect(_text(i, AppLang.ms), contains(' malam ini '), reason: '$slot $h:$m');
-        expect(_text(i, AppLang.en), contains(' tonight, '), reason: '$slot $h:$m');
-        expect(_text(i, AppLang.ar), contains(' الليلة '), reason: '$slot $h:$m');
-      }
     });
 
-    test('[PP-L1b] time words at 05:50, 12:30, 16:00 and 19:30 follow the start', () {
-      final cases = <(String, int, int, String, String, String)>[
-        ('subuh', 5, 50, 'pagi ini', 'this morning', 'هذا الصباح'),
-        ('zohor', 12, 30, 'tengah hari ini', 'this afternoon', 'بعد ظهر اليوم'),
-        ('asar', 16, 0, 'petang ini', 'this afternoon', 'بعد ظهر اليوم'),
-        ('lain', 19, 30, 'malam ini', 'tonight', 'الليلة'),
-      ];
-      for (final (slot, h, m, ms, en, ar) in cases) {
-        final i = _full(slot: slot, label: 'Kuliah Contoh', start: DateTime(2026, 11, 18, h, m));
-        expect(_text(i, AppLang.ms), contains(' $ms '), reason: '$h:$m');
-        expect(_text(i, AppLang.en), contains(' $en, '), reason: '$h:$m');
-        expect(_text(i, AppLang.ar), contains(' $ar '), reason: '$h:$m');
-      }
+    test('[W22-2] the title is the topic, then the kitab when there is no topic', () {
+      expect(_text(_full(topic: null), AppLang.ms), contains('Tajuk: *Kitab Contoh*'));
+      expect(_text(_full(kitab: null), AppLang.ms), contains('Tajuk: *Tajuk Contoh*'));
+      expect(_text(_full(), AppLang.ms), isNot(contains('Kitab Contoh')));
     });
 
-    test('[PP-L1b] tomorrow is esok, tomorrow, غدا; three days ahead has no time words', () {
-      final tomorrow = _full(slot: 'zohor', start: DateTime(2026, 11, 19, 13, 0));
-      expect(_text(tomorrow, AppLang.ms), contains('Ikuti Kuliah Zohor esok disampaikan'));
-      expect(_text(tomorrow, AppLang.en), contains('Join the Zohor talk tomorrow, delivered'));
-      expect(_text(tomorrow, AppLang.ar), contains('تابعوا درس الظهر غدا يلقيه'));
-      final later = _full(slot: 'zohor', start: DateTime(2026, 11, 21, 13, 0));
-      expect(_text(later, AppLang.ms), contains('Ikuti Kuliah Zohor disampaikan'));
-      expect(_text(later, AppLang.en), contains('Join the Zohor talk, delivered'));
-      expect(_text(later, AppLang.ar), contains('تابعوا درس الظهر يلقيه'));
-      // a Maghrib kuliah three days ahead is not "tonight"
-      final maghribLater = _full(slot: 'maghrib', start: DateTime(2026, 11, 21, 18, 45));
-      expect(_text(maghribLater, AppLang.ms), isNot(contains('malam ini')));
-    });
-
-    test('[PP-L1b] a slot outside the five uses the label, then the plain word', () {
+    test('[W22-2] a slot outside the five uses the label, then the plain word', () {
       final dhuha = _full(slot: 'lain', label: 'Kuliah Dhuha');
-      expect(_text(dhuha, AppLang.ms), contains('Ikuti Kuliah Dhuha malam ini'));
-      expect(_text(dhuha, AppLang.en), contains('Join Kuliah Dhuha tonight'));
-      expect(_text(dhuha, AppLang.ar), contains('تابعوا Kuliah Dhuha الليلة'));
+      expect(_text(dhuha, AppLang.ms), contains('Ikuti *Kuliah Dhuha* di'));
+      expect(_text(dhuha, AppLang.en), contains('Join *Kuliah Dhuha* at'));
+      expect(_text(dhuha, AppLang.ar), contains('تابعوا *Kuliah Dhuha* في'));
       final none = _full(slot: 'lain', label: null);
-      expect(_text(none, AppLang.ms), contains('Ikuti kuliah malam ini'));
-      expect(_text(none, AppLang.en), contains('Join the talk tonight'));
-      expect(_text(none, AppLang.ar), contains('تابعوا الدرس الليلة'));
+      expect(_text(none, AppLang.ms), contains('Ikuti *Kuliah* di'));
+      expect(_text(none, AppLang.en), contains('Join *Talk* at'));
+      expect(_text(none, AppLang.ar), contains('تابعوا *الدرس* في'));
+    });
+
+    test('[W22-2] every standard slot has its own name in the three languages', () {
+      final names = {
+        'subuh': ('Kuliah Subuh', 'Subuh Talk', 'درس الفجر'),
+        'zohor': ('Kuliah Zohor', 'Zohor Talk', 'درس الظهر'),
+        'asar': ('Kuliah Asar', 'Asar Talk', 'درس العصر'),
+        'maghrib': ('Kuliah Maghrib', 'Maghrib Talk', 'درس المغرب'),
+        'isyak': ('Kuliah Isyak', 'Isyak Talk', 'درس العشاء'),
+      };
+      names.forEach((slot, n) {
+        final i = _full(slot: slot);
+        expect(_text(i, AppLang.ms), contains('*${n.$1}*'));
+        expect(_text(i, AppLang.en), contains('*${n.$2}*'));
+        expect(_text(i, AppLang.ar), contains('*${n.$3}*'));
+      });
     });
   });
 
-  group('[PP-L1b] a missing piece still reads as one correct sentence', () {
-    test('[PP-L1b] no speaker, no kitab and a topic, no kitab and no topic, in every language', () {
+  group('[W22-2] a missing piece is left out cleanly', () {
+    test('[W22-2] no speaker, no surau, no title: no empty bold, no double space, link last', () {
       for (final lang in AppLang.values) {
         final noSpeaker = _text(_full(speaker: null), lang);
         _clean(noSpeaker);
-        expect(noSpeaker, isNot(contains('disampaikan')));
-        expect(noSpeaker, isNot(contains('delivered')));
-        expect(noSpeaker, isNot(contains('يلقيه')));
-        expect(_lines(noSpeaker)[1], isNot(contains('Ustaz')));
+        expect(noSpeaker, isNot(contains('Ustaz')));
+        expect(noSpeaker, isNot(contains('**')));
+        expect(_lines(noSpeaker).length, 4);
 
-        final topicOnly = _text(_full(kitab: null), lang);
-        _clean(topicOnly);
-        expect(topicOnly, contains('Tajuk Contoh'));
-        expect(topicOnly, isNot(contains('Kitab Contoh')));
+        final noTitle = _text(_full(kitab: null, topic: null), lang);
+        _clean(noTitle);
+        expect(noTitle, isNot(contains('Tajuk Contoh')));
+        expect(_lines(noTitle).length, 3);
 
-        final neither = _text(_full(kitab: null, topic: null), lang);
-        _clean(neither);
-        expect(neither, isNot(contains('Tajuk')));
-        expect(neither, isNot(contains('Kitab')));
+        final noSurau = _text(
+          LiveNoticeInput(videoId: _id, slot: 'maghrib', speaker: 'Ustaz Ahmad', topic: 'Tajuk Contoh'),
+          lang,
+        );
+        _clean(noSurau);
+        expect(noSurau, isNot(contains('**')));
+        expect(noSurau, isNot(contains('Surau')));
 
         final bare = _text(_full(speaker: null, kitab: null, topic: null), lang);
         _clean(bare);
+        expect(bare, isNot(contains('**')));
         expect(_lines(bare).length, 3);
+        expect(_lines(bare).last, _link);
       }
-      final ms = _text(_full(kitab: null), AppLang.ms);
-      expect(ms, contains('membicarakan tajuk Tajuk Contoh secara langsung'));
-      expect(_text(_full(kitab: null), AppLang.en), contains(', on the topic Tajuk Contoh, live online'));
-      expect(_text(_full(kitab: null), AppLang.ar), contains('في موضوع Tajuk Contoh في بث'));
       expect(
         _text(_full(speaker: null, kitab: null, topic: null), AppLang.ms),
-        contains('Ikuti Kuliah Maghrib malam ini secara langsung dalam talian'),
+        "Assalamu'alaikum warahmatullah.\nIkuti *Kuliah Maghrib* di *Surau Perintis Contoh*.\n$_link",
       );
       expect(
-        _text(_full(speaker: null, kitab: null, topic: null), AppLang.en),
-        contains('Join the Maghrib talk tonight, live online at the link below:'),
+        _text(LiveNoticeInput(videoId: _id, slot: 'maghrib', speaker: 'Ustaz Ahmad'), AppLang.en),
+        "Assalamu'alaikum warahmatullah.\nJoin *Maghrib Talk* with *Ustaz Ahmad*.\n$_link",
       );
     });
 
-    test('[PP-L1b] no kuliah chosen gives the surau sentence', () {
+    test('[W22-2] blank fields count as missing', () {
+      final t = _text(_full(speaker: '   ', topic: ' *** ', kitab: ''), AppLang.ms);
+      expect(t, isNot(contains('**')));
+      expect(t, isNot(contains('Tajuk:')));
+      expect(t, isNot(contains('bersama')));
+    });
+
+    test('[W22-2] no kuliah chosen gives the surau sentence, and without a surau the plain one', () {
       const none = LiveNoticeInput(videoId: _id, surau: 'Surau Perintis Contoh');
       expect(
         _text(none, AppLang.ms),
-        "Assalamu'alaikum warahmatullah.\n"
-        'Ikuti siaran langsung dari Surau Perintis Contoh dalam talian menerusi pautan berikut:\n$_link',
+        "Assalamu'alaikum warahmatullah.\nIkuti siaran langsung di *Surau Perintis Contoh*.\n$_link",
       );
-      expect(_text(none, AppLang.en), contains('Join the live stream from Surau Perintis Contoh at the link below:'));
-      expect(_text(none, AppLang.ar), contains('تابعوا البث المباشر من Surau Perintis Contoh عبر الرابط التالي:'));
+      expect(_text(none, AppLang.en), contains('Join the live stream at *Surau Perintis Contoh*.'));
+      expect(_text(none, AppLang.ar), contains('تابعوا البث المباشر في *Surau Perintis Contoh*.'));
+      const noName = LiveNoticeInput(videoId: _id);
+      expect(_text(noName, AppLang.ms), "Assalamu'alaikum warahmatullah.\nIkuti siaran langsung.\n$_link");
+      expect(_text(noName, AppLang.en), contains('Join the live stream.\n'));
       for (final lang in AppLang.values) {
         _clean(_text(none, lang));
-      }
-      const noName = LiveNoticeInput(videoId: _id);
-      expect(_text(noName, AppLang.ms), contains('Ikuti siaran langsung dalam talian menerusi'));
-      expect(_text(noName, AppLang.en), contains('Join the live stream at the link below:'));
-      for (final lang in AppLang.values) {
         _clean(_text(noName, lang));
       }
+    });
+  });
+
+  group('[W22-2] asterisks in a name cannot break the bold', () {
+    test('[W22-2] an asterisk typed in any field is removed', () {
+      final i = _full(
+        speaker: 'Ustaz *Ahmad*',
+        topic: 'Tajuk *Contoh',
+        label: 'Kuliah* Maghrib',
+        slot: 'lain',
+      );
+      final t = _text(i, AppLang.ms);
+      expect(t, contains('bersama *Ustaz Ahmad*.'));
+      expect(t, contains('Tajuk: *Tajuk Contoh*'));
+      expect(t, contains('Ikuti *Kuliah Maghrib* di'));
+      // exactly the bold marks the builder put: 3 on line 2 pairs and 1 on the title
+      final stars = RegExp(r'\*').allMatches(t).length;
+      expect(stars, 8);
+    });
+
+    test('[W22-2] the surau name with an asterisk is cleaned too', () {
+      const i = LiveNoticeInput(videoId: _id, surau: '**Surau Contoh*');
+      expect(_text(i, AppLang.en), contains('at *Surau Contoh*.'));
     });
   });
 
@@ -267,11 +265,33 @@ void main() {
         _clean(t);
         expect(t.contains('evil'), isFalse);
         expect(t.contains('192.'), isFalse);
-        expect(_lines(t).length, 3);
+        expect(_lines(t).length, 4);
       }
       final rlo = String.fromCharCode(0x202E);
       final marks = _full(speaker: 'Ustaz$rlo Ahmad${String.fromCharCode(0x2066)}');
       expect(_text(marks, AppLang.ms), isNot(contains(rlo)));
+    });
+
+    test('[AS1] WhatsApp _ ~ and backtick marks go, and scheme-less links are dropped', () {
+      final i = _full(
+        speaker: 'Ustaz _Ahmad_ ~Ali~ `Zain`',
+        topic: 'Tajuk www.evil.example bit.ly/x sebenar',
+        kitab: 'Kitab Contoh',
+      );
+      for (final lang in AppLang.values) {
+        final t = _text(i, lang);
+        _clean(t);
+        expect(t.contains('evil'), isFalse, reason: t);
+        expect(t.contains('bit.ly'), isFalse, reason: t);
+        // the three marks are gone from the typed fields; the only marks left are the notice's own bold stars
+        expect(t.contains('_'), isFalse, reason: t);
+        expect(t.contains('~'), isFalse, reason: t);
+        expect(t.contains('`'), isFalse, reason: t);
+      }
+      expect(_text(i, AppLang.ms), contains('*Ustaz Ahmad Ali Zain*'));
+      expect(_text(i, AppLang.ms), contains('Tajuk: *Tajuk sebenar*'));
+      // a plain word with a dot, or a name, is kept
+      expect(_text(_full(topic: 'Bab 1.2 tentang niat'), AppLang.ms), contains('Tajuk: *Bab 1.2 tentang niat*'));
     });
 
     test('[PP-L1b] the link is put back on its own line when it was removed', () {

@@ -46,13 +46,13 @@ const setPhone = (app: FastifyInstance, by: Login, id: string, phone: unknown) =
 const phoneOf = (db: DatabaseSync, id: string): unknown => db.prepare('SELECT phone FROM users WHERE id = ?').get(id)?.phone;
 
 describe('[PP-S10] create, edit, duplicate', () => {
-  it('[PP-S10] a person cannot be added without a number; with 012-000 0010 it is stored once as E.164', async () => {
+  it('[PP-S10] a number is optional on create; a given one is stored once as E.164 and a bad one is refused', async () => {
     const app = makeApp();
     const admin = await loginAs(app, 'admin');
-    const none = await create(app, admin, 'Kak Siti', undefined);
-    expect(none.statusCode).toBe(400);
-    expect(none.json().code).toBe('phone_required');
-    expect((await create(app, admin, 'Kak Siti', '   ')).json().code).toBe('phone_required');
+    const none = await create(app, admin, 'Kak Siti Tiada', undefined);
+    expect(none.statusCode, none.body).toBe(201);
+    expect(none.json().phone).toBeNull();
+    expect(phoneOf(app.surau.db, none.json().id)).toBeNull();
     const bad = await create(app, admin, 'Kak Siti', 'abc 123');
     expect(bad.statusCode).toBe(400);
     expect(bad.json().code).toBe('bad_phone');
@@ -80,7 +80,7 @@ describe('[PP-S10] create, edit, duplicate', () => {
     expect(bad.statusCode).toBe(400);
     expect(bad.json().code).toBe('bad_phone');
     expect(JSON.stringify(bad.json())).not.toContain('12-3');
-    expect((await setPhone(app, admin, u.id, undefined)).json().code).toBe('phone_required');
+    expect((await setPhone(app, admin, u.id, 12345)).json().code).toBe('bad_phone');
     expect(phoneOf(db, u.id)).toBe('+60120000011');
   });
 
@@ -124,7 +124,7 @@ describe('[PP-S10] create, edit, duplicate', () => {
     expect((await setPhone(app, treasurer, star.userId, P1)).statusCode).toBe(403);
   });
 
-  it('[PP-S10] an existing person with no number still unlocks and works, and shows needs phone; a duplicate that arrived by sync is flagged, not refused', async () => {
+  it('[PP-S10] an existing person with no number still unlocks and works, and is not flagged for a missing number; a duplicate that arrived by sync is flagged, not refused', async () => {
     const app = makeApp();
     const admin = await loginAs(app, 'admin');
     const old = await loginAs(app, 'ajk'); // made with no number, as before this version
@@ -133,7 +133,7 @@ describe('[PP-S10] create, edit, duplicate', () => {
     expect((await old.relogin()).length).toBeGreaterThan(10);
     expect((await app.inject({ method: 'GET', url: '/api/auth/me', headers: old.headers })).json().user.phone).toBeNull();
     const act = peopleActivity(db, LOCAL_SURAU_ID, new Date(), 'box', false);
-    expect(act.users.find((u) => u.id === old.userId)?.needs).toContain('phone');
+    expect(act.users.find((u) => u.id === old.userId)?.needs).not.toContain('phone');
     const a = (await create(app, admin, 'Kak Siti', P1)).json();
     const b = (await create(app, admin, 'Encik Rahman', '012-000 0012')).json();
     const at = new Date(Date.now() + 5000).toISOString();

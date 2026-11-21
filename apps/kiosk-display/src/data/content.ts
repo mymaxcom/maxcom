@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { buildCycle, currentSlot, dateOf, zikirWindow } from '@surau/core';
+import { buildCycle, currentSlot, dateOf, videoAfterPrayerSlots, videoSlotSeconds, zikirWindow } from '@surau/core';
+import type { AfterPrayerSlot } from '@surau/core';
 import type { KioskContent, Slot, SlotFeature } from '@surau/core';
 import { num } from '../content/assets.ts';
-import { subscribe } from './bundle.ts';
+import { subscribe, subscribePlayNow } from './bundle.ts';
 import { clearMedia, keepMedia } from './media.ts';
 import {
   PREVIEW_POLL_MS, isPreview, kioskFetch, preparePreviewAssets, usePreviewPoster, usePreviewTheme, usePreviewToken,
@@ -318,9 +319,43 @@ export function useContent(view: KioskView): ContentView {
   const [skipped, setSkipped] = useState<ReadonlyMap<number, number>>(() => new Map());
   const nowRef = useRef(view.now);
   nowRef.current = view.now;
+  // Videos tied to a prayer (afterPrayer): played once a day, outside the rotation, right after the prayer's zikir screen.
+  // `afterDone` holds the ones that ended, failed or were given up today (date|itemId), kept across a reload of the page.
+  const [afterDone, setAfterDone] = useState<ReadonlySet<string>>(() => (preview ? new Set<string>() : readAfterDone(dateOf(view.now, view.tz))));
+  const afterStarts = useRef(new Map<number, string>());
+  // "Main sekarang": a video item the box asked to show at once. It replaces the rotation until it ends, fails or is
+  // replaced by a second press, then the rotation is what its own clock says. It lives in Main, so a prayer phase or a
+  // live (which remove Main) end it with no more code. Never in a preview (the stream is not opened there).
+  const [playNow, setPlayNow] = useState<{ itemId: string; startedAt: Date } | null>(null);
+  const playNowRef = useRef(playNow);
+  playNowRef.current = playNow;
+  useEffect(
+    () =>
+      subscribePlayNow((data) => {
+        const id = isObj(data) && typeof data.itemId === 'string' ? data.itemId : null;
+        if (id !== null) setPlayNow({ itemId: id, startedAt: new Date() });
+      }),
+    [],
+  );
   const skip = useCallback((startedAt: Date) => {
+    const pn = playNowRef.current;
+    if (pn !== null && pn.startedAt.getTime() === startedAt.getTime()) {
+      setPlayNow(null);
+      return;
+    }
+    const tied = afterStarts.current.get(startedAt.getTime());
+    if (tied !== undefined) {
+      setAfterDone((cur) => {
+        if (cur.has(tied)) return cur;
+        const day = tied.split('|')[0] ?? '';
+        const next = new Set([...cur].filter((k) => k.startsWith(`${day}|`))).add(tied);
+        if (!preview) writeAfterDone(next);
+        return next;
+      });
+      return;
+    }
     setSkipped((cur) => (cur.has(startedAt.getTime()) ? cur : new Map(cur).set(startedAt.getTime(), Math.max(nowRef.current.getTime(), startedAt.getTime() + 1))));
-  }, []);
+  }, [preview]);
   const roomChecked = useRef(new Set<number>());
   const today = view.state.today;
   const hijriMonth = view.hijri?.m;
@@ -339,7 +374,7 @@ export function useContent(view: KioskView): ContentView {
   useEffect(() => {
     if (tooLate && natural) skip(natural.startedAt);
   }, [tooLate, natural, skip]);
-  const current = useMemo(() => {
+  const rotationCurrent = useMemo(() => {
     let cur = natural;
     let nat = natural; // the slot the clock itself is on: the chain walks the clock's boundaries, the shown start is the skip's
     for (let guard = 0; cur && nat && skipped.has(cur.startedAt.getTime()) && guard < rotation.length + 1; guard++) {
@@ -396,6 +431,39 @@ export function useContent(view: KioskView): ContentView {
     return cur;
   }, [natural, skipped, rotation, cycle.cycleStartSec, view.tz, view.now]);
 
+  // Where today's after-prayer videos start; one that could not finish before the next phase or recitation is left out
+  // (the same room rule as a video in the rotation, decided at its own start, so it is the same answer all day).
+  const afterMonth = tarawihMonthFor(view.now, today ? [today] : [], settings) ?? hijriMonth;
+  const afterSlots = useMemo((): AfterPrayerSlot[] => {
+    if (!content) return [];
+    return videoAfterPrayerSlots(content, settings, view.now, today ?? null, afterMonth).filter(
+      (a) => videoRoomSeconds(new Date(a.startsAt.getTime() - 1), today ?? null, settings, content.tilawah.slots, afterMonth) >= a.durationSeconds,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, settings, klDate, today, afterMonth]);
+  const doneKey = (a: AfterPrayerSlot): string => `${klDate}|${a.itemId}`;
+  const afterNow = useMemo(() => {
+    const t = view.now.getTime();
+    return afterSlots.find((a) => a.startsAt.getTime() <= t && t < a.startsAt.getTime() + a.durationSeconds * 1000 && !afterDone.has(doneKey(a))) ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [afterSlots, second, afterDone]);
+  afterStarts.current = new Map(afterSlots.map((a) => [a.startsAt.getTime(), doneKey(a)]));
+  // the item must be on this box's list (an upload whose file is missing is not): else there is nothing to show and the press is dropped
+  const playNowVideo = playNow !== null && !preview ? (content?.videos ?? []).find((v) => v.id === playNow.itemId) ?? null : null;
+  const playNowSeconds = playNowVideo ? videoSlotSeconds(playNowVideo) : 0;
+  useEffect(() => {
+    if (playNow === null) return;
+    if (playNowVideo === null && content !== null) setPlayNow(null);
+    else if (playNowVideo !== null && view.now.getTime() >= playNow.startedAt.getTime() + playNowSeconds * 1000) setPlayNow(null);
+  }, [playNow, playNowVideo, playNowSeconds, content, second]);
+  const current = useMemo((): ReturnType<typeof currentSlot> => {
+    if (playNow !== null && playNowVideo !== null && view.now.getTime() < playNow.startedAt.getTime() + playNowSeconds * 1000) {
+      return { slot: { feature: 'videos', itemId: playNowVideo.id, durationSeconds: playNowSeconds }, index: -1, startedAt: playNow.startedAt };
+    }
+    if (!afterNow || preview) return rotationCurrent;
+    return { slot: { feature: 'videos', itemId: afterNow.itemId, durationSeconds: afterNow.durationSeconds }, index: -1, startedAt: afterNow.startsAt };
+  }, [afterNow, rotationCurrent, preview, playNow, playNowVideo, playNowSeconds, second]);
+
   const zikir = useMemo(() => {
     const days = today ? [today] : [];
     const month = tarawihMonthFor(view.now, days, settings) ?? view.hijri?.m;
@@ -424,6 +492,26 @@ export function useContent(view: KioskView): ContentView {
     : forced ? null : zikir;
 
   return { forced, content, rotation, current, zikir: zikirOut, override, skip };
+}
+
+const AFTER_DONE_KEY = 'surau.afterPrayerDone';
+
+/** The after-prayer videos already played or given up on `date` (the entries of other days are forgotten). */
+function readAfterDone(date: string): ReadonlySet<string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(AFTER_DONE_KEY) ?? '[]') as unknown;
+    return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && x.startsWith(`${date}|`)) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeAfterDone(done: ReadonlySet<string>): void {
+  try {
+    localStorage.setItem(AFTER_DONE_KEY, JSON.stringify([...done]));
+  } catch {
+    /* storage full or blocked: the in-memory set still holds for this page */
+  }
 }
 
 /** The id the preview gives the host's poster; never a box item id (those are UUIDs). */

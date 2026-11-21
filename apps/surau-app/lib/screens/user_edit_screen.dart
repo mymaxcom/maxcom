@@ -678,7 +678,7 @@ class _LockedCard extends StatelessWidget {
 }
 
 /// The phone number (left to right), who may see it, WhatsApp and "Tukar
-/// nombor"; "Nombor telefon diperlukan" with "Isi nombor" when there is none.
+/// nombor"; "Tiada nombor telefon" with "Isi nombor" when there is none.
 class _PhoneCard extends StatelessWidget {
   const _PhoneCard({required this.phone, required this.onEdit, required this.onWhatsApp});
 
@@ -700,7 +700,7 @@ class _PhoneCard extends StatelessWidget {
               children: [
                 const Icon(Icons.phone_disabled_outlined, color: SurauColors.muted),
                 const SizedBox(width: 12),
-                Expanded(child: Text(s.phoneNeeded, style: text.bodyLarge)),
+                Expanded(child: Text(s.phoneNone, style: text.bodyLarge)),
                 const SizedBox(width: 8),
                 OutlinedButton(
                   key: const ValueKey('user-phone-edit'),
@@ -1064,11 +1064,12 @@ class _PhoneSheetState extends ConsumerState<_PhoneSheet> {
   Future<void> _save() async {
     final s = S.of(context);
     final raw = _phone.text.trim();
-    if (raw.isEmpty) {
-      setState(() => _error = s.phoneRequired);
+    // The number is optional: empty clears it (nothing to send when there is none).
+    if (raw.isEmpty && widget.user.phone == null) {
+      Navigator.of(context).pop(false);
       return;
     }
-    if (normalisePhone(raw) == null) {
+    if (raw.isNotEmpty && normalisePhone(raw) == null) {
       setState(() => _error = s.phoneInvalid);
       return;
     }
@@ -1092,7 +1093,7 @@ class _PhoneSheetState extends ConsumerState<_PhoneSheet> {
     Navigator.of(context).pop(true);
     messenger
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(s.phoneSaved)));
+      ..showSnackBar(SnackBar(content: Text(raw.isEmpty ? s.phoneCleared : s.phoneSaved)));
   }
 
   @override
@@ -1122,9 +1123,10 @@ class _PhoneSheetState extends ConsumerState<_PhoneSheet> {
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _busy ? null : _save(),
               decoration: InputDecoration(
-                labelText: s.phoneLabel,
+                labelText: s.phoneLabelOptional,
                 hintText: s.phoneHint,
-                helperText: _error == null ? s.phoneHint : null,
+                helperText: _error == null ? s.phoneWhatsAppHint : null,
+                helperMaxLines: 3,
                 errorText: _error,
                 errorMaxLines: 3,
               ),

@@ -340,7 +340,7 @@ describe('automatic cloud link (T3b)', () => {
     later();
     await r.box.syncAgent!.runOnce();
     const pub = (await r.box.inject({ method: 'GET', url: '/api/health' })).json();
-    expect(pub).toEqual({ ok: true, version: pub.version, name: null, themes: pub.themes, features: ['video', 'posterStretch', 'tvLangAr'], themeOk: true, cloud: CLOUD_URL });
+    expect(pub).toEqual({ ok: true, version: pub.version, name: null, themes: pub.themes, features: ['video', 'posterStretch', 'tvLangAr', 'videoAfterPrayer', 'videoPlayNow'], themeOk: true, cloud: CLOUD_URL });
     const full = (await r.box.inject({ method: 'GET', url: '/api/health', headers: admin.headers })).json();
     expect(full.cloud).toBe(CLOUD_URL);
     expect(full.sync).toMatchObject({ linked: true });

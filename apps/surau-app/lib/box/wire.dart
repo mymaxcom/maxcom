@@ -206,8 +206,8 @@ class UserActivityDto {
   final bool locked;
   final DateTime? pinLockedUntil;
 
-  /// What needs doing, from the server: `locked`, `no_device`, `phone`,
-  /// `phone_duplicate`.
+  /// What needs doing, from the server: `locked`, `no_device`,
+  /// `phone_duplicate`. A phone number is optional, so there is no missing-number need.
   final List<String> needs;
 
   /// Every phone unused for 90 days: "Nyahaktifkan?" (a suggestion only).
@@ -215,7 +215,6 @@ class UserActivityDto {
 
   bool get needsLocked => needs.contains('locked');
   bool get needsNoDevice => needs.contains('no_device');
-  bool get needsPhone => needs.contains('phone');
   bool get needsPhoneDuplicate => needs.contains('phone_duplicate');
 }
 
