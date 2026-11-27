@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Server } from 'node:net';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
@@ -793,5 +796,436 @@ describe.skipIf(FFMPEG === null)('LIFT + LIMITER with the real ffmpeg', () => {
     const peak = Number((/max_volume: (-?[\d.]+) dB/.exec(err) as RegExpExecArray)[1]);
     expect(peak).toBeLessThanOrEqual(-0.5);
     expect(Math.abs(tone(-30, LIMITER) + 30)).toBeLessThan(0.5);
+  });
+});
+
+/* ------------------------------------------------------------------ watchdog, kick, log, debug level, held, AAC rendition */
+
+describe('Mixer monitor watchdog and kick', () => {
+  const mk = (over: Partial<ConstructorParameters<typeof Mixer>[0]> = {}) => {
+    const { spawnFn, procs } = fakeSpawn();
+    const clock = { t: 1_000_000 };
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, now: () => clock.t, stallMs: 100, startGraceMs: 100, backoffBaseMs: 600_000, backoffMaxMs: 600_000, ...over });
+    return { m, procs, clock };
+  };
+  const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+  it('no monitor bytes for stallMs ends the run and starts the next at once (no back-off), counted as a stall', async () => {
+    const { m, procs, clock } = mk();
+    m.start(cfg);
+    clock.t += 150;
+    await wait(80);
+    expect(procs).toHaveLength(2);
+    const s = m.status();
+    expect(s.stalls).toBe(1);
+    expect(s.lastStall).toEqual({ reason: 'monitor_silent', atMs: 1_000_150 });
+    expect(s.restarts).toBe(1);
+    expect(s.state).toBe('running');
+    await m.stop();
+  });
+
+  it('steady monitor bytes never end a run', async () => {
+    const { m, procs, clock } = mk();
+    m.start(cfg);
+    for (let n = 0; n < 8; n++) {
+      clock.t += 60;
+      procs[0]!.stdout.write(Buffer.from([1, 0]));
+      await wait(30);
+    }
+    expect(procs).toHaveLength(1);
+    expect(m.status().stalls).toBe(0);
+    await m.stop();
+  });
+
+  it('silence inside the start grace does not end the run; after the grace it does', async () => {
+    const { m, procs, clock } = mk({ startGraceMs: 1000, stallMs: 100 });
+    m.start(cfg);
+    clock.t += 900;
+    await wait(80);
+    expect(procs).toHaveLength(1);
+    clock.t += 200;
+    await wait(80);
+    expect(procs).toHaveLength(2);
+    expect(m.status().stalls).toBe(1);
+    await m.stop();
+  });
+
+  it('a stall is not a failure: many in a row never reach maxFailures', async () => {
+    const { m, procs, clock } = mk({ maxFailures: 2, stallBackoffMs: [1, 1, 1] });
+    m.start(cfg);
+    for (let n = 0; n < 4; n++) {
+      clock.t += 150;
+      await wait(80);
+    }
+    expect(procs.length).toBeGreaterThanOrEqual(4);
+    expect(m.status().state).toBe('running');
+    expect(m.status().stalls).toBeGreaterThanOrEqual(3);
+    await m.stop();
+  });
+
+  it('B4: the 3rd stall in a row waits 10 s, the 4th 30 s, the 5th and later 60 s; a healthy run (60 s of monitor bytes) resets the streak', async () => {
+    const logs: Array<[string, string]> = [];
+    const { m, procs, clock } = mk({ stallBackoffMs: [120, 240, 360], healthyRunMs: 1000, log: (k, x) => logs.push([k, x]) });
+    m.start(cfg);
+    for (let n = 0; n < 2; n++) {
+      clock.t += 150;
+      await wait(80);
+    }
+    expect(procs).toHaveLength(3); // stalls 1 and 2 relaunch at once
+    clock.t += 150;
+    await wait(60);
+    expect(procs).toHaveLength(3); // the 3rd stall waits (120 ms here)
+    expect(m.status().state).toBe('retrying');
+    await wait(120);
+    expect(procs).toHaveLength(4);
+    expect(logs.some(([k, x]) => k === 'backoff' && x.includes('3 stalls in a row') && x.includes('waits'))).toBe(true);
+    clock.t += 150;
+    await wait(120);
+    expect(procs).toHaveLength(4); // the 4th waits 240 ms
+    await wait(200);
+    expect(procs).toHaveLength(5);
+    // a healthy run: monitor bytes over more than healthyRunMs, then a stall: the streak starts again
+    procs[4]!.stdout.write(Buffer.from([1, 0]));
+    clock.t += 1500;
+    procs[4]!.stdout.write(Buffer.from([1, 0]));
+    clock.t += 150;
+    await wait(80);
+    expect(procs).toHaveLength(6); // streak is 1 again: at once
+    await m.stop();
+  });
+
+  it('kick relaunches without back-off, counts a stall and keeps the reason', async () => {
+    const { m, procs } = mk();
+    m.start(cfg);
+    m.kick('no_output');
+    await wait(20);
+    expect(procs).toHaveLength(2);
+    expect(m.status().stalls).toBe(1);
+    expect(m.status().lastStall?.reason).toBe('no_output');
+    await m.stop();
+  });
+
+  it('a kick while a kick relaunch is pending does nothing more', async () => {
+    const { m, procs } = mk();
+    m.start(cfg);
+    let kills = 0;
+    procs[0]!.kill = () => {
+      kills++;
+      return true; // the process is slow to die
+    };
+    m.kick('a');
+    m.kick('b');
+    expect(kills).toBe(1);
+    expect(m.status().stalls).toBe(1);
+    procs[0]!.exit(0);
+    await wait(20);
+    expect(procs).toHaveLength(2);
+    expect(m.status().stalls).toBe(1);
+    await m.stop();
+  });
+
+  it('kick is a no-op before start and after stop', async () => {
+    const { m, procs } = mk();
+    m.kick('early');
+    expect(m.status().stalls).toBe(0);
+    m.start(cfg);
+    await m.stop();
+    m.kick('late');
+    await wait(20);
+    expect(procs).toHaveLength(1);
+    expect(m.status().stalls).toBe(0);
+  });
+
+  it('a stop during a stall does not relaunch, and the watchdog timer is gone after stop', async () => {
+    const { m, procs, clock } = mk();
+    m.start(cfg);
+    procs[0]!.kill = () => true;
+    m.kick('x');
+    const done = m.stop();
+    procs[0]!.exit(0);
+    await done;
+    clock.t += 10_000;
+    await wait(80);
+    expect(procs).toHaveLength(1);
+    expect(m.status().state).toBe('off');
+    expect(m.status().stalls).toBe(1);
+  });
+
+  it('the watchdog timer is cleared on every exit (an ordinary failed run waits for its back-off, no stall is made)', async () => {
+    const { m, procs, clock } = mk({ backoffBaseMs: 600_000 });
+    m.start(cfg);
+    procs[0]!.exit(1);
+    clock.t += 10_000;
+    await wait(80);
+    expect(procs).toHaveLength(1);
+    expect(m.status().stalls).toBe(0);
+    await m.stop();
+  });
+});
+
+describe('Mixer log', () => {
+  const PASS = 'Passw0rdPassw0rd';
+  const mk = (over: Partial<ConstructorParameters<typeof Mixer>[0]> = {}) => {
+    const { spawnFn, procs } = fakeSpawn();
+    const lines: Array<[string, string]> = [];
+    const clock = { t: 5_000_000 };
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, now: () => clock.t, rtspUser: 'mixer-1', rtspPass: PASS, backoffBaseMs: 1, log: (k, t) => lines.push([k, t]), ...over });
+    return { m, procs, lines, clock };
+  };
+  const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+  it('a launch line has the run number and the argument list with the login hidden', async () => {
+    const { m, lines } = mk();
+    m.start(cfg);
+    const l = lines.find(([k]) => k === 'launch');
+    expect(l?.[1]).toContain('run 1');
+    expect(l?.[1]).toContain('-filter_complex');
+    expect(l?.[1]).toContain('rtsp://***@127.0.0.1:8554/surau-cam');
+    expect(l?.[1]).not.toContain(PASS);
+    await m.stop();
+  });
+
+  it('every stderr line is logged, the same message over and over is counted not repeated', async () => {
+    const { m, procs, lines, clock } = mk();
+    m.start(cfg);
+    procs[0]!.stderr.write('Non-monotonic DTS in output stream 0:1; previous: 100, current: 90\n');
+    await wait(10);
+    procs[0]!.stderr.write('Non-monotonic DTS in output stream 0:1; previous: 200, current: 190\n');
+    procs[0]!.stderr.write('Non-monotonic DTS in output stream 0:1; previous: 300, current: 290\n');
+    procs[0]!.stderr.write('something else\n');
+    await wait(10);
+    let err = lines.filter(([k]) => k === 'stderr').map(([, t]) => t);
+    expect(err).toHaveLength(2);
+    expect(err[1]).toBe('something else');
+    clock.t += 11_000;
+    procs[0]!.stderr.write('Non-monotonic DTS in output stream 0:1; previous: 400, current: 390\n');
+    await wait(10);
+    err = lines.filter(([k]) => k === 'stderr').map(([, t]) => t);
+    expect(err).toHaveLength(3);
+    expect(err[2]).toContain('(2 similar lines left out)');
+    expect(m.status().stderrTail.length).toBe(5); // the in-memory tail still keeps every line
+    await m.stop();
+  });
+
+  it('an exit line has the code and the seconds since launch', async () => {
+    const { m, procs, lines, clock } = mk();
+    m.start(cfg);
+    clock.t += 7400;
+    procs[0]!.exit(3);
+    await wait(10);
+    expect(lines.find(([k]) => k === 'exit')?.[1]).toBe('code=3 signal=none after 7 s');
+    await m.stop();
+  });
+
+  it('a stall writes one block: reason, seconds since launch, monitor bytes, stderr tail; no password or camera address anywhere', async () => {
+    const { m, procs, lines, clock } = mk();
+    m.start(cfg);
+    procs[0]!.stdout.write(Buffer.alloc(64));
+    procs[0]!.stderr.write(`Error opening rtsp://admin:hunter2@192.0.2.9:554/stream1 using ${PASS}\n`);
+    procs[0]!.stderr.write(`rtsp://mixer-1:${PASS}@127.0.0.1:8554/surau-cam: Server returned 401\n`);
+    await wait(10);
+    clock.t += 42_000;
+    m.kick('no_output');
+    await wait(10);
+    const block = lines.filter(([k]) => k === 'stall');
+    expect(block).toHaveLength(1);
+    const t = block[0]![1];
+    expect(t).toContain('reason=no_output');
+    expect(t).toContain('seconds since launch=42');
+    expect(t).toContain('monitor bytes in this run=64');
+    expect(t).toContain('Server returned 401');
+    const all = lines.map(([, x]) => x).join('\n');
+    expect(all).not.toContain(PASS);
+    expect(all).not.toContain('hunter2');
+    expect(all).not.toContain('admin:');
+    expect(all).toContain('rtsp://***@');
+    await m.stop();
+  });
+
+  it('a logger that throws never stops the live', async () => {
+    const { m, procs } = mk({
+      log: () => {
+        throw new Error('disk full');
+      },
+    });
+    m.start(cfg);
+    procs[0]!.stderr.write('x\n');
+    procs[0]!.exit(1);
+    await wait(30);
+    expect(procs).toHaveLength(2);
+    await m.stop();
+  });
+});
+
+describe('Mixer debug level', () => {
+  it('stderr is split on a bare carriage return too: progress lines never swallow the real message', async () => {
+    const { spawnFn, procs } = fakeSpawn();
+    const lines: Array<[string, string]> = [];
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, backoffBaseMs: 600_000, log: (k, t) => lines.push([k, t]) });
+    m.start(cfg);
+    procs[0]!.stderr.write('size=N/A time=00:00:01.00 bitrate=N/A speed=1x    \rsize=N/A time=00:00:02.00 bitrate=N/A speed=1x    \r');
+    procs[0]!.stderr.write('Connection to tcp://x timed out\n');
+    await new Promise((r) => setTimeout(r, 20));
+    const err = lines.filter(([k]) => k === 'stderr').map(([, t]) => t);
+    expect(err.at(-1)).toBe('Connection to tcp://x timed out');
+    expect(err).toHaveLength(2); // the second progress line is the first again (counted, not repeated)
+    await m.stop();
+  });
+
+  it('-nostats only while the debug flag is on; the default arguments carry none', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mixer-nostats-'));
+    const flag = join(dir, 'debug.flag');
+    try {
+      const { spawnFn, procs } = fakeSpawn();
+      const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, backoffBaseMs: 1, debugFlagPath: flag });
+      m.start(cfg);
+      expect(procs[0]!.args).not.toContain('-nostats');
+      writeFileSync(flag, '');
+      m.kick('t');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(procs[1]!.args).toContain('-nostats');
+      await m.stop();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('ffmpeg runs with -loglevel info while the flag file exists, warning otherwise', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mixer-debug-'));
+    const flag = join(dir, 'debug.flag');
+    try {
+      const { spawnFn, procs } = fakeSpawn();
+      const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, backoffBaseMs: 1, debugFlagPath: flag });
+      m.start(cfg);
+      expect(procs[0]!.args[procs[0]!.args.indexOf('-loglevel') + 1]).toBe('warning');
+      writeFileSync(flag, '');
+      m.kick('t');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(procs[1]!.args[procs[1]!.args.indexOf('-loglevel') + 1]).toBe('info');
+      rmSync(flag);
+      m.kick('t');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(procs[2]!.args[procs[2]!.args.indexOf('-loglevel') + 1]).toBe('warning');
+      await m.stop();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('an unusable flag path means the normal level', () => {
+    const { spawnFn, procs } = fakeSpawn();
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn, debugFlagPath: '\u0000bad' });
+    m.start(cfg);
+    expect(procs[0]!.args[procs[0]!.args.indexOf('-loglevel') + 1]).toBe('warning');
+  });
+});
+
+describe('Mixer: an explicit held in the start config survives a lost/back cycle', () => {
+  const held = (a: string[], id: string): string => [...a.join(' ').matchAll(/volume@(\w+)=volume=(\d\.\d\d)/g)].find((x) => x[1] === id)?.[2] ?? '';
+  const start = (added: Array<{ id: 'deviceMic' | 'boxInput'; initialDelayMs: number; volume: number; held?: boolean }>) => {
+    const { spawnFn, procs } = fakeSpawn();
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'windows', control: 'stdin', deviceName: 'Line In', headroomMs: 1500, spawnFn });
+    m.start({ unit: 'camera', unitHasAudio: true, unitVolume: 100, added });
+    return { m, procs };
+  };
+
+  it('held:false stays in the mix after the input is lost and comes back; a source without held falls back to the default rule', async () => {
+    const { m, procs } = start([
+      { id: 'boxInput', initialDelayMs: 900, volume: 60, held: false },
+      { id: 'deviceMic', initialDelayMs: 1000, volume: 80 },
+    ]);
+    expect(held(procs[0]!.args, 'boxInput')).toBe('0.60');
+    expect(held(procs[0]!.args, 'deviceMic')).toBe('0.00');
+    await m.setVolume('deviceMic', 80); // released after a lock
+    m.setSourceAvailable('boxInput', false);
+    await tick();
+    m.setSourceAvailable('boxInput', true);
+    await tick();
+    m.setSourceAvailable('deviceMic', false);
+    await tick();
+    m.setSourceAvailable('deviceMic', true);
+    await tick();
+    const last = procs[procs.length - 1]!;
+    expect(held(last.args, 'boxInput')).toBe('0.60');
+    expect(held(last.args, 'deviceMic')).toBe('0.00');
+    await m.stop();
+  });
+
+  it('held:false also survives switchUnit; a given held:true is restored too', async () => {
+    const { m, procs } = start([
+      { id: 'boxInput', initialDelayMs: 900, volume: 60, held: false },
+      { id: 'deviceMic', initialDelayMs: 1000, volume: 80, held: true },
+    ]);
+    await m.setVolume('deviceMic', 80); // released after a lock
+    m.switchUnit('ingest');
+    await tick();
+    const last = procs[procs.length - 1]!;
+    expect(held(last.args, 'boxInput')).toBe('0.60');
+    expect(held(last.args, 'deviceMic')).toBe('0.00');
+    await m.stop();
+  });
+});
+
+describe('mixArgs: AAC rendition for YouTube (ytOutputPath)', () => {
+  /** The output groups after the filter graph: each starts at a `-map` that follows a finished output URL. */
+  const outputs = (a: string[]): string[][] => {
+    const res: string[][] = [];
+    let cur: string[] = [];
+    for (const x of a.slice(a.indexOf('-filter_complex') + 2)) {
+      if (x === '-map' && cur.length > 0 && /^(rtsp:|pipe:)/.test(cur[cur.length - 1] ?? '')) {
+        res.push(cur);
+        cur = [];
+      }
+      cur.push(x);
+    }
+    res.push(cur);
+    return res;
+  };
+
+  it('not set: the graph ends the mix in [mix] and there are exactly two outputs (picture + Opus, monitor)', () => {
+    for (const over of [{}, { added: [mic] }, { added: [mic, box], deviceName: 'Line In' }]) {
+      const a = mixArgs({ ...base, ...over });
+      expect(graph(a)).not.toContain('mixyt');
+      expect(graph(a)).toContain('[mix];');
+      expect(a).not.toContain('aac');
+      expect(outputs(a)).toHaveLength(2);
+      expect(mixArgs({ ...base, ...over, ytOutputPath: undefined })).toEqual(a);
+    }
+  });
+
+  it('set: one mix split in two; the second output copies the picture and encodes the same mix as AAC on the given path with the same login', () => {
+    const a = mixArgs({ ...base, added: [mic], rtspUser: 'mixer-ab12', rtspPass: 'Passw0rdPassw0rd', ytOutputPath: 'surau-yt' });
+    const g = graph(a);
+    expect(g).toContain(',asplit=2[mix][mixyt];');
+    expect(g.match(/amix=/g)).toHaveLength(1);
+    expect(g.match(/\[mixyt\]/g)).toHaveLength(1);
+    const o = outputs(a);
+    expect(o).toHaveLength(3);
+    expect(o[0]?.slice(0, 4)).toEqual(['-map', '1:v', '-map', '[mix]']);
+    expect(o[0]).toContain('libopus');
+    expect(o[1]).toEqual(['-map', '1:v', '-map', '[mixyt]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-f', 'rtsp', '-rtsp_transport', 'tcp', 'rtsp://mixer-ab12:Passw0rdPassw0rd@127.0.0.1:8554/surau-yt']);
+    // the monitor stays the last output
+    expect(a.slice(-9)).toEqual(['-map', '[mon]', '-c:a', 'pcm_s16le', '-ar', '16000', '-f', 's16le', 'pipe:1']);
+  });
+
+  it('set, single sound input: the split is on the one mix too', () => {
+    const a = mixArgs({ ...base, ytOutputPath: 'surau-yt' });
+    expect(graph(a)).toContain('[c0]aresample=async=1');
+    expect(graph(a)).toContain(',asplit=2[mix][mixyt]');
+    expect(a.filter((x) => x === 'aac')).toHaveLength(1);
+  });
+
+  it('refuses a bad path and the same path as the first output', () => {
+    expect(() => mixArgs({ ...base, ytOutputPath: 'Bad Path' })).toThrow(RangeError);
+    expect(() => mixArgs({ ...base, ytOutputPath: 'surau' })).toThrow(RangeError);
+    expect(() => mixArgs({ ...base, outputPath: 'surau-yt', ytOutputPath: 'surau-yt' })).toThrow(RangeError);
+  });
+
+  it('the Mixer passes the start config path on to every run', () => {
+    const { spawnFn, procs } = fakeSpawn();
+    const m = new Mixer({ ffmpegPath: 'ffmpeg', platform: 'android', headroomMs: 1500, spawnFn });
+    m.start({ ...cfg, ytOutputPath: 'surau-yt' });
+    expect(procs[0]!.args.join(' ')).toContain('[mixyt]');
+    expect(procs[0]!.args.join(' ')).toContain('/surau-yt');
   });
 });

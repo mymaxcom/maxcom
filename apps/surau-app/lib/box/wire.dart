@@ -567,6 +567,7 @@ class HealthDto {
     this.themes,
     this.themeHealth,
     this.features,
+    this.now,
   });
 
   factory HealthDto.fromJson(Map<String, dynamic> j) {
@@ -591,8 +592,14 @@ class HealthDto {
           : null,
       themeHealth: j['themeHealth'] is Map<String, dynamic> ? ThemeHealth.fromJson(j['themeHealth'] as Map<String, dynamic>) : null,
       features: j['features'] is List ? [for (final f in j['features'] as List) if (f is String) f] : null,
+      now: j['now'] is String ? DateTime.tryParse(j['now'] as String) : null,
     );
   }
+
+  /// The server's own clock at the answer (ISO `now`), when it says so: the
+  /// app learns its clock offset against the box from it (G3). Null on a
+  /// server that does not send it.
+  final DateTime? now;
 
   final bool ok;
   final int version;
@@ -867,6 +874,9 @@ class Challenge {
 
 String? _str(Object? v) => v is String && v.isNotEmpty ? v : null;
 
+/// A whole percent 0 to 100; null for anything else (an older box sends none).
+int? _percent(Object? v) => v is num && v >= 0 ? v.round().clamp(0, 100) : null;
+
 Map<String, dynamic> _map(Object? v) =>
     v is Map ? v.cast<String, dynamic>() : const <String, dynamic>{};
 
@@ -1006,16 +1016,78 @@ class LiveStatusDto {
     this.signIn,
     this.youtubeSignInHere = true,
     this.noticeRev,
+    this.viewers = const [],
+    this.mine = false,
+    this.videoPath,
+    this.kuliahId,
+    this.source,
+    this.sessionYoutube,
+    this.youtubeVia,
+    this.startedAt,
+    this.nextLiveOn,
+    this.gapSeconds = 0,
+    this.broadcastIds = const [],
+    this.cameraUse = const [],
+    this.channelId,
+    this.controllerQuietSeconds,
+    this.cameraKbps,
+    this.canToggleKiosk = false,
+    this.sessionKiosk,
+    this.sessionRecording,
+    this.sessionBoxPulled,
+    this.sessionStartedBoxPulled,
+    this.cpuPercent,
+    this.lastLiveCpuPercent,
+    this.relayBehindSeconds,
+    this.relayQuality,
+    this.relayRestarts = 0,
   });
 
   factory LiveStatusDto.fromJson(Map<String, dynamic> j) {
     final s = _map(j['session']);
     final yt = _map(j['youtube']);
+    final outputs = _map(s['outputs']);
     return LiveStatusDto(
       sessionId: _str(s['id']),
       startedBy: _str(s['startedBy']),
+      // 2026.11.15, all additive: an older box sends none of these
+      mine: s['mine'] == true,
+      videoPath: s['videoPath'] == 'box' || s['videoPath'] == 'device' ? s['videoPath'] as String : null,
+      kuliahId: _str(s['kuliahId']),
+      source: _str(s['source']),
+      sessionYoutube: outputs['youtube'] is bool ? outputs['youtube'] as bool : null,
+      youtubeVia: _str(s['youtubeVia']),
+      startedAt: DateTime.tryParse(_str(s['startedAt']) ?? ''),
+      nextLiveOn: j['nextLiveOn'] is bool ? j['nextLiveOn'] as bool : null,
+      gapSeconds: j['gapSeconds'] is num ? (j['gapSeconds'] as num).toInt() : 0,
+      broadcastIds: _strings(j['broadcastIds']),
+      cameraUse: [
+        for (final c in (j['cameraUse'] is List ? j['cameraUse'] as List : const []))
+          if (c is Map) ?LiveCameraUseDto.maybe(c.cast<String, dynamic>()),
+      ],
+      channelId: _str(yt['channelId']),
+      // 2026.11.15 build 4, all additive and optional: an older box sends none of these
+      controllerQuietSeconds: j['controllerQuietSeconds'] is num ? (j['controllerQuietSeconds'] as num).toInt() : null,
+      // `cameraKbps` is top level in the status; an earlier build read it from `ingest`
+      cameraKbps: j['cameraKbps'] is num
+          ? (j['cameraKbps'] as num).toDouble()
+          : (_map(j['ingest'])['cameraKbps'] is num ? (_map(j['ingest'])['cameraKbps'] as num).toDouble() : null),
+      sessionBoxPulled: s['boxPulled'] is bool ? s['boxPulled'] as bool : null,
+      sessionStartedBoxPulled: s['startedBoxPulled'] is bool ? s['startedBoxPulled'] as bool : null,
+      // 2026.11.15 build 5, additive and optional: an older box sends none of these
+      cpuPercent: _percent(j['cpuPercent']),
+      lastLiveCpuPercent: _percent(j['lastLiveCpuPercent']),
+      canToggleKiosk: j['canToggleKiosk'] == true,
+      sessionKiosk: outputs['kiosk'] is bool ? outputs['kiosk'] as bool : null,
+      sessionRecording: outputs['recording'] is bool ? outputs['recording'] as bool : null,
       ingestReady: _map(j['ingest'])['ready'] == true,
       relayState: _str(_map(j['relay'])['state']) ?? 'off',
+      // 2026.11.15 build 6, additive and optional: an older box sends none of these
+      relayBehindSeconds: _map(j['relay'])['behindSeconds'] is num ? (_map(j['relay'])['behindSeconds'] as num).round() : null,
+      relayQuality: _map(j['relay'])['quality'] == 'full' || _map(j['relay'])['quality'] == 'low'
+          ? _map(j['relay'])['quality'] as String
+          : null,
+      relayRestarts: _map(j['relay'])['restarts'] is num ? (_map(j['relay'])['restarts'] as num).toInt() : 0,
       youtubeSignedIn: yt['signedIn'] == true,
       channelTitle: _str(yt['channelTitle']),
       youtubeState: _str(yt['state']) ?? 'none',
@@ -1027,6 +1099,11 @@ class LiveStatusDto {
       warnings: _strings(j['warnings']),
       video: _str(j['video']),
       noticeRev: j['noticeRev'] is num ? (j['noticeRev'] as num).toInt() : null,
+      viewers: [
+        for (final v in (j['viewers'] is List ? j['viewers'] as List : const []))
+          if (v is Map && v['tvId'] is String && v['name'] is String && v['state'] is String)
+            LiveViewerDto(tvId: v['tvId'] as String, name: v['name'] as String, state: v['state'] as String),
+      ],
       audio: [
         for (final a in (_map(j['audio'])['sources'] is List ? _map(j['audio'])['sources'] as List : const []))
           if (a is Map && a['id'] is String) LiveAudioSourceDto.fromJson(a.cast<String, dynamic>()),
@@ -1036,6 +1113,67 @@ class LiveStatusDto {
 
   /// The picture source of the running live (`phone` or `external`); null while the box does not say.
   final String? video;
+
+  /// Whole-machine CPU of the live server, 0 to 100, average of the last 30 s; null when the box gives no figure.
+  final int? cpuPercent;
+
+  /// CPU average over the last ended live, 0 to 100; null when unknown.
+  final int? lastLiveCpuPercent;
+
+  /// The caller's own device started the session (`session.mine`); false on an older box.
+  final bool mine;
+
+  /// Who pulls the camera of the running live: `device` or `box`; null while the box does not say.
+  final String? videoPath;
+
+  /// What the running session was started with (for a resume of the caller's own session).
+  final String? kuliahId;
+  final String? source;
+  final bool? sessionYoutube;
+  final String? youtubeVia;
+  final DateTime? startedAt;
+
+  /// THIS BOX's stored YouTube choice for its next live; null on an older box (the settings copy then decides).
+  final bool? nextLiveOn;
+
+  /// Gap seconds of the running live so far, as the box recorded them.
+  final int gapSeconds;
+
+  /// Every YouTube broadcast of the running live, oldest first.
+  final List<String> broadcastIds;
+
+  /// The cameras a live holds right now (the "camera in use" flag).
+  final List<LiveCameraUseDto> cameraUse;
+
+  /// The YouTube channel id of this box's sign-in (public); null when signed out or unknown.
+  final String? channelId;
+
+  /// Seconds since a device last controlled the running live (`controllerQuietSeconds`); null on an older box.
+  final int? controllerQuietSeconds;
+
+  /// The 30 s average of what the camera sends, in kbps (`cameraKbps`, top level; `ingest.cameraKbps` of an earlier
+  /// build); null on an older box.
+  final double? cameraKbps;
+
+  /// The box pulls the camera of the running live now (`session.boxPulled`); false after a switch to the iPad's own
+  /// camera. Null on a box that does not say: the app then reads `videoPath`.
+  final bool? sessionBoxPulled;
+
+  /// The live STARTED with the box pulling the camera (`session.startedBoxPulled`): such a live never ends by itself and
+  /// any holder of live control may stop it, also after a switch to the iPad's own camera. Null on a box that does not
+  /// say.
+  final bool? sessionStartedBoxPulled;
+
+  /// The box can switch the TV screen on and off during a live (`canToggleKiosk`); false on an older box.
+  final bool canToggleKiosk;
+
+  /// What the running session sends to the TVs now (`session.outputs.kiosk`) and records (`session.outputs.recording`).
+  final bool? sessionKiosk;
+  final bool? sessionRecording;
+
+  /// The TVs of the surau while a live runs (additive; empty on a box that does not say): `state` is `playing`,
+  /// `connecting` or `off`.
+  final List<LiveViewerDto> viewers;
 
   /// Changes with every edit of the live notice text (`noticeRev` of the box); null while the box does not say.
   final int? noticeRev;
@@ -1052,6 +1190,15 @@ class LiveStatusDto {
 
   /// `off|starting|running|retrying|failed` (the box relay).
   final String relayState;
+
+  /// Seconds the YouTube leg is behind real time (build 6); null while the box does not say.
+  final int? relayBehindSeconds;
+
+  /// `full` or `low` (the picture lowered to 480p, build 6); null while the box does not say.
+  final String? relayQuality;
+
+  /// How many times the box restarted the YouTube leg.
+  final int relayRestarts;
   final bool youtubeSignedIn;
   final String? channelTitle;
 
@@ -1074,6 +1221,156 @@ class LiveStatusDto {
   bool get youtubeReceiving => youtubeHealth != null && youtubeState == 'live';
 }
 
+/// One TV of `LiveStatus.viewers`.
+/// The "camera in use" flag of one camera (core `LiveCameraUse`): which camera, which device, since when. Never an
+/// address and never a raw device id.
+class LiveCameraUseDto {
+  const LiveCameraUseDto({
+    required this.cameraId,
+    required this.sessionId,
+    required this.via,
+    required this.byName,
+    required this.byMine,
+    this.since,
+  });
+
+  static LiveCameraUseDto? maybe(Map<String, dynamic> j) {
+    final by = _map(j['by']);
+    final id = _str(j['cameraId']);
+    final via = j['via'];
+    if (id == null || (via != 'device' && via != 'box')) return null;
+    return LiveCameraUseDto(
+      cameraId: id,
+      sessionId: _str(j['sessionId']) ?? '',
+      via: via as String,
+      byName: _str(by['name']) ?? '',
+      byMine: by['mine'] == true,
+      since: DateTime.tryParse(_str(j['since']) ?? ''),
+    );
+  }
+
+  final String cameraId;
+  final String sessionId;
+
+  /// `device` (the phone named in [byName] pulls it) or `box` (the box itself does).
+  final String via;
+  final String byName;
+  final bool byMine;
+  final DateTime? since;
+}
+
+/// The one camera record a box holds today (core: `cameraId` is `external`).
+const String externalCameraId = 'external';
+
+/// Core's `cameraUseBlocksPull`: may this device NOT open its own RTSP pull of [cameraId]? False = the camera is
+/// free, or this device already holds the flag with a device pull. True = another device pulls it, or the box does:
+/// join the shared picture through the box instead (operator decision of 22 Nov 2026: never a second pull).
+bool cameraUseBlocksPull(List<LiveCameraUseDto> use, [String cameraId = externalCameraId]) {
+  for (final u in use) {
+    if (u.cameraId != cameraId) continue;
+    return u.via == 'box' || !u.byMine;
+  }
+  return false;
+}
+
+/// One gap of a live (core `LiveGap`).
+class LiveGapDto {
+  const LiveGapDto({required this.from, required this.to, required this.kind, this.broadcastId});
+
+  final DateTime from;
+  final DateTime to;
+
+  /// `ingest` or `youtube`.
+  final String kind;
+  final String? broadcastId;
+}
+
+/// One row of `GET /api/live/sessions/recent` (core `LiveSessionSummary`): a live of THIS BOX, no secret in it.
+class LiveSessionSummaryDto {
+  const LiveSessionSummaryDto({
+    required this.id,
+    this.startedBy = '',
+    this.kuliahId,
+    this.videoPath,
+    this.youtube = false,
+    this.startedAt,
+    this.stoppedAt,
+    this.reason,
+    this.broadcastIds = const [],
+    this.gaps = const [],
+    this.gapSeconds = 0,
+    this.mine = false,
+  });
+
+  static LiveSessionSummaryDto? maybe(Object? v) {
+    if (v is! Map) return null;
+    final j = v.cast<String, dynamic>();
+    final id = _str(j['id']);
+    if (id == null || id.isEmpty) return null;
+    return LiveSessionSummaryDto(
+      id: id,
+      startedBy: _str(j['startedBy']) ?? '',
+      kuliahId: _str(j['kuliahId']),
+      videoPath: _str(j['videoPath']),
+      youtube: _map(j['outputs'])['youtube'] == true,
+      startedAt: DateTime.tryParse(_str(j['startedAt']) ?? ''),
+      stoppedAt: DateTime.tryParse(_str(j['stoppedAt']) ?? ''),
+      reason: _str(j['reason']),
+      broadcastIds: _strings(j['broadcastIds']),
+      gaps: [
+        for (final g in (j['gaps'] is List ? j['gaps'] as List : const []))
+          if (g is Map &&
+              DateTime.tryParse('${g['from']}') != null &&
+              DateTime.tryParse('${g['to']}') != null &&
+              (g['kind'] == 'ingest' || g['kind'] == 'youtube'))
+            LiveGapDto(
+              from: DateTime.parse('${g['from']}'),
+              to: DateTime.parse('${g['to']}'),
+              kind: g['kind'] as String,
+              broadcastId: g['broadcastId'] is String ? g['broadcastId'] as String : null,
+            ),
+      ],
+      gapSeconds: j['gapSeconds'] is num ? (j['gapSeconds'] as num).toInt() : 0,
+      mine: j['mine'] == true,
+    );
+  }
+
+  /// `{ sessions: [...] }` as the route answers; rows that are not sessions are dropped.
+  static List<LiveSessionSummaryDto> listFrom(Map<String, dynamic> j) => [
+    for (final v in (j['sessions'] is List ? j['sessions'] as List : const [])) ?maybe(v),
+  ];
+
+  final String id;
+  final String startedBy;
+  final String? kuliahId;
+  final String? videoPath;
+  final bool youtube;
+  final DateTime? startedAt;
+
+  /// Null while the live runs.
+  final DateTime? stoppedAt;
+
+  /// Why it ended (`stopped`, `timeout`, `controller_lost`, `camera_lost`, `shutdown`, `system`).
+  final String? reason;
+  final List<String> broadcastIds;
+  final List<LiveGapDto> gaps;
+  final int gapSeconds;
+  final bool mine;
+
+  /// The last YouTube broadcast of the live (the one a replacement hides), or null.
+  String? get lastBroadcastId => broadcastIds.isEmpty ? null : broadcastIds.last;
+}
+
+class LiveViewerDto {
+  const LiveViewerDto({required this.tvId, required this.name, required this.state});
+
+  final String tvId;
+  final String name;
+
+  /// `playing`, `connecting` or `off`.
+  final String state;
+}
+
 /// One entry of `LiveStatus.audio.sources` (core `LiveAudioSourceStatus`).
 class LiveAudioSourceDto {
   const LiveAudioSourceDto({
@@ -1085,6 +1382,7 @@ class LiveAudioSourceDto {
     this.delayMs,
     this.residualMs,
     this.level,
+    this.noSignalSeconds,
   });
 
   factory LiveAudioSourceDto.fromJson(Map<String, dynamic> j) {
@@ -1100,6 +1398,9 @@ class LiveAudioSourceDto {
       delayMs: align['delayMs'] is num ? (align['delayMs'] as num).round() : null,
       residualMs: align['residualMs'] is num ? (align['residualMs'] as num).round() : null,
       level: lvl is num ? lvl.toDouble() : null,
+      noSignalSeconds: j['noSignalSeconds'] is num && (j['noSignalSeconds'] as num) > 0
+          ? (j['noSignalSeconds'] as num).floor()
+          : null,
     );
   }
 
@@ -1118,6 +1419,9 @@ class LiveAudioSourceDto {
 
   /// dBFS, -90 to 0, while the box combiner runs.
   final double? level;
+
+  /// Build 5, the box microphone only: seconds at or under -70 dBFS, present from the first silent second.
+  final int? noSignalSeconds;
 
   /// The meter, 0.0 to 1.0, from [level] (null when the box sends none).
   double? get meter => level == null ? null : ((level! + 60) / 60).clamp(0.0, 1.0);

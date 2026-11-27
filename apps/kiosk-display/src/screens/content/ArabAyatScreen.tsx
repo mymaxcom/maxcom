@@ -1,6 +1,6 @@
 import { arabicIndic, pageAt, useFit } from '../../content/paging.ts';
 import type { CardProps } from '../../content/ContentLayer.tsx';
-import { textSizeOf } from '../../content/cards/AyatCard.tsx';
+import { creditFor, textSizeOf } from '../../content/cards/AyatCard.tsx';
 import { useScale } from '../../content/scale.ts';
 import { surahNameFor, t } from '../../i18n.ts';
 import { useArabEnv } from '../../themes/arabContext.ts';
@@ -27,6 +27,7 @@ export function ArabAyatScreen({ view, lang, content, startedAt, durationSeconds
   const pageNo = groups.length > 1 ? pageAt(view.now, startedAt, durationSeconds / groups.length, groups.length, view.tz) : 0;
   const idx = groups[pageNo] ?? groups[0]!;
   const multi = a.ayatTo > a.ayatFrom;
+  // Tetapan decides on every TV, an Arabic one too (F30: only the zikir is Arabic-only).
   const mode = tarjamahMode(env.style, f.showTranslation !== false);
   const range = multi ? `${a.ayatFrom}-${a.ayatTo}` : String(a.ayatFrom);
   const verses = idx.map((i) => `${a.arabic[i]} \u06dd${arabicIndic(a.ayatFrom + i)}`).join(' ');
@@ -47,7 +48,7 @@ export function ArabAyatScreen({ view, lang, content, startedAt, durationSeconds
         </p>
       ) : null}
       <div class="aa-credit">
-        <span>{content.credits.translation}</span>
+        <span>{creditFor(content.credits.translation, lang)}</span>
         {groups.length > 1 ? <span class="num">{`${pageNo + 1} / ${groups.length}`}</span> : null}
       </div>
     </article>

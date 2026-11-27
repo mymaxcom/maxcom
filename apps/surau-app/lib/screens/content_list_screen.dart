@@ -144,6 +144,7 @@ class _ContentListScreenState extends ConsumerState<ContentListScreen> {
               padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
               child: Text(spec.description(s), style: text.bodyMedium!.copyWith(color: SurauColors.muted)),
             ),
+          if (spec.key == 'zikir') const ZikirSettingsLink(),
           if (canWrite) ...[
             FilledButton.icon(
               key: const ValueKey('content-add'),
@@ -200,6 +201,35 @@ class _ContentListScreenState extends ConsumerState<ContentListScreen> {
                 ],
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// On the zikir list only: the way to "Zikir selepas solat" (time per zikir, time limit after the
+/// prayer), which lives in Tetapan. Shown to whoever may open that settings form (`settings:read`;
+/// without `settings:write` the form is read-only, as from the Tetapan list).
+class ZikirSettingsLink extends ConsumerWidget {
+  const ZikirSettingsLink({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!canSee(ref.watch(rolesProvider), 'settings:read')) return const SizedBox.shrink();
+    final s = S.of(context);
+    // the spacing below lives here, so nothing is drawn when the link hides itself
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: RowsCard(
+        children: [
+          ListTile(
+            key: const ValueKey('content-zikir-settings'),
+            leading: const Icon(Icons.tune_rounded),
+            title: Text(s.contentZikirSettings),
+            subtitle: Text(s.contentZikirSettingsHint),
+            trailing: const Icon(Icons.chevron_right_rounded, color: SurauColors.outline),
+            onTap: () => context.go(AppRoutes.settingsFor('zikirSelepasSolat')),
           ),
         ],
       ),

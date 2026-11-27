@@ -44,7 +44,8 @@ describe('prayer entities in the feed', () => {
   it('a JAKIM import is one prayer:official entry per year, and the other side ends with the same days', () => {
     const box = newDb();
     const cloud = newDb();
-    importDays(box, 'SGR01', official, 'system:auto-prayer-fetch', undefined, undefined, 'sdm');
+    // same fixed clock as the cloud's apply (ctx().now), so fetched_at is comparable whatever the real date is
+    importDays(box, 'SGR01', official, 'system:auto-prayer-fetch', undefined, { meta: { editedAt: ctx().now.toISOString() } }, 'sdm');
     const entries = prayerOf(box).filter((e) => e.entity === 'prayer:official');
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ entityId: 'SGR01:2026', origin: 'local' });

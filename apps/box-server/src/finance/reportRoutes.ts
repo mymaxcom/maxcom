@@ -27,7 +27,7 @@ export interface ReportRouteDeps {
 const YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const VIA = new Set(['whatsapp', 'email', 'other']);
 
-/** `Surau D'Waqaf` -> `Surau-D-Waqaf` (letters and digits only, 40 characters at most). */
+/** `Surau Contoh` -> `Surau-Contoh` (letters and digits only, 40 characters at most). */
 export function fileSlug(name: string): string {
   const s = name.normalize('NFKD').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '');
   return s === '' ? 'Surau' : s;

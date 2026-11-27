@@ -29,6 +29,11 @@ class RoutedMicSource(
     private var ns = false
     private var sink: GetMicrophoneData? = null
     private var thread: Thread? = null
+    private var lastThread: Thread? = null
+    @Volatile private var activeCap: PcmCapture? = null
+
+    /** True while the recording thread is still running (a test reads it after [stop]). */
+    val threadAlive: Boolean get() = lastThread?.isAlive == true
 
     fun mute() {
         muted = true
@@ -53,6 +58,7 @@ class RoutedMicSource(
         sink = getMicrophoneData
         running = true
         thread = Thread({ loop() }, "maxcom-phone-mic").also {
+            lastThread = it
             it.isDaemon = true
             it.priority = Thread.MAX_PRIORITY
             it.start()
@@ -68,6 +74,7 @@ class RoutedMicSource(
         // (box + local MP4) gets this. It is reset on start, on unmute and after a capture re-open (no stale gain).
         val agc = if (useAgc) SpeechAgc(rate) else null
         var wasMuted = true // the first unmuted chunk starts from a reset AGC
+        var wasLift = true
         var seen = routing.version
         var retryAt = 0L
         var next = nowNanos()
@@ -78,6 +85,7 @@ class RoutedMicSource(
                 retryAt = 0L
                 cap?.stop()
                 cap = null
+                activeCap = null
             }
             if (cap == null && nowNanos() >= retryAt) {
                 val c = captureFactory(rate, echo, ns)
@@ -89,6 +97,7 @@ class RoutedMicSource(
                 }
                 if (ok) {
                     cap = c
+                    activeCap = c
                     agc?.reset()
                 } else retryAt = nowNanos() + 1_000_000_000L
             }
@@ -103,6 +112,10 @@ class RoutedMicSource(
                 } else {
                     if (n < chunk) java.util.Arrays.fill(buf, n, chunk, 0.toShort())
                     got = true
+                    // the lift can be switched off by the person; switched on again it starts from a clean state
+                    val lift = agc != null && routing.liftMic
+                    if (lift && !wasLift) agc!!.reset()
+                    wasLift = lift
                     if (agc != null) {
                         if (muted) {
                             wasMuted = true
@@ -111,15 +124,21 @@ class RoutedMicSource(
                                 agc.reset()
                                 wasMuted = false
                             }
-                            agc.process(buf, 0, chunk)
+                            if (lift) agc.process(buf, 0, chunk)
                         }
+                    }
+                    val vol = routing.phoneVolume
+                    if (vol < 100) {
+                        val g = vol.coerceIn(0, 100) / 100f
+                        for (k in 0 until chunk) buf[k] = (buf[k] * g).toInt().toShort()
                     }
                 }
                 next = nowNanos()
             }
             if (!got) {
                 java.util.Arrays.fill(buf, 0.toShort())
-            } else if (muted) {
+            } else if (muted || routing.muteAll) {
+                // the phone's mute: silence, whichever way it was asked for
                 java.util.Arrays.fill(buf, 0.toShort())
             }
             deliver(buf, chunk)
@@ -138,6 +157,7 @@ class RoutedMicSource(
             }
         }
         cap?.stop()
+        activeCap = null
     }
 
     private fun deliver(pcm: ShortArray, n: Int) {
@@ -161,6 +181,11 @@ class RoutedMicSource(
             try {
                 // A blocking open (each source x a 300 ms routed() poll) can hold the thread for about 1.2 s.
                 it.join(STOP_WAIT_MS)
+                // A read that does not react to the interrupt: closing the recorder frees it, so the thread ends here.
+                if (it.isAlive) {
+                    try { activeCap?.stop() } catch (_: Exception) {}
+                    it.join(500)
+                }
             } catch (_: InterruptedException) {
             }
         }

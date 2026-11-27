@@ -18,6 +18,14 @@
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
+    <!-- The store infers these two as required from the landscape activities and the Wi-Fi permissions. A box on
+         a cable, or one whose screen reports no fixed orientation, must still be offered the app. -->
+    <uses-feature
+        android:name="android.hardware.screen.landscape"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.wifi"
+        android:required="false" />
 
     <application
         android:allowBackup="false"

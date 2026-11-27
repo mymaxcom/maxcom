@@ -86,7 +86,7 @@ function tmp(): string {
 
 const NAME_019 = '019-multi-surau';
 /** Migrations numbered after 019 (themes 2026.11.9, renumbered from 019): they run in the same call. */
-const AFTER_019 = ['020-site-theme-support', '021-camera-secret', '022-people-relook', '023-youtube-box', '024-outbox-camera-mark', '025-poster-stretch-keep', '026-parked-settings', '027-deleted-people-phone', '028-box-name-follows-surau'];
+const AFTER_019 = ['020-site-theme-support', '021-camera-secret', '022-people-relook', '023-youtube-box', '024-outbox-camera-mark', '025-poster-stretch-keep', '026-parked-settings', '027-deleted-people-phone', '028-box-name-follows-surau', '029-linked-boxes', '030-link-people', '031-live-sessions', '032-upload-session-key', '033-surau-sleep', '034-live-session-outputs'];
 
 /** The four tables db.ts created BEFORE migration 019 (old keys). */
 const LEGACY_TABLES = `
@@ -189,7 +189,11 @@ function counts(db: DatabaseSync): Record<string, number> {
     // tables 019 creates (Task 8 added surau_assets, the per-surau storage count)
     if (t === 'schema_migrations' || t === 'suraus' || t === 'surau_assets' || t === 'camera_secrets' || t === 'id_counters') continue;
     // 023 makes the two YouTube tables (empty)
-    if (t === 'youtube_flag' || t === 'youtube_handover' || t === 'parked_settings') continue;
+    if (t === 'youtube_flag' || t === 'youtube_handover' || t === 'parked_settings' || t === 'linked_boxes' || t === 'link_sessions') continue;
+    // 030 makes link_people and 031 makes live_sessions (both empty)
+    if (t === 'link_people' || t === 'live_sessions') continue;
+    // 033 makes surau_resets and sync_nonces (both empty)
+    if (t === 'surau_resets' || t === 'sync_nonces') continue;
     // 022 sets two one-time flags in sync_state; they are not data
     const where = t === 'sync_state' ? " WHERE key NOT IN ('people_resync', 'ids_push', 'poster_stretch_keep')" : '';
     out[t] = Number(one(db, `SELECT COUNT(*) AS n FROM "${t}"${where}`).n);
@@ -354,7 +358,7 @@ describe('migration 019 on a cloud-shaped database (one surau, sdm)', () => {
 
   it('adds a suraus row for sdm with the pilot name and the site linked time', () => {
     const { db } = migrated({ cloud: true });
-    expect(cols(db, 'suraus').sort()).toEqual(['created_at', 'created_by', 'id', 'kind', 'linked_at', 'location', 'name', 'reviewed_at', 'storage_limit_bytes', 'suspended_at', 'suspended_reason', 'zone'].sort());
+    expect(cols(db, 'suraus').sort()).toEqual(['created_at', 'created_by', 'id', 'kind', 'linked_at', 'location', 'name', 'reviewed_at', 'storage_limit_bytes', 'suspended_at', 'suspended_reason', 'zone', 'asleep_at', 'asleep_box', 'log_floor'].sort());
     expect(pk(db, 'suraus')).toEqual(['id']);
     const rows = all(db, 'SELECT * FROM suraus');
     expect(rows).toHaveLength(1);

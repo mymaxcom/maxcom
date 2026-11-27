@@ -1,5 +1,5 @@
 {
- "coreSourceHash": "6d096dced588ee01a777cb720af4fb3e939c2ec0e3a3c31abb1b33cb61395b64",
+ "coreSourceHash": "a29d7d5e2d6ca184fee0d69590655e750ffeb13dff68113f0519a1147ae7bad4",
  "cases": [
   {
    "key": "prayerBar",
@@ -12024,6 +12024,73 @@
    "ok": false
   },
   {
+   "key": "tvProfiles",
+   "note": "defaults",
+   "patch": {
+    "tvs": {}
+   },
+   "ok": true
+  },
+  {
+   "key": "tvProfiles",
+   "note": "reset",
+   "patch": {
+    "enabled": true,
+    "tvs": {}
+   },
+   "ok": true
+  },
+  {
+   "key": "tvProfiles",
+   "note": "enabled true",
+   "patch": {
+    "enabled": true
+   },
+   "ok": true
+  },
+  {
+   "key": "tvProfiles",
+   "note": "enabled false",
+   "patch": {
+    "enabled": false
+   },
+   "ok": false
+  },
+  {
+   "key": "tvProfiles",
+   "note": "enabled not bool",
+   "patch": {
+    "enabled": "yes"
+   },
+   "ok": false
+  },
+  {
+   "key": "tvProfiles",
+   "note": "unknown key",
+   "patch": {
+    "zzUnknown": 1
+   },
+   "ok": false
+  },
+  {
+   "key": "tvProfiles",
+   "note": "unknown nested key under tvs",
+   "patch": {
+    "tvs": {
+     "zzUnknown": 1
+    }
+   },
+   "ok": false
+  },
+  {
+   "key": "tvProfiles",
+   "note": "tvs not an object",
+   "patch": {
+    "tvs": 5
+   },
+   "ok": false
+  },
+  {
    "key": "kuliahCard",
    "note": "defaults",
    "patch": {
@@ -15036,7 +15103,11 @@
    "note": "defaults",
    "patch": {
     "durationSeconds": 20,
-    "minutesAfterSolat": 10
+    "minutesAfterSolat": 10,
+    "startAfterMinutes": 0,
+    "showClock": true,
+    "showTimeLeft": false,
+    "look": "theme"
    },
    "ok": true
   },
@@ -15046,7 +15117,11 @@
    "patch": {
     "enabled": true,
     "durationSeconds": 20,
-    "minutesAfterSolat": 10
+    "minutesAfterSolat": 10,
+    "startAfterMinutes": 0,
+    "showClock": true,
+    "showTimeLeft": false,
+    "look": "theme"
    },
    "ok": true
   },
@@ -15191,6 +15266,142 @@
    "note": "minutesAfterSolat null",
    "patch": {
     "minutesAfterSolat": null
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "startAfterMinutes min",
+   "patch": {
+    "startAfterMinutes": 0
+   },
+   "ok": true
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "startAfterMinutes max",
+   "patch": {
+    "startAfterMinutes": 30
+   },
+   "ok": true
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "startAfterMinutes min-1",
+   "patch": {
+    "startAfterMinutes": -1
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "startAfterMinutes max+1",
+   "patch": {
+    "startAfterMinutes": 31
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "startAfterMinutes fraction",
+   "patch": {
+    "startAfterMinutes": 0.5
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "startAfterMinutes as text",
+   "patch": {
+    "startAfterMinutes": "0"
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "startAfterMinutes null",
+   "patch": {
+    "startAfterMinutes": null
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "showClock flipped",
+   "patch": {
+    "showClock": false
+   },
+   "ok": true
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "showClock as text",
+   "patch": {
+    "showClock": "true"
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "showTimeLeft flipped",
+   "patch": {
+    "showTimeLeft": true
+   },
+   "ok": true
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "showTimeLeft as text",
+   "patch": {
+    "showTimeLeft": "true"
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "look wrong value",
+   "patch": {
+    "look": "zzz-wrong"
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "look empty",
+   "patch": {
+    "look": ""
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "look 501 chars",
+   "patch": {
+    "look": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "look 500 chars",
+   "patch": {
+    "look": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "look number",
+   "patch": {
+    "look": 123
+   },
+   "ok": false
+  },
+  {
+   "key": "zikirSelepasSolat",
+   "note": "look null",
+   "patch": {
+    "look": null
    },
    "ok": false
   },
@@ -15758,8 +15969,9 @@
     "relayVideo": "copy",
     "titleTemplate": "{label}: {penceramah}",
     "descriptionTemplate": "{topic}\nKitab: {kitab}\n{surau}, {date}",
-    "maxBitrateKbps": 2500,
-    "nextLiveOn": true
+    "maxBitrateKbps": 3500,
+    "nextLiveOn": true,
+    "autoQuality": true
    },
    "ok": true
   },
@@ -15773,8 +15985,9 @@
     "relayVideo": "copy",
     "titleTemplate": "{label}: {penceramah}",
     "descriptionTemplate": "{topic}\nKitab: {kitab}\n{surau}, {date}",
-    "maxBitrateKbps": 2500,
-    "nextLiveOn": true
+    "maxBitrateKbps": 3500,
+    "nextLiveOn": true,
+    "autoQuality": true
    },
    "ok": true
   },
@@ -16054,7 +16267,7 @@
    "key": "liveYoutube",
    "note": "maxBitrateKbps min",
    "patch": {
-    "maxBitrateKbps": 500
+    "maxBitrateKbps": 1000
    },
    "ok": true
   },
@@ -16062,7 +16275,7 @@
    "key": "liveYoutube",
    "note": "maxBitrateKbps max",
    "patch": {
-    "maxBitrateKbps": 6000
+    "maxBitrateKbps": 8000
    },
    "ok": true
   },
@@ -16070,7 +16283,7 @@
    "key": "liveYoutube",
    "note": "maxBitrateKbps min-1",
    "patch": {
-    "maxBitrateKbps": 499
+    "maxBitrateKbps": 999
    },
    "ok": false
   },
@@ -16078,7 +16291,7 @@
    "key": "liveYoutube",
    "note": "maxBitrateKbps max+1",
    "patch": {
-    "maxBitrateKbps": 6001
+    "maxBitrateKbps": 8001
    },
    "ok": false
   },
@@ -16086,7 +16299,7 @@
    "key": "liveYoutube",
    "note": "maxBitrateKbps fraction",
    "patch": {
-    "maxBitrateKbps": 500.5
+    "maxBitrateKbps": 1000.5
    },
    "ok": false
   },
@@ -16094,7 +16307,7 @@
    "key": "liveYoutube",
    "note": "maxBitrateKbps as text",
    "patch": {
-    "maxBitrateKbps": "2500"
+    "maxBitrateKbps": "3500"
    },
    "ok": false
   },
@@ -16119,6 +16332,22 @@
    "note": "nextLiveOn as text",
    "patch": {
     "nextLiveOn": "true"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveYoutube",
+   "note": "autoQuality flipped",
+   "patch": {
+    "autoQuality": false
+   },
+   "ok": true
+  },
+  {
+   "key": "liveYoutube",
+   "note": "autoQuality as text",
+   "patch": {
+    "autoQuality": "true"
    },
    "ok": false
   },
@@ -16251,6 +16480,7 @@
    "patch": {
     "name": "Kamera luaran",
     "transport": "auto",
+    "brightness": "auto",
     "avOffsetMs": {
      "deviceMic": 0,
      "boxInput": 0
@@ -16265,6 +16495,7 @@
     "enabled": false,
     "name": "Kamera luaran",
     "transport": "auto",
+    "brightness": "auto",
     "avOffsetMs": {
      "deviceMic": 0,
      "boxInput": 0
@@ -16415,6 +16646,54 @@
    "note": "transport null",
    "patch": {
     "transport": null
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "brightness wrong value",
+   "patch": {
+    "brightness": "zzz-wrong"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "brightness empty",
+   "patch": {
+    "brightness": ""
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "brightness 501 chars",
+   "patch": {
+    "brightness": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "brightness 500 chars",
+   "patch": {
+    "brightness": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "brightness number",
+   "patch": {
+    "brightness": 123
+   },
+   "ok": false
+  },
+  {
+   "key": "liveCamera",
+   "note": "brightness null",
+   "patch": {
+    "brightness": null
    },
    "ok": false
   },

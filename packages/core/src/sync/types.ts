@@ -28,6 +28,19 @@ export interface SyncOp {
   sig: string;
 }
 
+/**
+ * The body of `POST /api/sync/ops` from a device. `clockOffsetMs` (2026.11.15, additive) is the box clock minus the
+ * device clock in whole milliseconds, as the device learned it from the health answer: the box adds it to the
+ * `editedAt` of every `settings.put` op of the batch before the per-field compare, so a phone whose clock is behind
+ * does not lose its save. It rides on the body, NOT inside an op: an op has a fixed key set and a signed digest, and
+ * an older box refuses an op with an unknown key. An older box ignores the field. The box bounds it and never moves
+ * a stamp into the future of its own clock.
+ */
+export interface DeviceOpsBody {
+  ops: SyncOp[];
+  clockOffsetMs?: number;
+}
+
 export type OpStatus = 'applied' | 'duplicate' | 'superseded' | 'refused';
 
 export type OpRefusal =

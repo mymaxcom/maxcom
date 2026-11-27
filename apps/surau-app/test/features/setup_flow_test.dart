@@ -312,4 +312,66 @@ void main() {
       expect(await store.load(), isNull);
     });
   });
+
+  group('web page origin and stored hints', () {
+    SetupFlow webFlow(FakeBox box, String page) {
+      key = FakeDeviceKey();
+      trust = FakeTrust();
+      store = MemoryEnrolledBoxStore();
+      infoStore = MemorySurauInfoStore();
+      return SetupFlow(
+        clientFor: box.client,
+        key: key,
+        trust: trust,
+        store: store,
+        surauInfoStore: infoStore,
+        platform: 'ios-web',
+        pageOrigin: Uri.parse(page),
+        now: fixedNow,
+      );
+    }
+
+    Future<EnrolledBox> setUpAt(SetupFlow flow) async {
+      final i = await flow.inspect(boxQrText('setup'), expect: ScannedKind.setup);
+      await flow.run(i, surauName: 'Surau', adminName: 'Haji Ali', deviceName: 'iPad', boxName: 'MAXCOM', pin: '482916');
+      return (await store.load())!;
+    }
+
+    test('native: the QR IP is remembered as box and lastIp, with no name', () async {
+      final saved = await setUpAt(flowFor(boxIn('setup')));
+      expect(saved.box.toString(), 'https://10.168.0.20:8443');
+      expect(saved.lastIp, '10.168.0.20');
+      expect(saved.name, isNull);
+    });
+
+    test('web opened at a box name on the QR port: enrols at the name and stores it, with the QR IP as lastIp', () async {
+      final box = boxIn('setup');
+      final saved = await setUpAt(webFlow(box, 'https://box1-surau.local:8443/app/'));
+      expect(saved.box.toString(), 'https://box1-surau.local:8443');
+      expect(saved.name, 'box1-surau.local');
+      expect(saved.lastIp, '10.168.0.20');
+      expect(box.byPath('/api/setup/complete')!.url.origin, 'https://box1-surau.local:8443');
+      expect(trust.calls.single.$1.toString(), 'https://box1-surau.local:8443');
+    });
+
+    test('web opened at the QR IP: stays at the IP', () async {
+      final saved = await setUpAt(webFlow(boxIn('setup'), 'https://10.168.0.20:8443/app/'));
+      expect(saved.box.toString(), 'https://10.168.0.20:8443');
+      expect(saved.name, isNull);
+      expect(saved.lastIp, '10.168.0.20');
+    });
+
+    test('web page at an unrelated host, a non-box name, another port or scheme: payload.box is kept', () async {
+      for (final page in [
+        'https://evil.example:8443/app/',
+        'https://box.surau.local:8443/app/',
+        'https://box1-surau.local:9999/app/',
+        'http://box1-surau.local:8443/app/',
+      ]) {
+        final saved = await setUpAt(webFlow(boxIn('setup'), page));
+        expect(saved.box.toString(), 'https://10.168.0.20:8443', reason: page);
+        expect(saved.name, isNull, reason: page);
+      }
+    });
+  });
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assetIdsOf, loadContent, parseCardOverride, shouldReplaceContent } from '../src/data/content.ts';
+import { assetIdsOf, keptZikirWindow, loadContent, parseCardOverride, shouldReplaceContent } from '../src/data/content.ts';
 
 function fakeStorage(): Storage {
   const m = new Map<string, string>();
@@ -415,5 +415,19 @@ describe('useContent skip: a video given up does not come back inside its own sl
     } finally {
       localStorage.removeItem('surau.content');
     }
+  });
+});
+
+describe('Q7: the zikir window kept while the content is missing', () => {
+  const win = { prayer: 'zohor' as const, startsAt: new Date('2026-11-24T05:10:00Z'), endsAt: new Date('2026-11-24T05:20:00Z') };
+  it('is kept while it runs', () => {
+    expect(keptZikirWindow(win, new Date('2026-11-24T05:15:00Z'))).toBe(win);
+  });
+  it('is dropped once it has ended', () => {
+    expect(keptZikirWindow(win, new Date('2026-11-24T05:20:00Z'))).toBeNull();
+    expect(keptZikirWindow(win, new Date('2026-11-24T06:00:00Z'))).toBeNull();
+  });
+  it('null stays null', () => {
+    expect(keptZikirWindow(null, new Date('2026-11-24T05:15:00Z'))).toBeNull();
   });
 });

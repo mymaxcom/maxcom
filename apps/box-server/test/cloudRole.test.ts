@@ -48,7 +48,7 @@ function plainBox(): FastifyInstance {
 }
 
 const sitesDeps = (c: TestCloud, now: () => Date = () => new Date()) => ({ db: c.app.surau.db, now });
-const code = (c: TestCloud, now?: () => Date): string => issueLinkCode(sitesDeps(c, now), { boxId: BOX, name: 'Surau D\'Waqaf', target: { surauId: ensureSurau(c.app.surau.db) } }).code;
+const code = (c: TestCloud, now?: () => Date): string => issueLinkCode(sitesDeps(c, now), { boxId: BOX, name: 'Surau Contoh', target: { surauId: ensureSurau(c.app.surau.db) } }).code;
 
 async function link(c: TestCloud, linkCode: string, over: Record<string, unknown> = {}, ip = freshIp()) {
   return c.app.inject({
@@ -74,7 +74,7 @@ describe('cloud role', () => {
     const res = await link(c, code(c));
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.name).toBe('Surau D\'Waqaf');
+    expect(body.name).toBe('Surau Contoh');
     expect(typeof body.siteToken).toBe('string');
     expect(typeof body.wakeSecret).toBe('string');
     const db = c.app.surau.db;

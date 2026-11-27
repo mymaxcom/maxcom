@@ -59,6 +59,10 @@ class KeystoreChannel(
     companion object {
         const val CHANNEL = "my.maxcom/keystore"
         const val ALIAS = "surau-device-key"
+
+        /** The second slot: a key being enrolled while the first one is still in use. */
+        const val ALIAS_B = "surau-device-key-b"
+        private const val SLOT_FILE = "device-key-slot"
         private const val PROVIDER = "AndroidKeyStore"
 
         /** Seal, open and key reset of the local store run here, two at a time at most. */
@@ -77,22 +81,60 @@ class KeystoreChannel(
 
     private fun store(): KeyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
 
+    // The key in use is [ALIAS] unless the slot file says "b". A pending key lives in the other alias; committing
+    // flips the slot file and deletes the old alias, so a failed enrolment never touches the key in use.
+    private fun slotFile(): java.io.File? = filesDir?.let { java.io.File(it, SLOT_FILE) }
+
+    private fun activeAlias(): String =
+        if (slotFile()?.takeIf { it.exists() }?.readText()?.trim() == "b") ALIAS_B else ALIAS
+
+    private fun pendingAlias(): String = if (activeAlias() == ALIAS) ALIAS_B else ALIAS
+
+    private fun setActive(alias: String) {
+        val f = slotFile() ?: throw IllegalStateException("no slot file")
+        if (alias == ALIAS_B) f.writeText("b") else f.delete()
+    }
+
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
-                "exists" -> result.success(store().containsAlias(ALIAS) && store().getKey(ALIAS, null) != null)
+                "exists" -> {
+                    val a = activeAlias()
+                    result.success(store().containsAlias(a) && store().getKey(a, null) != null)
+                }
                 "generate" -> result.success(generate())
-                "publicKey" -> result.success(publicPoint())
+                "publicKey" -> result.success(publicPoint(activeAlias()))
                 "sign" -> {
                     val message = call.arguments as? ByteArray
                     if (message == null) {
                         result.error("bad_args", "bad arguments", null)
                     } else {
-                        result.success(sign(message))
+                        result.success(sign(activeAlias(), message))
                     }
                 }
+                "generatePending" -> result.success(generatePending())
+                "signPending" -> {
+                    val message = call.arguments as? ByteArray
+                    if (message == null) {
+                        result.error("bad_args", "bad arguments", null)
+                    } else {
+                        result.success(sign(pendingAlias(), message))
+                    }
+                }
+                "commitPending" -> {
+                    commitPending()
+                    result.success(null)
+                }
+                "discardPending" -> {
+                    val ks = store()
+                    val p = pendingAlias()
+                    if (ks.containsAlias(p)) ks.deleteEntry(p)
+                    result.success(null)
+                }
                 "clear" -> {
-                    if (store().containsAlias(ALIAS)) store().deleteEntry(ALIAS)
+                    val ks = store()
+                    for (a in listOf(ALIAS, ALIAS_B)) if (ks.containsAlias(a)) ks.deleteEntry(a)
+                    slotFile()?.delete()
                     result.success(null)
                 }
                 "available" -> result.success(seal.available())
@@ -168,8 +210,8 @@ class KeystoreChannel(
 
     private class NoKeyException : Exception()
 
-    private fun spec(strongBox: Boolean): KeyGenParameterSpec {
-        val b = KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_SIGN)
+    private fun spec(alias: String, strongBox: Boolean): KeyGenParameterSpec {
+        val b = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
             .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
             .setDigests(KeyProperties.DIGEST_SHA256)
             .setUserAuthenticationRequired(false)
@@ -179,32 +221,56 @@ class KeystoreChannel(
         return b.build()
     }
 
-    private fun generateWith(strongBox: Boolean) {
+    private fun generateWith(alias: String, strongBox: Boolean) {
         val gen = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, PROVIDER)
-        gen.initialize(spec(strongBox))
+        gen.initialize(spec(alias, strongBox))
         gen.generateKeyPair()
     }
 
-    /** Replaces any existing key. StrongBox first, falling back to the TEE-backed Keystore. */
-    private fun generate(): ByteArray {
+    /** Makes a key under [alias], replacing what is there. StrongBox first, falling back to the TEE-backed Keystore. */
+    private fun generateAt(alias: String): ByteArray {
         val ks = store()
-        if (ks.containsAlias(ALIAS)) ks.deleteEntry(ALIAS)
+        if (ks.containsAlias(alias)) ks.deleteEntry(alias)
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) generateWith(true) else generateWith(false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) generateWith(alias, true) else generateWith(alias, false)
         } catch (e: StrongBoxUnavailableException) {
-            if (ks.containsAlias(ALIAS)) ks.deleteEntry(ALIAS)
-            generateWith(false)
+            if (ks.containsAlias(alias)) ks.deleteEntry(alias)
+            generateWith(alias, false)
         } catch (e: ProviderException) {
             // Some devices report missing StrongBox as a plain ProviderException.
-            if (ks.containsAlias(ALIAS)) ks.deleteEntry(ALIAS)
-            generateWith(false)
+            if (ks.containsAlias(alias)) ks.deleteEntry(alias)
+            generateWith(alias, false)
         }
-        return publicPoint()
+        return publicPoint(alias)
+    }
+
+    /** Replaces any existing key (both slots) and makes the one in use. */
+    private fun generate(): ByteArray {
+        val ks = store()
+        if (ks.containsAlias(ALIAS_B)) ks.deleteEntry(ALIAS_B)
+        slotFile()?.delete()
+        return generateAt(ALIAS)
+    }
+
+    /** A new key in the slot not in use; the key in use is not touched. */
+    private fun generatePending(): ByteArray {
+        if (slotFile() == null) throw IllegalStateException("no slot file")
+        return generateAt(pendingAlias())
+    }
+
+    /** The pending key becomes the key in use and the old one is deleted. */
+    private fun commitPending() {
+        val ks = store()
+        val pending = pendingAlias()
+        val old = activeAlias()
+        if (!ks.containsAlias(pending) || ks.getKey(pending, null) == null) throw NoKeyException()
+        setActive(pending)
+        if (ks.containsAlias(old)) ks.deleteEntry(old)
     }
 
     /** Uncompressed SEC1 point `04 || X(32) || Y(32)`. */
-    private fun publicPoint(): ByteArray {
-        val cert = store().getCertificate(ALIAS) ?: throw NoKeyException()
+    private fun publicPoint(alias: String): ByteArray {
+        val cert = store().getCertificate(alias) ?: throw NoKeyException()
         val w = (cert.publicKey as ECPublicKey).w
         val out = ByteArray(65)
         out[0] = 0x04
@@ -225,8 +291,8 @@ class KeystoreChannel(
     }
 
     /** DER `SEQUENCE { r, s }`; Dart converts it to the 64-byte P1363 form. */
-    private fun sign(message: ByteArray): ByteArray {
-        val key = store().getKey(ALIAS, null) as? PrivateKey ?: throw NoKeyException()
+    private fun sign(alias: String, message: ByteArray): ByteArray {
+        val key = store().getKey(alias, null) as? PrivateKey ?: throw NoKeyException()
         val sig = Signature.getInstance("SHA256withECDSA")
         sig.initSign(key)
         sig.update(message)

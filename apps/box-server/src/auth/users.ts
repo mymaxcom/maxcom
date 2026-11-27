@@ -102,8 +102,27 @@ export interface User {
   phone: string | null;
 }
 
-/** Run fn in an IMMEDIATE transaction (rolls back on throw). Not re-entrant. */
+let savepointSeq = 0;
+
+/**
+ * Run fn in an IMMEDIATE transaction (rolls back on throw). Inside a transaction already open (the cloud's
+ * reset-from-box applies many feed entries in one), it runs in a SAVEPOINT instead: a throw undoes fn's own writes
+ * only, and the outer transaction decides whether anything is kept.
+ */
 export function tx<T>(db: DatabaseSync, fn: () => T): T {
+  if (db.isTransaction) {
+    const name = `tx_${++savepointSeq}`;
+    db.exec(`SAVEPOINT ${name}`);
+    try {
+      const out = fn();
+      db.exec(`RELEASE ${name}`);
+      return out;
+    } catch (error) {
+      db.exec(`ROLLBACK TO ${name}`);
+      db.exec(`RELEASE ${name}`);
+      throw error;
+    }
+  }
   db.exec('BEGIN IMMEDIATE');
   try {
     const out = fn();

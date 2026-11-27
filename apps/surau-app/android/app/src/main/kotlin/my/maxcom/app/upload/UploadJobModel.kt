@@ -18,15 +18,18 @@ data class PartSpec(
     override fun toString() = "PartSpec($index, offset=$offset/$bytes)"
 }
 
-/** A job as Dart sends it (`UploadJob.toJson`). */
+/**
+ * A job as the worker reads it from its input data ([UploadPlan.workJob] of Dart's `UploadJob.toJson`). The kuliah and
+ * the live to replace are the app's business with the box since 2026.11.15; the worker does not use them.
+ */
 data class JobSpec(
     val id: String,
-    val kuliahId: String?,
+    val kuliahId: String? = null,
     val parts: List<PartSpec>,
-    val joined: Boolean,
-    val allowMobile: Boolean,
-    val replaceLiveVideoId: String?,
-    val joinSegments: Boolean,
+    val joined: Boolean = false,
+    val allowMobile: Boolean = false,
+    val replaceLiveVideoId: String? = null,
+    val joinSegments: Boolean = false,
     /**
      * The original segment files once the job collapsed into one `android:joined` part (Dart sends
      * them only then). Null before the join: the parts are the segments.
@@ -79,6 +82,8 @@ class PartState(
     var uploadId: String? = null,
     var uploadUri: String? = null,
     var videoId: String? = null,
+    /** The reason code of the last event (`needs_begin`, `network`, ...), so a replay after a restart still says why. */
+    var error: String? = null,
 )
 
 class JobState(
@@ -98,7 +103,8 @@ class JobState(
                     .put("offset", p.offset)
                     .put("uploadId", p.uploadId ?: JSONObject.NULL)
                     .put("uploadUri", p.uploadUri ?: JSONObject.NULL)
-                    .put("videoId", p.videoId ?: JSONObject.NULL),
+                    .put("videoId", p.videoId ?: JSONObject.NULL)
+                    .put("error", p.error ?: JSONObject.NULL),
             )
         }
         return o.put("parts", ps).put("joined", joined)
@@ -122,6 +128,7 @@ class JobState(
                     uploadId = p.optStringOrNull("uploadId"),
                     uploadUri = p.optStringOrNull("uploadUri"),
                     videoId = p.optStringOrNull("videoId"),
+                    error = p.optStringOrNull("error"),
                 )
             }
             return s

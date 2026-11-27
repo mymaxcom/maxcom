@@ -1,11 +1,15 @@
 package my.maxcom.box
 
 import android.app.Activity
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
@@ -21,6 +25,7 @@ import my.maxcom.box.core.HealthClient
 import my.maxcom.box.core.KeyCombo
 import my.maxcom.box.core.ServiceStartWatch
 import my.maxcom.box.core.UrlPolicy
+import my.maxcom.box.core.VideoRecovery
 
 /**
  * HOME and launcher entry, the only exported component. It reads nothing from the intent that
@@ -31,6 +36,7 @@ class KioskActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
     private val health = HealthClient()
     private val combo = KeyCombo(COMBO)
+    private lateinit var recovery: VideoRecovery
     private lateinit var root: FrameLayout
     private lateinit var start: StartScreen
     private var web: WebView? = null
@@ -68,6 +74,7 @@ class KioskActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(null)
+        recovery = VideoRecovery(getSharedPreferences(PREFS, MODE_PRIVATE).getLong(KEY_APP_RESTART, 0L))
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         root = FrameLayout(this)
         start = StartScreen(this)
@@ -210,6 +217,7 @@ class KioskActivity : Activity() {
             onRendererGone = { main.post { restartPage() } },
             onLoadError = { main.post { restartPage() } },
             onExitToHost = { startActivity(Intent(this, MaintenanceActivity::class.java)) },
+            onVideoStuck = { main.post { onVideoStuck() } },
         )
         KioskWebView.setKioskCookie(port, token)
         installedVersion()?.let { KioskWebView.clearCacheIfVersionChanged(this, view, it) }
@@ -227,6 +235,77 @@ class KioskActivity : Activity() {
         if (!active) return
         dropPage()
         render(BoxState.get())
+    }
+
+    // The page reports that the WebView cannot decode video. The policy decides; see VideoRecovery for the limits.
+    private fun onVideoStuck() {
+        if (!active || web == null) return
+        when (recovery.onStuck(System.currentTimeMillis())) {
+            VideoRecovery.Action.Ignore -> Unit
+            VideoRecovery.Action.RestartRenderer -> {
+                Log.w(TAG, "video decoder stuck, restarting the WebView renderer")
+                restartRenderer()
+            }
+            VideoRecovery.Action.RestartApp -> {
+                Log.w(TAG, "video decoder still stuck, restarting the app")
+                restartApp()
+            }
+        }
+    }
+
+    // Ending the renderer process makes onRenderProcessGone run, which runs restartPage(). The box server keeps running.
+    private fun restartRenderer() {
+        val ended = try {
+            Build.VERSION.SDK_INT >= 29 && web?.webViewRenderProcess?.terminate() == true
+        } catch (e: Exception) {
+            Log.w(TAG, "renderer terminate: " + e.javaClass.simpleName)
+            false
+        }
+        if (!ended) restartPage()
+    }
+
+    // New process, new WebView graphics state. The whole box server restarts with the app: phones lose the box for the
+    // restart and a live that is running ends. The process is ended only when the system will bring it back by itself:
+    // MAXCOM is the default Home app, and the relaunch alarm was armed. Otherwise nothing is stopped, nothing is stored,
+    // and the page is rebuilt instead. Order: arm the relaunch, stop the service (its onDestroy stops the server child;
+    // Supervisor.stop may wait two 5 s grace periods, hence the 11 s before the process ends), end the process. A server
+    // child still alive then is reaped by the next start (ProcReaper). The relaunched activity starts the service again.
+    private fun restartApp() {
+        val isHome = isDefaultHome()
+        val armed = isHome && armRelaunch()
+        if (!VideoRecovery.mayRestartApp(isHome, armed)) {
+            Log.w(TAG, "app restart declined (default home=$isHome, relaunch armed=$armed), rebuilding the page")
+            restartPage()
+            return
+        }
+        recovery.appRestarted(System.currentTimeMillis())
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putLong(KEY_APP_RESTART, recovery.lastAppRestartMs).commit()
+        try {
+            stopService(Intent(this, BoxService::class.java))
+        } catch (e: Exception) {
+            Log.w(TAG, "stop service: " + e.javaClass.simpleName)
+        }
+        main.postDelayed({ Process.killProcess(Process.myPid()) }, EXIT_AFTER_MS)
+    }
+
+    private fun isDefaultHome(): Boolean = try {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == packageName
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun armRelaunch(): Boolean = try {
+        val launch = PendingIntent.getActivity(
+            this, 0, Intent(this, KioskActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val alarms = getSystemService(ALARM_SERVICE) as AlarmManager
+        alarms.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + RELAUNCH_MS, launch)
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "relaunch not armed: " + e.javaClass.simpleName)
+        false
     }
 
     private fun installedVersion(): String? = try {
@@ -257,6 +336,10 @@ class KioskActivity : Activity() {
         const val TAG = "MAXCOM"
         const val POLL_MS = 1500L
         const val TICK_MS = 1000L
+        const val PREFS = "kiosk"
+        const val KEY_APP_RESTART = "video_app_restart_ms"
+        const val EXIT_AFTER_MS = 11_000L
+        const val RELAUNCH_MS = 13_000L
         val COMBO = listOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_DOWN,

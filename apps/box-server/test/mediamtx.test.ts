@@ -3,8 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MediamtxApi, createLiveSecrets, ensureBoxPassword, mediaBindHost, renderMediamtxConfig, startMediamtx, webrtcAdvertisedHosts } from '../src/live/mediamtx.ts';
+import { MediamtxApi, createLiveSecrets, ensureBoxPassword, mediaBindHost, reapStaleMediamtx, renderMediamtxConfig, startMediamtx, webrtcAdvertisedHosts } from '../src/live/mediamtx.ts';
 import type { MediamtxEvent, MediamtxSupervisor } from '../src/live/mediamtx.ts';
+import { cameraSecrets } from '../src/live/camera.ts';
 import { startFakeMediamtx } from './support/fakeMediamtx.ts';
 import type { FakeMediamtx } from './support/fakeMediamtx.ts';
 
@@ -182,6 +183,30 @@ describe('rendered config: listeners and advertised addresses', () => {
   it('declares the kiosk audio path as a publisher path next to surau', () => {
     expect(yml).toMatch(/^ {2}surau-kiosk:\r?\n {4}source: publisher$/m);
   });
+
+  it('declares the AAC rendition path of a combined live (the box YouTube relay reads it) as a publisher path', () => {
+    expect(yml).toMatch(/^ {2}surau-yt:\r?\n {4}source: publisher$/m);
+  });
+
+  it('declares the two paths of the solo sound process (Opus and AAC) as publisher paths', () => {
+    expect(yml).toMatch(/^ {2}surau-snd:\r?\n {4}source: publisher$/m);
+    expect(yml).toMatch(/^ {2}surau-snd-aac:\r?\n {4}source: publisher$/m);
+  });
+});
+
+describe('rendered config: the write queue', () => {
+  it('is 16384 on Windows and 8192 elsewhere by default, and the given value when one is set', () => {
+    const yml = renderMediamtxConfig({ dataDir: '/d', lanIps: ['10.168.1.20'], password: PASS });
+    expect(yml).toMatch(new RegExp(`^writeQueueSize: ${process.platform === 'win32' ? 16384 : 8192}$`, 'm'));
+    expect(renderMediamtxConfig({ dataDir: '/d', lanIps: [], password: PASS, writeQueue: 8192 })).toMatch(/^writeQueueSize: 8192$/m);
+    expect(renderMediamtxConfig({ dataDir: '/d', lanIps: [], password: PASS, writeQueue: 16384 })).toMatch(/^writeQueueSize: 16384$/m);
+  });
+
+  it('refuses a queue size that is not a power of two in range', () => {
+    for (const bad of [0, 100, 3000, 1 << 20, 1.5, Number.NaN]) {
+      expect(() => renderMediamtxConfig({ dataDir: '/d', lanIps: [], password: PASS, writeQueue: bad })).toThrow();
+    }
+  });
 });
 
 describe('ensureBoxPassword', () => {
@@ -299,6 +324,35 @@ describe('startMediamtx supervisor', () => {
     expect(text).toContain('publish%3Asurau%3Apub-s1%3A***');
   });
 
+  it('C6: a three-character camera password is scrubbed, a shorter one where it stands in the address, and the longest value goes first', async () => {
+    const secrets = createLiveSecrets();
+    const script = `
+      setTimeout(() => {
+        console.log('source rtsp://viewer:abc@10.168.1.20:554/main ready');
+        console.log('auth failed for abc');
+        console.log('source rtsp://ops:x9@10.168.1.21:554/main closed');
+        console.log('source rtsp://:q@10.168.1.22:554/main closed');
+        console.log('tail-marker');
+      }, 300);
+      setInterval(() => {}, 1000)`;
+    const { s, dir } = sup(script, { redact: () => [PASS, ...secrets.list()] });
+    s.start();
+    // the short password first, as the session adds the parts of a login before the joined forms
+    secrets.add('abc', 'viewer', 'viewer:abc', ':abc@');
+    secrets.add(...cameraSecrets({ url: 'rtsp://ops:x9@10.168.1.21:554/main' }), ...cameraSecrets({ url: 'rtsp://10.168.1.22:554/main', username: '', password: 'q' }));
+    const log = join(dir, 'live', 'mediamtx.out.log');
+    await until(() => existsSync(log) && readFileSync(log, 'utf8').includes('tail-marker'));
+    const text = readFileSync(log, 'utf8');
+    for (const secret of ['abc', 'viewer', 'x9', ':q@']) expect(text, secret).not.toContain(secret);
+    expect(text).toContain('source rtsp://***@10.168.1.20:554/main ready');
+    expect(text).toContain('auth failed for ***');
+    // a one or two character value alone is never registered: it would blank ordinary text
+    expect(createLiveSecrets().list()).toEqual([]);
+    const tiny = createLiveSecrets();
+    tiny.add('q', 'x9');
+    expect(tiny.list()).toEqual([]);
+  });
+
   it('runs MediaMTX with the live folder as its working directory', async () => {
     const { s, dir } = sup(`console.log('cwd=' + process.cwd()); setInterval(() => {}, 1000)`);
     s.start();
@@ -306,6 +360,44 @@ describe('startMediamtx supervisor', () => {
     await until(() => existsSync(log) && readFileSync(log, 'utf8').includes('cwd='));
     const line = readFileSync(log, 'utf8').split(String.fromCharCode(10)).find((l) => l.includes('cwd=')) ?? '';
     expect(realpathSync(line.slice(line.indexOf('cwd=') + 4).trim())).toBe(realpathSync(join(dir, 'live')));
+  });
+
+  it('K5: a supervisor that gave up tries again later by itself, and runs when the cause is gone (success path)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const dir = tempDir();
+    const flag = join(dir, 'ok.flag');
+    // crashes until the flag file exists, then stays up
+    const script = `if (!require('node:fs').existsSync(${JSON.stringify(flag)})) process.exit(1); setInterval(() => {}, 1000)`;
+    const events: MediamtxEvent[] = [];
+    const s = startMediamtx({ exe: process.execPath, args: ['-e', script], dataDir: dir, backoffBaseMs: 10, backoffMaxMs: 40, maxRestarts: 2, reviveMs: 300, onEvent: (e) => events.push(e) });
+    sups.push(s);
+    s.start();
+    await until(() => events.some((e) => e.type === 'failed'), 30_000);
+    expect(s.status().running).toBe(false);
+    writeFileSync(flag, '1');
+    await until(() => s.status().running === true, 30_000);
+    expect(s.status().state).toBe('running');
+  }, 70_000);
+
+  it('K5: a stop while it waits to try again ends the waiting', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { s, events } = sup('process.exit(1)', { maxRestarts: 1, reviveMs: 200 });
+    s.start();
+    await until(() => events.some((e) => e.type === 'failed'), 30_000);
+    const spawned = events.filter((e) => e.type === 'spawn').length;
+    await s.stop();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(events.filter((e) => e.type === 'spawn')).toHaveLength(spawned);
+  }, 40_000);
+
+  it('K5: every spawn records its process id for the stale-process check, and a clean stop removes it', async () => {
+    const { s, dir } = sup('setInterval(() => {}, 1000)');
+    s.start();
+    const pidFile = join(dir, 'live', 'mediamtx.pid');
+    await until(() => s.status().running && existsSync(pidFile));
+    expect(readFileSync(pidFile, 'utf8').trim()).toBe(String(s.status().pid));
+    await s.stop();
+    expect(existsSync(pidFile)).toBe(false);
   });
 
   it('never prints the password on the console', async () => {
@@ -511,5 +603,69 @@ describe('app wiring', () => {
     expect(existsSync(join(dir, 'data', 'secret', 'mediamtx.pass'))).toBe(true);
     await app.close();
     expect(sup?.status().running).toBe(false);
+  });
+});
+
+// 2026.11.15, Lane A task A7 (K5): a MediaMTX left running by a box that crashed holds the media ports; it is ended before a new one starts.
+describe('K5: the stale MediaMTX reaper', () => {
+  const pidFileIn = (): string => {
+    const dir = tempDir();
+    mkdirSync(join(dir, 'live'), { recursive: true });
+    return join(dir, 'live', 'mediamtx.pid');
+  };
+
+  it('ends the recorded process when it is still a MediaMTX, and removes the record (success path)', () => {
+    const file = pidFileIn();
+    writeFileSync(file, '4242');
+    const killed: number[] = [];
+    const out = reapStaleMediamtx(file, 'C:\\tools\\mediamtx\\mediamtx.exe', { platform: 'win32', imageOf: (pid) => (pid === 4242 ? 'MediaMTX.exe' : null), kill: (pid) => void killed.push(pid) });
+    expect(out).toBe(4242);
+    expect(killed).toEqual([4242]);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it('never ends a process that is not MediaMTX (the number was reused), its own process, or anything from a damaged record', () => {
+    const killed: number[] = [];
+    const kill = (pid: number): void => void killed.push(pid);
+    const reused = pidFileIn();
+    writeFileSync(reused, '4242');
+    expect(reapStaleMediamtx(reused, 'mediamtx.exe', { platform: 'win32', imageOf: () => 'notepad.exe', kill })).toBeNull();
+    expect(existsSync(reused)).toBe(false);
+    const gone = pidFileIn();
+    writeFileSync(gone, '4243');
+    expect(reapStaleMediamtx(gone, 'mediamtx.exe', { platform: 'win32', imageOf: () => null, kill })).toBeNull();
+    const own = pidFileIn();
+    writeFileSync(own, String(process.pid));
+    expect(reapStaleMediamtx(own, 'mediamtx.exe', { platform: 'win32', imageOf: () => 'mediamtx.exe', kill })).toBeNull();
+    for (const bad of ['', 'abc', '-5', '0', '1', '12 ; calc', '99999999999']) {
+      const f = pidFileIn();
+      writeFileSync(f, bad);
+      expect(reapStaleMediamtx(f, 'mediamtx.exe', { platform: 'win32', imageOf: () => 'mediamtx.exe', kill }), bad).toBeNull();
+    }
+    expect(reapStaleMediamtx(join(tempDir(), 'none.pid'), 'mediamtx.exe', { platform: 'win32', imageOf: () => 'mediamtx.exe', kill })).toBeNull();
+    expect(killed).toEqual([]);
+  });
+
+  it('does nothing on a platform other than Windows', () => {
+    const file = pidFileIn();
+    writeFileSync(file, '4242');
+    const killed: number[] = [];
+    expect(reapStaleMediamtx(file, 'mediamtx', { platform: 'linux', imageOf: () => 'mediamtx', kill: (pid) => void killed.push(pid) })).toBeNull();
+    expect(killed).toEqual([]);
+  });
+});
+
+describe('MediamtxApi.pathWebrtcReaders', () => {
+  it('lists the WebRTC readers of a path, and answers null when there is no usable answer', async () => {
+    const fake = await startFakeMediamtx();
+    fakes.push(fake);
+    const a = new MediamtxApi({ port: fake.port, user: fake.user, pass: fake.pass });
+    fake.setReady(true, { sourceType: 'srtConn', sourceId: 'c1', readers: 3 });
+    expect(await a.pathWebrtcReaders('surau')).toEqual(['r0', 'r1', 'r2']);
+    fake.setReady(true, { readers: 0 });
+    expect(await a.pathWebrtcReaders('surau')).toEqual([]);
+    // unknown path: no answer to count from
+    expect(await a.pathWebrtcReaders('nothing')).toBeNull();
+    await expect(a.pathWebrtcReaders('bad name')).rejects.toThrow('bad path name');
   });
 });

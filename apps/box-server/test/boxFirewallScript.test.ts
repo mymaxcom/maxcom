@@ -40,9 +40,15 @@ describe('ensure-box-firewall.ps1 (static)', () => {
     for (const ch of text) expect(ch.charCodeAt(0)).toBeLessThan(128);
   });
 
-  it('has exactly one add rule line: inbound TCP, every profile, local subnet only, the port, the program quoted', () => {
+  it('has exactly two add rule lines: inbound TCP 8443 and inbound UDP 5353, every profile, local subnet only, the program quoted', () => {
     const adds = text.split(/\r?\n/).filter((l) => /'add', 'rule'/.test(l));
-    expect(adds.length).toBe(1);
+    expect(adds.length).toBe(2);
+    const mdns = adds[1]!;
+    expect(mdns).toMatch(/Get-QuotedArg 'name' \$mdnsRuleName/);
+    for (const part of ["'dir=in'", "'action=allow'", "'protocol=udp'", '"localport=$mdnsPort"', "'profile=any'", "'remoteip=localsubnet'"]) {
+      expect(mdns).toContain(part);
+    }
+    expect(mdns).toMatch(/Get-QuotedArg 'program' \$Program/);
     expect(adds[0]).toMatch(/Get-QuotedArg 'name' \$ruleName/);
     for (const part of ["'dir=in'", "'action=allow'", "'protocol=tcp'", '"localport=$HttpsPort"', "'profile=any'", "'remoteip=localsubnet'"]) {
       expect(adds[0]).toContain(part);
@@ -52,15 +58,17 @@ describe('ensure-box-firewall.ps1 (static)', () => {
     expect(text).toMatch(/\$Key \+ '="' \+ \$Value \+ '"'/);
   });
 
-  it('opens one TCP rule only: the MAXCOM Box HTTPS name, the 8443 default and no media or UDP rule', () => {
+  it('opens the HTTPS rule (TCP, the 8443 default) and the local name rule (UDP 5353 only), and no media rule', () => {
     expect(text).toContain("'MAXCOM Box HTTPS'");
+    expect(text).toContain("'MAXCOM Box mDNS'");
+    expect(text).toMatch(/\$mdnsPort = 5353/);
     expect(text).toMatch(/\[int\]\$HttpsPort\s*=\s*8443/);
     expect(text).toMatch(/\[ValidateRange\(1, 65535\)\]/);
-    expect(text).not.toMatch(/protocol=udp/i);
-    expect(text).not.toMatch(/\budp\b/i);
+    // UDP appears for the name rule only, never for a media port
+    expect(text.match(/protocol=udp/gi)?.length).toBe(1);
     expect(text).not.toContain('MAXCOM Live WebRTC');
     expect(text).not.toContain('MAXCOM Live SRT');
-    expect(text.match(/'add', 'rule'/g)?.length).toBe(1);
+    expect(text.match(/'add', 'rule'/g)?.length).toBe(2);
   });
 
   it('refuses without administrator rights, before any delete or add', () => {
@@ -83,7 +91,8 @@ describe('ensure-box-firewall.ps1 (static)', () => {
     expect(text).toMatch(/'delete', 'rule', \(Get-QuotedArg 'name' \$ruleName\)/);
     expect(text).toMatch(/Test-RuleExact/);
     // the exact test looks at the protocol and the program as well
-    expect(text).toMatch(/\$r\.Protocol -ne 'TCP'/);
+    expect(text).toMatch(/\$r\.Protocol -ne \$Protocol/);
+    expect(text).toMatch(/\[string\]\$Protocol = 'TCP'/);
     expect(text).toMatch(/\$r\.Program -ine \$ProgramPath/);
     expect(text).toMatch(/OK      \$ruleName/);
   });
@@ -120,6 +129,8 @@ describe.runIf(process.platform === 'win32')('ensure-box-firewall.ps1 (run)', ()
     expect(r.out).toContain('DRYRUN');
     expect(r.out).toContain('MAXCOM Box HTTPS');
     expect(r.out).toContain('TCP 8443');
+    expect(r.out).toContain('MAXCOM Box mDNS');
+    expect(r.out).toContain('UDP 5353');
     expect(r.out).toContain(exe);
   });
 
@@ -129,6 +140,7 @@ describe.runIf(process.platform === 'win32')('ensure-box-firewall.ps1 (run)', ()
     expect(r.status).toBe(0);
     expect(r.out).toContain('DRYRUN');
     expect(r.out).toMatch(/delete .*MAXCOM Box HTTPS/);
+    expect(r.out).toMatch(/delete .*MAXCOM Box mDNS/);
   });
 
   it('refuses a program that is not node.exe', () => {
@@ -173,7 +185,12 @@ describe.runIf(process.platform === 'win32')('ensure-box-firewall.ps1 (run)', ()
     expect(r.calls[1]).toBe(
       'advfirewall firewall add rule name="MAXCOM Box HTTPS" dir=in action=allow protocol=tcp localport=8443 profile=any remoteip=localsubnet program="' + exe + '"',
     );
-    expect(r.calls.length).toBe(2);
+    // then the local name rule, the same way
+    expect(r.calls[2]).toBe('advfirewall firewall delete rule name="MAXCOM Box mDNS"');
+    expect(r.calls[3]).toBe(
+      'advfirewall firewall add rule name="MAXCOM Box mDNS" dir=in action=allow protocol=udp localport=5353 profile=any remoteip=localsubnet program="' + exe + '"',
+    );
+    expect(r.calls.length).toBe(4);
   });
 
   it('Test-RuleSnapshotExact accepts exactly the wanted rule and nothing else (locale-neutral values)', () => {
@@ -200,6 +217,8 @@ describe.runIf(process.platform === 'win32')('ensure-box-firewall.ps1 (run)', ()
         '"port=" + (Test-RuleSnapshotExact @((Variant "LocalPort" "8444")) 8443 $prog)',
         '"any=" + (Test-RuleSnapshotExact @((Variant "RemoteAddress" "Any")) 8443 $prog)',
         '"prog=" + (Test-RuleSnapshotExact @((Variant "Program" "C:\\other\\node.exe")) 8443 $prog)',
+        '"mdns=" + (Test-RuleSnapshotExact @((Variant "Protocol" "UDP")) 8443 $prog "UDP")',
+        '"mdnstcp=" + (Test-RuleSnapshotExact @($good) 8443 $prog "UDP")',
         '',
       ].join('\r\n'),
     );
@@ -209,7 +228,7 @@ describe.runIf(process.platform === 'win32')('ensure-box-firewall.ps1 (run)', ()
     );
     expect(got, `${r.stdout}${r.stderr}`).toEqual({
       good: 'True', case: 'True', three: 'True', none: 'False', two: 'False', disabled: 'False', out: 'False', block: 'False',
-      priv: 'False', udp: 'False', port: 'False', any: 'False', prog: 'False',
+      priv: 'False', udp: 'False', port: 'False', any: 'False', prog: 'False', mdns: 'True', mdnstcp: 'False',
     });
   });
 
@@ -217,7 +236,7 @@ describe.runIf(process.platform === 'win32')('ensure-box-firewall.ps1 (run)', ()
     const base = tempDir();
     const r = fakeNetshRun(base, ['-Remove'], fakeNodeExe(base));
     expect(r.status).toBe(0);
-    expect(r.calls).toEqual(['advfirewall firewall delete rule name="MAXCOM Box HTTPS"']);
+    expect(r.calls).toEqual(['advfirewall firewall delete rule name="MAXCOM Box HTTPS"', 'advfirewall firewall delete rule name="MAXCOM Box mDNS"']);
   });
 
   it.runIf(!elevated)('without administrator rights a real run exits non-zero and says what to do', () => {

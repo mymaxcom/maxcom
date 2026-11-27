@@ -14,7 +14,7 @@ import { resolveSession } from '../src/auth/sessions.ts';
 import { setRoles } from '../src/auth/users.ts';
 import { createChangeBus } from '../src/events.ts';
 import { putItem } from '../src/content/store.ts';
-import { getVersion } from '../src/settingsStore.ts';
+import { getSettings, getVersion } from '../src/settingsStore.ts';
 import { createSyncService, registerSyncRoutes, SYNC_BODY_LIMIT } from '../src/sync/routes.ts';
 import { LOCAL_SURAU_ID } from '../src/tenant.ts';
 import { loginAs } from './authHelpers.ts';
@@ -514,5 +514,64 @@ describe('hook wiring', () => {
     });
     const r = await bare.inject({ method: 'POST', url: '/api/sync/ops', remoteAddress: '10.168.1.5', payload: { ops: [] } });
     expect(r.statusCode).toBe(401);
+  });
+});
+
+describe('G3: clockOffsetMs on the body of POST /api/sync/ops corrects a settings.put stamp', () => {
+  const MIN = 60_000;
+  const liveOp = (nextLiveOn: boolean, at: number): OpInput => ({
+    kind: 'settings.put', entity: 'settings', entityId: 'liveYoutube', payload: { nextLiveOn }, editedAt: new Date(at).toISOString(),
+  });
+  const nextLiveOn = async (app: FastifyInstance, _login: Login): Promise<unknown> => getSettings(app.surau.db, 'sdm').liveYoutube.nextLiveOn;
+
+  /** Another admin saved 2 minutes ago (box time); then a phone whose clock is 5 minutes behind saves now. */
+  async function scene(extra: Record<string, unknown>, base = AT.getTime(), options: AppOptions = {}) {
+    const app = makeApp(options);
+    const other = await loginAs(app, 'admin');
+    const phone = await loginAs(app, 'admin');
+    const first = (await postOps(app, other, await batch(app, other, [liveOp(true, base - 2 * MIN)]))).json() as { results: OpResult[] };
+    expect(first.results[0]).toMatchObject({ status: 'applied' });
+    expect(await nextLiveOn(app, phone)).toBe(true);
+    const r = await postOps(app, phone, await batch(app, phone, [liveOp(false, base - 5 * MIN)]), extra);
+    expect(r.statusCode).toBe(200);
+    return { app, phone, result: (r.json() as { results: OpResult[] }).results[0]! };
+  }
+
+  it('with the offset the save of a phone 5 minutes behind lands', async () => {
+    const { app, phone, result } = await scene({ clockOffsetMs: 5 * MIN });
+    expect(result).toMatchObject({ status: 'applied' });
+    expect(result.skipped).toBeUndefined();
+    expect(await nextLiveOn(app, phone)).toBe(false);
+  });
+
+  it('without the offset (an older app) the same save loses, as before', async () => {
+    const { app, phone, result } = await scene({});
+    expect(result.status).toBe('superseded');
+    expect(await nextLiveOn(app, phone)).toBe(true);
+  });
+
+  it('the cloud never reads the offset: an app measures its clock against the box at the surau only', async () => {
+    const { app, phone, result } = await scene({ clockOffsetMs: 5 * MIN }, AT.getTime(), { role: 'cloud', dataDir: tempDir(), boxId: '0c10ad000000000d' });
+    expect(result.status).toBe('superseded');
+    expect(await nextLiveOn(app, phone)).toBe(true);
+  });
+
+  it('an offset that is not a whole number is ignored, never an error', async () => {
+    for (const bad of ['300000', 1.5, null, { ms: 300000 }, [300000]]) {
+      const { app, phone, result } = await scene({ clockOffsetMs: bad });
+      expect(result.status).toBe('superseded');
+      expect(await nextLiveOn(app, phone)).toBe(true);
+    }
+  });
+
+  it('a huge offset cannot push a stamp past the box clock: a later honest save still wins', async () => {
+    // the settings store bounds against the machine clock, so this scene runs on it
+    const base = Date.now();
+    const { app, phone } = await scene({ clockOffsetMs: 365 * 24 * 60 * MIN }, base, { now: () => new Date() });
+    expect(await nextLiveOn(app, phone)).toBe(false);
+    const other = await loginAs(app, 'admin');
+    const r = (await postOps(app, other, await batch(app, other, [liveOp(true, Date.now() + 1000)]))).json() as { results: OpResult[] };
+    expect(r.results[0]).toMatchObject({ status: 'applied' });
+    expect(await nextLiveOn(app, phone)).toBe(true);
   });
 });

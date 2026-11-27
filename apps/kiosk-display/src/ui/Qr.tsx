@@ -1,4 +1,6 @@
 import qrcode from 'qrcode-generator';
+import { t } from '../i18n.ts';
+import type { Lang } from '../i18n.ts';
 
 export interface QrProps {
   /** The text to encode (a `maxcom1:` payload). Empty draws nothing. */
@@ -7,6 +9,8 @@ export interface QrProps {
   size: number;
   /** Quiet zone in modules (the QR standard asks for 4). */
   quiet?: number;
+  /** The screen language, for the code's spoken label (Malay when left out). */
+  lang?: Lang;
 }
 
 /** Dark modules as one SVG path: a horizontal run per row, so a large code is a few KB of path data. */
@@ -38,14 +42,14 @@ export function qrPath(text: string, quiet = 4): { d: string; modules: number } 
 }
 
 /** A QR code drawn offline as inline SVG, black on white (high contrast reads best from across a room). */
-export function Qr({ text, size, quiet = 4 }: QrProps) {
+export function Qr({ text, size, quiet = 4, lang = 'ms' }: QrProps) {
   const p = qrPath(text, quiet);
   if (p === null) return null;
   return (
     <svg
       data-testid="qr"
       role="img"
-      aria-label="Kod QR"
+      aria-label={t('qrCode', lang)}
       width={size}
       height={size}
       viewBox={`0 0 ${p.modules} ${p.modules}`}

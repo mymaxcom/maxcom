@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { isBuiltInTheme, SCREEN_IDS, THEME_BUNDLE_FORMAT, THEME_CONTRACT } from '@surau/core';
 import type { InstalledPack } from '@surau/core';
 import { AssetError, deletePackAsset, getAssetPath, putAsset } from '../assets/store.ts';
+import { keepFolderBeforeDelete, keepMediaBeforeDelete } from '../assets/video.ts';
 import { getSettings, putFeature, SettingsError } from '../settingsStore.ts';
 import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { rewriteUrls, scopePackCss } from './cssCheck.ts';
@@ -136,6 +137,7 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
       // File names come from the validated key set and extension list, never from a zip entry name.
       for (const [key, img] of files.images) writeFileSync(join(tmp, 'images', `${key}.${img.ext}`), img.data);
       mkdirSync(join(final, '..'), { recursive: true });
+      keepThemeFolder(final);
       rmSync(final, { recursive: true, force: true });
       renameSync(tmp, final);
     } catch (error) {
@@ -146,12 +148,18 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
 
   const dirOf = (name: string, hash: string): string => join(root, name, hash);
 
+  /** A kept-data master's `keep-on-delete` backup takes the link-day files of a theme folder before it goes. */
+  const keepThemeFolder = (abs: string): void => keepFolderBeforeDelete(dataDir, relative(dataDir, abs));
+
   /** Folders nobody needs: the old versions of a theme (keeping `keep`), and everything of a theme that is gone. */
   function pruneVersions(name: string, keep: ReadonlySet<string>): void {
     const dir = join(root, name);
     if (!existsSync(dir)) return;
     for (const v of readdirSync(dir)) {
-      if (!FOLDER_NAME.test(v) || !keep.has(v)) rmSync(join(dir, v), { recursive: true, force: true });
+      if (!FOLDER_NAME.test(v) || !keep.has(v)) {
+        keepThemeFolder(join(dir, v));
+        rmSync(join(dir, v), { recursive: true, force: true });
+      }
     }
   }
 
@@ -165,7 +173,10 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
       if (entry.startsWith('.tmp-')) { rmSync(p, { recursive: true, force: true }); continue; }
       if (entry.startsWith('.') || !isPackFolder(p)) continue; // only what this store made is ever removed
       const rec = Object.prototype.hasOwnProperty.call(packs, entry) ? packs[entry] : undefined;
-      if (rec === undefined) rmSync(p, { recursive: true, force: true });
+      if (rec === undefined) {
+        keepThemeFolder(p);
+        rmSync(p, { recursive: true, force: true });
+      }
       else pruneVersions(entry, new Set([hashOf(rec.assetId)]));
     }
   }
@@ -225,7 +236,7 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
   /** The stored .maxtheme asset goes when no installed pack points at it any more. */
   function dropAssetIfUnused(assetId: string): void {
     const stillUsed = Object.values(installedPacks()).some((p) => p.assetId === assetId);
-    if (!stillUsed) deletePackAsset(db, dataDir, assetId);
+    if (!stillUsed) deletePackAsset(db, dataDir, assetId, (rel) => keepMediaBeforeDelete(dataDir, rel));
   }
 
   const inflight = new Map<string, Promise<{ dir: string; version: number; hash: string } | null>>();
@@ -331,8 +342,9 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
       const hash = hashOf(asset.id);
       const final = dirOf(m.name, hash);
       const undo = (): void => {
+        keepThemeFolder(final);
         rmSync(final, { recursive: true, force: true });
-        if (asset.created) deletePackAsset(db, dataDir, asset.id); // a file this install stored, that no record points at
+        if (asset.created) deletePackAsset(db, dataDir, asset.id, (rel) => keepMediaBeforeDelete(dataDir, rel)); // a file this install stored, that no record points at
       };
 
       try {
@@ -377,6 +389,7 @@ export function createThemeStore(deps: ThemeStoreDeps): ThemeStore {
       const assetId = packs[name]!.assetId;
       putFeature(db, 'themeStyle', { packs: { [name]: { removed: true } } }, actor, deviceId, LOCAL_SURAU_ID);
       problems.delete(name);
+      keepThemeFolder(join(root, name));
       rmSync(join(root, name), { recursive: true, force: true });
       dropAssetIfUnused(assetId);
     },

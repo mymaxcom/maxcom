@@ -16,11 +16,11 @@ import '../../features/enrol/pin_policy.dart';
 import '../../features/shell/permissions.dart';
 import '../../l10n/generated/s.dart';
 
-/// Which of the three people pages is open.
-enum PeopleTab { users, devices, pairing }
+/// Which of the four people pages is open.
+enum PeopleTab { users, devices, pairing, screens }
 
-/// The switch at the top of the users, devices and pairing pages; an entry
-/// the person's roles do not allow is simply not there.
+/// The switch at the top of the users, devices, pairing and TV screens
+/// pages; an entry the person's roles do not allow is simply not there.
 class PeopleTabs extends ConsumerWidget {
   const PeopleTabs({super.key, required this.current});
 
@@ -32,7 +32,7 @@ class PeopleTabs extends ConsumerWidget {
     final roles = ref.watch(rolesProvider);
     final tabs = <PeopleTab>[
       if (canSee(roles, 'users:manage')) PeopleTab.users,
-      if (canSee(roles, 'devices:manage')) ...[PeopleTab.devices, PeopleTab.pairing],
+      if (canSee(roles, 'devices:manage')) ...[PeopleTab.devices, PeopleTab.pairing, PeopleTab.screens],
     ];
     if (tabs.length < 2) return const SizedBox.shrink();
     return SegmentedButton<PeopleTab>(
@@ -40,15 +40,18 @@ class PeopleTabs extends ConsumerWidget {
         for (final t in tabs)
           ButtonSegment(
             value: t,
-            icon: Icon(switch (t) {
+            // Four tabs share the width of a phone: the words get the room, not the icons.
+            icon: tabs.length > 3 ? null : Icon(switch (t) {
               PeopleTab.users => Icons.people_outline_rounded,
               PeopleTab.devices => Icons.devices_rounded,
               PeopleTab.pairing => Icons.tv_outlined,
+              PeopleTab.screens => Icons.dns_outlined,
             }),
             label: Text(switch (t) {
               PeopleTab.users => s.peopleTabUsers,
               PeopleTab.devices => s.peopleTabDevices,
               PeopleTab.pairing => s.peopleTabPairing,
+              PeopleTab.screens => s.peopleTabScreens,
             }),
           ),
       ],
@@ -72,6 +75,7 @@ class PeopleTabs extends ConsumerWidget {
           PeopleTab.users => AppRoutes.users,
           PeopleTab.devices => AppRoutes.devices,
           PeopleTab.pairing => AppRoutes.pairing,
+          PeopleTab.screens => AppRoutes.screens,
         });
       },
     );

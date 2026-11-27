@@ -45,6 +45,7 @@ class SoftwareDeviceKey implements DeviceKey {
 
   BigInt? _d;
   Map<String, String>? _jwk;
+  SoftwareDeviceKey? _pending;
 
   @override
   Future<bool> exists() async => _d != null;
@@ -82,6 +83,34 @@ class SoftwareDeviceKey implements DeviceKey {
   Future<void> clear() async {
     _d = null;
     _jwk = null;
+  }
+
+  @override
+  Future<Map<String, String>> generatePending() async {
+    final k = SoftwareDeviceKey.random();
+    _pending = k;
+    return Map<String, String>.of(k._jwk!);
+  }
+
+  /// Signs with the pending key (tests; the platform keys sign their pending key through their own channel).
+  Future<Uint8List> signPending(Uint8List message) async {
+    final k = _pending;
+    if (k == null) throw StateError('Kunci peranti tiada');
+    return k.sign(message);
+  }
+
+  @override
+  Future<void> commitPending() async {
+    final k = _pending;
+    if (k == null) throw StateError('Kunci peranti tiada');
+    _d = k._d;
+    _jwk = k._jwk;
+    _pending = null;
+  }
+
+  @override
+  Future<void> discardPending() async {
+    _pending = null;
   }
 }
 

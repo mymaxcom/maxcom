@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render } from '@testing-library/preact';
 import { makeView } from './helpers.tsx';
 import type { KioskView } from '../src/data/kiosk.ts';
-import { captureHostBridge, exitToHost, parseHostHash, resetHostBridgeForTest } from '../src/data/hostExit.ts';
+import { captureHostBridge, exitToHost, reportVideoStuck, parseHostHash, resetHostBridgeForTest } from '../src/data/hostExit.ts';
 
 const holder = vi.hoisted(() => ({ view: null as unknown as KioskView, box: null as Record<string, unknown> | null }));
 vi.mock('../src/data/kiosk.ts', () => ({ useKiosk: () => holder.view }));
@@ -162,5 +162,32 @@ describe('HostExit pulse timer', () => {
     clear.mockClear();
     act(() => r.unmount());
     expect(clear.mock.calls.some((c) => c[0] === pulseId), 'the pulse timer is cleared on unmount').toBe(true);
+  });
+});
+
+describe('reportVideoStuck', () => {
+  it('calls the Android bridge with the key and returns true', () => {
+    const videoStuck = vi.fn();
+    expect(reportVideoStuck({ MaxcomHost: { videoStuck }, __mxHostKey: 'k1' })).toBe(true);
+    expect(videoStuck).toHaveBeenCalledWith('k1');
+  });
+  it('does nothing without the bridge function or the key', () => {
+    const videoStuck = vi.fn();
+    expect(reportVideoStuck({ MaxcomHost: { videoStuck } })).toBe(false);
+    expect(reportVideoStuck({ MaxcomHost: {}, __mxHostKey: 'k1' })).toBe(false);
+    expect(reportVideoStuck({})).toBe(false);
+    expect(videoStuck).not.toHaveBeenCalled();
+  });
+  it('returns false when the bridge throws', () => {
+    expect(
+      reportVideoStuck({
+        MaxcomHost: {
+          videoStuck: () => {
+            throw new Error('x');
+          },
+        },
+        __mxHostKey: 'k1',
+      }),
+    ).toBe(false);
   });
 });

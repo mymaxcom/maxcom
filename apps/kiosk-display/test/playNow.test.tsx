@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/preact';
 import type { KioskContent, KioskVideo } from '@surau/core';
 import { makeView } from './helpers.tsx';
@@ -103,14 +103,20 @@ describe('play now on the TV', () => {
   });
 
   it('goes back to the rotation when its own time is over (a video that never reports)', () => {
-    const { at, press, hook } = open([vid('a', { order: 1 }), vid('x', { order: 2, durationSec: 30 })]);
-    at('10:00');
-    press('x');
-    expect(hook.result.current.current?.slot.itemId).toBe('x');
-    // the TV's clock a little over 30 s on: the item is over (view time moves, the press instant is real time)
-    const later = makeView(DATE, '10:00', { settings, at: new Date(Date.now() + 31_000) });
-    hook.rerender(later);
-    expect(hook.result.current.current?.slot.itemId).not.toBe('x');
+    // A fixed clock: the press instant (new Date() in the hook) and the view time are the same fixed moment, so the
+    // rotation slot the TV falls back to does not depend on the time of day the test runs.
+    const base = makeView(DATE, '10:00', { settings }).now;
+    vi.useFakeTimers({ toFake: ['Date'], now: base });
+    try {
+      const { at, press, hook } = open([vid('a', { order: 1 }), vid('x', { order: 2, durationSec: 30 })]);
+      at('10:00');
+      press('x');
+      expect(hook.result.current.current?.slot.itemId).toBe('x');
+      // the TV's clock a little over 30 s on: the item is over
+      expect(at('10:00', 31)?.slot.itemId).toBe('a');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('plays an afterPrayer item too (it is outside the rotation) and an item the TV does not have is dropped', () => {

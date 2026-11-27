@@ -122,6 +122,10 @@ class BoxGateway {
   /// [SessionExpired] (after [onSessionExpired]) on a 401.
   Future<Read<Map<String, dynamic>>> get(String path) async {
     if (_offlineFirst) {
+      if (path.split('?').first == '/api/settings') {
+        final fresh = await _settingsRead(path);
+        if (fresh != null) return fresh;
+      }
       final local = await _localRead(path);
       if (local != null) return local;
     }
@@ -251,6 +255,11 @@ class BoxGateway {
     return _send('POST', path, (c, t) => c.postJson(path, body, token: t));
   }
 
+  /// `POST path` with its own read budget [read] (a probe that takes longer than the usual answer, such as the 5 second
+  /// microphone test). A live-only write, never queued.
+  Future<Map<String, dynamic>> postSlow(String path, Object body, {required Duration read}) =>
+      _send('POST', path, (c, t) => c.postJson(path, body, token: t, read: read));
+
   /// `POST path` with raw bytes and their own content type (for example a
   /// zip). Goes straight to the network like any live-only write; never
   /// queued.
@@ -375,6 +384,56 @@ class BoxGateway {
       if (e.sent) throw Uncertain(path);
       throw const OfflineWriteRefused();
     }
+  }
+
+  // ---- offline-first: the settings, fresh over local (G1) ----
+
+  /// `GET /api/settings`, fresh over local (2026.11.15, G1): the local copy
+  /// changes only in a sync pull, so a screen that read it showed and USED old
+  /// values (another admin's change was not seen, the live screen acted on a
+  /// camera switch that was no longer so). When the base answers, the settings
+  /// are its fresh body with this device's own waiting edits laid over it;
+  /// the local copy is the fallback only when it does not answer, and is then
+  /// marked `stale` (the screen says "Mungkin belum terkini").
+  ///
+  /// Null = no opinion (no session token to ask with, or nothing local to fall
+  /// back to after a failure the caller should see): [get] goes on as before.
+  Future<Read<Map<String, dynamic>>?> _settingsRead(String path) async {
+    // the offline session has no token: only the local copy can answer
+    if (token.isEmpty) return null;
+    Map<String, dynamic> body;
+    try {
+      body = await client.getJson(path, token: token);
+    } on SessionExpired {
+      onSessionExpired();
+      final local = await _localRead(path);
+      if (local == null) rethrow;
+      return Read(local.value, at: local.at, stale: true);
+    } on BoxUnreachable {
+      reach.markDown(now());
+      final local = await _localRead(path);
+      return local == null ? null : Read(local.value, at: local.at, stale: true);
+    } on BoxError {
+      // a refusal (a role that may not read them all, a box error): the copy, marked
+      final local = await _localRead(path);
+      return local == null ? null : Read(local.value, at: local.at, stale: true);
+    }
+    final at = now();
+    reach.markUp(at);
+    // This device's own edits that still wait in the outbox are newer than
+    // anything the box holds from it: keep them on screen.
+    final merged = <String, dynamic>{...body};
+    for (final op in await engine!.outbox.queued()) {
+      final patch = op.payload;
+      if (op.kind != 'settings.put' || patch is! Map<String, dynamic>) continue;
+      final cur = merged[op.entityId];
+      merged[op.entityId] = SyncEngine.deepMerge(
+        cur is Map<String, dynamic> ? cur : const <String, dynamic>{},
+        patch,
+      );
+    }
+    if (_cacheCurrent) cache.put(path, merged, at);
+    return Read(merged, at: at, stale: false);
   }
 
   // ---- offline-first: reads from the local copy ----

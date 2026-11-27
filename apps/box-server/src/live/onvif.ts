@@ -16,6 +16,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import dgram from 'node:dgram';
 import http from 'node:http';
+import net from 'node:net';
 import os from 'node:os';
 import { cameraUrlError } from '@surau/core';
 
@@ -48,6 +49,13 @@ const MAX_DATAGRAMS = 256;
 const KNOWN_TTL_MS = 10 * 60_000;
 const NAME_MAX = 40;
 const LOGIN_MAX = 128;
+/** C4: the RTSP port a camera without ONVIF still answers on, and the limits of the look for it. */
+export const RTSP_PORT = 554;
+export const RTSP_SCAN_TIMEOUT_MS = 400;
+const RTSP_SCAN_PARALLEL = 64;
+const RTSP_SCAN_MAX_INTERFACES = 2;
+/** The name shown for a camera found by its open RTSP port only (it told us nothing about itself). */
+export const RTSP_ONLY_NAME = 'Kamera RTSP';
 
 export interface DiscoveredCamera {
   name: string;
@@ -70,6 +78,11 @@ export interface OnvifTransport {
   probe(message: string): Promise<ProbeReply[]>;
   /** One SOAP POST to a private address; rejects on a network failure or an answer above the size cap. */
   post(ip: string, port: number, path: string, body: string): Promise<SoapAnswer>;
+  /**
+   * C4: the hosts of the box's own networks whose RTSP port (554) accepts a connection (a camera that does not speak
+   * ONVIF). Optional: a transport without it finds ONVIF cameras only. Nothing is sent to the host and nothing read.
+   */
+  scanRtsp?(): Promise<string[]>;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -410,6 +423,19 @@ export class OnvifClient {
       this.known.set(m.camera.ip, { name: m.camera.name, xaddr: m.xaddr, at });
     }
     for (const [ip, v] of this.known) if (at - v.at > KNOWN_TTL_MS) this.known.delete(ip);
+    // C4: a camera that does not answer ONVIF is still listed when its RTSP port is open. The same address rule
+    // applies: private IPv4 only, never the box itself, whatever the scan returned.
+    let rtsp: string[] = [];
+    try {
+      rtsp = (await this.transport.scanRtsp?.()) ?? [];
+    } catch {
+      rtsp = [];
+    }
+    for (const ip of rtsp) {
+      if (found.size >= MAX_DEVICES) break;
+      if (typeof ip !== 'string' || found.has(ip) || !privateIp(ip, this.boxIps)) continue;
+      found.set(ip, { name: RTSP_ONLY_NAME, ip });
+    }
     return [...found.values()].sort((a, b) => a.ip.localeCompare(b.ip, 'en', { numeric: true }));
   }
 
@@ -572,6 +598,54 @@ export class NetOnvifTransport implements OnvifTransport {
     if (!privateIp(ip, this.boxIps)) return Promise.reject(new Error('address'));
     return httpPost(ip, port, path, body, MAX_SOAP_BYTES, SOAP_TIMEOUT_MS);
   }
+
+  /** The /24 of each private interface of the box (two at most), a few at a time, one short TCP connect each. */
+  async scanRtsp(): Promise<string[]> {
+    const hosts = rtspScanHosts(this.interfaces().slice(0, RTSP_SCAN_MAX_INTERFACES), this.boxIps);
+    const open: string[] = [];
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      for (let i = next++; i < hosts.length; i = next++) {
+        const ip = hosts[i] as string;
+        if (await tcpOpens(ip, RTSP_PORT, RTSP_SCAN_TIMEOUT_MS)) open.push(ip);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(RTSP_SCAN_PARALLEL, hosts.length) }, worker));
+    return open;
+  }
+}
+
+/** The other hosts of each interface's /24: private IPv4 only, never an address of the box. */
+export function rtspScanHosts(interfaces: readonly string[], boxIps: readonly string[]): string[] {
+  const out: string[] = [];
+  const nets = new Set<string>();
+  for (const addr of interfaces) {
+    const m = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/.exec(addr);
+    if (m === null || nets.has(m[1] as string)) continue;
+    nets.add(m[1] as string);
+    for (let h = 1; h <= 254; h++) {
+      const ip = `${m[1]}.${h}`;
+      if (ip !== addr && privateIp(ip, boxIps)) out.push(ip);
+    }
+  }
+  return out;
+}
+
+/** Does a TCP connect to the port succeed within the time? The socket is closed at once; nothing is written or read. */
+export function tcpOpens(host: string, port: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let done = false;
+    const socket = new net.Socket();
+    const finish = (ok: boolean): void => {
+      if (done) return;
+      done = true;
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(timeoutMs, () => finish(false));
+    socket.once('error', () => finish(false));
+    socket.connect(port, host, () => finish(true));
+  });
 }
 
 /** One POST with a hard size cap on the answer and a hard time limit; no redirect is followed, no connection is kept. */

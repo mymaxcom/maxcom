@@ -79,11 +79,14 @@ const SCEN = [
   { name: '17-solat', now: '2026-11-03T16:35:00+08:00', main: '.phase__title' },
   { name: '18-khutbah', now: '2026-11-06T13:05:00+08:00', main: '.phase__title' },
   { name: '19-syuruk', now: '2026-11-03T06:52:00+08:00', settings: { syurukWarning: { enabled: true } }, main: '.phase__title' },
-  { name: '20-zikir', now: '2026-11-03T16:50:00+08:00', content: 'islamic', main: '[data-layer="zikir"], .arab-zikir, [data-screen="arab-zikir"]' },
+  { name: '20-zikir', now: '2026-11-03T16:45:05+08:00', content: 'islamic', main: '[data-layer="zikir"], .arab-zikir, [data-screen="arab-zikir"]' },
   { name: '21-emergency', now: T, content: 'islamic', card: 'pengumuman', emergency: true, main: '[data-testid="emergency-band"]' },
   { name: '22-24h-seconds', now: '2026-11-03T15:52:07+08:00', settings: { prayerBar: { timeFormat: '24h' }, clock: { showSeconds: true } }, main: '.screen--main, .screen--shell' },
   { name: '23-live', now: T, content: 'islamic', live: true, main: '[data-testid="live-video"]' },
   { name: '24-nodata', now: '2027-01-01T09:00:00+08:00', main: '.phase__title' },
+  // 2026.11.15 zikir settings (O11, C6): the time left on the plain panel; the Arabic-led look with no clock.
+  { name: '25-zikir-left', now: '2026-11-03T16:45:30+08:00', content: 'islamic', settings: { zikirSelepasSolat: { showTimeLeft: true, look: 'plain' } }, main: '[data-layer="zikir"]' },
+  { name: '26-zikir-arab-noclock', now: '2026-11-03T16:45:30+08:00', content: 'islamic', settings: { zikirSelepasSolat: { showTimeLeft: true, showClock: false, look: 'arab' } }, main: '.arab-zikir' },
 ];
 
 const LIVE = { live: true, since: '2026-11-03T15:30:00+08:00', kuliah: { label: 'Kuliah Maghrib', penceramah: 'Ustaz Ahmad Fauzi bin Hassan', topic: 'Adab menuntut ilmu' }, audio: false, volume: 50 };

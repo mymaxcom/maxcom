@@ -65,7 +65,8 @@ class MenuItem {
     if (route == AppRoutes.dashboard) return location == AppRoutes.dashboard;
     if (entry == MenuEntry.people &&
         (_under(location, AppRoutes.devices) ||
-            _under(location, AppRoutes.pairing))) {
+            _under(location, AppRoutes.pairing) ||
+            _under(location, AppRoutes.screens))) {
       return true;
     }
     return _under(location, route);
@@ -174,6 +175,10 @@ bool routeAllowed(String location, Set<String> roles, FeatureFlags features) {
   }
   if (path == AppRoutes.devices) return has('devices:manage');
   if (path == AppRoutes.pairing) return has('devices:manage');
+  // Skrin TV dan MAXCOM Kiosk Box: the list and the link flow are for `devices:manage`; the choices of one TV also need
+  // `settings:write` (they are a setting of the surau).
+  if (path == AppRoutes.screens || path == AppRoutes.screensLink) return has('devices:manage');
+  if (_under(path, AppRoutes.screens)) return has('devices:manage') && has('settings:write');
   if (path == AppRoutes.audit) return has('audit:read');
   if (_under(path, AppRoutes.finance)) {
     if (!features.isOn('finance')) return false;

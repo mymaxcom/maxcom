@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
@@ -15,6 +16,7 @@ final setupFlowProvider = Provider<SetupFlow>((ref) {
     store: deps.boxStore,
     surauInfoStore: deps.surauInfoStore,
     platform: deps.platform,
+    pageOrigin: kIsWeb ? Uri.base : null,
     now: deps.now,
   );
 });

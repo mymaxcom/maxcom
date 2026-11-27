@@ -35,7 +35,7 @@ void main() {
     tester,
   ) async {
     final h = await pumpShell(tester, roles: const ['ajk']);
-    expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+    expect(find.text('Surau Contoh'), findsOneWidget);
     expect(find.text('Assalamualaikum, Ustaz Ali'), findsOneWidget);
     expect(find.text('AJK'), findsOneWidget);
     expect(
@@ -102,7 +102,7 @@ void main() {
     'with a logo: beside the surau name in the header, in the rail on the iPad; without one nothing is drawn',
     (tester) async {
       final h = await pumpShell(tester, roles: const ['ajk'], logo: true);
-      expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Surau Contoh'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('surau-logo')),
         findsOneWidget,
@@ -151,7 +151,7 @@ void main() {
       await settleImages(tester);
       expect(find.byKey(const ValueKey('surau-logo')), findsOneWidget);
       expect(
-        find.text('Surau D\'Waqaf'),
+        find.text('Surau Contoh'),
         findsNothing,
         reason: 'the logo carries the name',
       );
@@ -172,7 +172,7 @@ void main() {
         findsNWidgets(2),
         reason: 'rail and header',
       );
-      expect(find.text('Surau D\'Waqaf'), findsNothing);
+      expect(find.text('Surau Contoh'), findsNothing);
 
       // The same wordmark with the name wanted too: both are drawn.
       final both = await pumpShell(
@@ -182,7 +182,7 @@ void main() {
       );
       await settleImages(tester);
       expect(find.byKey(const ValueKey('surau-logo')), findsOneWidget);
-      expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Surau Contoh'), findsOneWidget);
       expect(both.box.byPath('/surau-logo'), isNotNull);
     },
   );

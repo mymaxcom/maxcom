@@ -8,8 +8,9 @@ import './styles.css';
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Settings, ThemeStyleEntry, Tone } from '@surau/core';
-import { useBoxLang } from './data/boxLang.ts';
+import { rememberTvLang, useBoxLang } from './data/boxLang.ts';
 import { useBoxState } from './data/boxState.ts';
+import { followerInfoOf, linkScreenOf, useLinkState, useMasterLostSince } from './data/linkState.ts';
 import { NotPairedError } from './data/bundle.ts';
 import { useCloudStatus } from './data/cloud.ts';
 import { useKiosk } from './data/kiosk.ts';
@@ -24,7 +25,9 @@ import { dirOfLang, t } from './i18n.ts';
 import type { Lang } from './i18n.ts';
 import { LiveVideo } from './live/LiveLayer.tsx';
 import { liveDisplayMode, useLiveAnchors } from './live/liveMode.ts';
+import { LiveDecoderContext } from './video/decoder.ts';
 import { LiveScreen } from './screens/LiveScreen.tsx';
+import { FollowerMarks, Link } from './screens/Link.tsx';
 import { Locked } from './screens/Locked.tsx';
 import { Main } from './screens/Main.tsx';
 import { NetCheck } from './screens/NetCheck.tsx';
@@ -87,6 +90,10 @@ export function App() {
   const view = useKiosk();
   const { state, settings } = view;
   const lang: Lang = tvLanguage(settings);
+  // The next boot screen says "loading" in this TV's language (once the surau's settings are known; never a preview).
+  useEffect(() => {
+    if (view.ready && !isPreview()) rememberTvLang(lang);
+  }, [lang, view.ready]);
   const [measured, setMeasured] = useState<Tone | null>(null);
   const tone = resolveTone(measured, settings);
   // A preview is not a display of its own: it never pairs, and a thin ribbon says so.
@@ -99,6 +106,18 @@ export function App() {
   // A failed poll keeps the last answer, and no answer yet means the normal kiosk: display fails safe.
   const box = useBoxState(preview ? { fetchImpl: noBoxFetch } : {}).view;
   const locked = box?.state === 'locked';
+  // The link of this box to another one (its own TV only: any other display gets nothing back) and the follower marks.
+  // Read defensively: a box that sends none of it is a normal box and the page stays as it was.
+  const link = useLinkState({ enabled: !preview });
+  const follower = followerInfoOf(box);
+  const linkNow = Date.now() + link.offsetMs;
+  const lostSince = useMasterLostSince(box, link.view, linkNow);
+  const linkScreen = !preview && box !== null && !locked && box.state !== 'recovery' ? linkScreenOf(link.view, linkNow) : null;
+  // A follower with nothing stored yet says whom it is connecting to; with data on screen a lost master is a small mark (K11).
+  const connecting =
+    !preview && box !== null && box.state === 'active' && (follower.follower || link.view?.mode === 'follower') && state.phase === 'noData';
+  // The never-set-up box shows its link QR inside the setup screen, beside the setup QR.
+  const linkKind = linkScreen === 'qr' && box?.state === 'setup' ? null : (linkScreen ?? (connecting ? 'connecting' : null));
   // Setup and recovery take the screen only for the display that is given their QR (the box's own loopback kiosk, or a
   // damaged-database box that shows its own notice). A paired hall display gets the state without a QR and keeps its
   // normal content: it must not turn into a screen that asks someone to scan.
@@ -200,6 +219,22 @@ export function App() {
     );
   }
 
+  if (box !== null && linkKind !== null) {
+    return (
+      <div class="stage" data-phase="link" data-dim="true" style={toneVars(tone)}>
+        <SafeBoundary today={state.today} settings={settings} lang={lang}>
+          <Link
+            lang={boxLang}
+            kind={linkKind}
+            view={link.view}
+            offsetMs={link.offsetMs}
+            masterName={follower.masterName ?? link.view?.master?.name ?? null}
+          />
+        </SafeBoundary>
+      </div>
+    );
+  }
+
   if (box !== null && boxScreen) {
     const Screen = box.state === 'setup' ? Setup : Recovery;
     return (
@@ -215,6 +250,8 @@ export function App() {
             onLang={setBoxLang}
             focus={boxFocus}
             onNetCheck={() => setNetCheckOpen(true)}
+            link={link.view}
+            linkOffsetMs={link.offsetMs}
           />
           {overlay}
         </SafeBoundary>
@@ -299,6 +336,7 @@ export function App() {
   return (
     <ScaleContext.Provider value={scaleFactor}>
     <ArabEnvContext.Provider value={arabEnv}>
+    <LiveDecoderContext.Provider value={liveWanted !== 'none' && live.playable}>
     <div
       class="stage"
       data-phase={state.phase}
@@ -363,10 +401,21 @@ export function App() {
         ) : null}
         {showDot ? <span class="status-dot" data-testid="status-dot" aria-hidden="true" /> : null}
         <HostExit />
-        {preview ? <div class="preview-ribbon" data-testid="preview-ribbon">PRATONTON</div> : null}
+        {!preview ? (
+          <FollowerMarks
+            info={follower}
+            lang={lang}
+            lostSince={lostSince}
+            timeFormat={settings.prayerBar.timeFormat === '24h' ? '24h' : '12h'}
+            tz={view.tz}
+            nowMs={linkNow}
+          />
+        ) : null}
+        {preview ? <div class="preview-ribbon" data-testid="preview-ribbon">{t('previewRibbon', lang)}</div> : null}
         {overlay}
       </SafeBoundary>
     </div>
+    </LiveDecoderContext.Provider>
     </ArabEnvContext.Provider>
     </ScaleContext.Provider>
   );

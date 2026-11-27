@@ -41,7 +41,7 @@ export function QrCard({ payload, expiresAt, caption, rem, keyFp, hint, lang }: 
   const unit = Math.min(window.innerWidth, (window.innerHeight * 16) / 9) / 100;
   const px = qrPixelSize(rem * unit, modules, window.devicePixelRatio || 1);
   // The screen re-renders every second for the clock: the same vnode lets Preact skip redrawing a dense code.
-  const code = useMemo(() => (px > 0 ? <Qr text={text} size={px} /> : null), [text, px]);
+  const code = useMemo(() => (px > 0 ? <Qr text={text} size={px} lang={lang} /> : null), [text, px, lang]);
   const showCode = code !== null && left !== 0;
 
   return (

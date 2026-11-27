@@ -338,7 +338,7 @@ describe('1 route enumeration: nothing registered is unlisted, nothing is reacha
     }
   });
 
-  it('the public list is exactly the seventeen intended routes (POST /api/sync/link and /api/sync/claim are cloud-only: 404 on a box)', () => {
+  it('the public list is exactly the twenty-six intended routes (the iPad recording download link decides by its one-time token; POST /api/sync/link and /api/sync/claim are cloud-only: 404 on a box; the box-to-box rows of the multi-box set decide by one-time code and box signature; the unlink report and the reduced copy by the follower identity signature)', () => {
     expect(PUBLIC_RULES.map((r) => `${r.method} ${r.sample}`).sort()).toEqual(
       [
         'GET /api/box/info',
@@ -351,13 +351,22 @@ describe('1 route enumeration: nothing registered is unlisted, nothing is reacha
         'POST /api/auth/challenge',
         'POST /api/auth/unlock',
         'POST /api/enrol/complete',
+        'POST /api/follow/move',
         'POST /api/kiosk/pair/begin',
         'POST /api/kiosk/pair/poll',
+        'POST /api/link/peer/hello',
+        'POST /api/link/peer/store/list',
+        'GET /api/link/peer/store/file',
         'POST /api/recovery/complete',
         'POST /api/setup/complete',
         'POST /api/setup/probe',
         'POST /api/sync/claim',
         'POST /api/sync/link',
+        'POST /api/unlink/peer/report',
+        'POST /api/unlink/peer/store/list',
+        'GET /api/unlink/peer/store/file',
+        'POST /api/follow/revert',
+        'GET /api/live/recordings/dl/0000000000000000000000000000000000000000000000000000000000000000',
       ].sort(),
     );
   });

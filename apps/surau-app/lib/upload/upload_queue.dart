@@ -28,6 +28,11 @@ enum UploadPartState {
   failed,
   quota,
   paused,
+
+  /// YouTube has the whole part and gave its video id, but the MAXCOM box has
+  /// not been told yet (`upload/done`): "Menunggu pengesahan". The app tells
+  /// it at the next contact; nothing is sent again (2026.11.15).
+  uploaded,
 }
 
 /// What the queue decides for a job right now.
@@ -214,6 +219,9 @@ class UploadJob {
 
   bool get hasQuota => parts.any((p) => p.state == UploadPartState.quota);
 
+  /// A part is up at YouTube and waits to be confirmed with the box.
+  bool get awaitsConfirm => parts.any((p) => p.state == UploadPartState.uploaded);
+
   int get totalBytes => parts.fold(0, (a, p) => a + p.bytes);
 
   int get sentBytes => parts.fold(0, (a, p) => a + (p.isDone ? p.bytes : p.offset));
@@ -385,8 +393,16 @@ class UploadQueue {
     this.auth,
     this.wifiOnly,
     this.joinSegments,
+    this.appBegins = false,
     UlidGenerator? ids,
   }) : _ids = ids ?? UlidGenerator(now: now);
+
+  /// The APP asks the box for each part's upload address (`upload/begin`) and
+  /// tells it when the video is up (`upload/done`); the runner only sends the
+  /// bytes to that address (the Android worker since 2026.11.15: it has no
+  /// box address, token or certificate, B1 and U7). False for a runner that
+  /// makes both calls itself (the browser loop).
+  final bool appBegins;
 
   final LocalStore store;
   final UploadRunner runner;
@@ -516,6 +532,7 @@ class UploadQueue {
   Future<void> retry(String jobId) async {
     final j = _jobs[jobId];
     if (j == null) return;
+    _cooling.remove(jobId);
     await _put(
       j.copyWith(
         parts: [
@@ -533,12 +550,43 @@ class UploadQueue {
   /// Removes the job only. The recordings stay exactly where they are.
   Future<void> remove(String jobId) async {
     _running.remove(jobId);
+    _joinAsked.remove(jobId);
     await runner.cancel(jobId);
     await runner.forget(jobId);
+    final gone = _jobs[jobId];
+    // An upload that was opened and never finished would count against the box's cap of open uploads for
+    // days (U4): the box is told it is abandoned. Best effort, never in the way of the removal.
+    if (gone != null && appBegins) unawaited(_abandon(gone));
     if (_jobs.remove(jobId) == null) return;
     _enqueueWrite(() => store.deleteDoc(Collections.uploads, jobId));
     _emit();
     await _writes;
+  }
+
+  Future<void> _abandon(UploadJob job) async {
+    try {
+      final open = [
+        for (final p in job.parts)
+          if (!p.isDone && p.state != UploadPartState.uploaded && p.uploadId != null) p.uploadId!,
+      ];
+      await _abandonIds(open);
+    } on Object {
+      // the box's own expiry sweep frees it later
+    }
+  }
+
+  /// Tells the box these uploads are abandoned. Best effort: never throws.
+  Future<void> _abandonIds(List<String> open) async {
+    try {
+      if (open.isEmpty) return;
+      final api = (await auth?.call())?.api;
+      if (api is! UploadAbandon) return;
+      for (final id in open) {
+        await (api as UploadAbandon).abandon(id);
+      }
+    } on Object {
+      // the box's own expiry sweep frees it later
+    }
   }
 
   UploadPolicy policy(UploadJob job, UploadNetwork network) {
@@ -557,10 +605,15 @@ class UploadQueue {
   /// Looks at every job and starts or stops its runner by the policy. Safe to
   /// call often (the provider calls it on a timer, on a change and when the
   /// app comes to the front).
-  Future<void> kick() async {
+  ///
+  /// [retryFailed] false is for a kick that only follows a change of the list
+  /// itself: a part whose call to the box just failed is then left to the next
+  /// timed kick, so an unreachable box is not asked again in a tight loop.
+  Future<void> kick({bool retryFailed = true}) async {
     if (_kicking) return;
     _kicking = true;
     try {
+      if (retryFailed) _cooling.clear();
       await load();
       final net = await runner.network();
       for (var job in _sorted()) {
@@ -583,13 +636,19 @@ class UploadQueue {
           );
           await _put(job);
         }
+        // Parts that are up at YouTube: tell the box now that it may be reachable (no network policy: one small call).
+        if (appBegins && job.awaitsConfirm && !_cooling.contains(job.id)) {
+          job = await _confirm(job) ?? job;
+          if (job.isDone) continue;
+          if (job.awaitsConfirm) _cooling.add(job.id);
+        }
         if (!job.hasActive) {
           _running.remove(job.id);
           continue;
         }
         final p = policy(job, net);
         if (p == UploadPolicy.run) {
-          if (_running.contains(job.id)) continue;
+          if (_running.contains(job.id) || _cooling.contains(job.id)) continue;
           final a = await auth?.call();
           if (a == null) {
             // no session on the MAXCOM at the surau (it holds the YouTube grant, 2026.11.13)
@@ -626,13 +685,148 @@ class UploadQueue {
 
   Future<void> _run(UploadJob job, UploadAuth a) async {
     try {
-      await runner.start(job, a);
+      var j = job;
+      if (appBegins) {
+        final begun = await _beginNext(j, a);
+        if (begun == null) {
+          // nothing could be started now: the reason is on the job, the next timed kick tries again
+          _cooling.add(job.id);
+          _running.remove(job.id);
+          return;
+        }
+        j = begun;
+      }
+      await runner.start(j, a);
     } on Object {
       _running.remove(job.id);
       final j = _jobs[job.id];
       if (j != null) await _put(j.copyWith(lastError: 'runner_error'));
     }
   }
+
+  /// The id the box knows the live by, for `upload/begin`: text of at most
+  /// 100 characters; anything else (it could not be a box session) is left out.
+  static String? _liveSessionOf(String sessionId) =>
+      sessionId.isNotEmpty && sessionId.length <= 100 ? sessionId : null;
+
+  /// Gets the upload address of the next part to send from the box and puts
+  /// it on the job (the runner sends only to it). Answers the job to start,
+  /// or null when there is nothing to start now (the reason is kept in
+  /// `lastError`, and shown on the card).
+  ///
+  /// With `joinSegments` and no part begun the worker joins first and then
+  /// asks for the address (`needs_begin`): the job goes as it is.
+  Future<UploadJob?> _beginNext(UploadJob job, UploadAuth a) async {
+    final at = job.parts.indexWhere((p) => p.isActive);
+    if (at < 0) return null;
+    final part = job.parts[at];
+    if (part.uploadUri != null && part.uploadId != null) return job; // a session is open: continue it
+    final anyBegun = job.parts.any((p) => p.uploadUri != null || p.isDone || p.state == UploadPartState.uploaded);
+    if (job.joinSegments && !job.joined && !anyBegun && !_joinAsked.contains(job.id)) {
+      _joinAsked.add(job.id);
+      return job;
+    }
+    final count = job.parts.length;
+    List<UploadPart> withPart(UploadPart np) => [
+      for (final q in (_jobs[job.id] ?? job).parts) q.index == np.index ? np : q,
+    ];
+    await _put((_jobs[job.id] ?? job).copyWith(parts: withPart(part.copyWith(state: UploadPartState.beginning))));
+    try {
+      final b = await a.api.begin(
+        UploadBeginRequest(
+          kuliahId: job.kuliahId,
+          bytes: part.bytes,
+          part: count > 1 ? UploadPartRef(part.index, count) : null,
+          // The live is hidden only after the last part is up.
+          replaceLiveVideoId: part.index == count ? job.replaceLiveVideoId : null,
+          sessionId: _liveSessionOf(job.sessionId),
+        ),
+      );
+      final cur = _jobs[job.id];
+      if (cur == null) return null; // removed meanwhile
+      final np = part.copyWith(uploadId: b.uploadId, uploadUri: b.uploadUri, offset: 0, state: UploadPartState.queued);
+      final next = cur.copyWith(parts: withPart(np), lastError: null);
+      await _put(next);
+      return next;
+    } on UploadQuotaException catch (q) {
+      await _fail(job.id, part, UploadPartState.quota, 'quota', resets: q.resetsAt ?? now().add(const Duration(hours: 1)));
+    } on UploadNeedsUnlock {
+      // the part waits; the person unlocks and the next kick goes on
+      await _fail(job.id, part, UploadPartState.queued, 'needs_unlock');
+    } on UploadApiException catch (e) {
+      // the box's own refusal (`already_uploading`, `youtube_reauthorise`, ...): shown as it is
+      await _fail(job.id, part, UploadPartState.failed, e.code);
+    } on Object {
+      // the box did not answer: the part waits and the card says so (B1: this used to be silent)
+      await _fail(job.id, part, UploadPartState.queued, 'begin_failed');
+    }
+    return null;
+  }
+
+  /// Jobs whose worker was already sent off to join once in this run.
+  final Set<String> _joinAsked = {};
+
+  /// Jobs whose last call to the box failed: left alone until the next timed kick.
+  final Set<String> _cooling = {};
+
+  Future<void> _fail(String jobId, UploadPart part, UploadPartState state, String code, {DateTime? resets}) async {
+    final cur = _jobs[jobId];
+    if (cur == null) return;
+    await _put(
+      cur.copyWith(
+        parts: [
+          for (final q in cur.parts) q.index == part.index && !q.isDone ? q.copyWith(state: state) : q,
+        ],
+        lastError: code,
+        quotaResetsAt: resets ?? _keep,
+      ),
+    );
+  }
+
+  /// Tells the box about every part that is up at YouTube (`upload/done`).
+  /// A part the box confirmed is done; one it cannot be told about now waits
+  /// as it is ("Menunggu pengesahan"), with nothing sent again. Answers the
+  /// job as it is afterwards, or null when nothing could be asked.
+  Future<UploadJob?> _confirm(UploadJob job) async {
+    if (_confirming.contains(job.id)) return null;
+    _confirming.add(job.id);
+    try {
+      final a = await auth?.call();
+      if (a == null) {
+        if (job.lastError != 'no_box') await _put(job.copyWith(lastError: 'no_box'));
+        return _jobs[job.id];
+      }
+      for (final part in job.parts.where((p) => p.state == UploadPartState.uploaded).toList()) {
+        final uploadId = part.uploadId;
+        final videoId = part.videoId;
+        if (uploadId == null || videoId == null) continue;
+        try {
+          await a.api.done(uploadId, videoId);
+        } on UploadNeedsUnlock {
+          final cur = _jobs[job.id];
+          if (cur != null && cur.lastError != 'needs_unlock') await _put(cur.copyWith(lastError: 'needs_unlock'));
+          break;
+        } on UploadApiException catch (e) {
+          // the box knows the upload and refused the confirmation: said, and asked again later
+          final cur = _jobs[job.id];
+          if (cur != null && cur.lastError != e.code) await _put(cur.copyWith(lastError: e.code));
+          break;
+        } on Object {
+          final cur = _jobs[job.id];
+          if (cur != null && cur.lastError != 'done_failed') await _put(cur.copyWith(lastError: 'done_failed'));
+          break;
+        }
+        // the same path as a runner that confirmed by itself: the part is done
+        _onEvent(UploadEvent(jobId: job.id, partIndex: part.index, state: UploadPartState.done, videoId: videoId));
+      }
+      await _writes;
+      return _jobs[job.id];
+    } finally {
+      _confirming.remove(job.id);
+    }
+  }
+
+  final Set<String> _confirming = {};
 
   void _onEvent(UploadEvent e) {
     var j = _jobs[e.jobId];
@@ -661,6 +855,18 @@ class UploadQueue {
     }
     final p = parts[at];
     if (p.isDone && e.state != UploadPartState.done) return;
+    // up at YouTube already: a late progress report of the same part changes nothing
+    if (p.state == UploadPartState.uploaded && e.state != UploadPartState.done) return;
+
+    // The worker has no upload address for this part (none yet, or it died):
+    // the app gets one from the box and starts the job again.
+    final needsBegin = appBegins && e.error == 'needs_begin';
+    // YouTube has the part (`uploaded` on the wire; from a runner without that
+    // state: sent in full with the video id): the box is told by the app.
+    final sentInFull = e.state == UploadPartState.uploading && e.offset != null && e.offset! >= (e.total ?? p.bytes);
+    final upAtYoutube = appBegins &&
+        (e.videoId ?? '').isNotEmpty &&
+        (e.state == UploadPartState.uploaded || sentInFull);
 
     // A stopped run's last report must not undo a pause.
     final keepPaused = p.state == UploadPartState.paused &&
@@ -668,8 +874,12 @@ class UploadQueue {
             e.state == UploadPartState.beginning ||
             e.state == UploadPartState.uploading ||
             e.state == UploadPartState.joining);
+    // Q3: the session is dropped (its address died): the box is told the old upload is abandoned, or its open
+    // row would count against the cap of open uploads for days. Best effort, never in the way of the job.
+    final dropped = p.uploadId;
+    if (e.clearSession && appBegins && dropped != null) unawaited(_abandonIds([dropped]));
     var np = p.copyWith(
-      state: keepPaused ? p.state : e.state,
+      state: keepPaused ? p.state : (upAtYoutube ? UploadPartState.uploaded : e.state),
       offset: e.clearSession ? 0 : (e.offset ?? p.offset),
       uploadId: e.clearSession ? null : (e.uploadId ?? p.uploadId),
       uploadUri: e.clearSession ? null : (e.uploadUri ?? p.uploadUri),
@@ -677,6 +887,10 @@ class UploadQueue {
       bytes: e.total != null && joined ? e.total : null,
     );
     if (e.state == UploadPartState.done) {
+      np = np.copyWith(uploadUri: null, offset: np.bytes);
+    }
+    if (upAtYoutube) {
+      // the address has done its work (a secret: dropped); the id stays for the confirmation
       np = np.copyWith(uploadUri: null, offset: np.bytes);
     }
     parts[at] = np;
@@ -688,8 +902,13 @@ class UploadQueue {
       resets = e.resetsAt ?? now().add(const Duration(hours: 1));
       lastError = 'quota';
     }
-    if (e.error == 'join_failed') lastError = 'join_failed';
-    if (e.error == 'needs_unlock') lastError = 'needs_unlock';
+    // EVERY reason code a runner gives is kept and shown on the card (B1: a
+    // waiting part with `begin_failed` or `network` used to say nothing). Only
+    // the internal "give me an address" is not a reason for the person.
+    if (e.error != null && !needsBegin) lastError = e.error;
+    // bytes are moving again: the earlier reason is over
+    if (e.error == null && e.state == UploadPartState.uploading && !upAtYoutube) lastError = null;
+    if (upAtYoutube) lastError = null;
 
     j = j.copyWith(
       parts: parts,
@@ -708,10 +927,15 @@ class UploadQueue {
       );
     }
     if (!j.hasActive) _running.remove(j.id);
+    // the worker stopped to ask for an address, or handed a part over for confirmation: the next kick goes on
+    if (needsBegin || upAtYoutube) _running.remove(j.id);
     final wasDone = _jobs[e.jobId]?.isDone ?? false;
     _jobs[j.id] = j;
     _persist(j);
-    if (j.isDone && !wasDone) unawaited(runner.forget(j.id));
+    if (j.isDone && !wasDone) {
+      _joinAsked.remove(j.id);
+      unawaited(runner.forget(j.id));
+    }
   }
 
   Future<void> _put(UploadJob job) async {

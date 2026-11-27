@@ -1,0 +1,95 @@
+/* The TV's link screens and the follower marks. Written for the T95's Chrome 91 WebView: no backdrop-filter, no :has,
+   no container queries. Sizes are rem of the kiosk grid (1rem = 1 % of the stage width). */
+
+.screen--link {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: #06302b;
+  color: var(--text);
+  padding: 3rem;
+  cursor: default;
+}
+.link__logo { height: 2.4rem; margin-bottom: 2.4rem; opacity: 0.75; }
+.link__body { display: flex; flex-direction: column; align-items: center; max-width: 80rem; }
+.link__title { margin: 0 0 1.6rem; font-size: 3.6rem; font-weight: 700; line-height: 1.2; }
+.link__title--ok { color: var(--accent); }
+.link__lead { margin: 1.4rem 0 0; font-size: 2rem; line-height: 1.4; opacity: 0.88; }
+.link__sub { margin: 0.6rem 0 0; font-size: 2.2rem; font-weight: 600; }
+.link__code {
+  margin: 0.6rem 0 1rem;
+  font-size: 10rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  line-height: 1.1;
+}
+.link__step { margin: 0.4rem 0 0; font-size: 2.6rem; font-weight: 700; }
+.link__pct { margin: 0.8rem 0 0; font-size: 2.2rem; font-weight: 600; }
+.link__bar {
+  width: 44rem;
+  height: 1.1rem;
+  margin-top: 1.6rem;
+  border-radius: 0.6rem;
+  background: rgb(255 255 255 / 0.15);
+  overflow: hidden;
+}
+.link__bar i { display: block; height: 100%; background: var(--accent); }
+
+.screen--link[lang='ar'] .link__title { font-size: 3.9rem; line-height: 1.35; }
+.screen--link[lang='ar'] .link__lead { font-size: 2.2rem; line-height: 1.5; }
+.screen--link[lang='ar'] .link__code { letter-spacing: 0; }
+
+/* The link QR: a white card, the code large enough to read from the sofa. */
+.linkqr { display: flex; flex-direction: column; align-items: center; }
+.linkqr__code {
+  background: #fff;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0a1f1c;
+}
+.linkqr__code svg { display: block; }
+.linkqr__wait { margin: 0; padding: 1rem; font-size: 1.6rem; color: #0a1f1c; }
+.linkqr__left { margin-top: 1rem; font-size: 1.9rem; font-weight: 600; }
+
+/* Never-set-up box: the link code and its labels under the setup column. */
+.setuplink { margin-top: 1.4rem; display: flex; align-items: center; gap: 1.6rem; }
+.setuplink__qr { flex: none; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.setuplink__label { font-size: 1.5rem; font-weight: 700; max-width: 18rem; text-align: center; }
+.setuplink__line { margin: 0; font-size: 1.6rem; line-height: 1.35; opacity: 0.9; }
+.setuplink .linkqr__left { font-size: 1.3rem; }
+
+/* Follower marks: small, in a corner, never a warning screen. */
+.fmarks {
+  position: absolute;
+  bottom: 1.4rem;
+  right: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  z-index: 40;
+  pointer-events: none;
+}
+.fmarks[dir='rtl'] { right: auto; left: 1.6rem; align-items: flex-start; }
+.fmark {
+  margin-top: 0.5rem;
+  padding: 0.35rem 1rem;
+  border-radius: 0.8rem;
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.3;
+  background: rgb(6 48 43 / 0.82);
+  border: 0.1rem solid rgb(var(--accent-rgb) / 0.5);
+  color: var(--text);
+}
+/* O23: the main box not reached for 6 hours: the same quiet mark, wrapping to a second line when it is long. */
+.fmark--lost { max-width: 34rem; text-align: start; }

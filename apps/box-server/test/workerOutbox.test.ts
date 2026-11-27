@@ -264,7 +264,7 @@ describe('worker outbox: the device allowlist', () => {
 
 describe('worker outbox: the wake secret', () => {
   async function link(r: Rig) {
-    const { code } = issueLinkCode({ db: db(r), now: () => new Date(r.clock.t) }, { boxId: BOX, name: 'Surau D\'Waqaf', target: { surauId: ensureSurau(db(r)) } });
+    const { code } = issueLinkCode({ db: db(r), now: () => new Date(r.clock.t) }, { boxId: BOX, name: 'Surau Contoh', target: { surauId: ensureSurau(db(r)) } });
     return r.cloud.app.inject({
       method: 'POST',
       url: '/api/sync/link',

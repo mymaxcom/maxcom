@@ -7,6 +7,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../box/box_address.dart' show currentIpOrigin;
 import '../box/box_client.dart';
 import '../box/box_name.dart';
 import '../box/cloud_origin.dart';
@@ -41,6 +42,16 @@ class EnrolledBoxNotifier extends Notifier<EnrolledBox?> {
   /// new enrolment starts with an empty read cache.
   void adopt(EnrolledBox box) {
     final cache = ref.read(readCacheProvider)..clear();
+    cache.useBox(box.boxId);
+    state = box;
+  }
+
+  /// A new enrolment succeeded while the old one still stood (the phone left a follower for the main box): the new
+  /// enrolment is already saved by the enrol, so only the OLD box's local copy and cached answers go, then the new box
+  /// is taken. Nothing of the old enrolment is dropped before this is called.
+  Future<void> replaceWith(EnrolledBox box) async {
+    final cache = ref.read(readCacheProvider)..clear();
+    await wipeLocalStore(ref);
     cache.useBox(box.boxId);
     state = box;
   }
@@ -108,6 +119,8 @@ class EnrolledBoxNotifier extends Notifier<EnrolledBox?> {
     cache.useBox('');
     await wipeLocalStore(ref);
     await ref.read(appDepsProvider).boxStore.clear();
+    // the surau's name and helper belong to the box that was left
+    await ref.read(appDepsProvider).surauInfoStore.clear();
     state = null;
   }
 }
@@ -155,22 +168,80 @@ final isCloudGatewayProvider = Provider<bool>(
 // ---- the surau ----
 
 class SurauInfoNotifier extends Notifier<SurauInfo?> {
+  // What the header last showed, so a rebuild (a new route to the box, a
+  // move onto a cloud session) does not blank it while the refresh runs.
+  SurauInfo? _last;
+  // The enrolment (box id) [_last] belongs to: another box, or none, drops it.
+  String? _lastBoxId;
+
   @override
   SurauInfo? build() {
     final deps = ref.watch(appDepsProvider);
-    final client = ref.watch(enrolledClientProvider).value;
-    if (client != null) _refresh(deps, client);
-    return deps.initialSurau;
+    // While the client is being rebuilt for a changed enrolment, the value
+    // kept is the old box's client: do not ask it for the new box.
+    final clientAsync = ref.watch(enrolledClientProvider);
+    final client = clientAsync.isLoading ? null : clientAsync.value;
+    final box = ref.watch(enrolledBoxProvider);
+    if (box?.boxId != _lastBoxId) {
+      _last = null;
+      _lastBoxId = box?.boxId;
+    }
+    // A cloud session means the box did not answer the unlock: ask again.
+    ref.watch(sessionProvider.select((s) => s?.via == SessionDto.viaCloud));
+    if (client != null) _refresh(deps, client, box);
+    // The kept copy from launch is the initial box's surau only.
+    return _last ?? (box != null && box.boxId == deps.initialBox?.boxId ? deps.initialSurau : null);
   }
 
-  Future<void> _refresh(AppDeps deps, BoxClient client) async {
-    final loader = SurauInfoLoader(client: client, store: deps.surauInfoStore);
+  /// Ignored when the enrolment changed since [boxId] started a refresh: the
+  /// answer belongs to the old surau.
+  void _set(SurauInfo info, String? boxId) {
+    if (!ref.mounted || boxId != _lastBoxId) return;
+    _last = info;
+    state = info;
+  }
+
+  Future<void> _refresh(AppDeps deps, BoxClient client, EnrolledBox? box) async {
+    final boxId = box?.boxId;
+    final loader = SurauInfoLoader(
+      client: client,
+      store: deps.surauInfoStore,
+      // The box away: the MAXCOM cloud answers the same public route for
+      // this enrolment (the box id tells it which surau).
+      fallback: box == null
+          ? null
+          : () => deps.enrolledClient(boxAt(box, cloudOriginOf(box))),
+    );
     final cached = await loader.cached();
-    if (cached != null && ref.mounted) state = cached;
+    if (cached != null) _set(cached, boxId);
     final fresh = await loader.refresh();
-    if (fresh != null && ref.mounted) state = fresh;
+    if (fresh != null) _set(fresh, boxId);
   }
 }
+
+/// "Kemudian" on the move screen: the person left the move for now. The unlock then shows "Sambung ke Box utama" instead
+/// of sending the phone straight back to the move screen. Cleared when the move is opened again or the phone is enrolled
+/// anew.
+class MoveDeferredNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool value) => state = value;
+}
+
+final moveDeferredProvider = NotifierProvider<MoveDeferredNotifier, bool>(MoveDeferredNotifier.new);
+
+/// The phone is leaving its follower enrolment for the main box with a join code: the enrol page is open while the old
+/// enrolment still stands (the guard lets it through), and the old enrolment is forgotten only after the new one
+/// succeeded. Cleared by "Kembali" on that page and by the success.
+class JoiningInsteadNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool value) => state = value;
+}
+
+final joiningInsteadProvider = NotifierProvider<JoiningInsteadNotifier, bool>(JoiningInsteadNotifier.new);
 
 final surauInfoProvider = NotifierProvider<SurauInfoNotifier, SurauInfo?>(
   SurauInfoNotifier.new,
@@ -225,7 +296,10 @@ final enrolledClientProvider = FutureProvider<BoxClient?>((ref) async {
       return deps.enrolledClient(boxAt(box, boxNameOrigin(name, box.box.port)));
     }
   }
-  return deps.enrolledClient(box);
+  // No proven route: the enrolled address, or the IP the locator last
+  // proved for the box when that moved (never a name Android cannot open).
+  final direct = currentIpOrigin(box);
+  return deps.enrolledClient(direct == box.box ? box : boxAt(box, direct));
 });
 
 /// Moves when a box's name is pointed at a new address ([BoxRoutes]).
@@ -305,6 +379,20 @@ final dataVersionProvider = NotifierProvider<DataVersionNotifier, int>(
   DataVersionNotifier.new,
 );
 
+/// The box clock minus this device's clock in milliseconds, learned from the
+/// box's health answer; null until one carried the box's time.
+class BoxClockOffset extends Notifier<int?> {
+  @override
+  int? build() {
+    ref.watch(enrolledBoxProvider.select((b) => b?.boxId));
+    return null;
+  }
+
+  void learn(int ms) => state = ms;
+}
+
+final boxClockOffsetProvider = NotifierProvider<BoxClockOffset, int?>(BoxClockOffset.new);
+
 class HealthNotifier extends AsyncNotifier<Read<HealthDto>?> {
   int? _lastVersion;
 
@@ -335,9 +423,21 @@ class HealthNotifier extends AsyncNotifier<Read<HealthDto>?> {
         );
       }
       if (session?.offline == true) ref.read(sessionKeeperProvider).kick();
+      // The box's own clock, when its health answer carries it: the offset the
+      // settings ops are sent with (G3). Only against the box itself.
+      final boxNow = read.value.now;
+      if (boxNow != null && session?.via != SessionDto.viaCloud) {
+        ref.read(boxClockOffsetProvider.notifier).learn(boxNow.difference(ref.read(appDepsProvider).now()).inMilliseconds);
+      }
       final v = read.value.version;
       if (_lastVersion != null && _lastVersion != v) {
         ref.read(dataVersionProvider.notifier).bump();
+        // Something changed on the box (another admin, another device): the
+        // settings are read fresh by the bump above, and a sync pull brings
+        // the lists and the local copy along (G1). Never awaited: the health
+        // answer does not wait for a pull.
+        final engine = ref.read(syncEngineProvider);
+        if (engine != null) unawaited(engine.sync().then<void>((_) {}, onError: (Object _) {}));
       }
       _lastVersion = v;
     }

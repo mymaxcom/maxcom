@@ -200,6 +200,8 @@ export interface Zikir extends ContentBase {
   order: number;
   textAr: string;
   textMs: string;
+  /** The English meaning (optional): an English TV shows it, else the Malay one. */
+  textEn?: string;
   repeat?: number;
 }
 

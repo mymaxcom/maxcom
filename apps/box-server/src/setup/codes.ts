@@ -8,6 +8,7 @@ export const NONCE_TTL_MS = 10 * 60 * 1000;
 const RECOVERY_LENGTH = 16; // 16 symbols x 5 bits = 80 bits
 const RECOVERY_HASH_KEY = 'recovery_code_hash';
 
+const HASH_RE = /^[0-9a-f]{64}$/;
 const NONCE_SHAPE = /^[A-Za-z0-9_-]{43}$/;
 
 export type NonceResult = 'ok' | 'bad' | 'expired';
@@ -142,17 +143,48 @@ function validShape(code: string): boolean {
 
 /** A new recovery code. Only its sha256 is stored in `meta`; the old code dies. Returned as `XXXX-XXXX-XXXX-XXXX`. */
 export function issueRecoveryCode(db: DatabaseSync): string {
-  let code = '';
-  for (const b of randomBytes(RECOVERY_LENGTH)) code += CODE_ALPHABET[b % 32]!;
+  const r = newRecoveryCode();
   db.prepare(
     `INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(surau_id, key) DO UPDATE SET value = excluded.value`,
-  ).run(RECOVERY_HASH_KEY, sha256hex(code));
-  return code.match(/.{4}/g)!.join('-');
+  ).run(RECOVERY_HASH_KEY, r.hash);
+  return r.code;
 }
+
+/**
+ * A new recovery code and the hash `meta.recovery_code_hash` holds for it, stored by nobody yet. Multi-box (case X /
+ * N-X): the code is made when the link commits and written into the adopted store at the next start.
+ */
+export function newRecoveryCode(): { code: string; hash: string } {
+  let code = '';
+  for (const b of randomBytes(RECOVERY_LENGTH)) code += CODE_ALPHABET[b % 32]!;
+  return { code: code.match(/.{4}/g)!.join('-'), hash: sha256hex(code) };
+}
+
+export const RECOVERY_META_KEY = RECOVERY_HASH_KEY;
 
 /** Whether a recovery code was ever issued (an upgraded box may have none). Reveals nothing about the code. */
 export function recoveryCodeExists(db: DatabaseSync): boolean {
   return db.prepare('SELECT 1 AS ok FROM meta WHERE key = ?').get(RECOVERY_HASH_KEY) !== undefined;
+}
+
+/** The stored recovery code hash (64 hex), or null when none was ever issued. */
+export function recoveryHashOf(db: DatabaseSync): string | null {
+  const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(RECOVERY_HASH_KEY);
+  return typeof row?.value === 'string' && HASH_RE.test(row.value) ? row.value : null;
+}
+
+/**
+ * Put a recovery code hash into this store (a restore carries the hash in use before the swap into the store that
+ * comes back). Idempotent: the same hash twice changes nothing.
+ */
+export function setRecoveryHash(db: DatabaseSync, hash: string): void {
+  if (!HASH_RE.test(hash)) throw new Error('recovery: bad hash');
+  db.prepare(`INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(surau_id, key) DO UPDATE SET value = excluded.value`).run(RECOVERY_HASH_KEY, hash);
+}
+
+/** Remove the recovery code hash (a restore carries "no code in use" into the store that comes back). Idempotent. */
+export function clearRecoveryHash(db: DatabaseSync): void {
+  db.prepare('DELETE FROM meta WHERE key = ?').run(RECOVERY_HASH_KEY);
 }
 
 /** Constant-time compare of hashes. False when no code was ever issued. */

@@ -207,12 +207,15 @@ describe('A3: MediaMTX older than v1.21.0', () => {
 });
 
 describe('A6: start limiter', () => {
-  it('6 starts per device per hour and 12 per box; a reconnect is not counted', async () => {
-    const h = await make();
+  it('6 lives per device per hour and 12 per box; a reconnect is not counted', async () => {
+    const h = await make({ live: { monitorMs: 3_600_000 } });
     const a = await loginAs(h.app, 'live');
+    // S6: a start counts once its picture reached the box
+    h.fake.setReady(true, { sourceType: 'srtConn', sourceId: 'c1' });
     for (let i = 0; i < 6; i++) {
       const s = await post(h, '/api/live/start', a.headers, startBody(h));
       expect(s.statusCode, `start ${i}`).toBe(200);
+      await h.app.liveSessions!.tick();
       // same device again: the existing session, not counted
       const again = await post(h, '/api/live/start', a.headers, startBody(h));
       expect(again.statusCode).toBe(200);
@@ -228,6 +231,7 @@ describe('A6: start limiter', () => {
     for (let i = 0; i < 6; i++) {
       const s = await post(h, '/api/live/start', b.headers, startBody(h));
       expect(s.statusCode, `b start ${i}`).toBe(200);
+      await h.app.liveSessions!.tick();
       await post(h, '/api/live/stop', b.headers, {});
     }
     const c = await loginAs(h.app, 'live');
@@ -288,5 +292,23 @@ describe('A7: Q3, Q11 and the fallback title', () => {
     expect(y.titles).toHaveLength(1);
     expect(y.titles[0]).toBe('Kuliah Surau , Al Hidayah : Utama');
     expect(y.titles[0]).not.toMatch(/[<>–—→]/);
+  });
+});
+
+describe('S6: the start limiter counts lives that reached the box, not every stop and start', () => {
+  it('ten stop/start cycles that never got a picture are not refused; the ceiling of 30 requests per device still holds', async () => {
+    const h = await make({ live: { monitorMs: 3_600_000 } });
+    const a = await loginAs(h.app, 'live');
+    for (let i = 0; i < 30; i++) {
+      const s = await post(h, '/api/live/start', a.headers, startBody(h));
+      expect(s.statusCode, `start ${i}`).toBe(200);
+      await post(h, '/api/live/stop', a.headers, {});
+    }
+    const over = await post(h, '/api/live/start', a.headers, startBody(h));
+    expect(over.statusCode).toBe(429);
+    expect(over.json().code).toBe('live_rate');
+    // another device is not held back by the first one's requests
+    const b = await loginAs(h.app, 'live');
+    expect((await post(h, '/api/live/start', b.headers, startBody(h))).statusCode).toBe(200);
   });
 });

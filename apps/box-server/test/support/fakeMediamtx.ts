@@ -37,6 +37,8 @@ export interface FakeMediamtx {
   webOverride: { status: number } | null;
   /** Session id the next WHIP/WHEP answer carries in its Location header. */
   webSessionId: string;
+  /** Called once, then cleared, when a WHIP/WHEP POST arrives, before the answer (a test changes the live meanwhile). */
+  onWebPost: (() => void) | null;
   /** Drops every WHIP/WHEP connection without answering. */
   setWebDown: (down: boolean) => void;
   setReady: (ready: boolean, patch?: Partial<FakePathState>) => void;
@@ -61,6 +63,7 @@ export async function startFakeMediamtx(opts: { user?: string; pass?: string } =
     kicked: [],
     apiDelayMs: 0,
     webOverride: null,
+    onWebPost: null,
     webSessionId: 'fake-session-1',
     setWebDown(down) {
       webDown = down;
@@ -149,6 +152,9 @@ export async function startFakeMediamtx(opts: { user?: string; pass?: string } =
         }
       }
       if (method === 'POST' && web) {
+        const hook = state.onWebPost;
+        state.onWebPost = null;
+        if (hook !== null) hook();
         if (req.headers.authorization === undefined) {
           res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="mediamtx"' });
           return res.end();

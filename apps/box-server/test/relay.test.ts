@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MediamtxApi } from '../src/live/mediamtx.ts';
-import { Relay, createRedactor } from '../src/live/relay.ts';
+import { LagWindow, Relay, createRedactor } from '../src/live/relay.ts';
 import type { RelayOptions } from '../src/live/relay.ts';
 import type { YoutubeLeg } from '../src/live/sessions.ts';
 import { putFeature } from '../src/settingsStore.ts';
@@ -52,7 +52,18 @@ if (mode.mode === 'flood' || mode.mode === 'floodthendie') {
 }
 process.stderr.write('[flv] using key ' + key + ' ok' + '\\n');
 if (mode.mode === 'floodthendie') process.exit(1);
-const tick = () => process.stdout.write('bitrate=1234.5kbits/s\\nspeed=1.01x\\ndrop_frames=3\\nprogress=continue\\n');
+// 'stall': the output stops taking bytes (total_size stands still); 'flow': it keeps growing
+let sent = 1000;
+let outUs = 0;
+// O9: 'stallna' = total_size is N/A and nothing else moves; 'flowna' = total_size is N/A but the output time advances
+const size = () =>
+  mode.mode === 'stall' ? 'total_size=1000\\n'
+  : mode.mode === 'flow' ? 'total_size=' + (sent += 500) + '\\n'
+  : mode.mode === 'stallna' ? 'total_size=N/A\\nout_time_us=N/A\\nframe=0\\n'
+  : mode.mode === 'flowna' ? 'total_size=N/A\\nout_time_us=' + (outUs += 40000) + '\\n'
+  : mode.mode === 'lag' ? 'total_size=N/A\\nout_time_us=' + (outUs += 10000) + '\\n'
+  : '';
+const tick = () => process.stdout.write('bitrate=1234.5kbits/s\\n' + size() + 'speed=1.01x\\ndrop_frames=3\\nprogress=continue\\n');
 tick();
 setInterval(tick, 30);
 process.on('SIGTERM', () => process.exit(0));
@@ -64,7 +75,7 @@ interface Rig {
   fake: FakeMediamtx;
   api: MediamtxApi;
   opts: RelayOptions;
-  setMode: (m: 'run' | 'die' | 'flood' | 'floodthendie' | 'ioerror' | 'ioerrorsecret') => void;
+  setMode: (m: 'run' | 'die' | 'flood' | 'floodthendie' | 'ioerror' | 'ioerrorsecret' | 'stall' | 'flow' | 'stallna' | 'flowna' | 'lag') => void;
   runs: () => string[][];
   logText: () => string;
 }
@@ -210,6 +221,20 @@ describe('relay command line', () => {
     const st = relay.status();
     expect(st.lastError).toBe('[tls @ 0x7f1] The certificate is not correctly signed by the trusted CA. | Error opening output files: I/O error');
     expect(JSON.stringify(st)).not.toContain(KEY);
+  });
+
+  it('every redacted stderr line also reaches the log hook (the live log), the key never does', async () => {
+    const r = await rig({ caFile: null, maxFailures: 2 });
+    r.setMode('ioerrorsecret');
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    const seen: string[] = [];
+    const relay = new Relay({ ...r.opts, log: (t) => seen.push(t) });
+    relays.push(relay);
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => relay.status().state === 'failed');
+    expect(seen).toContain('[tls @ 0x7f1] The certificate is not correctly signed by the trusted CA.');
+    expect(seen).toContain('Error opening output files: I/O error');
+    expect(JSON.stringify(seen)).not.toContain(KEY);
   });
 
   it('the generic I/O error keeps the line before it, and the status carries the stderr tail', async () => {
@@ -409,6 +434,127 @@ describe('relay lifecycle', () => {
   });
 });
 
+// 2026.11.15, Lane A task A5: ffmpeg never waits for ever on a dead socket, and a stalled run is ended (Y3).
+describe('A5: relay timeouts and the stall watchdog (Y3)', () => {
+  const argsOf = (kind: 'youtube' | 'kioskAudio'): string[] => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'relay-args-'));
+    try {
+      const relay = new Relay({ ffmpegPath: 'ffmpeg', api: {} as RelayOptions['api'], dataDir, sessionId: 'abc123', kind }) as unknown as { args(s: { key: string; relayVideo: 'copy'; maxBitrateKbps: number }): string[] };
+      return relay.args({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  };
+
+  it('Y3: the ffmpeg arguments carry a read timeout on the RTSP input and a write timeout on the RTMPS output', () => {
+    const yt = argsOf('youtube');
+    const i = yt.indexOf('-i');
+    // input options stand before -i, the output option before the address
+    expect(yt.indexOf('-timeout')).toBeGreaterThan(0);
+    expect(yt.indexOf('-timeout')).toBeLessThan(i);
+    expect(yt[yt.indexOf('-timeout') + 1]).toBe('15000000');
+    expect(yt.indexOf('-rw_timeout')).toBeGreaterThan(i);
+    expect(yt[yt.indexOf('-rw_timeout') + 1]).toBe('15000000');
+    expect(yt.at(-1)!.startsWith('rtmps://')).toBe(true);
+    // the TV sound leg reads and writes loopback RTSP: the same read timeout on its input
+    const leg = argsOf('kioskAudio');
+    expect(leg.indexOf('-timeout')).toBeGreaterThan(0);
+    expect(leg.indexOf('-timeout')).toBeLessThan(leg.indexOf('-i'));
+    expect(leg).not.toContain('-rw_timeout');
+  });
+
+  it('Y3: a run whose output stops growing is ended as stalled and started again; a flowing run is left alone (success path)', async () => {
+    const r = await rig({ stallMs: 200 });
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    r.setMode('flow');
+    const relay = make(r);
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => relay.status().state === 'running');
+    await new Promise((res) => setTimeout(res, 600));
+    expect(r.runs()).toHaveLength(1);
+    expect(relay.status().state).toBe('running');
+    await relay.stop();
+
+    const r2 = await rig({ stallMs: 200 });
+    r2.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    r2.setMode('stall');
+    const stalled = make(r2);
+    stalled.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => r2.runs().length >= 2, 15000);
+    expect(r2.logText()).toContain('stalled');
+    // the picture is back to flowing: the next run stays
+    r2.setMode('flow');
+    await until(() => stalled.status().state === 'running' && stalled.status().lastError === null, 15000);
+  });
+});
+
+describe('relay sound option (copy of an AAC input)', () => {
+  const argsWith = (start: { relayVideo: 'copy' | 'reencode'; audio?: 'aac' | 'copy' }, path?: string): string[] => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'relay-audio-'));
+    try {
+      const relay = new Relay({ ffmpegPath: 'ffmpeg', api: {} as RelayOptions['api'], dataDir, sessionId: 'abc123', path }) as unknown as { args(s: object): string[] };
+      return relay.args({ key: KEY, maxBitrateKbps: 2500, ...start });
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  };
+  const AAC = ['-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2'];
+
+  it('without the option the sound is encoded to AAC 128k 48 kHz stereo, as before', () => {
+    const plain = argsWith({ relayVideo: 'copy' });
+    const i = plain.indexOf('-c:a');
+    expect(plain.slice(i, i + 8)).toEqual(AAC);
+    expect(argsWith({ relayVideo: 'copy', audio: 'aac' })).toEqual(plain);
+  });
+
+  it('audio copy passes the sound through and leaves the picture branch alone', () => {
+    const a = argsWith({ relayVideo: 'copy', audio: 'copy' });
+    const i = a.indexOf('-c:a');
+    expect(a.slice(i, i + 2)).toEqual(['-c:a', 'copy']);
+    expect(a).not.toContain('aac');
+    expect(a).not.toContain('-b:a');
+    expect(a).not.toContain('-ar');
+    expect(a[a.indexOf('-c:v') + 1]).toBe('copy');
+    const re = argsWith({ relayVideo: 'reencode', audio: 'copy' });
+    expect(re[re.indexOf('-c:v') + 1]).toBe('libx264');
+    expect(re[re.indexOf('-c:a') + 1]).toBe('copy');
+    // everything but the sound arguments equals the default arguments
+    const plain = argsWith({ relayVideo: 'copy' });
+    const j = plain.indexOf('-c:a');
+    expect([...plain.slice(0, j), ...plain.slice(j + 8)]).toEqual([...a.slice(0, i), ...a.slice(i + 2)]);
+  });
+
+  it('the input path is configurable (surau-yt for a combined live)', () => {
+    const a = argsWith({ relayVideo: 'copy', audio: 'copy' }, 'surau-yt');
+    expect(a[a.indexOf('-i') + 1]).toMatch(/\/surau-yt$/);
+  });
+});
+
+describe('O9: the stall watchdog with total_size=N/A', () => {
+  it('a run that reports total_size=N/A and nothing advancing is ended as stalled', async () => {
+    const r = await rig({ stallMs: 200 });
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    r.setMode('stallna');
+    const relay = make(r);
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => r.runs().length >= 2, 15000);
+    expect(r.logText()).toContain('stalled');
+  });
+
+  it('a run with total_size=N/A whose output time keeps advancing is left alone (success path)', async () => {
+    const r = await rig({ stallMs: 200 });
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    r.setMode('flowna');
+    const relay = make(r);
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => relay.status().state === 'running');
+    await new Promise((res) => setTimeout(res, 700));
+    expect(r.runs()).toHaveLength(1);
+    expect(r.logText()).not.toContain('stalled');
+    expect(relay.status().state).toBe('running');
+  });
+});
+
 describe('relay inside a live session', () => {
   const fakeYoutube = (): YoutubeLeg => ({
     signedIn: () => true,
@@ -476,13 +622,13 @@ describe('relay inside a live session', () => {
     }
   });
 
-  it('relayVideo reencode and the bitrate cap come from the liveYoutube settings', async () => {
+  it('relayVideo reencode comes from the settings and the bitrate cap is fixed at 3500', async () => {
     const s = await session((h) => putFeature(h.app.surau.db, 'liveYoutube', { relayVideo: 'reencode', maxBitrateKbps: 1800 }, 'test', undefined, 'sdm'));
     try {
       s.h.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
       await s.call('/api/live/start', startBody(s.h, { source: 'web', outputs: { kiosk: true, youtube: true }, youtubeVia: 'box' }));
       await until(() => s.runs().length === 1);
-      expect(s.runs()[0]!.join(' ')).toContain('-c:v libx264 -preset veryfast -tune zerolatency -force_key_frames expr:gte(t,n_forced*2) -sc_threshold 0 -x264-params nal-hrd=cbr -b:v 1800k -minrate 1800k -maxrate 1800k -bufsize 3600k');
+      expect(s.runs()[0]!.join(' ')).toContain('-c:v libx264 -preset veryfast -tune zerolatency -force_key_frames expr:gte(t,n_forced*2) -sc_threshold 0 -x264-params nal-hrd=cbr -b:v 3500k -minrate 3500k -maxrate 3500k -bufsize 7000k');
     } finally {
       s.cleanup();
     }
@@ -552,6 +698,54 @@ describe('relay inside a live session', () => {
       expect((await b.status()).relayReencode).toBe(false);
     } finally {
       b.cleanup();
+    }
+  });
+
+  // the HTTP status route is rate limited: these waits read the sessions directly
+  const relayState = (h: LiveHarness): string => h.app.liveSessions.status().relay.state;
+
+  it('Y2: a relay that gave up is started again when the picture returns (success path)', async () => {
+    const s = await session();
+    try {
+      s.h.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+      writeFileSync(join(s.dir, 'mode.json'), JSON.stringify({ mode: 'die' }));
+      await s.call('/api/live/start', startBody(s.h, { source: 'web', outputs: { kiosk: true, youtube: true }, youtubeVia: 'box' }));
+      await until(() => relayState(s.h) === 'failed', 20000);
+      const failedRuns = s.runs().length;
+      // the internet is back, but nothing tells the relay: it stays failed while the picture never left
+      writeFileSync(join(s.dir, 'mode.json'), JSON.stringify({ mode: 'run' }));
+      await s.h.app.liveSessions.tick();
+      expect(relayState(s.h)).toBe('failed');
+      // the picture drops and returns: a fresh relay
+      s.h.fake.setReady(false);
+      await until(() => !s.h.app.liveSessions.status().ingest.ready);
+      s.h.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w2' });
+      await until(() => relayState(s.h) === 'running', 20000);
+      expect(s.runs().length).toBeGreaterThan(failedRuns);
+      const users = s.h.fake.global.authInternalUsers as Array<{ user: string }>;
+      expect(users.filter((u) => u.user.startsWith('relay-'))).toHaveLength(1);
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  it('Y2: with the picture steady the whole time, a relay that gave up is tried again a minute later (the internet came back)', async () => {
+    const s = await session();
+    try {
+      s.h.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+      writeFileSync(join(s.dir, 'mode.json'), JSON.stringify({ mode: 'die' }));
+      await s.call('/api/live/start', startBody(s.h, { source: 'web', outputs: { kiosk: true, youtube: true }, youtubeVia: 'box' }));
+      await until(() => relayState(s.h) === 'failed', 20000);
+      // several monitor rounds (20 ms each) see the failure before the clock moves: the minute counts from here
+      await new Promise((res) => setTimeout(res, 200));
+      writeFileSync(join(s.dir, 'mode.json'), JSON.stringify({ mode: 'run' }));
+      s.h.clock.t += 30_000;
+      await new Promise((res) => setTimeout(res, 200));
+      expect(relayState(s.h)).toBe('failed');
+      s.h.clock.t += 31_000;
+      await until(() => relayState(s.h) === 'running', 20000);
+    } finally {
+      s.cleanup();
     }
   });
 
@@ -698,6 +892,19 @@ describe('kiosk audio leg (Opus copy for the kiosk)', () => {
     await relay.stop();
   });
 
+  it('B8: the live log callback of the YouTube relay gets a repeated line once (the relay file keeps every line)', async () => {
+    const r = await rig();
+    r.setMode('flood');
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    const seen: string[] = [];
+    const relay = new Relay({ ...r.opts, log: (x) => seen.push(x) });
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => r.logText().includes('[flv] using key'));
+    expect(r.logText().match(/Non-monotonic DTS/g)).toHaveLength(20);
+    expect(seen.filter((x) => x.includes('Non-monotonic DTS'))).toHaveLength(1);
+    await relay.stop();
+  });
+
   async function audioSession(relay: Partial<RelayOptions> = {}, mode?: 'die') {
     const dir = mkdtempSync(join(tmpdir(), 'surau-audio-sess-'));
     const script = join(dir, 'stub-ffmpeg.cjs');
@@ -808,5 +1015,175 @@ describe('kiosk audio leg (Opus copy for the kiosk)', () => {
     } finally {
       s.cleanup();
     }
+  });
+});
+
+describe('B12: the lag is measured against the smallest lag of the last 10 minutes (no drift)', () => {
+  /** One sample per second of a run whose lag (s) at second `sec` is `lagAt(sec)`; returns the reading at each second. */
+  const simulate = (seconds: number, lagAt: (sec: number) => number): number[] => {
+    const w = new LagWindow();
+    const out: number[] = [];
+    for (let sec = 0; sec <= seconds; sec++) {
+      const t = 1_000_000 + sec * 1000;
+      w.add(t, lagAt(sec));
+      out.push(w.behind(t, lagAt(sec)));
+    }
+    return out;
+  };
+
+  it('a constant offset that appears early and stays reads 0 once the window has moved past its start', () => {
+    const got = simulate(1200, (sec) => (sec < 10 ? 0 : 5));
+    expect(got[20]).toBeCloseTo(5, 5);
+    expect(got[700]).toBe(0);
+    expect(got[1200]).toBe(0);
+  });
+
+  it('a steady drift of 1 ms per second never reaches 4 over two hours', () => {
+    const got = simulate(7200, (sec) => sec * 0.001);
+    expect(Math.max(...got)).toBeLessThan(4);
+    expect(Math.max(...got)).toBeLessThan(0.7);
+  });
+
+  it('a real backlog of 8 s that appears at minute 20 reads about 8', () => {
+    const got = simulate(1260, (sec) => 0.3 + (sec >= 1200 ? 8 : 0));
+    expect(got[1199]).toBeCloseTo(0, 5);
+    expect(got[1230]).toBeCloseTo(8, 5);
+  });
+
+  it('keeps at most one sample per second and drops samples older than the window', () => {
+    const w = new LagWindow();
+    for (let ms = 0; ms < 5000; ms += 100) w.add(ms, 1);
+    expect(w.size()).toBe(5);
+    for (let s = 5; s < 2000; s++) w.add(s * 1000, 1);
+    expect(w.size()).toBeLessThanOrEqual(601);
+    w.reset();
+    expect(w.size()).toBe(0);
+  });
+});
+
+describe('B6: relay lag, low quality and the quality change', () => {
+  type Args = (s: object) => string[];
+  const argsFor = (start: object): string[] => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'relay-b6-'));
+    try {
+      const relay = new Relay({ ffmpegPath: 'ffmpeg', api: {} as RelayOptions['api'], dataDir, sessionId: 'abc123', caFile: null }) as unknown as { args: Args; quality: string };
+      relay.quality = (start as { quality?: string }).quality === 'low' ? 'low' : 'full';
+      return relay.args({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500, ...start });
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  };
+  const HEAD = ['-hide_banner', '-loglevel', 'warning', '-nostdin', '-progress', 'pipe:1', '-rtsp_transport', 'tcp', '-timeout', '15000000', '-i'];
+  const TAIL = ['-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-f', 'flv', '-rtmp_live', 'live', '-rw_timeout', '15000000', `rtmps://a.rtmps.youtube.com:443/live2/${KEY}`];
+  const lowVideo = (enc: string, pix: string, extra: string[] = []): string[] => ['-vf', 'scale=-2:480', '-c:v', enc, '-b:v', '1000k', '-maxrate', '1000k', '-bufsize', '2000k', '-g', '50', '-pix_fmt', pix, ...extra];
+
+  it('without a quality option the arguments are exactly those of build 5 (copy and reencode)', () => {
+    const copy = argsFor({});
+    expect(copy.slice(0, HEAD.length)).toEqual(HEAD);
+    expect(copy.slice(HEAD.length + 1)).toEqual(['-c:v', 'copy', ...TAIL]);
+    expect(argsFor({ quality: 'full', lowEncoder: 'libx264' })).toEqual(copy);
+    const re = argsFor({ relayVideo: 'reencode' });
+    expect(re.slice(HEAD.length + 1)).toEqual([
+      '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-force_key_frames', 'expr:gte(t,n_forced*2)', '-sc_threshold', '0', '-x264-params', 'nal-hrd=cbr',
+      '-b:v', '2500k', '-minrate', '2500k', '-maxrate', '2500k', '-bufsize', '5000k', '-pix_fmt', 'yuv420p', ...TAIL,
+    ]);
+  });
+
+  it('low quality: 480p at 1000 kbps with each encoder, audio unchanged', () => {
+    const cases: Array<['h264_qsv' | 'h264_mf' | 'libx264', string[]]> = [
+      ['h264_qsv', lowVideo('h264_qsv', 'nv12')],
+      ['h264_mf', lowVideo('h264_mf', 'yuv420p')],
+      ['libx264', lowVideo('libx264', 'yuv420p', ['-preset', 'veryfast', '-tune', 'zerolatency'])],
+    ];
+    for (const [enc, video] of cases) {
+      const a = argsFor({ quality: 'low', lowEncoder: enc });
+      expect(a.slice(0, HEAD.length)).toEqual(HEAD);
+      expect(a.slice(HEAD.length + 1)).toEqual([...video, ...TAIL]);
+    }
+    // a re-encoding relay keeps its brightness lift ahead of the scale
+    const lit = argsFor({ quality: 'low', lowEncoder: 'libx264', relayVideo: 'reencode', brightness: 'bright' });
+    expect(lit[lit.indexOf('-vf') + 1]).toBe('eq=gamma=1.2:brightness=0.04,scale=-2:480');
+  });
+
+  it('quality low without an encoder is copy', () => {
+    expect(argsFor({ quality: 'low' })).toEqual(argsFor({}));
+    expect(argsFor({ quality: 'low', lowEncoder: 'h264_nvenc; rm' })).toEqual(argsFor({}));
+  });
+
+  it('behindSeconds: null before two samples, grows when the output runs slower than the clock, resets on a new run', async () => {
+    let offset = 0;
+    const r = await rig({ now: () => Date.now() + offset });
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    r.setMode('lag');
+    const relay = make(r);
+    expect(relay.status().behindSeconds).toBeNull();
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500, lowEncoder: 'libx264' });
+    await until(() => relay.status().behindSeconds !== null);
+    offset += 10_000;
+    await until(() => (relay.status().behindSeconds ?? 0) >= 9);
+    expect(relay.status().quality).toBe('full');
+    // a new run starts with no reading (the old clock offset does not leak into it)
+    relay.setQuality('low');
+    await until(() => relay.status().restarts >= 1);
+    const after = relay.status().behindSeconds;
+    expect(after === null || after < 9).toBe(true);
+  });
+
+  it('setQuality restarts with the new arguments, counts in restarts, marks no failure and waits no back-off', async () => {
+    const r = await rig({ backoffBaseMs: 60_000, backoffMaxMs: 60_000 });
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    r.setMode('flow');
+    const relay = make(r);
+    relay.setQuality('low'); // not started: no-op
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500, lowEncoder: 'libx264' });
+    await until(() => relay.status().state === 'running');
+    expect(relay.status().quality).toBe('full');
+    relay.setQuality('full'); // unchanged: no-op
+    expect(r.runs().length).toBe(1);
+    relay.setQuality('low');
+    await until(() => r.runs().length === 2);
+    const second = r.runs()[1]!;
+    expect(second[second.indexOf('-c:v') + 1]).toBe('libx264');
+    expect(second).toContain('scale=-2:480');
+    await until(() => relay.status().state === 'running');
+    const st = relay.status();
+    expect(st.quality).toBe('low');
+    expect(st.restarts).toBe(1);
+    expect(st.lastError).toBeNull();
+    relay.setQuality('full');
+    await until(() => r.runs().length === 3);
+    expect(r.runs()[2]).toContain('copy');
+    expect(relay.status().restarts).toBe(2);
+  });
+
+  it('B6/B8: plannedRestarts counts the quality restarts; a later exit of the new run is an ordinary failure', async () => {
+    const r = await rig({ backoffBaseMs: 5, backoffMaxMs: 5 });
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    r.setMode('flow');
+    const relay = make(r);
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500, lowEncoder: 'libx264' });
+    await until(() => relay.status().state === 'running');
+    expect(relay.status().plannedRestarts).toBe(0);
+    // the next run dies by itself: only the first end is the planned one
+    r.setMode('die');
+    relay.setQuality('low');
+    await until(() => r.runs().length >= 3);
+    const st = relay.status();
+    expect(st.plannedRestarts).toBe(1);
+    expect(st.restarts).toBeGreaterThanOrEqual(2);
+    expect(st.lastError).not.toBeNull();
+  });
+
+  it('setQuality low without an encoder keeps the relay on full', async () => {
+    const r = await rig();
+    r.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w1' });
+    r.setMode('flow');
+    const relay = make(r);
+    relay.start({ key: KEY, relayVideo: 'copy', maxBitrateKbps: 2500 });
+    await until(() => relay.status().state === 'running');
+    relay.setQuality('low');
+    await until(() => r.runs().length === 2);
+    expect(r.runs()[1]).toEqual(r.runs()[0]);
+    expect(relay.status().quality).toBe('full');
   });
 });

@@ -11,9 +11,20 @@ import { purgeExpired } from './auth/sessions.ts';
 import { autoCleanPeople, cloudSeenFresh } from './auth/activity.ts';
 import { LiveFirewall } from './live/firewall.ts';
 import { buildDamagedApp, isDatabaseDamage, setDamagedAllowedHosts } from './setup/damaged.ts';
+import { removeLegacyImportDir } from './legacyImportCleanup.ts';
+import { readJournal } from './link/journal.ts';
+import { applyLinkJournalAtBoot } from './link/setAside.ts';
+import { runAdopt, sweepAdoptLeftovers } from './link/adopt.ts';
+import { runReduce, sweepReduceLeftovers } from './link/reduce.ts';
+import { sweepPartialBackups } from './link/backupCopy.ts';
+import { dropMoveOut } from './link/storeMove.ts';
+import { boxId as boxIdOfData } from './auth/secrets.ts';
 import { hardenServer } from './serverLimits.ts';
 import { enableCloudDiskGuard } from './surau/storage.ts';
 import { workerAdminFrom } from './sync/workerOutbox.ts';
+import { rootCaFingerprint } from './auth/routes.ts';
+import { startBoxNaming } from './mdns/service.ts';
+import type { BoxNaming } from './mdns/service.ts';
 import { expiryWarning, loadTls, startCertReload } from './tls.ts';
 import type { CertReloader, TlsMaterial } from './tls.ts';
 
@@ -129,6 +140,8 @@ export interface StartOptions {
   liveFirewall?: LiveFirewall;
   /** `box` (default) or `cloud` (env SURAU_ROLE). */
   role?: 'box' | 'cloud';
+  /** Ends this process so the supervisor starts it again (after a link moved the store); passed on as `link.restart`. */
+  linkRestart?: () => void;
 }
 
 /** SURAU_ROLE: `box` (default) or `cloud`; anything else is an error. */
@@ -193,6 +206,7 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
         ...(o.role === 'cloud' ? { workerAdmin: workerAdminFrom(o.env) } : {}),
         ...(o.env.SURAU_BOX_ID !== undefined && /^[0-9a-f]{16}$/.test(o.env.SURAU_BOX_ID.trim()) ? { boxId: o.env.SURAU_BOX_ID.trim() } : {}),
         ...(o.liveFirewall !== undefined ? { liveFirewall: o.liveFirewall } : {}),
+        ...(o.linkRestart !== undefined ? { link: { restart: o.linkRestart } } : {}),
       });
     } catch (error) {
       // A broken database file must not leave the TV blank: serve the "restore" screen instead (never for the cloud).
@@ -339,11 +353,56 @@ export async function startListeners(o: StartOptions): Promise<Listeners> {
   return { app, httpPort, httpsPort, certReload };
 }
 
+/** True when a link journal file exists (even one that cannot be read). */
+function readJournalOrNull(dataDir: string): ReturnType<typeof readJournal> {
+  try {
+    return readJournal(dataDir);
+  } catch {
+    return null;
+  }
+}
+
+function readJournalSafe(dataDir: string): boolean {
+  try {
+    return readJournal(dataDir) !== null;
+  } catch {
+    return true;
+  }
+}
+
 async function start(): Promise<void> {
   const dbPath = process.env.SURAU_DB ?? './data/surau.db';
   if (dbPath !== ':memory:') mkdirSync(dirname(resolve(dbPath)), { recursive: true });
   const dataDir = process.env.SURAU_DATA_DIR ?? (dbPath === ':memory:' ? './data' : dirname(resolve(dbPath)));
 
+  // A link moves the whole store (database, pictures, secrets) and the server cannot swap its open database, so every
+  // move waits for this start: finish the journal BEFORE anything opens the database or the data folders.
+  if (dbPath !== ':memory:') {
+    if (resolve(dbPath) === resolve(dataDir, 'surau.db')) {
+      try {
+        const envBox = process.env.SURAU_BOX_ID?.trim();
+        const ownBox = (): string => (envBox !== undefined && /^[0-9a-f]{16}$/.test(envBox) ? envBox : boxIdOfData(dataDir));
+        const done = applyLinkJournalAtBoot(dataDir, {
+          adopt: (dir, j, h) => runAdopt(dir, j, h, { boxId: ownBox }),
+          reduce: (dir, j, h) => runReduce(dir, j, h, { boxId: ownBox }),
+        });
+        if (done !== 'none') console.log(`Link journal applied at start: ${done}`);
+        // what a link that failed or finished left: the giver's database copy, a receiver's stage and plan
+        dropMoveOut(dataDir);
+        sweepAdoptLeftovers(dataDir);
+        sweepReduceLeftovers(dataDir, readJournalOrNull(dataDir));
+        sweepPartialBackups(dataDir);
+      } catch (error) {
+        // never carry on with a half-moved store: the service supervisor starts this process again
+        console.error('Link journal could not be applied', error);
+        process.exit(1);
+      }
+    } else if (readJournalSafe(dataDir)) {
+      console.error('WARNING: a link journal is open but the database is not <data folder>/surau.db; it was NOT applied');
+    }
+  }
+
+  removeLegacyImportDir(dataDir);
   const { tls, warning: tlsWarning } = loadTlsOrWarn(dataDir);
   if (tlsWarning) console.warn(tlsWarning);
   let plan: ListenerPlan;
@@ -371,8 +430,25 @@ async function start(): Promise<void> {
   const staticDir = resolve(repoRoot, 'apps/kiosk-display/dist');
   const appDir = resolve(repoRoot, 'apps/box-server/public/app');
 
-  const { app, httpPort, httpsPort } = await startListeners({
+  let closing = false;
+  let appRef: FastifyInstance | null = null;
+  // the local name responder (Windows box only); stopped first on every way out so it sends its goodbyes
+  let naming: BoxNaming | null = null;
+  // Exit 75 is the "restart at once" code of both supervisors (update/launcher.mjs on Windows, Supervisor.kt on
+  // Android); any other exit waits 5 s first. Used after a link moved or restored the store.
+  const restart = (): void => {
+    if (closing) return;
+    closing = true;
+    console.log('Surau box server restarting for a link (exit 75)');
+    naming?.stop();
+    void (appRef?.close() ?? Promise.resolve())
+      .catch((error: unknown) => console.error('Shutdown before restart failed', error))
+      .then(() => process.exit(75));
+  };
+
+  const { app, httpPort, httpsPort, certReload } = await startListeners({
     dbPath,
+    linkRestart: restart,
     staticDir: existsSync(staticDir) ? staticDir : null,
     appDir: existsSync(appDir) ? appDir : null,
     tls,
@@ -391,10 +467,35 @@ async function start(): Promise<void> {
   });
   console.log(`Surau box server: http://127.0.0.1:${httpPort}/` + (httpsPort ? ` and https://0.0.0.0:${httpsPort}/` : ''));
 
-  let closing = false;
+  appRef = app;
+  // Windows box: claim boxN-surau.local on the LAN and answer for it (the Android box does this in Kotlin). SURAU_MDNS=0 turns it off.
+  if (role === 'box' && process.platform === 'win32' && process.env.SURAU_MDNS !== '0') {
+    try {
+      naming = startBoxNaming({
+        dataDir,
+        httpsPort,
+        certNames: () => certReload?.current().dnsSan ?? tls?.dnsSan ?? [],
+        checkCert: () => void certReload?.check(),
+        hints: () => {
+          let id: string | null = null;
+          try {
+            id = boxIdOfData(dataDir);
+          } catch {
+            /* no box key yet */
+          }
+          return { boxId: id, caShort: rootCaFingerprint(dataDir)?.slice(0, 16) ?? null };
+        },
+        log: (m) => console.log(m),
+      });
+    } catch (error) {
+      // the name is an extra: the box keeps serving by address
+      console.warn(`WARNING: the local name responder did not start (${error instanceof Error ? error.name : 'error'})`);
+    }
+  }
   const shutdown = (signal: string): void => {
     if (closing) return;
     closing = true;
+    naming?.stop();
     console.log(`Surau box server received ${signal}, shutting down`);
     void app
       .close()

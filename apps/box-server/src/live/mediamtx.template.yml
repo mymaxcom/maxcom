@@ -7,6 +7,10 @@ logLevel: info
 # (MediaMTX logs the SRT stream id, which carries the session's publisher password).
 logDestinations: [stdout]
 
+# packets queued per reader before it is called too slow: a slow upload to YouTube becomes delay, not frames thrown
+# away (bench 2026-11-26: 16384 on Windows; 8192 on the Android box for its memory)
+writeQueueSize: {{WRITE_QUEUE}}
+
 api: yes
 apiAddress: 127.0.0.1:9997
 
@@ -67,6 +71,14 @@ paths:
   surau-mic:
     source: publisher
   surau-in:
+    source: publisher
+  # the AAC rendition of a combined live's mix (the box YouTube relay copies it as it is)
+  surau-yt:
+    source: publisher
+  # the solo sound process (one microphone, levelled): Opus for the TVs, AAC for YouTube; the join reads them
+  surau-snd:
+    source: publisher
+  surau-snd-aac:
     source: publisher
   surau-uji:
     source: publisher

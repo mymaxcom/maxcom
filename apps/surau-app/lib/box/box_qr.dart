@@ -29,6 +29,9 @@ class BoxQrInvalid implements Exception {
 }
 
 const String boxQrPrefix = 'maxcom1:';
+
+/// True when [text] looks like a box QR of any type (`maxcom1:`): the link scanner offers only those.
+bool looksLikeBoxQr(String text) => text.trim().startsWith(boxQrPrefix);
 const String _enrolPrefix = 'surau1:';
 
 /// Tells the kind of QR from its text without verifying anything: `surau1:`
@@ -125,12 +128,16 @@ class BoxQrPayload {
     required this.exp,
     required this.pub,
     required this.sig,
+    required this.text,
     required Map<String, dynamic> raw,
     // ignore: prefer_initializing_formals
   }) : _raw = raw;
 
-  /// 'setup', 'recovery' or 'probe'.
+  /// 'setup', 'recovery', 'probe' or 'link'.
   final String type;
+
+  /// The scanned text, trimmed and otherwise exactly as scanned: a link QR is given to this phone's own box as is.
+  final String text;
   final String boxId;
   final String keyFp;
   final String name;
@@ -152,7 +159,16 @@ class BoxQrPayload {
   /// Strict parse of a `maxcom1:` text. Throws [BoxQrInvalid] for a bad shape, a `keyFp` that is not
   /// `sha256(pub)`, a signature that does not verify, or (with [requireCa], Android) a payload with no HTTPS
   /// address or no CA fingerprint: the app pins the box's own CA and never falls back to system roots.
-  static BoxQrPayload parse(String text, {required bool requireCa}) {
+  static BoxQrPayload parse(String text, {required bool requireCa}) =>
+      _parse(text, requireCa: requireCa, types: const {'setup', 'recovery', 'probe'});
+
+  /// The link QR of another box (type `link`, shown on that box's TV), checked on the phone before it is given to
+  /// the phone's own box: the same strict shape and signature as [parse], an HTTPS address and a pinned CA always,
+  /// and no other type. The expiry is judged by the box that issued the code, never by this phone's clock, so it is
+  /// not checked here ([isExpired] is there for a caller that wants it).
+  static BoxQrPayload parseLink(String text) => _parse(text, requireCa: true, types: const {'link'});
+
+  static BoxQrPayload _parse(String text, {required bool requireCa, required Set<String> types}) {
     final t = text.trim();
     if (!t.startsWith(boxQrPrefix) || t.length > _maxText) throw const BoxQrInvalid();
     final r = _decode(t.substring(boxQrPrefix.length));
@@ -166,7 +182,7 @@ class BoxQrPayload {
     final ca = r['caSha256'];
     final cloud = r['cloud'];
     if (r['v'] != 1 ||
-        (type != 'setup' && type != 'recovery' && type != 'probe') ||
+        type is! String || !types.contains(type) ||
         r['boxId'] is! String || !_hex16.hasMatch(r['boxId'] as String) ||
         r['keyFp'] is! String || !_hex16.hasMatch(r['keyFp'] as String) ||
         r['name'] is! String || (r['name'] as String).isEmpty || (r['name'] as String).length > 60 ||
@@ -187,7 +203,8 @@ class BoxQrPayload {
     if (r['keyFp'] != keyFingerprint(pubRaw)) throw const BoxQrInvalid();
     if (requireCa && (r['box'] == '' || ca == null)) throw const BoxQrInvalid();
     final payload = BoxQrPayload._(
-      type: type as String,
+      type: type,
+      text: t,
       boxId: r['boxId'] as String,
       keyFp: r['keyFp'] as String,
       name: r['name'] as String,

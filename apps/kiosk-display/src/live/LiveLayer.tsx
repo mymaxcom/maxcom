@@ -1,15 +1,24 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { tvLanguage } from '@surau/core';
 import type { Settings } from '@surau/core';
 import type { LiveView } from '../data/live.ts';
+import { reportVideoStuck } from '../data/hostExit.ts';
 import { openWhep } from '../data/whep.ts';
+import { liveMaxHeight } from '../video/decoder.ts';
 import type { WhepState } from '../data/whep.ts';
 import { t } from '../i18n.ts';
 import type { Lang } from '../i18n.ts';
+import { tl } from '../i18n-box.ts';
 import type { LiveDisplayMode } from './liveMode.ts';
 import './live.css';
 
 /** No new video frame for this long: the picture counts as gone and the kiosk falls back to its normal screens. */
 export const FRAME_STALE_MS = 10_000;
+/**
+ * D3/D4: the player lost its connection while the picture was on air. The last picture stays this long, so the box's
+ * `waiting` (sent on its next monitor round, 2 s) finds it still on screen and the TV never flashes back to the slides.
+ */
+export const HOLD_GRACE_MS = 5_000;
 
 export interface LiveVideoProps {
   live: LiveView;
@@ -33,12 +42,18 @@ export interface LiveVideoProps {
 export function LiveVideo({ live, settings, mode, onAir }: LiveVideoProps) {
   const cfg = settings.liveOnKiosk;
   const fit = cfg?.fit === 'contain' ? 'contain' : 'cover';
+  const lang: Lang = tvLanguage(settings);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoOk, setVideoOk] = useState(live.playable);
   const [playing, setPlaying] = useState(false);
   // True from a frame (or the `playing` event) until FRAME_STALE_MS pass without the next one. The same <video>
   // stays mounted across a stall and a resume: nothing here reconnects.
   const [fresh, setFresh] = useState(false);
+  // K4: the box has no viewer slot left for this TV (it keeps asking)
+  const [tooMany, setTooMany] = useState(false);
+  // D3/D4: until when the last picture is held after the player dropped (0 = not holding)
+  const [graceUntil, setGraceUntil] = useState(0);
+  const flowingRef = useRef(false);
   const lastFrameRef = useRef(0);
   const markFrame = (): void => {
     lastFrameRef.current = Date.now();
@@ -77,15 +92,24 @@ export function LiveVideo({ live, settings, mode, onAir }: LiveVideoProps) {
     if (!video) return undefined;
     let session: { close(): Promise<void> } | null = null;
     const onState = (s: WhepState): void => {
+      if (s === 'toomany') setTooMany(true);
+      else if (s === 'playing' || s === 'nostream' || s === 'unsupported' || s === 'closed') setTooMany(false);
       if (s === 'unsupported') {
         setPlaying(false);
         setVideoOk(false);
-      } else if (s === 'nostream' || s === 'retrying' || s === 'connecting') {
+      } else if (s === 'nostream' || s === 'retrying' || s === 'connecting' || s === 'toomany') {
+        // a picture that was on air is held for a moment: the box says `waiting` on its next round
+        if (flowingRef.current) setGraceUntil(Date.now() + HOLD_GRACE_MS);
         setPlaying(false);
       }
     };
+    const onDecodeStuck = (): void => {
+      console.warn('kiosk live: video arrives but no frame decodes; asking the host to recover');
+      reportVideoStuck();
+    };
     try {
-      session = openWhep(video, { audio, volume: volumeRef.current, onState });
+      // O31: a display with little memory asks the box for a 720-line picture (the box may ignore it).
+      session = openWhep(video, { audio, volume: volumeRef.current, onState, onDecodeStuck, maxHeight: liveMaxHeight() });
     } catch (e) {
       console.error('kiosk live player failed to start; showing the strip only', e);
       setVideoOk(false);
@@ -135,10 +159,22 @@ export function LiveVideo({ live, settings, mode, onAir }: LiveVideoProps) {
   // freshness rules apply again. (The box ends a wait longer than 10 minutes by stopping the live itself.)
   const waiting = live.waiting === true;
   const flowing = showVideo && playing && fresh;
+  flowingRef.current = flowing;
+  const inGrace = graceUntil !== 0 && Date.now() < graceUntil;
   const heldRef = useRef(false);
   if (flowing) heldRef.current = true;
-  else if (!waiting || !showVideo) heldRef.current = false;
-  const shown = flowing || (waiting && heldRef.current);
+  else if ((!waiting && !inGrace) || !showVideo) heldRef.current = false;
+  const shown = flowing || ((waiting || inGrace) && heldRef.current);
+  // the hold ends by itself: one re-render when the grace runs out (or at once when the picture flows again)
+  useEffect(() => {
+    if (graceUntil === 0) return undefined;
+    if (flowing) {
+      setGraceUntil(0);
+      return undefined;
+    }
+    const timer = setTimeout(() => setGraceUntil(0), Math.max(0, graceUntil - Date.now()) + 20);
+    return () => clearTimeout(timer);
+  }, [graceUntil, flowing]);
   const onAirRef = useRef(onAir);
   onAirRef.current = onAir;
   useEffect(() => {
@@ -148,6 +184,32 @@ export function LiveVideo({ live, settings, mode, onAir }: LiveVideoProps) {
 
   if (!showVideo) return null;
   return (
+    <>
+    {tooMany && !shown ? (
+      // K4: a small note over the normal screen; styled here because the box page's sheet has no rule for it
+      <div
+        data-testid="live-toomany"
+        role="status"
+        dir={lang === 'ar' ? 'rtl' : 'ltr'}
+        style={{
+          position: 'absolute',
+          insetInlineStart: '50%',
+          bottom: '4%',
+          transform: 'translateX(-50%)',
+          maxWidth: '80%',
+          padding: '0.5em 1.1em',
+          borderRadius: '999px',
+          background: 'rgba(0, 0, 0, 0.72)',
+          color: '#fff',
+          fontSize: '1.4vw',
+          textAlign: 'center',
+          zIndex: 50,
+          pointerEvents: 'none',
+        }}
+      >
+        {tl('liveTooManyViewers', lang)}
+      </div>
+    ) : null}
     <div class={`live live--${mode}`} data-mode={mode} data-playing={shown ? 'true' : 'false'} aria-hidden="true">
       <video
         ref={videoRef}
@@ -171,6 +233,7 @@ export function LiveVideo({ live, settings, mode, onAir }: LiveVideoProps) {
           reads exactly as it does on its normal background. */}
       <div class="live__veil" />
     </div>
+    </>
   );
 }
 

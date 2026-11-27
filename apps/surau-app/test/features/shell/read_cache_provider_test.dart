@@ -57,6 +57,23 @@ void main() {
     expect(await t.store.load(fixtureBox().boxId), isEmpty);
   });
 
+  test('replacing the enrolment after a new one succeeded empties the cache and takes the new box', () async {
+    final t = build(fixtureBox());
+    t.c.read(readCacheProvider).put('/api/health', {'v': 1}, at);
+    final next = EnrolledBox(
+      box: fixtureBox().box,
+      boxId: 'ffffffffffffffff',
+      deviceId: 'dev-9',
+      userId: 'u1',
+      userName: 'Ustaz Ali',
+      roles: const ['admin'],
+      caSha256: fixtureBox().caSha256,
+    );
+    await t.c.read(enrolledBoxProvider.notifier).replaceWith(next);
+    expect(t.c.read(enrolledBoxProvider)?.boxId, 'ffffffffffffffff');
+    expect(t.c.read(readCacheProvider).get('/api/health'), isNull);
+  });
+
   test('a different box id gets its own cache', () async {
     final t = build(fixtureBox());
     t.c.read(readCacheProvider).put('/api/health', {'v': 1}, at);

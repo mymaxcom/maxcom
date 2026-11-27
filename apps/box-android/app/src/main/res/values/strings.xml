@@ -1,28 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Bahasa Malaysia (default). Every translatable key also lives in values-en and values-ar (StringsParityTest). -->
 <resources>
-    <string name="app_name">MAX Kiosk Server</string>
+    <string name="app_name" translatable="false">MAX Kiosk Server</string>
 
     <!-- Foreground service notification -->
     <string name="notif_channel_name">Perkhidmatan MAXCOM</string>
     <string name="notif_channel_desc">Menunjukkan bahawa pelayan MAXCOM sedang berjalan.</string>
-    <string name="notif_title">MAX Kiosk Server sedang berjalan / MAX Kiosk Server is running</string>
-    <string name="notif_text_running">Pelayan surau aktif pada peranti ini / The surau server is active on this device</string>
-    <string name="notif_text_starting">MAXCOM sedang dimulakan / MAXCOM is starting</string>
-    <string name="notif_text_waiting_clock">Menunggu jam Internet / Waiting for the Internet clock</string>
-    <string name="notif_text_failed">MAXCOM tidak dapat dimulakan / MAXCOM could not start</string>
+    <string name="notif_title">MAX Kiosk Server sedang berjalan</string>
+    <string name="notif_text_running">Pelayan surau aktif pada peranti ini</string>
+    <string name="notif_text_starting">MAXCOM sedang dimulakan</string>
+    <string name="notif_text_waiting_clock">Menunggu jam Internet</string>
+    <string name="notif_text_failed">MAXCOM tidak dapat dimulakan</string>
 
-    <!-- Kiosk start screen -->
-    <string name="start_title">MAXCOM</string>
-    <string name="start_starting">Sedang memulakan MAXCOM</string>
-    <string name="start_wait_clock">Menunggu jam Internet</string>
-    <string name="start_failed">MAXCOM tidak dapat dimulakan</string>
-    <string name="start_last_log">Baris log terakhir</string>
-    <string name="start_retry">Cuba lagi</string>
-    <string name="start_renderer_gone">Skrin MAXCOM terhenti. Memuatkan semula.</string>
-    <string name="start_load_error">GAGAL: skrin MAXCOM tidak dapat dimuatkan.</string>
-
-    <!-- Maintenance screen -->
+    <!-- Maintenance screen. maint_title_word sits beside the MAXCOM wordmark image; maint_title is its spoken label. -->
     <string name="maint_title">Penyelenggaraan MAXCOM</string>
+    <string name="maint_title_word">Penyelenggaraan</string>
     <string name="maint_check">Semak MAXCOM</string>
     <string name="maint_restart">Mula semula MAXCOM</string>
     <string name="maint_exit_android">Keluar ke Android</string>
@@ -41,4 +33,36 @@
     <string name="maint_ca_file">Kunci pensijil akar disimpan dalam fail peribadi aplikasi.</string>
     <string name="maint_check_ok">LULUS: semua semakan berjaya.</string>
     <string name="maint_check_fail">GAGAL: ada semakan yang tidak berjaya.</string>
+    <string name="maint_pin_locked">GAGAL: dikunci %1$d saat lagi.</string>
+    <string name="maint_pin_toomany">GAGAL: terlalu banyak cubaan. Cuba lagi selepas 5 minit.</string>
+    <string name="maint_wifi">Tetapan Wi-Fi</string>
+    <string name="maint_pin_change">Tukar atau buang PIN penyelenggaraan</string>
+    <string name="maint_pin_new">Tetapkan PIN penyelenggaraan</string>
+    <string name="maint_rekey">Tukar ke nama boxN-surau.local (sijil akar baharu)</string>
+
+    <!-- Follower box (an extra TV of a main box). box_term is the one product term for a box; strings that name a box take it as %1$s. -->
+    <string name="box_term" translatable="false">MAXCOM Kiosk Box</string>
+    <string name="follower_line">TV tambahan kepada %1$s</string>
+    <string name="follower_line_no_name">TV tambahan</string>
+    <string name="maint_mode_follower">Mod: %1$s pengikut</string>
+    <string name="maint_unlink">Tanggalkan dari surau</string>
+    <!-- Leave by itself (the unlink entry). %1$s is box_term unless a line says otherwise. -->
+    <string name="leave_intro">%1$s ini akan berhenti mengikut %1$s utama dan tidak lagi memaparkan kandungannya.</string>
+    <string name="leave_data">Jika %1$s ini mempunyai data sebelum dipautkan, ia akan kembali kepada data itu. Masukkan kod pemulihan dari sebelum pautan (16 huruf atau digit, dengan atau tanpa sempang), ditaip dengan alat kawalan jauh.</string>
+    <string name="leave_code_hint">Kod pemulihan</string>
+    <string name="leave_go">Kembali ke data sebelum pautan</string>
+    <string name="leave_no_code">Tiada kod: %1$s ini dahulunya baharu</string>
+    <string name="leave_new_confirm">%1$s ini dahulunya baharu. Ia akan dikosongkan dan kembali ke persediaan pertama. Semua yang dibuat selepas pautan akan hilang. Teruskan?</string>
+    <string name="leave_new_yes">Ya, kosongkan</string>
+    <string name="leave_cancel">Batal</string>
+    <string name="leave_working">Sedang diproses...</string>
+    <string name="leave_code_short">Kod mesti 16 huruf atau digit.</string>
+    <string name="leave_done">%1$s akan dimulakan semula. Tunggu sebentar.</string>
+    <string name="leave_err_wrong_code">GAGAL: kod pemulihan salah.</string>
+    <string name="leave_err_locked">GAGAL: terlalu banyak kod salah. Cuba lagi selepas %1$d minit.</string>
+    <string name="leave_err_no_backup">%1$s ini tiada data sebelum pautan, kerana dahulunya baharu. Pilih pilihan tanpa kod.</string>
+    <string name="leave_err_has_backup">GAGAL: %1$s ini mempunyai data sebelum pautan. Masukkan kod pemulihan.</string>
+    <string name="leave_err_not_local">GAGAL: ini hanya boleh dibuat pada %1$s ini sendiri.</string>
+    <string name="leave_err_generic">GAGAL: tidak berjaya (%1$s).</string>
+    <string name="leave_err_network">GAGAL: %1$s tidak menjawab. Cuba lagi.</string>
 </resources>

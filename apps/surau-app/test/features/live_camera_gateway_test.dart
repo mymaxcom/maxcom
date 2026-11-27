@@ -104,6 +104,100 @@ void main() {
     );
   });
 
+  test('the record carries the control opt-in; an older box without it reads as off', () async {
+    var rig = _rig((m, p, b) async => {..._masked, 'control': {'enabled': true, 'protocol': 'visca'}});
+    var r = await rig.gateway.liveCamera();
+    expect(r.control.enabled, isTrue);
+    expect(r.control.protocol, 'visca');
+    expect(r.control.hasBrightness, isFalse);
+    rig = _rig((m, p, b) async => _masked);
+    r = await rig.gateway.liveCamera();
+    expect(r.control.enabled, isFalse);
+    expect(r.control.hasBrightness, isTrue);
+  });
+
+  test('setLiveCameraControl PUTs the opt-in and answers the masked record', () async {
+    final rig = _rig((m, p, b) async => {..._masked, 'control': {'enabled': true, 'protocol': 'osc'}});
+    final r = await rig.gateway.setLiveCameraControl(enabled: true);
+    final seen = rig.box.seen.single;
+    expect(seen.method, 'PUT');
+    expect(seen.url.path, '/api/live/camera/control');
+    expect(jsonDecode(seen.body), {'enabled': true});
+    expect(r.control.enabled, isTrue);
+  });
+
+  test('controlLiveCamera POSTs one fixed action each and reads sent and confirmed', () async {
+    final rig = _rig((m, p, b) async => {'sent': true, 'confirmed': b!['action'] == 'preset'});
+    final g = rig.gateway;
+    expect((await g.controlLiveCamera(exposure: -2.3)).confirmed, isFalse);
+    expect((await g.controlLiveCamera(preset: 2)).confirmed, isTrue);
+    await g.controlLiveCamera(resetPosition: true);
+    await g.controlLiveCamera(aiTracking: false);
+    expect(rig.box.seen.map((r) => r.url.path).toSet(), {'/api/live/camera/control'});
+    expect(rig.box.seen.map((r) => r.method).toSet(), {'POST'});
+    expect(rig.box.seen.map((r) => jsonDecode(r.body)).toList(), [
+      {'action': 'exposure', 'ev': -2.3},
+      {'action': 'preset', 'preset': 2},
+      {'action': 'resetPosition'},
+      {'action': 'aiTracking', 'on': false},
+    ]);
+  });
+
+  test('the record carries the profile and the on-live switch, with defaults for a box that says nothing of them', () async {
+    var rig = _rig(
+      (m, p, b) async => {
+        ..._masked,
+        'control': {
+          'enabled': true,
+          'protocol': 'http',
+          'profile': {'preset': 3, 'focus': 'manual', 'tracking': 'human', 'exposureEv': -1.5},
+          'applyOnLive': true,
+        },
+      },
+    );
+    var r = await rig.gateway.liveCamera();
+    expect(r.control.protocol, 'http');
+    expect(r.control.profile.toJson(), {'preset': 3, 'focus': 'manual', 'tracking': 'human', 'exposureEv': -1.5});
+    expect(r.control.applyOnLive, isTrue);
+    rig = _rig((m, p, b) async => {..._masked, 'control': {'enabled': true, 'protocol': 'osc'}});
+    r = await rig.gateway.liveCamera();
+    expect(r.control.profile.toJson(), {'preset': 1, 'focus': 'continuous', 'tracking': 'off', 'exposureEv': 0.0});
+    expect(r.control.applyOnLive, isFalse);
+  });
+
+  test('setLiveCameraControl sends only the fields given: the profile alone, the on-live switch alone', () async {
+    final rig = _rig((m, p, b) async => {..._masked, 'control': {'enabled': true, 'protocol': 'http'}});
+    await rig.gateway.setLiveCameraControl(profile: const LiveCameraProfile(preset: 2, focus: 'single', exposureEv: 0.5));
+    await rig.gateway.setLiveCameraControl(applyOnLive: true);
+    expect(rig.box.seen.map((r) => jsonDecode(r.body)).toList(), [
+      {
+        'profile': {'preset': 2, 'focus': 'single', 'tracking': 'off', 'exposureEv': 0.5},
+      },
+      {'applyOnLive': true},
+    ]);
+  });
+
+  test('controlLiveCamera(applyProfile) POSTs the one fixed action and reads the steps', () async {
+    final rig = _rig(
+      (m, p, b) async => {
+        'sent': true,
+        'confirmed': false,
+        'steps': [
+          {'step': 'preset', 'sent': true, 'confirmed': true},
+          {'step': 'exposure', 'sent': true, 'confirmed': false},
+        ],
+      },
+    );
+    final out = await rig.gateway.controlLiveCamera(applyProfile: true);
+    expect(jsonDecode(rig.box.seen.single.body), {'action': 'applyProfile'});
+    expect(out.steps.map((s) => '${s.step}:${s.confirmed}').toList(), ['preset:true', 'exposure:false']);
+  });
+
+  test('a camera control refusal (opt-in off) reaches the caller with its code', () async {
+    final rig = _rig((m, p, b) async => jsonResponse(404, {'errors': ['x'], 'code': 'control_off'}));
+    await expectLater(rig.gateway.controlLiveCamera(resetPosition: true), throwsA(isA<BoxError>().having((e) => e.code, 'code', 'control_off')));
+  });
+
   test('clearLiveCamera sends DELETE /api/live/camera', () async {
     final rig = _rig((m, p, b) async => {'configured': false, 'url': '', 'username': null, 'hasPassword': false, 'lastTest': null});
     await rig.gateway.clearLiveCamera();
@@ -120,7 +214,7 @@ void main() {
         'hasAudio': false,
         'codecs': ['H265'],
         'transport': 'udp',
-        'message': 'Berjaya. Kotak menerima gambar dari kamera.',
+        'message': 'Berjaya. MAXCOM menerima gambar dari kamera.',
       },
     );
     final t = await rig.gateway.testLiveCamera(transport: 'udp');

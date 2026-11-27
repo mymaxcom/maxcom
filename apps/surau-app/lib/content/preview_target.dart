@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/providers.dart';
+import '../box/box_address.dart' show currentIpOrigin;
 import '../box/box_name.dart';
 import '../box/routes.dart';
 import '../box/trust.dart' show isPublicCloudOrigin;
@@ -45,7 +46,12 @@ class PreviewTarget {
 /// by that IPv4 (scheme and port kept). No name, no route, a non-https or
 /// cloud origin, the web build or no route table give the stored origin.
 PreviewTarget previewTargetFor(EnrolledBox box, BoxRoutes? routes, {bool isWeb = kIsWeb}) {
-  final stored = PreviewTarget(origin: box.box, leafBox: box, routed: false);
+  // The enrolled origin, or the IP last proved for the box when it moved:
+  // the WebView cannot open a `.local` name nor a stale enrolment IP.
+  final direct = currentIpOrigin(box, isWeb: isWeb);
+  final stored = direct == box.box
+      ? PreviewTarget(origin: box.box, leafBox: box, routed: false)
+      : PreviewTarget(origin: direct, leafBox: boxAt(box, direct), routed: false);
   if (isWeb || routes == null) return stored;
   final name = box.name;
   if (name == null || !isBoxName(name)) return stored;

@@ -8,6 +8,7 @@
 // `EnrolFlow` (lib/features/enrol/enrol_flow.dart).
 
 import '../../box/box_client.dart';
+import '../../box/box_name.dart';
 import '../../box/box_qr.dart';
 import '../../box/device_key.dart';
 import '../../box/setup_client.dart';
@@ -67,6 +68,7 @@ class SetupFlow {
     required this.store,
     required this.platform,
     this.surauInfoStore,
+    this.pageOrigin,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
 
@@ -77,10 +79,27 @@ class SetupFlow {
   final EnrolledBoxStore store;
   final String platform;
   final SurauInfoStore? surauInfoStore;
+
+  /// The origin the web build runs on (`Uri.base`); null on every native platform. A web page may only call its own
+  /// origin, so when it was opened at the box's numbered name on the QR's scheme and port, that name is the origin used
+  /// (and remembered) instead of the IP the QR carries. Never used to pick a host outside that one rule.
+  final Uri? pageOrigin;
   final DateTime Function() _now;
 
   /// The nonce of a request that may have reached the box; its key is still on the phone and is reused.
   String? _pendingNonce;
+
+  /// The origin to talk to for [payload]: its own `box`, except on the web when the page itself sits at a valid numbered
+  /// box name on the same scheme and port. The signed QR carries only the IP; the box at the page origin is still
+  /// checked against the QR (boxId and key fingerprint, [checkBoxMatches]) before anything is written.
+  Uri _originFor(BoxQrPayload payload) {
+    final box = Uri.parse(payload.box);
+    final page = pageOrigin;
+    if (page == null || !page.hasAuthority || page.scheme != box.scheme || page.port != box.port) return box;
+    final host = page.host.toLowerCase();
+    if (!isBoxName(host)) return box;
+    return boxNameOrigin(host, box.port);
+  }
 
   /// Parse, verify the signature, check the expiry, trust the box's CA, ask the box who it is and compare. Writes
   /// nothing. Throws [BoxQrInvalid], [WrongBoxQr], [BoxQrExpired], [TrustError], [BoxUnreachable], [BoxQrMismatch],
@@ -96,7 +115,7 @@ class SetupFlow {
       // a box with no certificate: never fall back to plain HTTP
       throw TrustError.of(TrustKind.noHttps);
     }
-    final box = Uri.parse(payload.box);
+    final box = _originFor(payload);
     await trust.establish(box, payload.caSha256);
     final info = await SetupClient(clientFor(box)).boxInfo();
     checkBoxMatches(payload, info);
@@ -109,7 +128,7 @@ class SetupFlow {
   /// on the phone.
   Future<void> probe(String text) async {
     final i = await inspect(text, expect: ScannedKind.probe);
-    await SetupClient(clientFor(Uri.parse(i.payload.box))).probe(i.payload.nonce);
+    await SetupClient(clientFor(_originFor(i.payload))).probe(i.payload.nonce);
   }
 
   /// A first setup: the first phone names the surau and becomes its first Pentadbir.
@@ -166,7 +185,7 @@ class SetupFlow {
   }) async {
     // Never touch the key of a working enrolment: this phone must leave its surau first.
     if (await store.load() != null && await key.exists()) throw const EnrolAlreadyEnrolled();
-    final box = Uri.parse(p.box);
+    final box = _originFor(p);
     // The same QR after a lost reply: the same key, so the box can recognise the request it already committed.
     final resume = _pendingNonce == p.nonce && await key.exists();
     final jwk = resume ? await key.publicJwk() : await key.generate();
@@ -194,11 +213,19 @@ class SetupFlow {
       caSha256: p.caSha256,
       appLock: result.appLock,
       cloud: p.cloud == null ? null : Uri.parse(p.cloud!),
+      // The name only when the web page was opened at it (see [_originFor]); the QR carries none. The IP is the
+      // address the QR itself gives, so the locator has the same fallback a code enrolment stores.
+      name: isBoxName(box.host) ? box.host : null,
+      lastIp: isIpv4(box.host) ? box.host : (isIpv4(Uri.parse(p.box).host) ? Uri.parse(p.box).host : null),
     );
     await trust.commit(p.caSha256);
     await store.save(enrolled);
     final name = result.surauName ?? surau;
-    if (name.isNotEmpty) await surauInfoStore?.save(SurauInfo(name: name));
+    if (name.isNotEmpty) {
+      await surauInfoStore?.save(SurauInfo(name: name));
+    } else {
+      await surauInfoStore?.clear();
+    }
     return SetupOutcome(box: enrolled, recoveryCode: result.recoveryCode, surauName: name);
   }
 }

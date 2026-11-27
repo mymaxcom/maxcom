@@ -2,11 +2,15 @@ package my.maxcom.box
 
 import android.content.Context
 import android.graphics.Color
-import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import my.maxcom.box.core.FollowerClient
+import my.maxcom.box.core.FollowerInfo
 
 /**
  * What the start screen says for one state. Nobody can act on it and the person's language is not known, so the
@@ -67,7 +71,7 @@ object StartTexts {
 
 /** Native start screen: the MAXCOM mark, the state text, and the last lines when the start failed. */
 class StartScreen(context: Context) : LinearLayout(context) {
-    private val mark = TextView(context)
+    private val mark = ImageView(context)
     private val title = TextView(context)
     private val detail = TextView(context)
     private val hint = TextView(context)
@@ -75,18 +79,39 @@ class StartScreen(context: Context) : LinearLayout(context) {
     private val titleAr = TextView(context)
     private val hintEn = TextView(context)
     private val hintAr = TextView(context)
+    private val followerMs = TextView(context)
+    private val followerEn = TextView(context)
+    private val followerAr = TextView(context)
+
+    // A follower box says whom it follows. The activity does not tell this screen, so it asks the box server itself.
+    private val ui = Handler(Looper.getMainLooper())
+    private val followerClient = FollowerClient()
+    private var polling = false
+    private var lastFollower: FollowerInfo? = null
+    private val poll = object : Runnable {
+        override fun run() {
+            if (!polling) return
+            if (isShown) {
+                Thread({
+                    val info = try { followerClient.read(BoxReducer.PORT) } catch (_: Exception) { null }
+                    ui.post { if (polling) showFollower(info) }
+                }, "follower-line").also { it.isDaemon = true }.start()
+            }
+            ui.postDelayed(this, FOLLOWER_POLL_MS)
+        }
+    }
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER
         setBackgroundColor(context.getColor(R.color.maxcom_bg))
         val fg = context.getColor(R.color.maxcom_fg)
+        // The MAXCOM wordmark (light letters, green dome, red X) as an image, about a third of the screen wide.
         mark.apply {
-            text = "MAXCOM"
-            textSize = 64f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(context.getColor(R.color.maxcom_accent))
-            gravity = Gravity.CENTER
+            setImageResource(R.drawable.maxcom_wordmark)
+            contentDescription = "MAXCOM"
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
         }
         val muted = Color.argb(160, 244, 241, 232)
         title.apply { textSize = 36f; setTextColor(fg); gravity = Gravity.CENTER; setPadding(0, 48, 0, 0) }
@@ -97,14 +122,45 @@ class StartScreen(context: Context) : LinearLayout(context) {
         hint.apply { textSize = 28f; setTextColor(context.getColor(R.color.maxcom_accent)); gravity = Gravity.CENTER; setPadding(0, 48, 0, 0) }
         listOf(hintEn, hintAr).forEach { it.apply { textSize = 20f; setTextColor(muted); gravity = Gravity.CENTER; setPadding(0, 6, 0, 0) } }
         hintAr.textDirection = View.TEXT_DIRECTION_RTL
-        addView(mark)
+        addView(mark, LayoutParams(markWidth(context), LayoutParams.WRAP_CONTENT))
         addView(title)
         addView(titleEn)
         addView(titleAr)
         addView(detail)
+        followerMs.apply { textSize = 26f; setTextColor(fg); gravity = Gravity.CENTER; setPadding(0, 36, 0, 0) }
+        listOf(followerEn, followerAr).forEach { it.apply { textSize = 20f; setTextColor(muted); gravity = Gravity.CENTER; setPadding(0, 6, 0, 0) } }
+        followerAr.textDirection = View.TEXT_DIRECTION_RTL
+        listOf(followerMs, followerEn, followerAr).forEach { it.visibility = View.GONE; addView(it) }
         addView(hint)
         addView(hintEn)
         addView(hintAr)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        polling = true
+        ui.removeCallbacks(poll)
+        ui.post(poll)
+    }
+
+    override fun onDetachedFromWindow() {
+        polling = false
+        ui.removeCallbacks(poll)
+        super.onDetachedFromWindow()
+    }
+
+    /** The follower line in the three languages; null (a main box, an old server, no answer) hides it. */
+    fun showFollower(info: FollowerInfo?) {
+        if (info?.masterName == lastFollower?.masterName && (info == null) == (lastFollower == null)) return
+        lastFollower = info
+        val lines = info?.let { FollowerTexts.line(it.masterName) }
+        followerMs.text = lines?.ms ?: ""
+        followerEn.text = lines?.en ?: ""
+        followerAr.text = lines?.ar ?: ""
+        val v = if (lines == null) View.GONE else View.VISIBLE
+        followerMs.visibility = v
+        followerEn.visibility = v
+        followerAr.visibility = v
     }
 
     fun show(text: StartText) {
@@ -119,5 +175,15 @@ class StartScreen(context: Context) : LinearLayout(context) {
         hintEn.visibility = if (text.hintEn == null) View.GONE else View.VISIBLE
         hintAr.text = text.hintAr ?: ""
         hintAr.visibility = if (text.hintAr == null) View.GONE else View.VISIBLE
+    }
+
+    private companion object {
+        const val FOLLOWER_POLL_MS = 5_000L
+
+        /** A third of the screen width (about 640 px on a 1080p TV), never wider than the wordmark at 2.5 times its size. */
+        fun markWidth(context: Context): Int {
+            val m = context.resources.displayMetrics
+            return minOf(m.widthPixels / 3, (300 * 2.5f * m.density).toInt())
+        }
     }
 }

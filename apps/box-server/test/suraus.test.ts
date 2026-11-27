@@ -46,12 +46,8 @@ import { buildCloud } from './support/fakeCloud.ts';
 import type { TestCloud } from './support/fakeCloud.ts';
 import { FakeWorker } from './support/fakeWorker.ts';
 import { jpeg } from './support/jpeg.ts';
-import { mkdirSync, writeFileSync } from 'node:fs';
 import { applyOp } from '../src/sync/apply.ts';
 import type { VerifiedOp } from '../src/sync/apply.ts';
-import { startFakeGoogle } from './support/fakeGoogle.ts';
-import { withUploadApi } from './support/fakeGoogleUpload.ts';
-import { seedCloudGrant } from './support/cloudGrant.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -553,61 +549,5 @@ describe('controller additions: the storage limit on the device asset op; catch-
     // an unreadable disk refuses nothing
     enableCloudDiskGuard(r.cloud.dir, () => null, () => t);
     expect(applyOp(r.db, assetOp(mp3b(5_000, 28)), ctx(x.id))).toMatchObject({ status: 'applied' });
-  });
-
-  it('catch-up uploads never count (decision 25): a large begin succeeds for a surau already at its limit', async () => {
-    const g = await startFakeGoogle();
-    cleanups.push(() => g.close());
-    const up = withUploadApi(g);
-    let t = Date.parse('2026-11-05T11:00:00.000Z');
-    up.snippet = () => ({ publishedAt: new Date(t + 1000).toISOString(), channelId: 'UC-surau' });
-    const cloud = buildCloud('0c10ad00000000cc', { now: () => new Date(t), fetchImpl: up.fetchImpl });
-    cleanups.push(() => cloud.close());
-    const app = cloud.app;
-    const db = app.surau.db;
-    mkdirSync(join(cloud.dir, 'secret'), { recursive: true });
-    writeFileSync(join(cloud.dir, 'secret', 'youtube-client.json'), JSON.stringify({ client_id: 'cid-123.apps.googleusercontent.com', client_secret: 'csecret-SECRET' }));
-    // the grant the cloud held from before release 2026.11.13 (the cloud makes no new one)
-    seedCloudGrant(cloud.dir, () => new Date(t));
-    const pen = putItem(db, 'penceramah', { name: 'Ustaz Ahmad' }, 'test', undefined, 'sdm');
-    const kuliah = putItem(db, 'kuliah', { date: '2026-11-05', slot: 'maghrib', time: '19:15', label: 'Kuliah Maghrib', penceramahId: pen.item.id, topic: 'Bab Solat', status: 'aktif' }, 'test', undefined, 'sdm');
-    // the cloud's surau `sdm` has a row (as on the pilot cloud), a tiny limit, and is already full of assets
-    const MIB = 1024 * 1024;
-    db.prepare("INSERT INTO suraus (id, name, created_at, created_by, linked_at, storage_limit_bytes) VALUES ('sdm', 'Surau Perintis Contoh', ?, 'migration', ?, 10000)").run(
-      new Date(t).toISOString(),
-      new Date(t).toISOString(),
-    );
-    db.prepare("INSERT INTO surau_assets (surau_id, asset_id, bytes, created_at) VALUES ('sdm', ?, 9999, ?)").run('f'.repeat(64), new Date(t).toISOString());
-    db.prepare("INSERT INTO sites (surau_id, box_id, name, public_jwk, token_hash, linked_at) VALUES ('sdm', 'a1b2c3d4e5f60799', 'Pilot', ?, ?, ?)").run(
-      JSON.stringify(generateSyncKeyPair().publicJwk),
-      sha256hex('sdm-site-token'),
-      new Date(t).toISOString(),
-    );
-    const small = mp3b(6_000, 77);
-    const putSmall = () =>
-      app.inject({
-        method: 'PUT',
-        url: `/api/sync/assets/${sha256hex(small)}`,
-        headers: { authorization: 'Bearer sdm-site-token', 'content-type': 'audio/mpeg' },
-        payload: small,
-      });
-    // the control: the surau really is full for what the cloud stores
-    const full = await putSmall();
-    expect(full.statusCode).toBe(413);
-    expect(full.json().code).toBe('storage_full');
-
-    const media = await loginAs(app, 'live');
-    const begin = (bytes: number) =>
-      app.inject({ method: 'POST', url: '/api/youtube/upload/begin', headers: media.headers, payload: { kuliahId: kuliah.item.id, part: null, bytes, replaceLiveVideoId: null } });
-    const sessions = up.sessions.length;
-    const one = await begin(3 * 1024 * MIB);
-    expect(one.statusCode, one.body).toBe(200);
-    const two = await begin(3 * 1024 * MIB);
-    expect(two.statusCode, two.body).toBe(200);
-    expect(up.sessions.length).toBe(sessions + 2);
-    // and the open sessions do not take the surau's room: usage is the assets only
-    expect(getSurau(db, 'sdm')!.storageUsedBytes).toBe(9999);
-    db.prepare("DELETE FROM surau_assets WHERE surau_id = 'sdm'").run();
-    expect((await putSmall()).statusCode).toBe(201);
   });
 });

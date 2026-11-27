@@ -22,7 +22,7 @@ vi.mock('../src/data/content.ts', async (importOriginal) => {
 import { App } from '../src/app.tsx';
 import { Main } from '../src/screens/Main.tsx';
 import { PENGUMUMAN_TEXT_FIT_MAX, PengumumanCard } from '../src/content/cards/PengumumanCard.tsx';
-import { paginateAyat } from '../src/content/cards/AyatCard.tsx';
+import { creditFor, paginateAyat } from '../src/content/cards/AyatCard.tsx';
 import { cityTime } from '../src/content/cards/WorldTimesCard.tsx';
 
 const PHOTO = 'a'.repeat(64);
@@ -79,12 +79,12 @@ function fixture(over: Partial<KioskContent> = {}): KioskContent {
   };
 }
 
-function show(content: KioskContent, card: SlotFeature | null, date = '2026-11-03', hhmm = '15:00', opts: ViewOpts = {}) {
+function show(content: KioskContent, card: SlotFeature | null, date = '2026-11-03', hhmm = '15:00', opts: ViewOpts = {}, lang: 'ms' | 'en' | 'ar' = 'ms') {
   const view = makeView(date, hhmm, opts);
   const cycle = buildCycle(content, view.settings, view.now);
   holder.view = view;
   holder.cv = { content, rotation: cycle.slots, current: currentSlot(cycle.slots, view.now, cycle.cycleStartSec), zikir: null, override: card };
-  return render(<Main view={view} lang="ms" />);
+  return render(<Main view={view} lang={lang} />);
 }
 
 let play: ReturnType<typeof vi.spyOn>;
@@ -582,6 +582,33 @@ describe('HadisCard', () => {
     expect(card.getAttribute('data-page')).toBeNull();
   });
 
+  it('R5: an English TV reads the grade, the attribution and the credit in English', () => {
+    const r = show(fixture({ hadisToday: [PROVIDER] }), 'hadis', '2026-11-03', '15:00', {}, 'en');
+    const card = hadisCard(r);
+    expect(card.querySelector('.hadis-grade')!.textContent).toBe('Sahih');
+    expect(card.querySelector('.hadis-attr')!.textContent).toBe('Agreed upon (al-Bukhari and Muslim)');
+    expect(card.querySelector('.hadis-credit')!.textContent).toBe('Source: HadeethEnc.com');
+  });
+
+  it('R5: an Arabic TV reads the grade and the attribution in Arabic; the Malay text follows Tetapan (F30)', () => {
+    const r = show(fixture({ hadisToday: [PROVIDER] }), 'hadis', '2026-11-03', '15:00', {}, 'ar');
+    const card = hadisCard(r);
+    expect(card.querySelector('.hadis-grade')!.textContent).toBe('صحيح');
+    expect(card.querySelector('.hadis-attr')!.textContent).toBe('متفق عليه (al-Bukhari و Muslim)');
+    expect(card.querySelector('[dir="rtl"]')).toBeTruthy();
+    // showMalay is on by default: the surau's translation stays on an Arabic TV (only the zikir is Arabic-only)
+    expect(card.textContent).toMatch(/Islam itu dibina atas lima perkara/);
+    cleanup();
+    // showMalay off: the Arabic stands in for it, as on any TV
+    const off = show(fixture({ hadisToday: [PROVIDER] }), 'hadis', '2026-11-03', '15:00', { settings: { hadis: { showMalay: false } } }, 'ar');
+    expect(hadisCard(off).querySelector('[dir="rtl"]')).toBeTruthy();
+    expect(hadisCard(off).textContent).not.toMatch(/Islam itu dibina atas lima perkara/);
+    cleanup();
+    // an own-list hadis with no Arabic keeps its only text
+    const own = show(fixture({ hadisToday: [{ ...HADIS, textAr: undefined }] }), 'hadis', '2026-11-03', '15:00', {}, 'ar');
+    expect(own.getByText(/Sesungguhnya/)).toBeTruthy();
+  });
+
   it('a short attribution is printed as it is, with no brackets', () => {
     const r = show(fixture({ hadisToday: [{ ...PROVIDER, attribution: 'Riwayat Muslim', attributionLong: undefined }] }), 'hadis');
     expect(hadisCard(r).querySelector('.hadis-attr')!.textContent).toBe('Riwayat Muslim');
@@ -746,6 +773,32 @@ describe('AyatCard', () => {
     expect(r.getByText(/Kitab Al-Quran ini, tidak ada sebarang syak/)).toBeTruthy();
     expect(r.getByText(/Terjemahan: Abdullah Basmeih \(QuranEnc\.com\)/)).toBeTruthy();
     expect(card.classList.contains('is-size-m')).toBe(true);
+  });
+
+  it('R5/F30: an Arabic TV shows the translation as Tetapan says, with the credit words in Arabic', () => {
+    const r = show(fixture({ ayat: { today: ayatShort, tomorrow: null }, credits }), 'ayatCard', '2026-11-03', '15:00', {}, 'ar');
+    const card = section(r).querySelector('[data-card="ayatCard"]')!;
+    expect(card.querySelector('[dir="rtl"]')!.textContent).toContain(short.arabic_text);
+    expect(r.getByText(/Kitab Al-Quran ini, tidak ada sebarang syak/)).toBeTruthy();
+    expect(r.getByText('الترجمة: Abdullah Basmeih (QuranEnc.com)')).toBeTruthy();
+    expect(r.getByText('خط المصحف: KFGQPC Uthmanic Hafs')).toBeTruthy();
+  });
+
+  it('F30: showTranslation off on an Arabic TV: the verse alone, the credits as on any TV', () => {
+    const r = show(fixture({ ayat: { today: ayatShort, tomorrow: null }, credits }), 'ayatCard', '2026-11-03', '15:00', { settings: { ayatCard: { showTranslation: false } } }, 'ar');
+    const card = section(r).querySelector('[data-card="ayatCard"]')!;
+    expect(card.querySelector('[dir="rtl"]')!.textContent).toContain(short.arabic_text);
+    expect(r.queryByText(/Kitab Al-Quran ini, tidak ada sebarang syak/)).toBeNull();
+    expect(r.getByText('الترجمة: Abdullah Basmeih (QuranEnc.com)')).toBeTruthy();
+    expect(r.getByText('خط المصحف: KFGQPC Uthmanic Hafs')).toBeTruthy();
+  });
+
+  it('R5: an English TV reads the credit words in English', () => {
+    const r = show(fixture({ ayat: { today: ayatShort, tomorrow: null }, credits }), 'ayatCard', '2026-11-03', '15:00', {}, 'en');
+    expect(r.getByText('Translation: Abdullah Basmeih (QuranEnc.com)')).toBeTruthy();
+    expect(r.getByText('Quran script: KFGQPC Uthmanic Hafs')).toBeTruthy();
+    expect(creditFor('Terjemahan: Abdullah Basmeih (QuranEnc.com), versi 1.2', 'en')).toBe('Translation: Abdullah Basmeih (QuranEnc.com), version 1.2');
+    expect(creditFor('Terjemahan: X', 'ms')).toBe('Terjemahan: X');
   });
 
   it('hides the translation when showTranslation is false; textSize maps to a class', () => {

@@ -2,7 +2,7 @@ name: surau_app
 description: "Aplikasi pentadbiran MAXCOM untuk AJK (Android dan web untuk iPad)."
 publish_to: 'none'
 
-version: 2026.11.14+2611142
+version: 2026.11.15+2611156
 
 environment:
   sdk: ^3.13.7

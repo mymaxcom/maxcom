@@ -24,9 +24,9 @@ function show(box: BoxStateView) {
 }
 const qr = () => ({ payload: qrPayload({ type: 'recovery' }), expiresAt: new Date(Date.now() + 300_000).toISOString() });
 const noAdmin = (over: Partial<BoxStateView> = {}) =>
-  boxView({ state: 'recovery', reason: 'no_admin', name: 'MAXCOM Dewan Utama', surauName: 'Surau D\'Waqaf', qr: qr(), ...over });
+  boxView({ state: 'recovery', reason: 'no_admin', name: 'MAXCOM Dewan Utama', surauName: 'Surau Contoh', qr: qr(), ...over });
 const damaged = (over: Partial<BoxStateView> = {}) =>
-  boxView({ state: 'recovery', reason: 'db_damaged', name: 'MAXCOM Dewan Utama', surauName: 'Surau D\'Waqaf', ...over });
+  boxView({ state: 'recovery', reason: 'db_damaged', name: 'MAXCOM Dewan Utama', surauName: 'Surau Contoh', ...over });
 
 afterEach(cleanup);
 
@@ -40,7 +40,7 @@ describe('Recovery screen, no active Pentadbir', () => {
     expect(r.getByText('Mod pemulihan')).toBeTruthy();
     expect(r.getByTestId('qr')).toBeTruthy();
     expect(r.getByText('Kod pemulihan, sekali guna')).toBeTruthy();
-    expect(r.getByText('Surau D\'Waqaf')).toBeTruthy();
+    expect(r.getByText('Surau Contoh')).toBeTruthy();
     expect(r.getByText('MAXCOM Dewan Utama')).toBeTruthy();
     expect(r.queryByText('Waktu solat tidak dapat dibaca')).toBeNull();
   });

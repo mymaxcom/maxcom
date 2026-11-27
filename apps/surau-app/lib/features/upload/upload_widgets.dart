@@ -191,6 +191,9 @@ int megabytes(int bytes) => (bytes / (1024 * 1024)).round();
       return (LightTone.idle, s.uploadPaused);
     case UploadPartState.failed:
       return (LightTone.failed, s.uploadFailed);
+    case UploadPartState.uploaded:
+      // up at YouTube; the MAXCOM box is told at the next contact
+      return (LightTone.waiting, s.uploadAwaitingConfirm);
     case UploadPartState.queued:
     case UploadPartState.joining:
     case UploadPartState.beginning:
@@ -218,10 +221,16 @@ String? jobErrorWords(S s, UploadJob job) => switch (job.lastError) {
   'no_box' => s.uploadErrorNoBox,
   'needs_unlock' => s.uploadErrorUnlock,
   'youtube_reauthorise' => s.uploadErrorReauth,
-  _ =>
-    job.parts.any((p) => p.state == UploadPartState.failed)
-        ? s.uploadErrorOther
-        : null,
+  // 2026.11.15 (B1): a job that waits says why, whatever the code
+  'begin_failed' || 'done_failed' => s.uploadReasonNoBox,
+  'network' => s.uploadWaitNetwork,
+  'claim_lost' => s.uploadErrorClaimLost,
+  'empty_file' => s.uploadErrorEmptyFile,
+  'already_uploading' => s.errcAlreadyUploading,
+  'youtube_live_not_enabled' => s.errcYoutubeLiveNotEnabled,
+  'box_clock_wrong' => s.errcBoxClockWrong,
+  // any other code (runner_error, job_too_large, rejected_<status>, ...): never silent
+  _ => s.uploadErrorOther,
 };
 
 // ---- the job card ----

@@ -98,7 +98,8 @@ describe('every Tetapan parameter is consumed, or listed as hidden / planned / l
     for (const [f, fields] of Object.entries(FIELD_META)) {
       for (const [leaf, m] of Object.entries(fields ?? {})) {
         if (!m.hidden) continue;
-        const r = REACH[f]?.[leaf];
+        // a dotted meta key (`avOffsetMs.deviceMic`) is covered by its parent entry in the table
+        const r = REACH[f]?.[leaf] ?? REACH[f]?.[leaf.split('.')[0]!];
         expect(r && 'none' in r && r.none === 'hidden', `${f}.${leaf} is hidden in Tetapan`).toBe(true);
       }
     }

@@ -41,7 +41,7 @@ final RegExp _logoPathRe = RegExp(r'^/surau-logo(?:\?v=[0-9a-f]{1,64})?$');
 String? surauLogoPath(Object? v) => v is String && _logoPathRe.hasMatch(v) ? v : null;
 
 /// `GET /api/surau/info`, as the box answers it. [kind] is `surau` or
-/// `masjid`; [name] already carries the word ("Surau D'Waqaf").
+/// `masjid`; [name] already carries the word ("Surau Contoh").
 class SurauInfo {
   const SurauInfo({
     required this.name,
@@ -115,6 +115,9 @@ String? _text(Object? v, int max) {
 abstract class SurauInfoStore {
   Future<SurauInfo?> load();
   Future<void> save(SurauInfo info);
+
+  /// Forgets the kept copy: it belongs to one surau, and the device left it or enrolled to another.
+  Future<void> clear();
 }
 
 class MemorySurauInfoStore implements SurauInfoStore {
@@ -127,6 +130,9 @@ class MemorySurauInfoStore implements SurauInfoStore {
 
   @override
   Future<void> save(SurauInfo info) async => _info = info;
+
+  @override
+  Future<void> clear() async => _info = null;
 }
 
 /// Reads the surau's details: [cached] answers at once from the store,

@@ -33,6 +33,19 @@ export interface StateRouteDeps {
   httpsPort: number;
   /** False for an in-memory database with no data folder: no box.json is kept. */
   realDataDir: boolean;
+  /** Several boxes in one surau: what a follower box says about itself, null on every other box. */
+  followerState?: () => FollowerView | null;
+}
+
+/** A follower (kotak pengikut) as its own TV page reads it: whom it follows and how long the master has been away. */
+export interface FollowerView {
+  mode: 'follower';
+  master: { name: string };
+  connected: boolean;
+  awayMinutes: number;
+  needsUpdate: boolean;
+  /** The surau's name from the master's last answer, null before the first one. */
+  surauName: string | null;
 }
 
 const SMALL_BODY = { bodyLimit: 8 * 1024 } as const;
@@ -83,7 +96,9 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
   const hasSurauInfo = (): boolean => db.prepare("SELECT 1 AS ok FROM settings WHERE feature = 'surauInfo'").get() !== undefined;
 
   const info = (): BoxInfo => {
-    const { state, reason } = boxState(db);
+    // A follower's own store is empty or set aside: its state is not `setup`, it is in use, by its master.
+    const follower = deps.followerState?.() ?? null;
+    const { state, reason } = follower !== null ? { state: 'active' as const, reason: 'none' as const } : boxState(db);
     return {
       boxId,
       keyFp: identity.keyFp,
@@ -97,6 +112,7 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
       caSha256: caSha256(),
       serverTime: deps.now().toISOString(),
       version: boxVersion(),
+      mode: follower !== null ? 'follower' : 'main',
     };
   };
 
@@ -139,6 +155,13 @@ export function registerStateRoutes(app: FastifyInstance, deps: StateRouteDeps):
   app.get('/api/box/state', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const i = info();
+    const follower = deps.followerState?.() ?? null;
+    if (follower !== null) {
+      // No setup or recovery QR on a follower: it is set up by its master, and leaves through the unlink.
+      const { surauName, ...marks } = follower;
+      const followerView: BoxStateView = { ...i, ...marks, surauName, appDownloadUrl: APP_DOWNLOAD_URL };
+      return followerView;
+    }
     const view: BoxStateView = {
       ...i,
       surauName: hasSurauInfo() ? surauPublicInfo(db, undefined, reqSurau(request)).name : null,

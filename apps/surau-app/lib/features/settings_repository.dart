@@ -14,6 +14,8 @@ import '../app/providers.dart';
 import '../box/box_client.dart';
 import '../l10n/generated/s.dart';
 import '../l10n/s_lookup.dart';
+import '../store/local_store.dart' show Collections;
+import '../sync/sync_engine.dart' show SyncEngine;
 import 'common/error_text.dart' show errorText, kErrorCodeTexts;
 import 'settings_widgets/field_meta.dart' show fieldMeta;
 import 'registry.g.dart';
@@ -180,8 +182,9 @@ class SettingsRepository {
     }
   }
 
-  /// `PUT { enabled: defaultEnabled, ...defaults }` for [feature]. A locked
-  /// feature stays on (its default is on).
+  /// `PUT { ...defaults }` for [feature] ([resetPatch]): the values go back
+  /// to MAXCOM's own, the feature's switch stays as it is and a camera keeps
+  /// its name (G2: a reset used to switch the camera OFF and rename it).
   ///
   /// Fields the Pentadbir MAXCOM owns (scope `system`) and hidden fields are
   /// left out unless [includeSystem] (the person holds `system:write`): the
@@ -193,8 +196,63 @@ class SettingsRepository {
     if (f == null) {
       throw SettingsSaveError.of(SettingsFailure.notFound, SettingsMsg.notFound);
     }
-    return save(feature, defaultsPatch(f, includeSystem: includeSystem)..removeWhere((k, _) => without.contains(k)));
+    return save(feature, resetPatch(f, includeSystem: includeSystem)..removeWhere((k, _) => without.contains(k)));
   }
+
+  /// Whether [feature] has no stored row yet, as far as this device can tell
+  /// (B4): the local copy holds a row only for what MAXCOM has stored (the
+  /// sync feed carries stored rows; a fresh `GET /api/settings` fills every
+  /// feature with its defaults, so the read alone cannot tell). False when
+  /// this device keeps no local copy or has pulled nothing yet.
+  Future<bool> rowMissing(String feature) async {
+    final store = gateway.store;
+    if (store == null || gateway.engine == null) return false;
+    try {
+      if ((await store.meta())['seq'] == null) return false; // nothing pulled yet: the copy knows nothing
+      return await store.getDoc(Collections.settings, feature) == null;
+    } on Object {
+      return false;
+    }
+  }
+}
+
+/// What a reset never touches, by feature (G2): the identity of a thing the
+/// person set up. The camera's address and login are not registry settings at
+/// all (the sealed camera record), so only its name is listed.
+const Map<String, Set<String>> resetKeeps = {
+  'liveCamera': {'name'},
+};
+
+/// The patch of "Set semula kepada lalai": every default of [f] except what
+/// [resetKeeps] names, and NEVER `enabled` (the feature stays on or off as it
+/// was).
+Map<String, dynamic> resetPatch(FeatureDef f, {bool includeSystem = true}) =>
+    (_without(f.key, '', _copy(f.defaults), includeSystem) as Map<String, dynamic>)
+      ..removeWhere((k, _) => resetKeeps[f.key]?.contains(k) ?? false);
+
+/// The whole row of [feature] as the form shows it ([edited], with
+/// `enabled`), for the FIRST save of a feature with no stored row (B4): the
+/// box then stores the switch and every value, not only the one cell that was
+/// touched. System-scoped and hidden fields are left out unless
+/// [includeSystem], except those in [changed] (the person's own edit: the box
+/// decides about it as before).
+Map<String, dynamic> fullRowPatch(
+  String feature,
+  Map<String, dynamic> edited, {
+  required Map<String, dynamic> changed,
+  bool includeSystem = false,
+  Set<String> without = const {},
+}) {
+  final row = _without(feature, '', _copy(edited), includeSystem) as Map<String, dynamic>;
+  row.removeWhere((k, _) => without.contains(k));
+  for (final e in changed.entries) {
+    final cur = row[e.key];
+    final v = e.value;
+    row[e.key] = cur is Map<String, dynamic> && v is Map<String, dynamic> && !wholeValueKeys.contains(e.key)
+        ? SyncEngine.deepMerge(cur, v)
+        : _copy(v);
+  }
+  return row;
 }
 
 /// `{enabled: defaultEnabled, ...defaults}` as plain JSON values.

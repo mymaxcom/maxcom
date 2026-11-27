@@ -3195,6 +3195,18 @@ abstract class S {
   /// **'Cari'**
   String get contentSearchHint;
 
+  /// No description provided for @contentZikirSettings.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan paparan zikir'**
+  String get contentZikirSettings;
+
+  /// No description provided for @contentZikirSettingsHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bila zikir bermula, tempoh setiap zikir, jam dan rupa skrin'**
+  String get contentZikirSettingsHint;
+
   /// No description provided for @contentNoMatch.
   ///
   /// In ms, this message translates to:
@@ -9243,132 +9255,6 @@ abstract class S {
   /// **'Lihat Rekod import'**
   String get impGoRecords;
 
-  /// No description provided for @impMysoTitle.
-  ///
-  /// In ms, this message translates to:
-  /// **'Import data paparan lama'**
-  String get impMysoTitle;
-
-  /// No description provided for @impMysoIntro.
-  ///
-  /// In ms, this message translates to:
-  /// **'Muat naik fail zip eksport dari sistem paparan lama surau ini. Kandungan dan tetapan pemasa digabung; waktu solat tidak termasuk.'**
-  String get impMysoIntro;
-
-  /// No description provided for @impMysoPick.
-  ///
-  /// In ms, this message translates to:
-  /// **'Pilih fail zip'**
-  String get impMysoPick;
-
-  /// No description provided for @impMysoPickHelp.
-  ///
-  /// In ms, this message translates to:
-  /// **'Dibuat dengan skrip eksport MAXCOM. Had 64 MB.'**
-  String get impMysoPickHelp;
-
-  /// No description provided for @impMysoTooBig.
-  ///
-  /// In ms, this message translates to:
-  /// **'Fail terlalu besar. Had ialah 64 MB.'**
-  String get impMysoTooBig;
-
-  /// No description provided for @impMysoWorking.
-  ///
-  /// In ms, this message translates to:
-  /// **'Sedang memuat naik dan menyemak'**
-  String get impMysoWorking;
-
-  /// No description provided for @impMysoMismatchTitle.
-  ///
-  /// In ms, this message translates to:
-  /// **'Nama surau berbeza'**
-  String get impMysoMismatchTitle;
-
-  /// No description provided for @impMysoMismatch.
-  ///
-  /// In ms, this message translates to:
-  /// **'Fail ini daripada \"{file}\"; import ke \"{target}\"?'**
-  String impMysoMismatch(String file, String target);
-
-  /// No description provided for @impMysoMismatchYes.
-  ///
-  /// In ms, this message translates to:
-  /// **'Ya, import ke surau ini'**
-  String get impMysoMismatchYes;
-
-  /// No description provided for @impMysoNameInFile.
-  ///
-  /// In ms, this message translates to:
-  /// **'Nama dalam fail: {name}'**
-  String impMysoNameInFile(String name);
-
-  /// No description provided for @impMysoTarget.
-  ///
-  /// In ms, this message translates to:
-  /// **'Sasaran: {name}'**
-  String impMysoTarget(String name);
-
-  /// No description provided for @impMysoPlanTitle.
-  ///
-  /// In ms, this message translates to:
-  /// **'Larian percubaan'**
-  String get impMysoPlanTitle;
-
-  /// No description provided for @impMysoKind.
-  ///
-  /// In ms, this message translates to:
-  /// **'Jenis'**
-  String get impMysoKind;
-
-  /// No description provided for @impMysoCreated.
-  ///
-  /// In ms, this message translates to:
-  /// **'Baharu'**
-  String get impMysoCreated;
-
-  /// No description provided for @impMysoUpdated.
-  ///
-  /// In ms, this message translates to:
-  /// **'Kemas kini'**
-  String get impMysoUpdated;
-
-  /// No description provided for @impMysoSame.
-  ///
-  /// In ms, this message translates to:
-  /// **'Sama'**
-  String get impMysoSame;
-
-  /// No description provided for @impMysoSkipped.
-  ///
-  /// In ms, this message translates to:
-  /// **'Langkau'**
-  String get impMysoSkipped;
-
-  /// No description provided for @impMysoTimers.
-  ///
-  /// In ms, this message translates to:
-  /// **'Guna tetapan pemasa dari sistem lama'**
-  String get impMysoTimers;
-
-  /// No description provided for @impMysoImport.
-  ///
-  /// In ms, this message translates to:
-  /// **'Import'**
-  String get impMysoImport;
-
-  /// No description provided for @impMysoDiscard.
-  ///
-  /// In ms, this message translates to:
-  /// **'Buang'**
-  String get impMysoDiscard;
-
-  /// No description provided for @impMysoDone.
-  ///
-  /// In ms, this message translates to:
-  /// **'Import data paparan lama selesai'**
-  String get impMysoDone;
-
   /// No description provided for @rekTitle.
   ///
   /// In ms, this message translates to:
@@ -15194,6 +15080,3781 @@ abstract class S {
   /// In ms, this message translates to:
   /// **'Fail rakaman tidak sah dan tidak diterima oleh MAXCOM. Setiap bahagian disimpan seperti asalnya.'**
   String get liveRecBadPieceNote;
+
+  /// No description provided for @linkTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautkan MAXCOM Kiosk Box'**
+  String get linkTitle;
+
+  /// No description provided for @linkEntryIntro.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautkan dua MAXCOM Kiosk Box yang sudah disediakan. Satu menjadi Box utama, yang lain mengikutnya.'**
+  String get linkEntryIntro;
+
+  /// No description provided for @linkCheckLan.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan MAXCOM Kiosk Box hanya boleh dibuat di Wi-Fi surau.'**
+  String get linkCheckLan;
+
+  /// No description provided for @linkCheckLive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hentikan siaran langsung dahulu, kemudian cuba lagi.'**
+  String get linkCheckLive;
+
+  /// No description provided for @linkCheckFollower.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box ini ialah Box pengikut. Buat pautan dari Box utama.'**
+  String get linkCheckFollower;
+
+  /// No description provided for @linkChoiceShow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Papar kod di TV ini'**
+  String get linkChoiceShow;
+
+  /// No description provided for @linkChoiceShowSub.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir MAXCOM Kiosk Box yang satu lagi mengimbas kod itu dengan aplikasi mereka.'**
+  String get linkChoiceShowSub;
+
+  /// No description provided for @linkChoiceScan.
+  ///
+  /// In ms, this message translates to:
+  /// **'Imbas kod MAXCOM Kiosk Box lain'**
+  String get linkChoiceScan;
+
+  /// No description provided for @linkChoiceScanSub.
+  ///
+  /// In ms, this message translates to:
+  /// **'Imbas kod yang dipaparkan di TV MAXCOM Kiosk Box lain, atau di TV Box baharu.'**
+  String get linkChoiceScanSub;
+
+  /// No description provided for @linkPinTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sahkan dengan PIN anda'**
+  String get linkPinTitle;
+
+  /// No description provided for @linkPinLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN anda'**
+  String get linkPinLabel;
+
+  /// No description provided for @linkPinBodyShow.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} akan memaparkan kod pautan di TV selama 5 minit.'**
+  String linkPinBodyShow(String name);
+
+  /// No description provided for @linkPinBodyScan.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN diperlukan untuk memautkan MAXCOM Kiosk Box anda dengan {name}.'**
+  String linkPinBodyScan(String name);
+
+  /// No description provided for @linkPinBodyAgree.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN diperlukan semula kerana sudah lama sejak anda memasukkannya.'**
+  String get linkPinBodyAgree;
+
+  /// No description provided for @linkShowCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tunjuk kod'**
+  String get linkShowCode;
+
+  /// No description provided for @linkWaitTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod pautan di TV {name}'**
+  String linkWaitTitle(String name);
+
+  /// No description provided for @linkWaitBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Minta pentadbir MAXCOM Kiosk Box yang satu lagi mengimbas kod itu dengan aplikasi MAXCOM yang disambung ke Box mereka.'**
+  String get linkWaitBody;
+
+  /// No description provided for @linkWaitExpires.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod tamat dalam {time}'**
+  String linkWaitExpires(String time);
+
+  /// No description provided for @linkWaitFact1.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sekali guna, sah 5 minit'**
+  String get linkWaitFact1;
+
+  /// No description provided for @linkWaitFact2.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditandatangani oleh MAXCOM Kiosk Box ini. Gambar kod tidak berguna selepas tamat.'**
+  String get linkWaitFact2;
+
+  /// No description provided for @linkWaitFact3.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada data disalin sehingga anda bersetuju'**
+  String get linkWaitFact3;
+
+  /// No description provided for @linkWaitClose.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tutup kod sekarang'**
+  String get linkWaitClose;
+
+  /// No description provided for @linkCalling.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menyemak kedua-dua MAXCOM Kiosk Box'**
+  String get linkCalling;
+
+  /// No description provided for @linkCallingBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Belum ada data dihantar.'**
+  String get linkCallingBody;
+
+  /// No description provided for @linkScanHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Halakan ke kod pautan di TV MAXCOM Kiosk Box lain. Telefon ini dan kedua-dua Box mesti berada di Wi-Fi surau yang sama.'**
+  String get linkScanHint;
+
+  /// No description provided for @linkScanPasteLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tampal kod pautan'**
+  String get linkScanPasteLabel;
+
+  /// No description provided for @linkConfirmTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautkan dengan {name}?'**
+  String linkConfirmTitle(String name);
+
+  /// No description provided for @linkFingerprint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Cap jari kunci MAXCOM Kiosk Box itu'**
+  String get linkFingerprint;
+
+  /// No description provided for @linkConfirmBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pastikan cap jari ini sama dengan yang anda jangka. Tiada data dihantar sebelum kedua-dua pentadbir bersetuju.'**
+  String get linkConfirmBody;
+
+  /// No description provided for @linkRescan.
+  ///
+  /// In ms, this message translates to:
+  /// **'Imbas semula'**
+  String get linkRescan;
+
+  /// No description provided for @linkStopTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan dihentikan'**
+  String get linkStopTitle;
+
+  /// No description provided for @linkStopVersion.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box {name} menggunakan versi {release}. Kemas kini Box itu, kemudian cuba lagi.'**
+  String linkStopVersion(String name, String release);
+
+  /// No description provided for @linkStopOlder.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box {name} menggunakan versi yang lebih lama. Kemas kini Box itu, kemudian cuba lagi.'**
+  String linkStopOlder(String name);
+
+  /// No description provided for @linkStopOlderUnnamed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Salah satu MAXCOM Kiosk Box menggunakan versi yang lebih lama. Kemas kini Box itu, kemudian cuba lagi.'**
+  String get linkStopOlderUnnamed;
+
+  /// No description provided for @linkStopNothingChanged.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada apa-apa diubah di kedua-dua MAXCOM Kiosk Box.'**
+  String get linkStopNothingChanged;
+
+  /// No description provided for @linkCodeApproveTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box {name} mahu dipautkan'**
+  String linkCodeApproveTitle(String name);
+
+  /// No description provided for @linkCodeApproveFacts.
+  ///
+  /// In ms, this message translates to:
+  /// **'{users} pengguna, {content} kandungan'**
+  String linkCodeApproveFacts(int users, int content);
+
+  /// No description provided for @linkCodeApproveBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bandingkan kod ini dengan kod di telefon pentadbir {name}. Kod mesti sama.'**
+  String linkCodeApproveBody(String name);
+
+  /// No description provided for @linkCodeNewBoxBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bandingkan kod ini dengan kod di TV MAXCOM Kiosk Box baharu. Kod mesti sama.'**
+  String get linkCodeNewBoxBody;
+
+  /// No description provided for @linkApprove.
+  ///
+  /// In ms, this message translates to:
+  /// **'Setuju'**
+  String get linkApprove;
+
+  /// No description provided for @linkReject.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tolak'**
+  String get linkReject;
+
+  /// No description provided for @linkSameCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod sama'**
+  String get linkSameCode;
+
+  /// No description provided for @linkCodeNoData.
+  ///
+  /// In ms, this message translates to:
+  /// **'Belum ada data disalin. Selepas Setuju, anda menjawab dua soalan.'**
+  String get linkCodeNoData;
+
+  /// No description provided for @linkCodeShowTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tunjukkan kod ini kepada pentadbir MAXCOM Kiosk Box yang satu lagi'**
+  String get linkCodeShowTitle;
+
+  /// No description provided for @linkWaitingApproval.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu pentadbir {name} bersetuju'**
+  String linkWaitingApproval(String name);
+
+  /// No description provided for @linkCodeMismatchTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod tidak sama?'**
+  String get linkCodeMismatchTitle;
+
+  /// No description provided for @linkCodeMismatch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tekan Batal. Box lain mungkin sedang cuba dipautkan.'**
+  String get linkCodeMismatch;
+
+  /// No description provided for @linkBoxThis.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini'**
+  String get linkBoxThis;
+
+  /// No description provided for @linkBoxThisNamed.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} (Box ini)'**
+  String linkBoxThisNamed(String name);
+
+  /// No description provided for @linkQIntroTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dipautkan, belum ada data diubah'**
+  String get linkQIntroTitle;
+
+  /// No description provided for @linkQIntro.
+  ///
+  /// In ms, this message translates to:
+  /// **'{a} dan {b} kini saling mengenali. Jawab soalan di bawah. Pentadbir yang satu lagi melihat jawapan yang sama dan menekan Setuju; itu memulakan pautan.'**
+  String linkQIntro(String a, String b);
+
+  /// No description provided for @linkQ1Title.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data MAXCOM Kiosk Box mana yang dikekalkan?'**
+  String get linkQ1Title;
+
+  /// No description provided for @linkQ1Hint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data MAXCOM Kiosk Box yang satu lagi diganti.'**
+  String get linkQ1Hint;
+
+  /// No description provided for @linkQ2Title.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box mana menjadi Box utama?'**
+  String get linkQ2Title;
+
+  /// No description provided for @linkQ2Hint.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box utama menyimpan data, berhubung dengan awan dan YouTube, dan menghantar salinan ke Box pengikut dalam beberapa saat. Telefon dan iPad mengurus melalui Box utama sahaja.'**
+  String get linkQ2Hint;
+
+  /// No description provided for @linkQ3Title.
+  ///
+  /// In ms, this message translates to:
+  /// **'Telefon pengguna Box ini'**
+  String get linkQ3Title;
+
+  /// No description provided for @linkQ3Hint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Orang di {name} yang mempunyai telefon, sama ada data diganti atau dipindahkan ke Box utama.'**
+  String linkQ3Hint(String name);
+
+  /// No description provided for @linkQ3Direct.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sambung terus ke Box utama'**
+  String get linkQ3Direct;
+
+  /// No description provided for @linkQ3DirectHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semua orang yang mempunyai telefon, termasuk pentadbir, menyambung ke Box utama dengan sendiri tanpa kod sertai. Kedua-dua pentadbir sudah bersetuju dengan PIN.'**
+  String get linkQ3DirectHint;
+
+  /// No description provided for @linkQ3Code.
+  ///
+  /// In ms, this message translates to:
+  /// **'Minta kod sertai untuk pentadbir'**
+  String get linkQ3Code;
+
+  /// No description provided for @linkQ3CodeHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Orang biasa menyambung dengan sendiri. Pentadbir perlukan kod sertai daripada pentadbir Box utama.'**
+  String get linkQ3CodeHint;
+
+  /// No description provided for @linkFactContent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kandungan'**
+  String get linkFactContent;
+
+  /// No description provided for @linkFactContentValue.
+  ///
+  /// In ms, this message translates to:
+  /// **'{content} kandungan, {posters} poster, {videos} video'**
+  String linkFactContentValue(int content, int posters, int videos);
+
+  /// No description provided for @linkFactFinance.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rekod kewangan'**
+  String get linkFactFinance;
+
+  /// No description provided for @linkFactPeople.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengguna'**
+  String get linkFactPeople;
+
+  /// No description provided for @linkFactLastEdit.
+  ///
+  /// In ms, this message translates to:
+  /// **'Suntingan terakhir'**
+  String get linkFactLastEdit;
+
+  /// No description provided for @linkNoEdit.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada suntingan'**
+  String get linkNoEdit;
+
+  /// No description provided for @linkFactDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti'**
+  String get linkFactDevice;
+
+  /// No description provided for @linkFactStorage.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ruang kosong'**
+  String get linkFactStorage;
+
+  /// No description provided for @linkFactYoutube.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube'**
+  String get linkFactYoutube;
+
+  /// No description provided for @linkFactCloud.
+  ///
+  /// In ms, this message translates to:
+  /// **'Awan MAXCOM'**
+  String get linkFactCloud;
+
+  /// No description provided for @linkYes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ya'**
+  String get linkYes;
+
+  /// No description provided for @linkNo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak'**
+  String get linkNo;
+
+  /// No description provided for @linkDeviceWindows.
+  ///
+  /// In ms, this message translates to:
+  /// **'PC Windows'**
+  String get linkDeviceWindows;
+
+  /// No description provided for @linkDeviceAndroid.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box Android'**
+  String get linkDeviceAndroid;
+
+  /// No description provided for @linkDeviceOther.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box'**
+  String get linkDeviceOther;
+
+  /// No description provided for @linkConnCable.
+  ///
+  /// In ms, this message translates to:
+  /// **'kabel'**
+  String get linkConnCable;
+
+  /// No description provided for @linkConnWifi.
+  ///
+  /// In ms, this message translates to:
+  /// **'Wi-Fi'**
+  String get linkConnWifi;
+
+  /// No description provided for @linkRecommended.
+  ///
+  /// In ms, this message translates to:
+  /// **'Disyorkan'**
+  String get linkRecommended;
+
+  /// No description provided for @linkAdvice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Disyorkan: {name} ({hardware})'**
+  String linkAdvice(String name, String hardware);
+
+  /// No description provided for @linkFixedNew.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box baharu tiada data'**
+  String get linkFixedNew;
+
+  /// No description provided for @linkFixedFollowers.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} sudah mempunyai MAXCOM Kiosk Box pengikut, jadi ia kekal sebagai Box utama dan datanya dikekalkan.'**
+  String linkFixedFollowers(String name);
+
+  /// No description provided for @linkCaseXOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dalam keluaran ini MAXCOM Kiosk Box utama mestilah Box yang datanya dikekalkan.'**
+  String get linkCaseXOff;
+
+  /// No description provided for @linkCrossTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data dan MAXCOM Kiosk Box utama berbeza'**
+  String get linkCrossTitle;
+
+  /// No description provided for @linkCrossBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data {kept} disalin sekali ke {master}, kemudian {master} menjadi MAXCOM Kiosk Box utama. {other} menjadi Box pengikut.'**
+  String linkCrossBody(String kept, String master, String other);
+
+  /// No description provided for @linkReplacedTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Yang akan diganti'**
+  String get linkReplacedTitle;
+
+  /// No description provided for @linkReplacedLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data {name} akan diganti: {content} kandungan, {posters} poster, {videos} video, {finance} rekod kewangan. Data {kept} dikekalkan.'**
+  String linkReplacedLine(
+    String name,
+    int content,
+    int posters,
+    int videos,
+    int finance,
+    String kept,
+  );
+
+  /// No description provided for @linkReplacedNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada data diganti. Semua data {kept} dikekalkan.'**
+  String linkReplacedNone(String kept);
+
+  /// No description provided for @linkBackupLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sandaran kedua-dua MAXCOM Kiosk Box diambil dahulu: {time}. Pautan boleh diputuskan bila-bila masa dan setiap Box boleh kembali ke sandaran ini.'**
+  String linkBackupLine(String time);
+
+  /// No description provided for @linkFinanceTick.
+  ///
+  /// In ms, this message translates to:
+  /// **'Saya faham rekod kewangan {name} tidak digabungkan. Laporan telah dieksport jika perlu.'**
+  String linkFinanceTick(String name);
+
+  /// No description provided for @linkFinanceCount.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} rekod kewangan {name} kekal dalam sandaran.'**
+  String linkFinanceCount(int n, String name);
+
+  /// No description provided for @linkFinanceFirst.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tandakan pengesahan rekod kewangan dahulu.'**
+  String get linkFinanceFirst;
+
+  /// No description provided for @linkMore.
+  ///
+  /// In ms, this message translates to:
+  /// **'Butiran lain'**
+  String get linkMore;
+
+  /// No description provided for @linkMorePeople.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengguna kedua-dua MAXCOM Kiosk Box digabungkan: {a} di {nameA}, {b} di {nameB}.'**
+  String linkMorePeople(int a, String nameA, int b, String nameB);
+
+  /// No description provided for @linkMoreYoutubeKept.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: log masuk {name} dikekalkan.'**
+  String linkMoreYoutubeKept(String name);
+
+  /// No description provided for @linkMoreYoutubeAgain.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: perlu log masuk sekali lagi selepas pautan.'**
+  String get linkMoreYoutubeAgain;
+
+  /// No description provided for @linkMoreCloud.
+  ///
+  /// In ms, this message translates to:
+  /// **'Awan: salinan awan dikemas kini oleh MAXCOM Kiosk Box utama.'**
+  String get linkMoreCloud;
+
+  /// No description provided for @linkMoreCamera.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera surau: tetapan kamera ikut data yang dikekalkan.'**
+  String get linkMoreCamera;
+
+  /// No description provided for @linkMoreBrowser.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin pelayar perlu dipadankan semula selepas pautan.'**
+  String get linkMoreBrowser;
+
+  /// No description provided for @linkAgreeButton.
+  ///
+  /// In ms, this message translates to:
+  /// **'Setuju: kekalkan data {kept}, {master} menjadi Box utama'**
+  String linkAgreeButton(String kept, String master);
+
+  /// No description provided for @linkWaitingFor.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu {name}'**
+  String linkWaitingFor(String name);
+
+  /// No description provided for @linkNameAgreed.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name}: setuju'**
+  String linkNameAgreed(String name);
+
+  /// No description provided for @linkNameNotYet.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name}: belum setuju'**
+  String linkNameNotYet(String name);
+
+  /// No description provided for @linkAnswersChangeable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Anda boleh mengubah jawapan sehingga kedua-dua pentadbir bersetuju.'**
+  String get linkAnswersChangeable;
+
+  /// No description provided for @linkStaleNotice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir lain menukar pilihan. Semak dan setuju sekali lagi.'**
+  String get linkStaleNotice;
+
+  /// No description provided for @linkProgressTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan sedang dibuat'**
+  String get linkProgressTitle;
+
+  /// No description provided for @linkProgressStarting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan sedang bermula'**
+  String get linkProgressStarting;
+
+  /// No description provided for @linkProgressStep.
+  ///
+  /// In ms, this message translates to:
+  /// **'Langkah {n} daripada {total}: {name}'**
+  String linkProgressStep(int n, int total, String name);
+
+  /// No description provided for @linkProgressStepPercent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Langkah {n} daripada {total}: {name}, {percent}%'**
+  String linkProgressStepPercent(int n, int total, String name, int percent);
+
+  /// No description provided for @linkProgressNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jangan matikan kuasa kedua-dua MAXCOM Kiosk Box. Suntingan ditolak sehingga pautan siap.'**
+  String get linkProgressNote;
+
+  /// No description provided for @linkStepBackup.
+  ///
+  /// In ms, this message translates to:
+  /// **'menyandarkan data'**
+  String get linkStepBackup;
+
+  /// No description provided for @linkStepPeople.
+  ///
+  /// In ms, this message translates to:
+  /// **'menggabungkan pengguna'**
+  String get linkStepPeople;
+
+  /// No description provided for @linkStepCommit.
+  ///
+  /// In ms, this message translates to:
+  /// **'memuktamadkan pautan'**
+  String get linkStepCommit;
+
+  /// No description provided for @linkStepFinish.
+  ///
+  /// In ms, this message translates to:
+  /// **'menamatkan pautan'**
+  String get linkStepFinish;
+
+  /// No description provided for @linkStepWorking.
+  ///
+  /// In ms, this message translates to:
+  /// **'memautkan MAXCOM Kiosk Box'**
+  String get linkStepWorking;
+
+  /// No description provided for @linkDoneTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan siap'**
+  String get linkDoneTitle;
+
+  /// No description provided for @linkDoneBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kedua-dua MAXCOM Kiosk Box kini dipautkan. Tetapan dan kandungan diurus dari Box utama.'**
+  String get linkDoneBody;
+
+  /// No description provided for @linkDoneMaster.
+  ///
+  /// In ms, this message translates to:
+  /// **'{master} kini MAXCOM Kiosk Box utama. {other} mengikutnya.'**
+  String linkDoneMaster(String master, String other);
+
+  /// No description provided for @linkDoneBackup.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sandaran kedua-dua MAXCOM Kiosk Box disimpan. Pautan boleh diputuskan bila-bila masa.'**
+  String get linkDoneBackup;
+
+  /// No description provided for @linkDoneNext.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengguna di MAXCOM Kiosk Box pengikut: sertai Box utama dengan kod sertai, kemudian tetapkan PIN baharu.'**
+  String get linkDoneNext;
+
+  /// No description provided for @linkDoneList.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lihat skrin TV dan MAXCOM Kiosk Box'**
+  String get linkDoneList;
+
+  /// No description provided for @linkDoneClose.
+  ///
+  /// In ms, this message translates to:
+  /// **'Selesai'**
+  String get linkDoneClose;
+
+  /// No description provided for @linkFailedTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan dibatalkan'**
+  String get linkFailedTitle;
+
+  /// No description provided for @linkFollowerTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Surau anda kini diurus dari MAXCOM Kiosk Box utama {name}.'**
+  String linkFollowerTitle(String name);
+
+  /// No description provided for @linkFollowerTitleNoName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Surau anda kini diurus dari MAXCOM Kiosk Box utama.'**
+  String get linkFollowerTitleNoName;
+
+  /// No description provided for @linkCodePinRequired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masukkan PIN anda untuk meneruskan.'**
+  String get linkCodePinRequired;
+
+  /// No description provided for @linkCodeWrongPin.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN salah. Cuba lagi.'**
+  String get linkCodeWrongPin;
+
+  /// No description provided for @linkCodeLocked.
+  ///
+  /// In ms, this message translates to:
+  /// **'PIN dikunci buat sementara. Cuba lagi sebentar lagi.'**
+  String get linkCodeLocked;
+
+  /// No description provided for @linkCodeWrongStep.
+  ///
+  /// In ms, this message translates to:
+  /// **'Langkah ini sudah berubah. Skrin dikemas kini.'**
+  String get linkCodeWrongStep;
+
+  /// No description provided for @linkCodeWrongSide.
+  ///
+  /// In ms, this message translates to:
+  /// **'Butang ini untuk pentadbir MAXCOM Kiosk Box yang satu lagi.'**
+  String get linkCodeWrongSide;
+
+  /// No description provided for @linkCodeSessionOpen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Satu pautan sedang berjalan di MAXCOM Kiosk Box ini. Batalkan dahulu atau tunggu ia tamat.'**
+  String get linkCodeSessionOpen;
+
+  /// No description provided for @linkCodeNoHttps.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box ini belum mempunyai sambungan selamat (HTTPS), jadi belum boleh dipautkan.'**
+  String get linkCodeNoHttps;
+
+  /// No description provided for @linkCodeLinkLocked.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terlalu banyak percubaan pautan yang gagal. Cuba semula selepas satu jam.'**
+  String get linkCodeLinkLocked;
+
+  /// No description provided for @linkCodeBadQr.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod ini bukan kod pautan MAXCOM Kiosk Box yang sah.'**
+  String get linkCodeBadQr;
+
+  /// No description provided for @linkCodeSameBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ini Box anda sendiri. Imbas kod di TV Box yang satu lagi.'**
+  String get linkCodeSameBox;
+
+  /// No description provided for @linkCodeCodeUsed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod ini sudah digunakan. Minta kod baharu.'**
+  String get linkCodeCodeUsed;
+
+  /// No description provided for @linkCodeCodeExpired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod ini sudah tamat. Minta kod baharu.'**
+  String get linkCodeCodeExpired;
+
+  /// No description provided for @linkCodePeerUnreachable.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box yang satu lagi tidak dapat dihubungi. Pastikan kedua-dua Box berada di Wi-Fi surau yang sama.'**
+  String get linkCodePeerUnreachable;
+
+  /// No description provided for @linkCodePeerRefused.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box yang satu lagi tidak menerima permintaan itu. Semak dan cuba lagi.'**
+  String get linkCodePeerRefused;
+
+  /// No description provided for @linkCodeBadHello.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box yang menjawab bukan Box dalam kod itu. Pautan tidak diteruskan.'**
+  String get linkCodeBadHello;
+
+  /// No description provided for @linkCodeVersion.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kedua-dua MAXCOM Kiosk Box mesti menjalankan versi yang sama. Kemas kini Box yang lebih lama, kemudian cuba lagi.'**
+  String get linkCodeVersion;
+
+  /// No description provided for @linkCodeBothHaveFollowers.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kedua-dua MAXCOM Kiosk Box sudah mempunyai Box pengikut. Box utama hanya boleh dipautkan dengan Box yang tiada pengikut.'**
+  String get linkCodeBothHaveFollowers;
+
+  /// No description provided for @linkCodeBothNew.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kedua-dua MAXCOM Kiosk Box belum disediakan. Sediakan satu Box dahulu.'**
+  String get linkCodeBothNew;
+
+  /// No description provided for @linkCodeFixedAnswer.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jawapan ini tidak boleh diubah untuk dua MAXCOM Kiosk Box ini.'**
+  String get linkCodeFixedAnswer;
+
+  /// No description provided for @linkCodeKeepNewBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box baharu tiada data untuk dikekalkan.'**
+  String get linkCodeKeepNewBox;
+
+  /// No description provided for @linkCodeFinanceTick.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tandakan bahawa anda faham rekod kewangan tidak digabungkan.'**
+  String get linkCodeFinanceTick;
+
+  /// No description provided for @linkCodeRejected.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan ditolak.'**
+  String get linkCodeRejected;
+
+  /// No description provided for @linkCodeLinking.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan sedang dibuat. Cuba sebentar lagi.'**
+  String get linkCodeLinking;
+
+  /// No description provided for @linkCodeNotFound.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box itu tidak ditemui.'**
+  String get linkCodeNotFound;
+
+  /// No description provided for @linkCodeBadMessage.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jawapan tidak sah. Cuba lagi.'**
+  String get linkCodeBadMessage;
+
+  /// No description provided for @linkCodeUnknown.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan tidak dapat diteruskan. Cuba lagi.'**
+  String get linkCodeUnknown;
+
+  /// No description provided for @linkOutcomeFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan tidak dapat disiapkan. Semak keadaan kedua-dua MAXCOM Kiosk Box, kemudian cuba lagi.'**
+  String get linkOutcomeFailed;
+
+  /// No description provided for @linkOutcomeCancelled.
+  ///
+  /// In ms, this message translates to:
+  /// **'Anda membatalkan pautan. Tiada data diubah.'**
+  String get linkOutcomeCancelled;
+
+  /// No description provided for @linkOutcomeCancelledByPeer.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir MAXCOM Kiosk Box yang satu lagi membatalkan pautan. Tiada data diubah.'**
+  String get linkOutcomeCancelledByPeer;
+
+  /// No description provided for @linkOutcomeRejectedByPeer.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir MAXCOM Kiosk Box yang satu lagi menolak pautan. Tiada data diubah.'**
+  String get linkOutcomeRejectedByPeer;
+
+  /// No description provided for @linkOutcomeExpired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masa tamat sebelum pautan selesai. Tiada data diubah.'**
+  String get linkOutcomeExpired;
+
+  /// No description provided for @linkOutcomeApproveTimeout.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod tidak disetujui dalam masa 2 minit. Tiada data diubah.'**
+  String get linkOutcomeApproveTimeout;
+
+  /// No description provided for @linkOutcomeRestart.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box dimulakan semula semasa pautan. Tiada data diubah; mulakan pautan sekali lagi.'**
+  String get linkOutcomeRestart;
+
+  /// No description provided for @tvsTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin TV dan MAXCOM Kiosk Box'**
+  String get tvsTitle;
+
+  /// No description provided for @tvsIntro.
+  ///
+  /// In ms, this message translates to:
+  /// **'Satu MAXCOM Kiosk Box utama untuk seluruh surau. Tetapan dan kandungan dibuat sekali; setiap TV ikut dalam beberapa saat.'**
+  String get tvsIntro;
+
+  /// No description provided for @tvsCount.
+  ///
+  /// In ms, this message translates to:
+  /// **'{a} daripada {b} skrin bersambung'**
+  String tvsCount(int a, int b);
+
+  /// No description provided for @tvsSectionBoxes.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box'**
+  String get tvsSectionBoxes;
+
+  /// No description provided for @tvsSectionBrowsers.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin pelayar'**
+  String get tvsSectionBrowsers;
+
+  /// No description provided for @tvsMainBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box utama'**
+  String get tvsMainBox;
+
+  /// No description provided for @tvsFollowerBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box pengikut'**
+  String get tvsFollowerBox;
+
+  /// No description provided for @tvsBrowserScreen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin pelayar'**
+  String get tvsBrowserScreen;
+
+  /// No description provided for @tvsRoleLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'{role}, versi {version}'**
+  String tvsRoleLine(String role, String version);
+
+  /// No description provided for @tvsConnected.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bersambung'**
+  String get tvsConnected;
+
+  /// No description provided for @tvsAwaySince.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada hubungan sejak {when}'**
+  String tvsAwaySince(String when);
+
+  /// No description provided for @tvsNeverSeen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Belum pernah bersambung'**
+  String get tvsNeverSeen;
+
+  /// No description provided for @tvsNotSeenSince.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dilihat sejak {date}'**
+  String tvsNotSeenSince(String date);
+
+  /// No description provided for @tvsRemoveStaleBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tanggalkan: MAXCOM Kiosk Box ini dikosongkan, termasuk sandarannya. Jika Box ini dihidupkan semula dan masih mengikut, ia mengosongkan dirinya sendiri.'**
+  String get tvsRemoveStaleBody;
+
+  /// No description provided for @tvsLinkedOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dipautkan {date}'**
+  String tvsLinkedOn(String date);
+
+  /// No description provided for @tvsRemoved.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditanggalkan'**
+  String get tvsRemoved;
+
+  /// No description provided for @tvsRemovedOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ditanggalkan {date}'**
+  String tvsRemovedOn(String date);
+
+  /// No description provided for @tvsOpenSettings.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan TV ini'**
+  String get tvsOpenSettings;
+
+  /// No description provided for @tvsRemove.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tanggalkan'**
+  String get tvsRemove;
+
+  /// No description provided for @tvsRemoveTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tanggalkan {name}?'**
+  String tvsRemoveTitle(String name);
+
+  /// No description provided for @tvsRemoveBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tanggalkan: MAXCOM Kiosk Box ini dikosongkan, termasuk sandarannya.'**
+  String get tvsRemoveBody;
+
+  /// No description provided for @tvsRemovedToast.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} ditanggalkan.'**
+  String tvsRemovedToast(String name);
+
+  /// No description provided for @tvsLinkOther.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautkan MAXCOM Kiosk Box lain'**
+  String get tvsLinkOther;
+
+  /// No description provided for @tvsOlderBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box ini belum menyokong pautan Box. Kemas kini Box ini dahulu.'**
+  String get tvsOlderBox;
+
+  /// No description provided for @tvsEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada skrin untuk dipaparkan.'**
+  String get tvsEmpty;
+
+  /// No description provided for @tvEdTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan TV ini'**
+  String get tvEdTitle;
+
+  /// No description provided for @tvEdFor.
+  ///
+  /// In ms, this message translates to:
+  /// **'Untuk {name} sahaja. Yang lain ikut tetapan surau.'**
+  String tvEdFor(String name);
+
+  /// No description provided for @tvEdName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama TV'**
+  String get tvEdName;
+
+  /// No description provided for @tvEdFollows.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ikut surau'**
+  String get tvEdFollows;
+
+  /// No description provided for @tvEdChanged.
+  ///
+  /// In ms, this message translates to:
+  /// **'Diubah'**
+  String get tvEdChanged;
+
+  /// No description provided for @tvEdReset.
+  ///
+  /// In ms, this message translates to:
+  /// **'Set semula'**
+  String get tvEdReset;
+
+  /// No description provided for @tvEdLiveSection.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran langsung'**
+  String get tvEdLiveSection;
+
+  /// No description provided for @tvEdShow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Papar siaran di TV ini'**
+  String get tvEdShow;
+
+  /// No description provided for @tvEdShowYes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Papar'**
+  String get tvEdShowYes;
+
+  /// No description provided for @tvEdShowNo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak papar'**
+  String get tvEdShowNo;
+
+  /// No description provided for @tvEdShowOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera kuliah dipaparkan'**
+  String get tvEdShowOn;
+
+  /// No description provided for @tvEdShowOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'TV ini kekal pada paparan biasa'**
+  String get tvEdShowOff;
+
+  /// No description provided for @tvEdSound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bunyi siaran'**
+  String get tvEdSound;
+
+  /// No description provided for @tvEdSoundYes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dengan bunyi'**
+  String get tvEdSoundYes;
+
+  /// No description provided for @tvEdSoundNo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tanpa bunyi'**
+  String get tvEdSoundNo;
+
+  /// No description provided for @tvEdSoundOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bunyi dari TV ini'**
+  String get tvEdSoundOn;
+
+  /// No description provided for @tvEdSoundOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar sahaja (elak gema)'**
+  String get tvEdSoundOff;
+
+  /// No description provided for @tvEdVolume.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kelantangan siaran'**
+  String get tvEdVolume;
+
+  /// No description provided for @tvEdDisplay.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paparan'**
+  String get tvEdDisplay;
+
+  /// No description provided for @tvEdTemplate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Templat'**
+  String get tvEdTemplate;
+
+  /// No description provided for @tvEdTemplatePickTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Templat untuk TV ini'**
+  String get tvEdTemplatePickTitle;
+
+  /// No description provided for @tvEdTemplatePickHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih satu untuk TV ini sahaja, atau ikut surau.'**
+  String get tvEdTemplatePickHint;
+
+  /// No description provided for @tvEdLang.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bahasa TV'**
+  String get tvEdLang;
+
+  /// No description provided for @tvEdLangAuto.
+  ///
+  /// In ms, this message translates to:
+  /// **'Automatik'**
+  String get tvEdLangAuto;
+
+  /// No description provided for @tvEdLangMs.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bahasa Melayu'**
+  String get tvEdLangMs;
+
+  /// No description provided for @tvEdLangEn.
+  ///
+  /// In ms, this message translates to:
+  /// **'English'**
+  String get tvEdLangEn;
+
+  /// No description provided for @tvEdLangAr.
+  ///
+  /// In ms, this message translates to:
+  /// **'العربية'**
+  String get tvEdLangAr;
+
+  /// No description provided for @tvEdContent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kandungan'**
+  String get tvEdContent;
+
+  /// No description provided for @tvEdHide.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jenis disembunyi di TV ini'**
+  String get tvEdHide;
+
+  /// No description provided for @tvEdHideNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada; semua jenis dipaparkan'**
+  String get tvEdHideNone;
+
+  /// No description provided for @tvEdHideHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ketik untuk sembunyikan di TV ini. Kandungan masih dipaparkan di TV lain. Waktu solat, azan dan iqamah tidak boleh disembunyikan.'**
+  String get tvEdHideHint;
+
+  /// No description provided for @tvEdSounds.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bunyi TV'**
+  String get tvEdSounds;
+
+  /// No description provided for @tvEdBeeps.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bip waktu solat'**
+  String get tvEdBeeps;
+
+  /// No description provided for @tvEdBeepsSub.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sebelum azan dan iqamah'**
+  String get tvEdBeepsSub;
+
+  /// No description provided for @tvEdAzan.
+  ///
+  /// In ms, this message translates to:
+  /// **'Azan'**
+  String get tvEdAzan;
+
+  /// No description provided for @tvEdAzanSub.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dimainkan di TV ini'**
+  String get tvEdAzanSub;
+
+  /// No description provided for @tvEdAzanOffSub.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dimainkan (TV berdekatan sudah memainkannya)'**
+  String get tvEdAzanOffSub;
+
+  /// No description provided for @tvEdTilawah.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tilawah'**
+  String get tvEdTilawah;
+
+  /// No description provided for @tvEdTilawahSub.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sebelum Subuh dan Jumaat'**
+  String get tvEdTilawahSub;
+
+  /// No description provided for @tvEdOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hidup'**
+  String get tvEdOn;
+
+  /// No description provided for @tvEdOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mati'**
+  String get tvEdOff;
+
+  /// No description provided for @tvEdSaved.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan TV disimpan.'**
+  String get tvEdSaved;
+
+  /// No description provided for @tvKindKuliah.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kuliah'**
+  String get tvKindKuliah;
+
+  /// No description provided for @tvKindPengumuman.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengumuman'**
+  String get tvKindPengumuman;
+
+  /// No description provided for @tvKindTicker.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teks bergerak'**
+  String get tvKindTicker;
+
+  /// No description provided for @tvKindPoster.
+  ///
+  /// In ms, this message translates to:
+  /// **'Poster'**
+  String get tvKindPoster;
+
+  /// No description provided for @tvKindVideo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video'**
+  String get tvKindVideo;
+
+  /// No description provided for @tvKindProgramKhas.
+  ///
+  /// In ms, this message translates to:
+  /// **'Program khas'**
+  String get tvKindProgramKhas;
+
+  /// No description provided for @tvKindTakwim.
+  ///
+  /// In ms, this message translates to:
+  /// **'Takwim'**
+  String get tvKindTakwim;
+
+  /// No description provided for @tvKindHadis.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hadis'**
+  String get tvKindHadis;
+
+  /// No description provided for @tvKindWorldTime.
+  ///
+  /// In ms, this message translates to:
+  /// **'Waktu dunia'**
+  String get tvKindWorldTime;
+
+  /// No description provided for @tvKindTugasan.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tugasan'**
+  String get tvKindTugasan;
+
+  /// No description provided for @tvKindZikir.
+  ///
+  /// In ms, this message translates to:
+  /// **'Zikir'**
+  String get tvKindZikir;
+
+  /// No description provided for @tvKindTabung.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tabung surau'**
+  String get tvKindTabung;
+
+  /// No description provided for @backupLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sandaran sebelum pautan: {time}, {size}'**
+  String backupLine(String time, String size);
+
+  /// No description provided for @backupDrop.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buang sandaran'**
+  String get backupDrop;
+
+  /// No description provided for @backupDropTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buang sandaran?'**
+  String get backupDropTitle;
+
+  /// No description provided for @backupDropBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Selepas ini Box ini tidak boleh kembali ke data {date}.'**
+  String backupDropBody(String date);
+
+  /// No description provided for @backupWordDrop.
+  ///
+  /// In ms, this message translates to:
+  /// **'BUANG'**
+  String get backupWordDrop;
+
+  /// No description provided for @backupConfirmLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Taip {word} untuk mengesahkan'**
+  String backupConfirmLabel(String word);
+
+  /// No description provided for @backupKeptLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan ini boleh ditukar hingga {date}'**
+  String backupKeptLine(String date);
+
+  /// No description provided for @backupKeptDrop.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buang data lama'**
+  String get backupKeptDrop;
+
+  /// No description provided for @backupKeptDropTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buang data lama?'**
+  String get backupKeptDropTitle;
+
+  /// No description provided for @backupKeptDropBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data lama ({size}) dibuang dan tidak boleh dipulihkan.'**
+  String backupKeptDropBody(String size);
+
+  /// No description provided for @backupRestore.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembali ke data sebelum dipautkan'**
+  String get backupRestore;
+
+  /// No description provided for @backupRestoreTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembali ke data sebelum dipautkan?'**
+  String get backupRestoreTitle;
+
+  /// No description provided for @backupRestoreBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data kembali ke keadaan {date}. Box ini dimulakan semula. Telefon Pentadbir terus berfungsi; telefon lain menyertainya sekali lagi dengan kod QR daripada Pentadbir.'**
+  String backupRestoreBody(String date);
+
+  /// No description provided for @backupWordRestore.
+  ///
+  /// In ms, this message translates to:
+  /// **'KEMBALI'**
+  String get backupWordRestore;
+
+  /// No description provided for @backupDroppedToast.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sandaran dibuang.'**
+  String get backupDroppedToast;
+
+  /// No description provided for @backupKeptDroppedToast.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data lama dibuang.'**
+  String get backupKeptDroppedToast;
+
+  /// No description provided for @backupRestoredToast.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini dimulakan semula. Setiap telefon perlu menyertainya sekali lagi.'**
+  String get backupRestoredToast;
+
+  /// No description provided for @linkCodeHasFollowers.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini masih mempunyai Box pengikut. Tanggalkan mereka dahulu.'**
+  String get linkCodeHasFollowers;
+
+  /// No description provided for @linkCodeKeptExists.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data lama masih ada. Buang data lama dahulu.'**
+  String get linkCodeKeptExists;
+
+  /// No description provided for @linkCodeOtherVolume.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sandaran berada di storan lain dan tidak boleh dipulihkan di sini.'**
+  String get linkCodeOtherVolume;
+
+  /// No description provided for @linkCodeConfirmRequired.
+  ///
+  /// In ms, this message translates to:
+  /// **'Taip perkataan pengesahan dahulu.'**
+  String get linkCodeConfirmRequired;
+
+  /// No description provided for @linkCodeNoBackup.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada sandaran lagi.'**
+  String get linkCodeNoBackup;
+
+  /// No description provided for @linkCodeKeptData.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data lama disimpan hingga {date}. Buang data lama untuk memaut sekarang.'**
+  String linkCodeKeptData(String date);
+
+  /// No description provided for @linkCodeKeptDataNoDate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data lama masih disimpan. Buang data lama untuk memaut sekarang.'**
+  String get linkCodeKeptDataNoDate;
+
+  /// No description provided for @liveViewersTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'TV yang memaparkan siaran'**
+  String get liveViewersTitle;
+
+  /// No description provided for @liveViewerPlaying.
+  ///
+  /// In ms, this message translates to:
+  /// **'memaparkan'**
+  String get liveViewerPlaying;
+
+  /// No description provided for @liveViewerConnecting.
+  ///
+  /// In ms, this message translates to:
+  /// **'menyambung'**
+  String get liveViewerConnecting;
+
+  /// No description provided for @liveViewerOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'tidak memaparkan siaran'**
+  String get liveViewerOff;
+
+  /// No description provided for @peopleTabScreens.
+  ///
+  /// In ms, this message translates to:
+  /// **'TV dan Box'**
+  String get peopleTabScreens;
+
+  /// No description provided for @linkPeopleTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pengguna selepas pautan'**
+  String get linkPeopleTitle;
+
+  /// No description provided for @linkPeopleAdded.
+  ///
+  /// In ms, this message translates to:
+  /// **'{count, plural, =1{1 orang ditambah daripada {box}} other{{count} orang ditambah daripada {box}}}'**
+  String linkPeopleAdded(int count, String box);
+
+  /// No description provided for @linkPeopleAddedNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada orang baharu daripada {box} untuk ditambah.'**
+  String linkPeopleAddedNone(String box);
+
+  /// No description provided for @linkPeopleSameTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sama (nombor telefon sama)'**
+  String get linkPeopleSameTitle;
+
+  /// No description provided for @linkPeopleSameHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mereka ada di kedua-dua Box dan hanya disenaraikan sekali. Peranan di Box yang dikekalkan terus berlaku.'**
+  String get linkPeopleSameHint;
+
+  /// No description provided for @linkPeopleRolesTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranan yang berbeza'**
+  String get linkPeopleRolesTitle;
+
+  /// No description provided for @linkPeopleRoleHead.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name}, telefon berakhir {phone4}'**
+  String linkPeopleRoleHead(String name, String phone4);
+
+  /// No description provided for @linkPeopleRoleStays.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kekal: {roles}'**
+  String linkPeopleRoleStays(String roles);
+
+  /// No description provided for @linkPeopleRoleOther.
+  ///
+  /// In ms, this message translates to:
+  /// **'Di {box}: {roles}'**
+  String linkPeopleRoleOther(String box, String roles);
+
+  /// No description provided for @linkPeopleRoleAddLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tambah satu peranan daripada {box}:'**
+  String linkPeopleRoleAddLabel(String box);
+
+  /// No description provided for @linkPeopleRoleChangeNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan ini membuat semakan baharu. Persetujuan kedua-dua pentadbir dibatalkan dan perlu diberi semula.'**
+  String get linkPeopleRoleChangeNote;
+
+  /// No description provided for @linkPeopleNoRole.
+  ///
+  /// In ms, this message translates to:
+  /// **'tiada peranan'**
+  String get linkPeopleNoRole;
+
+  /// No description provided for @linkPeopleNamesTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama yang sama'**
+  String get linkPeopleNamesTitle;
+
+  /// No description provided for @linkPeopleNameAsk.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} di {box} ada nama yang sama dengan {keptName}, tetapi nombor telefonnya tidak sepadan.'**
+  String linkPeopleNameAsk(String name, String box, String keptName);
+
+  /// No description provided for @linkPeopleSameYes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Orang yang sama'**
+  String get linkPeopleSameYes;
+
+  /// No description provided for @linkPeopleSameNo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Orang berbeza'**
+  String get linkPeopleSameNo;
+
+  /// No description provided for @linkPeopleAdminsTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir selepas pautan'**
+  String get linkPeopleAdminsTitle;
+
+  /// No description provided for @linkPeopleAdminsNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada pentadbir'**
+  String get linkPeopleAdminsNone;
+
+  /// No description provided for @linkPeopleTickets.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n, plural, =0{Tiada telefon akan diminta menyambung ke Box utama} other{{n} telefon akan diminta menyambung ke Box utama}}'**
+  String linkPeopleTickets(int n);
+
+  /// No description provided for @linkCodePeopleAnswer.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan tentang pengguna tidak lagi sesuai dengan senarai. Lihat semula bahagian Pengguna di atas.'**
+  String get linkCodePeopleAnswer;
+
+  /// No description provided for @moveAskTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Surau anda kini diurus dari MAXCOM Kiosk Box utama {master}. Sambung sekarang?'**
+  String moveAskTitle(String master);
+
+  /// No description provided for @moveAskBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Satu ketik, kemudian tetapkan PIN baharu. Anda tidak perlu kod sertai.'**
+  String get moveAskBody;
+
+  /// No description provided for @moveConnect.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sambung sekarang'**
+  String get moveConnect;
+
+  /// No description provided for @moveLater.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kemudian'**
+  String get moveLater;
+
+  /// No description provided for @moveChecking.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menyemak Box anda'**
+  String get moveChecking;
+
+  /// No description provided for @movePinBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapkan PIN baharu untuk {master}. PIN lama tidak dibawa.'**
+  String movePinBody(String master);
+
+  /// No description provided for @moveWorking.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menyambung ke {master}'**
+  String moveWorking(String master);
+
+  /// No description provided for @moveDone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Anda kini disambungkan ke {master}.'**
+  String moveDone(String master);
+
+  /// No description provided for @moveDoneButton.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teruskan'**
+  String get moveDoneButton;
+
+  /// No description provided for @moveNeedCodeTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Perlu kod sertai'**
+  String get moveNeedCodeTitle;
+
+  /// No description provided for @moveNeedCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Minta kod sertai daripada Pentadbir {master}.'**
+  String moveNeedCode(String master);
+
+  /// No description provided for @moveNeedCodeNoName.
+  ///
+  /// In ms, this message translates to:
+  /// **'Minta kod sertai daripada Pentadbir.'**
+  String get moveNeedCodeNoName;
+
+  /// No description provided for @moveAway.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka aplikasi di Wi-Fi surau sekali untuk menyambung ke Box utama'**
+  String get moveAway;
+
+  /// No description provided for @moveTooMany.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terlalu banyak percubaan. Cuba lagi sebentar lagi.'**
+  String get moveTooMany;
+
+  /// No description provided for @moveWrongBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box yang menjawab bukan Box utama yang dinyatakan. Tiada apa yang diubah.'**
+  String get moveWrongBox;
+
+  /// No description provided for @moveBadPointer.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jawapan Box lama tidak dapat dibaca. Cuba lagi atau minta kod sertai daripada Pentadbir.'**
+  String get moveBadPointer;
+
+  /// No description provided for @moveRetry.
+  ///
+  /// In ms, this message translates to:
+  /// **'Cuba lagi'**
+  String get moveRetry;
+
+  /// No description provided for @moveJoinScan.
+  ///
+  /// In ms, this message translates to:
+  /// **'Imbas kod sertai'**
+  String get moveJoinScan;
+
+  /// No description provided for @moveJoinPaste.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tampal kod'**
+  String get moveJoinPaste;
+
+  /// No description provided for @moveJoinHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir Box utama membuat kod sertai di Pengguna & peranti. Imbas kod QR itu atau tampal teksnya.'**
+  String get moveJoinHint;
+
+  /// No description provided for @moveJoinCodeLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod sertai'**
+  String get moveJoinCodeLabel;
+
+  /// No description provided for @moveBannerTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sambung ke Box utama'**
+  String get moveBannerTitle;
+
+  /// No description provided for @moveBannerBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Surau anda kini diurus dari Box utama. Sambung untuk terus menggunakan aplikasi.'**
+  String get moveBannerBody;
+
+  /// No description provided for @openByNameTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka melalui nama MAXCOM'**
+  String get openByNameTitle;
+
+  /// No description provided for @openByNameBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Alamat IP MAXCOM boleh berubah. Jika iPad atau komputer ini didaftarkan melalui alamat IP, ia perlu didaftarkan semula apabila alamat itu berubah. Buka {origin} dan imbas kod ini sekali lagi di sana.'**
+  String openByNameBody(String origin);
+
+  /// No description provided for @openByNameButton.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka {host}'**
+  String openByNameButton(String host);
+
+  /// No description provided for @openByNameKeepIp.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teruskan dengan alamat IP'**
+  String get openByNameKeepIp;
+
+  /// No description provided for @openByNameDeviceBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti ini didaftarkan melalui alamat IP. Jika alamat MAXCOM berubah, pendaftaran ini tidak dapat digunakan lagi. Untuk kekal, buka {origin} dan daftarkan peranti ini di sana.'**
+  String openByNameDeviceBody(String origin);
+
+  /// No description provided for @liveDestUnconfirmed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Belum dapat disahkan dengan MAXCOM'**
+  String get liveDestUnconfirmed;
+
+  /// No description provided for @liveDestSaving.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menyimpan pilihan'**
+  String get liveDestSaving;
+
+  /// No description provided for @liveDestPerBoxNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan ini disimpan untuk MAXCOM Kiosk Box ini sahaja. Setiap MAXCOM Kiosk Box menggunakan saluran YouTube sendiri.'**
+  String get liveDestPerBoxNote;
+
+  /// No description provided for @liveDestRecUnavailable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman: Tidak tersedia'**
+  String get liveDestRecUnavailable;
+
+  /// No description provided for @liveMineTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran anda masih berjalan'**
+  String get liveMineTitle;
+
+  /// No description provided for @liveMineResume.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sambung semula'**
+  String get liveMineResume;
+
+  /// No description provided for @liveMineStillSending.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran masih dihantar dari telefon ini'**
+  String get liveMineStillSending;
+
+  /// No description provided for @liveStoppedCameraLost.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran dihentikan kerana kamera luaran terputus'**
+  String get liveStoppedCameraLost;
+
+  /// No description provided for @liveStoppedByBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran dihentikan oleh MAXCOM'**
+  String get liveStoppedByBox;
+
+  /// No description provided for @liveStoppedByAdmin.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran dihentikan oleh pentadbir'**
+  String get liveStoppedByAdmin;
+
+  /// No description provided for @liveVideoPathLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video diambil oleh'**
+  String get liveVideoPathLabel;
+
+  /// No description provided for @liveVideoPathDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Telefon ini'**
+  String get liveVideoPathDevice;
+
+  /// No description provided for @liveVideoPathBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box'**
+  String get liveVideoPathBox;
+
+  /// No description provided for @liveVideoPathBoxNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Telefon hanya mengawal siaran. Rakaman pada telefon tidak tersedia.'**
+  String get liveVideoPathBoxNote;
+
+  /// No description provided for @liveCamCtlTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kawalan kamera'**
+  String get liveCamCtlTitle;
+
+  /// No description provided for @liveCamCtlBrightness.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kecerahan'**
+  String get liveCamCtlBrightness;
+
+  /// No description provided for @liveCamCtlBrightnessDown.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kurangkan kecerahan'**
+  String get liveCamCtlBrightnessDown;
+
+  /// No description provided for @liveCamCtlBrightnessUp.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tambah kecerahan'**
+  String get liveCamCtlBrightnessUp;
+
+  /// No description provided for @liveCamCtlPosition.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kedudukan'**
+  String get liveCamCtlPosition;
+
+  /// No description provided for @liveCamCtlHome.
+  ///
+  /// In ms, this message translates to:
+  /// **'Asal'**
+  String get liveCamCtlHome;
+
+  /// No description provided for @liveCamCtlTracking.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jejak automatik'**
+  String get liveCamCtlTracking;
+
+  /// No description provided for @liveCamCtlSent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Arahan dihantar ke kamera'**
+  String get liveCamCtlSent;
+
+  /// No description provided for @liveCamCtlConfirmed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera menjawab'**
+  String get liveCamCtlConfirmed;
+
+  /// No description provided for @liveCamCtlFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Arahan tidak sampai ke kamera'**
+  String get liveCamCtlFailed;
+
+  /// No description provided for @liveCamCtlAllow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Benarkan kawalan kamera'**
+  String get liveCamCtlAllow;
+
+  /// No description provided for @liveCamCtlAllowNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hanya untuk kamera yang menyokong kawalan melalui rangkaian.'**
+  String get liveCamCtlAllowNote;
+
+  /// No description provided for @liveCamCtlApply.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terapkan tetapan kamera'**
+  String get liveCamCtlApply;
+
+  /// No description provided for @liveCamCtlFocus.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fokus'**
+  String get liveCamCtlFocus;
+
+  /// No description provided for @liveCamCtlFocusContinuous.
+  ///
+  /// In ms, this message translates to:
+  /// **'Berterusan'**
+  String get liveCamCtlFocusContinuous;
+
+  /// No description provided for @liveCamCtlFocusSingle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sekali'**
+  String get liveCamCtlFocusSingle;
+
+  /// No description provided for @liveCamCtlFocusManual.
+  ///
+  /// In ms, this message translates to:
+  /// **'Manual'**
+  String get liveCamCtlFocusManual;
+
+  /// No description provided for @liveCamCtlTrackingOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tutup'**
+  String get liveCamCtlTrackingOff;
+
+  /// No description provided for @liveCamCtlTrackingHuman.
+  ///
+  /// In ms, this message translates to:
+  /// **'Orang'**
+  String get liveCamCtlTrackingHuman;
+
+  /// No description provided for @liveCamCtlApplyOnLive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terapkan semasa siaran bermula'**
+  String get liveCamCtlApplyOnLive;
+
+  /// No description provided for @liveCamCtlProfileTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan kamera'**
+  String get liveCamCtlProfileTitle;
+
+  /// No description provided for @liveCameraHeavyWarn.
+  ///
+  /// In ms, this message translates to:
+  /// **'Strim kamera terlalu besar untuk YouTube. Turunkan kepada 720p, 3 hingga 4 Mbps pada kamera.'**
+  String get liveCameraHeavyWarn;
+
+  /// No description provided for @liveRecNoBoxPullStart.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakam tidak ditawarkan kerana video diambil oleh MAXCOM Kiosk Box. Telefon ini tidak menerima gambar kamera, jadi tiada apa yang boleh dirakam pada telefon. Untuk merakam, pilih Video diambil oleh: Telefon ini.'**
+  String get liveRecNoBoxPullStart;
+
+  /// No description provided for @liveRecNoBoxPullSummary.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran ini tidak dirakam pada telefon kerana video diambil oleh MAXCOM Kiosk Box, bukan oleh telefon ini. Jika YouTube dipilih, salinan siaran ada di YouTube.'**
+  String get liveRecNoBoxPullSummary;
+
+  /// No description provided for @liveCameraInUseBy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera sedang digunakan oleh {device} sejak {since}.'**
+  String liveCameraInUseBy(String device, String since);
+
+  /// No description provided for @liveCameraInUseByBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera sedang digunakan oleh MAXCOM Kiosk Box sejak {since}.'**
+  String liveCameraInUseByBox(String since);
+
+  /// No description provided for @liveCameraJoinNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Telefon ini memaparkan gambar yang sama melalui MAXCOM dan tidak menyambung terus ke kamera.'**
+  String get liveCameraJoinNote;
+
+  /// No description provided for @errcCameraInUse.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera sedang digunakan oleh peranti lain. Gambar dikongsi melalui MAXCOM.'**
+  String get errcCameraInUse;
+
+  /// No description provided for @liveWarnWeakPhoneWifi.
+  ///
+  /// In ms, this message translates to:
+  /// **'Isyarat Wi-Fi telefon lemah. Gambar mungkin tersekat.'**
+  String get liveWarnWeakPhoneWifi;
+
+  /// No description provided for @errcResumeMismatch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran yang sedang berjalan tidak sama dengan pilihan ini. Hentikan siaran itu dahulu, kemudian mula semula.'**
+  String get errcResumeMismatch;
+
+  /// No description provided for @errcYoutubeLiveNotEnabled.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran langsung belum diaktifkan pada saluran YouTube ini.'**
+  String get errcYoutubeLiveNotEnabled;
+
+  /// No description provided for @errcBoxClockWrong.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jam MAXCOM tidak tepat. Betulkan jam dan cuba lagi.'**
+  String get errcBoxClockWrong;
+
+  /// No description provided for @errcYoutubeBusyOtherBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube sedang digunakan oleh MAXCOM Kiosk Box lain.'**
+  String get errcYoutubeBusyOtherBox;
+
+  /// No description provided for @errcTooManyViewers.
+  ///
+  /// In ms, this message translates to:
+  /// **'Had paparan siaran langsung telah dicapai'**
+  String get errcTooManyViewers;
+
+  /// No description provided for @errcYoutubeBroadcastOpen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran YouTube belum ditutup. Cuba lagi dalam beberapa minit.'**
+  String get errcYoutubeBroadcastOpen;
+
+  /// No description provided for @errcAlreadyUploading.
+  ///
+  /// In ms, this message translates to:
+  /// **'Rakaman siaran ini sedang dimuat naik dari peranti lain.'**
+  String get errcAlreadyUploading;
+
+  /// No description provided for @liveNotifStop.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hentikan siaran'**
+  String get liveNotifStop;
+
+  /// No description provided for @syncBoxFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dapat menyelaras dengan MAXCOM'**
+  String get syncBoxFailed;
+
+  /// No description provided for @settingsChangedElsewhereNow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tetapan ini baru diubah pada peranti lain'**
+  String get settingsChangedElsewhereNow;
+
+  /// No description provided for @settingsReload.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat semula'**
+  String get settingsReload;
+
+  /// No description provided for @settingsMaybeStale.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mungkin belum terkini'**
+  String get settingsMaybeStale;
+
+  /// No description provided for @cameraResetBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan lanjutan akan dikembalikan kepada lalai. Kamera kekal dihidupkan.'**
+  String get cameraResetBody;
+
+  /// No description provided for @cameraFoundByPort.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti yang menjawab pada port kamera'**
+  String get cameraFoundByPort;
+
+  /// No description provided for @uploadReasonNoBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dapat menghubungi MAXCOM'**
+  String get uploadReasonNoBox;
+
+  /// No description provided for @uploadAwaitingConfirm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu pengesahan'**
+  String get uploadAwaitingConfirm;
+
+  /// No description provided for @uploadErrorEmptyFile.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail rakaman kosong'**
+  String get uploadErrorEmptyFile;
+
+  /// No description provided for @uploadEarlierEntry.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik rakaman terdahulu'**
+  String get uploadEarlierEntry;
+
+  /// No description provided for @liveGapReplaceAsk.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran tadi terputus selama {minutes} minit. Gantikan dengan rakaman penuh?'**
+  String liveGapReplaceAsk(int minutes);
+
+  /// No description provided for @liveGapReplaceYes.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ganti'**
+  String get liveGapReplaceYes;
+
+  /// No description provided for @liveGapReplaceNo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak'**
+  String get liveGapReplaceNo;
+
+  /// No description provided for @liveYoutubeSignOutOtherBoxes.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM Kiosk Box lain yang menggunakan akaun YouTube ini perlu disambung semula.'**
+  String get liveYoutubeSignOutOtherBoxes;
+
+  /// No description provided for @errcYoutubeClientRefused.
+  ///
+  /// In ms, this message translates to:
+  /// **'Fail klien YouTube ditolak oleh Google. Hubungi Pentadbir MAXCOM.'**
+  String get errcYoutubeClientRefused;
+
+  /// No description provided for @errcUploadAbandoned.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik ini telah dibatalkan'**
+  String get errcUploadAbandoned;
+
+  /// No description provided for @liveStoppedUnattended.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran dihentikan kerana sambungan telefon ke MAXCOM terputus lebih 10 minit'**
+  String get liveStoppedUnattended;
+
+  /// No description provided for @liveWarnCameraH265.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera menghantar video H.265, yang tidak dapat disiarkan melalui MAXCOM. Tukar kamera kepada H.264.'**
+  String get liveWarnCameraH265;
+
+  /// No description provided for @unlinkTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Putuskan pautan'**
+  String get unlinkTitle;
+
+  /// No description provided for @unlinkSheetTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Putuskan pautan: {name}'**
+  String unlinkSheetTitle(String name);
+
+  /// No description provided for @unlinkSheetLineFollower.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini akan berjalan sendiri semula. Pilih data yang digunakan selepas ini.'**
+  String get unlinkSheetLineFollower;
+
+  /// No description provided for @unlinkSheetLineMaster.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} akan berjalan sendiri. Pilih data yang digunakan oleh Box ini selepas ini.'**
+  String unlinkSheetLineMaster(String name);
+
+  /// No description provided for @unlinkEligibleAny.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada Pentadbir lama {name} yang masih aktif. Anda dijadikan Pentadbir {name}.'**
+  String unlinkEligibleAny(String name);
+
+  /// No description provided for @unlinkPhoneNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Selepas ini telefon ini meninggalkan Box utama dan menyertai {name}. Anda menetapkan PIN baharu di sana.'**
+  String unlinkPhoneNote(String name);
+
+  /// No description provided for @unlinkAnsweredBy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dijawab oleh {name}'**
+  String unlinkAnsweredBy(String name);
+
+  /// No description provided for @unlinkChoiceBack.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembali ke data sebelum dipautkan (sandaran {date})'**
+  String unlinkChoiceBack(String date);
+
+  /// No description provided for @unlinkChoiceBackNoDate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembali ke data sebelum dipautkan'**
+  String get unlinkChoiceBackNoDate;
+
+  /// No description provided for @unlinkChoiceBackNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini kembali seperti pada tarikh itu. Perubahan selepas itu tiada pada Box ini.'**
+  String get unlinkChoiceBackNote;
+
+  /// No description provided for @unlinkChoiceCarry.
+  ///
+  /// In ms, this message translates to:
+  /// **'Teruskan dengan data sekarang secara berasingan'**
+  String get unlinkChoiceCarry;
+
+  /// No description provided for @unlinkChoiceCarryNoteFollower.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini menyimpan kandungan dan tetapan sekarang dan menjadi surau berasingan.'**
+  String get unlinkChoiceCarryNoteFollower;
+
+  /// No description provided for @unlinkChoiceCarryNoteMaster.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini menyimpan data sekarang. Tiada apa-apa yang berubah pada Box ini.'**
+  String get unlinkChoiceCarryNoteMaster;
+
+  /// No description provided for @unlinkChoiceEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kosongkan Box ini (kembali ke skrin persediaan)'**
+  String get unlinkChoiceEmpty;
+
+  /// No description provided for @unlinkChoiceEmptyNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini dikosongkan dan bermula semula di skrin persediaan.'**
+  String get unlinkChoiceEmptyNote;
+
+  /// No description provided for @unlinkNumChanges.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} perubahan sejak {date} tiada pada Box ini selepas ini.'**
+  String unlinkNumChanges(int n, String date);
+
+  /// No description provided for @unlinkNumNoChanges.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada perubahan sejak sandaran dibuat.'**
+  String get unlinkNumNoChanges;
+
+  /// No description provided for @unlinkNumKept7.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data sekarang disimpan 7 hari lagi sebelum dibuang.'**
+  String get unlinkNumKept7;
+
+  /// No description provided for @unlinkNumPeopleLead.
+  ///
+  /// In ms, this message translates to:
+  /// **'Senarai pengguna kembali seperti pada {date}.'**
+  String unlinkNumPeopleLead(String date);
+
+  /// No description provided for @unlinkNumPeopleBack.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} orang yang dibuang selepas itu akan kembali: {names}.'**
+  String unlinkNumPeopleBack(int n, String names);
+
+  /// No description provided for @unlinkNumPeopleAbsent.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} orang yang ditambah selepas itu tiada: {names}.'**
+  String unlinkNumPeopleAbsent(int n, String names);
+
+  /// No description provided for @unlinkNumFinance.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} rekod kewangan kekal di Box utama. Box ini bermula dengan lejar kosong.'**
+  String unlinkNumFinance(int n);
+
+  /// No description provided for @unlinkTickLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Saya faham rekod kewangan kekal di Box utama.'**
+  String get unlinkTickLabel;
+
+  /// No description provided for @unlinkNumVideos.
+  ///
+  /// In ms, this message translates to:
+  /// **'{n} video tidak muat dan tidak disalin:'**
+  String unlinkNumVideos(int n);
+
+  /// No description provided for @unlinkVideoLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'{title} ({size})'**
+  String unlinkVideoLine(String title, String size);
+
+  /// No description provided for @unlinkRemovePeople.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buang pengguna yang datang dari {name} ({n} orang)'**
+  String unlinkRemovePeople(String name, int n);
+
+  /// No description provided for @unlinkYoutubeKept.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: Box ini mengekalkan log masuk yang digunakannya.'**
+  String get unlinkYoutubeKept;
+
+  /// No description provided for @unlinkYoutubeReturns.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: log masuk dalam sandaran kembali ke Box ini.'**
+  String get unlinkYoutubeReturns;
+
+  /// No description provided for @unlinkYoutubeSignIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: log masuk sekali lagi di Box ini.'**
+  String get unlinkYoutubeSignIn;
+
+  /// No description provided for @unlinkYoutubeNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube: tiada log masuk. Log masuk sendiri di Box ini (kira-kira seminit).'**
+  String get unlinkYoutubeNone;
+
+  /// No description provided for @unlinkAgree.
+  ///
+  /// In ms, this message translates to:
+  /// **'Setuju'**
+  String get unlinkAgree;
+
+  /// No description provided for @unlinkChangeAnswer.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ubah jawapan'**
+  String get unlinkChangeAnswer;
+
+  /// No description provided for @unlinkConfirmTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sahkan pilihan ini'**
+  String get unlinkConfirmTitle;
+
+  /// No description provided for @unlinkConfirmBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan ini meninggalkan perubahan di belakang. Data yang ditinggalkan disimpan 7 hari sebelum dibuang.'**
+  String get unlinkConfirmBody;
+
+  /// No description provided for @unlinkAgreePinBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masukkan PIN anda untuk bersetuju.'**
+  String get unlinkAgreePinBody;
+
+  /// No description provided for @unlinkWord.
+  ///
+  /// In ms, this message translates to:
+  /// **'PUTUS'**
+  String get unlinkWord;
+
+  /// No description provided for @unlinkSideFollower.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box pengikut'**
+  String get unlinkSideFollower;
+
+  /// No description provided for @unlinkSideMaster.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box utama'**
+  String get unlinkSideMaster;
+
+  /// No description provided for @unlinkStartBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Setiap MAXCOM Kiosk Box bertanya Pentadbirnya sendiri apa yang berlaku kepada datanya. Tiada apa-apa berubah sehingga kedua-duanya bersetuju.'**
+  String get unlinkStartBody;
+
+  /// No description provided for @unlinkStartPhoneNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir yang menjawab untuk {name} meninggalkan Box utama dengan telefonnya dan menyertai {name}.'**
+  String unlinkStartPhoneNote(String name);
+
+  /// No description provided for @unlinkStartTimeNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jika tiada jawapan dalam 20 minit, tiada apa-apa berubah dan pautan kekal.'**
+  String get unlinkStartTimeNote;
+
+  /// No description provided for @unlinkStartButton.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mula'**
+  String get unlinkStartButton;
+
+  /// No description provided for @unlinkStartPinBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masukkan PIN anda untuk memulakan.'**
+  String get unlinkStartPinBody;
+
+  /// No description provided for @unlinkWaitingTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu pentadbir yang satu lagi'**
+  String get unlinkWaitingTitle;
+
+  /// No description provided for @unlinkWaitingBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jawapan anda disimpan. Pautan diputuskan selepas pentadbir yang satu lagi bersetuju. Tiada apa-apa berubah sebelum itu.'**
+  String get unlinkWaitingBody;
+
+  /// No description provided for @unlinkWaitingOther.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pentadbir lain menjawab di telefonnya. Tiada apa-apa berubah sebelum semua bersetuju.'**
+  String get unlinkWaitingOther;
+
+  /// No description provided for @unlinkProgressTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan sedang diputuskan'**
+  String get unlinkProgressTitle;
+
+  /// No description provided for @unlinkProgressStarting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kerja sedang bermula'**
+  String get unlinkProgressStarting;
+
+  /// No description provided for @unlinkProgressNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jangan matikan kuasa kedua-dua MAXCOM Kiosk Box sehingga selesai.'**
+  String get unlinkProgressNote;
+
+  /// No description provided for @unlinkStepCopy.
+  ///
+  /// In ms, this message translates to:
+  /// **'menyalin data untuk Box pengikut'**
+  String get unlinkStepCopy;
+
+  /// No description provided for @unlinkStepBack.
+  ///
+  /// In ms, this message translates to:
+  /// **'mengembalikan data sebelum dipautkan'**
+  String get unlinkStepBack;
+
+  /// No description provided for @unlinkStepCarryOn.
+  ///
+  /// In ms, this message translates to:
+  /// **'menyimpan data sekarang'**
+  String get unlinkStepCarryOn;
+
+  /// No description provided for @unlinkStepEmpty.
+  ///
+  /// In ms, this message translates to:
+  /// **'mengosongkan Box'**
+  String get unlinkStepEmpty;
+
+  /// No description provided for @unlinkStepJoin.
+  ///
+  /// In ms, this message translates to:
+  /// **'menunggu telefon menyertai Box pengikut'**
+  String get unlinkStepJoin;
+
+  /// No description provided for @unlinkJoinTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sambung ke {name}'**
+  String unlinkJoinTitle(String name);
+
+  /// No description provided for @unlinkJoinBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Telefon ini kini milik {name}. Tetapkan PIN baharu untuk menyertainya. Pautan selesai diputuskan selepas itu.'**
+  String unlinkJoinBody(String name);
+
+  /// No description provided for @unlinkJoinWaitTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu telefon Pentadbir {name}'**
+  String unlinkJoinWaitTitle(String name);
+
+  /// No description provided for @unlinkJoinWaitBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan selesai diputuskan selepas Pentadbir menyertai Box itu dengan telefonnya dan menetapkan PIN. Box itu terus berjalan sendiri sementara itu.'**
+  String get unlinkJoinWaitBody;
+
+  /// No description provided for @unlinkDoneTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan diputuskan'**
+  String get unlinkDoneTitle;
+
+  /// No description provided for @unlinkDoneBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} kini berjalan sendiri.'**
+  String unlinkDoneBody(String name);
+
+  /// No description provided for @unlinkFailedTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pautan tidak diputuskan'**
+  String get unlinkFailedTitle;
+
+  /// No description provided for @unlinkKeptSection.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data lama selepas pautan diputuskan'**
+  String get unlinkKeptSection;
+
+  /// No description provided for @unlinkKeptNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada data lama yang disimpan.'**
+  String get unlinkKeptNone;
+
+  /// No description provided for @unlinkKeptMasterRow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box utama, selepas {name} keluar'**
+  String unlinkKeptMasterRow(String name);
+
+  /// No description provided for @unlinkKeptFollowerRow.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name}'**
+  String unlinkKeptFollowerRow(String name);
+
+  /// No description provided for @unlinkKeptChosenBack.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan: kembali ke data sebelum dipautkan'**
+  String get unlinkKeptChosenBack;
+
+  /// No description provided for @unlinkKeptChosenCarry.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan: teruskan dengan data sekarang'**
+  String get unlinkKeptChosenCarry;
+
+  /// No description provided for @unlinkSwitch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar pilihan'**
+  String get unlinkSwitch;
+
+  /// No description provided for @unlinkSwitchTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar pilihan?'**
+  String get unlinkSwitchTitle;
+
+  /// No description provided for @unlinkSwitchBodyToBack.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini kembali ke data sebelum dipautkan. Data sekarang disimpan sehingga {date}.'**
+  String unlinkSwitchBodyToBack(String date);
+
+  /// No description provided for @unlinkSwitchBodyToCarry.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini meneruskan dengan data sekarang. Sandaran disimpan sehingga {date}.'**
+  String unlinkSwitchBodyToCarry(String date);
+
+  /// No description provided for @unlinkSwitchedToast.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan ditukar. Box ini sedang bekerja.'**
+  String get unlinkSwitchedToast;
+
+  /// No description provided for @unlinkDropBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data lama dibuang dan tidak boleh dipulihkan.'**
+  String get unlinkDropBody;
+
+  /// No description provided for @unlinkCodeOpen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Satu pemutusan pautan sedang berjalan.'**
+  String get unlinkCodeOpen;
+
+  /// No description provided for @unlinkCodeNotLinked.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini tidak dipautkan lagi.'**
+  String get unlinkCodeNotLinked;
+
+  /// No description provided for @unlinkCodeNotAllowed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Anda tidak boleh menjawab untuk Box ini. Pentadbir lain yang menjawab.'**
+  String get unlinkCodeNotAllowed;
+
+  /// No description provided for @unlinkCodeSamePhone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Satu telefon tidak boleh menjawab untuk kedua-dua Box.'**
+  String get unlinkCodeSamePhone;
+
+  /// No description provided for @unlinkCodeOptionUnavailable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan ini tidak tersedia untuk Box ini.'**
+  String get unlinkCodeOptionUnavailable;
+
+  /// No description provided for @unlinkCodeStaleSession.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pemutusan pautan ini sudah berubah atau tamat. Skrin dikemas kini.'**
+  String get unlinkCodeStaleSession;
+
+  /// No description provided for @unlinkCodeKeptOver.
+  ///
+  /// In ms, this message translates to:
+  /// **'Masa untuk menukar pilihan sudah tamat.'**
+  String get unlinkCodeKeptOver;
+
+  /// No description provided for @unlinkCodeNoKept.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada data lama yang disimpan.'**
+  String get unlinkCodeNoKept;
+
+  /// No description provided for @unlinkCodeNotLocal.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ini hanya boleh dibuat pada skrin penyelenggaraan Box itu sendiri.'**
+  String get unlinkCodeNotLocal;
+
+  /// No description provided for @unlinkCodeWrongCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kod pemulihan salah.'**
+  String get unlinkCodeWrongCode;
+
+  /// No description provided for @unlinkCodeHasBackup.
+  ///
+  /// In ms, this message translates to:
+  /// **'Box ini mempunyai sandaran. Gunakan kembali ke data sebelum dipautkan.'**
+  String get unlinkCodeHasBackup;
+
+  /// No description provided for @unlinkKeptMasterNamed.
+  ///
+  /// In ms, this message translates to:
+  /// **'{master}, selepas {follower} keluar'**
+  String unlinkKeptMasterNamed(String master, String follower);
+
+  /// No description provided for @unlinkKeptListLine.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data lama disimpan hingga {date}'**
+  String unlinkKeptListLine(String date);
+
+  /// No description provided for @unlinkVideosNotFitTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video ini tidak muat di Box itu dan tidak disalin:'**
+  String get unlinkVideosNotFitTitle;
+
+  /// No description provided for @unlinkJoinStay.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kekal di sini'**
+  String get unlinkJoinStay;
+
+  /// No description provided for @unlinkJoinStayNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Jika anda kekal di sini, telefon ini dilog keluar daripada {master} apabila {follower} sudah disertai. Pilih Sambung sekarang untuk terus mengurus {follower} dengan telefon ini.'**
+  String unlinkJoinStayNote(String master, String follower);
+
+  /// No description provided for @linkRecoveryTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Simpan kod ini'**
+  String get linkRecoveryTitle;
+
+  /// No description provided for @errcSurauAsleep.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data surau ini di awan sedang dikemas kini daripada MAXCOM Kiosk Box. Cuba lagi sebentar lagi.'**
+  String get errcSurauAsleep;
+
+  /// No description provided for @liveYoutubeLaterButton.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siarkan ke YouTube'**
+  String get liveYoutubeLaterButton;
+
+  /// No description provided for @liveYoutubeLaterHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran ini hanya ke skrin surau. Anda boleh menambah YouTube sekarang.'**
+  String get liveYoutubeLaterHint;
+
+  /// No description provided for @liveYoutubeLaterStarting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Memulakan YouTube'**
+  String get liveYoutubeLaterStarting;
+
+  /// No description provided for @liveYoutubeLaterNotSignedIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube belum disambungkan pada MAXCOM ini. Sambungkan akaun YouTube dalam Tetapan dahulu.'**
+  String get liveYoutubeLaterNotSignedIn;
+
+  /// No description provided for @liveYoutubeLaterNotOwner.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hanya peranti yang memulakan siaran ini, atau pentadbir, boleh menambah YouTube.'**
+  String get liveYoutubeLaterNotOwner;
+
+  /// No description provided for @liveYoutubeLaterBusy.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube sedang dimulakan. Cuba sebentar lagi.'**
+  String get liveYoutubeLaterBusy;
+
+  /// No description provided for @liveRecNoSpaceNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada ruang mencukupi pada MAXCOM untuk menyambung rakaman. Simpan atau buang rakaman lama dahulu. Setiap bahagian disimpan seperti asalnya.'**
+  String get liveRecNoSpaceNote;
+
+  /// No description provided for @uploadErrorClaimLost.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik dihentikan kerana peranti lain telah mengambil alih siaran ini. Tiada tindakan diperlukan.'**
+  String get uploadErrorClaimLost;
+
+  /// No description provided for @liveYoutubeLaterSheetTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siarkan ke YouTube'**
+  String get liveYoutubeLaterSheetTitle;
+
+  /// No description provided for @liveYoutubeLaterTitleLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tajuk di YouTube'**
+  String get liveYoutubeLaterTitleLabel;
+
+  /// No description provided for @liveYoutubeLaterPrivacyLabel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Keterlihatan'**
+  String get liveYoutubeLaterPrivacyLabel;
+
+  /// No description provided for @liveYoutubePrivacyPrivate.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peribadi'**
+  String get liveYoutubePrivacyPrivate;
+
+  /// No description provided for @liveYoutubePrivacyUnlisted.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak disenaraikan'**
+  String get liveYoutubePrivacyUnlisted;
+
+  /// No description provided for @liveYoutubePrivacyPublic.
+  ///
+  /// In ms, this message translates to:
+  /// **'Awam'**
+  String get liveYoutubePrivacyPublic;
+
+  /// No description provided for @liveYoutubeLaterConfirm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siarkan sekarang'**
+  String get liveYoutubeLaterConfirm;
+
+  /// No description provided for @liveYoutubeLaterConfirmNote.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran akan mula dipaparkan di YouTube dengan tajuk dan keterlihatan ini.'**
+  String get liveYoutubeLaterConfirmNote;
+
+  /// No description provided for @liveYoutubeLaterUpdateBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kemas kini MAXCOM untuk ciri ini.'**
+  String get liveYoutubeLaterUpdateBox;
+
+  /// No description provided for @liveYoutubeLaterNoSession.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran ini sudah tamat. Mulakan siaran baharu.'**
+  String get liveYoutubeLaterNoSession;
+
+  /// No description provided for @liveYoutubeLaterBadRequest.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tajuk atau keterlihatan tidak sah. Semak dan cuba lagi.'**
+  String get liveYoutubeLaterBadRequest;
+
+  /// No description provided for @liveYoutubeLaterYoutubeOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube dimatikan dalam tetapan MAXCOM ini.'**
+  String get liveYoutubeLaterYoutubeOff;
+
+  /// No description provided for @liveYoutubeLaterToolsMissing.
+  ///
+  /// In ms, this message translates to:
+  /// **'Alat siaran YouTube belum dipasang pada MAXCOM ini.'**
+  String get liveYoutubeLaterToolsMissing;
+
+  /// No description provided for @liveYoutubeLaterNoInternet.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM tiada sambungan internet. Cuba lagi sebentar lagi.'**
+  String get liveYoutubeLaterNoInternet;
+
+  /// No description provided for @liveYoutubeLaterPrivacyNotAllowed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Keterlihatan ini lebih terbuka daripada yang dibenarkan dalam tetapan surau. Pilih yang lebih terhad.'**
+  String get liveYoutubeLaterPrivacyNotAllowed;
+
+  /// No description provided for @unlinkJoinWebBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Anda sedang menggunakan pelayar web. Buka aplikasi web {name} untuk menyertainya. Di sana anda memilih nama peranti dan PIN baharu.'**
+  String unlinkJoinWebBody(String name);
+
+  /// No description provided for @unlinkJoinWebOpen.
+  ///
+  /// In ms, this message translates to:
+  /// **'Buka aplikasi {name}'**
+  String unlinkJoinWebOpen(String name);
+
+  /// No description provided for @unlinkJoinWebTrust.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pelayar mungkin meminta anda mempercayai MAXCOM itu sekali sahaja. Terima, kemudian teruskan.'**
+  String get unlinkJoinWebTrust;
+
+  /// No description provided for @unlinkJoinWebFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pelayar tidak dapat membuka aplikasi itu. Cuba lagi.'**
+  String get unlinkJoinWebFailed;
+
+  /// No description provided for @unlinkJoinUnreachable.
+  ///
+  /// In ms, this message translates to:
+  /// **'Telefon ini tidak dapat menghubungi {name}. Semak sambungan rangkaian dan cuba lagi.'**
+  String unlinkJoinUnreachable(String name);
+
+  /// No description provided for @unlinkNumBackRecovery.
+  ///
+  /// In ms, this message translates to:
+  /// **'Telefon Pentadbir terus berfungsi. Telefon lain menyertai semula dengan kod QR daripada Pentadbir. Kod pemulihan hanya diperlukan jika tiada lagi telefon Pentadbir.'**
+  String get unlinkNumBackRecovery;
+
+  /// No description provided for @unlockUseRecoveryCode.
+  ///
+  /// In ms, this message translates to:
+  /// **'Guna kod pemulihan'**
+  String get unlockUseRecoveryCode;
+
+  /// No description provided for @unlockRecoveryHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM ini tiada Pentadbir yang boleh masuk. Imbas kod QR pemulihan pada skrin TV MAXCOM, kemudian masukkan kod pemulihan yang ditulis di atas kertas.'**
+  String get unlockRecoveryHint;
+
+  /// No description provided for @linkKeptOtherBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Data lama itu disimpan pada MAXCOM yang satu lagi. Buang data lama di sana, dengan telefon Pentadbirnya, untuk memaut sekarang.'**
+  String get linkKeptOtherBox;
+
+  /// No description provided for @liveCtlNoVideo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Video tidak dipaparkan pada peranti ini. Lihat pada TV atau YouTube.'**
+  String get liveCtlNoVideo;
+
+  /// No description provided for @liveCtlCloseApp.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tutup aplikasi kamera (OBSBOT) semasa siaran.'**
+  String get liveCtlCloseApp;
+
+  /// No description provided for @liveCtlCloseAppWhy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dua pembaca menjatuhkan gambar kepada 4 hingga 6 bingkai sesaat.'**
+  String get liveCtlCloseAppWhy;
+
+  /// No description provided for @liveCtlLevels.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paras bunyi'**
+  String get liveCtlLevels;
+
+  /// No description provided for @liveCtlStartedBy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dimulakan oleh {name} dari {device}, {time}'**
+  String liveCtlStartedBy(String name, String device, String time);
+
+  /// No description provided for @liveCtlStartedByNoDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dimulakan oleh {name}, {time}'**
+  String liveCtlStartedByNoDevice(String name, String time);
+
+  /// No description provided for @liveCtlTvsSub.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin surau, melalui Wi-Fi surau'**
+  String get liveCtlTvsSub;
+
+  /// No description provided for @liveCtlTvsWaiting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kad menunggu dipaparkan'**
+  String get liveCtlTvsWaiting;
+
+  /// No description provided for @liveCtlTvsOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin surau dimatikan untuk siaran ini'**
+  String get liveCtlTvsOff;
+
+  /// No description provided for @liveCtlYtWaiting.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu gambar'**
+  String get liveCtlYtWaiting;
+
+  /// No description provided for @liveCtlYtNo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak'**
+  String get liveCtlYtNo;
+
+  /// No description provided for @liveCtlCamOk.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bersambung, {mbps} Mbps'**
+  String liveCtlCamOk(String mbps);
+
+  /// No description provided for @liveCtlCamConnected.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bersambung'**
+  String get liveCtlCamConnected;
+
+  /// No description provided for @liveCtlCamSlow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bersambung, gambar perlahan ({mbps} Mbps)'**
+  String liveCtlCamSlow(String mbps);
+
+  /// No description provided for @liveCtlCamGone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Terputus'**
+  String get liveCtlCamGone;
+
+  /// No description provided for @liveCtlSubOnAir.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ke udara, {vol}%'**
+  String liveCtlSubOnAir(int vol);
+
+  /// No description provided for @liveCtlSubOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'{vol}%, tidak ke udara'**
+  String liveCtlSubOff(int vol);
+
+  /// No description provided for @liveCtlSubBenched.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dihentikan sementara, dicuba semula'**
+  String get liveCtlSubBenched;
+
+  /// No description provided for @liveCtlSubWaitingCam.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menunggu kamera'**
+  String get liveCtlSubWaitingCam;
+
+  /// No description provided for @liveCtlSubMeanwhile.
+  ///
+  /// In ms, this message translates to:
+  /// **'Digunakan sementara'**
+  String get liveCtlSubMeanwhile;
+
+  /// No description provided for @liveCtlRecHere.
+  ///
+  /// In ms, this message translates to:
+  /// **'Merakam di iPad ini'**
+  String get liveCtlRecHere;
+
+  /// No description provided for @liveCtlWatchYoutube.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lihat di YouTube'**
+  String get liveCtlWatchYoutube;
+
+  /// No description provided for @liveQuietTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran masih berjalan, tiada peranti mengawal'**
+  String get liveQuietTitle;
+
+  /// No description provided for @liveQuietBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Peranti yang memulakan siaran tidak dilihat sejak {minutes} minit. Siaran ke TV dan YouTube diteruskan.'**
+  String liveQuietBody(int minutes);
+
+  /// No description provided for @liveQuietStop.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hentikan siaran'**
+  String get liveQuietStop;
+
+  /// No description provided for @liveKioskRestored.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube tidak dapat disiarkan. Skrin surau dihidupkan semula supaya siaran tetap ke udara.'**
+  String get liveKioskRestored;
+
+  /// No description provided for @liveCamSlowTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar kamera perlahan'**
+  String get liveCamSlowTitle;
+
+  /// No description provided for @liveMicBenchedTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mikrofon MAXCOM dihentikan sementara, bunyi kamera digunakan'**
+  String get liveMicBenchedTitle;
+
+  /// No description provided for @liveMicBenchedBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran tidak senyap. Mikrofon MAXCOM dicuba semula sendiri dalam 1 minit.'**
+  String get liveMicBenchedBody;
+
+  /// No description provided for @liveCamGoneTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kamera terputus, siaran diteruskan'**
+  String get liveCamGoneTitle;
+
+  /// No description provided for @liveCamGoneBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'TV memaparkan kad menunggu. Gambar dan bunyi kembali sendiri apabila kamera bersambung semula. Siaran tidak dihentikan secara automatik; tekan Berhenti jika kuliah sudah tamat.'**
+  String get liveCamGoneBody;
+
+  /// No description provided for @liveStopOtherTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hentikan siaran'**
+  String get liveStopOtherTitle;
+
+  /// No description provided for @liveStopOtherBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran ini dimulakan oleh {name} dari {device}. Hentikan siaran?'**
+  String liveStopOtherBody(String name, String device);
+
+  /// No description provided for @liveStopOtherBodyNoDevice.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran ini dimulakan oleh {name}. Hentikan siaran?'**
+  String liveStopOtherBodyNoDevice(String name);
+
+  /// No description provided for @liveStopOtherLog.
+  ///
+  /// In ms, this message translates to:
+  /// **'Nama anda dan nama {name} dicatat dalam log perubahan.'**
+  String liveStopOtherLog(String name);
+
+  /// No description provided for @liveLeaveBoxPulled.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran diteruskan oleh MAXCOM. Buka semula aplikasi untuk mengawal atau menghentikan.'**
+  String get liveLeaveBoxPulled;
+
+  /// No description provided for @liveAudioBoxMicMain.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mikrofon MAXCOM (utama)'**
+  String get liveAudioBoxMicMain;
+
+  /// No description provided for @liveAudioBoxMicMainHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mic-in pada MAXCOM. Suara penceramah, sentiasa dalam campuran.'**
+  String get liveAudioBoxMicMainHint;
+
+  /// No description provided for @liveAudioCamBoxHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Naikkan hanya jika mahu bunyi dewan'**
+  String get liveAudioCamBoxHint;
+
+  /// No description provided for @liveAudioCamNotOnAir.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak ke udara'**
+  String get liveAudioCamNotOnAir;
+
+  /// No description provided for @liveAudioBoxMicOnAir.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ke udara'**
+  String get liveAudioBoxMicOnAir;
+
+  /// No description provided for @liveSyncTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Segerak bunyi dan gambar'**
+  String get liveSyncTitle;
+
+  /// No description provided for @liveSyncAuto.
+  ///
+  /// In ms, this message translates to:
+  /// **'Segerak automatik'**
+  String get liveSyncAuto;
+
+  /// No description provided for @liveSyncAutoBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bunyi mikrofon MAXCOM dilewatkan supaya selari dengan gambar kamera. Diukur sendiri daripada bunyi kamera.'**
+  String get liveSyncAutoBody;
+
+  /// No description provided for @liveSyncBusy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sedang menyegerak (bunyi tetap ke udara)'**
+  String get liveSyncBusy;
+
+  /// No description provided for @liveSyncBusyBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mikrofon MAXCOM kekal ke udara pada lewat siaran lepas (+{ms} ms) sementara MAXCOM mengukur.'**
+  String liveSyncBusyBody(int ms);
+
+  /// No description provided for @liveSyncManual.
+  ///
+  /// In ms, this message translates to:
+  /// **'Laras manual'**
+  String get liveSyncManual;
+
+  /// No description provided for @liveSyncManualBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Lewatkan bunyi supaya selari dengan gambar kamera. Lihat bibir penceramah pada TV semasa melaras.'**
+  String get liveSyncManualBody;
+
+  /// No description provided for @liveSyncRange.
+  ///
+  /// In ms, this message translates to:
+  /// **'0 hingga 2000 ms, langkah 50 ms.'**
+  String get liveSyncRange;
+
+  /// No description provided for @liveSyncBack.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kembali ke automatik'**
+  String get liveSyncBack;
+
+  /// No description provided for @liveSyncLess.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kurangkan 50 ms'**
+  String get liveSyncLess;
+
+  /// No description provided for @liveSyncMore.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tambah 50 ms'**
+  String get liveSyncMore;
+
+  /// No description provided for @liveDestPickOne.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilih sekurang-kurangnya satu destinasi'**
+  String get liveDestPickOne;
+
+  /// No description provided for @liveDestLastOne.
+  ///
+  /// In ms, this message translates to:
+  /// **'Destinasi terakhir tidak boleh dimatikan semasa siaran'**
+  String get liveDestLastOne;
+
+  /// No description provided for @liveDestKioskOldBox.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kemas kini MAXCOM Kiosk Box untuk pilihan ini'**
+  String get liveDestKioskOldBox;
+
+  /// No description provided for @liveDestKioskOffSub.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dimatikan untuk siaran ini'**
+  String get liveDestKioskOffSub;
+
+  /// No description provided for @liveDestKioskLabelOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Skrin surau: Tidak'**
+  String get liveDestKioskLabelOff;
+
+  /// No description provided for @liveDestRecSwitchNotNow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dapat ditukar semasa siaran pada peranti ini'**
+  String get liveDestRecSwitchNotNow;
+
+  /// No description provided for @liveCtlTvsTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'TV memaparkan'**
+  String get liveCtlTvsTitle;
+
+  /// No description provided for @liveCtlDuration.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tempoh siaran'**
+  String get liveCtlDuration;
+
+  /// No description provided for @liveMicLostBoxTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mikrofon MAXCOM tidak dikesan'**
+  String get liveMicLostBoxTitle;
+
+  /// No description provided for @liveMicLostBoxBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran mungkin senyap. Semak sambungan mikrofon pada MAXCOM.'**
+  String get liveMicLostBoxBody;
+
+  /// No description provided for @liveMicLostDeviceTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mikrofon peranti tidak dikesan'**
+  String get liveMicLostDeviceTitle;
+
+  /// No description provided for @liveMicLostDeviceBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran mungkin senyap. Semak mikrofon pada peranti yang menghantar siaran.'**
+  String get liveMicLostDeviceBody;
+
+  /// No description provided for @liveRecordingStopped.
+  ///
+  /// In ms, this message translates to:
+  /// **'Dihentikan, fail setakat ini disimpan'**
+  String get liveRecordingStopped;
+
+  /// No description provided for @liveRetrying.
+  ///
+  /// In ms, this message translates to:
+  /// **'Mencuba semula'**
+  String get liveRetrying;
+
+  /// No description provided for @liveDestYoutubeLive.
+  ///
+  /// In ms, this message translates to:
+  /// **'Boleh dihidupkan semasa siaran, tidak boleh dimatikan'**
+  String get liveDestYoutubeLive;
+
+  /// No description provided for @liveSyncRangeSaved.
+  ///
+  /// In ms, this message translates to:
+  /// **'0 hingga 2000 ms, langkah 50 ms. Disimpan untuk siaran seterusnya di MAXCOM ini.'**
+  String get liveSyncRangeSaved;
+
+  /// No description provided for @liveDestLiveYt.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ke YouTube sahaja'**
+  String get liveDestLiveYt;
+
+  /// No description provided for @liveDestLiveRec.
+  ///
+  /// In ms, this message translates to:
+  /// **'Merakam sahaja, tiada siaran ke skrin surau atau YouTube'**
+  String get liveDestLiveRec;
+
+  /// No description provided for @liveCtlSubMicLost.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dikesan'**
+  String get liveCtlSubMicLost;
+
+  /// No description provided for @liveTvShowTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paparkan siaran langsung'**
+  String get liveTvShowTitle;
+
+  /// No description provided for @liveTvShowHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Matikan bagi Box yang perlahan semasa siaran. TV Box itu kekal dengan paparan biasa.'**
+  String get liveTvShowHint;
+
+  /// No description provided for @liveTvShowServer.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pelayan siaran'**
+  String get liveTvShowServer;
+
+  /// No description provided for @liveTvShowOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paparan biasa semasa siaran'**
+  String get liveTvShowOff;
+
+  /// No description provided for @liveTvShowAllOff.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada TV akan memaparkan siaran.'**
+  String get liveTvShowAllOff;
+
+  /// No description provided for @liveTvShowSwitch.
+  ///
+  /// In ms, this message translates to:
+  /// **'Paparkan siaran langsung, {name}'**
+  String liveTvShowSwitch(String name);
+
+  /// No description provided for @liveTvShowCpuNow.
+  ///
+  /// In ms, this message translates to:
+  /// **'CPU {n}%'**
+  String liveTvShowCpuNow(int n);
+
+  /// No description provided for @liveTvShowCpuLast.
+  ///
+  /// In ms, this message translates to:
+  /// **'CPU {n}% semasa siaran lepas'**
+  String liveTvShowCpuLast(int n);
+
+  /// No description provided for @liveCtlTvsShowing.
+  ///
+  /// In ms, this message translates to:
+  /// **'TV memaparkan siaran: {n} ({names})'**
+  String liveCtlTvsShowing(int n, String names);
+
+  /// No description provided for @liveCtlTvNormal.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name}: paparan biasa'**
+  String liveCtlTvNormal(String name);
+
+  /// No description provided for @liveViewerShowing.
+  ///
+  /// In ms, this message translates to:
+  /// **'memaparkan siaran'**
+  String get liveViewerShowing;
+
+  /// No description provided for @liveViewerNormal.
+  ///
+  /// In ms, this message translates to:
+  /// **'paparan biasa'**
+  String get liveViewerNormal;
+
+  /// No description provided for @liveViewersHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar dalam Tetapan siaran, Paparkan siaran langsung.'**
+  String get liveViewersHint;
+
+  /// No description provided for @liveBusyTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'{name} terlalu sibuk (CPU {n}%)'**
+  String liveBusyTitle(String name, int n);
+
+  /// No description provided for @liveBusyBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gambar mungkin tersekat di TV dan YouTube. TV lain memaparkan siaran, jadi TV Box ini boleh kembali ke paparan biasa. Boleh dihidupkan semula dalam Tetapan siaran.'**
+  String get liveBusyBody;
+
+  /// No description provided for @liveBusyAction.
+  ///
+  /// In ms, this message translates to:
+  /// **'Matikan paparan siaran pada Box ini'**
+  String get liveBusyAction;
+
+  /// No description provided for @liveBusyLater.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bukan sekarang'**
+  String get liveBusyLater;
+
+  /// No description provided for @liveMicSilentTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada bunyi dari Mikrofon MAXCOM'**
+  String get liveMicSilentTitle;
+
+  /// No description provided for @liveMicSilentBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran ke udara tanpa suara penceramah sejak {n} minit.'**
+  String liveMicSilentBody(int n);
+
+  /// No description provided for @liveMicSilentTip1.
+  ///
+  /// In ms, this message translates to:
+  /// **'Semak kabel mikrofon pada lubang mic-in MAXCOM.'**
+  String get liveMicSilentTip1;
+
+  /// No description provided for @liveMicSilentTip2.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gunakan kad bunyi USB yang ada input mikrofon.'**
+  String get liveMicSilentTip2;
+
+  /// No description provided for @liveMicSilentTip3.
+  ///
+  /// In ms, this message translates to:
+  /// **'Atau naikkan bunyi kamera luaran.'**
+  String get liveMicSilentTip3;
+
+  /// No description provided for @liveMicSilentUseCamera.
+  ///
+  /// In ms, this message translates to:
+  /// **'Gunakan bunyi kamera'**
+  String get liveMicSilentUseCamera;
+
+  /// No description provided for @liveMicSilentRow.
+  ///
+  /// In ms, this message translates to:
+  /// **'Ke udara, tiada bunyi sejak {time}'**
+  String liveMicSilentRow(String time);
+
+  /// No description provided for @liveMicSilentCamTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bunyi kamera digunakan'**
+  String get liveMicSilentCamTitle;
+
+  /// No description provided for @liveMicSilentCamBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran kini ada bunyi dari kamera luaran. Jika Mikrofon MAXCOM kembali berbunyi, ia didengar semula.'**
+  String get liveMicSilentCamBody;
+
+  /// No description provided for @liveMicTestHint.
+  ///
+  /// In ms, this message translates to:
+  /// **'Cakap ke mikrofon semasa ujian 5 saat. Pilih input yang ada bunyi.'**
+  String get liveMicTestHint;
+
+  /// No description provided for @liveMicTestBusy.
+  ///
+  /// In ms, this message translates to:
+  /// **'Menguji...'**
+  String get liveMicTestBusy;
+
+  /// No description provided for @liveMicTestSound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Diuji: ada bunyi'**
+  String get liveMicTestSound;
+
+  /// No description provided for @liveMicTestSilent.
+  ///
+  /// In ms, this message translates to:
+  /// **'Diuji: senyap'**
+  String get liveMicTestSilent;
+
+  /// No description provided for @liveMicTestFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tidak dapat diuji'**
+  String get liveMicTestFailed;
+
+  /// No description provided for @liveMicTestNone.
+  ///
+  /// In ms, this message translates to:
+  /// **'Belum diuji'**
+  String get liveMicTestNone;
+
+  /// No description provided for @liveMicTestAgain.
+  ///
+  /// In ms, this message translates to:
+  /// **'Uji semula (5 saat)'**
+  String get liveMicTestAgain;
+
+  /// No description provided for @liveMicTestAt.
+  ///
+  /// In ms, this message translates to:
+  /// **'Diuji pada {time}.'**
+  String liveMicTestAt(String time);
+
+  /// No description provided for @liveMicTestSilentTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Input yang dipilih senyap'**
+  String get liveMicTestSilentTitle;
+
+  /// No description provided for @liveMicTestSilentBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran akan ke udara tanpa suara penceramah. Pilih input lain atau semak kabel, kemudian uji semula.'**
+  String get liveMicTestSilentBody;
+
+  /// No description provided for @liveYoutubeLaterWhySignIn.
+  ///
+  /// In ms, this message translates to:
+  /// **'YouTube belum disambungkan pada MAXCOM.'**
+  String get liveYoutubeLaterWhySignIn;
+
+  /// No description provided for @liveYoutubeLaterWhyUnreachable.
+  ///
+  /// In ms, this message translates to:
+  /// **'MAXCOM tidak dapat dihubungi.'**
+  String get liveYoutubeLaterWhyUnreachable;
+
+  /// No description provided for @liveYoutubeLaterWhyStarter.
+  ///
+  /// In ms, this message translates to:
+  /// **'Hanya peranti yang memulakan siaran boleh menambah YouTube.'**
+  String get liveYoutubeLaterWhyStarter;
+
+  /// No description provided for @liveTvShowFailed.
+  ///
+  /// In ms, this message translates to:
+  /// **'Pilihan tidak dapat disimpan. Cuba lagi.'**
+  String get liveTvShowFailed;
+
+  /// No description provided for @liveCtlSubNoSound.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tiada bunyi'**
+  String get liveCtlSubNoSound;
+
+  /// No description provided for @liveAudioSwitchConfirm.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar bunyi? Siaran berhenti seketika (2 hingga 3 saat).'**
+  String get liveAudioSwitchConfirm;
+
+  /// No description provided for @liveAudioSwitchDo.
+  ///
+  /// In ms, this message translates to:
+  /// **'Tukar'**
+  String get liveAudioSwitchDo;
+
+  /// No description provided for @liveAudioSwitchCancel.
+  ///
+  /// In ms, this message translates to:
+  /// **'Batal'**
+  String get liveAudioSwitchCancel;
+
+  /// No description provided for @liveWarnMicDropsTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Bunyi mikrofon MAXCOM terputus-putus'**
+  String get liveWarnMicDropsTitle;
+
+  /// No description provided for @liveWarnMicDropsBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Periksa kabel mikrofon atau pilih bunyi kamera.'**
+  String get liveWarnMicDropsBody;
+
+  /// No description provided for @liveWarnBehindTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Muat naik ke YouTube perlahan'**
+  String get liveWarnBehindTitle;
+
+  /// No description provided for @liveWarnBehindBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Siaran lewat {seconds} saat. Siaran diteruskan.'**
+  String liveWarnBehindBody(int seconds);
+
+  /// No description provided for @liveWarnQualityTitle.
+  ///
+  /// In ms, this message translates to:
+  /// **'Kualiti gambar diturunkan (480p)'**
+  String get liveWarnQualityTitle;
+
+  /// No description provided for @liveWarnQualityBody.
+  ///
+  /// In ms, this message translates to:
+  /// **'Internet perlahan. Kualiti kembali sendiri apabila internet pulih.'**
+  String get liveWarnQualityBody;
+
+  /// No description provided for @liveRelayReconnects.
+  ///
+  /// In ms, this message translates to:
+  /// **'Sambungan ke YouTube disambung semula {count} kali'**
+  String liveRelayReconnects(int count);
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

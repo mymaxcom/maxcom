@@ -57,7 +57,7 @@ function setup(date: string, hhmm: string, override: SlotFeature | null = null) 
   const rotation = buildRotation(content, view.settings, view.now);
   const today = view.state.today;
   const month = tarawihMonthFor(view.now, today ? [today] : [], view.settings) ?? view.hijri?.m;
-  const zikir = zikirWindow(view.now, days, view.settings, month);
+  const zikir = zikirWindow(view.now, days, view.settings, month, content.zikir.length);
   holder.view = view;
   holder.cv = { content, rotation, current: currentSlot(rotation, view.now), zikir, override };
   return view;
@@ -129,7 +129,7 @@ describe('contract v1 hooks on the screens', () => {
   });
 
   it('the zikir overlay is a main region with the Arabic classes', () => {
-    setup('2026-11-03', '16:50');
+    setup('2026-11-03', '16:45:05');
     const r = render(<Main view={holder.view} lang="ms" />);
     expect(r.container.querySelector('section.zikir.region-main')).toBeTruthy();
     expect(r.container.querySelector('.zikir__ar.arab.arabic')).toBeTruthy();

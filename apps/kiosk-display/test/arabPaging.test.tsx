@@ -70,12 +70,12 @@ function showCard(card: SlotFeature, opts: { theme?: string; content?: KioskCont
   return render(<App />);
 }
 function showZikir(theme: string, content = fixture()) {
-  const view = makeView('2026-11-03', '16:50', { settings: { kioskTemplate: { templateId: theme } } });
+  const view = makeView('2026-11-03', '16:45:05', { settings: { kioskTemplate: { templateId: theme } } });
   const rotation = buildRotation(content, view.settings, view.now);
   const today = view.state.today;
   const month = tarawihMonthFor(view.now, today ? [today] : [], view.settings) ?? view.hijri?.m;
   holder.view = view;
-  holder.cv = { content, rotation, current: currentSlot(rotation, view.now), zikir: zikirWindow(view.now, days, view.settings, month), override: null };
+  holder.cv = { content, rotation, current: currentSlot(rotation, view.now), zikir: zikirWindow(view.now, days, view.settings, month, content.zikir.length), override: null };
   return render(<App />);
 }
 const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((res) => setTimeout(res, 10)); };

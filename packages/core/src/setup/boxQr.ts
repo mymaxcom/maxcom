@@ -4,7 +4,8 @@
 import { canonicalJson, sha256Hex } from '../sync/canonical.ts';
 
 export const BOX_QR_PREFIX = 'maxcom1:';
-export type BoxQrType = 'setup' | 'recovery' | 'probe';
+/** `link` (2026.11.15) asks another box of the same surau to link; an older app reads it as an invalid code, as wanted. */
+export type BoxQrType = 'setup' | 'recovery' | 'probe' | 'link';
 
 export interface BoxQrPub { kty: 'EC'; crv: 'P-256'; x: string; y: string }
 
@@ -100,7 +101,7 @@ export function parseBoxQr(text: string): BoxQrPayload {
   const pub = r.pub as Record<string, unknown> | undefined;
   if (
     r.v !== 1 ||
-    (r.type !== 'setup' && r.type !== 'recovery' && r.type !== 'probe') ||
+    (r.type !== 'setup' && r.type !== 'recovery' && r.type !== 'probe' && r.type !== 'link') ||
     typeof r.boxId !== 'string' || !hex16.test(r.boxId) ||
     typeof r.keyFp !== 'string' || !hex16.test(r.keyFp) ||
     typeof r.name !== 'string' || r.name.length < 1 || r.name.length > 60 ||

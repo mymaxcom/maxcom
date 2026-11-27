@@ -70,10 +70,10 @@ async function makePair(o: { onSleep?: (ms: number, p: Pair) => void; limits?: {
   pair = { box, boxDir, boxId, cloud, worker, sleeps, hook };
   pairs.push(pair);
 
-  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau D\'Waqaf', target: { surauId: ensureSurau(cloud.app.surau.db) } });
+  const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau Contoh', target: { surauId: ensureSurau(cloud.app.surau.db) } });
   const lines: string[] = [];
   const exit = await runCloudLink(['--data', boxDir, '--db', join(boxDir, 'box.db'), 'link', CLOUD_URL, code], { out: (l) => lines.push(l), err: (l) => lines.push(l) }, worker.fetch);
-  expect(lines.join('\n')).toContain('Dipautkan ke awan: Surau D\'Waqaf');
+  expect(lines.join('\n')).toContain('Dipautkan ke awan: Surau Contoh');
   expect(exit).toBe(0);
   worker.setSecret(boxId, loadSyncKey(boxDir)!.wakeSecret);
   // the YouTube handover is settled here: an unsettled one asks the cloud to wake (F1), which these tests count on their own

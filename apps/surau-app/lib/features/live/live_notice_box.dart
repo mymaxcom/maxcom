@@ -113,20 +113,54 @@ final liveBoxNoticeProvider = FutureProvider<BoxLiveNotice?>((ref) async {
     if (notice == null) return null;
     // The notice follows the BOX's live session: when the session is over the banner and the share buttons go, even
     // if YouTube still says the broadcast is live. A status that does not answer, or does not say, keeps the notice.
-    if (await _boxSessionOver(gateway)) return null;
+    // While this device's own live is running or starting (the controller holds its session id) a momentary
+    // `session: null` is a race with the box, not the end: the notice is kept.
+    if (ref.read(liveBoxProvider).sessionId == null) {
+      final over = await _boxSessionOver(gateway);
+      if (over == true) return null;
+      // The banner follows the box (B13): while it is shown, a slow poll of the box's status stays alive, so it
+      // goes within one poll after the live ends. A read that failed is tried again by the same poll instead of
+      // leaving the banner up for good.
+      _watchForEnd(ref);
+    }
     return notice;
   } on Object {
     return null;
   }
 });
 
-/// True when `GET /api/live/status` answers with `session: null` (no live session on the box).
-Future<bool> _boxSessionOver(BoxGateway gateway) async {
+/// How often the dashboard banner asks the box whether the live is still on.
+final liveNoticePollIntervalProvider = Provider<Duration>((_) => const Duration(seconds: 10));
+
+/// One slow look at the box while the notice is shown outside the Live tab: the provider is read again, which
+/// drops the notice once the box says the session is over.
+///
+/// Only while something shows the notice: with no listener left the timer is dropped, and a listener that comes
+/// back reads the box again at once.
+void _watchForEnd(Ref ref) {
+  final timer = Timer(ref.read(liveNoticePollIntervalProvider), () {
+    if (ref.mounted) ref.invalidateSelf();
+  });
+  var dropped = false;
+  ref.onDispose(timer.cancel);
+  ref.onCancel(() {
+    dropped = timer.isActive;
+    timer.cancel();
+  });
+  ref.onResume(() {
+    if (dropped && ref.mounted) ref.invalidateSelf();
+  });
+}
+
+/// True when `GET /api/live/status` answers with `session: null` (no live session on the box), false when it
+/// names a session, null when the read failed or does not say.
+Future<bool?> _boxSessionOver(BoxGateway gateway) async {
   try {
-    final status = await gateway.getFresh('/api/live/status');
-    return status.containsKey('session') && status['session'] == null;
+    final status = await gateway.getFresh('/api/live/status', quiet: () => true);
+    if (!status.containsKey('session')) return null;
+    return status['session'] == null;
   } on Object {
-    return false;
+    return null;
   }
 }
 

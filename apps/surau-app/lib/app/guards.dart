@@ -20,6 +20,7 @@ class GuardInput {
     this.needsSurau = false,
     this.opsRevoked = false,
     this.localDataClosed = false,
+    this.joining = false,
   });
 
   final String location;
@@ -37,6 +38,10 @@ class GuardInput {
 
   /// Ops build: a MAXCOM session acting through the cloud; the pages that use the phone's own local copy are closed.
   final bool localDataClosed;
+
+  /// The phone is leaving its follower enrolment for the main box with a join code: the enrol page opens although the
+  /// old enrolment still stands (it is forgotten only after the new one succeeded).
+  final bool joining;
 }
 
 class GuardResult {
@@ -54,7 +59,7 @@ class GuardResult {
 
 GuardResult guard(GuardInput input) {
   final path = _path(input.location);
-  final atDoor = path == AppRoutes.enrol || path == AppRoutes.unlock;
+  final atDoor = path == AppRoutes.enrol || path == AppRoutes.unlock || path == AppRoutes.move;
   // The first-setup and recovery pages are doors of a phone that belongs to no
   // surau yet (reached by scanning the box screen's QR from the enrol page).
   final joinDoor =
@@ -67,6 +72,7 @@ GuardResult guard(GuardInput input) {
   }
   // An enrolled app never shows the enrol form: the way back to it is
   // "Daftar semula", which forgets the box first (so `enrolled` is false).
+  if (path == AppRoutes.enrol && input.joining) return GuardResult.allow;
   if (joinDoor) {
     return GuardResult(
       redirect: input.unlocked ? AppRoutes.dashboard : AppRoutes.unlock,
@@ -121,6 +127,7 @@ String? returnPathOf(String location) {
   final target = _path(from);
   if (target == AppRoutes.enrol ||
       target == AppRoutes.unlock ||
+      target == AppRoutes.move ||
       target == AppRoutes.setup ||
       target == AppRoutes.recovery) {
     return null;

@@ -288,23 +288,75 @@ function intervalsAround(now: Date, days: PrayerDay[], settings: Settings, hijri
   return out;
 }
 
-/** Zikir shows from the end of a prayer's `solat` phase for `minutesAfterSolat`, only while no prayer phase is running. */
-export function zikirWindow(
-  now: Date, days: PrayerDay[], settings: Settings, hijriMonth?: number,
-): { prayer: SolatName; endsAt: Date } | null {
+/**
+ * How long the zikir stretch after a prayer lasts, in seconds: every item once at `durationSeconds` each, cut at the
+ * `minutesAfterSolat` ceiling (never wrapped). 0 = no zikir (feature off, no items, or a ceiling of 0 or less).
+ * The ONE length the window, the kiosk overlay and the after-zikir video anchor all use.
+ */
+export function zikirSpanSeconds(itemCount: number, durationSeconds: unknown, minutesAfterSolat: unknown): number {
+  const cap = num(minutesAfterSolat, 10) * 60;
+  if (!(cap > 0) || !(itemCount > 0)) return 0;
+  const d = num(durationSeconds, 20);
+  const dur = d > 0 ? d : 20;
+  return Math.min(itemCount * dur, cap);
+}
+
+/** The zikir span for the current settings, 0 when the feature is off. `itemCount` undefined = unknown: the full ceiling. */
+function zikirSpanMs(settings: Settings, itemCount: number | undefined): number {
   const z = feat(settings, 'zikirSelepasSolat');
-  if (!z || !on(z)) return null;
+  if (!z || !on(z)) return 0;
   const mins = num(z.minutesAfterSolat, 10);
-  if (mins <= 0) return null;
+  if (mins <= 0) return 0;
+  return itemCount === undefined ? mins * MIN : zikirSpanSeconds(itemCount, z.durationSeconds, mins) * SEC;
+}
+
+/** How long after the end of the solat phase the zikir starts (`startAfterMinutes`, 0 to 30; 0 when unset or invalid). */
+export function zikirStartOffsetMs(settings: Settings): number {
+  const z = feat(settings, 'zikirSelepasSolat');
+  const m = num(z?.startAfterMinutes, 0);
+  return m > 0 ? Math.min(m, 30) * MIN : 0;
+}
+
+/**
+ * Zikir shows from `startAfterMinutes` after the end of a prayer's `solat` phase for `zikirSpanSeconds` (each item once,
+ * at most `minutesAfterSolat`, counted from the zikir's own start), only while no prayer phase is running. `itemCount`
+ * is the number of zikir items; left out, the window is the full `minutesAfterSolat` (the old behaviour).
+ */
+export function zikirWindow(
+  now: Date, days: PrayerDay[], settings: Settings, hijriMonth?: number, itemCount?: number,
+): { prayer: SolatName; startsAt: Date; endsAt: Date } | null {
+  const span = zikirSpanMs(settings, itemCount);
+  if (span <= 0) return null;
+  const offset = zikirStartOffsetMs(settings);
   const t = now.getTime();
   const intervals = intervalsAround(now, days, settings, hijriMonth);
   if (intervals.some((i) => i.start.getTime() <= t && t < i.end.getTime())) return null;
   for (const i of intervals) {
     if (i.phase !== 'solat' || i.prayer === 'syuruk') continue;
-    const end = i.end.getTime();
-    if (end <= t && t < end + mins * MIN) return { prayer: i.prayer, endsAt: new Date(end + mins * MIN) };
+    const start = i.end.getTime() + offset;
+    // The window ends at its span or where the next prayer phase starts, whichever is first (F33: the time-left
+    // countdown must not run past the moment the zikir leaves the screen).
+    let end = start + span;
+    for (const j of intervals) {
+      const js = j.start.getTime();
+      if (js > start && js < end) end = js;
+    }
+    if (start <= t && t < end) return { prayer: i.prayer, startsAt: new Date(start), endsAt: new Date(end) };
   }
   return null;
+}
+
+/**
+ * F16: the instants the zikir after each of the day's prayers takes the screen (the solat end plus `startAfterMinutes`),
+ * empty when the zikir would not show (feature off, a ceiling of 0, no items). A video must not start if it would be
+ * cut there. `itemCount` undefined = unknown: counted as having items.
+ */
+export function zikirStarts(day: PrayerDay, settings: Settings, hijriMonth?: number, itemCount?: number): Date[] {
+  if (zikirSpanMs(settings, itemCount) <= 0) return [];
+  const offset = zikirStartOffsetMs(settings);
+  return buildDayIntervals(day, settings, hijriMonth)
+    .filter((i) => i.phase === 'solat' && i.prayer !== 'syuruk')
+    .map((i) => new Date(i.end.getTime() + offset));
 }
 
 /** Tilawah plays from `prayer - minutesBefore` and stops at the prayer's azanCountdown start (or the prayer time). */
@@ -351,7 +403,8 @@ export interface AfterPrayerSlot {
 /**
  * Where each video with `afterPrayer` plays today (2026.11.14). The anchor of a prayer is the end of its `solat`
  * phase (a Friday zohor is the Jumaat solat); with the zikir screen on for it (`zikirSelepasSolat` on, its minutes above
- * 0 and zikir items in the content) the video starts when the zikir screen ends, else right at the end of the solat
+ * 0 and zikir items in the content) the video starts when the zikir screen ends (after its start offset and its span),
+ * else right at the end of the solat
  * phase. A prayer with no solat phase falls back to the end of its last phase, or its own time. Videos of one prayer
  * follow each other in order. Each item appears once, so it plays once a day; it respects `days`, `from` and `to`, and
  * the videos feature. A showing that would start inside a prayer phase (the zikir screen cut short by the next prayer's
@@ -380,8 +433,7 @@ export function videoAfterPrayerSlots(
   } catch {
     return [];
   }
-  const z = feat(settings, 'zikirSelepasSolat');
-  const zikirMins = z && on(z) && content.zikir.length > 0 ? Math.max(0, num(z.minutesAfterSolat, 10)) : 0;
+  const zikirMs = zikirSpanMs(settings, content.zikir.length);
   const out: AfterPrayerSlot[] = [];
   for (const prayer of AFTER_PRAYERS) {
     const mine = visible.filter((v) => v.afterPrayer === prayer);
@@ -390,7 +442,7 @@ export function videoAfterPrayerSlots(
     const solat = of.find((i) => i.phase === 'solat');
     let anchor: number;
     if (solat) {
-      anchor = solat.end.getTime() + zikirMins * MIN;
+      anchor = solat.end.getTime() + (zikirMs > 0 ? zikirStartOffsetMs(settings) + zikirMs : 0);
     } else {
       anchor = instantOf(today, day.times[prayer], tz).getTime();
       for (const i of of) if (i.phase !== 'tarawih') anchor = Math.max(anchor, i.end.getTime());

@@ -128,8 +128,10 @@ class SupervisorRestartTest {
     /** A child whose output read blocks until [release], and which ignores TERM and KILL (a stuck loop thread). */
     private class StuckProc(override val pid: Int) : RunningProcess {
         val release = CountDownLatch(1)
+        /** Counted down once the loop thread is inside the blocking read: only then is the thread really stuck. */
+        val blocked = CountDownLatch(1)
         override val output: InputStream = object : InputStream() {
-            override fun read(): Int { try { release.await() } catch (_: InterruptedException) { release.await() }; return -1 }
+            override fun read(): Int { blocked.countDown(); try { release.await() } catch (_: InterruptedException) { release.await() }; return -1 }
         }
         override fun waitFor(): Int = 0
         override fun terminate() {}
@@ -141,6 +143,9 @@ class SupervisorRestartTest {
         val stuck = StuckProc(1)
         val r = Rig({ if (it == 1) stuck else Proc(it, 0) }, graceMs = 100)
         assertTrue(r.sup.start()); r.awaitStarts(1)
+        // wait until the old loop thread is inside its blocking read: a stop (and its later interrupt) sent before that
+        // could end the thread, and the test would then see a free slot instead of a stuck one (a timing flake under load)
+        assertTrue("old loop never reached its blocking read", stuck.blocked.await(10, TimeUnit.SECONDS))
         r.sup.stop() // old thread stays alive in its blocking read
         assertFalse("old thread alive: no new loop", r.sup.start())
         assertFalse(r.sup.ensureRunning())

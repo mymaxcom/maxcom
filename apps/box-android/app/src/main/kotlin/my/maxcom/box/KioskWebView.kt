@@ -25,7 +25,7 @@ import my.maxcom.box.core.HostExitGate
 import my.maxcom.box.core.UrlPolicy
 
 /**
- * The kiosk WebView: loopback page only, one bridge ([HostBridge], `MaxcomHost.exit(key)`) and nothing else, no file
+ * The kiosk WebView: loopback page only, one bridge ([HostBridge], `MaxcomHost.exit(key)` and `MaxcomHost.videoStuck(key)`) and nothing else, no file
  * or content access, no mixed content, no permissions. Every navigation, sub-resource request and new window is checked by
  * [UrlPolicy]. The kiosk token is handled only as a cookie value and never logged.
  */
@@ -51,6 +51,7 @@ object KioskWebView {
         onRendererGone: () -> Unit,
         onLoadError: () -> Unit,
         onExitToHost: () -> Unit = {},
+        onVideoStuck: () -> Unit = {},
     ): WebView {
         val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         WebView.setWebContentsDebuggingEnabled(debuggable)
@@ -133,11 +134,11 @@ object KioskWebView {
                 callback.invoke(origin, false, false)
             }
         }
-        view.addJavascriptInterface(HostBridge(view, HostExitGate(policy, hostKey), onExitToHost), HOST_BRIDGE_NAME)
+        view.addJavascriptInterface(HostBridge(view, HostExitGate(policy, hostKey), onExitToHost, onVideoStuck), HOST_BRIDGE_NAME)
         return view
     }
 
-    /** The one name the page can call: `window.MaxcomHost.exit(key)`. */
+    /** The one name the page can call: `window.MaxcomHost.exit(key)` and `window.MaxcomHost.videoStuck(key)`. */
     const val HOST_BRIDGE_NAME = "MaxcomHost"
 
     /** The main-frame variable that holds the bridge key. */
@@ -152,13 +153,24 @@ object KioskWebView {
 
     /**
      * What the kiosk page may ask of the app: leave the kiosk for the maintenance screen (the admin's way to the
-     * Android settings). It runs on the main thread and re-checks the page's current URL against [UrlPolicy]. Every
+     * Android settings), and report that the WebView cannot decode video (the app then restarts the renderer, or
+     * itself, within the limits of [my.maxcom.box.core.VideoRecovery]). Each runs on the main thread and re-checks the page's current URL against [UrlPolicy]. Every
      * frame can see this object, so the call counts only with the key that the main frame alone was given.
      */
-    class HostBridge(private val view: WebView, private val gate: HostExitGate, private val onExit: () -> Unit) {
+    class HostBridge(
+        private val view: WebView,
+        private val gate: HostExitGate,
+        private val onExit: () -> Unit,
+        private val onVideoStuck: () -> Unit,
+    ) {
         @JavascriptInterface
         fun exit(key: String?) {
             view.post { gate.exit(view.url, key, onExit) }
+        }
+
+        @JavascriptInterface
+        fun videoStuck(key: String?) {
+            view.post { gate.run(view.url, key, onVideoStuck) }
         }
     }
 

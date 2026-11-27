@@ -169,23 +169,51 @@ void main() {
     expect(rig.saved, 1);
   });
 
-  test('resetToDefaults sends enabled plus every default', () async {
+  test('[G2] resetToDefaults sends every default and never the switch', () async {
     final rig = _Rig((r) async => jsonResponse(200, _allSettings()));
     await rig.repo.resetToDefaults('iqamahCountdown');
     final body = jsonDecode(rig.box.seen.single.body) as Map<String, dynamic>;
     final f = features.firstWhere((x) => x.key == 'iqamahCountdown');
-    expect(body['enabled'], f.defaultEnabled);
-    expect(body.keys.toSet(), {'enabled', ...f.defaults.keys});
+    expect(body.containsKey('enabled'), isFalse);
+    expect(body.keys.toSet(), f.defaults.keys.toSet());
     expect((((body['minutes'] as Map<String, dynamic>)['jumaat']) as Map<String, dynamic>)['subuh'], 12);
     expect(rig.box.seen.single.url.path, '/api/settings/iqamahCountdown');
 
     await rig.repo.resetToDefaults('appLock');
-    expect(jsonDecode(rig.box.seen.last.body), {'enabled': false});
+    expect(jsonDecode(rig.box.seen.last.body), <String, dynamic>{});
     await rig.repo.resetToDefaults('clock');
-    expect(jsonDecode(rig.box.seen.last.body), {
-      'enabled': true,
-      'showSeconds': false,
+    expect(jsonDecode(rig.box.seen.last.body), {'showSeconds': false});
+  });
+
+  test('[G2] a reset of the camera page leaves it ON with its name (audit id 1915)', () async {
+    final rig = _Rig((r) async => jsonResponse(200, _allSettings()));
+    await rig.repo.resetToDefaults('liveCamera');
+    final body = jsonDecode(rig.box.seen.single.body) as Map<String, dynamic>;
+    expect(body.containsKey('enabled'), isFalse, reason: 'the camera stays switched on');
+    expect(body.containsKey('name'), isFalse, reason: 'the camera keeps its name');
+    // the sound delay is automatic and hidden from the form: a reset leaves its stored value alone
+    expect(body, {
+      'transport': 'auto',
+      'brightness': 'auto',
+      'avOffsetMs': <String, dynamic>{},
     });
+  });
+
+  test('[B4] fullRowPatch: the whole row with the switch, the edit on top, no system field for a surau admin', () {
+    final edited = {
+      'enabled': true,
+      'wifiOnly': true,
+      'joinSegments': true,
+      'replaceGappyLive': 'always',
+    };
+    expect(fullRowPatch('youtubeCatchUp', edited, changed: const {'replaceGappyLive': 'always'}), edited);
+    final f = features.firstWhere((x) => x.key == 'liveYoutube');
+    final row = {'enabled': true, ...f.defaults.cast<String, dynamic>()};
+    final sent = fullRowPatch('liveYoutube', row, changed: const {'privacy': 'public'});
+    expect(sent['enabled'], isTrue);
+    expect(sent['privacy'], 'public');
+    expect(sent.containsKey('relayVideo'), isFalse, reason: 'a system field');
+    expect(fullRowPatch('liveYoutube', row, changed: const {}, includeSystem: true).containsKey('relayVideo'), isTrue);
   });
 
   test('[K3] resetting liveYoutube as a surau Pentadbir sends no system field', () async {
@@ -193,7 +221,8 @@ void main() {
     await rig.repo.resetToDefaults('liveYoutube');
     final body = jsonDecode(rig.box.seen.single.body) as Map<String, dynamic>;
     expect(body.containsKey('relayVideo'), isFalse);
-    expect(body.containsKey('maxBitrateKbps'), isFalse);
+    expect(body.containsKey('maxBitrateKbps'), isFalse, reason: 'hidden: quality is automatic, nothing to reset');
+    expect(body.containsKey('autoQuality'), isFalse, reason: 'a hidden field');
     expect(body.containsKey('relayFrom'), isFalse, reason: 'a hidden field');
     expect(body['titleTemplate'], isNotNull);
     await rig.repo.resetToDefaults('tilawah');

@@ -1,6 +1,7 @@
 package my.maxcom.app.live
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -22,13 +23,33 @@ import android.os.Looper
    which one. Plugging or unplugging a microphone during the live re-opens the capture (`MicRouting.devicesChanged`).
    Everything below `AudioRecordPort` is JVM-pure so it is unit tested with a fake port. */
 
-/** A microphone as the app names it: the id is `type:product`, [kind] is `builtin` or `external`, [name] the product name. */
+/** A microphone as the app names it: the id is `type:product`, [kind] is `builtin`, `external` or `bluetooth`, [name] the product name. */
 data class MicRoute(val id: String, val name: String, val kind: String) {
     val builtin: Boolean get() = kind == KIND_BUILTIN
+    val bluetooth: Boolean get() = kind == KIND_BLUETOOTH
 
     companion object {
         const val KIND_BUILTIN = "builtin"
         const val KIND_EXTERNAL = "external"
+        /** A Bluetooth headset microphone (SCO or LE): telephone quality, never picked by "automatic". */
+        const val KIND_BLUETOOTH = "bluetooth"
+
+        // AudioDeviceInfo.TYPE_* numbers, kept here so the id rules need no Android class.
+        const val TYPE_BUILTIN_MIC = 15
+        const val TYPE_BLUETOOTH_SCO = 7
+        const val TYPE_BLE_HEADSET = 26
+
+        /** The system's device type inside an id, or null when the id has none. */
+        fun typeOfId(id: String): Int? = id.substringBefore(':').toIntOrNull()
+
+        /** The kind an id stands for, from its device type alone. */
+        fun kindOfId(id: String): String = when (typeOfId(id)) {
+            TYPE_BUILTIN_MIC -> KIND_BUILTIN
+            TYPE_BLUETOOTH_SCO, TYPE_BLE_HEADSET -> KIND_BLUETOOTH
+            else -> KIND_EXTERNAL
+        }
+
+        fun isBluetoothId(id: String?): Boolean = id != null && kindOfId(id) == KIND_BLUETOOTH
 
         fun idOf(type: Int, product: String) = "$type:$product"
 
@@ -70,6 +91,24 @@ class MicRouting {
     @Volatile var unavailableName: String? = null
         private set
 
+    // Audio choices the sources read on their own thread (set by the channel; all safe from any thread).
+
+    /** The loudness lift ("Naikkan suara perlahan") of the phone microphone. On by default. */
+    @Volatile var liftMic = true
+    /** The loudness lift of the camera's own sound. On by default. */
+    @Volatile var liftCamera = true
+    /** The phone's mute: everything the phone sends is silence (the microphone, the camera sound, Mic-in's reference). */
+    @Volatile var muteAll = false
+
+    /** A new live starts unmuted: the phone's mute of an earlier live does not carry over (the engine outlives lives). */
+    fun resetForNewLive() {
+        muteAll = false
+    }
+    /** The phone microphone's own volume 0..100 with the phone camera (the external camera mixes it in the mixer). */
+    @Volatile var phoneVolume = 100
+    /** The application context, for the Bluetooth link below Android 12 (the SCO broadcast). Set by the channel. */
+    @Volatile var context: Context? = null
+
     /** Called (capture thread) after every open with the device really routed and the one that could not be used. */
     @Volatile var onRouted: ((routed: MicRoute?, unavailableName: String?) -> Unit)? = null
 
@@ -89,16 +128,19 @@ class MicRouting {
     private var micIds: Set<String>? = null
 
     /**
-     * A device was added or removed: [ids] are the microphones attached now. Re-opens the capture only when that set
-     * really changed (a Bluetooth SCO link or a remote submix coming and going is not a microphone). The first look
-     * only records the set. Main thread.
+     * A device was added or removed: [ids] are the microphones attached now. Re-opens the capture only when that
+     * change touches the sound that is running (O3): the microphone in use went away, the wanted one came back, or
+     * the device's own microphone is in use and "automatic" now has a wired or USB one to take. Another microphone
+     * coming or going (a Bluetooth headset, a second USB one) changes nothing, so the camera sound never stalls. While
+     * the routed device is not known yet any change re-opens. The first look only records the set. Main thread.
      */
     fun micsChanged(ids: Set<String>): Boolean {
         val before = micIds
         micIds = ids
         if (before == null || before == ids) return false
-        version++
-        return true
+        val need = capturePathChanged(before, ids, routed?.id, wantedId)
+        if (need) version++
+        return need
     }
 
     /** Records the microphones attached at start-up, so the first plug is compared with them. Main thread. */
@@ -114,6 +156,23 @@ class MicRouting {
 
     companion object {
         const val OWN = "own"
+
+        /** Android 12 and later asks the Bluetooth permission before a Bluetooth microphone is used. */
+        fun needsBluetoothPermission(id: String?, sdk: Int): Boolean = sdk >= 31 && MicRoute.isBluetoothId(id)
+
+        /** Pure rule behind [micsChanged]. */
+        fun capturePathChanged(before: Set<String>, now: Set<String>, inUse: String?, wanted: String?): Boolean {
+            if (inUse == null) return true
+            val removed = before - now
+            val added = now - before
+            if (inUse in removed) return true
+            return when (wanted) {
+                OWN -> false
+                null -> MicRoute.kindOfId(inUse) == MicRoute.KIND_BUILTIN &&
+                    added.any { MicRoute.kindOfId(it) == MicRoute.KIND_EXTERNAL }
+                else -> wanted != inUse && wanted in added
+            }
+        }
     }
 }
 
@@ -128,15 +187,31 @@ class MicOpenResult(
     val target: String? = null,
     val targetName: String = "",
     val pending: Boolean = false,
+    /** The rate the recorder was opened at: below the engine rate for a Bluetooth microphone (it is resampled). */
+    val captureRate: Int = 0,
 )
+
+/** Brings the audio link of a Bluetooth microphone up and down. The real one is [AndroidScoLink]; tests use a fake. */
+interface ScoLink {
+    /** Routes the call audio to the device with [id] and waits for it. False when it could not be brought up. */
+    fun connect(id: String): Boolean
+    /** Gives the route back. Safe to call when nothing was connected. */
+    fun disconnect()
+}
 
 object MicOpener {
     /** AudioSource.DEFAULT, MIC, VOICE_RECOGNITION: the order the router tries when the first does not route. */
     val SOURCES = intArrayOf(MediaRecorder.AudioSource.DEFAULT, MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.VOICE_RECOGNITION)
 
-    /** The microphone to ask for: the chosen one, the device's own, or (automatic) the first external one attached. */
+    /** AudioSource.VOICE_COMMUNICATION first for a Bluetooth microphone (the system routes the call link for it). */
+    val BLUETOOTH_SOURCES = intArrayOf(MediaRecorder.AudioSource.VOICE_COMMUNICATION, MediaRecorder.AudioSource.DEFAULT, MediaRecorder.AudioSource.MIC)
+
+    /** A Bluetooth call link records at 16 kHz (wide band) or 8 kHz (narrow band); the app resamples to the engine rate. */
+    val BLUETOOTH_RATES = intArrayOf(16000, 8000)
+
+    /** The microphone to ask for: the chosen one, the device's own, or (automatic) the first wired or USB one attached (never Bluetooth). */
     fun target(wanted: String?, available: List<MicRoute>): String? = when (wanted) {
-        null -> available.firstOrNull { !it.builtin }?.id
+        null -> available.firstOrNull { !it.builtin && !it.bluetooth }?.id
         MicRouting.OWN -> available.firstOrNull { it.builtin }?.id
         else -> wanted
     }
@@ -151,23 +226,46 @@ object MicOpener {
     fun unavailableFor(target: String?, targetName: String, routed: MicRoute?): String? =
         if (target != null && routed != null && routed.id != target) targetName else null
 
-    fun open(newPort: () -> RecordPort, inputs: () -> List<MicRoute>, sampleRate: Int, wanted: String?, sources: IntArray = SOURCES): MicOpenResult {
+    fun open(
+        newPort: () -> RecordPort,
+        inputs: () -> List<MicRoute>,
+        sampleRate: Int,
+        wanted: String?,
+        sources: IntArray = SOURCES,
+        sco: ScoLink? = null,
+    ): MicOpenResult {
         val avail = try { inputs() } catch (_: Exception) { emptyList() }
         val target = target(wanted, avail)
         val attached = target != null && avail.any { it.id == target }
         if (target != null && attached) {
-            for (src in sources) {
-                val p = newPort()
-                try {
-                    if (p.open(src, sampleRate) && p.setPreferred(target) && p.start()) {
-                        val r = p.routed()
-                        if (r != null && r.id == target) return MicOpenResult(p, r, null)
-                        // Not said yet is "unknown", not failure: keep the recorder and learn the device later.
-                        if (r == null) return MicOpenResult(p, null, null, target, nameOf(target, avail), pending = true)
+            val bt = MicRoute.isBluetoothId(target)
+            // A Bluetooth microphone needs its call link first; without it the recording runs on the default microphone.
+            val linked = !bt || (try { sco?.connect(target) } catch (_: Exception) { false } ?: false)
+            // A link that did not come up is given back at once (a pending request must not hold the headset).
+            if (bt && !linked) {
+                try { sco?.disconnect() } catch (_: Exception) {}
+            }
+            if (linked) {
+                val trySources = if (bt) BLUETOOTH_SOURCES else sources
+                val rates = if (bt) BLUETOOTH_RATES else intArrayOf(sampleRate)
+                for (src in trySources) {
+                    for (rate in rates) {
+                        val p = newPort()
+                        try {
+                            if (p.open(src, rate) && p.setPreferred(target) && p.start()) {
+                                val r = p.routed()
+                                if (r != null && r.id == target) return MicOpenResult(p, r, null, captureRate = rate)
+                                // Not said yet is "unknown", not failure: keep the recorder and learn the device later.
+                                if (r == null) return MicOpenResult(p, null, null, target, nameOf(target, avail), pending = true, captureRate = rate)
+                            }
+                        } catch (_: Exception) {
+                        }
+                        p.close()
                     }
-                } catch (_: Exception) {
                 }
-                p.close()
+                if (bt) {
+                    try { sco?.disconnect() } catch (_: Exception) {}
+                }
             }
         }
         val p = newPort()
@@ -177,7 +275,7 @@ object MicOpener {
             return MicOpenResult(null, null, null)
         }
         val unavailable = if (target != null && attached) nameOf(target, avail) else null
-        return MicOpenResult(p, p.routed(), unavailable)
+        return MicOpenResult(p, p.routed(), unavailable, captureRate = sampleRate)
     }
 
     private fun nameOf(target: String, avail: List<MicRoute>): String =
@@ -253,18 +351,22 @@ class AudioRecordPort(private val am: AudioManager?) : RecordPort {
     }
 
     companion object {
-        /** The real microphones (built-in, wired, USB) as `audioInputs` lists them. */
+        /** The real microphones (built-in, wired, USB, Bluetooth) as `audioInputs` lists them. */
         val MIC_TYPES = setOf(
             AudioDeviceInfo.TYPE_BUILTIN_MIC,
             AudioDeviceInfo.TYPE_WIRED_HEADSET,
             AudioDeviceInfo.TYPE_USB_DEVICE,
             AudioDeviceInfo.TYPE_USB_HEADSET,
+            // Bluetooth headsets: the call link (SCO) and, from Android 12, LE Audio headsets
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+            AudioDeviceInfo.TYPE_BLE_HEADSET,
         )
 
         fun routeOf(d: AudioDeviceInfo): MicRoute {
             val builtin = d.type == AudioDeviceInfo.TYPE_BUILTIN_MIC
             val product = d.productName?.toString()?.trim().orEmpty()
-            return MicRoute(MicRoute.idOf(d.type, product), if (builtin) "" else product, if (builtin) MicRoute.KIND_BUILTIN else MicRoute.KIND_EXTERNAL)
+            val id = MicRoute.idOf(d.type, product)
+            return MicRoute(id, if (builtin) "" else product, MicRoute.kindOfId(id))
         }
 
         fun inputDevices(am: AudioManager?): List<AudioDeviceInfo> =

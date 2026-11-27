@@ -15,6 +15,7 @@ import 'package:surau_app/features/live/fake_publisher.dart';
 import 'package:surau_app/features/live/live_screen.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:surau_app/features/live/live_source.dart';
+import 'package:surau_app/features/live/live_source_widgets.dart' show FoldSection;
 import 'package:surau_app/features/live/mic_watch.dart';
 import 'package:surau_app/features/live/publisher.dart';
 import 'package:surau_app/features/shell/live_camera_gateway.dart';
@@ -27,7 +28,8 @@ import '../features/fakes.dart';
 import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
 
-const _signedIn = LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau Contoh'));
+// a box with the build 4 controls (`canToggleKiosk`): the main box microphone and its sync block are for such a box
+const _signedIn = LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau Contoh'), canToggleKiosk: true);
 
 class _MemStore implements LiveSourceStore {
   _MemStore(this.video, this.mix);
@@ -59,6 +61,29 @@ class _MicShown extends MicAutoNotifier {
   MicAutoState build() => const MicAutoState(mic: MicInfo(deviceId: 'usb-1', label: 'Rode Lavalier'));
 }
 
+class _PathStore implements LiveVideoPathStore {
+  _PathStore([this.path]);
+
+  String? path;
+
+  @override
+  Future<String?> read() async => path;
+
+  @override
+  Future<void> write(String p) async => path = p;
+}
+
+/// A publisher that can let its prepared camera go (as the Android one does).
+class _ReleasingPub extends FakePublisher implements LivePreparedRelease {
+  int releases = 0;
+
+  @override
+  Future<void> releasePrepared() async {
+    releases += 1;
+    emit(current.copyWith(phase: PublisherPhase.idle));
+  }
+}
+
 class _T {
   _T(this.h, this.pub, this.store);
 
@@ -67,6 +92,7 @@ class _T {
   final _MemStore store;
   final List<Map<String, dynamic>> starts = [];
   final List<Map<String, dynamic>> audioPosts = [];
+  final List<Map<String, dynamic>> controlPosts = [];
 
   LiveBoxNotifier get box => h.container.read(liveBoxProvider.notifier);
   LiveSourceState get source => h.container.read(liveSourceProvider);
@@ -90,8 +116,11 @@ Future<_T> _open(
   bool realController = false,
   GoldenSize size = GoldenSize.phone,
   List<Override> extra = const [],
+  FakePublisher? publisher,
+  Map<String, Object?>? control,
+  Map<String, Object?> controlAnswer = const {'sent': true, 'confirmed': true},
 }) async {
-  final pub = FakePublisher(initial: initial);
+  final pub = publisher ?? FakePublisher(initial: initial);
   final store = _MemStore(video, mix ?? (video == VideoSourceKind.external ? _mix() : _phoneMix));
   final h = await pumpShell(
     tester,
@@ -119,6 +148,7 @@ Future<_T> _open(
     'configured': true,
     'url': 'rtsp://10.168.1.50:554/stream1',
     'hasPassword': false,
+    'control': ?control,
     'lastTest': reachable == null
         ? null
         : {
@@ -137,7 +167,7 @@ Future<_T> _open(
     200,
     boxInput
         ? {'available': true, 'devices': <Object>[], 'selected': null}
-        : {'available': false, 'devices': <Object>[], 'selected': null, 'reason': 'Tiada input audio pada kotak ini'},
+        : {'available': false, 'devices': <Object>[], 'selected': null, 'reason': 'Tiada input audio pada MAXCOM ini'},
   );
   h.handlers['POST /api/live/start'] = (r) async {
     t.starts.add(jsonDecode(r.body) as Map<String, dynamic>);
@@ -147,6 +177,10 @@ Future<_T> _open(
         'srt': {'host': '10.168.1.2', 'port': 8890, 'streamId': 'x', 'passphrase': 'y'},
       },
     });
+  };
+  h.handlers['POST /api/live/camera/control'] = (r) async {
+    t.controlPosts.add(jsonDecode(r.body) as Map<String, dynamic>);
+    return jsonResponse(200, controlAnswer);
   };
   h.handlers['POST /api/live/audio'] = (r) async {
     t.audioPosts.add(jsonDecode(r.body) as Map<String, dynamic>);
@@ -195,7 +229,46 @@ Future<void> _openSection(WidgetTester tester, String key) async {
   final head = k('live-section-$key-head');
   await reveal(tester, head);
   await tester.ensureVisible(head);
+  // "Sumber video" is open by default before a live: a fold that is open already stays open
+  final fold = find.ancestor(of: k('live-section-$key'), matching: find.byType(FoldSection));
+  if (tester.widget<FoldSection>(fold).open) return;
   await tester.tap(head);
+  await settle(tester);
+}
+
+/// A publisher whose source change or prepare for the external camera fails.
+class _FailingPublisher extends FakePublisher {
+  _FailingPublisher();
+
+  bool failSwitch = false;
+  bool failExternalPrepare = false;
+
+  @override
+  Future<void> setVideoSource(
+    VideoSourceKind kind, {
+    ExternalCameraSource? camera,
+    LiveAudioMix? mix,
+    int avOffsetMs = 0,
+  }) async {
+    if (failSwitch) throw StateError('no switch');
+    return super.setVideoSource(kind, camera: camera, mix: mix, avOffsetMs: avOffsetMs);
+  }
+
+  @override
+  Future<void> prepare(PublisherConfig c) async {
+    if (failExternalPrepare && c.video == VideoSourceKind.external) throw StateError('no prepare');
+    return super.prepare(c);
+  }
+}
+
+/// The Kamera luaran form is a page of its own: the live page is gone while it is open.
+Future<void> _leaveAndComeBack(WidgetTester tester, _T t, {required bool cameraOn}) async {
+  t.h.router.go('/live/settings/liveCamera');
+  await settle(tester);
+  (t.h.settings['liveCamera'] as Map)['enabled'] = cameraOn;
+  t.h.container.invalidate(settingsProvider);
+  await settle(tester);
+  t.h.router.go('/live');
   await settle(tester);
 }
 
@@ -238,7 +311,20 @@ void main() {
       expect(t.source.video, VideoSourceKind.phone);
       expect(find.text('Mikrofon telefon ini'), findsOneWidget);
       expect(k('audio-mute'), findsOneWidget);
-      expect(k('audio-volume-deviceMic'), findsNothing, reason: 'today\'s mute only, no slider (M3)');
+      // 2026.11.15 (P1): the phone microphone has a volume and a loudness lift of its own beside today's mute
+      expect(k('audio-volume-deviceMic'), findsOneWidget);
+      expect(k('audio-lift-deviceMic'), findsOneWidget);
+    });
+
+    testWidgets('the phone camera prepare carries the mix, so the phone microphone volume applies from the first second', (tester) async {
+      final t = await _open(tester, video: VideoSourceKind.phone);
+      await _openAll(tester);
+      await _setVolume(tester, 'deviceMic', 40);
+      await t.h.container.read(liveSourceProvider.notifier).prepare(recording: false, frontCamera: true);
+      await settle(tester);
+      expect(t.pub.prepared.last.video, VideoSourceKind.phone);
+      expect(t.pub.prepared.last.mix, isNotNull);
+      expect(t.pub.prepared.last.mix!.deviceMic.volume, 40);
     });
 
     testWidgets('choosing the camera prepares it and remembers the choice', (tester) async {
@@ -275,20 +361,30 @@ void main() {
 
   group('the Audio card', () {
     testWidgets('one row per source with Kelantangan and a meter; the camera row cannot be removed', (tester) async {
-      await _open(tester, mix: _mix(cam: 40, mic: true), initial: _ready(audio: _audio()));
+      await _open(tester, mix: _mix(cam: 40), initial: _ready(audio: _audio()));
       await _openAll(tester);
       expect(k('audio-row-camera'), findsOneWidget);
-      expect(k('audio-row-deviceMic'), findsOneWidget);
       expect(k('audio-volume-camera'), findsOneWidget);
       expect(k('audio-remove-camera'), findsNothing);
-      expect(k('audio-remove-deviceMic'), findsOneWidget);
       expect(find.text('Audio kamera luaran'), findsOneWidget);
       expect(find.textContaining('Mikrofon kamera biasanya jauh dan bising'), findsOneWidget);
       expect(find.text('40%'), findsOneWidget);
     });
 
-    testWidgets('moving a slider sets the volume in steps of 5, remembers it and tells the engine', (tester) async {
+    testWidgets('a saved mix with two sources on opens as one: the microphone, and the camera row is off with its slider disabled', (tester) async {
       final t = await _open(tester, mix: _mix(cam: 40, mic: true), initial: _ready(audio: _audio()));
+      await _openAll(tester);
+      expect(t.source.mix.deviceMic.enabled, isTrue);
+      expect(t.source.mix.camera.enabled, isFalse);
+      expect(k('audio-row-deviceMic'), findsOneWidget);
+      expect(k('audio-remove-deviceMic'), findsOneWidget);
+      await reveal(tester, k('audio-volume-camera'));
+      expect(tester.widget<Slider>(k('audio-volume-camera')).onChanged, isNull);
+      expect(tester.widget<Slider>(k('audio-volume-deviceMic')).onChanged, isNotNull);
+    });
+
+    testWidgets('moving a slider sets the volume in steps of 5, remembers it and tells the engine', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 40), initial: _ready(audio: _audio()));
       await _openAll(tester);
       await _setVolume(tester, 'camera', 62);
       expect(t.source.mix.camera.volume, 60);
@@ -302,11 +398,14 @@ void main() {
       await tester.tap(k('audio-add'));
       await settle(tester);
       expect(find.text('Tambah audio'), findsWidgets);
-      expect(find.text('Tiada input audio pada kotak ini'), findsOneWidget);
+      expect(find.text('Tiada input audio pada MAXCOM ini'), findsOneWidget);
       expect(k('add-audio-button-boxInput'), findsNothing);
       await tester.tap(k('add-audio-button-deviceMic'));
       await settle(tester);
       expect(t.source.mix.deviceMic.enabled, isTrue);
+      // one sound only: adding the microphone turns the camera sound off
+      expect(t.source.mix.camera.enabled, isFalse);
+      expect(t.pub.mixes.last.camera.enabled, isFalse);
       expect(k('audio-row-deviceMic'), findsOneWidget);
     });
 
@@ -343,79 +442,44 @@ void main() {
       expect(t.pub.started, hasLength(1));
     });
 
-    testWidgets('the folded summary names the sources and the alignment (01)', (tester) async {
+    testWidgets('the folded summary names the one sound (01)', (tester) async {
       await _open(tester, mix: _mix(cam: 40, mic: true), initial: _ready(audio: _audio()));
-      expect(find.text('Audio kamera + Mikrofon telefon, selaras'), findsOneWidget);
+      expect(find.text('Mikrofon telefon'), findsWidgets);
+      expect(find.textContaining('selaras'), findsNothing);
     });
   });
 
-  group('alignment (4.3a, 4.7)', () {
-    testWidgets('searching: the microphone is held out and the chip says so (28)', (tester) async {
+  group('one sound: no mixing words, no alignment chip, no delay block', () {
+    testWidgets('a microphone row shows no alignment chip and no mixing notice', (tester) async {
       await _open(tester, mix: _mix(cam: 40, mic: true), initial: _ready(audio: _audio(align: 'searching')));
       await _openAll(tester);
-      expect(find.descendant(of: k('audio-chip-deviceMic'), matching: find.text('Sedang diselaraskan')), findsOneWidget);
-      expect(find.text('Belum dicampur sehingga selaras'), findsOneWidget);
-    });
-
-    testWidgets('locked: Selaras (17)', (tester) async {
-      await _open(tester, mix: _mix(cam: 40, mic: true), initial: _ready(audio: _audio()));
-      await _openAll(tester);
-      expect(find.descendant(of: k('audio-chip-deviceMic'), matching: find.text('Selaras')), findsOneWidget);
-    });
-
-    testWidgets('failed after the wait: Belum selaras and Guna Mikrofon telefon sahaja sets the camera to 0 (29)', (tester) async {
-      final t = await _open(tester, mix: _mix(cam: 40, mic: true), initial: _ready(audio: _audio(align: 'failed')));
-      await _openAll(tester);
-      expect(find.descendant(of: k('audio-chip-deviceMic'), matching: find.text('Belum selaras')), findsOneWidget);
-      expect(find.textContaining('Penyelarasan automatik belum berjaya, jadi Mikrofon telefon belum dicampur'), findsOneWidget);
-      await reveal(tester, k('audio-use-only'));
-      expect(find.text('Guna Mikrofon telefon sahaja'), findsOneWidget);
-      await tester.tap(k('audio-use-only'));
-      await settle(tester);
-      expect(t.source.mix.camera.volume, 0);
-      expect(t.pub.mixes.last.camera.volume, 0);
-    });
-
-    testWidgets('failed with the camera at 0: the short message and no action', (tester) async {
-      await _open(tester, mix: _mix(cam: 0, mic: true), initial: _ready(audio: _audio(cam: 0, align: 'failed')));
-      await _openAll(tester);
-      expect(find.text('Penyelarasan automatik belum berjaya. Bunyi mungkin tidak selari dengan gambar.'), findsOneWidget);
+      expect(k('audio-chip-deviceMic'), findsNothing);
+      expect(find.text('Sedang diselaraskan'), findsNothing);
+      expect(find.text('Belum dicampur sehingga selaras'), findsNothing);
       expect(k('audio-use-only'), findsNothing);
     });
 
-    testWidgets('before an iPad or Mic-in live the chip reads Diselaraskan bila siaran bermula (M4)', (tester) async {
+    testWidgets('no delay block anywhere in the card, in any live', (tester) async {
       await _open(tester, device: 'ipad', mix: _mix(cam: 40, mic: true, box: true));
       await _openAll(tester);
-      expect(
-        find.descendant(of: k('audio-chip-deviceMic'), matching: find.text('Diselaraskan bila siaran bermula')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: k('audio-chip-boxInput'), matching: find.text('Diselaraskan bila siaran bermula')),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('an iPad live shows the 1 hingga 2 saat lewat note (M5)', (tester) async {
-      await _open(tester, device: 'ipad', mix: _mix(cam: 40));
-      expect(find.textContaining('1 hingga 2 saat lewat'), findsOneWidget);
+      expect(k('audio-offset-plus'), findsNothing);
+      expect(k('audio-offset-value'), findsNothing);
+      expect(k('audio-clap'), findsNothing);
+      expect(find.text('Imbangan masa audio'), findsNothing);
+      expect(find.text('Selaras bunyi dengan gambar'), findsNothing);
     });
   });
 
   group('a camera with no audio (30)', () {
-    testWidgets('the camera row is greyed; Imbangan masa audio and Uji tepukan show for live:settings', (tester) async {
-      final t = await _open(tester, hasAudio: false, mix: _mix(mic: true), initial: _ready());
+    testWidgets('the camera row is greyed; no delay block is offered for the microphone', (tester) async {
+      await _open(tester, hasAudio: false, mix: _mix(mic: true), initial: _ready());
       await _openAll(tester);
       expect(find.text('Kamera ini tiada audio'), findsOneWidget);
       expect(k('audio-volume-camera'), findsNothing);
-      expect(find.text('Imbangan masa audio'), findsOneWidget);
-      expect(k('audio-clap'), findsOneWidget);
+      expect(find.text('Imbangan masa audio'), findsNothing);
+      expect(k('audio-clap'), findsNothing);
+      expect(k('audio-offset-plus'), findsNothing);
       expect(find.textContaining('Mikrofon telefon digunakan bersendirian'), findsOneWidget);
-      await reveal(tester, k('audio-offset-plus'));
-      await tester.tap(k('audio-offset-plus'));
-      await settle(tester);
-      expect(t.source.offsets[idDeviceMic], 50);
-      expect(t.pub.avOffsets.last, 50);
     });
 
     testWidgets('with nothing added the screen says the live has no sound', (tester) async {
@@ -425,36 +489,6 @@ void main() {
       expect(k('audio-clap'), findsNothing, reason: 'no added source, nothing to align');
     });
 
-    testWidgets('Uji tepukan records, replays and saves the offset through the engine', (tester) async {
-      final t = await _open(tester, hasAudio: false, mix: _mix(mic: true), initial: _ready());
-      await _openAll(tester);
-      await reveal(tester, k('audio-clap'));
-      await tester.tap(k('audio-clap'));
-      await settle(tester);
-      expect(k('clap-sheet'), findsOneWidget);
-      await tester.tap(k('clap-record'));
-      await tester.pump();
-      expect(t.pub.clapCalls, contains('capture'));
-      t.pub.emit(t.pub.current.copyWith(clap: ClapPhase.capturing));
-      await tester.pump();
-      t.pub.emit(t.pub.current.copyWith(clap: ClapPhase.ready));
-      await tester.pump();
-      expect(t.pub.clapCalls.any((c) => c.startsWith('replay')), isTrue);
-      t.pub.emit(t.pub.current.copyWith(clap: ClapPhase.replaying));
-      await settle(tester);
-      await tester.tap(k('clap-plus'));
-      await tester.pump();
-      expect(t.pub.clapCalls.last, 'offset:50');
-      var saved = false;
-      t.h.handlers['PUT /api/settings/liveCamera'] = (r) async {
-        saved = (jsonDecode(r.body) as Map)['avOffsetMs'] != null;
-        return jsonResponse(200, t.h.settings);
-      };
-      await tester.tap(k('clap-save'));
-      await settle(tester);
-      expect(saved, isTrue);
-      expect(t.pub.avOffsets.last, 50);
-    });
   });
 
   group('during the live', () {
@@ -471,7 +505,7 @@ void main() {
     });
 
     testWidgets('a volume change during the live goes to the engine without a restart', (tester) async {
-      final t = await _open(tester, mix: _mix(cam: 40, mic: true));
+      final t = await _open(tester, mix: _mix(cam: 40));
       t.pub.emit(_live(audio: _audio()));
       await settle(tester);
       t.h.container.read(liveFoldedProvider.notifier).set(false);
@@ -516,7 +550,6 @@ void main() {
       t.pub.emit(_live(audio: _audio(align: 'searching')));
       await settle(tester);
       expect(k('live-camera-back'), findsOneWidget);
-      expect(find.text('Kembali. Dicampur semula bila selaras'), findsOneWidget);
     });
 
     testWidgets('after 10 minutes the engine ends the live: the normal stop and the message', (tester) async {
@@ -526,7 +559,180 @@ void main() {
       t.pub.emit(_live(audio: _audio()).copyWith(endReason: endedCameraLost));
       await settle(tester);
       expect(t.pub.stops, 1);
-      expect(find.text('Siaran dihentikan kerana kamera terputus lebih 10 minit.'), findsOneWidget);
+      expect(find.text('Siaran dihentikan kerana kamera luaran terputus'), findsOneWidget);
+    });
+  });
+
+  group('Video diambil oleh (the phone by default, the box by choice)', () {
+    testWidgets('the phone pulls by default; choosing MAXCOM Kiosk Box says clearly why Rakam is not offered', (tester) async {
+      final t = await _open(tester, realController: true);
+      expect(t.source.videoPath, 'device');
+      expect(k('video-path-choice'), findsOneWidget);
+      expect(find.text('Video diambil oleh'), findsOneWidget);
+      expect(k('live-rec-no-box-pull'), findsNothing);
+      await tester.tap(find.text('MAXCOM Kiosk Box'));
+      await settle(tester);
+      expect(t.source.videoPath, 'box');
+      expect(find.text('Telefon hanya mengawal siaran. Rakaman pada telefon tidak tersedia.'), findsWidgets);
+      // the start screen says why, in full: never silently hidden
+      expect(
+        find.text(
+          'Rakam tidak ditawarkan kerana video diambil oleh MAXCOM Kiosk Box. Telefon ini tidak menerima gambar kamera, jadi tiada apa yang boleh dirakam pada telefon. Untuk merakam, pilih Video diambil oleh: Telefon ini.',
+        ),
+        findsOneWidget,
+      );
+      // the Rakam pill reads "not available", and the sheet repeats the reason
+      await tester.tap(k('live-dest-recording'));
+      await settle(tester);
+      expect(find.text('Rakaman: Tidak tersedia'), findsOneWidget);
+      t.h.container.dispose();
+    });
+
+    testWidgets('B11: choosing the box as the puller closes the camera this phone had prepared, and the live opens none', (tester) async {
+      final pub = _ReleasingPub();
+      final t = await _open(tester, realController: true, publisher: pub);
+      // the page opened with this phone as the puller: its engine is prepared
+      expect(pub.prepared, isNotEmpty);
+      expect(pub.current.phase, PublisherPhase.ready);
+      expect(pub.releases, 0);
+      await tester.tap(find.text('MAXCOM Kiosk Box'));
+      await settle(tester);
+      expect(pub.releases, 1, reason: 'the prepared camera is let go');
+      expect(pub.current.phase, PublisherPhase.idle);
+      expect(k('live-box-pull-idle'), findsNothing, reason: 'no picture area at all');
+      expect(k('live-no-video-note'), findsOneWidget);
+      final preparedBefore = pub.prepared.length;
+      t.h.handlers['GET /api/live/status'] = (r) async => jsonResponse(200, {
+        'session': t.starts.isEmpty ? null : {'id': 's1', 'startedBy': 'Ustaz Ali', 'mine': true, 'videoPath': 'box', 'source': 'android'},
+        'video': 'external',
+        'warnings': <Object>[],
+        'ingest': {'ready': t.starts.isNotEmpty},
+        'relay': {'state': 'off'},
+        'youtube': {'signedIn': true, 'state': 'none'},
+      });
+      await tester.tap(k('live-start'));
+      await settle(tester);
+      expect(t.starts.single['videoPath'], 'box');
+      expect(k('live-control-only'), findsOneWidget);
+      expect(pub.started, isEmpty);
+      expect(pub.prepared.length, preparedBefore, reason: 'no camera is opened while this phone only controls');
+      expect(pub.current.phase, PublisherPhase.idle);
+      // back to this phone as the puller (after the live): the engine is prepared again
+      t.h.container.dispose();
+    });
+
+    testWidgets('with the box pulling: start sends videoPath box, the phone starts no publisher and asks for no camera address', (tester) async {
+      final t = await _open(tester, realController: true);
+      await tester.tap(find.text('MAXCOM Kiosk Box'));
+      await settle(tester);
+      final preparedBefore = t.pub.prepared.length;
+      t.h.box.seen.clear();
+      // the box reports the session it is about to open, as this phone's own, pulled by the box
+      t.h.handlers['GET /api/live/status'] = (r) async => jsonResponse(200, {
+        'session': t.starts.isEmpty ? null : {'id': 's1', 'startedBy': 'Ustaz Ali', 'mine': true, 'videoPath': 'box', 'source': 'android'},
+        'video': 'external',
+        'warnings': <Object>[],
+        'ingest': {'ready': t.starts.isNotEmpty},
+        'relay': {'state': 'off'},
+        'youtube': {'signedIn': true, 'state': 'none'},
+      });
+      await tester.tap(k('live-start'));
+      await settle(tester);
+      expect(t.starts.single['videoPath'], 'box');
+      expect(t.starts.single['youtubeVia'], 'box');
+      expect(t.pub.started, isEmpty, reason: 'the phone only controls');
+      expect(t.pub.prepared.length, preparedBefore);
+      expect(t.h.box.seen.where((r) => r.url.path == '/api/live/camera/source'), isEmpty, reason: 'no pull by the phone');
+      // the live is on the screen from the box's status: Berhenti, the note, the shared picture
+      expect(k('live-stop'), findsOneWidget);
+      expect(k('live-control-only'), findsOneWidget);
+      expect(k('live-shared-picture'), findsNothing, reason: 'the control card replaces the picture (build 4)');
+      expect(k('live-control-card'), findsOneWidget);
+      // the stop asks first (B12), then the summary says why nothing was recorded on the phone
+      await tester.tap(k('live-stop'));
+      await settle(tester);
+      expect(k('live-stop-dialog'), findsOneWidget);
+      await tester.tap(k('live-stop-confirm'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await settle(tester);
+      expect(t.pub.stops, 0);
+      expect(k('live-rec-none-why'), findsOneWidget);
+      expect(
+        find.text(
+          'Siaran ini tidak dirakam pada telefon kerana video diambil oleh MAXCOM Kiosk Box, bukan oleh telefon ini. Jika YouTube dipilih, salinan siaran ada di YouTube.',
+        ),
+        findsOneWidget,
+      );
+      t.h.container.dispose();
+    });
+
+    testWidgets('the choice is remembered on this device', (tester) async {
+      final mem = _PathStore('box');
+      final t = await _open(tester, realController: true, extra: [liveVideoPathStoreProvider.overrideWithValue(mem)]);
+      expect(t.source.videoPath, 'box');
+      await tester.tap(find.text('Telefon ini'));
+      await settle(tester);
+      expect(mem.path, 'device');
+      t.h.container.dispose();
+    });
+
+    testWidgets('an iPad has no such choice (the box always pulls for a browser)', (tester) async {
+      await _open(tester, device: 'ipad');
+      expect(k('video-path-choice'), findsNothing);
+    });
+  });
+
+  group('the camera in use flag', () {
+    Map<String, Object?> busy({String via = 'device'}) => {
+      'session': {'id': 's7', 'startedBy': 'Tablet Surau', 'mine': false, 'videoPath': via},
+      'video': 'external',
+      'warnings': <Object>[],
+      'ingest': {'ready': true},
+      'relay': {'state': 'off'},
+      'youtube': {'signedIn': true, 'state': 'none'},
+      'cameraUse': [
+        {'cameraId': 'external', 'sessionId': 's7', 'via': via, 'by': {'name': 'Tablet Surau', 'mine': false}, 'since': '2026-11-23T12:00:00.000Z'},
+      ],
+    };
+
+    testWidgets('another phone pulls the camera: the flag is shown, the picture is joined through the box, and NO second pull is opened', (tester) async {
+      final t = await _open(tester, realController: true);
+      t.h.handlers['GET /api/live/status'] = (r) async => jsonResponse(200, busy());
+      t.h.box.seen.clear();
+      final prepared = t.pub.prepared.length;
+      await (t.box as LiveController).pollOnce();
+      await settle(tester);
+      expect(k('live-camera-in-use'), findsOneWidget);
+      expect(find.textContaining('Kamera sedang digunakan oleh'), findsOneWidget);
+      expect(find.textContaining('Tablet Surau'), findsWidgets);
+      expect(find.text('Telefon ini memaparkan gambar yang sama melalui MAXCOM dan tidak menyambung terus ke kamera.'), findsOneWidget);
+      expect(k('live-shared-picture'), findsOneWidget);
+      expect(t.source.cameraInUse, isTrue);
+      // a refresh of the source while the camera is busy prepares nothing and asks for no address
+      await t.h.container.read(liveSourceProvider.notifier).prepare(recording: true, frontCamera: false);
+      expect(t.pub.prepared.length, prepared);
+      expect(t.h.box.seen.where((r) => r.url.path == '/api/live/camera/source'), isEmpty);
+      t.h.container.dispose();
+    });
+
+    testWidgets('the box pulls it for another device: "oleh MAXCOM Kiosk Box"', (tester) async {
+      final t = await _open(tester, realController: true);
+      t.h.handlers['GET /api/live/status'] = (r) async => jsonResponse(200, busy(via: 'box'));
+      await (t.box as LiveController).pollOnce();
+      await settle(tester);
+      expect(find.textContaining('Kamera sedang digunakan oleh MAXCOM Kiosk Box sejak'), findsOneWidget);
+      t.h.container.dispose();
+    });
+
+    testWidgets('the box refuses the address (camera_in_use): no fallback to the phone camera, no second pull', (tester) async {
+      final t = await _open(tester, realController: true);
+      t.h.handlers['GET /api/live/camera/source'] = (r) async => jsonResponse(409, {'errors': ['x'], 'code': 'camera_in_use'});
+      await t.h.container.read(liveSourceProvider.notifier).prepare(recording: true, frontCamera: false);
+      await settle(tester);
+      expect(t.source.video, VideoSourceKind.external, reason: 'the choice stays; the phone camera does not take over');
+      expect(t.source.cameraRefused, isTrue);
+      expect(t.source.cameraBusy, isTrue);
+      t.h.container.dispose();
     });
   });
 
@@ -537,7 +743,8 @@ void main() {
       await settle(tester);
       expect(t.starts, hasLength(1));
       expect(t.starts.single['video'], 'external');
-      expect((t.starts.single['audio'] as Map)['camera'], {'enabled': true, 'volume': 40});
+      // one sound only: the microphone is on, the camera sound is off (its volume is kept)
+      expect((t.starts.single['audio'] as Map)['camera'], {'enabled': false, 'volume': 40});
       expect((t.starts.single['audio'] as Map)['deviceMic'], {'enabled': true, 'volume': 100});
       t.h.container.dispose(); // the open live's heartbeat ends with its controller
     });
@@ -549,6 +756,144 @@ void main() {
       expect(t.starts.single.containsKey('video'), isFalse);
       expect(t.starts.single.containsKey('audio'), isFalse);
       t.h.container.dispose();
+    });
+  });
+
+  group('Lane X: Kawalan kamera', () {
+    testWidgets('an older box that says nothing about control: no row', (tester) async {
+      await _open(tester);
+      expect(k('camera-control-row'), findsNothing);
+    });
+
+    testWidgets('the opt-in off: no row', (tester) async {
+      await _open(tester, control: {'enabled': false, 'protocol': 'osc'});
+      expect(k('camera-control-row'), findsNothing);
+    });
+
+    testWidgets('the opt-in on: a collapsed row; open, it shows Kecerahan, Kedudukan 1 2 3 Asal and Jejak automatik', (tester) async {
+      await _open(tester, control: {'enabled': true, 'protocol': 'osc'});
+      await reveal(tester, k('camera-control-row'));
+      expect(find.text('Kawalan kamera'), findsOneWidget);
+      expect(k('camera-control-darker'), findsNothing, reason: 'collapsed');
+      await tester.tap(k('camera-control-toggle'));
+      await settle(tester);
+      expect(find.text('Kecerahan'), findsOneWidget);
+      expect(find.text('Kedudukan'), findsOneWidget);
+      for (final key in ['camera-control-preset-1', 'camera-control-preset-2', 'camera-control-preset-3', 'camera-control-home', 'camera-control-tracking']) {
+        expect(k(key), findsOneWidget, reason: key);
+      }
+      expect(find.text('Asal'), findsOneWidget);
+      expect(find.text('Jejak automatik'), findsOneWidget);
+      expect(tester.widget<Text>(k('camera-control-ev')).data, '0.0');
+    });
+
+    testWidgets('each tap is one call to the box: brightness steps, a preset, Asal and the tracking switch', (tester) async {
+      final t = await _open(tester, control: {'enabled': true, 'protocol': 'osc'});
+      await reveal(tester, k('camera-control-row'));
+      await tester.tap(k('camera-control-toggle'));
+      await settle(tester);
+      await tester.tap(k('camera-control-brighter'));
+      await settle(tester);
+      expect(t.controlPosts, [
+        {'action': 'exposure', 'ev': 0.3},
+      ]);
+      expect(tester.widget<Text>(k('camera-control-ev')).data, '+0.3');
+      expect(find.text('Kamera menjawab'), findsOneWidget);
+      await tester.tap(k('camera-control-darker'));
+      await settle(tester);
+      await tester.tap(k('camera-control-darker'));
+      await settle(tester);
+      expect(t.controlPosts.last, {'action': 'exposure', 'ev': -0.3});
+      expect(tester.widget<Text>(k('camera-control-ev')).data, '-0.3');
+      await tester.tap(k('camera-control-preset-2'));
+      await settle(tester);
+      expect(t.controlPosts.last, {'action': 'preset', 'preset': 2});
+      await tester.tap(k('camera-control-home'));
+      await settle(tester);
+      expect(t.controlPosts.last, {'action': 'resetPosition'});
+      await tester.tap(k('camera-control-tracking'));
+      await settle(tester);
+      expect(t.controlPosts.last, {'action': 'aiTracking', 'on': true});
+      expect(tester.widget<SwitchListTile>(k('camera-control-tracking')).value, isTrue);
+      expect(t.controlPosts, hasLength(6));
+    });
+
+    testWidgets('a camera that stays silent: the row says it was sent and the shown value still moves', (tester) async {
+      final t = await _open(tester, control: {'enabled': true, 'protocol': 'osc'}, controlAnswer: {'sent': true, 'confirmed': false});
+      await reveal(tester, k('camera-control-row'));
+      await tester.tap(k('camera-control-toggle'));
+      await settle(tester);
+      await tester.tap(k('camera-control-brighter'));
+      await settle(tester);
+      expect(find.text('Arahan dihantar ke kamera'), findsOneWidget);
+      expect(tester.widget<Text>(k('camera-control-ev')).data, '+0.3');
+      expect(t.controlPosts, hasLength(1));
+    });
+
+    testWidgets('a message that never left the box is told, and the value does not move', (tester) async {
+      await _open(tester, control: {'enabled': true, 'protocol': 'osc'}, controlAnswer: {'sent': false, 'confirmed': false});
+      await reveal(tester, k('camera-control-row'));
+      await tester.tap(k('camera-control-toggle'));
+      await settle(tester);
+      await tester.tap(k('camera-control-brighter'));
+      await settle(tester);
+      expect(find.text('Arahan tidak sampai ke kamera'), findsOneWidget);
+      expect(tester.widget<Text>(k('camera-control-ev')).data, '0.0');
+    });
+
+    testWidgets('the other method has no brightness command: Kecerahan is left out, the rest stays', (tester) async {
+      await _open(tester, control: {'enabled': true, 'protocol': 'visca'});
+      await reveal(tester, k('camera-control-row'));
+      await tester.tap(k('camera-control-toggle'));
+      await settle(tester);
+      expect(find.text('Kecerahan'), findsNothing);
+      expect(k('camera-control-brighter'), findsNothing);
+      expect(k('camera-control-preset-1'), findsOneWidget);
+    });
+
+    testWidgets('Terapkan tetapan kamera: the main button is in the collapsed row and is one call; the row then shows the saved brightness and tracking', (tester) async {
+      final t = await _open(
+        tester,
+        control: {
+          'enabled': true,
+          'protocol': 'http',
+          'profile': {'preset': 2, 'focus': 'single', 'tracking': 'human', 'exposureEv': 1.0},
+          'applyOnLive': false,
+        },
+      );
+      await reveal(tester, k('camera-control-row'));
+      expect(k('camera-control-darker'), findsNothing, reason: 'collapsed');
+      expect(find.text('Terapkan tetapan kamera'), findsOneWidget);
+      await tester.tap(k('camera-control-apply'));
+      await settle(tester);
+      expect(t.controlPosts, [
+        {'action': 'applyProfile'},
+      ]);
+      expect(find.text('Kamera menjawab'), findsOneWidget);
+      await tester.tap(k('camera-control-toggle'));
+      await settle(tester);
+      expect(tester.widget<Text>(k('camera-control-ev')).data, '+1.0');
+      expect(tester.widget<SwitchListTile>(k('camera-control-tracking')).value, isTrue);
+    });
+
+    testWidgets('Terapkan tetapan kamera: a message that never left the box is told and the shown values do not move', (tester) async {
+      await _open(
+        tester,
+        control: {'enabled': true, 'protocol': 'http', 'profile': {'preset': 1, 'focus': 'continuous', 'tracking': 'human', 'exposureEv': 2.0}},
+        controlAnswer: {'sent': false, 'confirmed': false},
+      );
+      await reveal(tester, k('camera-control-row'));
+      await tester.tap(k('camera-control-apply'));
+      await settle(tester);
+      expect(find.text('Arahan tidak sampai ke kamera'), findsOneWidget);
+      await tester.tap(k('camera-control-toggle'));
+      await settle(tester);
+      expect(tester.widget<Text>(k('camera-control-ev')).data, '0.0');
+    });
+
+    testWidgets('the phone camera is the picture: no row for the external camera', (tester) async {
+      await _open(tester, video: VideoSourceKind.phone, control: {'enabled': true, 'protocol': 'osc'});
+      expect(k('camera-control-row'), findsNothing);
     });
   });
 
@@ -633,6 +978,214 @@ void main() {
       h.router.go('/users');
       await settle(tester);
       expect(find.text('Peranan Media tidak lagi boleh membuat siaran langsung. Beri peranan Siaran Langsung kepada pengguna yang perlu.'), findsOneWidget);
+    });
+  });
+
+  group('build 6: one source on at a time', () {
+    testWidgets('turning an off row on turns the others off in the one request', (tester) async {
+      // the box microphone is the sound (a saved mix with two on opens as one); the camera row is off
+      final t = await _open(tester, mix: _mix(cam: 60, box: true, boxVol: 80));
+      await _openAll(tester);
+      expect(t.source.mix.boxInput.enabled, isTrue);
+      expect(t.source.mix.camera.enabled, isFalse);
+      await reveal(tester, k('audio-rowmute-camera'));
+      await tester.tap(k('audio-rowmute-camera'));
+      await settle(tester);
+      final m = t.pub.mixes.last;
+      expect(m.camera.enabled, isTrue);
+      expect(m.camera.volume, 60, reason: 'its last volume');
+      expect(m.boxInput.enabled, isFalse);
+      expect(m.deviceMic.enabled, isFalse);
+    });
+
+    testWidgets('picking B while A was on: both rows stay listed, A off and B on', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 60, box: true, boxVol: 80));
+      await _openAll(tester);
+      expect(k('audio-row-boxInput'), findsOneWidget);
+      await reveal(tester, k('audio-rowmute-camera'));
+      await tester.tap(k('audio-rowmute-camera'));
+      await settle(tester);
+      expect(t.source.mix.camera.enabled, isTrue);
+      expect(t.source.mix.boxInput.enabled, isFalse);
+      expect(k('audio-row-camera'), findsOneWidget);
+      expect(k('audio-row-boxInput'), findsOneWidget, reason: 'an off row does not disappear');
+      await reveal(tester, k('audio-volume-boxInput'));
+      expect(tester.widget<Slider>(k('audio-volume-boxInput')).onChanged, isNull);
+      expect(tester.widget<Slider>(k('audio-volume-camera')).onChanged, isNotNull);
+    });
+
+    testWidgets('a status echo with the listed source disabled keeps its row; X removes it; the sheet brings it back on', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 60, box: true, boxVol: 80));
+      await _openAll(tester);
+      await reveal(tester, k('audio-rowmute-camera'));
+      await tester.tap(k('audio-rowmute-camera'));
+      await settle(tester);
+      // an echo from the box: only the camera is enabled
+      t.h.container.read(liveBoxProvider.notifier);
+      await t.h.container.read(liveSourceProvider.notifier).refresh();
+      await settle(tester);
+      expect(k('audio-row-boxInput'), findsOneWidget, reason: 'a reload of the source does not drop a listed row');
+      await reveal(tester, k('audio-remove-boxInput'));
+      await tester.tap(k('audio-remove-boxInput'));
+      await settle(tester);
+      expect(k('audio-row-boxInput'), findsNothing);
+      expect(t.source.mix.camera.enabled, isTrue, reason: 'removing an off row leaves the sound as it was');
+      await reveal(tester, k('audio-add'));
+      await tester.tap(k('audio-add'));
+      await settle(tester);
+      await tester.tap(k('add-audio-button-boxInput'));
+      await settle(tester);
+      expect(k('audio-row-boxInput'), findsOneWidget);
+      expect(t.source.mix.boxInput.enabled, isTrue);
+      expect(t.source.mix.camera.enabled, isFalse);
+      expect(k('audio-row-camera'), findsOneWidget, reason: 'the camera row stays as an off row');
+    });
+
+    testWidgets('an off row at volume 0 comes on at 100', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 0, box: true, boxVol: 80));
+      await _openAll(tester);
+      await reveal(tester, k('audio-rowmute-camera'));
+      await tester.tap(k('audio-rowmute-camera'));
+      await settle(tester);
+      expect(t.source.mix.camera.volume, 100);
+      expect(t.source.mix.boxInput.enabled, isFalse);
+    });
+
+    testWidgets('Tambah audio turns the new source on and the others off', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 50));
+      await _openAll(tester);
+      await tester.tap(k('audio-add'));
+      await settle(tester);
+      await tester.tap(k('add-audio-button-boxInput'));
+      await settle(tester);
+      final m = t.pub.mixes.isEmpty ? t.source.mix : t.pub.mixes.last;
+      expect(m.boxInput.enabled, isTrue);
+      expect(m.camera.enabled, isFalse);
+      expect(m.deviceMic.enabled, isFalse);
+      expect(t.source.mix.camera.volume, 50, reason: 'the volume of the row that went off is kept');
+    });
+
+    testWidgets('turning the only row on off is allowed: no sound, and the warning says so', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 0, mic: true));
+      await _openAll(tester);
+      await tester.tap(k('audio-remove-deviceMic'));
+      await settle(tester);
+      expect(t.source.mix.deviceMic.enabled, isFalse);
+      expect(t.source.mix.camera.enabled, isFalse, reason: 'removing never switches another source on by itself');
+      expect(find.text('Semua sumber audio disenyapkan. Siaran tiada bunyi.'), findsOneWidget);
+    });
+
+    testWidgets('during a live a switch asks first: Batal changes nothing, Tukar sends one request', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 60, box: true, boxVol: 80));
+      t.pub.emit(_live(audio: _audio()));
+      await settle(tester);
+      t.h.container.read(liveFoldedProvider.notifier).set(false);
+      await settle(tester);
+      final before = t.pub.mixes.length;
+      await reveal(tester, k('audio-rowmute-camera'));
+      await tester.tap(k('audio-rowmute-camera'));
+      await settle(tester);
+      expect(find.text('Tukar bunyi? Siaran berhenti seketika (2 hingga 3 saat).'), findsOneWidget);
+      await tester.tap(k('audio-switch-cancel'));
+      await settle(tester);
+      expect(t.pub.mixes.length, before);
+      expect(t.source.mix.boxInput.enabled, isTrue);
+      await tester.tap(k('audio-rowmute-camera'));
+      await settle(tester);
+      await tester.tap(k('audio-switch-do'));
+      await settle(tester);
+      expect(t.pub.mixes.length, before + 1);
+      expect(t.pub.mixes.last.camera.enabled, isTrue);
+      expect(t.pub.mixes.last.boxInput.enabled, isFalse);
+    });
+
+    testWidgets('before a live a switch asks nothing', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 60, box: true, boxVol: 80));
+      await _openAll(tester);
+      await reveal(tester, k('audio-rowmute-camera'));
+      await tester.tap(k('audio-rowmute-camera'));
+      await settle(tester);
+      expect(k('audio-switch-confirm'), findsNothing);
+      expect(t.source.mix.camera.enabled, isTrue);
+    });
+
+    testWidgets('the card never offers a delay block and sends no avOffsetMs', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 60, box: true, boxVol: 80));
+      await _openAll(tester);
+      expect(k('audio-offset-plus'), findsNothing);
+      expect(k('audio-offset-minus'), findsNothing);
+      expect(find.text('Selaras bunyi dengan gambar'), findsNothing);
+      expect(t.audioPosts.where((p) => p.containsKey('avOffsetMs')), isEmpty);
+    });
+  });
+
+  group('build 6 gate fixes: the box follows a switch, a refusal puts the mix back', () {
+    Future<_T> liveWithBoxMic(WidgetTester tester, {bool refuse = false}) async {
+      final t = await _open(tester, mix: _mix(cam: 60, box: true, boxVol: 80));
+      if (refuse) {
+        t.h.handlers['POST /api/live/audio'] = (r) async {
+          t.audioPosts.add(jsonDecode(r.body) as Map<String, dynamic>);
+          return jsonResponse(500, {'error': 'refused'});
+        };
+      }
+      t.pub.emit(_live(audio: _audio()));
+      await settle(tester);
+      return t;
+    }
+
+    testWidgets('A1: turning the phone microphone on while the box microphone plays still reaches the box', (tester) async {
+      final t = await liveWithBoxMic(tester);
+      expect(t.source.mix.boxInput.enabled, isTrue);
+      final before = t.audioPosts.length;
+      await t.h.container.read(liveSourceProvider.notifier).add(idDeviceMic);
+      await settle(tester);
+      expect(t.audioPosts.length, before + 1, reason: 'the box is told, or it keeps playing its own microphone');
+      final audio = t.audioPosts.last['audio'] as Map<String, dynamic>;
+      expect((audio['deviceMic'] as Map)['enabled'], isTrue);
+      expect((audio['boxInput'] as Map)['enabled'], isFalse);
+      expect(t.source.mix.deviceMic.enabled, isTrue);
+    });
+
+    testWidgets('A1: a live that never had the box microphone sends nothing to the box', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 60, mic: true));
+      t.pub.emit(_live(audio: _audio()));
+      await settle(tester);
+      final before = t.audioPosts.length;
+      await t.h.container.read(liveSourceProvider.notifier).setVolume(idCamera, 30);
+      await settle(tester);
+      expect(t.audioPosts.length, before);
+    });
+
+    testWidgets('A2: add() refused by the box puts the mix back, tells the person and restores the engine', (tester) async {
+      final t = await liveWithBoxMic(tester, refuse: true);
+      final original = t.source.mix;
+      await t.h.container.read(liveSourceProvider.notifier).add(idDeviceMic);
+      await settle(tester);
+      expect(t.source.mix.deviceMic.enabled, isFalse);
+      expect(t.source.mix.boxInput.enabled, isTrue);
+      expect(t.source.mix.boxInput.volume, original.boxInput.volume);
+      expect(t.source.error, liveSourceSwitchFailed(AppLang.ms));
+      expect(t.pub.mixes.last.boxInput.enabled, isTrue, reason: 'the phone engine is back on the box microphone');
+      expect(t.pub.mixes.last.deviceMic.enabled, isFalse);
+    });
+
+    testWidgets('A2: setVolume() refused by the box puts the volume back', (tester) async {
+      final t = await liveWithBoxMic(tester, refuse: true);
+      await t.h.container.read(liveSourceProvider.notifier).setVolume(idBoxInput, 40);
+      await settle(tester);
+      expect(t.source.mix.boxInput.volume, 80);
+      expect(t.source.error, liveSourceSwitchFailed(AppLang.ms));
+      expect(t.pub.mixes.last.boxInput.volume, 80);
+    });
+
+    testWidgets('A2: useOnly() refused by the box puts the mix back', (tester) async {
+      final t = await liveWithBoxMic(tester, refuse: true);
+      await t.h.container.read(liveSourceProvider.notifier).useOnly(idCamera);
+      await settle(tester);
+      expect(t.source.mix.camera.enabled, isFalse);
+      expect(t.source.mix.boxInput.enabled, isTrue);
+      expect(t.source.error, liveSourceSwitchFailed(AppLang.ms));
+      expect(t.pub.mixes.last.boxInput.enabled, isTrue);
     });
   });
 
@@ -841,6 +1394,181 @@ void main() {
       final t = await _open(tester, device: 'ipad', mix: _mix(cam: 100));
       await _openAll(tester);
       await g(tester, t, 'live_ipad_cam_audio_only', focus: 'live-section-video');
+    });
+  });
+
+  group('one place to choose the source', () {
+    testWidgets('Sumber video is open by default before a live', (tester) async {
+      await _open(tester, video: VideoSourceKind.phone);
+      expect(k('video-pick-phone'), findsOneWidget);
+      expect(k('video-pick-external'), findsOneWidget);
+    });
+
+    testWidgets('the offer switched off while the page was away is current on return (and back on)', (tester) async {
+      final t = await _open(tester, roles: const ['admin']);
+      expect(t.source.video, VideoSourceKind.external);
+      expect(find.descendant(of: k('live-settings-liveCamera'), matching: find.textContaining('Ditawarkan sebagai pilihan')), findsOneWidget);
+      await _leaveAndComeBack(tester, t, cameraOn: false);
+      expect(t.source.camera.enabled, isFalse);
+      expect(t.source.video, VideoSourceKind.phone, reason: 'not offered: the phone camera');
+      expect(find.descendant(of: k('live-settings-liveCamera'), matching: find.text('Tidak ditawarkan')), findsOneWidget);
+      expect(k('video-pick-external'), findsNothing);
+      expect(t.pub.prepared.last.video, VideoSourceKind.phone);
+      await _leaveAndComeBack(tester, t, cameraOn: true);
+      expect(t.source.camera.enabled, isTrue);
+      expect(find.descendant(of: k('live-settings-liveCamera'), matching: find.textContaining('Ditawarkan sebagai pilihan')), findsOneWidget);
+      expect(k('video-pick-external'), findsOneWidget);
+    });
+
+    testWidgets('a switch that fails before the live puts the screen and the saved choice back, with a notice', (tester) async {
+      final pub = _FailingPublisher();
+      final t = await _open(tester, video: VideoSourceKind.phone, publisher: pub);
+      pub.failExternalPrepare = true;
+      await t.h.container.read(liveSourceProvider.notifier).selectVideo(VideoSourceKind.external);
+      await settle(tester);
+      expect(t.source.video, VideoSourceKind.phone);
+      expect(t.store.video, VideoSourceKind.phone);
+      expect(find.text(liveSourceSwitchFailed(AppLang.ms)), findsOneWidget);
+      expect(pub.prepared.last.video, VideoSourceKind.phone, reason: 'the engine is prepared on the source in use');
+    });
+
+    testWidgets('a switch that fails during the live puts the screen and the saved choice back, with a notice', (tester) async {
+      final pub = _FailingPublisher();
+      final t = await _open(tester, mix: _mix(cam: 40, mic: true), publisher: pub);
+      pub.emit(_live(audio: _audio()));
+      await settle(tester);
+      t.h.container.read(liveFoldedProvider.notifier).set(false);
+      await settle(tester);
+      pub.failSwitch = true;
+      await reveal(tester, k('live-switch-phone'));
+      await tester.tap(k('live-switch-phone'));
+      await settle(tester);
+      expect(t.source.video, VideoSourceKind.external);
+      expect(t.store.video, VideoSourceKind.external);
+      expect(t.source.mix.camera.volume, 40);
+      expect(find.text(liveSourceSwitchFailed(AppLang.ms)), findsOneWidget);
+    });
+
+    testWidgets('the camera address missing falls back to the phone for now; the saved choice stays external', (tester) async {
+      final t = await _open(tester);
+      final n = t.h.container.read(liveSourceProvider.notifier);
+      t.h.handlers['GET /api/live/camera/source'] = (r) async => jsonResponse(200, {'url': ''});
+      await n.prepare(recording: true, frontCamera: false);
+      expect(t.source.video, VideoSourceKind.phone);
+      expect(t.source.error, liveCameraSourceFailed(AppLang.ms));
+      expect(t.store.video, VideoSourceKind.external, reason: 'one network hiccup does not change the surau default');
+
+      // an unrelated settings change: no flip back to external, no new notice
+      t.h.settings['liveCamera'] = {...(t.h.settings['liveCamera'] as Map), 'avOffsetMs': {'deviceMic': 300, 'boxInput': 0}};
+      t.h.container.invalidate(settingsProvider);
+      await n.refresh();
+      expect(t.source.video, VideoSourceKind.phone);
+      expect(t.store.video, VideoSourceKind.external);
+
+      // the page is opened again: the saved external choice is tried again
+      await n.reloadForPage();
+      expect(t.source.video, VideoSourceKind.external);
+      expect(t.store.video, VideoSourceKind.external);
+    });
+
+    testWidgets('choosing external again after a fallback, push fails: the saved choice stays external and the fallback stays', (tester) async {
+      final pub = _FailingPublisher();
+      final t = await _open(tester, publisher: pub);
+      final n = t.h.container.read(liveSourceProvider.notifier);
+      t.h.handlers['GET /api/live/camera/source'] = (r) async => jsonResponse(200, {'url': ''});
+      await n.prepare(recording: true, frontCamera: false);
+      expect(t.source.video, VideoSourceKind.phone);
+      expect(t.store.video, VideoSourceKind.external);
+      pub.failExternalPrepare = true;
+      await n.selectVideo(VideoSourceKind.external);
+      await settle(tester);
+      expect(t.source.video, VideoSourceKind.phone);
+      expect(t.store.video, VideoSourceKind.external, reason: 'the rollback must not write phone over the saved choice');
+      expect(t.source.error, isNotNull, reason: 'the person is told');
+      // the fallback is still active: an unrelated settings change does not flip it
+      t.h.settings['liveCamera'] = {...(t.h.settings['liveCamera'] as Map), 'avOffsetMs': {'deviceMic': 300, 'boxInput': 0}};
+      t.h.container.invalidate(settingsProvider);
+      await n.refresh();
+      expect(t.source.video, VideoSourceKind.phone);
+      expect(t.store.video, VideoSourceKind.external);
+    });
+
+    testWidgets('the page reopened while the publisher is preparing does not flip the source of a fallback', (tester) async {
+      {
+        const phase = PublisherPhase.preparing;
+        final pub = _FailingPublisher();
+        final t = await _open(tester, publisher: pub);
+        final n = t.h.container.read(liveSourceProvider.notifier);
+        t.h.handlers['GET /api/live/camera/source'] = (r) async => jsonResponse(200, {'url': ''});
+        await n.prepare(recording: true, frontCamera: false);
+        expect(t.source.video, VideoSourceKind.phone);
+        pub.emit(PublisherState(phase: phase, video: VideoSourceKind.phone));
+        await tester.pump(const Duration(milliseconds: 100));
+        t.h.router.go('/live/settings/liveCamera');
+        await tester.pump(const Duration(milliseconds: 500));
+        t.h.router.go('/live');
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(t.source.video, VideoSourceKind.phone, reason: 'no reload in $phase');
+        expect(t.store.video, VideoSourceKind.external);
+      }
+    });
+
+    testWidgets('the page reopened while the publisher is in error does not flip the source of a fallback', (tester) async {
+      {
+        const phase = PublisherPhase.error;
+        final pub = _FailingPublisher();
+        final t = await _open(tester, publisher: pub);
+        final n = t.h.container.read(liveSourceProvider.notifier);
+        t.h.handlers['GET /api/live/camera/source'] = (r) async => jsonResponse(200, {'url': ''});
+        await n.prepare(recording: true, frontCamera: false);
+        expect(t.source.video, VideoSourceKind.phone);
+        pub.emit(PublisherState(phase: phase, video: VideoSourceKind.phone));
+        await tester.pump(const Duration(milliseconds: 100));
+        t.h.router.go('/live/settings/liveCamera');
+        await tester.pump(const Duration(milliseconds: 500));
+        t.h.router.go('/live');
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(t.source.video, VideoSourceKind.phone, reason: 'no reload in $phase');
+        expect(t.store.video, VideoSourceKind.external);
+      }
+    });
+
+    testWidgets('the camera switched off after a fallback ends it and the settings decide', (tester) async {
+      final t = await _open(tester);
+      final n = t.h.container.read(liveSourceProvider.notifier);
+      t.h.handlers['GET /api/live/camera/source'] = (r) async => jsonResponse(200, {'url': ''});
+      await n.prepare(recording: true, frontCamera: false);
+      expect(t.source.video, VideoSourceKind.phone);
+      t.h.settings['liveCamera'] = {...(t.h.settings['liveCamera'] as Map), 'enabled': false};
+      t.h.container.invalidate(settingsProvider);
+      await n.refresh();
+      expect(t.source.video, VideoSourceKind.phone);
+      expect(t.store.video, VideoSourceKind.external, reason: 'still not saved over the choice');
+    });
+
+    testWidgets('Tukar ke kamera luaran comes back after the page is rebuilt mid-live', (tester) async {
+      final t = await _open(tester, mix: _mix(cam: 40, mic: true));
+      t.h.container.read(liveSourceProvider.notifier).liveStarting();
+      t.pub.emit(_live(audio: _audio()));
+      await settle(tester);
+      t.h.container.read(liveFoldedProvider.notifier).set(false);
+      await settle(tester);
+      await reveal(tester, k('live-switch-phone'));
+      await tester.tap(k('live-switch-phone'));
+      await settle(tester);
+      expect(t.source.video, VideoSourceKind.phone);
+      expect(k('live-switch-external'), findsOneWidget);
+      // leave the page and come back: the screen state is new, the live is the same
+      t.h.router.go('/live/settings/liveCamera');
+      await settle(tester);
+      t.h.router.go('/live');
+      await settle(tester);
+      t.h.container.read(liveFoldedProvider.notifier).set(false);
+      await settle(tester);
+      await reveal(tester, k('live-switch-external'));
+      expect(k('live-switch-external'), findsOneWidget);
     });
   });
 }

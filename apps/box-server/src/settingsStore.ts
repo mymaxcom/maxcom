@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { PACKS_MAX_BYTES, THEME_STYLE_MAX_BYTES, decide, isFeatureKey, isoInstantMs, offsetMinutes, resolveSettings, tzOf, validateFeatureSettings } from '@surau/core';
+import { MAX_TVS, PACKS_MAX_BYTES, THEME_STYLE_MAX_BYTES, decide, isFeatureKey, isoInstantMs, offsetMinutes, resolveSettings, tvCount, tzOf, validateFeatureSettings } from '@surau/core';
 import type { FeatureKey, FeatureSettings, FieldStamp, Settings } from '@surau/core';
 import { deviceOfRev, revOf } from './sync/meta.ts';
 import type { ChangeMeta } from './sync/meta.ts';
@@ -24,8 +24,8 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 /** Settings whose object value is one thing (an adjusted image) and replaces the old value whole. */
 const ATOMIC_KEYS: ReadonlySet<string> = new Set(['logo']);
-/** Row-level maps (`themeStyle.styles`, `themeStyle.packs`) whose every entry (one theme, one pack) is atomic, so two editors on different entries never erase each other. */
-const ENTRY_MAPS: ReadonlySet<string> = new Set(['styles', 'packs']);
+/** Row-level maps (`themeStyle.styles`, `themeStyle.packs`, `tvProfiles.tvs`) whose every entry (one theme, one pack, one TV) is atomic, so two editors on different entries never erase each other. A removed TV stays as `null` so the removal syncs. */
+const ENTRY_MAPS: ReadonlySet<string> = new Set(['styles', 'packs', 'tvs']);
 
 /** A key that holds one whole value; `path` is the dot path of the value, `key` its own name. */
 const isAtomic = (path: string, key: string): boolean => ATOMIC_KEYS.has(key) || ENTRY_MAPS.has(path.split('.')[0]!) && path.includes('.') && path.split('.').length === 2;
@@ -202,6 +202,41 @@ function withoutUnchanged(patch: unknown, stored: Plain | undefined): unknown {
   return out;
 }
 
+/** G3: a device's clock may be off by at most this much and still be corrected; a larger offset is cut to it. */
+export const MAX_CLOCK_OFFSET_MS = 24 * 3_600_000;
+
+/**
+ * G3: the stamp of a device's edit, corrected by the device's own measure of its clock (`clockOffsetMs` on the body
+ * of `POST /api/sync/ops`: the box clock minus the device clock). A phone whose clock is behind no longer loses its
+ * save to an older stored value. The offset is bounded, and the stamp never passes the box's own clock, so an offset
+ * cannot buy more than a fresh edit made now would. Anything that is not a whole number leaves the stamp as it is.
+ */
+export function correctedStamp(editedAt: string, clockOffsetMs: unknown, now: Date): string {
+  const t = Date.parse(editedAt);
+  if (typeof clockOffsetMs !== 'number' || !Number.isInteger(clockOffsetMs) || clockOffsetMs === 0 || Number.isNaN(t)) return editedAt;
+  const offset = Math.max(-MAX_CLOCK_OFFSET_MS, Math.min(MAX_CLOCK_OFFSET_MS, clockOffsetMs));
+  return new Date(Math.min(t + offset, now.getTime())).toISOString();
+}
+
+/**
+ * G8: a replicated entry from a newer box or cloud may carry a setting this version does not know. The unknown
+ * fields are left out and the rest of the entry lands, instead of the whole entry being refused. Returns the patch
+ * without the paths the validator named as unknown, or null when there is none to drop.
+ */
+function withoutUnknown(patch: unknown, errors: readonly string[]): Plain | null {
+  const SUFFIX = ' is not a known setting';
+  const unknown = errors.filter((e) => e.endsWith(SUFFIX)).map((e) => e.slice(0, -SUFFIX.length));
+  if (!isPlain(patch) || unknown.length === 0) return null;
+  const out = clone(patch) as Plain;
+  for (const path of unknown) {
+    const keys = path.split('.');
+    let cur: unknown = out;
+    for (const k of keys.slice(0, -1)) cur = isPlain(cur) ? cur[k] : undefined;
+    if (isPlain(cur)) delete cur[keys[keys.length - 1]!];
+  }
+  return out;
+}
+
 export interface PutFeatureResult {
   /** False only when a synced edit had fields and none of them was newer than what the row holds. */
   applied: boolean;
@@ -223,7 +258,8 @@ export function putFeatureIn(
   actor: string,
   deviceId: string | undefined,
   meta: ChangeMeta | undefined,
-  opts: { fieldStamps?: FieldStamps } | undefined,
+  /** `clockOffsetMs` (G3): the device's clock offset of a signed op, see `correctedStamp`; ignored without `meta.editedAt`. */
+  opts: { fieldStamps?: FieldStamps; clockOffsetMs?: number } | undefined,
   surauId: string,
 ): PutFeatureResult {
   if (!isFeatureKey(key)) throw new SettingsError([`unknown feature ${String(key)}`]);
@@ -233,15 +269,24 @@ export function putFeatureIn(
   // rules allow today) must not block a save or a replicated full row that leaves it as it is. Unknown keys and
   // wrong types are never "unchanged", so the shape is still checked. The cross-field rule needs the stored row and
   // is run for local routes and signed ops, not for replicated entries (those carry values already accepted elsewhere).
-  const result = validateFeatureSettings(
+  let result = validateFeatureSettings(
     key,
     withoutUnchanged(patch, before),
     meta?.trusted === true ? undefined : before ?? {},
   );
+  if (!result.ok && meta?.trusted === true) {
+    // G8: only a replicated entry; a local route and a device's signed op keep the strict refusal
+    const known = withoutUnknown(patch, result.errors);
+    if (known !== null) {
+      patch = known;
+      result = validateFeatureSettings(key, withoutUnchanged(patch, before), undefined);
+    }
+  }
   if (!result.ok) throw new SettingsError(result.errors);
 
-  const now = new Date().toISOString();
-  const editedAt = meta?.editedAt ?? now;
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+  const editedAt = meta?.editedAt === undefined ? now : correctedStamp(meta.editedAt, opts?.clockOffsetMs, nowDate);
   const device = meta?.deviceId ?? deviceId;
   const origin = meta?.origin ?? 'local';
   const synced = meta?.rev !== undefined;
@@ -282,6 +327,8 @@ export function putFeatureIn(
     if (size(merged.styles) > THEME_STYLE_MAX_BYTES) throw new SettingsError(['styles must be at most 32 KB in all']);
     if (size(merged.packs) > PACKS_MAX_BYTES) throw new SettingsError(['packs must be at most 64 KB in all']);
   }
+  // The same for the TVs: each patch holds at most 16, and the whole stored map may too (removed TVs, kept as null, do not count).
+  if (key === 'tvProfiles' && meta?.trusted !== true && tvCount(merged.tvs) > MAX_TVS) throw new SettingsError([`tvs may hold at most ${MAX_TVS} TVs in all`]);
   const afterJson = JSON.stringify(merged);
   const stampsJson = JSON.stringify(next);
 

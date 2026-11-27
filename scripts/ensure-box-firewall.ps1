@@ -3,9 +3,10 @@
   MAXCOM: make sure the box HTTPS firewall rule exists and is exactly right. Windows PowerShell 5.1.
 
 .DESCRIPTION
-  Keeps one inbound rule for the box LAN HTTPS port, on every network profile (Windows may call the
-  Wi-Fi Private or Public), open to the local subnet only:
+  Keeps two inbound rules, on every network profile (Windows may call the Wi-Fi Private or Public), open to
+  the local subnet only:
     "MAXCOM Box HTTPS"  TCP 8443  (the phones, the iPad and the kiosk)
+    "MAXCOM Box mDNS"   UDP 5353  (the local name boxN-surau.local: multicast DNS questions from the LAN)
   The rule is bound to the installed node.exe (<install root>\runtime\node\node.exe), so no other
   program can use it. A hand-run box got this rule from the Windows "Allow access" prompt; an
   installed box starts from a scheduled task with no desktop, so no prompt appears and the rule has
@@ -38,6 +39,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ruleName = 'MAXCOM Box HTTPS'
+$mdnsRuleName = 'MAXCOM Box mDNS'
+$mdnsPort = 5353
 
 # Windows PowerShell 5.1 passes an argument that contains a space as one quoted token ("name=MAXCOM Box HTTPS"),
 # but an argument that already holds a double quote is passed exactly as written. So name and program are built
@@ -65,8 +68,10 @@ $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 
 if ($DryRun) {
   Write-Host "DRYRUN  ${ruleName}: TCP $HttpsPort, every network profile, local subnet only, program $Program"
+  Write-Host "DRYRUN  ${mdnsRuleName}: UDP $mdnsPort, every network profile, local subnet only, program $Program"
   if ($Remove) {
     Write-Host "DRYRUN  would delete the rule $ruleName if it exists."
+    Write-Host "DRYRUN  would delete the rule $mdnsRuleName if it exists."
   } else {
     Write-Host "DRYRUN  would make the rule if it is missing or different, and leave it alone when it is exact."
   }
@@ -105,8 +110,8 @@ function Get-RuleSnapshot([string]$Name) {
 }
 
 # True when the snapshot is exactly the wanted rule: one copy, enabled, inbound, allow, every profile,
-# TCP, the port, local subnet, and bound to this node.exe.
-function Test-RuleSnapshotExact($Snapshot, [int]$Port, [string]$ProgramPath) {
+# the protocol (TCP unless told), the port, local subnet, and bound to this node.exe.
+function Test-RuleSnapshotExact($Snapshot, [int]$Port, [string]$ProgramPath, [string]$Protocol = 'TCP') {
   $s = @($Snapshot)
   if ($s.Count -ne 1) { return $false }
   $r = $s[0]
@@ -115,7 +120,7 @@ function Test-RuleSnapshotExact($Snapshot, [int]$Port, [string]$ProgramPath) {
   if ($r.Action -ne 'Allow') { return $false }
   $allProfiles = ($r.Profile -eq 'Any') -or (($r.Profile -match 'Domain') -and ($r.Profile -match 'Private') -and ($r.Profile -match 'Public'))
   if (-not $allProfiles) { return $false }
-  if ($r.Protocol -ne 'TCP') { return $false }
+  if ($r.Protocol -ne $Protocol) { return $false }
   if ($r.LocalPort -ne [string]$Port) { return $false }
   if ($r.RemoteAddress -ne 'LocalSubnet') { return $false }
   if ($r.Program -ine $ProgramPath) { return $false }
@@ -123,24 +128,36 @@ function Test-RuleSnapshotExact($Snapshot, [int]$Port, [string]$ProgramPath) {
 }
 
 # An unreadable answer counts as "different": the rule is made again.
-function Test-RuleExact([string]$Name, [int]$Port) {
-  try { return (Test-RuleSnapshotExact (Get-RuleSnapshot $Name) $Port $Program) } catch { return $false }
+function Test-RuleExact([string]$Name, [int]$Port, [string]$Protocol = 'TCP') {
+  try { return (Test-RuleSnapshotExact (Get-RuleSnapshot $Name) $Port $Program $Protocol) } catch { return $false }
 }
 
 if ($Remove) {
   # netsh reports a non-zero code when there is nothing to delete; the uninstall must not fail then.
   Invoke-NetshCmd @('advfirewall', 'firewall', 'delete', 'rule', (Get-QuotedArg 'name' $ruleName)) | Out-Null
   Write-Host "REMOVED $ruleName (if it was present)."
+  Invoke-NetshCmd @('advfirewall', 'firewall', 'delete', 'rule', (Get-QuotedArg 'name' $mdnsRuleName)) | Out-Null
+  Write-Host "REMOVED $mdnsRuleName (if it was present)."
   exit 0
 }
 
 if (Test-RuleExact $ruleName $HttpsPort) {
   Write-Host "OK      $ruleName (TCP $HttpsPort) already set."
-  exit 0
+} else {
+  Invoke-NetshCmd @('advfirewall', 'firewall', 'delete', 'rule', (Get-QuotedArg 'name' $ruleName)) | Out-Null
+  Invoke-NetshCmd @('advfirewall', 'firewall', 'add', 'rule', (Get-QuotedArg 'name' $ruleName), 'dir=in', 'action=allow', 'protocol=tcp', "localport=$HttpsPort", 'profile=any', 'remoteip=localsubnet', (Get-QuotedArg 'program' $Program)) | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "GAGAL: tidak dapat menambah peraturan firewall $ruleName (could not create it)" }
+  Write-Host "SET     $ruleName (TCP $HttpsPort), every network profile, local subnet only, program $Program."
 }
 
-Invoke-NetshCmd @('advfirewall', 'firewall', 'delete', 'rule', (Get-QuotedArg 'name' $ruleName)) | Out-Null
-Invoke-NetshCmd @('advfirewall', 'firewall', 'add', 'rule', (Get-QuotedArg 'name' $ruleName), 'dir=in', 'action=allow', 'protocol=tcp', "localport=$HttpsPort", 'profile=any', 'remoteip=localsubnet', (Get-QuotedArg 'program' $Program)) | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "GAGAL: tidak dapat menambah peraturan firewall $ruleName (could not create it)" }
-Write-Host "SET     $ruleName (TCP $HttpsPort), every network profile, local subnet only, program $Program."
+# The local name: multicast DNS questions arrive on UDP 5353 (the box listens there with address reuse, so the
+# Windows DNS client and any Bonjour service keep their own use of the port).
+if (Test-RuleExact $mdnsRuleName $mdnsPort 'UDP') {
+  Write-Host "OK      $mdnsRuleName (UDP $mdnsPort) already set."
+} else {
+  Invoke-NetshCmd @('advfirewall', 'firewall', 'delete', 'rule', (Get-QuotedArg 'name' $mdnsRuleName)) | Out-Null
+  Invoke-NetshCmd @('advfirewall', 'firewall', 'add', 'rule', (Get-QuotedArg 'name' $mdnsRuleName), 'dir=in', 'action=allow', 'protocol=udp', "localport=$mdnsPort", 'profile=any', 'remoteip=localsubnet', (Get-QuotedArg 'program' $Program)) | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "GAGAL: tidak dapat menambah peraturan firewall $mdnsRuleName (could not create it)" }
+  Write-Host "SET     $mdnsRuleName (UDP $mdnsPort), every network profile, local subnet only, program $Program."
+}
 exit 0

@@ -20,11 +20,13 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
-/// True only for an address the bytes may be sent to: https, no user info and
-/// a host of `googleapis.com` itself or a subdomain of it (YouTube's upload
-/// address is `www.googleapis.com`). The cloud already checks the address it
-/// mints; the device checks again before the first PUT and when it resumes
-/// (a stored address is a bearer secret and must never lead elsewhere).
+/// True only for YouTube's own upload address (S3): https, no user info, the
+/// host exactly `www.googleapis.com` on the default port, and a path under
+/// `/upload/youtube/` with no dot segments (plain or encoded). No other Google
+/// host passes (a storage bucket is one too). The cloud already checks the
+/// address it mints; the device checks again before the first PUT and when it
+/// resumes (a stored address is a bearer secret and must never lead
+/// elsewhere). The Kotlin twin is `UploadUri.isYoutube`: keep the two the same.
 bool isYoutubeUploadUri(String raw) {
   final Uri u;
   try {
@@ -33,8 +35,11 @@ bool isYoutubeUploadUri(String raw) {
     return false;
   }
   if (u.scheme != 'https' || u.userInfo.isNotEmpty) return false;
-  final host = u.host.toLowerCase();
-  return host == 'www.googleapis.com' || host.endsWith('.googleapis.com');
+  if (u.host.toLowerCase() != 'www.googleapis.com' || u.port != 443) return false;
+  // the address as written, before the query: nothing in it may climb out of the upload path
+  final written = raw.split('#').first.split('?').first.toLowerCase();
+  if (written.contains('..') || written.contains('%2e') || written.contains(r'\')) return false;
+  return u.path.startsWith('/upload/youtube/');
 }
 
 /// Size of one PUT.

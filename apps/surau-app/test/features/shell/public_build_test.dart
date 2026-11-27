@@ -66,7 +66,6 @@ void main() {
       await open(tester, both, path);
       expect(k('lanjutan-card'), findsNothing, reason: path);
       expect(find.text('Video ke YouTube'), findsNothing, reason: path);
-      expect(find.text('Kadar bit maksimum (kbps)'), findsNothing, reason: path);
       expect(find.text('Ruang simpanan (MB)'), findsNothing, reason: path);
     }
   }, skip: kOpsBuild);
@@ -111,6 +110,7 @@ void main() {
     expect(puts, isNotEmpty);
     final body = jsonDecode(puts.last.body) as Map<String, dynamic>;
     expect(body.keys, isNot(contains('relayVideo')));
+    // the bitrate is no longer a system field; it is absent only because the person did not change it
     expect(body.keys, isNot(contains('maxBitrateKbps')));
     expect(body['titleTemplate'], 'Kuliah Maghrib');
   }, skip: kOpsBuild);

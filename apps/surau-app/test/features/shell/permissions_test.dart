@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/features/shell/menu.dart' show routeAllowed;
+import 'package:surau_app/features/settings_defaults.dart';
 import 'package:surau_app/features/shell/permissions.dart';
 
 String _read(String relative) {
@@ -91,8 +92,10 @@ void main() {
   test('menu feature defaults equal the registry', () {
     final core = _parseDefaults(registryTs);
     expect(core.length, greaterThan(40));
-    for (final e in featureDefaultEnabled.entries) {
-      expect(core[e.key], e.value, reason: e.key);
+    // B2: the app reads every default from the generated registry; this
+    // checks the generated values against core for EVERY feature.
+    for (final e in core.entries) {
+      expect(featureDefaultOn(e.key), e.value, reason: e.key);
     }
   });
 
@@ -130,7 +133,7 @@ void main() {
     expect(fromBox.isOn('finance'), isTrue);
     expect(fromBox.isOn('liveOnKiosk'), isFalse);
     expect(fromBox.isOn('liveYoutube'), isTrue, reason: 'default kept');
-    expect(fromBox.isOn('clock'), isFalse, reason: 'bad value ignored');
+    expect(fromBox.isOn('clock'), isTrue, reason: 'a bad value is ignored: the registry default (on) stands');
   });
 
   // [A14] The permission the app asks for to open a page must imply the one
@@ -170,11 +173,14 @@ void main() {
       '/prayer-data': '/api/prayer/status',
       '/prayer-data/import': '/api/prayer/status',
       '/prayer-data/imports': '/api/prayer/imports',
-      '/prayer-data/import-paparan-lama': '/api/prayer/status',
       '/users': '/api/users',
       '/users/new': '/api/users',
       '/devices': '/api/devices',
       '/pairing': '/api/kiosk/pair/pending',
+      '/screens': '/api/devices',
+      '/screens/link': '/api/devices',
+      '/screens/unlink': '/api/unlink/status',
+      '/screens/tv/:id': '/api/settings',
       '/audit': '/api/audit',
       '/finance': '/api/finance/summary',
       '/finance/kutipan': '/api/finance/funds',
@@ -193,11 +199,14 @@ void main() {
     const noRead = <String>{
       '/', '/enrol', '/setup', '/recovery', '/scan', '/unlock',
       '/this-device', '/sync/conflicts',
+      // the phone move (2C): its only read, the main box's name, is best effort and a refusal is ignored
+      '/move',
     };
 
     String concrete(String route) => route
         .replaceAll(':feature', 'clock')
-        .replaceAll(':kind', 'kuliah');
+        .replaceAll(':kind', 'kuliah')
+        .replaceAll(':id', 'self');
 
     test('every route of the app has a first read, or is listed as reading nothing', () {
       final missing = appRoutes.where(
@@ -214,13 +223,13 @@ void main() {
 
     test('whoever the app lets into a page holds the box permission of its first read', () {
       final allOn = FeatureFlags.fromSettings({
-        for (final k in featureDefaultEnabled.keys) k: {'enabled': true},
+        for (final k in const ['finance', 'liveOnKiosk', 'liveYoutube', 'jemaahPage']) k: {'enabled': true},
       }).copyWith({'finance': true, 'liveOnKiosk': true, 'youtubeCatchUp': true});
       final bad = <String>[];
       for (final role in permissions.keys) {
         for (final e in firstRead.entries) {
           final need = rows['GET ${e.value}'];
-          if (need == null || need == 'session_or_site' || need == 'public') continue;
+          if (need == null || need == 'session' || need == 'session_or_site' || need == 'public') continue;
           if (routeAllowed(concrete(e.key), {role}, allOn) && !can([role], need)) {
             bad.add('$role opens ${e.key} but the box needs $need for ${e.value}');
           }

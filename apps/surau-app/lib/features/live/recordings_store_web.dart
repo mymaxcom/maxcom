@@ -310,6 +310,19 @@ Future<void> anchorDownload(String fileName, Object blob) async {
   Timer(const Duration(seconds: 60), () => web.URL.revokeObjectURL(url));
 }
 
+/// One tap, one file, no bytes in the page: a plain link to the box's download address. The box answers with
+/// `Content-Disposition: attachment`, so the browser saves it to Files by itself.
+Future<void> anchorOpenLink(Uri url, String fileName) async {
+  final a = web.document.createElement('a') as web.HTMLAnchorElement
+    ..href = url.toString()
+    ..download = fileName
+    ..rel = 'noopener noreferrer'
+    ..style.display = 'none';
+  web.document.body!.append(a);
+  a.click();
+  a.remove();
+}
+
 /// Hands [bytes] to the browser as a download named [fileName] (the joined recording, one tap).
 Future<void> saveBytesToDevice(String fileName, Uint8List bytes, String mime) async {
   final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: mime));

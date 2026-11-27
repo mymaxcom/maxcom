@@ -179,12 +179,12 @@ abstract class PageEnv {
 
 // ---- the publisher ----
 
-class WebPublisher implements LivePublisher, LiveMicControl {
+class WebPublisher implements LivePublisher, LiveMicControl, LiveLiftControl, LiveRecordingControl {
   WebPublisher({
     this.tokenProvider,
     Uri? box,
     this.segmentMinutes = 15,
-    this.maxBitrateKbps = 2500,
+    this.maxBitrateKbps = 3500,
     GetUserMedia? getUserMedia,
     bool Function()? portraitProvider,
     PeerFactory? peerFactory,
@@ -363,7 +363,7 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     _emit(_state.copyWith(warnings: next));
   }
 
-  static Map<String, Object?> constraintsFor({required bool front, String? micId}) => {
+  static Map<String, Object?> constraintsFor({required bool front, String? micId, bool agc = true}) => {
     'video': {
       'facingMode': front ? 'user' : 'environment',
       // Always a 16:9 1280x720 track, whatever way the device is held. Where
@@ -377,15 +377,28 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     },
     // A PA microphone: echo cancellation and noise suppression stay off on purpose. The browser's automatic gain is on:
     // a tablet or phone microphone records speech about 10 dB too quiet (measured -31 dBFS RMS, clear speech is -18).
-    'audio': _audioConstraints(micId),
+    'audio': _audioConstraints(micId, agc),
   };
 
-  static Map<String, Object?> _audioConstraints(String? micId) => {
+  static Map<String, Object?> _audioConstraints(String? micId, bool agc) => {
     if (micId != null) 'deviceId': {'exact': micId},
     'echoCancellation': false,
     'noiseSuppression': false,
-    'autoGainControl': true,
+    'autoGainControl': agc,
   };
+
+  /// The browser's automatic gain (the "Naikkan suara perlahan" switch of the device microphone).
+  bool _agc = true;
+
+  /// The lift switch of the device microphone: the capture is opened again with the new `autoGainControl`
+  /// (the camera's own sound is played, not captured here, so only `deviceMic` counts).
+  @override
+  Future<void> setLift(String id, bool on) async {
+    if (id != 'deviceMic' || on == _agc) return;
+    final prev = _agc;
+    _agc = on;
+    if (!await setMicrophone(_micId)) _agc = prev;
+  }
 
   /// The microphone the person's device switched to by itself (a USB or
   /// Lightning mic plugged in); null = the browser's default.
@@ -440,16 +453,16 @@ class WebPublisher implements LivePublisher, LiveMicControl {
   Future<void> _acquire() async {
     final cap = await _openCapture(
       (id) => _extMode && _audioOnly
-          ? micConstraints(micId: id)
-          : constraintsFor(front: _front, micId: id),
+          ? micConstraints(micId: id, agc: _agc)
+          : constraintsFor(front: _front, micId: id, agc: _agc),
     );
     _swapCapture(cap);
   }
 
   /// The iPad microphone alone (an added source of the box's mix): raw, for
   /// a PA, like the camera capture's audio.
-  static Map<String, Object?> micConstraints({String? micId}) => {
-    'audio': _audioConstraints(micId),
+  static Map<String, Object?> micConstraints({String? micId, bool agc = true}) => {
+    'audio': _audioConstraints(micId, agc),
   };
 
   void _swapCapture(CaptureStream cap) {
@@ -462,28 +475,53 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     if (old != null && !identical(old, cap)) old.stop();
   }
 
+  web.HTMLVideoElement? _sink;
+
   void _attachPreview() {
     final v = _video;
     // An external-camera live shows the box's combined stream, never the
     // microphone capture; otherwise the capture itself.
     final n = _extMode ? _recv?.stream : _capture?.native;
-    if (v == null) return;
-    if (_extMode) v.muted = !_ext.previewSound;
+    if (v == null) {
+      // A box-pulled live shows no picture on this device (build 4) but still receives the stream to record it:
+      // a detached, muted video element keeps the received tracks flowing without drawing anything.
+      if (_extMode && n != null) {
+        final sink = _sink ??= (web.document.createElement('video') as web.HTMLVideoElement)
+          ..autoplay = true
+          ..setAttribute('playsinline', '');
+        sink.muted = true;
+        sink.srcObject = n as web.MediaStream?;
+        unawaited(sink.play().toDart.catchError((Object _) => null));
+      }
+      return;
+    }
+    // The live sound comes from the box, never from this device: the received stream is ALWAYS muted in box-pull mode,
+    // whatever the preview sound switch holds (the iPad microphone would otherwise feed back into the speaker).
+    if (_extMode) v.muted = true;
     v.srcObject = n as web.MediaStream?;
-    if (n != null) {
-      unawaited(
-        v.play().toDart.catchError((Object _) {
-          // Safari refuses sound without a gesture: play muted instead.
-          if (_extMode && !v.muted) {
-            v.muted = true;
-            _setExt(_ext.copyWith(previewSound: false));
-            unawaited(v.play().toDart.catchError((Object _) => null));
-          }
-          return null;
-        }),
-      );
+    if (n != null) unawaited(v.play().toDart.catchError((Object _) => null));
+  }
+
+  /// The detached element of a box-pulled live lets go of the received stream (the live is over or the reader is closed).
+  void _releaseSink() {
+    final sink = _sink;
+    _sink = null;
+    if (sink == null) return;
+    try {
+      sink.pause();
+      sink.srcObject = null;
+    } catch (_) {
+      // the element is already gone
     }
   }
+
+  /// True while a detached receiver element is held (box-pull mode with the reader open).
+  @visibleForTesting
+  bool get sinkHeld => _sink != null;
+
+  /// Whether the picture element of this device is muted (null while none is mounted).
+  @visibleForTesting
+  bool? get previewMuted => _video?.muted;
 
   @override
   Widget preview(BuildContext context) => HtmlElementView.fromTagName(
@@ -528,6 +566,7 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     _location = null;
     _recError = null;
     _recStopped = false;
+    _previewOff = false;
     _segIndex = 0;
     _segCount = 0;
     _recBytes = 0;
@@ -870,6 +909,51 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     }
   }
 
+  /// Rakam switched during the live ("Destinasi siaran"): off files the running piece and keeps everything so far;
+  /// on starts a new piece (a box-pulled live records the received stream, so it waits for that stream).
+  @override
+  Future<void> setRecording(bool on) async {
+    if (!_live) {
+      _recordingOn = on;
+      _publishRecording();
+      return;
+    }
+    final epoch = _epoch;
+    if (!on) {
+      if (!_recordingOn) return;
+      _recordingOn = false;
+      _segmentTimer?.cancel();
+      _segmentTimer = null;
+      _recWatch?.cancel();
+      await _endSegment();
+      _publishRecording();
+      if (_extMode) {
+        // the reader exists only for the recording: it is closed with it
+        await _closeReceiver();
+        _releaseSink();
+        _setExt(_ext.copyWith(recording: ExternalRecording.off, preview: ExternalPreview.idle));
+      }
+      return;
+    }
+    if (_recordingOn && !_recStopped) return;
+    _recordingOn = true;
+    _recStopped = false;
+    _recError = null;
+    if (_segCount > 0) _segIndex++;
+    if (_extMode) {
+      if (_recv != null) {
+        await _onReceivedUp(epoch);
+      } else {
+        // Rakam turned on again: the reader opens now, and the recording starts when the stream arrives
+        _recvAttempt = 0;
+        unawaited(_connectPreview(epoch));
+      }
+    } else {
+      await _startRecording(epoch);
+    }
+    _publishRecording();
+  }
+
   Future<void> _rotate(int epoch) async {
     if (!_active(epoch) || _rotating || _recorder == null) return;
     _rotating = true;
@@ -994,7 +1078,7 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     final front = !_front;
     final CaptureStream next;
     try {
-      next = await _openCapture((id) => constraintsFor(front: front, micId: id));
+      next = await _openCapture((id) => constraintsFor(front: front, micId: id, agc: _agc));
     } catch (_) {
       return; // the camera stays as it was
     }
@@ -1057,8 +1141,8 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     try {
       next = await _getUserMedia(
         audioOnly
-            ? micConstraints(micId: deviceId)
-            : constraintsFor(front: _front, micId: deviceId),
+            ? micConstraints(micId: deviceId, agc: _agc)
+            : constraintsFor(front: _front, micId: deviceId, agc: _agc),
       );
     } catch (_) {
       _micId = prev;
@@ -1103,7 +1187,10 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     _recWatch?.cancel();
     // The last segment is finalised before anything else can fail.
     await _endSegment();
-    if (_extMode) await _closeReceiver();
+    if (_extMode) {
+      await _closeReceiver();
+      _releaseSink();
+    }
     final loc = _location;
     _location = null;
     final peer = _peer;
@@ -1137,6 +1224,7 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     await _visSub?.cancel();
     await _peerSub?.cancel();
     await _closeReceiver();
+    _releaseSink();
     _micRetry?.cancel();
     _recWatch?.cancel();
     _page.dispose();
@@ -1251,7 +1339,7 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     _setExt(_ext.copyWith(mic: ExternalMic.starting));
     final CaptureStream cap;
     try {
-      cap = await _openCapture((id) => micConstraints(micId: id));
+      cap = await _openCapture((id) => micConstraints(micId: id, agc: _agc));
     } catch (_) {
       if (!_active(epoch)) return;
       await _micRefused();
@@ -1364,8 +1452,15 @@ class WebPublisher implements LivePublisher, LiveMicControl {
 
   // The preview and the recording of the received stream -------------------
 
+  /// The box answered 409 `preview_off`: no picture is served to this device, so none is asked for again.
+  bool _previewOff = false;
+
+  @visibleForTesting
+  bool get previewRefused => _previewOff;
+
   Future<void> _connectPreview(int epoch) async {
-    if (!_active(epoch) || !_extMode) return;
+    // The reader of the box's stream is allowed only for the recording (build 4, D-B): no Rakam, no reader.
+    if (!_active(epoch) || !_extMode || _previewOff || !_recordingOn) return;
     _setExt(
       _ext.copyWith(
         preview: _recvAttempt == 0
@@ -1399,6 +1494,14 @@ class WebPublisher implements LivePublisher, LiveMicControl {
       if (!_active(epoch) || !identical(_recv, r)) {
         r.close();
         if (location != null) unawaited(_deleteWhip(location));
+        return;
+      }
+      if (reply.status == 409 && reply.body.contains('preview_off')) {
+        // The box shows no picture to this device (build 4): asked once, never again, no retry loop.
+        _previewOff = true;
+        r.close();
+        if (identical(_recv, r)) _recv = null;
+        _setExt(_ext.copyWith(preview: ExternalPreview.idle));
         return;
       }
       if (reply.status != 201 && reply.status != 200) {
@@ -1661,7 +1764,7 @@ class WebPublisher implements LivePublisher, LiveMicControl {
     final epoch = _epoch;
     final CaptureStream cam;
     try {
-      cam = await _openCapture((id) => constraintsFor(front: _front, micId: id));
+      cam = await _openCapture((id) => constraintsFor(front: _front, micId: id, agc: _agc));
     } catch (_) {
       return false;
     }

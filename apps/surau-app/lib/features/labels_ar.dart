@@ -28,8 +28,10 @@ const Map<String, String> featureHelpAr = {
 };
 
 const Map<String, String> settingLabelsAr = {
+  'tvs': 'الشاشات',
   // liveCamera
   'transport': 'طريقة النقل',
+  'brightness': 'سطوع الصورة',
   'avOffsetMs': 'إزاحة توقيت الصوت',
   'deviceMic': 'ميكروفون الجهاز',
   'boxInput': 'مدخل الميكروفون في الصندوق',
@@ -133,6 +135,10 @@ const Map<String, String> settingLabelsAr = {
   'showTranslation': 'عرض الترجمة',
   'textSize': 'حجم النص',
   'minutesAfterSolat': 'دقائق بعد الصلاة',
+  'startAfterMinutes': 'البدء بعد الصلاة (دقائق)',
+  'showClock': 'إظهار الساعة',
+  'showTimeLeft': 'إظهار الوقت المتبقي',
+  'look': 'شكل شاشة الأذكار',
   'reciter': 'القارئ',
   'cacheMaxMb': 'مساحة التخزين (MB)',
   // finance and donation card
@@ -163,6 +169,7 @@ const Map<String, String> settingLabelsAr = {
   'descriptionTemplate': 'قالب الوصف',
   'maxBitrateKbps': 'الحد الأقصى لمعدل البت (kbps)',
   'nextLiveOn': 'YouTube للبث القادم',
+  'autoQuality': 'الجودة التلقائية',
   'segmentMinutes': 'مدة كل ملف تسجيل (دقائق)',
   'keepOnDevice': 'حفظ التسجيل على الجهاز',
   // audio
@@ -198,6 +205,7 @@ const Map<String, String> sourceLeafLabelsAr = {
 /// Arabic names of the choices of an enum setting, by setting name then value.
 const Map<String, Map<String, String>> choiceLabelsAr = {
   'transport': {'auto': 'تلقائي', 'tcp': 'TCP', 'udp': 'UDP'},
+  'brightness': {'auto': 'تلقائي', 'normal': 'عادي', 'bright': 'ساطع', 'brighter': 'أكثر سطوعًا'},
   'timeFormat': {'12h': '12 ساعة', '24h': '24 ساعة'},
   'switchAt': {'maghrib': 'وقت المغرب', 'midnight': 'منتصف الليل'},
   'lang': {'auto': 'تلقائي', 'ms': 'الملايو', 'en': 'الإنجليزية', 'ar': 'العربية'},
@@ -241,6 +249,7 @@ const Map<String, Map<String, String>> choiceLabelsAr = {
   'speed': {'slow': 'بطيء', 'normal': 'عادي', 'fast': 'سريع'},
   'shape': {'round': 'دائري', 'square': 'مربع'},
   'textSize': {'s': 'صغير', 'm': 'متوسط', 'l': 'كبير'},
+  'look': {'theme': 'حسب القالب', 'plain': 'عادي', 'arab': 'العربية أولًا'},
   'kind': {'surau': 'مصلى', 'masjid': 'مسجد'},
   'method': {
     'auto': 'تلقائي (حسب الدولة)',
@@ -316,13 +325,21 @@ const Map<String, String> settingHelpAr = {
       'للبث من المتصفح فقط؛ أما البث من تطبيق Android فلا يمر عبر MAXCOM. النسخ '
       'المباشر يستهلك أقل قدر من معالج MAXCOM. وإعادة الترميز للهواتف التي ترسل '
       'معدل بت مرتفعًا جدًا.',
-  'maxBitrateKbps': 'حسب سرعة الرفع في إنترنت المصلى.',
+  'maxBitrateKbps':
+      'حسب سرعة الرفع في إنترنت المصلى. اترك 30% على الأقل من سرعة الرفع '
+      'للاستخدامات الأخرى. النطاق من 1000 إلى 8000 kbps. يسري على البث القادم.',
   'nextLiveOn': 'اختيار مشترك بين المسؤولين: هل يذهب البث القادم إلى YouTube.',
+  'autoQuality': 'عند بطء الإنترنت تنخفض جودة الصورة إلى 480p حتى لا ينقطع البث، وتعود تلقائيا عند تحسن الاتصال.',
   'cacheMaxMb':
       'يتوقف تنزيل الصوت عند بلوغ الحد؛ ولا يُحذف الصوت القديم. الجزء الواحد '
       'نحو 40 MB.',
   'fontSize': 'الحجم الأساسي للنص. وحجم النص في التخصيص يضيف مقياسًا فوقه.',
   'textSize': 'الحجم الأساسي للنص. وحجم النص في التخصيص يضيف مقياسًا فوقه.',
+  'minutesAfterSolat': 'أطول مدة تُعرض فيها الأذكار، محسوبة من بدايتها.',
+  'startAfterMinutes': 'تبدأ الأذكار بعد انتهاء الصلاة بهذا العدد من الدقائق. 0 يعني بعد الصلاة مباشرة.',
+  'showClock': 'تبقى الساعة أعلى الشاشة أثناء الأذكار.',
+  'showTimeLeft': 'عدّاد صغير للوقت المتبقي حتى تنتهي الأذكار.',
+  'look': 'حسب القالب يستخدم الشكل المناسب للقالب. العربية أولًا يعرض النص العربي كبيرًا داخل حلقة من حبات السبحة.',
   'segmentMinutes': 'الملفات القصيرة أكثر أمانًا إذا انقطع اتصال الهاتف.',
   'noVideoSeconds':
       'المدة التي تمر دون صورة من الهاتف قبل ظهور التنبيه في التطبيق.',

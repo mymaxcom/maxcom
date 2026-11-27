@@ -12,7 +12,7 @@ import '../../app/theme.dart';
 import '../shell/live_camera_gateway.dart' show LiveAudioMix;
 import 'publisher.dart';
 
-class FakePublisher implements LivePublisher, LiveSourceControl {
+class FakePublisher implements LivePublisher, LiveSourceControl, LiveBrightnessControl, LiveScreenKeep {
   FakePublisher({PublisherState initial = PublisherState.initial})
     : _state = initial;
 
@@ -22,6 +22,11 @@ class FakePublisher implements LivePublisher, LiveSourceControl {
   final List<PublisherConfig> prepared = [];
   final List<PublisherTargets> started = [];
   final List<String> startedYoutube = [];
+
+  /// Every level the controller set, in order.
+  final List<String> brightnessLevels = [];
+  /// Every keep-screen-on call of the controller (F1), in order.
+  final List<bool> screenKeeps = [];
   int stops = 0;
   int switches = 0;
 
@@ -139,6 +144,12 @@ class FakePublisher implements LivePublisher, LiveSourceControl {
 
   @override
   Future<void> setAvOffset(int ms) async => avOffsets.add(ms);
+
+  @override
+  Future<void> setBrightness(String level) async => brightnessLevels.add(level);
+
+  @override
+  Future<void> keepScreenOn(bool on) async => screenKeeps.add(on);
 
   @override
   Future<void> clapCapture() async => clapCalls.add('capture');

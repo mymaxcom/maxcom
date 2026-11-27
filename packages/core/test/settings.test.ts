@@ -81,9 +81,9 @@ describe('registry', () => {
     expect(FEATURES.every((f) => f.labelMs && f.labelEn && f.labelAr)).toBe(true);
     const keys = FEATURES.map((f) => f.key as FeatureKey);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys).toHaveLength(56);
+    expect(keys).toHaveLength(57);
     expect(new Set(FEATURES.map((f) => f.group)).size).toBe(11);
-    expect(FEATURES.filter((f) => f.locked)).toHaveLength(11);
+    expect(FEATURES.filter((f) => f.locked)).toHaveLength(12);
   });
   it('DAY_KEYS and minutesFor', () => {
     expect(DAY_KEYS[5]).toBe('jumaat');
@@ -150,6 +150,16 @@ describe('content feature rules', () => {
     expect(validateFeatureSettings('ticker', { speed: 'slow' }).ok).toBe(true);
     expect(validateFeatureSettings('penceramahPhoto', { shape: 'square' }).ok).toBe(true);
     expect(validateFeatureSettings('ayatCard', { textSize: 'l', showTranslation: false }).ok).toBe(true);
+  });
+  it('zikir: start offset 0..30 minutes, the clock and time-left switches, and the three looks', () => {
+    expect(validateFeatureSettings('zikirSelepasSolat', { startAfterMinutes: 0, showClock: false, showTimeLeft: true, look: 'arab' }))
+      .toEqual({ ok: true, value: { startAfterMinutes: 0, showClock: false, showTimeLeft: true, look: 'arab' } });
+    expect(validateFeatureSettings('zikirSelepasSolat', { startAfterMinutes: 30, look: 'plain' }).ok).toBe(true);
+    expect(validateFeatureSettings('zikirSelepasSolat', { look: 'theme' }).ok).toBe(true);
+    expect(validateFeatureSettings('zikirSelepasSolat', { startAfterMinutes: 31 }).ok).toBe(false);
+    expect(validateFeatureSettings('zikirSelepasSolat', { startAfterMinutes: -1 }).ok).toBe(false);
+    expect(validateFeatureSettings('zikirSelepasSolat', { look: 'fancy' }).ok).toBe(false);
+    expect(validateFeatureSettings('zikirSelepasSolat', { showClock: 'yes' }).ok).toBe(false);
   });
 });
 
@@ -228,7 +238,7 @@ describe('surauInfo', () => {
     expect(validateFeatureSettings('surauInfo', good)).toEqual({ ok: true, value: good });
     expect(validateFeatureSettings('surauInfo', { helpPhone: '+60120000001', helpEmail: '', helpName: '' }).ok).toBe(true);
     expect(validateFeatureSettings('surauInfo', { name: 'x'.repeat(80) }).ok).toBe(true);
-    expect(validateFeatureSettings('surauInfo', { shortName: 'SDM' }).ok).toBe(true);
+    expect(validateFeatureSettings('surauInfo', { shortName: 'SCT' }).ok).toBe(true);
     expect(validateFeatureSettings('surauInfo', { shortName: '' }).ok).toBe(true);
     expect(validateFeatureSettings('surauInfo', { shortName: 'x'.repeat(12) }).ok).toBe(true);
   });

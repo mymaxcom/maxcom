@@ -46,9 +46,16 @@ class SyncView {
     this.via,
     this.conflicts = 0,
     this.state = SyncState.idle,
+    this.failedVia,
   });
 
   static const SyncView empty = SyncView();
+
+  /// The base the failed exchange was with (`box` or `cloud`) when a base had
+  /// been found and the push or pull with it then failed; null when the last
+  /// run succeeded or no base answered at all. A failure against the box says
+  /// nothing about the cloud (B13).
+  final String? failedVia;
 
   /// Edits waiting in the outbox.
   final int pendingOut;
@@ -72,7 +79,9 @@ class SyncView {
     Object? via = _keep,
     int? conflicts,
     SyncState? state,
+    Object? failedVia = _keep,
   }) => SyncView(
+    failedVia: identical(failedVia, _keep) ? this.failedVia : failedVia as String?,
     pendingOut: pendingOut ?? this.pendingOut,
     lastSync: lastSync ?? this.lastSync,
     lastError: identical(lastError, _keep)
@@ -202,12 +211,20 @@ class SyncEngine {
     ],
     this.batchSize = 50,
     this.snapshotFormat,
+    this.clockOffsetMs,
   }) : now = now ?? DateTime.now,
        _ulid = ulid ?? UlidGenerator(now: now),
        _schedule = schedule ?? ((d, f) => Timer(d, f)),
        outbox = Outbox(store);
 
   final LocalStore store;
+
+  /// The box clock minus this device's clock in milliseconds, as learned from
+  /// the box's health answer; null while unknown. Sent on the BODY of
+  /// `POST /api/sync/ops` to the box (never inside an op, never to the cloud:
+  /// it was measured against the box), so a phone whose clock is behind does
+  /// not lose its settings save to an older stored stamp (G3).
+  final int? Function()? clockOffsetMs;
 
   /// The format of the local copy this build needs (see [kSnapshotFormat]);
   /// null (tests) does not check it.
@@ -485,7 +502,7 @@ class SyncEngine {
             ? <String, dynamic>{}
             : cleanItem(existing);
         final merged = op.kind == 'settings.put'
-            ? _deepMerge(base, p)
+            ? deepMerge(base, p)
             : {...base, ...p};
         await store.putDoc(coll, op.entityId, {
           ...merged,
@@ -581,7 +598,7 @@ class SyncEngine {
   static String financePhotoBlob(String photoId) =>
       financePhotoBlobId(photoId);
 
-  static Map<String, dynamic> _deepMerge(
+  static Map<String, dynamic> deepMerge(
     Map<String, dynamic> a,
     Map<String, dynamic> b,
   ) {
@@ -590,7 +607,7 @@ class SyncEngine {
       final x = out[e.key];
       final y = e.value;
       out[e.key] = x is Map<String, dynamic> && y is Map<String, dynamic>
-          ? _deepMerge(x, y)
+          ? deepMerge(x, y)
           : y;
     }
     return out;
@@ -658,8 +675,8 @@ class SyncEngine {
     _retry = _schedule(d, () => unawaited(sync()));
   }
 
-  void _fail(String code, {bool retry = true}) {
-    _emit(_view.copyWith(lastError: code, state: SyncState.offline));
+  void _fail(String code, {bool retry = true, String? via}) {
+    _emit(_view.copyWith(lastError: code, state: SyncState.offline, failedVia: via));
     if (retry) {
       final i = _failures < backoff.length ? _failures : backoff.length - 1;
       _failures++;
@@ -672,7 +689,7 @@ class SyncEngine {
 
   Future<SyncView> _run([int round = 0]) async {
     if (_dead) return _view;
-    _emit(_view.copyWith(state: SyncState.syncing));
+    _emit(_view.copyWith(state: SyncState.syncing, failedVia: null));
     final SyncLink link;
     try {
       link = await transport.connect();
@@ -737,7 +754,7 @@ class SyncEngine {
         _view.copyWith(lastError: 'session_expired', state: SyncState.idle),
       );
     } on BoxUnreachable {
-      _fail('unreachable');
+      _fail('unreachable', via: link.via);
     } on BoxError catch (e) {
       if (e.code == _revokedCode) {
         // Any answer that says "revoked" ends this copy; "unreachable" never does.
@@ -749,10 +766,10 @@ class SyncEngine {
         onWakeNeeded?.call();
         _later(Duration(seconds: e.retryAfterSec ?? 60));
       } else {
-        _fail(e.code ?? 'http_${e.status}');
+        _fail(e.code ?? 'http_${e.status}', via: link.via);
       }
     } on Object catch (_) {
-      _fail('sync_failed');
+      _fail('sync_failed', via: link.via);
     }
     return _view;
   }
@@ -793,9 +810,10 @@ class SyncEngine {
       }
       final Map<String, dynamic> out;
       try {
+        final offset = link.via == 'cloud' ? null : clockOffsetMs?.call();
         out = await link.client.postJson(
           '/api/sync/ops',
-          {'ops': wire},
+          {'ops': wire, 'clockOffsetMs': ?offset},
           token: link.token,
           read: picture ? pictureReadTimeout : null,
         );

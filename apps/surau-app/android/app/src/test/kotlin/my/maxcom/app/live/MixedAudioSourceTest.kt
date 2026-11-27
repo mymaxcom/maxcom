@@ -311,4 +311,42 @@ class MixedAudioSourceTest {
         r.go(1, 1000, 0)
         assertTrue(r.delayed.all { it.toInt() == 0 })
     }
+
+    @Test
+    fun aSlowMicrophoneOpeningDoesNotStallTheStream() {
+        val slow = object : PcmCapture {
+            @Volatile var started = false
+            @Volatile var stopped = false
+            override fun start(): Boolean {
+                Thread.sleep(1500) // a Bluetooth link coming up
+                started = true
+                return true
+            }
+            override fun read(out: ShortArray): Int {
+                try { Thread.sleep(20) } catch (_: InterruptedException) {}
+                java.util.Arrays.fill(out, 700.toShort())
+                return out.size
+            }
+            override fun stop() {
+                stopped = true
+            }
+        }
+        val src = MixedAudioSource(null, null, 16000, captureFactory = { _, _, _ -> slow }, useAgc = false)
+        src.setMicEnabled(true)
+        assertTrue(src.init(16000, false, false, false))
+        val sink = Collect()
+        src.start(sink)
+        try {
+            Thread.sleep(700)
+            // 20 ms chunks: the stream keeps going while the opening is still blocked
+            assertFalse(slow.started)
+            assertTrue("frames=${sink.last.size}", sink.last.size >= 20)
+            // when the link is up the microphone joins
+            assertTrue(waitFor(4000) { slow.started && sink.last.isNotEmpty() && sink.last.last() == 700 })
+        } finally {
+            src.stop()
+            src.release()
+        }
+        assertTrue(waitFor { slow.stopped })
+    }
 }

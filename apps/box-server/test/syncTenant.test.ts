@@ -473,7 +473,7 @@ describe('a box keeps pushing and pulling `*` rows as today', () => {
     clouds.push(cloud);
     const worker = new FakeWorker(cloud.fetch);
     hook.fetch = worker.fetch;
-    const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau D\'Waqaf', target: { surauId: ensureSurau(cloud.app.surau.db) } });
+    const { code } = issueLinkCode({ db: cloud.app.surau.db, now: () => new Date() }, { boxId, name: 'Surau Contoh', target: { surauId: ensureSurau(cloud.app.surau.db) } });
     const lines: string[] = [];
     const exit = await runCloudLink(['--data', boxDir, '--db', join(boxDir, 'box.db'), 'link', CLOUD_URL, code], { out: (l) => lines.push(l), err: (l) => lines.push(l) }, worker.fetch);
     expect(exit).toBe(0);

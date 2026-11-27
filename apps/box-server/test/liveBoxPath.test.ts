@@ -5,11 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AddedAudioId, AlignState, LiveStartRequest } from '@surau/core';
 import { putFeature } from '../src/settingsStore.ts';
 import { LiveSessions, parseStartRequest } from '../src/live/sessions.ts';
-import type { AlignerLike, CameraSource, MixerLike } from '../src/live/sessions.ts';
+import type { AlignerLike, CameraSource, MixerLike, YoutubeLeg } from '../src/live/sessions.ts';
 import { registerLiveRoutes } from '../src/live/routes.ts';
 import { createLiveSecrets } from '../src/live/mediamtx.ts';
 import type { LiveRuntime } from '../src/live/mediamtx.ts';
 import { mixArgs } from '../src/live/mixer.ts';
+import { soundArgs } from '../src/live/soloCombiner.ts';
 import type { MixerOptions, MixerStartConfig, MixerStatus, VolumeTarget } from '../src/live/mixer.ts';
 import { AudioInputs, parseDshowAudioDevices } from '../src/live/audioInputs.ts';
 import type { AlignerOptions } from '../src/live/align.ts';
@@ -39,6 +40,8 @@ class FakeMixer implements MixerLike {
   volumes: Array<[VolumeTarget, number]> = [];
   stopped = false;
   state: MixerStatus['state'] = 'running';
+  stalls = 0;
+  kicks: string[] = [];
   readonly o: MixerOptions;
   constructor(o: MixerOptions) {
     this.o = o;
@@ -55,12 +58,22 @@ class FakeMixer implements MixerLike {
   async stop(): Promise<void> {
     this.stopped = true;
   }
+  kick(reason: string): void {
+    this.kicks.push(reason);
+    this.stalls += 1;
+  }
   status(): MixerStatus {
-    return { state: this.state, restarts: 0, lastError: null, stderrTail: [], unit: this.cfg?.unit ?? 'camera', channels: ['unit'], missing: [], commandsSent: 0, lastCommandError: null };
+    return { state: this.state, restarts: 0, lastError: null, stderrTail: [], unit: this.cfg?.unit ?? 'camera', channels: ['unit'], missing: [], commandsSent: 0, lastCommandError: null, stalls: this.stalls, lastStall: null };
   }
   volumeOf(id: VolumeTarget): number[] {
     return this.volumes.filter(([x]) => x === id).map(([, v]) => v);
   }
+  /** Build 6: the solo path's dropped-frame count (this fake stands in for both combiners). */
+  drops(): number {
+    return 0;
+  }
+  /** Built through the solo factory (one microphone on its own path), not the mixer. */
+  solo = false;
 }
 
 class FakeAligner implements AlignerLike {
@@ -90,6 +103,11 @@ class FakeAligner implements AlignerLike {
   setManual(id: AddedAudioId): void {
     this.states.set(id, 'manual');
   }
+  autos: Array<[AddedAudioId, number]> = [];
+  setAuto(id: AddedAudioId, delayMs: number): void {
+    this.autos.push([id, delayMs]);
+    this.states.set(id, 'searching');
+  }
   reset(): void {}
   /** The aligner reports a state (a lock, a failure). */
   emit(id: AddedAudioId, st: AlignState): void {
@@ -105,10 +123,12 @@ interface FakeApi {
   tracks: Record<string, string[]>;
   removed: string[];
   failPatch: boolean;
+  /** bytesReceived per path (the bitrate the monitor measures). */
+  bytes: Record<string, number>;
 }
 
 function makeApi(): { api: FakeApi; impl: NonNullable<LiveRuntime['api']> } {
-  const api: FakeApi = { users: new Map(), patches: [], ready: new Set(), tracks: {}, removed: [], failPatch: false };
+  const api: FakeApi = { users: new Map(), patches: [], ready: new Set(), tracks: {}, removed: [], failPatch: false, bytes: {} };
   const impl = {
     authUserAdd: async (u: { user: string; pass: string; permissions: Array<{ action: string; path?: string }>; ips?: string[] }) => {
       api.users.set(u.user, { pass: u.pass, permissions: u.permissions, ips: u.ips });
@@ -125,7 +145,7 @@ function makeApi(): { api: FakeApi; impl: NonNullable<LiveRuntime['api']> } {
       ready: api.ready.has(name),
       source: api.ready.has(name) ? { type: 'rtspSource', id: '' } : null,
       readers: 0,
-      bytesReceived: 0,
+      bytesReceived: api.bytes[name] ?? 0,
       tracks: api.tracks[name] ?? [],
     }),
     kickPublisher: async () => undefined,
@@ -150,7 +170,7 @@ interface Rig {
   inputAvailable: { v: { deviceName: string } | null };
 }
 
-async function rig(o: { camera?: Partial<Rig['camera']>; combiner?: NonNullable<ConstructorParameters<typeof LiveSessions>[0]['combiner']>; cameraSettings?: Record<string, unknown> } = {}): Promise<Rig> {
+async function rig(o: { camera?: Partial<Rig['camera']>; combiner?: NonNullable<ConstructorParameters<typeof LiveSessions>[0]['combiner']>; cameraSettings?: Record<string, unknown>; extra?: Partial<ConstructorParameters<typeof LiveSessions>[0]> } = {}): Promise<Rig> {
   const h = await startLiveHarness();
   harnesses.push(h);
   putFeature(h.app.surau.db, 'liveCamera', { enabled: true, ...(o.cameraSettings ?? {}) }, 'test', undefined, 'sdm');
@@ -182,12 +202,20 @@ async function rig(o: { camera?: Partial<Rig['camera']>; combiner?: NonNullable<
       mixers.push(m);
       return m;
     },
+    // build 6: a microphone goes through the solo path; the same fake records it, marked `solo`
+    soloFactory: (so) => {
+      const m = new FakeMixer(so);
+      m.solo = true;
+      mixers.push(m);
+      return m;
+    },
     alignerFactory: (ao) => {
       const a = new FakeAligner(ao);
       aligners.push(a);
       return a;
     },
     combiner: { fadeMs: 0, ...(o.combiner ?? {}) },
+    ...(o.extra ?? {}),
   });
   const baseReq = (over: Partial<LiveStartRequest>): LiveStartRequest => ({
     kuliahId: h.kuliahId,
@@ -253,6 +281,16 @@ describe('start request', () => {
 });
 
 describe('box-pull topology (iPad or web with Kamera luaran)', () => {
+  it('Lane X2: a live that uses the external camera calls the camera-profile hook once, without waiting for it; a live with the phone camera does not', async () => {
+    let calls = 0;
+    const r = await rig({ extra: { onExternalCameraLive: () => void calls++ } });
+    await r.start({ audio: MIX_MIC });
+    expect(calls).toBe(1);
+    const p = await rig({ extra: { onExternalCameraLive: () => void calls++ } });
+    await p.start({ video: 'phone', source: 'android', youtubeVia: 'device' }, 'dev-phone');
+    expect(calls).toBe(1);
+  });
+
   it('pulls the camera into surau-cam through the API only, gives the iPad a surau-mic publisher and the combiner its own user', async () => {
     const r = await rig();
     const res = await r.start({ audio: MIX_MIC });
@@ -272,6 +310,13 @@ describe('box-pull topology (iPad or web with Kamera luaran)', () => {
       { action: 'read', path: 'surau-mic' },
       { action: 'read', path: 'surau-in' },
       { action: 'publish', path: 'surau' },
+      // A21: YouTube is on in the settings (the default), so the AAC rendition for the box relay may be published too
+      { action: 'publish', path: 'surau-yt' },
+      // build 6: the solo sound process publishes the microphone (Opus, AAC) and the join reads it back
+      { action: 'read', path: 'surau-snd' },
+      { action: 'read', path: 'surau-snd-aac' },
+      { action: 'publish', path: 'surau-snd' },
+      { action: 'publish', path: 'surau-snd-aac' },
     ]);
     // the login and the combiner password are in the log scrubber
     const scrub = r.runtime.secrets.list();
@@ -327,23 +372,21 @@ describe('box-pull topology (iPad or web with Kamera luaran)', () => {
 });
 
 describe('combiner and aligner lifecycle', () => {
-  it('waits for the picture, then starts the combiner with the unit, the plan and the aligner wired to it', async () => {
+  it('waits for the picture, then starts the combiner with the unit and the one chosen sound (build 6: the solo path, no aligner)', async () => {
     const r = await rig();
     await r.start({ audio: MIX_MIC });
+    await r.tick();
+    expect(r.mixers).toHaveLength(0); // no picture yet
     cameraUp(r, true);
     await r.tick();
     expect(r.mixers).toHaveLength(1);
     const m = r.mixers[0]!;
-    expect(m.o).toMatchObject({ rtspUser: expect.stringMatching(/^mix-/), headroomMs: 2000, maxFailures: 1_000_000 });
-    expect(m.cfg).toMatchObject({ unit: 'camera', unitHasAudio: true, unitVolume: 100 });
-    expect(m.cfg?.added).toEqual([{ id: 'deviceMic', initialDelayMs: 1000, volume: 80 }]);
-    const a = r.aligners[0]!;
-    expect(a.started).toBe(true);
-    expect(a.o.monitor).toBe(m.monitor); // Mixer.monitor -> Aligner
-    expect(a.o.added).toEqual(['deviceMic']);
-    expect(a.o.maxLagMs).toBe(4000);
-    a.o.apply('deviceMic', 2650); // Aligner.apply -> Mixer.setDelay
-    expect(m.delays).toEqual([['deviceMic', 2650]]);
+    expect(m.solo).toBe(true);
+    expect(m.o).toMatchObject({ rtspUser: expect.stringMatching(/^mix-/), maxFailures: 1_000_000 });
+    expect(m.cfg).toMatchObject({ unit: 'camera' });
+    // the iPad microphone is the one sound (the camera's own is off by the one-sound rule), joined with the default delay
+    expect(m.cfg?.added).toEqual([{ id: 'deviceMic', initialDelayMs: 400, volume: 80, held: false }]);
+    expect(r.aligners).toHaveLength(0);
     // a second poll with nothing changed does not restart anything
     await r.tick();
     expect(r.mixers).toHaveLength(1);
@@ -367,8 +410,9 @@ describe('combiner and aligner lifecycle', () => {
     await r.tick();
     const m = r.mixers[0]!;
     expect(m.cfg).toMatchObject({ unitHasAudio: false });
-    expect(m.cfg?.added).toEqual([{ id: 'deviceMic', initialDelayMs: 2350, volume: 80 }]); // headroom + 350
-    expect(r.aligners[0]!.states.get('deviceMic')).toBe('manual');
+    // build 6: the join delay is the saved offset itself (no headroom on the solo path)
+    expect(m.cfg?.added).toEqual([{ id: 'deviceMic', initialDelayMs: 350, volume: 80, held: false }]);
+    expect(r.aligners).toHaveLength(0);
     const st = r.s.status();
     expect(st.audio?.sources.find((x) => x.id === 'deviceMic')?.align?.state).toBe('manual');
     expect(st.warnings).toContain('camera_no_audio');
@@ -384,6 +428,8 @@ describe('combiner and aligner lifecycle', () => {
     await r.tick(9000);
     expect(r.mixers).toHaveLength(1);
     expect(r.mixers[0]!.cfg?.added).toEqual([]);
+    // build 6: the camera's own sound carries the live meanwhile (it is not the chosen sound, so at 100)
+    expect(r.mixers[0]!.cfg).toMatchObject({ unitHasAudio: true, unitVolume: 100 });
     expect(r.s.status().warnings).toContain('audio_source_lost');
     // the microphone arrives: not added until steady
     r.api.ready.add('surau-mic');
@@ -411,83 +457,75 @@ describe('combiner and aligner lifecycle', () => {
     expect(r.s.status().audio?.sources.find((x) => x.id === 'deviceMic')?.state).toBe('lost');
   });
 
-  it('the camera lost: the combiner waits (stopped); the camera back: a new combiner, the microphone held out again and searching', async () => {
+  it('the camera lost: the combiner waits (stopped); the camera back: a new combiner with the same sound and delay', async () => {
     const r = await rig();
     await r.start({ audio: MIX_MIC });
     cameraUp(r, true);
     await r.tick();
-    r.aligners[0]!.emit('deviceMic', 'locked');
-    expect(r.mixers[0]!.volumeOf('deviceMic')).toEqual([80]);
     r.api.ready.delete('surau-cam');
     r.api.ready.delete('surau');
     await r.tick(3000);
     expect(r.mixers[0]!.stopped).toBe(true);
-    expect(r.aligners[0]!.stopped).toBe(true);
     expect(r.mixers).toHaveLength(1);
     r.api.ready.add('surau-cam');
     r.api.ready.add('surau');
     await r.tick(3000);
     expect(r.mixers).toHaveLength(2);
-    expect(r.aligners).toHaveLength(2);
-    expect(r.aligners[1]!.state('deviceMic')).toBe('searching');
-    expect(r.mixers[1]!.cfg?.added[0]).toMatchObject({ id: 'deviceMic', initialDelayMs: 1000 });
-    expect(r.mixers[1]!.volumeOf('deviceMic')).toEqual([]); // held out until the new lock
+    expect(r.mixers[1]!.solo).toBe(true);
+    expect(r.mixers[1]!.cfg?.added[0]).toEqual({ id: 'deviceMic', initialDelayMs: 400, volume: 80, held: false });
+    expect(r.aligners).toHaveLength(0);
   });
 
-  it('a late state from a replaced combiner is ignored', async () => {
+  it('a change after the rebuild reaches the new combiner only, never the replaced one', async () => {
     const r = await rig();
     await r.start({ audio: MIX_MIC });
     cameraUp(r, true);
     await r.tick();
-    const old = r.aligners[0]!;
     r.api.ready.delete('surau-cam');
     await r.tick(3000);
-    old.emit('deviceMic', 'locked');
+    r.api.ready.add('surau-cam');
+    await r.tick(3000);
+    await r.s.changeAudio('dev-ipad', { audio: { ...MIX_MIC, deviceMic: { enabled: true, volume: 40 } } });
     expect(r.mixers[0]!.volumeOf('deviceMic')).toEqual([]);
+    expect(r.mixers[1]!.volumeOf('deviceMic')).toEqual([40]);
   });
 });
 
-describe('hold-out and lock release', () => {
-  it('holds the added microphone at 0 while the camera is audible and unlocked, releases it on the lock', async () => {
+describe('build 6: no hold-out on the solo path (was: hold-out and lock release)', () => {
+  it('the chosen microphone plays at once at its volume: never held at 0, whatever the camera does', async () => {
     const r = await rig();
     await r.start({ audio: MIX_MIC });
     cameraUp(r, true);
     await r.tick();
     const m = r.mixers[0]!;
-    const a = r.aligners[0]!;
-    expect(m.volumeOf('deviceMic')).toEqual([]); // the Mixer starts it at 0 (held) and nothing raised it
-    a.emit('deviceMic', 'searching');
-    a.emit('deviceMic', 'failed'); // no lock after 60 s: still held out
-    expect(m.volumeOf('deviceMic')).toEqual([]);
-    a.emit('deviceMic', 'locked');
-    expect(m.volumeOf('deviceMic')).toEqual([80]);
-    a.emit('deviceMic', 'holding'); // silence in the room: stays in
-    expect(m.volumeOf('deviceMic')).toEqual([80]);
+    expect(m.cfg?.added[0]).toMatchObject({ volume: 80, held: false });
+    expect(m.volumeOf('deviceMic')).toEqual([]); // nothing to release
+    expect(r.s.status().audio?.sources.find((x) => x.id === 'deviceMic')?.align).toEqual({ state: 'manual', delayMs: 400 });
+    expect(r.s.status().warnings).not.toContain('audio_align_searching');
   });
 
-  it('the release is a fade: steps rise to the user volume', async () => {
+  it('a volume change is one command, never a fade of steps', async () => {
     const r = await rig({ combiner: { fadeMs: 60, fadeSteps: 4 } });
     await r.start({ audio: MIX_MIC });
     cameraUp(r, true);
     await r.tick();
-    r.aligners[0]!.emit('deviceMic', 'locked');
-    for (let i = 0; i < 100 && r.mixers[0]!.volumeOf('deviceMic').length < 4; i++) await new Promise((x) => setTimeout(x, 10));
-    const v = r.mixers[0]!.volumeOf('deviceMic');
-    expect(v).toHaveLength(4);
-    expect(v.at(-1)).toBe(80);
-    expect([...v].sort((a, b) => a - b)).toEqual(v);
+    await r.s.changeAudio('dev-ipad', { audio: { ...MIX_MIC, deviceMic: { enabled: true, volume: 30 } } });
+    await r.s.changeAudio('dev-ipad', { audio: { ...MIX_MIC, deviceMic: { enabled: true, volume: 60 } } });
+    await new Promise((x) => setTimeout(x, 100));
+    expect(r.mixers[0]!.volumeOf('deviceMic')).toEqual([30, 60]);
+    expect(r.mixers).toHaveLength(1);
   });
 
-  it('with the camera volume at 0 ("mic only") nothing is held: the microphone plays at once and no hold-out command is sent', async () => {
+  it('the camera volume at 0 with the microphone chosen: the microphone is the sound, the camera is not in the live', async () => {
     const r = await rig();
     await r.start({ audio: { ...MIX_MIC, camera: { enabled: true, volume: 0 } } });
     cameraUp(r, true);
     await r.tick();
     const m = r.mixers[0]!;
-    expect(m.cfg).toMatchObject({ unitVolume: 0, unitHasAudio: true });
-    expect(m.volumeOf('deviceMic')).toEqual([]);
-    r.aligners[0]!.emit('deviceMic', 'failed');
-    expect(m.volumeOf('deviceMic')).toEqual([]);
+    expect(m.solo).toBe(true);
+    expect(m.cfg?.added.map((a) => a.id)).toEqual(['deviceMic']);
+    expect(r.s.status().audio?.sources.map((x) => x.id)).toEqual(['deviceMic']);
+    expect(m.volumeOf('unit')).toEqual([]);
   });
 });
 
@@ -513,7 +551,8 @@ describe('POST /api/live/audio', () => {
     expect((await post(app, 'dev-other', MIX_MIC)).statusCode).toBe(403);
     const ok = await post(app, 'dev-ipad', MIX_MIC);
     expect(ok.statusCode).toBe(200);
-    expect(ok.json().audio.sources.map((x: { id: string }) => x.id)).toEqual(['camera', 'deviceMic']);
+    // build 6: an older app sends two enabled sources; the box keeps one by the priority rule (never a 400)
+    expect(ok.json().audio.sources.map((x: { id: string }) => x.id)).toEqual(['deviceMic']);
     expect((await post(app, 'dev-ipad', 'loud')).statusCode).toBe(400);
   });
 
@@ -523,28 +562,26 @@ describe('POST /api/live/audio', () => {
     expect((await post(app, 'dev-ipad', MIX_MIC)).statusCode).toBe(409);
   });
 
-  it('a volume is a run-time command: no restart; a raised camera volume holds an unaligned microphone out again', async () => {
+  it('a volume is a run-time command: no restart; the camera volume of an older app changes nothing (one sound)', async () => {
     const r = await rig();
     await r.start({ audio: { ...MIX_MIC, camera: { enabled: true, volume: 0 } } });
     cameraUp(r, true);
     await r.tick();
     const m = r.mixers[0]!;
     const app = await mini(r);
-    // microphone volume only: the camera is silent, so nothing can double; the graph value follows at once
+    // the microphone volume: the graph value follows at once
     expect((await post(app, 'dev-ipad', { ...MIX_MIC, camera: { enabled: true, volume: 0 }, deviceMic: { enabled: true, volume: 50 } })).statusCode).toBe(200);
     expect(r.mixers).toHaveLength(1);
     expect(m.volumeOf('deviceMic')).toEqual([50]);
-    // the camera audible again while the microphone has no lock: the unit volume goes up and the microphone is held out (0)
+    // the camera raised as well (an older app): the microphone stays the one sound, no unit volume, no hold-out, no restart
     expect((await post(app, 'dev-ipad', { ...MIX_MIC, deviceMic: { enabled: true, volume: 50 } })).statusCode).toBe(200);
     expect(r.mixers).toHaveLength(1);
-    expect(m.volumeOf('unit')).toEqual([100]);
-    expect(m.volumeOf('deviceMic').at(-1)).toBe(0);
-    // locked: released to the user's volume
-    r.aligners[0]!.emit('deviceMic', 'locked');
-    expect(m.volumeOf('deviceMic').at(-1)).toBe(50);
+    expect(m.volumeOf('unit')).toEqual([]);
+    expect(m.volumeOf('deviceMic')).toEqual([50]);
+    expect(m.stopped).toBe(false);
   });
 
-  it('adding or removing a source restarts the combiner (the old one stops first); the new source goes through searching', async () => {
+  it('choosing the microphone or the camera sound restarts the combiner (the old one stops first); the microphone is joined by hand (manual)', async () => {
     const r = await rig();
     await r.start();
     cameraUp(r, true);
@@ -559,12 +596,15 @@ describe('POST /api/live/audio', () => {
     await r.tick(3500);
     expect(r.mixers).toHaveLength(2);
     expect(r.mixers[0]!.stopped).toBe(true);
+    expect(r.mixers[1]!.solo).toBe(true);
     expect(r.mixers[1]!.cfg?.added.map((a) => a.id)).toEqual(['deviceMic']);
-    expect(r.s.status().audio?.sources.find((x) => x.id === 'deviceMic')?.align?.state).toBe('searching');
-    // removed again
+    expect(r.s.status().audio?.sources.find((x) => x.id === 'deviceMic')?.align?.state).toBe('manual');
+    // back to the camera sound
     expect((await post(app, 'dev-ipad', { ...MIX_MIC, deviceMic: { enabled: false, volume: 80 } })).statusCode).toBe(200);
     expect(r.mixers).toHaveLength(3);
-    expect(r.mixers[2]!.cfg?.added).toEqual([]);
+    expect(r.mixers[1]!.stopped).toBe(true);
+    expect(r.mixers[2]!.solo).toBe(false);
+    expect(r.mixers[2]!.cfg).toMatchObject({ unitHasAudio: true, unitVolume: 100, added: [] });
   });
 
   it('a phone-run live: volumes are only recorded; Mic-in cannot be switched on or off mid-live (409)', async () => {
@@ -601,10 +641,14 @@ describe('Mic-in on a device stream (the box only ingests)', () => {
     r.api.ready.add('surau-in');
     await r.tick();
     const o = r.mixers[0]!.o;
+    expect(r.mixers[0]!.solo).toBe(true);
     expect(o.deviceName).toBe(real);
-    const args = mixArgs({ unit: 'ingest', unitHasAudio: true, added: [{ id: 'boxInput', initialDelayMs: 0, volume: 60 }], unitVolume: 100, headroomMs: 2000, control: 'zmq', zmqPort: 30000, platform: 'windows', deviceName: o.deviceName! });
+    // build 6: the box microphone is read by the solo sound process
+    const args = soundArgs({ input: { kind: 'dshow', deviceName: o.deviceName! }, volume: 60, levelled: false, leveller: true, control: 'zmq', zmqPort: 30000, platform: 'windows', aac: false });
     expect(args).toContain(`audio=${real}`);
     expect(args).toContain('-sample_rate');
+    // and the mixer still takes the same name (its argument rules are unchanged)
+    expect(mixArgs({ unit: 'ingest', unitHasAudio: true, added: [{ id: 'boxInput', initialDelayMs: 0, volume: 60 }], unitVolume: 100, headroomMs: 2000, control: 'zmq', zmqPort: 30000, platform: 'windows', deviceName: o.deviceName! })).toContain(`audio=${real}`);
   });
 
   it('the phone publishes to surau-in; the combiner takes it as the unit and the capture device as the added source', async () => {
@@ -622,22 +666,24 @@ describe('Mic-in on a device stream (the box only ingests)', () => {
     r.api.ready.add('surau-in');
     await r.tick();
     const m = r.mixers[0]!;
-    expect(m.cfg).toMatchObject({ unit: 'ingest', unitHasAudio: true, unitVolume: 100 });
+    // build 6: the box microphone is the one sound, joined to the phone's picture (the phone's own sound is not used)
+    expect(m.solo).toBe(true);
+    expect(m.cfg).toMatchObject({ unit: 'ingest' });
     expect(m.o).toMatchObject({ deviceName: 'Line In' });
-    expect(m.cfg?.added.map((a) => a.id)).toEqual(['boxInput']);
-    expect(r.aligners[0]!.o.added).toEqual(['boxInput']);
-    r.aligners[0]!.emit('boxInput', 'locked');
-    expect(m.volumeOf('boxInput')).toEqual([60]);
+    expect(m.cfg?.added).toEqual([{ id: 'boxInput', initialDelayMs: 400, volume: 60, held: false }]);
+    expect(r.aligners).toHaveLength(0);
+    expect(r.s.status().audio?.sources.map((x) => x.id)).toEqual(['boxInput']);
   });
 
-  it('"Mic-in only" (every phone-side volume 0): the box takes the reference sound and mutes it', async () => {
+  it('"Mic-in only" (every phone-side volume 0): the same solo path, the phone stream is the picture only', async () => {
     const r = await rig();
     r.inputAvailable.v = { deviceName: 'Line In' };
     await r.start({ source: 'android', youtubeVia: 'device', video: 'phone', audio: { camera: { enabled: false, volume: 100 }, deviceMic: { enabled: true, volume: 0 }, boxInput: { enabled: true, volume: 100 } } }, 'dev-phone');
     r.api.ready.add('surau-in');
     await r.tick();
-    expect(r.mixers[0]!.cfg).toMatchObject({ unit: 'ingest', unitHasAudio: true, unitVolume: 0 });
-    expect(r.aligners[0]!.o.added).toEqual(['boxInput']); // still aligned: the phone sends the reference
+    expect(r.mixers[0]!.solo).toBe(true);
+    expect(r.mixers[0]!.cfg).toMatchObject({ unit: 'ingest', added: [{ id: 'boxInput', volume: 100 }] });
+    expect(r.aligners).toHaveLength(0);
   });
 
   it('without a capture device the choice is dropped: an ordinary phone live', async () => {
@@ -649,31 +695,25 @@ describe('Mic-in on a device stream (the box only ingests)', () => {
 });
 
 describe('status (plan 4.7)', () => {
-  it('reports the video, one row per source with its state, volume and alignment; the chip follows the aligner', async () => {
+  it('reports the video and one row for the one sound with its state, volume and fixed delay (build 6: never searching)', async () => {
     const r = await rig();
     await r.start({ audio: MIX_MIC });
-    // before the picture: the camera has not been seen yet
+    // before the picture
     let st = r.s.status();
     expect(st.video).toBe('external');
-    expect(st.audio?.sources.map((x) => [x.id, x.volume, x.state])).toEqual([
-      ['camera', 100, 'ok'],
-      ['deviceMic', 80, 'ok'],
-    ]);
-    expect(st.audio?.sources[1]?.align).toEqual({ state: 'searching', delayMs: 1000 });
+    expect(st.audio?.sources.map((x) => [x.id, x.volume, x.state])).toEqual([['deviceMic', 80, 'ok']]);
+    expect(st.audio?.sources[0]?.align).toEqual({ state: 'manual', delayMs: 400 });
     cameraUp(r, true);
     await r.tick();
     st = r.s.status();
-    expect(st.warnings).toContain('audio_align_searching');
-    r.aligners[0]!.emit('deviceMic', 'failed');
-    st = r.s.status();
-    expect(st.warnings).toContain('audio_align_failed');
-    expect(st.audio?.sources[1]?.align).toMatchObject({ state: 'failed', delayMs: 1234 });
-    r.aligners[0]!.emit('deviceMic', 'locked');
-    st = r.s.status();
-    expect(st.warnings).not.toContain('audio_align_failed');
     expect(st.warnings).not.toContain('audio_align_searching');
-    expect(st.audio?.sources[1]?.align?.state).toBe('locked');
-    expect(st.audio?.sources[0]?.align).toBeUndefined(); // only added sources align
+    expect(st.warnings).not.toContain('audio_align_failed');
+    expect(st.audio?.sources[0]?.align).toEqual({ state: 'manual', delayMs: 400 });
+    // the camera's own sound chosen: one row, no alignment (only a microphone is joined with a delay)
+    await r.s.changeAudio('dev-ipad', { audio: { ...MIX_MIC, deviceMic: { enabled: false, volume: 80 } } });
+    st = r.s.status();
+    expect(st.audio?.sources.map((x) => x.id)).toEqual(['camera']);
+    expect(st.audio?.sources[0]?.align).toBeUndefined();
   });
 
   it('warns when every source is silent, and marks a silenced source', async () => {
@@ -739,58 +779,83 @@ describe('camera lost (waiting flag, 10 minute stop) and the controller heartbea
     expect(back.waiting).toBeUndefined();
   });
 
-  it('ends the live after 10 minutes without the camera (reason camera_lost), not before', async () => {
+  it('a box-pulled live has no automatic end: the camera gone for 3 hours (fake time) leaves it open, with the waiting card', async () => {
     const r = await rig();
     const id = (await r.start()).session.id;
     cameraUp(r);
     await r.tick();
     r.api.ready.delete('surau-cam');
     r.api.ready.delete('surau');
-    const poll = (): void => r.s.heartbeat('dev-ipad'); // the iPad is still there
-    await r.tick(3000);
-    poll();
-    await r.tick(9 * 60_000);
-    poll();
+    for (let i = 0; i < 18; i++) {
+      r.h.clock.t += 10 * 60_000;
+      await r.tick();
+    }
     expect(r.s.current()?.id).toBe(id);
-    await r.tick(61_000);
-    expect(r.s.current()).toBeNull();
-    const rows = r.h.app.surau.db.prepare("SELECT after_json FROM change_log WHERE entity = 'live' AND entity_id = ? ORDER BY id").all(id) as Array<{ after_json: string }>;
-    expect(JSON.parse(rows.at(-1)!.after_json)).toMatchObject({ reason: 'camera_lost' });
-    expect(r.mixers[0]!.stopped).toBe(true);
+    expect(r.s.status().warnings).toContain('no_video_from_camera');
+    expect(r.s.kioskLive()).toMatchObject({ live: true, waiting: true });
+    // the camera comes back by itself: a new combiner, the same live
+    cameraUp(r);
+    await r.tick(3000);
+    expect(r.s.current()?.id).toBe(id);
+    expect(r.mixers.at(-1)!.stopped).toBe(false);
   });
 
-  it('a camera that never came ends the live too, after 10 minutes', async () => {
+  it('a live that started box-pulled stays open after the switch to the iPad\'s own camera, however long that camera is missing (K2)', async () => {
+    const r = await rig();
+    const id = (await r.start({ audio: MIX_MIC })).session.id;
+    cameraUp(r);
+    await r.tick();
+    await r.s.changeAudio('dev-ipad', { audio: MIX_MIC, video: 'phone' });
+    const round = async (ms: number): Promise<void> => {
+      r.h.clock.t += ms;
+      r.s.heartbeat('dev-ipad');
+      r.api.ready.add('surau'); // the box output is still there: only the unit is missing
+      await r.tick();
+    };
+    await round(3000);
+    await round(9 * 60_000);
+    expect(r.s.current()?.id).toBe(id);
+    await round(61_000);
+    await round(60 * 60_000);
+    expect(r.s.current()?.id).toBe(id);
+  });
+
+  it('a camera that never came leaves a box-pulled live open too', async () => {
     const r = await rig();
     await r.start();
-    r.s.heartbeat('dev-ipad');
-    await r.tick(9 * 60_000);
-    r.s.heartbeat('dev-ipad');
+    for (let i = 0; i < 6; i++) {
+      r.h.clock.t += 30 * 60_000;
+      await r.tick();
+    }
     expect(r.s.current()).not.toBeNull();
-    await r.tick(61_000);
-    expect(r.s.current()).toBeNull();
   });
 
-  it('the controller heartbeat: the starter polling keeps a box-pulled live; another device does not; 10 minutes of silence ends it (controller_lost)', async () => {
+  it('A3: no poll of any device for 3 hours leaves a box-pulled live open; controller_quiet shows from 10 minutes and one poll of the starter clears it', async () => {
     const r = await rig();
     const id = (await r.start()).session.id;
     cameraUp(r);
     await r.tick();
-    for (let i = 0; i < 4; i++) {
-      r.s.heartbeat('dev-ipad');
-      await r.tick(4 * 60_000);
+    expect(r.s.status().warnings).not.toContain('controller_quiet');
+    expect(r.s.status().controllerQuietSeconds).toBe(0);
+    await r.tick(9 * 60_000);
+    expect(r.s.status().warnings).not.toContain('controller_quiet');
+    await r.tick(61_000);
+    expect(r.s.status().warnings).toContain('controller_quiet');
+    expect(r.s.status().controllerQuietSeconds).toBeGreaterThanOrEqual(600);
+    for (let i = 0; i < 17; i++) {
+      cameraUp(r);
+      await r.tick(10 * 60_000);
     }
-    expect(r.s.current()?.id).toBe(id); // 16 minutes, polled every 4
-    // another device polling does not count
-    for (let i = 0; i < 3; i++) {
-      r.s.heartbeat('dev-other');
-      await r.tick(4 * 60_000);
-    }
-    expect(r.s.current()).toBeNull();
-    const rows = r.h.app.surau.db.prepare("SELECT after_json FROM change_log WHERE entity = 'live' AND entity_id = ? ORDER BY id").all(id) as Array<{ after_json: string }>;
-    expect(JSON.parse(rows.at(-1)!.after_json)).toMatchObject({ reason: 'controller_lost' });
+    expect(r.s.current()?.id).toBe(id);
+    // a device that did not start the live does not clear the notice; the starter does
+    r.s.heartbeat('dev-other');
+    expect(r.s.status().warnings).toContain('controller_quiet');
+    r.s.heartbeat('dev-ipad');
+    expect(r.s.status().warnings).not.toContain('controller_quiet');
+    expect(r.s.status().controllerQuietSeconds).toBe(0);
   });
 
-  it('the status route is the heartbeat, for the starting device only', async () => {
+  it('the status route: a poll of another device leaves the quiet notice in place', async () => {
     const r = await rig();
     await r.start();
     cameraUp(r);
@@ -802,13 +867,11 @@ describe('camera lost (waiting flag, 10 minute stop) and the controller heartbea
     registerLiveRoutes(app, { sessions: r.s, proxy: {} as never, lanIps: [] });
     await app.ready();
     minis.push(app);
-    r.h.clock.t += 9 * 60_000;
-    await app.inject({ method: 'GET', url: '/api/live/status', headers: { 'x-device': 'dev-ipad' } });
-    await r.tick(2 * 60_000);
-    expect(r.s.current()).not.toBeNull(); // the poll of the starter moved the deadline
-    await app.inject({ method: 'GET', url: '/api/live/status', headers: { 'x-device': 'dev-other' } });
-    await r.tick(9 * 60_000);
-    expect(r.s.current()).toBeNull(); // the other device's poll did not
+    r.h.clock.t += 11 * 60_000;
+    expect(r.s.status().warnings).toContain('controller_quiet');
+    const polled = await app.inject({ method: 'GET', url: '/api/live/status', headers: { 'x-device': 'dev-other' } });
+    expect(polled.json().warnings).toContain('controller_quiet');
+    expect(polled.json().canToggleKiosk).toBe(true);
   });
 
   it('a phone-run live is not ended by a silent controller (it ends with its stream)', async () => {
@@ -844,6 +907,12 @@ describe('stop rule and the emergency-stop audit (real roles)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.actor).toBe(`user:${admin.userId}`);
     expect(rows[0]!.after).toMatchObject({ sessionId: id, startedBy: `user:${starter.userId}`, stoppedBy: `user:${admin.userId}` });
+    // B12: the record names a person's stop `stopped`, the Pentadbir's included. The starting device, which did not
+    // stop it, reads its own row (`mine`) with that reason as "dihentikan oleh pentadbir" (app: live_controller.dart).
+    const recent = async (headers: Record<string, string>) =>
+      ((await h.app.inject({ method: 'GET', url: '/api/live/sessions/recent', headers, remoteAddress: LAN })).json().sessions as Array<{ id: string; reason: string | null; mine: boolean }>).find((x) => x.id === id);
+    expect(await recent(starter.headers)).toMatchObject({ reason: 'stopped', mine: true });
+    expect(await recent(admin.headers)).toMatchObject({ reason: 'stopped', mine: false });
   });
 
   it('the starter stopping its own live is no emergency', async () => {
@@ -952,6 +1021,30 @@ describe('mid-live switch to the iPad camera, hand-set offset and level meters (
     expect(r.mixers[3]!.cfg?.added.map((a) => a.id)).toEqual(['deviceMic']);
   });
 
+  it('Q6: the camera-in-use flag follows the video source: cleared on the iPad\'s own camera, set again (via box) when the pulled camera returns', async () => {
+    const r = await rig();
+    await r.start({ audio: MIX_MIC });
+    const id = r.s.current()!.id;
+    expect(r.s.cameraUse('dev-other')).toMatchObject([{ sessionId: id, via: 'box', by: { mine: false } }]);
+    // A14: a box-pulled live shows no picture to another device; the iPad (web) owner keeps its one reader
+    expect(() => r.s.previewFor('dev-other')).toThrowError(expect.objectContaining({ status: 409, code: 'preview_off' }));
+    expect(r.s.previewFor('dev-ipad')).toMatchObject({ path: 'surau' });
+
+    const st = await r.s.changeAudio('dev-ipad', { audio: audio(), video: 'phone' });
+    expect(st.cameraUse).toEqual([]);
+    expect(r.s.cameraUse('dev-other')).toEqual([]);
+    // no camera in the live: nobody new joins, and another device is not told the camera is busy
+    expect(() => r.s.previewFor('dev-new')).toThrowError(expect.objectContaining({ code: 'not_owner' }));
+    expect(() => r.s.cameraAddressFor('dev-new')).toThrowError(expect.objectContaining({ code: 'not_owner' }));
+
+    const back = await r.s.changeAudio('dev-ipad', { audio: audio(), video: 'external' });
+    expect(back.cameraUse).toMatchObject([{ cameraId: 'external', sessionId: id, via: 'box', by: { mine: true } }]);
+    expect(() => r.s.cameraAddressFor('dev-new')).toThrowError(expect.objectContaining({ code: 'camera_in_use' }));
+    // a change of the mix alone leaves the flag (and its since) as it is
+    const since = back.cameraUse![0]!.since;
+    expect((await r.s.changeAudio('dev-ipad', { audio: audio() })).cameraUse![0]!.since).toBe(since);
+  });
+
   it('refuses a bad video value and a switch on a live the box does not pull', async () => {
     const r = await rig();
     await r.start({ audio: MIX_MIC });
@@ -962,25 +1055,26 @@ describe('mid-live switch to the iPad camera, hand-set offset and level meters (
     await expect(r.s.changeAudio('dev-phone', { audio: audio(), video: 'external' })).rejects.toMatchObject({ status: 409 });
   });
 
-  it('avOffsetMs: validated 0..2000 step 50, and a running manual combiner gets headroom + offset as the delay', async () => {
+  it('avOffsetMs: validated 0..2000 step 50, and the running solo path gets the offset as its join delay', async () => {
     const r = await rig();
     await r.start({ audio: MIX_MIC });
     r.api.ready.add('surau-cam');
     r.api.ready.add('surau-mic');
-    r.api.tracks['surau-cam'] = ['H264']; // no camera audio: the fallback
+    r.api.tracks['surau-cam'] = ['H264']; // no camera audio
     await r.tick();
     const m = r.mixers[0]!;
-    expect(m.cfg?.added).toEqual([{ id: 'deviceMic', initialDelayMs: 2000, volume: 80 }]);
-    for (const bad of [-50, 2050, 25, 1.5, '300', null]) {
+    expect(m.cfg?.added).toEqual([{ id: 'deviceMic', initialDelayMs: 400, volume: 80, held: false }]);
+    for (const bad of [-50, 2050, 25, 1.5, '300']) {
       await expect(r.s.changeAudio('dev-ipad', { audio: audio(), avOffsetMs: bad })).rejects.toMatchObject({ status: 400 });
     }
     expect(m.delays).toEqual([]);
     const st = await r.s.changeAudio('dev-ipad', { audio: audio(), avOffsetMs: 350 });
-    expect(m.delays).toEqual([['deviceMic', 2350]]);
-    expect(r.mixers).toHaveLength(1); // no restart
-    expect(st.audio?.sources.find((x) => x.id === 'deviceMic')?.align).toMatchObject({ state: 'manual', delayMs: 2350 });
+    expect(m.delays).toEqual([['deviceMic', 350]]);
+    expect(r.mixers).toHaveLength(1); // no rebuild (the solo path restarts its join only)
+    expect(st.audio?.sources.find((x) => x.id === 'deviceMic')?.align).toEqual({ state: 'manual', delayMs: 350 });
+    // a hand-set 0 is a real value (no delay), not "unset"
     await r.s.changeAudio('dev-ipad', { audio: audio(), avOffsetMs: 0 });
-    expect(m.delays.at(-1)).toEqual(['deviceMic', 2000]);
+    expect(m.delays.at(-1)).toEqual(['deviceMic', 0]);
   });
 
   it('level meters: RMS dBFS per source from the monitor, absent before the first window and after the combiner goes', async () => {
@@ -990,18 +1084,18 @@ describe('mid-live switch to the iPad camera, hand-set offset and level meters (
     await r.tick();
     const m = r.mixers[0]!;
     expect(r.s.status().audio?.sources.every((x) => x.level === undefined)).toBe(true);
-    // 0.5 s of 16 kHz stereo (unit, deviceMic): unit at half scale (-6.0 dBFS), mic silent
+    // 0.5 s of 16 kHz stereo (unit, deviceMic) as the solo path gives it: the unit channel silent, the mic at half scale (-6.0 dBFS)
     const frames = 8000;
     const buf = Buffer.alloc(frames * 4);
     for (let f = 0; f < frames; f++) {
-      buf.writeInt16LE(f % 2 === 0 ? 16384 : -16384, f * 4);
-      buf.writeInt16LE(0, f * 4 + 2);
+      buf.writeInt16LE(0, f * 4);
+      buf.writeInt16LE(f % 2 === 0 ? 16384 : -16384, f * 4 + 2);
     }
     m.monitor.write(buf);
     await new Promise((res) => setImmediate(res));
     const src = r.s.status().audio!.sources;
-    expect(src.find((x) => x.id === 'camera')?.level).toBeCloseTo(-6, 0);
-    expect(src.find((x) => x.id === 'deviceMic')?.level).toBe(-90);
+    expect(src.find((x) => x.id === 'deviceMic')?.level).toBeCloseTo(-6, 0);
+    expect(src.find((x) => x.id === 'camera')).toBeUndefined(); // one sound: the camera's is not in the live
     // the camera is lost: the combiner is gone and so are the levels
     r.api.ready.delete('surau-cam');
     await r.tick(3000);
@@ -1030,28 +1124,33 @@ describe('round 2 review fixes: Android with an external camera and Mic-in', () 
     expect(args.join(' ')).not.toContain('surau-mic');
   });
 
-  it('a silent reference (phone mic off, camera sound off) is aligned by hand: manual mode, headroom plus the saved offset; the own track of the stream stays consumed at volume 0', async () => {
+  it('a silent reference (phone mic off, camera sound off): the box microphone is joined by hand with the saved offset as its delay', async () => {
     const r = await rig({ camera: { lastTest: { ...LAST_TEST, hasAudio: false, codecs: ['H264'] } }, cameraSettings: { avOffsetMs: { deviceMic: 0, boxInput: 450 } } });
     r.inputAvailable.v = { deviceName: 'Line In' };
     await r.start(ANDROID_EXT({ camera: { enabled: false, volume: 100 }, deviceMic: { enabled: false, volume: 100 }, boxInput: { enabled: true, volume: 100 } }), 'dev-phone');
     r.api.ready.add('surau-in');
     await r.tick();
     const m = r.mixers[0]!;
-    expect(m.cfg).toMatchObject({ unit: 'ingest', unitHasAudio: true, unitVolume: 0 }); // the track is still consumed (T0 rule), at volume 0
-    expect(m.cfg?.added).toEqual([{ id: 'boxInput', initialDelayMs: 2450, volume: 100 }]);
-    expect(r.aligners[0]!.states.get('boxInput')).toBe('manual');
+    expect(m.solo).toBe(true);
+    expect(m.cfg).toMatchObject({ unit: 'ingest' });
+    // build 6: the join delay is the saved offset itself
+    expect(m.cfg?.added).toEqual([{ id: 'boxInput', initialDelayMs: 450, volume: 100, held: false }]);
+    expect(r.s.status().audio?.sources.find((x) => x.id === 'boxInput')?.align).toEqual({ state: 'manual', delayMs: 450 });
     expect(r.s.status().warnings).not.toContain('audio_align_searching');
   });
 
-  it('a device stream with a picture and no sound track uses the silent reference and manual alignment', async () => {
+  it('a device stream with a picture and no sound track: the box microphone on the solo path, and a silent picture if it is benched', async () => {
     const r = await rig();
     r.inputAvailable.v = { deviceName: 'Line In' };
     await r.start({ source: 'android', youtubeVia: 'device', video: 'phone', audio: { camera: { enabled: false, volume: 100 }, deviceMic: { enabled: true, volume: 100 }, boxInput: { enabled: true, volume: 100 } } }, 'dev-phone');
     r.api.ready.add('surau-in');
     r.api.tracks['surau-in'] = ['H264'];
     await r.tick();
-    expect(r.mixers[0]!.cfg).toMatchObject({ unit: 'ingest', unitHasAudio: false });
-    expect(r.aligners[0]!.states.get('boxInput')).toBe('manual');
+    expect(r.mixers[0]!.solo).toBe(true);
+    expect(r.mixers[0]!.cfg).toMatchObject({ unit: 'ingest', added: [{ id: 'boxInput' }] });
+    (r.s as unknown as { session: { boxInputBenchedUntilMs: number } }).session.boxInputBenchedUntilMs = r.h.clock.t + 60_000;
+    await r.tick();
+    expect(r.mixers[1]!.cfg).toMatchObject({ unit: 'ingest', unitHasAudio: false, added: [] });
   });
 
   it('Mic-in uses the device captured at the start: a later empty device list does not break the build', async () => {
@@ -1099,5 +1198,163 @@ describe('round 2 review fixes: Android with an external camera and Mic-in', () 
     const w = r.s.status().warnings;
     expect(w).not.toContain('no_video_from_camera');
     expect(w).toContain('no_video_from_device');
+  });
+});
+
+// 2026.11.15, Lane A task A4 (B11): an Android phone asks the box to pull the camera (`videoPath: 'box'`); the phone
+// only controls. The default stays the phone pull, and the box flags the camera as in use either way.
+describe('A4: box pull for an Android phone, the camera-in-use flag, bitrate and codec warnings', () => {
+  const android = { source: 'android' as const, videoPath: 'box' as const };
+
+  it('B11: an Android start with videoPath box is a pulled session: the box pulls into surau-cam, the phone gets a surau-mic SRT target (success path)', async () => {
+    const r = await rig();
+    const res = await r.start({ ...android, audio: MIX_MIC }, 'dev-phone');
+    expect(res.session).toMatchObject({ source: 'android', videoPath: 'box', mine: true });
+    expect(res.ingest.path).toBe('surau-mic');
+    expect(res.ingest.srt).toMatchObject({ host: '10.168.1.5', port: 8890 });
+    expect(res.ingest.srt!.streamId.startsWith('publish:surau-mic:pub-')).toBe(true);
+    // the camera address reaches MediaMTX through the API only
+    const cam = r.api.patches.filter((p) => p.path === 'surau-cam');
+    expect(cam.at(-1)!.patch).toMatchObject({ source: CAM_URL, rtspTransport: 'tcp' });
+    // the box joins the phone's microphone to the camera picture, as for a browser (build 6: the solo path)
+    cameraUp(r, true);
+    await r.tick();
+    expect(r.mixers).toHaveLength(1);
+    expect(r.mixers[0]!.solo).toBe(true);
+    expect(r.mixers[0]!.cfg).toMatchObject({ unit: 'camera' });
+    expect(r.mixers[0]!.cfg!.added.map((a) => a.id)).toEqual(['deviceMic']);
+    // the Android app levels its own microphone: the solo path does not lift it again
+    expect(r.mixers[0]!.o.appLevelled).toBe(true);
+    const st = r.s.status('dev-phone');
+    expect(st.session).toMatchObject({ videoPath: 'box', mine: true });
+    expect(st.cameraUse).toEqual([{ cameraId: 'external', sessionId: res.session.id, via: 'box', by: { name: '', mine: true }, since: res.session.startedAt }]);
+    // the box holds the camera: nobody reads the address, not even the starting phone
+    expect(() => r.s.cameraAddressFor('dev-phone')).toThrowError(expect.objectContaining({ status: 409, code: 'camera_in_use' }));
+    expect(() => r.s.cameraAddressFor('dev-other')).toThrowError(expect.objectContaining({ status: 409, code: 'camera_in_use' }));
+    await r.s.stop(res.session.id, 'user:starter');
+    expect(r.api.patches.at(-1)).toMatchObject({ path: 'surau-mic' });
+    expect(r.api.patches.some((p) => p.path === 'surau-cam' && p.patch.source === 'publisher')).toBe(true);
+    expect(r.s.status('dev-phone').cameraUse).toEqual([]);
+  });
+
+  it('the default is the phone pull: an Android start without videoPath is not pulled, and the starting phone holds the camera', async () => {
+    const r = await rig();
+    const res = await r.start({ source: 'android', youtubeVia: 'device' }, 'dev-phone');
+    expect(res.session.videoPath).toBe('device');
+    expect(res.ingest.path).toBe('surau');
+    expect(r.api.patches.some((p) => p.path === 'surau-cam')).toBe(false);
+    expect(r.s.status('dev-phone').cameraUse).toMatchObject([{ cameraId: 'external', via: 'device', by: { mine: true } }]);
+    expect(r.s.status('dev-other').cameraUse).toMatchObject([{ via: 'device', by: { mine: false } }]);
+    // the starting phone reads the address; a second device is refused and joins the shared picture instead
+    expect(() => r.s.cameraAddressFor('dev-phone')).not.toThrow();
+    expect(() => r.s.cameraAddressFor('dev-other')).toThrowError(expect.objectContaining({ status: 409, code: 'camera_in_use' }));
+    expect(r.s.previewFor('dev-other')).toMatchObject({ path: 'surau', max: 1 });
+  });
+
+  it('a box pull with YouTube from the phone is refused at the door: the phone has no picture to push', () => {
+    const base = { kuliahId: null, source: 'android', video: 'external', videoPath: 'box', outputs: { kiosk: true, youtube: true } };
+    expect(() => parseStartRequest({ ...base, youtubeVia: 'device' })).toThrow();
+    expect(parseStartRequest({ ...base, youtubeVia: 'box' })).toMatchObject({ videoPath: 'box', youtubeVia: 'box' });
+    // without YouTube the leg does not matter
+    expect(parseStartRequest({ ...base, outputs: { kiosk: true, youtube: false }, youtubeVia: 'device' })).toMatchObject({ videoPath: 'box' });
+  });
+
+  it('C11: an H.265-only camera is refused for an Android box pull when the test knows it, and warned by its tracks when no test exists', async () => {
+    const tested = await rig({ camera: { lastTest: { ...LAST_TEST, codecs: ['H265', 'MPEG-4 Audio'] } } });
+    await expect(tested.start(android, 'dev-phone')).rejects.toMatchObject({ status: 409, code: 'camera_h265' });
+    const untested = await rig({ camera: { lastTest: null } });
+    await untested.start(android, 'dev-phone');
+    expect(untested.s.status().warnings).not.toContain('camera_h265');
+    untested.api.ready.add('surau-cam');
+    untested.api.tracks['surau-cam'] = ['H265', 'MPEG-4 Audio'];
+    await untested.tick();
+    expect(untested.s.status().warnings).toContain('camera_h265');
+    // an H.264 camera never warns
+    untested.api.tracks['surau-cam'] = ['H264', 'MPEG-4 Audio'];
+    await untested.tick();
+    expect(untested.s.status().warnings).not.toContain('camera_h265');
+  });
+
+  it('C3: the copy relay of a pulled camera warns when the camera sends well above the configured maximum, and not below it', async () => {
+    const yt: YoutubeLeg = {
+      signedIn: () => true,
+      createBroadcastFor: async () => ({ broadcastId: 'bc1', watchUrl: 'https://youtu.be/bc1', key: 'abcd-efgh-ijkl-mnop-qrst' }),
+      complete: async () => undefined,
+      status: () => ({ signedIn: true, channelTitle: 'Surau', broadcastId: 'bc1', state: 'created', health: null, watchUrl: null, lastError: null }),
+    };
+    const r = await rig({ extra: { youtube: yt, youtubeGraceMs: 0 } });
+    // the rig has no data folder until it is given one: the relay needs it
+    const withRelay = new LiveSessions({
+      db: r.h.app.surau.db,
+      now: r.h.clock.now,
+      runtime: r.runtime,
+      onKiosk: () => undefined,
+      monitorMs: 3_600_000,
+      camera: { get: () => r.camera.record, lastTest: LAST_TEST },
+      youtube: yt,
+      youtubeGraceMs: 0,
+      dataDir: r.h.dataDir,
+      relayOptions: { ffmpegPath: process.execPath, argsPrefix: ['-e', 'setInterval(() => {}, 1000)'], pollMs: 10, killAfterMs: 300 },
+      mixerFactory: (mo) => new FakeMixer(mo),
+      alignerFactory: (ao) => new FakeAligner(ao),
+    });
+    putFeature(r.h.app.surau.db, 'liveYoutube', { enabled: true, relayVideo: 'copy', maxBitrateKbps: 2500 }, 'test', undefined, 'sdm');
+    const res = await withRelay.start({ kuliahId: r.h.kuliahId, source: 'android', outputs: { kiosk: true, youtube: true }, youtubeVia: 'box', video: 'external', videoPath: 'box' }, 'user:starter', 'dev-phone', '10.168.1.5');
+    try {
+      for (let i = 0; i < 300 && withRelay.status().relay.state === 'off'; i++) await new Promise((x) => setTimeout(x, 10));
+      expect(withRelay.status().relay.state).not.toBe('off');
+      cameraUp(r);
+      // the camera's own bytes (surau-cam), averaged over 30 s: 10 s of samples give no verdict yet
+      r.api.bytes['surau-cam'] = 0;
+      await withRelay.tick();
+      const feed = async (kbps: number, seconds: number): Promise<void> => {
+        for (let i = 0; i < seconds / 2; i++) {
+          r.h.clock.t += 2000;
+          r.api.bytes['surau-cam'] = (r.api.bytes['surau-cam'] ?? 0) + (kbps * 1000 * 2) / 8;
+          await withRelay.tick();
+        }
+      };
+      await feed(10_000, 10);
+      expect(withRelay.status().warnings).not.toContain('camera_bitrate_high');
+      expect(withRelay.status().cameraKbps).toBeUndefined();
+      // 40 s at 2.4 Mbps: under the maximum (the 10 s of 10 Mbps leave the 30 s window)
+      await feed(2400, 40);
+      expect(withRelay.status().cameraKbps).toBe(2400);
+      expect(withRelay.status().warnings).not.toContain('camera_bitrate_high');
+      // 40 s at 10 Mbps: the camera's main stream as it is
+      await feed(10_000, 40);
+      expect(withRelay.status().warnings).toContain('camera_bitrate_high');
+      // "Kod semula" on a box that can encode brings it down itself: no warning
+      putFeature(r.h.app.surau.db, 'liveYoutube', { relayVideo: 'reencode' }, 'test', undefined, 'sdm');
+      expect(withRelay.status().warnings).not.toContain('camera_bitrate_high');
+    } finally {
+      await withRelay.stop(res.session.id, 'user:starter');
+    }
+  });
+});
+
+// 2026.11.15, Lane A task A7 (K2): a change of one TV's live profile during a live is announced, so that TV follows it.
+describe('K2: a per-TV profile change mid-live is pushed', () => {
+  it('announces again when one TV profile changes while the surau state is the same, and each TV gets its own view (success path)', async () => {
+    const r = await rig();
+    await r.start();
+    cameraUp(r);
+    await r.tick();
+    const base = r.kiosk.length;
+    expect(r.kiosk.at(-1)).toMatchObject({ live: true });
+    // nothing changed: nothing is announced
+    r.s.publishKiosk();
+    expect(r.kiosk).toHaveLength(base);
+    putFeature(r.h.app.surau.db, 'tvProfiles', { tvs: { 'tv-dewan': { live: { show: false } } } }, 'test', undefined, 'sdm');
+    r.s.publishKiosk();
+    expect(r.kiosk).toHaveLength(base + 1);
+    // the surau state is as before; the one TV is told its own
+    expect(r.kiosk.at(-1)).toMatchObject({ live: true });
+    expect(r.s.liveForTv(r.kiosk.at(-1)!, 'tv-dewan').live).toBe(false);
+    expect(r.s.liveForTv(r.kiosk.at(-1)!, 'tv-lain').live).toBe(true);
+    putFeature(r.h.app.surau.db, 'tvProfiles', { tvs: { 'tv-dewan': { live: { show: true, audio: true, volume: 30 } } } }, 'test', undefined, 'sdm');
+    r.s.publishKiosk();
+    expect(r.kiosk).toHaveLength(base + 2);
+    expect(r.s.liveForTv(r.kiosk.at(-1)!, 'tv-dewan')).toMatchObject({ live: true, audio: true, volume: 30 });
   });
 });

@@ -202,8 +202,10 @@ void main() {
       expect(choiceLabel('lang', 'en', AppLang.ms), 'English');
       expect(groupLabel('solat', AppLang.en), 'Prayer');
       expect(groupLabel('solat', AppLang.ms), 'Solat');
-      expect(settingHelp('maxBitrateKbps', AppLang.en), startsWith('Follow'));
+      expect(settingHelp('maxBitrateKbps', AppLang.en), startsWith('Match'));
+      expect(settingHelp('maxBitrateKbps', AppLang.en), contains('1000 to 8000'));
       expect(settingHelp('maxBitrateKbps', AppLang.ms), startsWith('Ikut'));
+      expect(settingHelp('maxBitrateKbps', AppLang.ms), contains('1000 hingga 8000'));
       expect(arabic.hasMatch(settingHelp('maxBitrateKbps', AppLang.ar)!), isTrue);
       expect(settingHelp('no-such-setting', AppLang.ar), isNull);
       expect(choiceHelp('relayFrom', 'box', AppLang.en), isNotNull);
@@ -275,8 +277,8 @@ void main() {
     });
 
     test('the camera and live words answer in all three languages and BM stays word for word', () {
-      expect(cam.cameraUseTitle(AppLang.ms), 'Guna kamera luaran');
-      expect(cam.cameraUseTitle(AppLang.en), 'Use external camera');
+      expect(cam.cameraUseTitle(AppLang.ms), 'Tawarkan kamera luaran');
+      expect(cam.cameraUseTitle(AppLang.en), 'Offer the external camera');
       expect(arabic.hasMatch(cam.cameraUseTitle(AppLang.ar)), isTrue);
       expect(cam.cameraTestRunningDetail(AppLang.ms, 'x'), 'Menghubungi x. Ini mengambil masa hingga 15 saat.');
       expect(cam.cameraTestRunningDetail(AppLang.en, 'x'), contains('x'));
@@ -301,6 +303,14 @@ void main() {
       // a few functions answer without `_t` (an address, a +ms value, a codec question)
       expect(calls, greaterThan(fns - 6));
       expect(bad.hasMatch(src), isFalse, reason: 'labels_cam.dart has a dash, arrow or approximation sign');
+      // G7: the device is MAXCOM in every text, never "kotak"; and the live screen words nothing by itself
+      final kotak = RegExp(r'kotak', caseSensitive: false);
+      expect(kotak.hasMatch(src), isFalse, reason: 'labels_cam.dart says "kotak"');
+      final screen = File('lib/features/live/live_screen.dart').readAsStringSync();
+      expect(kotak.hasMatch(screen), isFalse, reason: 'live_screen.dart says "kotak"');
+      for (final hard in const ["'Terputus'", "'Menyambung semula'", "'Diterima'", "'Gambar terakhir'"]) {
+        expect(screen.contains(hard), isFalse, reason: 'live_screen.dart hardcodes $hard');
+      }
     });
 
     test('content kind words: BM from kinds.dart, English and Arabic from the tables, same keys', () {

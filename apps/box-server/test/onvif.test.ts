@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import http from 'node:http';
+import net from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cameraUrlError } from '@surau/core';
-import { NetOnvifTransport, OnvifClient, OnvifError, buildProbe, httpPost, localAddresses, parseProbeMatch, parseXml } from '../src/live/onvif.ts';
+import { NetOnvifTransport, OnvifClient, OnvifError, buildProbe, httpPost, localAddresses, parseProbeMatch, parseXml, rtspScanHosts, tcpOpens } from '../src/live/onvif.ts';
 import type { OnvifTransport, ProbeReply, SoapAnswer } from '../src/live/onvif.ts';
 
 const fx = (name: string): string => readFileSync(new URL(`./fixtures/onvif/${name}`, import.meta.url), 'utf8');
@@ -355,5 +356,76 @@ describe('probe and fill guards (round 2 review fixes)', () => {
     expect(localAddresses(ifaces as never).sort()).toEqual(['10.0.0.7', '10.168.1.40', 'fe80::1']);
     const c = new OnvifClient({ transport: new FakeCamera().asTransport(), boxIps: localAddresses(ifaces as never) });
     return expect(failure(c.fill('10.0.0.7', '', ''))).resolves.toMatchObject({ code: 'bad_address' });
+  });
+});
+
+// 2026.11.15, Lane A task A4 (C4): "Cari kamera" also lists a camera that does not speak ONVIF, by its open RTSP port.
+describe('C4: discovery by the open RTSP port', () => {
+  const scanning = (replies: (id: string) => ProbeReply[], open: string[] | (() => Promise<string[]>)): OnvifTransport => ({
+    probe: async (message) => replies(/urn:uuid:[0-9a-f-]+/.exec(message)?.[0] ?? ''),
+    post: async () => {
+      throw new Error('not used');
+    },
+    scanRtsp: typeof open === 'function' ? open : async () => open,
+  });
+
+  it('a camera with no ONVIF answer is listed by its address with the fixed name (success path); an ONVIF camera keeps its own name', async () => {
+    const c = client(scanning((id) => [probeReply(id)], ['10.168.1.30', CAM]));
+    expect(await c.discover()).toEqual([
+      { name: 'Kamera Dewan', ip: CAM },
+      { name: 'Kamera RTSP', ip: '10.168.1.30' },
+    ]);
+  });
+
+  it('refuses a public address, the box itself and nonsense, whatever the scan returned', async () => {
+    const c = client(scanning(() => [], ['8.8.8.8', BOX, '127.0.0.1', '10.168.1.300', 'kamera.local', '10.168.1.31', '10.0.0.9']));
+    expect(await c.discover()).toEqual([
+      { name: 'Kamera RTSP', ip: '10.0.0.9' },
+      { name: 'Kamera RTSP', ip: '10.168.1.31' },
+    ]);
+  });
+
+  it('a scan that fails leaves the ONVIF answers standing; a transport without a scan finds ONVIF cameras only', async () => {
+    const broken = client(
+      scanning(
+        (id) => [probeReply(id)],
+        async () => {
+          throw new Error('scan failed');
+        },
+      ),
+    );
+    expect(await broken.discover()).toEqual([{ name: 'Kamera Dewan', ip: CAM }]);
+    const plain = client(new FakeCamera().asTransport((id) => [probeReply(id)]));
+    expect(await plain.discover()).toEqual([{ name: 'Kamera Dewan', ip: CAM }]);
+  });
+
+  it('the scan covers only the other hosts of the box private /24 networks', () => {
+    const hosts = rtspScanHosts(['10.168.1.5', '10.168.1.6', '10.1.2.3'], ['10.168.1.5', '10.168.1.6']);
+    expect(hosts).toHaveLength(252 + 253);
+    expect(hosts).not.toContain('10.168.1.5');
+    expect(hosts).not.toContain('10.168.1.6');
+    expect(hosts).toContain('10.168.1.254');
+    expect(hosts).toContain('10.1.2.1');
+    expect(hosts.every((h) => h.startsWith('10.168.1.') || h.startsWith('10.1.2.'))).toBe(true);
+    // a public or malformed interface address is never scanned
+    expect(rtspScanHosts(['8.8.8.8', 'fe80::1', ''], [])).toEqual([]);
+  });
+
+  it('the connect check answers true for an open port and false for a closed one, and sends nothing', async () => {
+    const got: unknown[] = [];
+    const server = net.createServer((s) => {
+      s.on('data', (d) => got.push(d));
+      s.on('error', () => undefined);
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as net.AddressInfo).port;
+    try {
+      expect(await tcpOpens('127.0.0.1', port, 1000)).toBe(true);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(got).toEqual([]);
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+    expect(await tcpOpens('127.0.0.1', port, 500)).toBe(false);
   });
 });

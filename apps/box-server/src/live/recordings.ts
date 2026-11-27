@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { childEnv } from './childEnv.ts';
+import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { Transform } from 'node:stream';
@@ -8,6 +9,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DatabaseSync } from 'node:sqlite';
 import { VIDEO_LIMITS } from '@surau/core';
 import { identityCan } from '../auth/authz.ts';
+import { createRateLimiter } from '../auth/ratelimit.ts';
+import type { RateLimiter } from '../auth/ratelimit.ts';
+import { isLanDirect } from '../net/lan.ts';
+import { parseRange } from '../assets/videoServe.ts';
 import { exemptFromRequestTimeout } from '../serverLimits.ts';
 import { VIDEO_MIN_RATE, statfsFreeBytes, videoDeadlineMs } from '../assets/video.ts';
 import type { FreeBytes } from '../assets/video.ts';
@@ -22,9 +27,11 @@ import type { FreeBytes } from '../assets/video.ts';
  *   POST   /api/live/recordings/<liveId>/pieces/<n>  raw bytes, Content-Type video/mp4 | video/webm (also audio/*), Content-Length
  *   POST   /api/live/recordings/<liveId>/join        optional JSON { count }
  *   GET    /api/live/recordings/<liveId>/file        the joined file
- *   DELETE /api/live/recordings/<liveId>             saved or given up: pieces and file go
+ *   POST   /api/live/recordings/<liveId>/link        a 15 minute download link { url, expiresAt } for the joined file (same owner rule)
+ *   GET    /api/live/recordings/dl/<token>           the joined file by link: public with the token, surau network only, rate limited, Range
+ *   DELETE /api/live/recordings/<liveId>             saved or given up: pieces and file go (also voids the link)
  * A refusal is `{ errors, code }`; codes: unknown_live 404, not_owner 403, bad_piece 400, upload_failed 408/411,
- * too_big 413, no_space 413, mixed_types 409, already_joined 409, busy 409, no_pieces 409, missing_piece 409, join_failed 500, not_ready 404.
+ * too_big 413, no_space 413 (the box is short of room, or all recordings together are at their limit), bad_link 404, lan_only 403, rate_limited 429, mixed_types 409, already_joined 409, busy 409, no_pieces 409, missing_piece 409, join_failed 500, not_ready 404.
  */
 
 export const RECORDING_LIMITS = {
@@ -40,6 +47,14 @@ export const RECORDING_LIMITS = {
   joinTimeoutMs: 20 * 60 * 1000,
   /** Piece uploads running at once on the whole box. */
   maxConcurrentUploads: 2,
+  /** All recordings of all lives together (pieces and joined files). */
+  maxTotalBytes: 8 * 1024 * 1024 * 1024,
+  /** A download link lives this long. */
+  linkTtlMs: 15 * 60 * 1000,
+  /** Download links alive at once (one per live; the oldest goes first). */
+  maxLinks: 32,
+  /** Downloads by link per address: a wrong guess counts as well. */
+  dlRate: { windowMs: 60_000, max: 120 },
 } as const;
 
 const LIVE_ID = /^[A-Za-z0-9_-]{6,64}$/;
@@ -86,7 +101,7 @@ export const spawnJoin: JoinRunner = (ffmpeg, args, timeoutMs) =>
     };
     let child;
     try {
-      child = spawn(ffmpeg, [...args], { shell: false, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
+      child = spawn(ffmpeg, [...args], { shell: false, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'], env: childEnv() });
     } catch {
       resolve({ code: null, stderr: 'spawn failed' });
       return;
@@ -112,6 +127,12 @@ export interface RecordingOptions {
   keepMs?: number;
   maxPieceBytes?: number;
   maxLiveBytes?: number;
+  /** Test hooks: the limit of all recordings together, the link lifetime and the link download rate. */
+  maxTotalBytes?: number;
+  /** Test hook: the share of one device (default: half of the total). */
+  maxPerDeviceBytes?: number;
+  linkTtlMs?: number;
+  dlRate?: { windowMs: number; max: number };
   minFreeBytes?: number;
   /** Test hooks: the piece upload's deadline, minimum rate, rate check interval and concurrency cap. */
   deadlineMs?: number;
@@ -153,10 +174,100 @@ export class Recordings {
   private readonly joining = new Set<string>();
   private readonly uploading = new Set<string>();
   private active = 0;
+  /** Download links by SHA-256 of the token (the token itself is never kept; a restart voids every link). */
+  private readonly links = new Map<string, { liveId: string; expiresAt: number }>();
+  private readonly dlLimiter: RateLimiter;
 
   constructor(o: RecordingOptions) {
     this.o = o;
     this.root = join(o.dataDir, 'live-recordings');
+    const rate = o.dlRate ?? RECORDING_LIMITS.dlRate;
+    this.dlLimiter = createRateLimiter({ windowMs: rate.windowMs, max: rate.max });
+  }
+
+  /** Counts one failed download request (an unknown token) of [address]; not ok (with the wait) when it is over the rate. */
+  dlHit(address: string): { ok: boolean; retryAfterSec: number } {
+    return this.dlLimiter.hit(address);
+  }
+
+  /** Bytes of every recording on the box (pieces and joined files of all lives). */
+  storedBytes(): number {
+    return this.sumStored(null);
+  }
+
+  /** S10: bytes of the recordings of the lives one device ran (the owner id kept in each live's meta). */
+  storedBytesOf(deviceId: string | null): number {
+    return this.sumStored({ deviceId });
+  }
+
+  private sumStored(only: { deviceId: string | null } | null): number {
+    let sum = 0;
+    let lives: string[];
+    try {
+      lives = readdirSync(this.root);
+    } catch {
+      return 0;
+    }
+    for (const id of lives) {
+      if (!LIVE_ID.test(id)) continue;
+      if (only !== null && (this.readMeta(id)?.deviceId ?? null) !== only.deviceId) continue;
+      let names: string[];
+      try {
+        names = readdirSync(this.dirOf(id));
+      } catch {
+        continue;
+      }
+      for (const f of names) {
+        if (!PIECE_RE.test(f) && !/^joined\.(mp4|webm)$/.test(f)) continue;
+        try {
+          sum += statSync(join(this.dirOf(id), f)).size;
+        } catch {
+          // gone between the listing and the stat
+        }
+      }
+    }
+    return sum;
+  }
+
+  /**
+   * A link to the joined file of [liveId]: a random 32-byte token (hex), a short-lived link (15 minutes, not one-time):
+   * it serves any number of GETs in that time, which Range resumes need. A new link for the same live voids the earlier one. Throws not_ready when there is no joined file.
+   */
+  createLink(liveId: string): { token: string; expiresAt: string } {
+    if (this.file(liveId) === null) throw fail(404, 'not_ready');
+    const nowMs = this.now().getTime();
+    for (const [h, l] of this.links) if (l.expiresAt <= nowMs || l.liveId === liveId) this.links.delete(h);
+    while (this.links.size >= RECORDING_LIMITS.maxLinks) {
+      const oldest = this.links.keys().next().value;
+      if (oldest === undefined) break;
+      this.links.delete(oldest);
+    }
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = nowMs + (this.o.linkTtlMs ?? RECORDING_LIMITS.linkTtlMs);
+    this.links.set(createHash('sha256').update(token).digest('hex'), { liveId, expiresAt });
+    return { token, expiresAt: new Date(expiresAt).toISOString() };
+  }
+
+  /** The joined file a link names, or null (unknown, expired, voided, or the file is gone). */
+  resolveLink(token: string): { liveId: string; path: string; bytes: number; container: 'mp4' | 'webm'; at: string } | null {
+    if (!/^[0-9a-f]{64}$/.test(token)) return null;
+    const h = createHash('sha256').update(token).digest('hex');
+    const l = this.links.get(h);
+    if (l === undefined) return null;
+    if (l.expiresAt <= this.now().getTime()) {
+      this.links.delete(h);
+      return null;
+    }
+    const f = this.file(l.liveId);
+    if (f === null) {
+      this.links.delete(h);
+      return null;
+    }
+    return { liveId: l.liveId, ...f };
+  }
+
+  private voidLinks(liveId: string): void {
+    for (const [h, l] of this.links) if (l.liveId === liveId) this.links.delete(h);
   }
 
   private now(): Date {
@@ -238,6 +349,11 @@ export class Recordings {
     const replaced = have.find((p) => p.n === n)?.bytes ?? 0;
     const total = have.reduce((s, p) => s + p.bytes, 0) - replaced + declared;
     if (total > (this.o.maxLiveBytes ?? RECORDING_LIMITS.maxLiveBytes)) throw fail(413, 'too_big');
+    // all recordings of all lives together stay under one limit (a replaced piece counts only by the difference)
+    const totalMax = this.o.maxTotalBytes ?? RECORDING_LIMITS.maxTotalBytes;
+    if (this.storedBytes() - replaced + declared > totalMax) throw fail(413, 'no_space');
+    // S10: one device may hold at most half of the total, so one member cannot fill the box for the others
+    if (this.storedBytesOf(deviceId) - replaced + declared > (this.o.maxPerDeviceBytes ?? Math.floor(totalMax / 2))) throw fail(413, 'no_space');
     // the join needs about as much room again as the pieces take
     const f = (this.o.free ?? statfsFreeBytes)(dir);
     if (f !== null && f - declared < (this.o.minFreeBytes ?? VIDEO_LIMITS.minFreeBytes)) throw fail(413, 'no_space');
@@ -375,6 +491,7 @@ export class Recordings {
   remove(liveId: string): boolean {
     const dir = this.dirOf(liveId);
     if (!existsSync(dir) || this.joining.has(liveId) || this.uploading.has(liveId)) return false;
+    this.voidLinks(liveId);
     rmSync(dir, { recursive: true, force: true });
     return true;
   }
@@ -485,6 +602,56 @@ export function registerRecordingRoutes(app: FastifyInstance, deps: RecordingRou
           .send(createReadStream(f.path));
       } catch (error) {
         return sendFail(reply, error);
+      }
+    });
+
+    scope.post('/api/live/recordings/:liveId/link', async (request, reply) => {
+      const { liveId } = request.params as { liveId: string };
+      try {
+        authorise(request, liveId);
+        // F18: the same surau-network check as the download itself, so the app knows now and falls back to the Blob path
+        if (!isLanDirect(request)) throw fail(403, 'lan_only');
+        const l = recordings.createLink(liveId);
+        return reply.header('Cache-Control', 'no-store').send({ url: `/api/live/recordings/dl/${l.token}`, expiresAt: l.expiresAt });
+      } catch (error) {
+        return sendFail(reply, error);
+      }
+    });
+
+    // The link is the credential: the surau network only, rate limited (a wrong guess counts), never logged. Any other
+    // failure is answered here, so the shared error handler (which logs the path) never sees the token.
+    scope.get('/api/live/recordings/dl/:token', async (request, reply) => {
+      const { token } = request.params as { token: string };
+      try {
+        if (!isLanDirect(request)) throw fail(403, 'lan_only');
+        const f = recordings.resolveLink(token);
+        if (f === null) {
+          // F4: only a request whose token does not resolve counts: a valid download (many Range calls) never meets the limit
+          const hit = recordings.dlHit(request.ip);
+          if (!hit.ok) {
+            reply.header('Retry-After', String(hit.retryAfterSec));
+            throw fail(429, 'rate_limited');
+          }
+          throw fail(404, 'bad_link');
+        }
+        const range = parseRange(typeof request.headers.range === 'string' ? request.headers.range : undefined, f.bytes);
+        const base = reply
+          .header('Cache-Control', 'no-store')
+          .header('Content-Type', MIME_OF[f.container])
+          .header('Accept-Ranges', 'bytes')
+          .header('X-Content-Type-Options', 'nosniff')
+          .header('Referrer-Policy', 'no-referrer')
+          .header('Content-Disposition', `attachment; filename="MAXCOM-${f.at.slice(0, 10)}-${f.liveId}.${f.container}"`);
+        if (range === 'bad') return base.code(416).header('Content-Range', `bytes */${f.bytes}`).send();
+        if (range === null) return base.header('Content-Length', String(f.bytes)).send(createReadStream(f.path));
+        return base
+          .code(206)
+          .header('Content-Range', `bytes ${range.start}-${range.end}/${f.bytes}`)
+          .header('Content-Length', String(range.end - range.start + 1))
+          .send(createReadStream(f.path, { start: range.start, end: range.end }));
+      } catch (error) {
+        if (error instanceof RecordingError) return sendFail(reply, error);
+        return reply.code(500).header('Cache-Control', 'no-store').send({ errors: ['internal error'], code: 'internal' });
       }
     });
 

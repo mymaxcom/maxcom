@@ -70,6 +70,9 @@ class MixSettings(
     val referenceForced: Boolean,
 )
 
+/** A permission of the phone a live may need (the Android names are mapped in the channel). */
+enum class LivePermission { CAMERA, MICROPHONE }
+
 object SourceLogic {
     /**
      * The spec from the channel arguments: `source` = `{kind, url, transport}`, `mix` = the audio mix map,
@@ -92,6 +95,26 @@ object SourceLogic {
 
     /** Reason code of the `ended` event when the lost camera ended the live. */
     const val ENDED_CAMERA_LOST = "camera_lost"
+
+    /** The `warning` kind when the phone receives far fewer pictures than the camera sends (C1). */
+    const val WARN_WEAK_INGEST = "weakIngest"
+
+    /**
+     * A1: how long the camera's own sound is held back so it leaves the phone with the picture, from the camera's
+     * saved offset. The sound can only be delayed, never advanced, and never by more than two seconds.
+     */
+    fun cameraSyncMs(avOffsetMs: Int): Int = avOffsetMs.coerceIn(0, 2000)
+
+    /**
+     * C9: what the live really uses of the phone. The phone camera: its camera and its microphone. The external
+     * camera: the microphone only when the phone's microphone is in the mix, otherwise nothing (until 2026.11.15 an
+     * external-only live still demanded the camera permission).
+     */
+    fun permissionsFor(video: VideoKind, phoneMicInMix: Boolean): List<LivePermission> = when {
+        video == VideoKind.PHONE -> listOf(LivePermission.CAMERA, LivePermission.MICROPHONE)
+        phoneMicInMix -> listOf(LivePermission.MICROPHONE)
+        else -> emptyList()
+    }
 
     /** The words drawn into the stream while the camera is lost. */
     const val LOST_MESSAGE = "Siaran akan bersambung sebentar lagi"
@@ -116,10 +139,27 @@ object SourceLogic {
     }
 
     /**
-     * The phone-camera mute with "Mic-in only": the phone microphone is the reference then, so it is not muted while
-     * Mic-in is added (the user's mute is remembered and applies again when Mic-in is removed).
+     * The phone's mute (A4, 2026.11.15): it mutes the phone microphone whether or not "Mic-in pada kotak" is added.
+     * (Until 2026.11.15 an added Mic-in lifted the mute so the phone microphone could serve as the alignment
+     * reference; the phone's mute now silences everything the phone sends, see [MicRouting.muteAll].)
      */
-    fun effectiveMuted(userMuted: Boolean, cfg: AudioMixCfg): Boolean = userMuted && !cfg.boxInput.enabled
+    fun effectiveMuted(userMuted: Boolean, cfg: AudioMixCfg): Boolean = userMuted
+
+    /** The sources whose loudness lift ("Naikkan suara perlahan") the person can switch. */
+    const val LIFT_CAMERA = "camera"
+    const val LIFT_MIC = "deviceMic"
+
+    /** Applies one lift switch to [routing]; false for a source that has no lift. */
+    fun applyLift(routing: MicRouting, id: String?, on: Boolean): Boolean = when (id) {
+        LIFT_CAMERA -> { routing.liftCamera = on; true }
+        LIFT_MIC -> { routing.liftMic = on; true }
+        else -> false
+    }
+
+    /** What the phone microphone is told after a mix change: its own volume (the phone camera has no mixer). */
+    fun applyMixToRouting(routing: MicRouting, cfg: AudioMixCfg) {
+        routing.phoneVolume = cfg.deviceMic.volume
+    }
 
     /**
      * While the camera is lost and the added microphone has never been aligned, the hold-out rule would keep the

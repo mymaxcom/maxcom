@@ -46,7 +46,7 @@ void main() {
   test('keys are under surau.box.* and hold no token or key', () async {
     await store.save(_box);
     await SurauInfoPrefsStore(prefs)
-        .save(const SurauInfo(name: 'Surau D\'Waqaf'));
+        .save(const SurauInfo(name: 'Surau Contoh'));
     expect(prefs.getKeys(), isNotEmpty);
     expect(prefs.getKeys().every((k) => k.startsWith('surau.box.')), isTrue);
     final all = prefs.getKeys().map((k) => '${prefs.get(k)}').join();
@@ -65,10 +65,10 @@ void main() {
   test('surau info round-trips through the SurauInfoStore side', () async {
     await store.save(_box);
     await SurauInfoPrefsStore(prefs).save(const SurauInfo(
-        name: 'Surau D\'Waqaf',
+        name: 'Surau Contoh',
         help: HelpContact(name: 'Encik Hafiz', phone: '012-345 6789')));
     final i = (await SurauInfoPrefsStore(prefs).load())!;
-    expect(i.name, 'Surau D\'Waqaf');
+    expect(i.name, 'Surau Contoh');
     expect(i.help!.phone, '012-345 6789');
   });
 

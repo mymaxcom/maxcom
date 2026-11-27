@@ -110,7 +110,7 @@ describe('old stored values do not block a save or a feed entry that leaves them
     expect(stored(app.surau.db, 'liveYoutube')).toMatchObject({ titleTemplate: OLD_TITLE, maxBitrateKbps: 3500 });
     // a new long value is still refused, and so is an out-of-range value on another field
     expect((await put(app, sup, 'liveYoutube', { titleTemplate: 'U'.repeat(120) })).statusCode).toBe(400);
-    expect((await put(app, sup, 'liveYoutube', { titleTemplate: OLD_TITLE, maxBitrateKbps: 7000 })).statusCode).toBe(400);
+    expect((await put(app, sup, 'liveYoutube', { titleTemplate: OLD_TITLE, maxBitrateKbps: 8001 })).statusCode).toBe(400);
     // an unknown key is refused whatever is stored
     expect((await put(app, sup, 'liveYoutube', { nope: 1 })).statusCode).toBe(400);
   });

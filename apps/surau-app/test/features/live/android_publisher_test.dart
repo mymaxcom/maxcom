@@ -117,6 +117,152 @@ void main() {
     },
   );
 
+  // ---- B9 (native half): the service owns the session; the publisher asks it ----
+
+  test('B9: the publisher is a LiveSessionHolder and start carries the session id', () async {
+    expect(pub, isA<LiveSessionHolder>());
+    replies['prepare'] = {'ok': true, 'cameras': <String>[]};
+    await pub.prepare(const PublisherConfig());
+    pub.liveSessionId = 'S1';
+    await pub.start(targets());
+    final a = Map<String, Object?>.from(calls.last.arguments as Map);
+    expect(a['sessionId'], 'S1');
+    // the frozen keys are all still there
+    expect(a.keys, containsAll(['srt', 'rtmps', 'record', 'video', 'audio']));
+  });
+
+  test('B9: the session id of the start itself wins over the one set on the publisher', () async {
+    replies['prepare'] = {'ok': true, 'cameras': <String>[]};
+    await pub.prepare(const PublisherConfig());
+    pub.liveSessionId = 'OLD';
+    await pub.start(
+      const PublisherTargets(
+        outputs: LiveOutputs(kiosk: true, youtube: false),
+        ingestUrl: 'srt://10.168.1.10:8890?streamid=publish:surau:live-1:pw',
+        sessionId: 'S2',
+      ),
+    );
+    expect(Map<String, Object?>.from(calls.last.arguments as Map)['sessionId'], 'S2');
+  });
+
+  test('F1: keepScreenOn sends the keepScreen call with the flag; an engine without it is ignored', () async {
+    expect(pub, isA<LiveScreenKeep>());
+    await pub.keepScreenOn(true);
+    expect(calls.last.method, 'keepScreen');
+    expect(calls.last.arguments, true);
+    await pub.keepScreenOn(false);
+    expect(calls.last.arguments, false);
+    replies['keepScreen'] = PlatformException(code: 'error');
+    await pub.keepScreenOn(true);
+  });
+
+  // ---- B11: with the box pulling the camera, the phone lets its own camera go ----
+
+  test('B11: releasePrepared closes a prepared engine and goes back to idle', () async {
+    expect(pub, isA<LivePreparedRelease>());
+    replies['prepare'] = {'ok': true, 'cameras': <String>[]};
+    replies['release'] = true;
+    await pub.prepare(const PublisherConfig());
+    expect(pub.current.phase, PublisherPhase.ready);
+    await pub.releasePrepared();
+    expect(calls.last.method, 'release');
+    expect(pub.current.phase, PublisherPhase.idle);
+    // nothing is held any more: a second ask sends nothing
+    final n = calls.length;
+    await pub.releasePrepared();
+    expect(calls.length, n);
+  });
+
+  test('B11: releasePrepared never touches a live, and an engine that refuses keeps its state', () async {
+    replies['prepare'] = {'ok': true, 'cameras': <String>[]};
+    await pub.prepare(const PublisherConfig());
+    // the engine says no (a stop is still under way on its side)
+    replies['release'] = false;
+    await pub.releasePrepared();
+    expect(pub.current.phase, PublisherPhase.ready);
+    // an engine that throws leaves the state alone too
+    replies['release'] = PlatformException(code: 'error');
+    await pub.releasePrepared();
+    expect(pub.current.phase, PublisherPhase.ready);
+    await pub.start(targets());
+    sink!.success({'type': 'phase', 'value': 'live'});
+    await pump();
+    expect(pub.current.phase, PublisherPhase.live);
+    final n = calls.length;
+    replies['release'] = true;
+    await pub.releasePrepared();
+    expect(calls.length, n, reason: 'nothing is sent to the engine during a live');
+    expect(pub.current.phase, PublisherPhase.live);
+  });
+
+  test('B9: status after the screen came back returns the running session', () async {
+    // a fresh publisher (the screen was closed and opened again); the service still holds the live
+    replies['status'] = {
+      'sessionId': 'S1',
+      'startedAt': DateTime.utc(2026, 11, 23, 12).millisecondsSinceEpoch,
+      'streaming': true,
+      'youtube': true,
+      'kiosk': true,
+      'video': 'external',
+      'recording': true,
+      'recordings': ['MAXCOM-2026-11-23-2000-siaran-01.mp4', 7],
+    };
+    final s = await pub.status();
+    expect(s, isNotNull);
+    expect(s!.sessionId, 'S1');
+    expect(s.startedAt.toUtc(), DateTime.utc(2026, 11, 23, 12));
+    expect(s.streaming, isTrue);
+    expect(s.youtube, isTrue);
+    expect(s.video, VideoSourceKind.external);
+    expect(s.recordings, ['MAXCOM-2026-11-23-2000-siaran-01.mp4']);
+    // what the replayed events do not carry is taken from the answer
+    expect(pub.current.video, VideoSourceKind.external);
+    expect(pub.current.recording.on, isTrue);
+    expect(pub.liveSessionId, 'S1');
+    // and the engine's replayed events bring the phase and the legs
+    await pump();
+    sink!.success({'type': 'phase', 'value': 'live'});
+    sink!.success({'type': 'output', 'name': 'kiosk', 'state': 'up'});
+    await pump();
+    expect(pub.current.phase, PublisherPhase.live);
+    expect(pub.current.outputs.kiosk!.phase, OutputPhase.up);
+  });
+
+  test('B9: status with no live held, or an engine that cannot answer, is null', () async {
+    expect(await pub.status(), isNull);
+    replies['status'] = PlatformException(code: 'x');
+    expect(await pub.status(), isNull);
+    replies['status'] = {'sessionId': 5, 'startedAt': 'x'};
+    expect(await pub.status(), isNull);
+  });
+
+  test('B9: an id learned after start is handed to the service at once', () async {
+    replies['prepare'] = {'ok': true, 'cameras': <String>[]};
+    await pub.prepare(const PublisherConfig());
+    await pub.start(targets());
+    calls.clear();
+    pub.liveSessionId = 'S2';
+    await pump();
+    expect(calls.single.method, 'setSession');
+    expect((calls.single.arguments as Map)['sessionId'], 'S2');
+  });
+
+  test('B12: a stop nobody tapped for carries its reason', () async {
+    await pump();
+    for (final reason in ['notification_stop', 'unattended', 'camera_lost']) {
+      sink!.success({'type': 'ended', 'reason': reason});
+      await pump();
+      expect(pub.current.endReason, reason);
+    }
+  });
+
+  test('B3: a segment with nothing in it is reported, not hidden', () async {
+    await pump();
+    sink!.success({'type': 'recording', 'segments': 1, 'bytes': 0, 'lastError': 'empty_recording'});
+    await pump();
+    expect(pub.current.recording.lastError, 'empty_recording');
+  });
+
   test('a bare stream key is turned into the YouTube RTMPS URL', () async {
     await pub.start(
       PublisherTargets(

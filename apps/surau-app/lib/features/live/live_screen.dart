@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../labels.dart' show appLangOfS;
 import '../../app/app_lang.dart' show AppLang;
@@ -20,7 +21,6 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../app/shell.dart';
 import '../../app/theme.dart';
-import '../../box/box_client.dart' show BoxError;
 import '../../l10n/generated/s.dart';
 import '../common/bidi.dart';
 import '../common/time_words.dart';
@@ -29,21 +29,31 @@ import '../labels.dart' show appLangOf;
 import '../labels_cam.dart';
 import '../registry.g.dart' as reg;
 import '../shell/connection_icons.dart' show LinkGlyph, LinkKind, LinkState;
-import '../shell/live_camera_gateway.dart' show AudioSourceMix, LiveAudioMix;
+import '../shell/live_camera_gateway.dart' show AudioSourceMix, BoxGatewayLiveCamera, LiveAudioMix;
+import '../screens/screens_data.dart';
+import '../screens/tv_profile.dart' show selfTvId, tvProfileOf;
 import '../shell/permissions.dart';
 import '../../upload/upload_queue.dart' show NoRecordings;
 import '../upload/cleanup_providers.dart';
+import '../upload/earlier_recordings.dart' show gapReplaceThresholdSec;
 import '../upload/join_providers.dart';
 import '../../upload/recording_join.dart' show JoinOutcome, JoinSave;
 import '../upload/upload_widgets.dart';
+import '../../box/wire.dart' show cameraUseBlocksPull, externalCameraId;
+import 'audio_inputs.dart';
+import 'live_control_card.dart';
 import 'live_controller.dart';
+import 'live_destinations.dart';
 import 'live_fold.dart';
+import 'box_mic_test.dart';
 import 'live_notice.dart';
+import 'live_tv_show_card.dart';
 import 'live_notice_box.dart';
 import 'live_notice_sheet.dart';
 import 'live_source.dart';
 import 'live_source_widgets.dart';
 import 'live_widgets.dart';
+import 'live_youtube_later_gate.dart';
 import 'mic_watch.dart';
 import 'publisher.dart';
 import 'web_publisher.dart';
@@ -243,14 +253,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
   bool _kuliahChosen = false;
   String? _kuliahId;
-  // The surau's choice for the next live is the setting `liveYoutube.nextLiveOn`, one for the whole surau.
-  // [_pendingWanted] is this phone's tap until the box has answered; [_localWanted] serves a box that has no
-  // such setting yet (an older box): today's in-memory choice, default on.
-  bool? _pendingWanted;
-  // The answer of the dedicated route, kept until this phone's copy of the settings shows it (or a minute passes).
-  bool? _confirmedWanted;
-  DateTime? _confirmedAt;
-  bool _localWanted = true;
+  // The YouTube choice for the next live is THIS BOX's own (`nextLiveOn` in its live status): it lives in
+  // [liveDestinationsProvider], not in this screen, so a rebuilt screen shows the same choice (B5).
 
   /// The folded or open state of the idle sections (kept while the screen lives).
   final Map<String, bool> _open = {};
@@ -262,14 +266,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   /// The sheet is open (it may outlive this screen: see [dispose]).
   bool _sheetOpen = false;
 
-  /// This live started with the external camera (so "Tukar ke kamera luaran" can offer the way back).
-  bool _startedExternal = false;
-
   /// The camera was lost during this live (the "kembali" message follows its return).
   bool _cameraWasLost = false;
 
   /// The engine's end of a lost camera was already turned into a stop.
   bool _endHandled = false;
+
+  /// The live the person said "Bukan sekarang" to for the busy suggestion (kept on this screen only).
+  String? _busyLaterFor;
+
+  /// The start screen has asked for the first test of the box microphones.
+  bool _micTestAsked = false;
+
+  /// The last answer of [youtubeLaterGate], so a change of it is written to the log once.
+  YoutubeLaterGate? _lastLaterGate;
 
   @override
   void initState() {
@@ -288,17 +298,34 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         // The lost camera ran out its 10 minutes: the normal stop, with the reason on the screen.
         _endHandled = true;
         unawaited(_stopForLostCamera());
+      } else if ((s.endReason == endedNotificationStop || s.endReason == endedUnattended) && !_endHandled) {
+        // The engine has stopped already (the notification's "Hentikan siaran", or an unattended live it gave
+        // up): the box session is ended too, and a stop nobody tapped for on this screen says why (B12).
+        _endHandled = true;
+        unawaited(_stopForEngineEnd(s.endReason!));
       }
     });
-    if (_state.phase == PublisherPhase.idle ||
-        _state.phase == PublisherPhase.stopped) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _prepare());
+    final idleStart = _state.phase == PublisherPhase.idle || _state.phase == PublisherPhase.stopped;
+    if (idleStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // the camera switch may have changed while no live page was open: read it before the first prepare
+        if (mounted) await _reloadSource();
+        if (mounted) await _prepare();
+      });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _controller.attach();
       // what this device remembers and what the box says about the camera (also when the publisher is ready already)
-      unawaited(ref.read(liveSourceProvider.notifier).ensureLoaded());
+      if (idleStart || _state.isLive) {
+        unawaited(ref.read(liveSourceProvider.notifier).ensureLoaded());
+      } else if (_state.phase == PublisherPhase.ready) {
+        // Only where a re-prepare can follow: in the other phases (preparing, starting, stopping,
+        // error) the publisher keeps what it has, and the source state must not move under it.
+        unawaited(_reloadSource().then((changed) async {
+          if (changed && mounted && _state.phase == PublisherPhase.ready) await _prepare();
+        }));
+      }
       // a microphone plugged in is picked up by itself
       ref.read(micAutoProvider.notifier).start();
     });
@@ -307,6 +334,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   ScaffoldMessengerState? _messenger;
   MicAutoNotifier? _micAuto;
   String _stillLiveText = '';
+  String _stillLiveBoxText = '';
 
   @override
   void didChangeDependencies() {
@@ -314,6 +342,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     _messenger = ScaffoldMessenger.maybeOf(context);
     _micAuto = ref.read(micAutoProvider.notifier);
     _stillLiveText = S.of(context).ra4StillLive;
+    _stillLiveBoxText = S.of(context).liveLeaveBoxPulled;
   }
 
   @override
@@ -323,7 +352,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // The live goes on without this page (its heartbeat is the controller's): say so once.
     if (_controller.takeLeaveReminder()) {
       final messenger = _messenger;
-      final text = _stillLiveText;
+      // a live the box pulls goes on in MAXCOM's hands: the reminder says so (build 4, U8)
+      final text = _controller.leaveReminderBoxPulled ? _stillLiveBoxText : _stillLiveText;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         try {
           messenger?.showSnackBar(SnackBar(content: Text(text)));
@@ -350,19 +380,66 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     return reg.features.firstWhere((f) => f.key == 'recording').defaultEnabled;
   }
 
-  Future<void> _prepare() {
-    _cameraWasLost = false;
-    return ref
-        .read(liveSourceProvider.notifier)
-        .prepare(recording: _recordingOn, frontCamera: _state.frontCamera);
+  /// Reads the camera part of the source again (not during a live: its changes wait for the stop).
+  /// True when the chosen video source changed because of it.
+  Future<bool> _reloadSource() async {
+    if (_state.isLive) return false;
+    final before = ref.read(liveSourceProvider).video;
+    await ref.read(liveSourceProvider.notifier).reloadForPage();
+    return ref.read(liveSourceProvider).video != before;
   }
 
+  Future<void> _prepare() {
+    _cameraWasLost = false;
+    // B11: while this phone only controls a live the box pulls, it opens no camera of its own
+    if (_controlsOnly(ref.read(liveBoxProvider))) return _releasePrepared();
+    return ref
+        .read(liveSourceProvider.notifier)
+        .prepare(recording: _recordingChosen(ref.read(liveSourceProvider)), frontCamera: _state.frontCamera);
+  }
+
+  static bool _controlsOnly(LiveBoxStatus box) => box.controlOnly && box.sessionId != null;
+
+  /// Lets go of a camera (or a pull) the publisher prepared before this phone became the controller only.
+  Future<void> _releasePrepared() async {
+    final p = _publisher;
+    if (p is LivePreparedRelease && !p.current.isLive) await (p as LivePreparedRelease).releasePrepared();
+  }
+
+  /// A stop nobody tapped for: the engine gave the lost camera up. It says why (B12).
   Future<void> _stopForLostCamera() async {
-    final lang = appLangOf(context);
-    await ref.read(liveBoxProvider.notifier).stopLive(notice: liveCameraLostMinutes(lang));
+    final s = S.of(context);
+    await ref.read(liveBoxProvider.notifier).stopLive(notice: s.liveStoppedCameraLost, path: 'camera_lost');
     if (!mounted) return;
     await _prepare();
   }
+
+  Future<void> _stopForEngineEnd(String reason) async {
+    final s = S.of(context);
+    await ref
+        .read(liveBoxProvider.notifier)
+        .stopLive(notice: reason == endedUnattended ? s.liveStoppedUnattended : null, path: reason);
+    if (!mounted) return;
+    await _prepare();
+  }
+
+  /// "Sambung semula" on the card of this device's own live (B9): the publisher is made ready, then the box gives
+  /// the session back with fresh targets.
+  Future<void> _resumeMine() async {
+    if (_resuming) return;
+    setState(() => _resuming = true);
+    try {
+      if (_state.phase != PublisherPhase.ready) await _prepare();
+      if (!mounted) return;
+      await ref.read(liveBoxProvider.notifier).resumeLive();
+    } catch (_) {
+      // the controller has put the reason on the screen
+    } finally {
+      if (mounted) setState(() => _resuming = false);
+    }
+  }
+
+  bool _resuming = false;
 
   /// Why YouTube cannot be used now, or null when it can.
   ///
@@ -370,6 +447,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   /// "YouTube:" in front (the dialog already starts with the name).
   String? _youtubeBlock(S s, LiveBoxStatus box, bool canSignIn, {bool asReason = false}) {
     if (!box.internet) return asReason ? s.liveYoutubeWhyNoInternet : s.liveWarnNoInternet;
+    // The box's own word for what stands in the way (Y9): said as it is, not as a generic failure.
+    final own = switch (box.youtubeError) {
+      'live_not_enabled' => s.errcYoutubeLiveNotEnabled,
+      'clock_wrong' => s.errcBoxClockWrong,
+      'busy_other_box' => s.errcYoutubeBusyOtherBox,
+      'client_refused' => s.errcYoutubeClientRefused,
+      _ => null,
+    };
+    if (own != null && box.youtube.signedIn) return own;
     if (box.youtube.phase == YoutubeAccountPhase.unknown) {
       return asReason ? youtubeUnknownReason(s, box.youtube.channel) : youtubeUnknownText(s, box.youtube.channel);
     }
@@ -381,60 +467,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       return canSignIn ? s.liveYoutubeNeedsSignIn : s.liveYoutubeAskAdmin;
     }
     return null;
-  }
-
-  /// The surau's choice: the box's setting when it has one (shared by every phone), else this run's own.
-  bool _wantedFrom(Map<String, dynamic>? settings) {
-    final pending = _pendingWanted;
-    if (pending != null) return pending;
-    final f = settings?['liveYoutube'];
-    final confirmed = _confirmedWanted;
-    if (confirmed != null) {
-      final fresh = _confirmedAt != null && ref.read(appDepsProvider).now().difference(_confirmedAt!) < const Duration(minutes: 1);
-      final caughtUp = f is Map && f['nextLiveOn'] == confirmed;
-      if (fresh && !caughtUp) return confirmed;
-      _confirmedWanted = null;
-    }
-    if (f is Map && f['nextLiveOn'] is bool) return f['nextLiveOn'] as bool;
-    return _localWanted;
-  }
-
-  bool _boxKnowsChoice(Map<String, dynamic>? settings) {
-    final f = settings?['liveYoutube'];
-    return f is Map && f['nextLiveOn'] is bool;
-  }
-
-  /// A tap on the chip: written to the surau setting (optimistic, put back with a message when the box refuses).
-  Future<void> _setWanted(bool next, {required bool boxKnows}) async {
-    // The sheet can outlive this screen, and its enabled flag arrives one frame late: one write at a time.
-    if (!mounted || _pendingWanted != null) return;
-    if (!boxKnows) {
-      setState(() => _localWanted = next);
-      return;
-    }
-    final gateway = ref.read(gatewayProvider);
-    final failed = S.of(context).liveYoutubeChoiceFailed;
-    final messenger = _messenger;
-    setState(() => _pendingWanted = next);
-    try {
-      if (gateway == null) throw StateError('no box');
-      try {
-        // The dedicated route: live:control is enough (the settings route needs settings:write).
-        final answer = await gateway.put('/api/live/youtube/next-live', {'on': next});
-        _confirmedWanted = answer['nextLiveOn'] is bool ? answer['nextLiveOn'] as bool : next;
-        _confirmedAt = ref.read(appDepsProvider).now();
-      } on BoxError catch (e) {
-        // An older box has no such route: the settings field, as before.
-        if (e.status != 404) rethrow;
-        await gateway.put('/api/settings/liveYoutube', {'nextLiveOn': next});
-      }
-      ref.invalidate(settingsProvider);
-      await ref.read(settingsProvider.future);
-    } on Object {
-      if (mounted) messenger?.showSnackBar(SnackBar(content: Text(failed)));
-    } finally {
-      if (mounted) setState(() => _pendingWanted = null);
-    }
   }
 
   /// "Destinasi siaran": the full text of each destination, the YouTube switch and Sambung, opened from any pill.
@@ -452,6 +484,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 
   Future<void> _showDestSheet(bool Function() popping, VoidCallback markPopping) {
+    // The sheet can outlive this screen: the choice is the provider's, reached without this widget's ref.
+    final destinations = ref.read(liveDestinationsProvider.notifier);
     return showModalBottomSheet<void>(
       context: context,
       // over the whole app, the navigation bar included (mockup live-dest-strip, option A)
@@ -478,12 +512,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           }
           return _DestSheet(
             dest: dest,
-            onYoutube: dest.youtubeEnabled
-                ? (_) {
-                    if (!mounted) return;
-                    unawaited(_setWanted(!dest.wanted, boxKnows: dest.boxKnows));
-                  }
-                : null,
+            // A tap while a write is on its way is queued by the provider and applied after it, never dropped (B5).
+            onYoutube: dest.youtubeEnabled ? (_) => unawaited(destinations.choose(!dest.wanted)) : null,
+            onKiosk: (on) => unawaited(_setKiosk(on)),
+            onRecording: (on) => unawaited(_setRecording(on)),
             onConnect: () {
               Navigator.of(sheetContext).pop();
               if (mounted) setState(() => _open['set'] = true);
@@ -526,16 +558,173 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     if (_starting) return;
     setState(() => _starting = true);
     final source = ref.read(liveSourceProvider);
+    // a new live starts from what the box measures: the hand-set offset of the last one is not carried over
+    ref.read(liveSourceProvider.notifier).rememberOffset(idBoxInput, 0);
     try {
-      _startedExternal = source.external;
+      ref.read(liveSourceProvider.notifier).liveStarting();
       await ref
           .read(liveBoxProvider.notifier)
-          .startLive(kuliahId: _kuliahId, youtube: youtube, video: source.video, mix: source.mix);
+          .startLive(
+            kuliahId: _kuliahId,
+            youtube: youtube,
+            video: source.video,
+            mix: source.mix,
+            // the box pulls the camera only by the admin's choice, on a phone (a browser's external live is always the box's)
+            videoPath: source.boxPull && !_ipad ? videoPathBox : null,
+            kiosk: ref.read(liveKioskChoiceProvider) || !ref.read(liveBoxProvider).canToggleKiosk,
+            recording: _recordingChosen(source),
+          );
     } catch (_) {
       // the controller has put the reason on the screen
     } finally {
       if (mounted) setState(() => _starting = false);
     }
+  }
+
+  /// Rakam for the next live: the person's switch, else today's `recording` setting; never on a phone that only
+  /// controls (the box pulls the camera, nothing arrives to record).
+  bool _recordingChosen(LiveSourceState source) {
+    if (source.boxPull && !_ipad) return false;
+    return ref.read(liveRecordingChoiceProvider) ?? _recordingOn;
+  }
+
+  /// The Skrin switch in "Destinasi siaran": before the start it is kept on this device; during the live the box
+  /// is asked (`POST /api/live/outputs`) and the screen follows its answer.
+  Future<void> _setKiosk(bool on) async {
+    final box = ref.read(liveBoxProvider);
+    if (box.sessionId != null) {
+      // the box counts its destinations by what it was told: say whether the recording really runs now, so its
+      // `last_output` rule and the screen's count agree
+      final source = ref.read(liveSourceProvider);
+      final recAvailable = !((source.boxPull && !_ipad) || (box.controlOnly && box.sessionId != null));
+      await ref
+          .read(liveBoxProvider.notifier)
+          .setOutputs(kiosk: on, recording: recAvailable && box.canToggleKiosk ? _state.recording.active : null);
+    } else {
+      await ref.read(liveKioskChoiceProvider.notifier).set(on);
+    }
+  }
+
+  /// The Rakam switch: before the start the choice is held for that start; during the live the recording of this
+  /// device stops (what is recorded so far is kept) or starts again.
+  Future<void> _setRecording(bool on) async {
+    final box = ref.read(liveBoxProvider);
+    final pub = _publisher;
+    if (box.sessionId != null) {
+      if (pub is! LiveRecordingControl) return;
+      // the box is asked first (its last-destination rule may refuse); the local recording changes only when it agreed.
+      // A box without the outputs route has nothing to ask.
+      if (box.canToggleKiosk && !await ref.read(liveBoxProvider.notifier).setOutputs(recording: on)) return;
+      try {
+        await (pub as LiveRecordingControl).setRecording(on);
+      } on Object {
+        // the box agreed but this device could not: tell the box what really runs
+        if (box.canToggleKiosk) await ref.read(liveBoxProvider.notifier).setOutputs(recording: !on);
+      }
+      return;
+    }
+    ref.read(liveRecordingChoiceProvider.notifier).set(on);
+    if (pub is LiveRecordingControl) {
+      await (pub as LiveRecordingControl).setRecording(on);
+    } else if (!_state.isLive) {
+      unawaited(_prepare());
+    }
+  }
+
+  Future<void> _openWatch(String? url) async {
+    final uri = watchUri(url);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } on Object {
+      // no browser to open it: the link is in the notice
+    }
+  }
+
+  /// U6: another person's live the box pulls is stopped from here; the sheet names who started it and says both
+  /// names are written to the change log.
+  Future<void> _confirmStopOther(OtherLive other) async {
+    final s = S.of(context);
+    final name = other.starterName;
+    final device = other.starterDevice;
+    final at = other.startedAt;
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          key: const ValueKey('live-stop-other-sheet'),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(header: true, child: Text(s.liveStopOtherTitle, style: Theme.of(sheetContext).textTheme.titleMedium)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: SurauColors.tealSoft,
+                    child: Text(name.isEmpty ? '' : name.characters.first.toUpperCase()),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      [
+                        bidiIsolate(name),
+                        if (at != null) TimeOfDay.fromDateTime(at.toLocal()).format(sheetContext),
+                      ].join(', '),
+                      key: const ValueKey('live-stop-other-who'),
+                      style: Theme.of(sheetContext).textTheme.titleSmall,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                device == null ? s.liveStopOtherBodyNoDevice(bidiIsolate(name)) : s.liveStopOtherBody(bidiIsolate(name), bidiIsolate(device)),
+                key: const ValueKey('live-stop-other-body'),
+              ),
+              const SizedBox(height: 6),
+              Text(s.liveStopConfirmBody),
+              const SizedBox(height: 6),
+              Text(
+                s.liveStopOtherLog(bidiIsolate(name)),
+                style: Theme.of(sheetContext).textTheme.bodySmall!.copyWith(color: SurauColors.muted),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('live-stop-other-cancel'),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      onPressed: () => Navigator.of(sheetContext, rootNavigator: true).pop(false),
+                      child: Text(s.actionCancel),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      key: const ValueKey('live-stop-other-confirm'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        backgroundColor: LiveColors.onAir,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: () => Navigator.of(sheetContext, rootNavigator: true).pop(true),
+                      child: Text(s.liveStopConfirmAction),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ok == true && mounted) await ref.read(liveBoxProvider.notifier).emergencyStop();
   }
 
   Future<void> _confirmStop() async {
@@ -560,21 +749,30 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       context: context,
       useRootNavigator: true,
       builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('live-stop-dialog'),
         title: Text(s.liveStopConfirm),
         content: Text(s.liveStopConfirmBody),
         actions: [
           TextButton(
+            key: const ValueKey('live-stop-cancel'),
             onPressed: () =>
                 Navigator.of(dialogContext, rootNavigator: true).pop(false),
             child: Text(s.actionCancel),
           ),
           FilledButton(
+            key: const ValueKey('live-stop-confirm'),
             style: FilledButton.styleFrom(
               backgroundColor: LiveColors.onAir,
               foregroundColor: Colors.white,
             ),
-            onPressed: () =>
-                Navigator.of(dialogContext, rootNavigator: true).pop(true),
+            onPressed: () {
+              // B12: a second tap of a fast double tap on Berhenti must never
+              // land here. The confirm takes a tap only once the dialog has
+              // fully opened (it has been seen), not while it is flying in.
+              final opening = ModalRoute.of(dialogContext)?.animation;
+              if (opening != null && opening.status != AnimationStatus.completed) return;
+              Navigator.of(dialogContext, rootNavigator: true).pop(true);
+            },
             child: Text(s.liveStopConfirmAction),
           ),
         ],
@@ -585,10 +783,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // close animation is over), never while a route is still popping.
     await Future<void>.delayed(const Duration(milliseconds: 250));
     if (!mounted) return;
-    final duration = _state.durationSec;
-    final youtubeUsed = _state.outputs.youtube != null;
-    final recorded = _state.recording.on;
-    final boxSession = ref.read(liveBoxProvider).sessionId;
+    final boxBefore = ref.read(liveBoxProvider);
+    // The box pulls the camera and this phone only controlled: no engine clock, no leg and no recording of its own.
+    final control = boxBefore.controlOnly && boxBefore.sessionId != null;
+    final duration = _state.isLive ? _state.durationSec : boxBefore.runSeconds(ref.read(appDepsProvider).now());
+    final youtubeUsed = control ? boxBefore.youtubeViaBox : _state.outputs.youtube != null;
+    final recorded = !control && _state.recording.on;
+    final boxSession = boxBefore.sessionId;
     // The browser's own id of this recording, read before the stop (the catch-up names it).
     final publisherSession = _publisher.recordingSessionId;
     final kuliahId = _kuliahId;
@@ -628,7 +829,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         recorded &&
         ref.read(featureFlagsProvider).isOn('youtubeCatchUp') &&
         ref.read(catchUpQueueProvider) != null &&
-        liveNeedsCatchUp(durationSec: duration, youtubeSeconds: youtubeSeconds);
+        // the phone's own count of the YouTube leg, or the gaps the BOX recorded for this live (D1: a dropped
+        // stream the phone's count never saw)
+        (liveNeedsCatchUp(durationSec: duration, youtubeSeconds: youtubeSeconds) ||
+            ref.read(liveBoxProvider).endedGapSeconds >= gapReplaceThresholdSec);
     final goUpload = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -640,6 +844,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         kuliah: ref.read(liveKuliahProvider).value?.byId(kuliahId),
         watchUrl: watchUrl,
         recordingNotes: recorded ? _recordingNotes(join, cleanupCovered, web: web) : const [],
+        // said plainly, never hidden: why this live has no recording on the phone
+        noRecordingWhy: control ? S.of(context).liveRecNoBoxPullSummary : null,
         onWatch: (url) => ref.read(appDepsProvider).openUrl(Uri.parse(url)),
         onSave: () => _saveRecording(),
         onShareNotice: summaryNotice == null
@@ -841,9 +1047,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     if (queue == null) return false;
     String? replace;
     if (liveVideoId != null) {
+      final ended = ref.read(liveBoxProvider);
+      // A box that records gaps (it named the broadcasts of the live) decides "always" by its own measure: the
+      // live is replaced only when its gap passes the threshold. An older box says nothing: as before.
+      final boxMeasures = ended.endedBroadcastIds.isNotEmpty;
       switch (catchUpReplaceMode(ref.read(settingsProvider).value?.value)) {
         case 'always':
-          replace = liveVideoId;
+          replace = !boxMeasures || ended.endedGapSeconds >= gapReplaceThresholdSec ? liveVideoId : null;
         case 'never':
           replace = null;
         default:
@@ -860,10 +1070,17 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // the stop; Android files go by the box session. Never "the newest file".
     final session = catchUpSessionId(web: web, publisherSession: publisherSession, boxSession: boxSession);
     if (session == null) return false;
-    try {
-      await queue.enqueueFromSession(session, kuliahId, replaceLive: replace);
-    } on NoRecordings {
-      return false;
+    // Right after a stop the phone may still be publishing the files to its gallery (U2): a first look that finds
+    // nothing is tried again briefly before the offer is given up (the recording stays under "Muat naik rakaman
+    // terdahulu" either way).
+    for (var attempt = 0; ; attempt++) {
+      try {
+        await queue.enqueueFromSession(session, kuliahId, replaceLive: replace);
+        break;
+      } on NoRecordings {
+        if (web || attempt >= 2) return false;
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
     }
     unawaited(queue.kick());
     return true;
@@ -954,6 +1171,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final ext = other?.video == 'external' || box.audioOf(idCamera) != null;
     const off = AudioSourceMix(enabled: false, volume: 100);
     return base.copyWith(
+      listed: {...base.listed, for (final a in box.audio) a.id},
       video: ext ? VideoSourceKind.external : VideoSourceKind.phone,
       mix: LiveAudioMix(
         camera: of(idCamera, off),
@@ -976,56 +1194,87 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     return best;
   }
 
+  /// "Tambah audio": the new source is on and every other one off. During a live that takes the sound from the one
+  /// on air, so the person is asked first.
   Future<void> _openAdd() async {
     final id = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       builder: (_) => AddAudioSheet(source: ref.read(liveSourceProvider), ipad: _ipad),
     );
-    if (id != null && mounted) await ref.read(liveSourceProvider.notifier).add(id);
+    if (id == null || !mounted) return;
+    if (!await _confirmSoundSwitch(id)) return;
+    await ref.read(liveSourceProvider.notifier).add(id);
   }
 
-  /// The stepper of the fallback "Imbangan masa audio" moved.
-  void _stepOffset(String id, int delta) {
-    final notifier = ref.read(liveSourceProvider.notifier);
-    final ms = clampExternalOffset((ref.read(liveSourceProvider).offsets[id] ?? 0) + delta);
-    notifier.rememberOffset(id, ms);
-    _applyOffset(ms);
-  }
-
-  void _applyOffset(int ms) {
-    final p = _publisher;
-    if (p is WebPublisher) {
-      p.setFallbackOffset(ms);
-    } else if (p is LiveSourceControl) {
-      unawaited((p as LiveSourceControl).setAvOffset(ms).catchError((_) {}));
-    }
-  }
-
-  Future<void> _openClap(String id) async {
-    final p = _publisher;
-    final control = p is LiveSourceControl && p is! WebPublisher ? p as LiveSourceControl : null;
-    final start = ref.read(liveSourceProvider).offsets[id] ?? 0;
-    final saved = await showModalBottomSheet<int>(
+  /// During a live, putting another source on air restarts the sound for 2 to 3 seconds: ask first. True = go on.
+  Future<bool> _confirmSoundSwitch(String id) async {
+    final live = _publisher.current.isLive || ref.read(liveBoxProvider).sessionId != null;
+    if (!live || !ref.read(liveSourceProvider.notifier).switchesTo(id)) return true;
+    final s = S.of(context);
+    final ok = await showModalBottomSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      builder: (_) => ClapSheet(
-        initialMs: start,
-        control: control,
-        clap: p.states.map((s) => s.clap).distinct(),
-        onOffset: _applyOffset,
-        onSave: (ms) async {
-          if (p is WebPublisher) {
-            p.setFallbackOffset(ms);
-            await p.saveFallbackOffset();
-          } else {
-            await control?.setAvOffset(ms);
-            await saveCameraOffset(ref.read(gatewayProvider), ref.read(settingsProvider).value?.value, id, ms);
-          }
-        },
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 8, 20, 16),
+          child: Column(
+            key: const ValueKey('audio-switch-confirm'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(s.liveAudioSwitchConfirm, style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('audio-switch-cancel'),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text(s.liveAudioSwitchCancel),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      key: const ValueKey('audio-switch-do'),
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text(s.liveAudioSwitchDo),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
-    if (saved != null && mounted) ref.read(liveSourceProvider.notifier).rememberOffset(id, saved);
+    return ok == true;
+  }
+
+  /// A row's own mute button: a row that is on mutes and unmutes; a row that is off is turned on (the other one goes off).
+  Future<void> _rowMute(String id, List<PhoneInput> inputs) async {
+    final cur = mixOf(ref.read(liveSourceProvider).mix, id);
+    if (cur.enabled) {
+      await ref.read(audioRowActionsProvider).muteRow(id);
+      return;
+    }
+    if (!await _confirmSoundSwitch(id) || !mounted) return;
+    await ref.read(liveSourceProvider.notifier).setVolume(id, cur.volume == 0 ? 100 : cur.volume);
+  }
+
+  /// A phone input's switch turned on with the external camera makes the phone microphone the one sound.
+  Future<void> _inputToggle(String id, bool on, List<PhoneInput> inputs) async {
+    final st = ref.read(liveSourceProvider);
+    if (on && st.external && !st.mix.deviceMic.enabled && !await _confirmSoundSwitch(idDeviceMic)) return;
+    if (!mounted) return;
+    await ref.read(audioRowActionsProvider).toggle(id, on, inputs);
+  }
+
+  /// The live ended: what this screen held for it (the Rakam choice of that start) goes.
+  void _liveEnded() {
+    ref.read(liveRecordingChoiceProvider.notifier).set(null);
   }
 
   Future<void> _confirmEmergency(String starter) async {
@@ -1082,8 +1331,135 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     return liveNoticeInputFor(id, kuliah, ref.read(surauInfoProvider)?.name);
   }
 
+  /// F4: "Siarkan ke YouTube" first asks for the title (prefilled) and the privacy (never more open than the surau's
+  /// setting) and waits for a confirm; only then the box is called.
+  Future<void> _askYoutubeLater() async {
+    final settings = ref.read(settingsProvider).value?.value;
+    final yt = settings?['liveYoutube'];
+    final p = yt is Map ? yt['privacy'] : null;
+    final max = p is String && const {'private', 'unlisted', 'public'}.contains(p) ? p : 'unlisted';
+    final k = ref.read(liveKuliahProvider).value?.byId(_kuliahId);
+    final surau = ref.read(surauInfoProvider)?.name;
+    final prefill = k != null
+        ? [k.label, if ((k.penceramah ?? '').isNotEmpty) k.penceramah!].join(': ')
+        : ((surau ?? '').isNotEmpty ? 'Kuliah $surau' : S.of(context).liveYoutubeLaterSheetTitle);
+    final choice = await showYoutubeLaterSheet(context, title: prefill, maxPrivacy: max);
+    if (choice == null || !mounted) return;
+    await ref.read(liveBoxProvider.notifier).startYoutubeLater(title: choice.title, privacy: choice.privacy);
+  }
+
   Future<void> _openNotice(LiveNoticeInput? input) async {
     await showLiveNoticeSheet(context, ref, input: input);
+  }
+
+  /// What the control card of a box-pulled live shows, read from the box's status.
+  /// The name of this box's own TV in the viewer list, else the name of the box the app is enrolled on.
+  String _selfTvName(LiveBoxStatus box) {
+    for (final v in box.viewers) {
+      if (v.tvId == selfTvId && v.name.isNotEmpty && v.name != selfTvId) return v.name;
+    }
+    return ref.read(enrolledBoxProvider)?.name ?? 'MAXCOM';
+  }
+
+  /// "Matikan paparan siaran pada kotak ini": the box's own TV goes back to its normal display; the suggestion is
+  /// done for this live either way.
+  Future<void> _switchOwnTvOff(String? sessionId) async {
+    final ok = await ref.read(liveTvShowProvider.notifier).set(selfTvId, false);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _busyLaterFor = sessionId);
+    } else {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(S.of(context).liveTvShowFailed)));
+    }
+  }
+
+  Widget _controlCard({
+    required S s,
+    required LiveBoxStatus box,
+    required LiveSourceState view,
+    required AudioContext ctx,
+    required Map<String, LiveRowInfo> info,
+    required OtherLive? other,
+    required bool ipad,
+    required bool live,
+    required bool boxCameraGone,
+  }) {
+    final now = ref.read(appDepsProvider).now();
+    final seconds = box.startedAt != null ? box.runSeconds(now) : (_state.isLive ? _state.durationSec : 0);
+    final camera = boxCameraGone
+        ? ControlCamera.gone
+        : box.warnings.contains(cameraSlow)
+        ? ControlCamera.slow
+        : ControlCamera.ok;
+    final ytOn = box.sessionYoutube ?? box.youtubeViaBox;
+    final ytLeg = box.youtubeLeg;
+    final youtube = !ytOn
+        ? ControlYoutube.off
+        : (ytLeg == null ? box.youtubeSeconds > 0 : ytLeg.phase == OutputPhase.up)
+        ? ControlYoutube.onAir
+        : ControlYoutube.waiting;
+    final benched = box.boxMicBenched;
+    final micGone = box.boxMicLostSilent;
+    final mix = view.mix;
+    ControlSource? source(String id, String name, AudioSourceMix m) {
+      if (!m.enabled) return null;
+      final on = m.volume > 0;
+      var sub = on ? s.liveCtlSubOnAir(m.volume) : s.liveCtlSubOff(m.volume);
+      var dim = !on;
+      var bad = false;
+      if (boxCameraGone) {
+        sub = s.liveCtlSubWaitingCam;
+        dim = true;
+      } else if (benched && id == idBoxInput) {
+        sub = s.liveCtlSubBenched;
+        dim = true;
+      } else if (micGone && id == idBoxInput) {
+        sub = s.liveCtlSubMicLost;
+        dim = true;
+      } else if (benched && id == idCamera) {
+        sub = s.liveCtlSubMeanwhile;
+        dim = false;
+      } else if (id == idBoxInput && on && box.boxMicNoSignalSeconds != null && (box.boxMicSilent || box.boxMicSilentCovered)) {
+        // build 5: the microphone is on air but sends no signal; with the camera sound carrying it reads plainly
+        final since = TimeOfDay.fromDateTime(now.subtract(Duration(seconds: box.boxMicNoSignalSeconds!)).toLocal());
+        sub = box.boxMicSilentCovered ? s.liveCtlSubNoSound : s.liveMicSilentRow(since.format(context));
+        bad = box.boxMicSilent;
+      }
+      return ControlSource(id: id, name: name, sub: sub, level: info[id]?.level ?? 0, dim: dim, bad: bad);
+    }
+
+    final sources = <ControlSource>[
+      ?source(idBoxInput, s.liveAudioBoxMicMain, mix.boxInput),
+      ?source(idDeviceMic, ctx.micName, mix.deviceMic),
+      ?source(idCamera, liveAudioCameraRow(ctx.lang), mix.camera),
+    ];
+    final rec = _state.recording;
+    final recordingRow = ipad && live && rec.on
+        ? ControlRecording(bytes: rec.bytes, segments: rec.segments, running: rec.active)
+        : null;
+    String? by;
+    if (other != null) {
+      final at = other.startedAt;
+      final time = at == null ? '' : TimeOfDay.fromDateTime(at.toLocal()).format(context);
+      final device = other.starterDevice;
+      by = device == null
+          ? s.liveCtlStartedByNoDevice(bidiIsolate(other.starterName), time)
+          : s.liveCtlStartedBy(bidiIsolate(other.starterName), bidiIsolate(device), time);
+    }
+    return LiveControlCard(
+      seconds: seconds,
+      camera: camera,
+      cameraName: view.camera.name,
+      cameraKbps: box.cameraKbps,
+      youtube: youtube,
+      youtubeLabel: box.youtube.channel ?? s.liveYoutubeHint,
+      viewers: box.viewers,
+      kioskOn: box.sessionKiosk ?? true,
+      sources: sources,
+      startedBy: by,
+      recording: recordingRow,
+      onWatchYoutube: box.watchUrl == null ? null : () => unawaited(_openWatch(box.watchUrl)),
+    );
   }
 
   @override
@@ -1122,6 +1498,11 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // the moment the sign-in completes while this screen is open: said once, with the channel
     ref.listen<LiveBoxStatus>(liveBoxProvider, (prev, next) {
       if (!mounted || prev == null) return;
+      // B11: this phone became the controller of a live the box pulls (a start, or its own session found again):
+      // a camera prepared before that is closed
+      if (_controlsOnly(next) && !_controlsOnly(prev)) unawaited(_releasePrepared());
+      if (prev.sessionId != null && next.sessionId == null) _liveEnded();
+      if (!prev.canToggleKiosk && next.canToggleKiosk) sourceNotifier.boxCapabilityKnown();
       if (prev.youtube.phase == YoutubeAccountPhase.signingIn && next.youtube.phase == YoutubeAccountPhase.signedIn) {
         final t = S.of(context);
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -1136,8 +1517,34 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       _kuliahId = choice.preselected;
     }
 
+    // a write of the YouTube choice the box refused or never answered: said once
+    ref.listen(liveDestinationsProvider.select((d) => d.failures), (prev, next) {
+      if (!mounted || prev == null || next <= prev) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(S.of(context).liveYoutubeChoiceFailed)));
+    });
+    // The box's "camera in use" flag: this device opens no pull of a camera another device, or the box, holds.
+    final cameraBlocked = cameraUseBlocksPull(box.cameraUse);
+    if (cameraBlocked != source.cameraInUse) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) sourceNotifier.cameraUseKnown(cameraBlocked);
+      });
+    }
     final other = box.otherLive;
-    final live = _state.isLive;
+    // The box pulls the camera and this phone only controls: the live is the box's status, there is no engine state.
+    final control = box.controlOnly && box.sessionId != null;
+    final live = _state.isLive || control;
+    // This device's own live the box pulls, found again after a reload: the control card and the notices show at once
+    // while "Sambung semula" runs, not the start screen.
+    final heldBoxPulled = !live && other == null && box.sessionId != null && box.boxPulled && !box.stopFailed;
+    // Before a live with the box pulling, the phone's engine prepares nothing: the frame is not "getting ready".
+    final idleBoxPull = !_state.isLive && !control && source.boxPull && ref.read(liveDeviceKindProvider) != 'ipad' &&
+        (_state.phase == PublisherPhase.idle || _state.phase == PublisherPhase.preparing || _state.phase == PublisherPhase.stopped);
+    final shown = control && !_state.isLive
+        ? _state.copyWith(phase: PublisherPhase.live, durationSec: box.runSeconds(ref.read(appDepsProvider).now()))
+        : (idleBoxPull ? _state.copyWith(phase: PublisherPhase.ready) : _state);
+    // This device's own live, found on the box after the app was reopened, with no picture going out from here.
+    final resumeNeeded = !live && box.sessionId != null && box.resume == LiveResume.needed && !box.stopFailed;
+    final sessionHeld = !live && box.sessionId != null && !box.stopFailed;
     final noticeInput = (live || other != null) ? _noticeInput(box.watchUrl, choice?.byId(_kuliahId)) : null;
     // The surau's notice on the box: every live:control holder sees it, whichever device started the live.
     final boxNotice = ref.watch(liveBoxNoticeProvider).value;
@@ -1150,27 +1557,62 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final youtubeFeature = flags.isOn('liveYoutube');
     final kioskFeature = flags.isOn('liveOnKiosk');
     final block = youtubeFeature ? _youtubeBlock(s, box, canSettings) : s.liveNotUsed;
-    final settingsMap = ref.watch(settingsProvider).value?.value;
-    final boxKnowsChoice = _boxKnowsChoice(settingsMap);
-    final wanted = _wantedFrom(settingsMap);
+    final destChoice = ref.watch(liveDestinationsProvider);
+    final wanted = destChoice.wanted;
+    final boxPull = source.boxPull && !ipad;
+    // The box pulls the camera of this live (build 4): no picture, no preview and no still on this device, a control
+    // card instead. Another device's live counts when the box says it pulls it.
+    final boxPulledLive =
+        control ||
+        heldBoxPulled ||
+        (ipad && _state.isLive && source.external) ||
+        // the box's own word (`session.boxPulled`) decides; false after a switch to the iPad's own camera
+        (readOnly &&
+            (other.boxPulled ??
+                (other.videoPath == 'box' ||
+                    box.cameraUse.any((u) => u.cameraId == externalCameraId && u.via == 'box'))));
+    // Before the start with the box set to pull: the start screen says there will be no picture here.
+    final boxPullIdle = !live && !heldBoxPulled && !readOnly && source.external && (boxPull || ipad);
+    // The box's own camera signals: the warning `no_video_from_camera` or the camera row reading `lost`
+    final boxCameraGone =
+        boxPulledLive && (box.warnings.contains(noVideoFromCamera) || box.audioOf(idCamera)?.state == 'lost');
     // What the chip shows is the surau's choice; whether YouTube can be used right now is a separate matter
     // (a block is told beside it and asked about at Mula siaran, it never changes the choice).
     final youtubeChosen = youtubeFeature && wanted;
     final youtubeOn = youtubeChosen && block == null;
     final canChoose = can(roles, 'live:control');
+    // Stop for another person's box-pulled live: live control on a box that has the new controls, or the Pentadbir.
+    final mayStopOther = canChoose && (box.canToggleKiosk || canEmergency);
+    // A live STARTED box-pulled never ends by itself (`session.startedBoxPulled`): the Stop right and the quiet notice
+    // follow it, also after a switch to the iPad's own camera (the control card and "no video" still follow boxPulled).
+    final startedPulledLive = boxPulledLive || (readOnly && other.startedPulled);
+    // The destinations as they stand now: Skrin (kept on this device per box, always on for a box that cannot switch
+    // it), YouTube, and Rakam (this device's own recording; never on a phone that only controls).
+    final kioskOn = live ? (box.sessionKiosk ?? true) : (ref.watch(liveKioskChoiceProvider) || !box.canToggleKiosk);
+    final recAvailable = !(boxPull || control);
+    // a recording that has stopped (no data, storage low, stopped) is not a destination any more
+    final recordingOn =
+        recAvailable && (live ? _state.recording.active : (ref.watch(liveRecordingChoiceProvider) ?? _recordingOn));
+    final youtubeNow = live ? (box.sessionYoutube ?? box.youtubeViaBox) : youtubeOn;
+    final destCount = ((kioskFeature && kioskOn) ? 1 : 0) + (youtubeNow ? 1 : 0) + (recordingOn ? 1 : 0);
     final canStart =
+        destCount > 0 &&
         kioskFeature &&
         !_starting &&
         !box.stopping &&
         !box.stopFailed &&
-        _state.phase == PublisherPhase.ready &&
+        // with the box pulling the camera this phone publishes nothing: its engine need not be ready
+        (_state.phase == PublisherPhase.ready || (boxPull && _state.phase != PublisherPhase.starting && _state.phase != PublisherPhase.stopping)) &&
         box.boxReachable &&
         box.busyDevice == null &&
+        box.sessionId == null &&
         other == null &&
         choice != null;
 
     final info = _rowInfo(box);
     final view = readOnly ? _viewFromBox(source, box) : source;
+    // the box microphone is the main sound whenever the box pulls the camera, before the start and during the live
+    final boxPulledAudio = boxPulledLive || (source.external && (boxPull || ipad));
     final camLost = live && (_state.camera?.isLost ?? false);
     final micInfo = info[idDeviceMic];
     final camBack =
@@ -1192,12 +1634,18 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       micLabel: _routedMicName(ref.watch(micAutoProvider.select((m) => m.mic)), _state.micRoute, lang),
       micUnavailable: _state.micUnavailable,
       trrsHint: ref.watch(micAutoProvider.select((m) => m.trrsHint)),
+      // every input the live can hear is its own row; the lift and the volume of each are remembered (P1)
+      inputs: phoneInputs(ref.watch(micAutoProvider), routedId: _state.micRoute?.id, lang: lang),
+      lifts: ref.watch(audioPrefsProvider).lifts,
+      inputVolumes: ref.watch(audioPrefsProvider).inputVolumes,
+      // the main-microphone rows and the sync block belong to a box that has the new controls
+      boxPulled: boxPulledAudio && box.canToggleKiosk,
     );
     final rows = buildAudioRows(source: view, ctx: ctx, info: info);
     final audioNotices = buildAudioNotices(source: view, ctx: ctx, info: info);
     final showMixer = view.external || view.mix.boxInput.enabled;
     final canAddAudio =
-        !readOnly && ((view.external && !view.mix.deviceMic.enabled) || !view.mix.boxInput.enabled) && (!live || view.external);
+        !readOnly && ((view.external && !view.listed.contains(idDeviceMic)) || !view.listed.contains(idBoxInput)) && (!live || view.external);
 
     final catchUpOn =
         flags.isOn('youtubeCatchUp') && ref.watch(catchUpQueueProvider) != null;
@@ -1236,12 +1684,61 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           title: s.liveBusy(box.busyDevice!),
           danger: true,
         ),
-      if (other != null && !live)
+      // a live the box pulls can be stopped by any holder of live control: the card says who started it instead
+      if (other != null && !live && !(startedPulledLive && mayStopOther))
         LiveNotice(
           key: const ValueKey('live-other-device'),
           icon: Icons.sensors_rounded,
           title: liveOtherDeviceTitle(lang, other.starter),
           body: liveOtherDeviceBody(lang),
+        ),
+      if (cameraBlocked && !control)
+        for (final u in box.cameraUse.where((u) => u.cameraId == externalCameraId).take(1))
+          LiveNotice(
+            key: const ValueKey('live-camera-in-use'),
+            icon: Icons.videocam_rounded,
+            title: u.via == 'box'
+                ? s.liveCameraInUseByBox(_sinceText(context, u.since))
+                : s.liveCameraInUseBy(bidiIsolate(u.byName.isEmpty ? s.liveOtherDevice : u.byName), _sinceText(context, u.since)),
+            // the shared picture, through the box: never a second pull of the same camera (no picture at all in a
+            // box-pulled live, where the note would promise one)
+            body: boxPulledLive ? null : s.liveCameraJoinNote,
+          ),
+      if (resumeNeeded)
+        LiveNotice(
+          key: const ValueKey('live-mine'),
+          icon: Icons.sensors_rounded,
+          title: s.liveMineTitle,
+          action: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                key: const ValueKey('live-mine-stop'),
+                style: OutlinedButton.styleFrom(foregroundColor: LiveColors.onAir, side: const BorderSide(color: LiveColors.onAir)),
+                onPressed: box.stopping || _resuming ? null : _confirmStop,
+                child: Text(s.liveStop),
+              ),
+              FilledButton(
+                key: const ValueKey('live-mine-resume'),
+                onPressed: box.stopping || _resuming ? null : () => unawaited(_resumeMine()),
+                child: Text(s.liveMineResume),
+              ),
+            ],
+          ),
+        ),
+      if (live && !control && box.resume == LiveResume.sending)
+        LiveNotice(
+          key: const ValueKey('live-mine-sending'),
+          icon: Icons.sensors_rounded,
+          title: s.liveMineStillSending,
+        ),
+      if (control)
+        LiveNotice(
+          key: const ValueKey('live-control-only'),
+          icon: Icons.dns_rounded,
+          title: s.liveVideoPathBoxNote,
         ),
       if (box.stopFailed)
         LiveNotice(
@@ -1256,9 +1753,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             child: Text(s.ra4StopRetry),
           ),
         ),
+      if (_state.recording.lastError == recordingEmpty)
+        LiveNotice(
+          key: const ValueKey('live-rec-empty'),
+          icon: Icons.videocam_off_rounded,
+          title: s.uploadErrorEmptyFile,
+        ),
       if (box.notice != null && !(box.stopFailed && box.notice == s.ra4StopNotYet))
         LiveNotice(icon: Icons.info_outline_rounded, title: box.notice!),
-      if (source.error != null && !live)
+      if (source.error != null)
         LiveNotice(icon: Icons.info_outline_rounded, title: source.error!),
       if (box.warnings.contains(mediaPortsBlocked))
         LiveNotice(
@@ -1268,6 +1771,169 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         ),
       if (box.warnings.contains(noVideoFromDevice))
         LiveNotice(icon: Icons.videocam_off_rounded, title: s.liveNoVideo),
+      if (box.warnings.contains(cameraH265))
+        LiveNotice(key: const ValueKey('live-warn-camera-h265'), icon: Icons.videocam_off_rounded, title: s.liveWarnCameraH265),
+      if (box.warnings.contains(cameraBitrateHigh))
+        LiveNotice(key: const ValueKey('live-warn-camera-heavy'), icon: Icons.speed_rounded, title: s.liveCameraHeavyWarn),
+      if (boxPullIdle) ...[
+        LiveNotice(key: const ValueKey('live-no-video-note'), icon: Icons.dns_rounded, title: s.liveCtlNoVideo),
+        LiveNotice(
+          key: const ValueKey('live-close-camera-app'),
+          icon: Icons.warning_amber_rounded,
+          title: s.liveCtlCloseApp,
+          body: s.liveCtlCloseAppWhy,
+        ),
+      ],
+      // YouTube did not deliver: the box put the TV screen back on by itself (the Skrin switch reads on from the status)
+      if (box.warnings.contains(kioskRestored) && (live || other != null))
+        LiveNotice(
+          key: const ValueKey('live-kiosk-restored'),
+          icon: Icons.tv_rounded,
+          title: s.liveKioskRestored,
+        ),
+      if (startedPulledLive && box.warnings.contains(controllerQuiet))
+        LiveNotice(
+          key: const ValueKey('live-controller-quiet'),
+          icon: Icons.warning_amber_rounded,
+          title: s.liveQuietTitle,
+          body: s.liveQuietBody(((box.controllerQuietSeconds ?? 600) / 60).floor().clamp(10, 99999)),
+          action: (other != null ? mayStopOther : canChoose)
+              ? OutlinedButton.icon(
+                  key: const ValueKey('live-quiet-stop'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: LiveColors.onAir,
+                    side: const BorderSide(color: LiveColors.onAir),
+                    minimumSize: const Size(48, 48),
+                  ),
+                  onPressed: other != null ? () => _confirmStopOther(other) : _confirmStop,
+                  icon: const Icon(Icons.stop_rounded),
+                  label: Text(s.liveQuietStop),
+                )
+              : null,
+        ),
+      if (boxPulledLive && box.warnings.contains(cameraSlow))
+        LiveNotice(
+          key: const ValueKey('live-warn-camera-slow'),
+          icon: Icons.speed_rounded,
+          title: s.liveCamSlowTitle,
+          body: '${s.liveCtlCloseApp} ${s.liveCtlCloseAppWhy}',
+        ),
+      // the box microphone benched while the camera sound carries the live: the broadcast is not silent
+      if (boxPulledLive && box.boxMicBenched)
+        LiveNotice(
+          key: const ValueKey('live-warn-audio-lost'),
+          icon: Icons.mic_off_rounded,
+          title: s.liveMicBenchedTitle,
+          body: s.liveMicBenchedBody,
+        ),
+      // the box microphone is gone and the camera sound is not carrying (at 0, or lost too): honest, it may be silent
+      if (boxPulledLive && box.boxMicLostSilent)
+        LiveNotice(
+          key: const ValueKey('live-warn-box-mic-lost'),
+          icon: Icons.mic_off_rounded,
+          title: s.liveMicLostBoxTitle,
+          body: s.liveMicLostBoxBody,
+          danger: true,
+        ),
+      // build 5: the box microphone is on air but sends no signal
+      if (boxPulledLive && box.boxMicSilent)
+        LiveNotice(
+          key: const ValueKey('live-warn-box-mic-silent'),
+          icon: Icons.mic_off_rounded,
+          title: s.liveMicSilentTitle,
+          body:
+              '${s.liveMicSilentBody(((box.boxMicNoSignalSeconds ?? 60) / 60).floor().clamp(1, 99999))}\n'
+              '\u2022 ${s.liveMicSilentTip1}\n\u2022 ${s.liveMicSilentTip2}\n\u2022 ${s.liveMicSilentTip3}',
+          danger: true,
+          // only the device that started the live, and only when the camera has a sound to use
+          action: (live || heldBoxPulled) && !readOnly && view.external && source.camera.hasAudio != false
+              ? FilledButton.icon(
+                  key: const ValueKey('live-mic-use-camera'),
+                  style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+                  onPressed: () => unawaited(sourceNotifier.setVolume(idCamera, 100)),
+                  icon: const Icon(Icons.videocam_rounded),
+                  label: Text(s.liveMicSilentUseCamera),
+                )
+              : null,
+        ),
+      if (boxPulledLive && box.boxMicSilentCovered)
+        LiveNotice(
+          key: const ValueKey('live-warn-box-mic-covered'),
+          icon: Icons.check_circle_outline_rounded,
+          title: s.liveMicSilentCamTitle,
+          body: s.liveMicSilentCamBody,
+        ),
+      // build 5: the live server is too busy; a holder of live:settings may switch this box's TV to its normal display
+      if (box.serverBusy && canSettings && (live || other != null) && _busyLaterFor != (box.sessionId ?? other?.sessionId))
+        LiveNotice(
+          key: const ValueKey('live-warn-server-busy'),
+          icon: Icons.speed_rounded,
+          title: s.liveBusyTitle(bidiIsolate(_selfTvName(box)), box.cpuPercent ?? 0),
+          body: s.liveBusyBody,
+          action: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FilledButton.icon(
+                key: const ValueKey('live-busy-off'),
+                style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+                onPressed: () => unawaited(_switchOwnTvOff(box.sessionId ?? other?.sessionId)),
+                icon: const Icon(Icons.tv_off_rounded),
+                label: Text(s.liveBusyAction, textAlign: TextAlign.center),
+              ),
+              const SizedBox(height: 4),
+              TextButton(
+                key: const ValueKey('live-busy-later'),
+                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                onPressed: () => setState(() => _busyLaterFor = box.sessionId ?? other?.sessionId),
+                child: Text(s.liveBusyLater),
+              ),
+            ],
+          ),
+        ),
+      // build 6: the box microphone drops frames; the YouTube leg is behind; its picture was lowered; it reconnected
+      if ((live || other != null) && box.boxMicDrops)
+        LiveNotice(
+          key: const ValueKey('live-warn-box-mic-drops'),
+          icon: Icons.mic_off_rounded,
+          title: s.liveWarnMicDropsTitle,
+          body: s.liveWarnMicDropsBody,
+        ),
+      if ((live || other != null) && box.uploadBehind)
+        LiveNotice(
+          key: const ValueKey('live-warn-upload-behind'),
+          icon: Icons.upload_rounded,
+          title: s.liveWarnBehindTitle,
+          body: s.liveWarnBehindBody(box.relayBehindSeconds ?? 0),
+        ),
+      if ((live || other != null) && box.qualityLowered)
+        LiveNotice(
+          key: const ValueKey('live-warn-quality-lowered'),
+          icon: Icons.speed_rounded,
+          title: s.liveWarnQualityTitle,
+          body: s.liveWarnQualityBody,
+        ),
+      if ((live || other != null) && box.relayRestarts > 0)
+        LiveNotice(
+          key: const ValueKey('live-relay-reconnects'),
+          icon: Icons.sync_rounded,
+          title: s.liveRelayReconnects(box.relayRestarts),
+        ),
+      if (boxPulledLive && box.deviceMicLost)
+        LiveNotice(
+          key: const ValueKey('live-warn-device-mic-lost'),
+          icon: Icons.mic_off_rounded,
+          title: s.liveMicLostDeviceTitle,
+          body: s.liveMicLostDeviceBody,
+          danger: true,
+        ),
+      if (boxPulledLive && boxCameraGone)
+        LiveNotice(
+          key: const ValueKey('live-camera-gone'),
+          icon: Icons.error_outline_rounded,
+          title: s.liveCamGoneTitle,
+          body: s.liveCamGoneBody,
+          danger: true,
+        ),
       if (box.warnings.contains(cloudUnreachable))
         LiveNotice(
           icon: Icons.cloud_off_rounded,
@@ -1324,13 +1990,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         ),
     ];
 
-    final externalIdle = !live && !readOnly && source.external;
+    final externalIdle = !live && !heldBoxPulled && !readOnly && source.external;
     final pullNote = externalIdle
         ? (ipad
               ? LiveNotice(
                   key: const ValueKey('live-pull-note'),
                   icon: Icons.dns_rounded,
                   title: liveBoxPullNote(lang, camName),
+                )
+              : boxPull
+              // Rakam is not offered in this mode, and the start screen says clearly why (never silently hidden)
+              ? LiveNotice(
+                  key: const ValueKey('live-rec-no-box-pull'),
+                  icon: Icons.dns_rounded,
+                  title: s.liveRecNoBoxPullStart,
                 )
               : LiveNotice(
                   key: const ValueKey('live-pull-note'),
@@ -1339,63 +2012,170 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                 ))
         : null;
 
+    // The picture of a live this device does not pull itself comes THROUGH the box (its own still of the running
+    // live), never from a second pull of the camera: another device's external-camera live, or the box's own pull.
+    final joinShared = control || (readOnly && (cameraBlocked || source.cameraRefused));
+    final gatewayNow = ref.read(gatewayProvider);
+    final Widget ownPicture = joinShared && gatewayNow != null
+        ? SharedPictureView(fetch: () => gatewayNow.getBytes('/api/live/notice/frame.jpg'))
+        : idleBoxPull
+        // nothing is pulled by this phone: no preview of its own
+        ? const ColoredBox(
+            key: ValueKey('live-box-pull-idle'),
+            color: SurauColors.glass,
+            child: Center(child: Icon(Icons.dns_rounded, size: 44, color: Colors.white54)),
+          )
+        : _publisher.preview(context);
     final picture = showMixer
         ? Stack(
             fit: StackFit.expand,
             children: [
-              _publisher.preview(context),
+              ownPicture,
               PositionedDirectional(
                 end: 10,
                 top: 10,
                 child: MixedLevelChip(
                   key: const ValueKey('live-mixed-level'),
                   level: _mixedLevel(view, info),
-                  silent: mixAllMuted(view.mix, muted: _state.muted),
+                  silent: mixAllMuted(view.mix, muted: _state.muted, phone: !ipad),
                 ),
               ),
             ],
           )
-        : _publisher.preview(context);
-    final liveDest = live && (kioskFeature || youtubeFeature)
-        ? Padding(
+        : ownPicture;
+    final liveSummaryText = live && (kioskFeature || youtubeFeature)
+        ? _liveSummary(
+            s,
+            kiosk: kioskOn,
+            youtube: box.sessionYoutube ?? (control ? box.youtubeViaBox : _state.outputs.youtube != null),
+            recording: recAvailable && !boxPulledLive,
+          )
+        : null;
+    final liveDest = liveSummaryText == null
+        ? null
+        : Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
-              _state.outputs.youtube != null ? s.liveDestLive2 : s.liveDestLive1,
+              liveSummaryText,
               key: const ValueKey('live-dest-summary'),
               style: Theme.of(context).textTheme.titleSmall,
             ),
-          )
-        : null;
+          );
 
+    // O34: a live that runs without YouTube offers to add it (the box signed in, the starter of this live).
+    final laterGate = youtubeLaterGate(
+      sessionOpen: box.sessionId != null || other != null,
+      own: live || heldBoxPulled,
+      readOnly: readOnly,
+      youtubeFeature: youtubeFeature,
+      youtubeOn: box.sessionYoutube ?? (control ? box.youtubeViaBox : _state.outputs.youtube != null),
+      accountPhase: box.youtube.phase,
+      boxReachable: box.boxReachable,
+      stopping: box.stopping,
+    );
+    if (laterGate != _lastLaterGate) {
+      // the log line is written after the frame: build changes no state
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || laterGate == _lastLaterGate) return;
+        _lastLaterGate = laterGate;
+        debugPrint('live youtube-later gate: ${laterGate.name}');
+      });
+    }
+    final laterWhy = switch (laterGate) {
+      YoutubeLaterGate.notSignedIn => s.liveYoutubeLaterWhySignIn,
+      YoutubeLaterGate.unreachable => s.liveYoutubeLaterWhyUnreachable,
+      YoutubeLaterGate.notStarter => s.liveYoutubeLaterWhyStarter,
+      _ => null,
+    };
+    // The control card of a live the box pulls: the running time, TVs, YouTube, camera, one level per sound source and
+    // (iPad) the recording of the received stream. It replaces the picture and the old three-row status card.
+    final Widget controlCard = boxPulledLive
+        ? _controlCard(
+            s: s,
+            box: box,
+            view: view,
+            ctx: ctx,
+            info: info,
+            other: other,
+            ipad: ipad,
+            live: live,
+            boxCameraGone: boxCameraGone,
+          )
+        : const SizedBox.shrink();
     final monitor = <Widget>[
       ?liveDest,
-      LivePreviewFrame(
-        picture: picture,
-        state: _state,
-        onFlip: _state.phase == PublisherPhase.idle || source.external
-            ? null
-            : () => _publisher.switchCamera(),
-        onMute: _state.phase == PublisherPhase.idle
-            ? null
-            : () => _publisher.setMuted(!_state.muted),
-        onMinimise: () => ref.read(liveFoldedProvider.notifier).set(true),
-      ),
-      const SizedBox(height: 16),
-      LiveStatsStrip(state: _state),
-      if (_state.warnings.isNotEmpty) ...[
+      if (laterGate != YoutubeLaterGate.hidden)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('live-youtube-later'),
+                onPressed: laterGate != YoutubeLaterGate.ok || box.youtubeStarting
+                    ? null
+                    : () => unawaited(_askYoutubeLater()),
+                icon: const Icon(Icons.live_tv_rounded),
+                label: Text(box.youtubeStarting ? s.liveYoutubeLaterStarting : s.liveYoutubeLaterButton),
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              ),
+              const SizedBox(height: 6),
+              if (laterWhy != null)
+                Text(
+                  laterWhy,
+                  key: const ValueKey('live-youtube-later-why'),
+                  style: Theme.of(context).textTheme.bodySmall!.copyWith(color: SurauColors.muted),
+                )
+              else
+                Text(
+                  s.liveYoutubeLaterHint,
+                  key: const ValueKey('live-youtube-later-hint'),
+                  style: Theme.of(context).textTheme.bodySmall!.copyWith(color: SurauColors.muted),
+                ),
+            ],
+          ),
+        ),
+      if (boxPulledLive)
+        controlCard
+      else if (!boxPullIdle) ...[
+        LivePreviewFrame(
+          picture: picture,
+          state: shown,
+          onFlip: _state.phase == PublisherPhase.idle || source.external
+              ? null
+              : () => _publisher.switchCamera(),
+          onMute: _state.phase == PublisherPhase.idle
+              ? null
+              : () => _publisher.setMuted(!_state.muted),
+          onMinimise: () => ref.read(liveFoldedProvider.notifier).set(true),
+        ),
         const SizedBox(height: 16),
-        WarningChips(warnings: _state.warnings),
+        LiveStatsStrip(state: _state),
+        if (_state.warnings.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          WarningChips(warnings: _state.warnings),
+        ],
+        if (box.viewers.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          LiveViewerChips(viewers: box.viewers),
+        ],
       ],
     ];
 
     final (kioskTone, kioskText) = outputStatus(
       s,
-      live ? kioskLeg(_state.outputs.kiosk, box.ingestReady) : null,
+      live
+          ? (control
+                ? (box.ingestReady == true ? OutputState.up : OutputState.connecting)
+                : kioskLeg(_state.outputs.kiosk, box.ingestReady))
+          : null,
       live: live,
     );
     // A leg the box relays is as healthy as the box says (the iPad only
     // sends one stream); otherwise the publisher knows.
-    final ytOut = box.youtubeViaBox && _state.outputs.youtube != null
+    final ytOut = control
+        ? box.youtubeLeg
+        : box.youtubeViaBox && _state.outputs.youtube != null
         ? (box.youtubeLeg ?? _state.outputs.youtube)
         : _state.outputs.youtube;
     final (ytTone, ytText) = live
@@ -1404,7 +2184,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               : outputStatus(s, ytOut, live: live))
         : (LightTone.idle, youtubeOn ? s.liveReady : s.liveNotUsed);
     final rec = _state.recording;
-    final recordingOn = _recordingOn;
+    // With the box pulling the camera the phone receives no picture: nothing can be recorded on it.
+    final recordingWhy = (boxPull || control) && _recordingOn ? s.liveDestRecUnavailable : null;
+    // a recording switched off (or stopped) during the live: what was recorded so far is kept, and the row says so
+    final recStopped = live && recAvailable && !recordingOn && (rec.segments > 0 || rec.bytes > 0 || rec.lastError != null);
 
     final outputRows = <Widget>[
       if (kioskFeature)
@@ -1432,19 +2215,21 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         key: const ValueKey('live-recording'),
         icon: Icons.fiber_manual_record_rounded,
         title: s.liveRecording,
-        subtitle: !recordingOn
-            ? s.liveRecordingOff
+        subtitle: recordingWhy != null
+            ? s.liveVideoPathBoxNote
+            : !recordingOn
+            ? (recStopped ? s.liveRecordingStopped : s.liveRecordingOff)
             : (live || rec.segments > 0)
             ? s.liveRecordingParts(rec.segments, formatBytes(rec.bytes))
             : s.liveRecordingWithLive,
         tone: !recordingOn
             ? LightTone.idle
-            : live && rec.on
+            : live && rec.active
             ? LightTone.onAir
             : LightTone.idle,
         status: !recordingOn
             ? s.liveRecordingOff
-            : (live && rec.on ? s.liveRecordingOn : s.liveReady),
+            : (live && rec.active ? s.liveRecordingOn : s.liveReady),
       ),
     ];
     final outputs = LiveCard(children: outputRows);
@@ -1452,25 +2237,49 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // The destinations, always visible right above "Mula siaran" (not inside the folded card).
     final signedIn = box.youtube.signedIn;
     final unknownYoutube = box.youtube.phase == YoutubeAccountPhase.unknown;
-    final _Dest? dest = (!live && !readOnly && (kioskFeature || youtubeFeature))
+    final lastOne = live && destCount == 1;
+    final _Dest? dest = (!readOnly && !heldBoxPulled && (kioskFeature || youtubeFeature) && (!live || canChoose))
         ? (
             kiosk: kioskFeature,
+            kioskOn: kioskOn,
+            kioskEnabled: kioskFeature && box.canToggleKiosk && canChoose && !busy && !_starting && !(lastOne && kioskOn),
+            kioskNote: !box.canToggleKiosk
+                ? s.liveDestKioskOldBox
+                : (lastOne && kioskOn)
+                ? s.liveDestLastOne
+                : null,
+            live: live,
             youtube: youtubeFeature,
-            youtubeState: unknownYoutube
+            youtubeState: live
+                ? (youtubeNow ? _DestState.on : _DestState.off)
+                : unknownYoutube
                 ? _DestState.unknown
                 : !signedIn
                 ? _DestState.warn
                 : (youtubeChosen ? _DestState.on : _DestState.off),
-            youtubeOn: youtubeChosen,
-            youtubeLabel: youtubeChosen
+            youtubeOn: live ? youtubeNow : youtubeChosen,
+            youtubeLabel: (live ? youtubeNow : youtubeChosen)
                 ? ((box.youtube.channel ?? '').isEmpty ? s.liveDestOnPlain : s.liveDestOn(bidiIsolate(box.youtube.channel!)))
                 : s.liveDestOff,
-            youtubeEnabled: canChoose && _pendingWanted == null && !busy && !_starting,
+            youtubeEnabled: canChoose && !busy && !_starting && !live,
             wanted: wanted,
-            boxKnows: boxKnowsChoice,
+            saving: destChoice.saving,
+            // shown from an old copy: the box has not agreed with the last write, or does not answer now
+            unconfirmed: !live && (destChoice.unconfirmed || (!box.boxReachable && !destChoice.saving)),
             recordingOn: recordingOn,
-            recordingLabel: recordingOn ? s.liveDestRec : s.liveDestRecOff,
-            note: !youtubeFeature
+            recordingLabel: recordingWhy ?? (recordingOn ? s.liveDestRec : s.liveDestRecOff),
+            recordingWhy: recordingWhy != null ? s.liveRecNoBoxPullStart : (recStopped ? s.liveRecordingStopped : null),
+            recordingEnabled:
+                recAvailable && canChoose && !busy && !_starting && (!live || _publisher is LiveRecordingControl) && !(lastOne && recordingOn),
+            recordingNote: !recAvailable
+                ? null
+                : (lastOne && recordingOn)
+                ? s.liveDestLastOne
+                : (live && _publisher is! LiveRecordingControl)
+                ? s.liveDestRecSwitchNotNow
+                : null,
+            pickNote: !live && destCount == 0 ? s.liveDestPickOne : null,
+            note: live || !youtubeFeature
                 ? null
                 : unknownYoutube
                 ? youtubeUnknownText(s, box.youtube.channel)
@@ -1479,7 +2288,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                 : (!signedIn ? s.liveDestNone : null),
             noteIsSkip: signedIn || unknownYoutube,
             // Unknown with no last good channel (a box never signed in, its cloud away): Sambung is still offered.
-            connectLabel: !signedIn && (!unknownYoutube || (box.youtube.channel ?? '').isEmpty) && canSettings
+            connectLabel: !live && !signedIn && (!unknownYoutube || (box.youtube.channel ?? '').isEmpty) && canSettings
                 ? s.liveDestLink
                 : null,
           )
@@ -1514,6 +2323,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               ),
             ),
             child: _SettingsLinks(
+              leading: const _TvShowSection(),
               cameraOn: source.camera.enabled,
               cameraName: camName,
               account: youtubeFeature && !live ? YoutubeAccountCard(box: box) : null,
@@ -1523,7 +2333,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
     final button = LiveActionButton(
       // our own stop keeps the quiet "Menghentikan siaran" until the box is done
-      phase: box.stopping ? PublisherPhase.stopping : _state.phase,
+      phase: box.stopping ? PublisherPhase.stopping : shown.phase,
+      // this device holds a session on the box though its publisher is not live (it failed, or the app was
+      // reopened): Berhenti, never Mula siaran (S7, B9)
+      sessionHeld: sessionHeld,
       onStart: canStart
           ? () => (youtubeChosen && block != null)
               ? _askTvOnly(_youtubeBlock(s, box, canSettings, asReason: true) ?? block)
@@ -1532,23 +2345,32 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       onStop: _confirmStop,
     );
 
+    // build 5: the 5 second test of every box microphone, on the start screen of a live the box pulls
+    final showMicTest = boxPulledAudio && !live && !readOnly && !heldBoxPulled && source.boxInputAvailable;
+    if (showMicTest && !_micTestAsked) {
+      _micTestAsked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final n = ref.read(boxMicTestProvider.notifier);
+        await n.loadDevices();
+        if (mounted) await n.test();
+      });
+    }
+    final Widget? micTest = showMicTest ? _MicTestSection(canPick: canSettings) : null;
+
     // ---- the audio card (rows, messages) ----
     Widget audioBody() => AudioCardBody(
       rows: rows,
       notices: audioNotices,
       canAdd: canAddAudio,
       onAdd: _openAdd,
-      onVolume: (id, v) => sourceNotifier.setVolume(id, v),
+      onVolume: (id, v) => ref.read(audioRowActionsProvider).volume(id, v, ctx.inputs),
       onRemove: (id) => sourceNotifier.remove(id),
       onMute: () => _publisher.setMuted(!_state.muted),
       onUseOnly: (id) => sourceNotifier.useOnly(id),
-      offsetBlock: canSettings && !readOnly
-          ? (row) => OffsetBlock(
-              ms: source.offsets[row.id] ?? 0,
-              onStep: (d) => _stepOffset(row.id, d),
-              onClap: () => _openClap(row.id),
-            )
-          : null,
+      onToggle: (id, on) => _inputToggle(id, on, ctx.inputs),
+      onLift: (id, on) => ref.read(audioRowActionsProvider).lift(id, on, ctx.inputs),
+      onRowMute: (id) => _rowMute(id, ctx.inputs),
     );
 
     final audioSum = audioSummary(view, ctx, info);
@@ -1562,13 +2384,32 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         ? (cam.reachable == false ? s.liveCamUnreachable(camName) : s.liveCamReady(camName))
         : (ipad ? liveSourceIpadCamera(lang) : liveSourcePhoneCamera(lang));
 
+    // Lane X: the camera's control row, only while the opt-in is on, the external camera is the picture, and this device
+    // may act on the live. The box refuses the call itself (404) when the opt-in is off.
+    final controlGateway = ref.read(gatewayProvider);
+    final Widget? cameraControlRow =
+        !readOnly && source.external && source.camera.offered && source.camera.control.enabled && controlGateway != null
+        ? CameraControlRow(
+            key: const ValueKey('live-camera-control'),
+            hasBrightness: source.camera.control.hasBrightness,
+            profile: source.camera.control.profile,
+            send: ({exposure, preset, resetPosition = false, aiTracking, applyProfile = false}) => controlGateway.controlLiveCamera(
+              exposure: exposure,
+              preset: preset,
+              resetPosition: resetPosition,
+              aiTracking: aiTracking,
+              applyProfile: applyProfile,
+            ),
+          )
+        : null;
+
     final idleSections = <Widget>[
       FoldSection(
         sectionKey: 'video',
         icon: Icons.videocam_rounded,
         title: liveSourceVideoTitle(lang),
         summary: DotSummary(videoTone, videoSummaryText),
-        open: _isOpen('video'),
+        open: _open['video'] ?? (!live && !readOnly),
         onToggle: () => _toggle('video'),
         child: VideoSourceBody(
           source: source,
@@ -1577,6 +2418,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           onPick: (k) async {
             await sourceNotifier.selectVideo(k);
           },
+          // "Video diambil oleh": the phone by default, the box by the admin's choice (a browser has no choice)
+          onPath: ipad ? null : (path) => unawaited(sourceNotifier.setVideoPath(path)),
           onOpenCamera: canSettings ? () => GoRouter.of(context).go(AppRoutes.liveSettingsFor('liveCamera')) : null,
         ),
       ),
@@ -1591,13 +2434,35 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         ),
         open: _isOpen('audio'),
         onToggle: () => _toggle('audio'),
-        child: audioBody(),
+        child: micTest == null
+            ? audioBody()
+            : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [micTest, audioBody()]),
       ),
       FoldSection(
         sectionKey: 'out',
         icon: Icons.tv_rounded,
         title: liveSectionOutputs(lang),
-        summary: Text(ipad ? liveSectionOutputsSummaryIpad(lang) : liveSectionOutputsSummaryPhone(lang)),
+        summary: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              liveSectionOutputsSummary(
+                lang,
+                screen: kioskFeature && kioskOn,
+                youtube: youtubeNow,
+                recording: recordingOn,
+                ipad: ipad,
+              ),
+              key: const ValueKey('live-out-summary'),
+            ),
+            if (!recAvailable)
+              Text(
+                liveSectionOutputsNoRecording(lang),
+                key: const ValueKey('live-out-summary-norec'),
+                style: Theme.of(context).textTheme.bodySmall!.copyWith(color: SurauColors.muted),
+              ),
+          ],
+        ),
         open: _isOpen('out'),
         onToggle: () => _toggle('out'),
         child: Column(
@@ -1621,9 +2486,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
     // ---- during a live (this device's or another's): the sources card ----
     final liveCamStatus = switch (_state.camera?.link) {
-      CameraLink.lost => ('Terputus', RowTone.off),
-      CameraLink.connecting => ('Menyambung semula', RowTone.warn),
-      _ => camBack ? ('Kembali', RowTone.ok) : ('Diterima', RowTone.ok),
+      CameraLink.lost => (liveCamLinkLost(lang), RowTone.off),
+      CameraLink.connecting => (liveCamLinkReconnecting(lang), RowTone.warn),
+      _ => camBack ? (liveCamLinkBack(lang), RowTone.ok) : (liveCamLinkReceived(lang), RowTone.ok),
     };
     final liveSources = (live || readOnly) && showMixer
         ? Card(
@@ -1631,8 +2496,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _CardHead(liveSourceVideoTitle(lang)),
-                if (view.external)
+                if (!boxPulledLive) _CardHead(liveSourceVideoTitle(lang)),
+                if (view.external && !boxPulledLive)
                   Padding(
                     padding: const EdgeInsetsDirectional.fromSTEB(20, 4, 16, 12),
                     child: Row(
@@ -1645,9 +2510,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                             children: [
                               Text(camName, style: Theme.of(context).textTheme.titleSmall),
                               Text(
-                                ipad
-                                    ? 'Ditarik oleh kotak MAXCOM'
-                                    : (camLost ? 'Gambar terakhir' : (view.camera.spec ?? '')),
+                                ipad || control
+                                    ? liveCamPulledByBox(lang)
+                                    : (camLost ? liveCamLastPicture(lang) : (view.camera.spec ?? '')),
                                 style: Theme.of(context).textTheme.bodySmall!.copyWith(color: SurauColors.muted),
                               ),
                             ],
@@ -1656,7 +2521,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                         ToneDot(liveCamStatus.$2),
                         const SizedBox(width: 6),
                         Text(
-                          ipad ? 'Diterima' : liveCamStatus.$1,
+                          ipad ? liveCamLinkReceived(lang) : liveCamStatus.$1,
                           style: Theme.of(context).textTheme.labelMedium!.copyWith(color: _toneInkOf(liveCamStatus.$2)),
                         ),
                       ],
@@ -1680,7 +2545,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                   icon: const Icon(Icons.smartphone_rounded),
                   label: Text(ipad ? liveSwitchToIpad(lang) : liveSwitchToPhone(lang)),
                 ),
-              if (!source.external && _startedExternal && source.camera.offered)
+              if (!source.external && source.startedExternal && source.camera.offered)
                 OutlinedButton.icon(
                   key: const ValueKey('live-switch-external'),
                   onPressed: () => sourceNotifier.selectVideo(VideoSourceKind.external),
@@ -1702,7 +2567,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
     // ---- the action area ----
     final starterName = other?.starter ?? '';
-    final Widget action = readOnly
+    final Widget action = readOnly && startedPulledLive && mayStopOther
+        // K1: any holder of live control may stop a live the box pulls; the sheet names who started it (U6)
+        ? FilledButton.icon(
+            key: const ValueKey('live-stop-other'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(60),
+              backgroundColor: LiveColors.onAir,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: box.stopping ? null : () => _confirmStopOther(other),
+            icon: const Icon(Icons.stop_rounded, size: 28),
+            label: Text(s.liveStop),
+          )
+        : readOnly
         ? Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1741,10 +2619,24 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [destinations, const SizedBox(height: 10), button],
+                  children: [
+                    destinations,
+                    if (dest?.pickNote != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          dest!.pickNote!,
+                          key: const ValueKey('live-dest-pick-one'),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall!.copyWith(color: LiveColors.waitingInk),
+                        ),
+                      ),
+                    const SizedBox(height: 10),
+                    button,
+                  ],
                 ));
 
-    if (ref.watch(liveFoldedProvider)) {
+    if (ref.watch(liveFoldedProvider) && !boxPulledLive) {
       // The preview alone, edge to edge inside the safe areas: no title bar
       // (and the shell hides its navigation). Back unfolds first.
       return PopScope(
@@ -1756,8 +2648,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           backgroundColor: SurauColors.glass,
           body: SafeArea(
             child: LiveFoldedView(
-              picture: _publisher.preview(context),
-              state: _state,
+              picture: ownPicture,
+              state: shown,
               legs: [
                 if (kioskFeature) FoldedLeg('kiosk', s.liveKiosk, kioskTone),
                 if (youtubeFeature) FoldedLeg('youtube', s.liveYoutube, ytTone),
@@ -1765,7 +2657,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                   FoldedLeg(
                     'recording',
                     s.liveRecording,
-                    live && rec.on ? LightTone.onAir : LightTone.idle,
+                    live && rec.active ? LightTone.onAir : LightTone.idle,
                   ),
               ],
               onFlip: _state.phase == PublisherPhase.idle || source.external
@@ -1783,17 +2675,23 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       );
     }
 
-    final idle = !live && !readOnly;
+    final idle = !live && !readOnly && !heldBoxPulled;
     List<Widget> controls(double gap) => [
       picker,
       SizedBox(height: gap),
       if (idle) ...[
-        for (final w in idleSections) ...[w, SizedBox(height: gap)],
+        for (final (i, w) in idleSections.indexed) ...[
+          w,
+          SizedBox(height: gap),
+          // the control row sits right under "Sumber video"
+          if (i == 0 && cameraControlRow != null) ...[cameraControlRow, SizedBox(height: gap)],
+        ],
       ] else ...[
         ?liveSources,
         if (liveSources != null) SizedBox(height: gap),
         if (switchRow != null) ...[switchRow, SizedBox(height: gap)],
-        outputs,
+        if (cameraControlRow != null) ...[cameraControlRow, SizedBox(height: gap)],
+        if (!boxPulledLive) outputs,
         if (noticeInput != null || boxNotice != null) ...[
           SizedBox(height: gap),
           OutlinedButton.icon(
@@ -1872,6 +2770,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 }
 
+/// "sejak 9:05 PTG": when the camera was taken, in the phone's own time; empty words when the box did not say.
+String _sinceText(BuildContext context, DateTime? since) =>
+    since == null ? '' : TimeOfDay.fromDateTime(since.toLocal()).format(context);
+
 Color _toneInkOf(RowTone t) => switch (t) {
   RowTone.ok => LiveColors.healthyInk,
   RowTone.warn => LiveColors.waitingInk,
@@ -1897,15 +2799,24 @@ enum _DestState {
 /// Everything the strip and its sheet show (a record: equal values publish no change to an open sheet).
 typedef _Dest = ({
   bool kiosk,
+  bool kioskOn,
+  bool kioskEnabled,
+  String? kioskNote,
+  bool live,
+  bool recordingEnabled,
+  String? recordingNote,
+  String? pickNote,
   bool youtube,
   _DestState youtubeState,
   bool youtubeOn,
   String youtubeLabel,
   bool youtubeEnabled,
   bool wanted,
-  bool boxKnows,
+  bool saving,
+  bool unconfirmed,
   bool recordingOn,
   String recordingLabel,
+  String? recordingWhy,
   String? note,
   bool noteIsSkip,
   String? connectLabel,
@@ -1934,9 +2845,9 @@ class _DestStrip extends StatelessWidget {
           key: const ValueKey('live-dest-kiosk'),
           icon: Icons.desktop_windows_outlined,
           label: s.liveDestShortKiosk,
-          spoken: s.liveKiosk,
+          spoken: dest.kioskOn ? s.liveKiosk : s.liveDestKioskLabelOff,
           hint: hint,
-          state: _DestState.on,
+          state: dest.kioskOn ? _DestState.on : _DestState.off,
           onTap: onOpen,
         ),
       if (dest.youtube)
@@ -1944,9 +2855,10 @@ class _DestStrip extends StatelessWidget {
           key: const ValueKey('live-dest-youtube'),
           icon: Icons.smart_display_rounded,
           label: s.liveDestShortYoutube,
-          spoken: ytSpoken,
+          spoken: dest.saving ? '$ytSpoken. ${s.liveDestSaving}' : ytSpoken,
           hint: hint,
           state: dest.youtubeState,
+          saving: dest.saving,
           onTap: onOpen,
         ),
       _DestPill(
@@ -1982,6 +2894,7 @@ class _DestPill extends StatelessWidget {
     required this.hint,
     required this.state,
     required this.onTap,
+    this.saving = false,
   });
 
   final IconData icon;
@@ -1990,6 +2903,9 @@ class _DestPill extends StatelessWidget {
   final String hint;
   final _DestState state;
   final VoidCallback onTap;
+
+  /// A write of this choice is on its way to the box: a small progress mark in place of the badge.
+  final bool saving;
 
   @override
   Widget build(BuildContext context) {
@@ -2018,7 +2934,7 @@ class _DestPill extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _BadgedIcon(icon: icon, color: ink, state: state),
+                  _BadgedIcon(icon: icon, color: ink, state: state, saving: saving),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
@@ -2041,11 +2957,12 @@ class _DestPill extends StatelessWidget {
 
 /// A 22 px icon with the 16 px status badge on its top end corner.
 class _BadgedIcon extends StatelessWidget {
-  const _BadgedIcon({required this.icon, required this.color, required this.state});
+  const _BadgedIcon({required this.icon, required this.color, required this.state, this.saving = false});
 
   final IconData icon;
   final Color color;
   final _DestState state;
+  final bool saving;
 
   @override
   Widget build(BuildContext context) {
@@ -2071,18 +2988,27 @@ class _BadgedIcon extends StatelessWidget {
           PositionedDirectional(
             end: -7,
             top: -6,
-            child: Container(
-              key: ValueKey('live-dest-badge-${state.name}'),
-              width: 16,
-              height: 16,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: bg,
-                shape: BoxShape.circle,
-                border: Border.all(color: SurauColors.card, width: 2),
-              ),
-              child: glyph,
-            ),
+            child: saving
+                ? Container(
+                    key: const ValueKey('live-dest-saving'),
+                    width: 16,
+                    height: 16,
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(color: SurauColors.card, shape: BoxShape.circle),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                  )
+                : Container(
+                    key: ValueKey('live-dest-badge-${state.name}'),
+                    width: 16,
+                    height: 16,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: bg,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: SurauColors.card, width: 2),
+                    ),
+                    child: glyph,
+                  ),
           ),
         ],
       ),
@@ -2092,10 +3018,18 @@ class _BadgedIcon extends StatelessWidget {
 
 /// The sheet behind the strip: each destination's full text, the YouTube switch, the note and Sambung.
 class _DestSheet extends StatelessWidget {
-  const _DestSheet({required this.dest, required this.onYoutube, required this.onConnect});
+  const _DestSheet({
+    required this.dest,
+    required this.onYoutube,
+    required this.onConnect,
+    required this.onKiosk,
+    required this.onRecording,
+  });
 
   final _Dest dest;
   final ValueChanged<bool>? onYoutube;
+  final ValueChanged<bool>? onKiosk;
+  final ValueChanged<bool>? onRecording;
   final VoidCallback onConnect;
 
   @override
@@ -2107,13 +3041,47 @@ class _DestSheet extends StatelessWidget {
     final noteInk = dest.noteIsSkip || warnNote ? LiveColors.waitingInk : SurauColors.muted;
     final blocks = <Widget>[
       if (dest.kiosk)
-        _DestSheetRow(
-          icon: Icons.desktop_windows_outlined,
-          title: s.liveKiosk,
-          subtitle: s.liveKioskHint,
-          trailing: const _DestTick(on: true),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            MergeSemantics(
+              child: _DestSheetRow(
+                icon: Icons.desktop_windows_outlined,
+                title: s.liveKiosk,
+                subtitle: dest.kioskOn ? s.liveKioskHint : s.liveDestKioskOffSub,
+                trailing: SizedBox(
+                  width: 60,
+                  height: 48,
+                  child: Center(
+                    child: Switch(
+                      key: const ValueKey('live-dest-kiosk-switch'),
+                      value: dest.kioskOn,
+                      onChanged: dest.kioskEnabled ? onKiosk : null,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (dest.kioskNote != null)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 58, bottom: 10),
+                child: Text(
+                  dest.kioskNote!,
+                  key: const ValueKey('live-dest-kiosk-note'),
+                  style: text.bodySmall!.copyWith(color: SurauColors.muted),
+                ),
+              ),
+          ],
         ),
-      if (dest.youtube)
+      if (dest.youtube && dest.live)
+        // YouTube keeps the way it works during a live: it can be turned on (Siarkan ke YouTube), never off here.
+        _DestSheetRow(
+          icon: Icons.smart_display_rounded,
+          title: dest.youtubeLabel,
+          subtitle: s.liveDestYoutubeLive,
+          trailing: _DestTick(on: dest.youtubeOn),
+        ),
+      if (dest.youtube && !dest.live)
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -2171,13 +3139,58 @@ class _DestSheet extends StatelessWidget {
                   ),
                 ),
               ),
+            if (dest.saving || dest.unconfirmed)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 58, bottom: 10),
+                child: Text(
+                  dest.saving ? s.liveDestSaving : s.liveDestUnconfirmed,
+                  key: ValueKey(dest.saving ? 'live-dest-saving-line' : 'live-dest-unconfirmed'),
+                  style: text.bodySmall!.copyWith(color: dest.saving ? SurauColors.muted : LiveColors.waitingInk),
+                ),
+              ),
+            // The memory is this box's own: each MAXCOM Kiosk Box has its own YouTube channel (operator decision).
+            Padding(
+              padding: const EdgeInsetsDirectional.only(start: 58, bottom: 10),
+              child: Text(
+                s.liveDestPerBoxNote,
+                key: const ValueKey('live-dest-per-box'),
+                style: text.bodySmall!.copyWith(color: SurauColors.muted),
+              ),
+            ),
           ],
         ),
-      _DestSheetRow(
-        icon: Icons.radio_button_checked_rounded,
-        title: dest.recordingLabel,
-        subtitle: dest.recordingOn ? s.liveRecordingWithLive : null,
-        trailing: _DestTick(on: dest.recordingOn),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          MergeSemantics(
+            child: _DestSheetRow(
+              icon: Icons.radio_button_checked_rounded,
+              title: dest.recordingLabel,
+              // not offered with the box pulling the camera, and the sheet says why
+              subtitle: dest.recordingWhy ?? (dest.recordingOn ? s.liveRecordingWithLive : null),
+              trailing: SizedBox(
+                width: 60,
+                height: 48,
+                child: Center(
+                  child: Switch(
+                    key: const ValueKey('live-dest-recording-switch'),
+                    value: dest.recordingOn,
+                    onChanged: dest.recordingEnabled ? onRecording : null,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (dest.recordingNote != null)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(start: 58, bottom: 10),
+              child: Text(
+                dest.recordingNote!,
+                key: const ValueKey('live-dest-recording-note'),
+                style: text.bodySmall!.copyWith(color: SurauColors.muted),
+              ),
+            ),
+        ],
       ),
     ];
     return SafeArea(
@@ -2211,6 +3224,15 @@ class _DestSheet extends StatelessWidget {
                 ),
                 child: blocks[i],
               ),
+            if (dest.pickNote != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  dest.pickNote!,
+                  key: const ValueKey('live-dest-pick-one-sheet'),
+                  style: text.bodySmall!.copyWith(color: LiveColors.waitingInk),
+                ),
+              ),
             const SizedBox(height: 10),
             OutlinedButton(
               key: const ValueKey('live-dest-close'),
@@ -2229,6 +3251,26 @@ class _DestSheet extends StatelessWidget {
     );
   }
 }
+
+/// The hosts "Lihat di YouTube" may open.
+const _watchHosts = {'youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'};
+
+/// The box's watch link as a link that may be opened: a secure address on YouTube's own hosts, nothing else (the link
+/// comes from the box's word and is never trusted to be a web page).
+@visibleForTesting
+Uri? watchUri(String? url) {
+  final uri = url == null ? null : Uri.tryParse(url.trim());
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return null;
+  if (!_watchHosts.contains(uri.host.toLowerCase())) return null;
+  return uri;
+}
+
+/// The one line above the controls of a running live: where it goes now. Skrin off is said, not hidden.
+///
+/// Null when the screen and YouTube are both off and this device cannot record: "recording only" would be wrong.
+String? _liveSummary(S s, {required bool kiosk, required bool youtube, required bool recording}) => kiosk
+    ? (youtube ? s.liveDestLive2 : s.liveDestLive1)
+    : (youtube ? s.liveDestLiveYt : (recording ? s.liveDestLiveRec : null));
 
 class _DestSheetRow extends StatelessWidget {
   const _DestSheetRow({required this.icon, required this.title, this.subtitle, required this.trailing});
@@ -2308,7 +3350,10 @@ class _CardHead extends StatelessWidget {
 
 /// "Tetapan siaran": where the holder of `live:settings` changes the camera, the screen, YouTube and the recording.
 class _SettingsLinks extends StatelessWidget {
-  const _SettingsLinks({required this.cameraOn, required this.cameraName, this.account});
+  const _SettingsLinks({required this.cameraOn, required this.cameraName, this.account, this.leading});
+
+  /// The first item of the block (the card "Paparkan siaran langsung").
+  final Widget? leading;
 
   final bool cameraOn;
   final String cameraName;
@@ -2349,6 +3394,7 @@ class _SettingsLinks extends StatelessWidget {
 
     return Column(
       children: [
+        ?leading,
         row(
           'liveCamera',
           Icons.videocam_rounded,
@@ -2880,7 +3926,8 @@ class YoutubeAccountCard extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         key: const ValueKey('live-youtube-signout-confirm'),
         title: Text(s.liveSignOutConfirmTitle),
-        content: Text(s.liveSignOutConfirmBody),
+        // Y5: the sign-out withdraws the access at Google, so every other box on the same account is signed out too
+        content: Text('${s.liveSignOutConfirmBody}\n\n${s.liveYoutubeSignOutOtherBoxes}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -2901,7 +3948,7 @@ class YoutubeAccountCard extends ConsumerWidget {
 /// The collapsed "Tetapan siaran" line: the connected channel with a check mark, else the plain summary.
 Widget _settingsSummary(S s, AppLang lang, YoutubeAccount yt, bool cameraOn) {
   if (!yt.signedIn) return Text(liveSectionSettingsSummary(lang, cameraOn));
-  final camera = (cameraOn ? liveSettingsCameraOn(lang) : liveSettingsCameraOff(lang)).toLowerCase();
+  final camera = liveSettingsCameraShort(lang, cameraOn);
   return Row(
     key: const ValueKey('live-settings-summary-connected'),
     children: [
@@ -2934,7 +3981,11 @@ class LiveSummarySheet extends StatelessWidget {
     this.onCatchUp,
     this.onShareNotice,
     this.recordingNotes = const [],
+    this.noRecordingWhy,
   });
+
+  /// Why this live was not recorded on the phone (the box pulled the camera): shown in place of the recording row.
+  final String? noRecordingWhy;
 
   final int durationSec;
 
@@ -3045,6 +4096,16 @@ class LiveSummarySheet extends StatelessWidget {
                     ),
                   ],
                 ),
+              if (noRecordingWhy != null)
+                Row(
+                  key: const ValueKey('live-rec-none-why'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded, size: 20, color: SurauColors.teal),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(noRecordingWhy!, style: text.bodyMedium)),
+                  ],
+                ),
               for (final k in recordingNotes) ...[
                 const SizedBox(height: 12),
                 Row(
@@ -3052,7 +4113,7 @@ class LiveSummarySheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
-                      const {'joinFailed', 'joinNeedsWifi', 'badPiece', 'joinedUntracked'}.contains(k)
+                      const {'joinFailed', 'joinNeedsWifi', 'badPiece', 'joinedUntracked', 'noSpace'}.contains(k)
                           ? Icons.warning_amber_rounded
                           : (k == 'joined' ? Icons.merge_type_rounded : Icons.info_outline_rounded),
                       size: 20,
@@ -3066,6 +4127,7 @@ class LiveSummarySheet extends StatelessWidget {
                           'joinFailed' => s.liveRecJoinFailedNote,
                           'joinNeedsWifi' => s.liveRecJoinNeedsWifiNote,
                           'badPiece' => s.liveRecBadPieceNote,
+                          'noSpace' => s.liveRecNoSpaceNote,
                           'joinedUntracked' => s.liveRecJoinedUntrackedNote,
                           'askLater' => s.liveRecAskLaterNote,
                           _ => s.liveRecKeptUnconfirmedNote,
@@ -3308,9 +4370,116 @@ List<String> recordingNotesFor(JoinOutcome? join, bool? covered, {required bool 
       switch (join.error) {
         'box_away' => 'joinNeedsWifi',
         'bad_piece' => 'badPiece',
+        'no_space' => 'noSpace',
         _ => 'joinFailed',
       },
     if (!failed && !web && covered == true) 'askLater',
     if (!failed && !web && covered == false) 'keptUnconfirmed',
   ];
+}
+
+/// "Paparkan siaran langsung" (build 5): one switch per box in Tetapan siaran. A box that is a follower shows none; a box
+/// without the route (a build 4 box) hides the card for the session.
+class _TvShowSection extends ConsumerWidget {
+  const _TvShowSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tv = ref.watch(liveTvShowProvider);
+    if (tv.unavailable) return const SizedBox.shrink();
+    final s = S.of(context);
+    final data = ref.watch(screensDataProvider).value;
+    if (data != null && data.isFollower) return const SizedBox.shrink();
+    final settings = ref.watch(settingsProvider).value?.value;
+    final box = ref.watch(liveBoxProvider);
+    final enrolled = ref.watch(enrolledBoxProvider);
+    final listed = data == null || data.lanOnly || data.olderBox ? const <ScreenRowData>[] : [for (final r in data.boxes) if (!r.removed) r];
+    // the list could not be read: the one row `self` with the name the app already has
+    final boxes = listed.isEmpty
+        ? [ScreenRowData(kind: ScreenKind.main, id: selfTvId, name: enrolled?.name ?? '')]
+        : listed;
+    final cpu = box.cpuPercent;
+    final last = box.lastLiveCpuPercent;
+    final rows = [
+      for (final r in boxes)
+        TvShowRow(
+          tvId: r.id,
+          name: r.name.isEmpty ? (enrolled?.name ?? 'MAXCOM') : r.name,
+          kindLabel: r.kind == ScreenKind.main ? s.tvsMainBox : s.tvsFollowerBox,
+          server: r.kind == ScreenKind.main,
+          show: tv.pending[r.id] ?? (tvProfileOf(settings, r.id).show != false),
+          cpuLine: r.kind == ScreenKind.main
+              ? (cpu != null ? s.liveTvShowCpuNow(cpu) : (last != null ? s.liveTvShowCpuLast(last) : null))
+              : null,
+          busy: tv.busy.contains(r.id),
+        ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: LiveTvShowCard(
+        rows: rows,
+        texts: TvShowTexts(
+          title: s.liveTvShowTitle,
+          hint: s.liveTvShowHint,
+          serverBadge: s.liveTvShowServer,
+          offLine: s.liveTvShowOff,
+          allOffNote: s.liveTvShowAllOff,
+          switchLabel: s.liveTvShowSwitch,
+        ),
+        onChanged: (tvId, show) async {
+          final ok = await ref.read(liveTvShowProvider.notifier).set(tvId, show);
+          if (!ok && context.mounted && !ref.read(liveTvShowProvider).unavailable) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(S.of(context).liveTvShowFailed)));
+          }
+        },
+      ),
+    );
+  }
+}
+
+/// The 5 second test of every box microphone on the start screen (build 5). Never blocks Start.
+class _MicTestSection extends ConsumerWidget {
+  const _MicTestSection({required this.canPick});
+
+  final bool canPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final st = ref.watch(boxMicTestProvider);
+    if (st.testUnavailable || st.devices.isEmpty) return const SizedBox.shrink();
+    final s = S.of(context);
+    final notifier = ref.read(boxMicTestProvider.notifier);
+    MicTestState stateOf(BoxMicDevice d) {
+      if (st.testing) return MicTestState.testing;
+      return switch (d.code) {
+        'ok' => MicTestState.sound,
+        'silent' => MicTestState.silent,
+        null => MicTestState.none,
+        _ => MicTestState.failed,
+      };
+    }
+
+    final at = st.testedAt;
+    return BoxMicTestCard(
+      rows: [
+        for (final d in st.devices)
+          MicTestRow(name: d.name, selected: d.selected, state: stateOf(d), meter: micMeterOf(d.meanDb)),
+      ],
+      texts: MicTestTexts(
+        hint: s.liveMicTestHint,
+        testing: s.liveMicTestBusy,
+        sound: s.liveMicTestSound,
+        silent: s.liveMicTestSilent,
+        failed: s.liveMicTestFailed,
+        none: s.liveMicTestNone,
+        again: s.liveMicTestAgain,
+        testedAt: at == null ? null : s.liveMicTestAt(TimeOfDay.fromDateTime(at.toLocal()).format(context)),
+        silentTitle: s.liveMicTestSilentTitle,
+        silentBody: s.liveMicTestSilentBody,
+      ),
+      testing: st.testing,
+      onPick: canPick ? (name) => unawaited(notifier.pick(name)) : null,
+      onTestAgain: () => unawaited(notifier.test()),
+    );
+  }
 }

@@ -1,8 +1,13 @@
 // A microphone plugged into the publishing device (a USB or Lightning mic on
-// the iPad, a USB or Bluetooth mic on an Android phone) is picked up by
+// the iPad, a USB or wired mic on an Android phone) is picked up by
 // itself: the device microphone source uses it and is switched on the first
 // time it is seen (task W7). A microphone seen before is not switched on
 // again; one that was in use, unplugged and plugged back is used again.
+// A Bluetooth microphone (2026.11.15) is never switched on by itself: it is
+// telephone quality and holds the phone's call link, so it appears as its own
+// row, off, and the person turns it on (the row says when the permission is
+// missing). Every input met while the screen is open is kept in [MicAutoState.inputs]
+// so the Audio card can show one row each, a missing one greyed.
 //
 // How the change is noticed: the browser fires `devicechange` (and the list
 // is read again every 10 s); Android has no Dart callback, so the Live tab
@@ -36,9 +41,12 @@ class MicInfo {
   final String deviceId;
   final String label;
 
-  /// Android: `builtin` or `external`, a neutral kind the app words in its own language when the system gave no
-  /// product name. Empty where the platform gives a label (the browser).
+  /// Android: `builtin`, `external` or `bluetooth`, a neutral kind the app words in its own language when the
+  /// system gave no product name. Empty where the platform gives a label (the browser).
   final String kind;
+
+  /// A Bluetooth headset microphone (telephone quality, never picked by itself).
+  bool get bluetooth => kind == 'bluetooth';
 
   /// What "seen before" is judged by: the id, else the label.
   String get key => deviceId.isNotEmpty ? deviceId : label.trim();
@@ -49,10 +57,15 @@ class MicInfo {
     return switch (kind) {
       'builtin' => liveMicBuiltinName(l),
       'external' => liveMicExternalName(l),
+      'bluetooth' => liveMicBluetoothName(l),
       _ => null,
     };
   }
 }
+
+/// The browser gives a label only: a label that says Bluetooth is a Bluetooth microphone (telephone quality, never
+/// switched on by itself, as on the phone). Anything else keeps the empty kind.
+String kindFromBrowserLabel(String label) => label.toLowerCase().contains('bluetooth') ? 'bluetooth' : '';
 
 abstract class MicDevices {
   Future<List<MicInfo>> list();
@@ -101,7 +114,7 @@ class ChannelMicDevices implements MicDevices {
           MicInfo(
             deviceId: '${m['id']}',
             label: m['name'] is String ? m['name'] as String : '',
-            kind: m['kind'] == 'builtin' || m['kind'] == 'external' ? m['kind'] as String : '',
+            kind: m['kind'] == 'builtin' || m['kind'] == 'external' || m['kind'] == 'bluetooth' ? m['kind'] as String : '',
           ),
     ];
   }
@@ -115,6 +128,9 @@ abstract class SeenMicsStore {
 }
 
 const int seenMicsCap = 40;
+
+/// How many inputs the Audio card remembers (a greyed one is dropped first when there are more).
+const int knownInputsCap = 12;
 
 class PrefsSeenMicsStore implements SeenMicsStore {
   const PrefsSeenMicsStore();
@@ -165,8 +181,18 @@ class MicToast {
   final bool undo;
 }
 
+const Object _keep = Object();
+
 class MicAutoState {
-  const MicAutoState({this.mic, this.toast, this.trrsHint = false});
+  const MicAutoState({
+    this.mic,
+    this.toast,
+    this.trrsHint = false,
+    this.inputs = const [],
+    this.present = const {},
+    this.chosenKey,
+    this.denied = const {},
+  });
 
   /// Headphones are plugged in but no microphone: the person needs a 4-pole (TRRS) plug.
   final bool trrsHint;
@@ -175,7 +201,49 @@ class MicAutoState {
   final MicInfo? mic;
   final MicToast? toast;
 
+  /// Every input met while the screen was open, in the order they were met (small, capped).
+  final List<MicInfo> inputs;
+
+  /// The keys of [inputs] attached now; the others are greyed.
+  final Set<String> present;
+
+  /// The input the person (or the first-plug rule) chose, built-in ones too; null until one was chosen.
+  final String? chosenKey;
+
+  /// Bluetooth inputs whose permission was refused at the last try: the row says so.
+  final Set<String> denied;
+
   String? get label => mic?.label;
+
+  MicAutoState copyWith({
+    Object? mic = _keep,
+    Object? toast = _keep,
+    bool? trrsHint,
+    List<MicInfo>? inputs,
+    Set<String>? present,
+    Object? chosenKey = _keep,
+    Set<String>? denied,
+  }) => MicAutoState(
+    mic: identical(mic, _keep) ? this.mic : mic as MicInfo?,
+    toast: identical(toast, _keep) ? this.toast : toast as MicToast?,
+    trrsHint: trrsHint ?? this.trrsHint,
+    inputs: inputs ?? this.inputs,
+    present: present ?? this.present,
+    chosenKey: identical(chosenKey, _keep) ? this.chosenKey : chosenKey as String?,
+    denied: denied ?? this.denied,
+  );
+}
+
+/// Which input the sound comes from: the one chosen, else the one the system routed, else the plugged-in one, else
+/// the device's own (the first built-in), else the first. Null when there is no input listed.
+String? activeInputKey(List<MicInfo> inputs, {String? chosenKey, String? routedId, String? micKey}) {
+  bool has(String? k) => k != null && inputs.any((m) => m.key == k);
+  if (has(chosenKey)) return chosenKey;
+  if (has(routedId)) return routedId;
+  if (has(micKey)) return micKey;
+  final own = inputs.where((m) => m.kind == 'builtin');
+  if (own.isNotEmpty) return own.first.key;
+  return inputs.isEmpty ? null : inputs.first.key;
 }
 
 class _Undo {
@@ -261,7 +329,12 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     final list = byKey.values.toList();
     await _trrs(dev, list);
     // no microphone permission yet: the browser gives empty labels. Wait.
-    if (list.isEmpty || list.any((m) => m.label.trim().isEmpty && m.kind.isEmpty)) return;
+    if (list.isEmpty) {
+      _remember(const []);
+      return;
+    }
+    if (list.any((m) => m.label.trim().isEmpty && m.kind.isEmpty)) return;
+    _remember(list);
     final store = ref.read(seenMicsStoreProvider);
     var seen = _seen ??= await store.load();
     if (seen == null) {
@@ -278,17 +351,30 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
       for (final m in list)
         if (!seen.contains(m.key)) m,
     ];
-    if (fresh.isNotEmpty) {
+    // A Bluetooth microphone is never taken by itself: it is only marked as met, its row stays off.
+    final fromBluetooth = [
+      for (final m in fresh)
+        if (m.bluetooth) m.key,
+    ];
+    final auto = [
+      for (final m in fresh)
+        if (!m.bluetooth) m,
+    ];
+    if (fromBluetooth.isNotEmpty) {
+      seen = _seen = _capped([...seen, ...fromBluetooth]);
+      await store.save(seen);
+    }
+    if (auto.isNotEmpty) {
       // A mic counts as seen only after it was used: one that could not be
       // opened (once more after a short wait) is tried again at the next read.
-      final pick = fresh.last;
+      final pick = auto.last;
       var used = await _use(pick, announce: true);
       if (!used && _running) {
         await Future<void>.delayed(ref.read(micRetryDelayProvider));
         if (_running) used = await _use(pick, announce: true);
       }
       if (used) {
-        seen = _seen = _capped([...seen, for (final m in fresh) m.key]);
+        seen = _seen = _capped([...seen, for (final m in auto) m.key]);
         await store.save(seen);
       }
       return;
@@ -300,10 +386,62 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     }
   }
 
+  /// Keeps every input met while the screen is open (so a device that went away stays as a greyed row) and which
+  /// of them are attached now.
+  void _remember(List<MicInfo> list) {
+    final known = [...state.inputs];
+    for (final m in list) {
+      final i = known.indexWhere((k) => k.key == m.key);
+      if (i < 0) {
+        known.add(m);
+      } else if (known[i].label != m.label || known[i].kind != m.kind) {
+        known[i] = m;
+      }
+    }
+    final present = {for (final m in list) m.key};
+    // small and capped: the oldest absent ones go first
+    while (known.length > knownInputsCap) {
+      final gone = known.indexWhere((k) => !present.contains(k.key));
+      if (gone < 0) break;
+      known.removeAt(gone);
+    }
+    if (_sameInputs(known, state.inputs) && setEquals(present, state.present)) return;
+    state = state.copyWith(inputs: known, present: present);
+  }
+
+  static bool _sameInputs(List<MicInfo> a, List<MicInfo> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].key != b[i].key || a[i].label != b[i].label || a[i].kind != b[i].kind) return false;
+    }
+    return true;
+  }
+
+  /// The person turns an input on (a row's switch): the sound comes from it from now on. False when it could not
+  /// be taken (a Bluetooth microphone without its permission is remembered, the row says so; the live goes on).
+  Future<bool> chooseInput(MicInfo m) async {
+    final ctl = _control;
+    if (ctl != null) {
+      final id = m.kind == 'builtin' ? ctl.ownMicrophoneId : m.deviceId;
+      if (!await ctl.setMicrophone(id)) {
+        if (m.bluetooth) state = state.copyWith(denied: {...state.denied, m.key});
+        return false;
+      }
+    }
+    _undo = null;
+    _returning = null;
+    state = state.copyWith(
+      mic: m.kind == 'builtin' ? null : m,
+      chosenKey: m.key,
+      denied: {...state.denied}..remove(m.key),
+    );
+    return true;
+  }
+
   /// Headphones without a microphone seen and no external microphone listed: say the plug must be 4-pole (TRRS).
   Future<void> _trrs(MicDevices dev, List<MicInfo> list) async {
     final hint = list.every((m) => m.kind != 'external') && await dev.headphonesWithoutMic();
-    if (hint != state.trrsHint) state = MicAutoState(mic: state.mic, toast: state.toast, trrsHint: hint);
+    if (hint != state.trrsHint) state = state.copyWith(trrsHint: hint);
   }
 
   List<String> _capped(List<String> keys) => keys.length <= seenMicsCap ? keys : keys.sublist(keys.length - seenMicsCap);
@@ -314,17 +452,16 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     final ctl = _control;
     if (ctl != null && !await ctl.setMicrophone(mic.deviceId)) return false;
     final prev = state.mic;
-    state = MicAutoState(mic: mic, toast: state.toast, trrsHint: state.trrsHint);
+    state = state.copyWith(mic: mic, chosenKey: mic.key);
     if (!announce) return true;
     final wasOff = ref.read(liveSourceProvider).external && !before.enabled;
     if (wasOff) await src.setDeviceMic(const AudioSourceMix(enabled: true, volume: 100));
     // Android: the system chose the microphone, only the mix can be undone
     final canUndo = ctl != null || wasOff;
     _undo = canUndo ? _Undo(prev, wasOff ? before : null) : null;
-    state = MicAutoState(
+    state = state.copyWith(
       mic: mic,
       toast: MicToast(++_seq, MicToastKind.added, mic.label, undo: canUndo, micKind: mic.kind),
-      trrsHint: state.trrsHint,
     );
     return true;
   }
@@ -333,7 +470,11 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     _returning = gone;
     _undo = null;
     await _control?.setMicrophone(null);
-    state = MicAutoState(toast: MicToast(++_seq, MicToastKind.unplugged, gone.label, micKind: gone.kind), trrsHint: state.trrsHint);
+    state = state.copyWith(
+      mic: null,
+      chosenKey: null,
+      toast: MicToast(++_seq, MicToastKind.unplugged, gone.label, micKind: gone.kind),
+    );
   }
 
   /// "Batal": back to the microphone and the on or off state before; the
@@ -345,7 +486,7 @@ class MicAutoNotifier extends Notifier<MicAutoState> {
     final ctl = _control;
     // Android: "own" keeps the device microphone chosen (null would pick the plugged-in one again)
     if (ctl != null) await ctl.setMicrophone(u.mic?.deviceId ?? ctl.ownMicrophoneId);
-    state = MicAutoState(mic: u.mic, trrsHint: state.trrsHint);
+    state = state.copyWith(mic: u.mic, toast: null, chosenKey: u.mic?.key);
     final m = u.mix;
     if (m != null) await ref.read(liveSourceProvider.notifier).setDeviceMic(m);
   }

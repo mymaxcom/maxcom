@@ -43,6 +43,12 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // O12: a live or a recording keeps the screen on, whichever app screen is showing.
+        LiveChannel.reapplyScreenOn(this)
+    }
+
     override fun onPause() {
         Diag.log("activity_pause", "finishing=$isFinishing")
         super.onPause()

@@ -116,7 +116,7 @@ class BoxDoctor(
 
     private fun certDays(): DoctorLine {
         val f = paths.leafCert
-        if (!f.isFile || f.length() > MAX_CERT) return DoctorLine(false, "Pensijil kotak tiada.")
+        if (!f.isFile || f.length() > MAX_CERT) return DoctorLine(false, "Pensijil ${FollowerTexts.BOX_TERM} tiada.")
         val cert = CertificateFactory.getInstance("X.509").generateCertificate(f.readBytes().inputStream()) as X509Certificate
         return DoctorReport.certDays(Duration.between(now(), cert.notAfter.toInstant()).toDays())
     }
@@ -156,7 +156,7 @@ class BoxDoctor(
         val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         val info = context.packageManager.resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo
         return if (info?.packageName == context.packageName) DoctorLine(true, "MAXCOM ialah aplikasi utama.")
-        else DoctorLine(false, "MAXCOM bukan aplikasi utama; kotak tidak akan membuka MAXCOM sendiri selepas dihidupkan.")
+        else DoctorLine(false, "MAXCOM bukan aplikasi utama; ${FollowerTexts.BOX_TERM} tidak akan membuka MAXCOM sendiri selepas dihidupkan.")
     }
 
     /** The warmest readable thermal zone, or null when none can be read. Over 85 C fails. */

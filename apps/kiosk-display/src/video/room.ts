@@ -1,4 +1,4 @@
-import { DAY_KEYS, buildDayIntervals, firstAzanPlan, instantOf, klWeekday, dateOf, tzOf } from '@surau/core';
+import { DAY_KEYS, buildDayIntervals, firstAzanPlan, instantOf, klWeekday, dateOf, tzOf, zikirStarts } from '@surau/core';
 import type { PrayerDay, Settings, TilawahSlot } from '@surau/core';
 
 const MIN = 60_000;
@@ -6,17 +6,23 @@ const MIN = 60_000;
 /**
  * How many whole seconds a video that starts at `now` has before the next thing that must have the screen to itself:
  * the start of the next prayer phase (the countdown before the azan, the azan, iqamah, solat ...), the next tilawah
- * window, or the first Subuh azan. Infinity when none is left today. This is the SOFT rule (a video that cannot finish
- * is not started); the hard rule (stop at once when one begins) is the unmounting in VideoScreen and Main.
+ * window, the first Subuh azan, or the next zikir after a prayer (it may start some minutes after the solat, F16;
+ * `zikirCount` is the number of zikir items: 0 = no zikir, left out = counted as some). Infinity when none is left
+ * today. This is the SOFT rule (a video that cannot finish is not started); the hard rule (stop at once when one
+ * begins) is the unmounting in VideoScreen and Main.
  */
 export function videoRoomSeconds(
-  now: Date, day: PrayerDay | null, settings: Settings, slots: readonly TilawahSlot[], hijriMonth?: number,
+  now: Date, day: PrayerDay | null, settings: Settings, slots: readonly TilawahSlot[], hijriMonth?: number, zikirCount?: number,
 ): number {
   if (!day) return Number.POSITIVE_INFINITY;
   const t = now.getTime();
   let next = Number.POSITIVE_INFINITY;
   for (const i of buildDayIntervals(day, settings, hijriMonth)) {
     const s = i.start.getTime();
+    if (s > t && s < next) next = s;
+  }
+  for (const z of zikirStarts(day, settings, hijriMonth, zikirCount)) {
+    const s = z.getTime();
     if (s > t && s < next) next = s;
   }
   const fa = firstAzanPlan(day, settings);

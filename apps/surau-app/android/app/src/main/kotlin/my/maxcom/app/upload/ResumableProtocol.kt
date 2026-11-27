@@ -84,15 +84,21 @@ class ByteArraySource(private val bytes: ByteArray) : ByteSource {
 /** Where the device may send the recording: only to Google (S1). */
 object UploadUri {
     /**
-     * True only for https with no user info and a host of `googleapis.com`'s `www` or any subdomain
-     * of it. The cloud checks the address it mints; the device checks again before the first PUT
-     * and when it resumes from a stored one.
+     * True only for YouTube's own upload address (S3): https, no user info, the host exactly
+     * `www.googleapis.com` on the default port, and a path under `/upload/youtube/` with no dot
+     * segments (plain or encoded). No other Google host passes (a storage bucket is one too). The
+     * cloud checks the address it mints; the device checks again before the first PUT and when it
+     * resumes from a stored one. The Dart twin is `isYoutubeUploadUri`: keep the two the same.
      */
     fun isYoutube(raw: String): Boolean {
         val u = try { java.net.URI(raw) } catch (_: Exception) { return false }
         if (u.scheme != "https" || u.rawUserInfo != null) return false
         val host = u.host?.lowercase(java.util.Locale.ROOT) ?: return false
-        return host == "www.googleapis.com" || host.endsWith(".googleapis.com")
+        if (host != "www.googleapis.com" || (u.port != -1 && u.port != 443)) return false
+        // the address as written, before the query: nothing in it may climb out of the upload path
+        val written = raw.substringBefore('#').substringBefore('?').lowercase(java.util.Locale.ROOT)
+        if (written.contains("..") || written.contains("%2e") || written.contains('\\')) return false
+        return (u.rawPath ?: "").startsWith("/upload/youtube/")
     }
 }
 

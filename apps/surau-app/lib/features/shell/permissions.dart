@@ -4,6 +4,7 @@
 // this file re-exports them and keeps the helpers every screen calls.
 
 import '../registry.g.dart';
+import '../settings_defaults.dart';
 
 export '../registry.g.dart' show permissions, roleLabelsMs;
 
@@ -30,18 +31,10 @@ const Set<String> liveSettingsFeatures = {'liveOnKiosk', 'liveYoutube', 'recordi
 bool canWriteSettingsFeature(Set<String> roles, String feature) =>
     canSee(roles, 'settings:write') || (canSee(roles, 'live:settings') && liveSettingsFeatures.contains(feature));
 
-/// `defaultEnabled` from the registry for the features that hide a menu
-/// entry when off (spec 5.4). Used until the box's settings have loaded.
-const Map<String, bool> featureDefaultEnabled = {
-  'finance': false,
-  'liveOnKiosk': true,
-  'liveYoutube': true,
-  'jemaahPage': false,
-};
-
 /// Which features are on, read from `GET /api/settings`
 /// (`{ <feature>: { enabled, ... } }`); features the box did not mention
-/// fall back to the registry default.
+/// fall back to the registry default
+/// (`featureDefaultOn`, the generated registry: no hand-kept list, B2).
 class FeatureFlags {
   const FeatureFlags([this._enabled = const {}]);
 
@@ -61,7 +54,7 @@ class FeatureFlags {
 
   /// A feature the Tetapan lists hide (planned) behaves as off whatever is stored: nobody could switch it off again.
   bool isOn(String feature) =>
-      !hiddenFeatures.contains(feature) && (_enabled[feature] ?? featureDefaultEnabled[feature] ?? false);
+      !hiddenFeatures.contains(feature) && (_enabled[feature] ?? featureDefaultOn(feature));
 
   /// For tests and previews: [defaults] with some features forced.
   FeatureFlags copyWith(Map<String, bool> changes) =>

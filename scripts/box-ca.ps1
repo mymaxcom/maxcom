@@ -5,10 +5,17 @@
 .DESCRIPTION
   Creates (or reuses) a root CA "MAXCOM Root CA <Surau>" (ECDSA P-256, 20 years), installs it in
   Cert:\LocalMachine\Root (so Edge on the box trusts it; needs an elevated prompt once), and issues a
-  leaf for the box (ECDSA P-256, SAN IP:<Ip>, IP:127.0.0.1, DNS:localhost, DNS:box.surau.local,
+  leaf for the box (ECDSA P-256, SAN IP:<Ip>, IP:127.0.0.1, DNS:localhost and the box's local name,
   EKU server auth, at most 825 days). The root CA carries a CRITICAL NameConstraints extension that
-  permits only the DNS names localhost and box.surau.local, so a stolen CA key cannot impersonate any
-  other DNS name on the devices that trust it. The constraint is DNS-only ON PURPOSE: BoringSSL (the
+  permits only a fixed list of DNS names, so a stolen CA key cannot impersonate any other DNS name on
+  the devices that trust it. Two lists exist (the same two the Android box uses):
+    v2 (new roots)     localhost and the 99 numbered names box1-surau.local .. box99-surau.local. The leaf
+                       carries localhost and, when -BoxName is given, that one numbered name.
+    legacy (old roots) localhost and box.surau.local. The leaf carries those two; -BoxName is ignored
+                       (a legacy root cannot vouch for a numbered name). A legacy root is kept and renewed
+                       as it is; use -NewRoot once to move a box to a v2 root (every device then installs
+                       the new root again).
+  The constraint is DNS-only ON PURPOSE: BoringSSL (the
   TLS stack of Flutter / the Android app) cannot verify IP-address name constraints and fails the
   handshake with "unsupported name constraint type"; OS and browser verifiers handle IP subtrees,
   but one root must work everywhere. Accepted trade-off: IP-address HTTPS endpoints are not limited
@@ -20,7 +27,7 @@
     <DataDir>\secret\pfx.pass       the passphrase (never printed)
     <DataDir>\pki\box-leaf.cer      leaf, DER (the TLS loader reads SAN and expiry from it)
     <DataDir>\pki\root-ca.cer       root CA, DER (install on PCs and iPads)
-    <DataDir>\pki\box-ca.json       how the leaf was made (ip, store, surau, days, noTrust; no secrets),
+    <DataDir>\pki\box-ca.json       how the leaf was made (ip, store, surau, days, noTrust, rootGeneration; no secrets),
                                     read by scripts\box-cert-renew.ps1 for the automatic renewal
   <DataDir>\secret is restricted to the current user and SYSTEM.
   With -ServiceAccount (an installed box; ONLY S-1-5-19, LOCAL SERVICE, is accepted) the two folders get
@@ -42,6 +49,13 @@
 .PARAMETER DataDir  Data folder (default .\data).
 .PARAMETER Days     Leaf validity in days, 1..825 (default 730).
 .PARAMETER Renew    Reissue the leaf only (a root CA with the DNS-only constraint must already exist).
+.PARAMETER BoxName  The numbered local name the box claimed on the LAN, exactly boxN-surau.local with N 1 to 99
+                    (lower case). Put in the leaf under a v2 root only. The renewal task passes the number the
+                    box service stored in data\box-name.json (see scripts\box-cert-renew.ps1).
+.PARAMETER NewRoot  Use only a v2 root: ignore a legacy root and make a v2 root when none exists. Every device
+                    must then trust the new root. Not with -Renew or -LegacyRoot.
+.PARAMETER LegacyRoot  Use or make a legacy root (localhost and box.surau.local only). For tests and for a box
+                    that must stay compatible with devices that only know the legacy root. Not with -NewRoot.
 .PARAMETER Surau    Name used in the CA subject (default "Surau").
 .PARAMETER Store    LocalMachine (default) or CurrentUser (tests).
 .PARAMETER NoTrust  Do not install the root CA into the Trusted Root store (tests).
@@ -54,6 +68,9 @@ param(
   [string]$DataDir = '.\data',
   [int]$Days = 730,
   [switch]$Renew,
+  [string]$BoxName = '',
+  [switch]$NewRoot,
+  [switch]$LegacyRoot,
   [string]$Surau = 'Surau',
   [ValidateSet('LocalMachine', 'CurrentUser')][string]$Store = 'LocalMachine',
   [switch]$NoTrust,
@@ -72,6 +89,12 @@ if (-not [System.Net.IPAddress]::TryParse($Ip, [ref]$addr) -or
 if ($Days -lt 1 -or $Days -gt 825) {
   throw 'Days must be between 1 and 825 (Apple limit for server certificates)'
 }
+# The name is checked exactly (case sensitive) before it is used anywhere: it ends up in a certificate.
+if ($BoxName -ne '' -and $BoxName -cnotmatch '^box([1-9][0-9]?)-surau\.local\z') {
+  throw "BoxName must be boxN-surau.local with N 1 to 99, got '$BoxName'"
+}
+if ($NewRoot -and $LegacyRoot) { throw '-NewRoot and -LegacyRoot cannot be used together' }
+if ($NewRoot -and $Renew) { throw '-NewRoot cannot be used with -Renew (a renewal never makes a root)' }
 if ($Surau -notmatch '^[A-Za-z0-9 ._-]{1,40}$') {
   throw 'Surau may only contain letters, digits, space, dot, underscore, hyphen (max 40)'
 }
@@ -126,15 +149,22 @@ function Get-NameConstraintsHex([string[]]$dnsNames) {
   $all = New-DerNode 0x30 $permitted
   return (($all | ForEach-Object { $_.ToString('X2') }) -join '')
 }
-# The only names the root may vouch for. DNS only: BoringSSL cannot verify IP name constraints.
-$caDnsNames = @('localhost', 'box.surau.local')
-# True only for a root whose NameConstraints is exactly the DNS-only extension this script makes
-# (an older root with IP subtrees, or one without the extension, is not usable by the Android app).
-function Test-CaDnsOnly($cert) {
+# The only names a root may vouch for. DNS only: BoringSSL cannot verify IP name constraints. The v2 list is
+# explicit names, never a subtree such as "local" (same list as the Android box, BoxCa.kt PERMITTED_DNS_V2).
+$caDnsNamesLegacy = @('localhost', 'box.surau.local')
+$caDnsNamesV2 = @('localhost') + @(1..99 | ForEach-Object { "box$_-surau.local" })
+$caHexLegacy = Get-NameConstraintsHex $caDnsNamesLegacy
+$caHexV2 = Get-NameConstraintsHex $caDnsNamesV2
+# 'v2' or 'legacy' only for a root whose NameConstraints is exactly one of the two DNS-only extensions this script
+# makes; $null for anything else (an older root with IP subtrees, or one without the extension, is not usable by
+# the Android app).
+function Get-CaGeneration($cert) {
   $ext = $cert.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.30' } | Select-Object -First 1
-  if ($null -eq $ext) { return $false }
+  if ($null -eq $ext) { return $null }
   $hex = ($ext.RawData | ForEach-Object { $_.ToString('X2') }) -join ''
-  return ($hex -eq (Get-NameConstraintsHex $caDnsNames))
+  if ($hex -eq $caHexV2) { return 'v2' }
+  if ($hex -eq $caHexLegacy) { return 'legacy' }
+  return $null
 }
 
 $caSubject = "CN=MAXCOM Root CA $Surau"
@@ -187,12 +217,25 @@ if ($svcSid -eq '') {
 }
 
 # ---- root CA --------------------------------------------------------------
-$ca = Get-ChildItem $myStore | Where-Object { $_.Subject -eq $caSubject -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date).AddDays(60) -and (Test-CaDnsOnly $_) } |
-  Sort-Object NotAfter -Descending | Select-Object -First 1
+# A usable root: ours by subject, its key here, not near its end, and one of the two known constraint lists.
+# -LegacyRoot wants a legacy one, -NewRoot a v2 one; otherwise either, and a v2 root is preferred.
+$candidates = @(Get-ChildItem $myStore | Where-Object { $_.Subject -eq $caSubject -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date).AddDays(60) } |
+  ForEach-Object { [pscustomobject]@{ Cert = $_; Gen = (Get-CaGeneration $_) } } |
+  Where-Object { $null -ne $_.Gen })
+if ($LegacyRoot) { $candidates = @($candidates | Where-Object { $_.Gen -eq 'legacy' }) }
+elseif ($NewRoot) { $candidates = @($candidates | Where-Object { $_.Gen -eq 'v2' }) }
+$pick = $candidates | Sort-Object @{ Expression = { if ($_.Gen -eq 'v2') { 0 } else { 1 } } }, @{ Expression = { $_.Cert.NotAfter }; Descending = $true } | Select-Object -First 1
+$ca = $null
+$gen = 'v2'
+if ($null -ne $pick) { $ca = $pick.Cert; $gen = $pick.Gen }
 
 if ($null -eq $ca) {
   if ($Renew) { throw 'Renew requested but no usable root CA exists. A root CA made before the DNS-only NameConstraints (no constraint, or IP subtrees) cannot be renewed and cannot be used by the Android app: run without -Renew to create a new root CA, then install it on every device.' }
-  $nameConstraints = '2.5.29.30={critical}{hex}' + (Get-NameConstraintsHex $caDnsNames)
+  $gen = 'v2'
+  if ($LegacyRoot) { $gen = 'legacy' }
+  $newNames = $caDnsNamesV2
+  if ($gen -eq 'legacy') { $newNames = $caDnsNamesLegacy }
+  $nameConstraints = '2.5.29.30={critical}{hex}' + (Get-NameConstraintsHex $newNames)
   $ca = New-SelfSignedCertificate -Subject $caSubject `
     -KeyAlgorithm ECDSA_nistP256 -CurveExport CurveName `
     -KeyExportPolicy NonExportable -KeyUsage CertSign, CRLSign `
@@ -214,7 +257,13 @@ if (-not $NoTrust) {
 # ---- leaf -----------------------------------------------------------------
 $sanIps = @($Ip)
 if ($Ip -ne '127.0.0.1') { $sanIps += '127.0.0.1' }
-$san = '2.5.29.17={text}' + ((@($sanIps | ForEach-Object { "IPAddress=$_" }) + @('DNS=localhost', 'DNS=box.surau.local')) -join '&')
+# The leaf may carry only names its root permits: a legacy root vouches for box.surau.local, a v2 root for the one
+# numbered name the box claimed (never both, and never a name that was not validated above).
+$sanDns = @('DNS=localhost')
+$leafName = ''
+if ($gen -eq 'legacy') { $sanDns += 'DNS=box.surau.local' }
+elseif ($BoxName -ne '') { $sanDns += "DNS=$BoxName"; $leafName = $BoxName }
+$san = '2.5.29.17={text}' + ((@($sanIps | ForEach-Object { "IPAddress=$_" }) + $sanDns) -join '&')
 $leaf = New-SelfSignedCertificate -Subject $leafSubject `
   -Signer $ca `
   -KeyAlgorithm ECDSA_nistP256 -CurveExport CurveName `
@@ -264,8 +313,11 @@ Write-Output "Root CA   : $($ca.Subject)"
 Write-Output "Root file : $rootCer"
 Write-Output "Root sha256 fingerprint: $fp"
 Write-Output "Box leaf  : valid until $($leaf.NotAfter.ToString('yyyy-MM-dd')) for IP $Ip"
+Write-Output "Root kind : $gen"
+if ($leafName -ne '') { Write-Output "Local name: $leafName" }
+elseif ($BoxName -ne '') { Write-Output "Local name: $BoxName NOT in the leaf (the root is a legacy root; run with -NewRoot to move to a v2 root)" }
 # Record how this leaf was made (no secrets) so the scheduled renewal can repeat it unattended.
-$meta = [ordered]@{ ip = $Ip; store = $Store; surau = $Surau; days = $Days; noTrust = [bool]$NoTrust }
+$meta = [ordered]@{ ip = $Ip; store = $Store; surau = $Surau; days = $Days; noTrust = [bool]$NoTrust; rootGeneration = $gen }
 if ($svcSid -ne '') { $meta['serviceAccount'] = $svcSid }
 [System.IO.File]::WriteAllText((Join-Path $pkiDir 'box-ca.json'), ($meta | ConvertTo-Json), (New-Object System.Text.ASCIIEncoding))
 

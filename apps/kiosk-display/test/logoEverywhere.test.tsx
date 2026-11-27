@@ -59,7 +59,7 @@ function put(date: string, hhmm: string, opts: ViewOpts, override: SlotFeature |
   const rotation = buildRotation(content, view.settings, view.now);
   const today = view.state.today;
   const month = tarawihMonthFor(view.now, today ? [today] : [], view.settings) ?? view.hijri?.m;
-  const zikir = zikirWindow(view.now, days, view.settings, month);
+  const zikir = zikirWindow(view.now, days, view.settings, month, content.zikir.length);
   holder.view = view;
   holder.cv = { content, rotation, current: currentSlot(rotation, view.now), zikir, override };
 }
@@ -88,7 +88,7 @@ const CASES: [string, string, string, SlotFeature | null, string][] = [
   ['takwim', '2026-11-03', '15:52', 'takwim', 'takwim'],
   ['hadis', '2026-11-03', '15:52', 'hadis', 'hadis'],
   ['ayat', '2026-11-03', '15:52', 'ayatCard', 'ayat'],
-  ['zikir', '2026-11-03', '16:50', null, 'zikir'],
+  ['zikir', '2026-11-03', '16:45:05', null, 'zikir'],
 ];
 
 for (const id of KIOSK_TEMPLATE_IDS) {

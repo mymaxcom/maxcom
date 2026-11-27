@@ -1,4 +1,4 @@
-import { zikirTier, useZikirSlot } from '../../content/ZikirOverlay.tsx';
+import { zikirOptions, zikirTier, useZikirSlot, ZikirTimeLeft } from '../../content/ZikirOverlay.tsx';
 import type { ZikirOverlayProps } from '../../content/ZikirOverlay.tsx';
 import { prayerLabel } from '../../format.ts';
 import { t } from '../../i18n.ts';
@@ -17,18 +17,20 @@ const BEADS = Array.from({ length: 33 }, (_, i) => {
  * under it, the repeat count at the side (only above one). The same item, order, timing and paging as the overlay.
  */
 export function ArabZikirScreen(props: ZikirOverlayProps) {
-  const { lang, zikir } = props;
+  const { lang, zikir, view } = props;
   const env = useArabEnv();
   const slot = useZikirSlot(props);
   // (a Malay page of a paged zikir has no Arabic: it still shows, with the ring)
   if (!slot || (slot.shown.ar === null && slot.shown.ms === '')) return null;
   const { item, shown, repeat, ref, fit, key, pages, sub } = slot;
   const mode = tarjamahMode(env.style, shown.ms !== '');
+  const { showTimeLeft } = zikirOptions(view.settings);
   return (
-    <section class={`arab-zikir is-${zikirTier(item.textAr)}`} data-layer="zikir" data-prayer={zikir.prayer} data-item={item.id} ref={ref} style={`--fit:${fit}`} key={key}>
+    <section class={`arab-zikir is-${zikirTier(item.textAr)}`} data-layer="zikir" data-prayer={zikir.prayer} data-item={item.id} style={`--fit:${fit}`} key={key}>
       <div class="zk-side">
         <div class="eyebrow">{t('zikirAfter', lang, { prayer: prayerLabel(zikir.prayer, lang) })}</div>
         {pages > 1 ? <span class="zk-pg num">{`${sub + 1} / ${pages}`}</span> : null}
+        {showTimeLeft ? <ZikirTimeLeft zikir={zikir} now={view.now} lang={lang} class="zk-left" /> : null}
       </div>
       <svg class="zk-ring" viewBox="-420 -420 840 840" aria-hidden="true">
         <circle class="zk-orbit" r="380" />
@@ -36,8 +38,12 @@ export function ArabZikirScreen(props: ZikirOverlayProps) {
           {BEADS.map((b, i) => <circle key={i} cx={b.x} cy={b.y} r="11" />)}
         </g>
       </svg>
-      {shown.ar !== null ? <Hk class="zk-ar" text={shown.ar} /> : null}
-      {(mode !== 'hidden' || shown.ar === null) && shown.ms !== '' ? <div class="zk-ms arab-tarjamah">{shown.ms}</div> : null}
+      {/* the Arabic and its meaning stacked in one block between the head and the strip: a long doa pushes its meaning
+          down, never over it, and the fit (measured on this block) shrinks it, then pages it, before anything is cut */}
+      <div class="zk-text" ref={ref}>
+        {shown.ar !== null ? <Hk class="zk-ar" text={shown.ar} /> : null}
+        {(mode !== 'hidden' || shown.ar === null) && shown.ms !== '' ? <div class="zk-ms arab-tarjamah">{shown.ms}</div> : null}
+      </div>
       {repeat ? (
         <div class="zk-count">
           <b class="num">{repeat}</b>

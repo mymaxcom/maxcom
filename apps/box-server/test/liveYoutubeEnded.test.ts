@@ -111,9 +111,9 @@ describe('the live ends: the YouTube state follows', () => {
     expect(yt.completed).toEqual(['bc1']);
   });
 
-  it('ingest gone for 10 minutes ends the session and completes the broadcast at once (no grace window for a system end)', async () => {
+  it('ingest gone for 10 minutes ends the session; with no grace window the broadcast is completed at once', async () => {
     const yt = leg();
-    const h = await make({ live: { monitorMs: 3_600_000, youtube: yt, youtubeGraceMs: 60_000 } });
+    const h = await make({ live: { monitorMs: 3_600_000, youtube: yt, youtubeGraceMs: 0 } });
     const user = await loginAs(h.app, 'live');
     await post(h, '/api/live/start', user.headers, startBody(h, wants));
     await ytReady(h, user.headers);
@@ -128,15 +128,22 @@ describe('the live ends: the YouTube state follows', () => {
     expect(yt.completed).toEqual(['bc1']);
   });
 
-  it('a camera that vanishes for 10 minutes (pulled live) completes the broadcast at once too', async () => {
-    // the same system-end rule: only an explicit stop by a person may keep the broadcast open for a restart
+  it('Y4: a system end of a kuliah (controller lost) keeps the broadcast open for the grace window, then completes it; a shutdown completes at once', async () => {
     const yt = leg();
-    const h = await make({ live: { monitorMs: 3_600_000, youtube: yt, youtubeGraceMs: 60_000 } });
+    const h = await make({ live: { monitorMs: 3_600_000, youtube: yt, youtubeGraceMs: 150 } });
     const user = await loginAs(h.app, 'live');
     await post(h, '/api/live/start', user.headers, startBody(h, wants));
     await ytReady(h, user.headers);
     const sessions = h.app.liveSessions!;
     await sessions.stop(sessions.current()!.id, 'system', 'controller_lost');
+    expect(yt.completed).toEqual([]);
+    expect(sessions.lingeringBroadcast()).toBe('bc1');
+    for (let i = 0; i < 200 && yt.completed.length === 0; i++) await new Promise((r) => setTimeout(r, 10));
     expect(yt.completed).toEqual(['bc1']);
+    // a shutdown never lingers: nothing would complete it later
+    await post(h, '/api/live/start', user.headers, startBody(h, wants));
+    await ytReady(h, user.headers);
+    await sessions.stop(sessions.current()!.id, 'system', 'shutdown');
+    expect(yt.completed).toEqual(['bc1', 'bc1']);
   });
 });

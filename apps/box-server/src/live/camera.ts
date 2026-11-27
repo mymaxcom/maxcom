@@ -1,7 +1,8 @@
 import { hkdfSync } from 'node:crypto';
 import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CAMERA_PASSWORD_MASK, cameraQuerySecrets, cameraUrlError, hasMaskedCameraQuery, isMaskedCameraUrl, maskCameraUrl, restoreMaskedCameraQuery, stripCameraQuerySecrets } from '@surau/core';
+import { CAMERA_CONTROL_DEFAULT, CAMERA_CONTROL_PROTOCOLS, CAMERA_PASSWORD_MASK, CAMERA_PROFILE_DEFAULT, parseCameraProfile, cameraQuerySecrets, cameraUrlError, hasMaskedCameraQuery, isMaskedCameraUrl, maskCameraUrl, restoreMaskedCameraQuery, stripCameraQuerySecrets } from '@surau/core';
+import type { CameraControlSetting } from '@surau/core';
 import { openSecret, sealSecret } from '../auth/crypto.ts';
 import { loadBoxKey, secretDir } from '../auth/secrets.ts';
 import type { LiveSecrets, MediamtxApi } from './mediamtx.ts';
@@ -22,6 +23,8 @@ export interface CameraRecord {
   /** Used only when the address carries no login. */
   username?: string;
   password?: string;
+  /** Lane X: the opt-in for network control of the camera; absent = off. Kept across saves of the address. */
+  control?: CameraControlSetting;
 }
 
 export interface CameraSaveInput {
@@ -77,6 +80,8 @@ export interface MaskedCamera {
   username: string | null;
   hasPassword: boolean;
   lastTest: CameraTestResult | null;
+  /** Lane X: the control opt-in (off by default). */
+  control: CameraControlSetting;
   /**
    * Only when true: the record came back from the cloud backup, which never holds the password, and the camera had
    * one. The password must be typed again here ("Kata laluan kamera perlu ditaip semula").
@@ -178,6 +183,9 @@ export function cameraSecrets(r: CameraRecord): string[] {
   add(r.username);
   add(r.password);
   if (p !== null && p.user !== null && p.pass !== null) add(`${p.user}:${p.pass}`);
+  // C6: the password as it stands in an address (`:pass@`), so a very short one is still scrubbed where it is printed
+  for (const pass of [p?.pass, r.password]) if (typeof pass === 'string' && pass !== '') add(`:${pass}@`);
+  if (typeof r.username === 'string' && r.username !== '' && typeof r.password === 'string' && r.password !== '') add(`${r.username}:${r.password}`);
   for (const v of cameraQuerySecrets(r.url)) add(v);
   return [...out];
 }
@@ -241,7 +249,27 @@ function parseRecord(text: string): Loaded | null {
   const record: CameraRecord = { url: o.url };
   if (typeof o.username === 'string' && o.username !== '') record.username = o.username;
   if (typeof o.password === 'string' && o.password !== '') record.password = o.password;
+  const control = parseControl(o.control);
+  if (control !== null) record.control = control;
   return { record, lastTest: parseTest(o.lastTest), passwordNeeded: o.passwordNeeded === true };
+}
+
+/** The control opt-in as stored; anything odd reads as "off". */
+function parseControl(v: unknown): CameraControlSetting | null {
+  if (typeof v !== 'object' || v === null) return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o.enabled !== 'boolean') return null;
+  const protocol = (CAMERA_CONTROL_PROTOCOLS as readonly unknown[]).includes(o.protocol) ? (o.protocol as CameraControlSetting['protocol']) : CAMERA_CONTROL_DEFAULT.protocol;
+  return { enabled: o.enabled, protocol, profile: parseCameraProfile(o.profile, true) ?? { ...CAMERA_PROFILE_DEFAULT }, applyOnLive: o.applyOnLive === true };
+}
+
+/** The host of a camera address (IPv4 as saved), without login, port or path; null when the address has no host. */
+export function cameraHostOf(url: string): string | null {
+  const p = splitUrl(url);
+  if (p === null) return null;
+  const authority = p.rest.search(/[/?#]/) === -1 ? p.rest : p.rest.slice(0, p.rest.search(/[/?#]/));
+  const host = authority.split(':')[0] ?? '';
+  return host === '' ? null : host;
 }
 
 const CODES: readonly CameraTestCode[] = ['ok', 'unreachable', 'login', 'path', 'codec', 'busy', 'not_configured', 'bad_address', 'unavailable'];
@@ -307,7 +335,7 @@ export class CameraStore {
   /** What a client may see: the address with the password as dots, and whether a password is held. */
   getMasked(): MaskedCamera {
     const l = this.load();
-    if (l === null) return { configured: false, url: '', username: null, hasPassword: false, lastTest: null };
+    if (l === null) return { configured: false, url: '', username: null, hasPassword: false, lastTest: null, control: { ...CAMERA_CONTROL_DEFAULT, profile: { ...CAMERA_PROFILE_DEFAULT } } };
     const p = splitUrl(l.record.url);
     const user = p?.user ?? l.record.username ?? null;
     const hasPassword = p !== null && p.user !== null ? p.pass !== null && p.pass !== '' : l.record.password !== undefined;
@@ -317,6 +345,7 @@ export class CameraStore {
       username: user !== '' ? user : null,
       hasPassword,
       lastTest: l.lastTest,
+      control: l.record.control ?? { ...CAMERA_CONTROL_DEFAULT, profile: { ...CAMERA_PROFILE_DEFAULT } },
       ...(l.passwordNeeded && !hasPassword ? { passwordNeeded: true as const } : {}),
     };
   }
@@ -399,9 +428,20 @@ export class CameraStore {
       if (record.username !== undefined && password !== undefined && password !== '') record.password = password;
     }
 
+    // the opt-in belongs to the camera, not to the stream path: it is kept while the host stays the same, and a
+    // different host is another device that must be switched on again
+    if (prev?.record.control !== undefined && cameraHostOf(prev.record.url) === cameraHostOf(url)) record.control = prev.record.control;
     const changed = prev === null || cameraPullUrl(prev.record) !== cameraPullUrl(record);
     this.write(record, changed ? null : prev.lastTest, o.passwordNeeded === true);
     return this.getMasked();
+  }
+
+  /** Lane X: sets the control opt-in of the saved camera; false when no camera is saved. The address is not touched. */
+  setControl(control: CameraControlSetting): boolean {
+    const l = this.load();
+    if (l === null) return false;
+    this.write({ ...l.record, control: { enabled: control.enabled, protocol: control.protocol, profile: { ...control.profile }, applyOnLive: control.applyOnLive } }, l.lastTest, l.passwordNeeded);
+    return true;
   }
 
   clear(): void {

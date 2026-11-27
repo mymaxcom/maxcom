@@ -14,20 +14,26 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Surau">
+  <meta name="apple-mobile-web-app-title" content="MAXCOM">
   <!-- The box serves an opaque icon made from the surau logo here when one is set (apps/box-server surauLogo.ts). -->
   <link rel="apple-touch-icon" href="icons/Icon-maskable-192.png">
   <link rel="icon" type="image/png" href="favicon.png">
 
-  <title>Surau</title>
+  <!-- The box puts the surau's short name here when one is set (withHomeScreenName); MAXCOM otherwise. -->
+  <title>MAXCOM</title>
   <link rel="manifest" href="manifest.json">
 
-  <!-- Kiosk glass while Flutter loads, so the iPad never flashes white. -->
+  <!-- Kiosk glass with the MAXCOM wordmark while Flutter loads, so the iPad never flashes white. CSS only (the
+       page CSP allows no inline script): the wordmark hides as soon as Flutter adds its view to the page. -->
   <style>
     html, body { margin: 0; height: 100%; background: #06302b; }
+    #maxcom-boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+    #maxcom-boot img { width: min(60vw, 320px); height: auto; }
+    body:has(flutter-view) #maxcom-boot, body:has(flt-glass-pane) #maxcom-boot { display: none; }
   </style>
 </head>
 <body>
+  <div id="maxcom-boot"><img src="maxcom-wordmark.svg" alt="MAXCOM" width="320" height="82"></div>
   <script src="flutter_bootstrap.js" async></script>
   <script>
     if ('serviceWorker' in navigator) {

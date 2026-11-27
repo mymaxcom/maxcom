@@ -28,8 +28,8 @@ final reportFileOpsProvider = Provider<ReportFileOps>(
   (ref) => const ReportFileOps(),
 );
 
-/// `Surau D'Waqaf` and `2026-10` become
-/// `Penyata-Kewangan-Surau-D-Waqaf-2026-10.pdf`: the box's own name
+/// `Surau Contoh` and `2026-10` become
+/// `Penyata-Kewangan-Surau-Contoh-2026-10.pdf`: the box's own name
 /// for the download (letters and digits only, 40 characters at most).
 String reportFileName(String surauName, String ym) {
   var slug = surauName

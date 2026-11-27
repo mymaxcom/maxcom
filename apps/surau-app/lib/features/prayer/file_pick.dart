@@ -47,7 +47,6 @@ List<String> mimeTypesFor(List<String> extensions) {
   const known = {
     'csv': ['text/csv', 'text/comma-separated-values'],
     'xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-    'zip': ['application/zip'],
     // A theme file has no registered type: providers call it a zip or a plain binary.
     'maxtheme': ['application/octet-stream', 'application/vnd.maxcom.theme+zip', 'application/zip', 'application/x-zip-compressed'],
   };

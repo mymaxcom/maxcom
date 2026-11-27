@@ -119,6 +119,15 @@ class MixerCore(
      */
     @Volatile var micAgc: SpeechAgc? = null
 
+    /** The same lift on the camera's own sound (it can be quiet too). Null = off (tests). Not fed to the aligner. */
+    @Volatile var camAgc: SpeechAgc? = null
+
+    /** The per-source switch of the lift ("Naikkan suara perlahan"); on by default. */
+    @Volatile var micLift = true
+    @Volatile var camLift = true
+    private var lastMicLift = true
+    private var lastCamLift = true
+
     /** Peak limiter (-1 dBFS) on the SUM of camera and microphone. Null = off (tests): the sum is only clamped. */
     @Volatile var sumLimiter: PeakLimiter? = null
 
@@ -190,6 +199,7 @@ class MixerCore(
 
     /** The camera audio stopped or came back (transition seen by the mixer thread). */
     private fun cameraTransition(live: Boolean) {
+        if (live && !lastCameraLive) camAgc?.reset() // a camera back: no stale gain
         if (!live && lastCameraLive) cameraWasLost = true
         if (live && !lastCameraLive && cameraWasLost) {
             cameraWasLost = false
@@ -234,14 +244,25 @@ class MixerCore(
         var pm = 0
         var po = 0
         val agc = micAgc
+        val cagc = camAgc
         val lim = sumLimiter
+        // a lift switched on again starts from a clean state
+        val mLift = micLift
+        val cLift = camLift
+        if (mLift && !lastMicLift) agc?.reset()
+        if (cLift && !lastCamLift) cagc?.reset()
+        lastMicLift = mLift
+        lastCamLift = cLift
+        val useMicAgc = agc != null && mLift
+        val useCamAgc = cagc != null && cLift
         for (i in 0 until n) {
             val r = ref[i].toInt()
             val d = delayedOut[i].toInt()
             // delay -> AGC on the raw microphone -> user volume / hold-out ramp -> sum with the camera -> limiter on the sum
-            val leveled = if (agc != null) agc.processSample(d.toFloat()) else d.toFloat()
+            val leveled = if (useMicAgc) agc!!.processSample(d.toFloat()) else d.toFloat()
             val m = leveled * micGain.next()
-            var mix = r * camGain.next() + m
+            val camIn = if (useCamAgc) cagc!!.processSample(r.toFloat()) else r.toFloat()
+            var mix = camIn * camGain.next() + m
             if (lim != null) mix = lim.process(mix)
             val s = Math.round(mix).coerceIn(-32768, 32767)
             out[i] = s.toShort()
@@ -263,6 +284,10 @@ class MixerCore(
     }
 }
 
+private const val OPEN_PENDING = 0
+private const val OPEN_READY = 1
+private const val OPEN_FAILED = 2
+
 /** A blocking microphone reader. The real one is [AudioRecordCapture]; tests use a fake. */
 interface PcmCapture {
     fun start(): Boolean
@@ -279,17 +304,24 @@ class AudioRecordCapture(
     private val am: AudioManager? = null,
     private val portFactory: () -> RecordPort = { AudioRecordPort(am) },
     private val inputs: () -> List<MicRoute> = { AudioRecordPort.inputs(am) },
+    private val sco: ScoLink? = AndroidScoLink(am, routing),
 ) : PcmCapture {
     private var port: RecordPort? = null
+    private var resampler: ResampledReader? = null
+    private var linked = false
     private var aec: AcousticEchoCanceler? = null
     private var nsEff: NoiseSuppressor? = null
 
     override fun start(): Boolean {
         var opened: RecordPort? = null
         return try {
-            val res = MicOpener.open(portFactory, inputs, sampleRate, routing?.wantedId)
+            val res = MicOpener.open(portFactory, inputs, sampleRate, routing?.wantedId, sco = sco)
             val p = res.port ?: return false
             opened = p
+            // a Bluetooth microphone records at 8 or 16 kHz: hand the engine its own rate
+            val capRate = res.captureRate
+            resampler = if (capRate > 0 && capRate != sampleRate) ResampledReader(capRate, sampleRate) { b, n -> p.read(b, 0, n) } else null
+            linked = MicRoute.isBluetoothId(res.routed?.id ?: res.target)
             try {
                 if (echo && AcousticEchoCanceler.isAvailable()) aec = AcousticEchoCanceler.create(p.sessionId)?.also { it.enabled = true }
                 if (ns && NoiseSuppressor.isAvailable()) nsEff = NoiseSuppressor.create(p.sessionId)?.also { it.enabled = true }
@@ -325,6 +357,7 @@ class AudioRecordCapture(
 
     override fun read(out: ShortArray): Int {
         val r = port ?: return -1
+        resampler?.let { return it.read(out) }
         var got = 0
         while (got < out.size) {
             val n = r.read(out, got, out.size - got)
@@ -350,6 +383,14 @@ class AudioRecordCapture(
         port = null
         aec = null
         nsEff = null
+        resampler = null
+        if (linked) {
+            linked = false
+            try {
+                sco?.disconnect()
+            } catch (_: Exception) {
+            }
+        }
     }
 }
 
@@ -393,10 +434,14 @@ class MixedAudioSource(
     private var alignThread: Thread? = null
     @Volatile private var running = false
     private var sink: GetMicrophoneData? = null
-    private var capture: PcmCapture? = null
+    @Volatile private var capture: PcmCapture? = null
     private var rate = 48000
     private var stereo = false
     @Volatile private var manualApplied = false
+
+    /** True while the mixing thread is still running (a test reads it after [stop]). */
+    val threadAlive: Boolean get() = lastThread?.isAlive == true
+    private var lastThread: Thread? = null
 
     /** The mixing core (read-only use: the screen reads states and levels). */
     val mixer: MixerCore? get() = core
@@ -440,6 +485,7 @@ class MixedAudioSource(
         c.micEnabled = pendingMicOn
         c.hasCamera = camera != null
         c.micAgc = if (useAgc) SpeechAgc(sampleRate) else null
+        c.camAgc = if (useAgc) SpeechAgc(sampleRate) else null
         c.sumLimiter = if (useAgc) PeakLimiter(sampleRate) else null
         core = c
         aligner?.onChange = { st, d ->
@@ -475,6 +521,7 @@ class MixedAudioSource(
             }
         }
         thread = Thread({ loop(c, factor) }, "maxcom-mix").also {
+            lastThread = it
             it.isDaemon = true
             it.priority = Thread.MAX_PRIORITY
             it.start()
@@ -499,25 +546,27 @@ class MixedAudioSource(
             if (rv != routeSeen) {
                 routeSeen = rv
                 micFailed = false
+                cancelOpen()
                 if (micOn) {
                     capture?.stop()
                     capture = null
                     micOn = false
                 }
             }
-            // The microphone follows the switch: opened when added, released when removed.
+            // The microphone follows the switch: opened when added, released when removed. The opening (a Bluetooth
+            // link can take seconds) runs on its own thread, so the camera sound keeps flowing meanwhile.
             if (c.micEnabled && !micOn && !micFailed) {
-                val cap = captureFactory(rate, echoCanceler, noiseSuppressor)
-                if (cap.start()) {
-                    capture = cap
-                    micOn = true
-                } else {
-                    micFailed = true
+                when (pollOpen(echoCanceler, noiseSuppressor)) {
+                    OPEN_READY -> micOn = true
+                    OPEN_FAILED -> micFailed = true
+                    else -> {}
                 }
             } else if (!c.micEnabled && micOn) {
                 capture?.stop()
                 capture = null
                 micOn = false
+            } else if (!c.micEnabled) {
+                cancelOpen()
             }
 
             var mic: ShortArray? = null
@@ -558,12 +607,19 @@ class MixedAudioSource(
                 }
             }
 
+            // the person's lift switches and the phone's mute (read every chunk: they change while running)
+            if (routing != null) {
+                c.micLift = routing.liftMic
+                c.camLift = routing.liftCamera
+            }
             val aligning = c.mix(ref, live, mic, out, delayed, levels)
             if (aligning && aligner != null && c.cameraHasAudio && !manualApplied) {
                 val a = refDec.process(ref.copyOf())
                 val b = micDec.process(delayed.copyOf())
                 if (alignQueue.size < 60) alignQueue.offer(AlignChunk(a, b)) else droppedAlignChunks++
             }
+            // the phone's mute silences everything it sends; the aligner above keeps its (unmuted) input
+            if (routing?.muteAll == true) java.util.Arrays.fill(out, 0.toShort())
             deliver(out, chunk)
 
             if (!micOn) {
@@ -580,8 +636,68 @@ class MixedAudioSource(
                 }
             }
         }
+        cancelOpen()
         capture?.stop()
         capture = null
+    }
+
+    private val openLock = Any()
+    private var opener: Thread? = null
+    private var openedCap: PcmCapture? = null
+    private var openFailedNow = false
+    private var openGen = 0
+
+    /** Where the microphone opening stands: [OPEN_PENDING], [OPEN_READY] (then [capture] is set) or [OPEN_FAILED]. */
+    private fun pollOpen(echo: Boolean, ns: Boolean): Int = synchronized(openLock) {
+        val got = openedCap
+        if (got != null) {
+            openedCap = null
+            opener = null
+            capture = got
+            return@synchronized OPEN_READY
+        }
+        if (openFailedNow) {
+            openFailedNow = false
+            opener = null
+            return@synchronized OPEN_FAILED
+        }
+        if (opener == null) {
+            val gen = openGen
+            val r = rate
+            opener = Thread({
+                var cap: PcmCapture? = null
+                var ok = false
+                try {
+                    cap = captureFactory(r, echo, ns)
+                    ok = cap.start()
+                } catch (_: Exception) {
+                }
+                synchronized(openLock) {
+                    if (!running || gen != openGen) {
+                        // asked to stop or changed while the link came up: give the recorder back
+                        if (ok) try { cap?.stop() } catch (_: Exception) {}
+                    } else if (ok) {
+                        openedCap = cap
+                    } else {
+                        openFailedNow = true
+                    }
+                }
+            }, "maxcom-mic-open").also {
+                it.isDaemon = true
+                it.start()
+            }
+        }
+        OPEN_PENDING
+    }
+
+    /** Drops an opening in progress (its recorder, if it ends up open, is released by the opener thread). */
+    private fun cancelOpen() = synchronized(openLock) {
+        openGen++
+        opener = null
+        openFailedNow = false
+        val c = openedCap
+        openedCap = null
+        if (c != null) try { c.stop() } catch (_: Exception) {}
     }
 
     private fun deliver(mixed: ShortArray, n: Int) {
@@ -604,6 +720,11 @@ class MixedAudioSource(
             it.interrupt()
             try {
                 it.join(1000)
+                // A read that does not react to the interrupt (a recorder waiting for sound): closing the recorder frees it.
+                if (it.isAlive) {
+                    try { capture?.stop() } catch (_: Exception) {}
+                    it.join(1000)
+                }
             } catch (_: InterruptedException) {
             }
         }
@@ -616,6 +737,7 @@ class MixedAudioSource(
         }
         thread = null
         alignThread = null
+        cancelOpen()
     }
 
     override fun isRunning(): Boolean = running

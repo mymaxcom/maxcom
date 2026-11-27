@@ -1,10 +1,9 @@
-// qs-gate round 1, security scope: the YouTube sign-in code only for live:settings callers (S6), Google's own device
-// address only (S8), and a camera password in the address query never reaches the cloud backup, a masked view or the
-// history (S7).
+// qs-gate round 1, security scope: the YouTube sign-in code only for live:settings callers (S6), and a camera password
+// in the address query never reaches the cloud backup, a masked view or the history (S7). (S8, the device address the
+// cloud's YouTube leg passed on, went with that leg in 2026.11.15.)
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { CAMERA_PASSWORD_MASK, GOOGLE_DEVICE_URL, maskCameraUrl, restoreMaskedCameraQuery, stripCameraQuerySecrets } from '@surau/core';
 import type { YoutubeSignInState } from '@surau/core';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,8 +11,6 @@ import type { AuthIdentity } from '../src/auth/authz.ts';
 import { CameraStore, cameraBackupOf, cameraSecrets } from '../src/live/camera.ts';
 import { signInForCaller } from '../src/live/routes.ts';
 import { cleanCameraRecord } from '../src/sync/cameraSecretCloud.ts';
-import { generateSyncKeyPair, saveSyncKey } from '../src/sync/syncKey.ts';
-import { RemoteYoutubeLeg } from '../src/sync/youtubeRemote.ts';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -37,28 +34,6 @@ describe('S6: the pending sign-in code goes only to callers holding live:setting
     // outcomes and nothing are shown as they are
     expect(signInForCaller(user(['ajk']), { state: 'expired' })).toEqual({ state: 'expired' });
     expect(signInForCaller(user(['ajk']), null)).toBeNull();
-  });
-});
-
-describe('S8: the device address is always Google\'s own', () => {
-  it('a cloud status naming another address is passed on with https://www.google.com/device', async () => {
-    const dataDir = tempDir();
-    const pair = generateSyncKeyPair();
-    saveSyncKey(dataDir, { ...pair, cloudUrl: 'https://cloud.example.test', siteToken: 'site-token', wakeSecret: 'w', linkedAt: '2026-11-05T00:00:00.000Z' });
-    const db = new DatabaseSync(':memory:');
-    const fetchImpl = (async () =>
-      new Response(JSON.stringify({ signedIn: false, state: 'none', signIn: { state: 'pending', userCode: 'WXYZ-1234', verificationUrl: 'https://evil.example/device', expiresAt: '2026-11-19T10:00:00.000Z' } }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      })) as unknown as typeof fetch;
-    const leg = new RemoteYoutubeLeg({ db, dataDir, now: () => new Date(), fetchImpl, bootRetryMs: 3_600_000 });
-    try {
-      await leg.refresh();
-      expect(leg.status().signIn).toEqual({ state: 'pending', userCode: 'WXYZ-1234', verificationUrl: 'https://www.google.com/device', expiresAt: '2026-11-19T10:00:00.000Z' });
-    } finally {
-      leg.stop();
-      db.close();
-    }
   });
 });
 

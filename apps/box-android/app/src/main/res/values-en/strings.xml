@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English. Same keys as values/ (StringsParityTest); box_term and app_name are not translated. -->
+<resources>
+    <!-- Foreground service notification -->
+    <string name="notif_channel_name">MAXCOM service</string>
+    <string name="notif_channel_desc">Shows that the MAXCOM server is running.</string>
+    <string name="notif_title">MAX Kiosk Server is running</string>
+    <string name="notif_text_running">The surau server is active on this device</string>
+    <string name="notif_text_starting">MAXCOM is starting</string>
+    <string name="notif_text_waiting_clock">Waiting for the Internet clock</string>
+    <string name="notif_text_failed">MAXCOM could not start</string>
+
+    <!-- Maintenance screen -->
+    <string name="maint_title">MAXCOM maintenance</string>
+    <string name="maint_title_word">Maintenance</string>
+    <string name="maint_check">Check MAXCOM</string>
+    <string name="maint_restart">Restart MAXCOM</string>
+    <string name="maint_exit_android">Exit to Android</string>
+    <string name="maint_android_settings">Android settings</string>
+    <string name="maint_change_home">Change the home app</string>
+    <string name="maint_back">Back to the MAXCOM screen</string>
+    <string name="maint_licences">Software licences</string>
+    <string name="maint_pin_title">Maintenance PIN</string>
+    <string name="maint_pin_hint">6 to 8 digits</string>
+    <string name="maint_pin_set">Set PIN</string>
+    <string name="maint_pin_clear">Remove PIN</string>
+    <string name="maint_pin_enter">Enter the maintenance PIN</string>
+    <string name="maint_pin_wrong">FAILED: wrong PIN.</string>
+    <string name="maint_pin_invalid">FAILED: the PIN must be 6 to 8 digits.</string>
+    <string name="maint_ca_keystore">The root certificate key is kept in the Android Keystore.</string>
+    <string name="maint_ca_file">The root certificate key is kept in a private file of the app.</string>
+    <string name="maint_check_ok">PASSED: all checks succeeded.</string>
+    <string name="maint_check_fail">FAILED: some checks did not succeed.</string>
+    <string name="maint_pin_locked">FAILED: locked for %1$d more seconds.</string>
+    <string name="maint_pin_toomany">FAILED: too many tries. Try again after 5 minutes.</string>
+    <string name="maint_wifi">Wi-Fi settings</string>
+    <string name="maint_pin_change">Change or remove the maintenance PIN</string>
+    <string name="maint_pin_new">Set a maintenance PIN</string>
+    <string name="maint_rekey">Switch to the name boxN-surau.local (new root certificate)</string>
+
+    <!-- Follower box (an extra TV of a main box) -->
+    <string name="follower_line">Extra TV for %1$s</string>
+    <string name="follower_line_no_name">Extra TV</string>
+    <string name="maint_mode_follower">Mode: %1$s follower</string>
+    <string name="maint_unlink">Remove from the surau</string>
+    <string name="leave_intro">This %1$s will stop following the main %1$s and will no longer show its content.</string>
+    <string name="leave_data">If this %1$s had data before it was linked, it goes back to that data. Type the recovery code from before the link with the remote (16 letters or digits, with or without dashes).</string>
+    <string name="leave_code_hint">Recovery code</string>
+    <string name="leave_go">Go back to the data from before the link</string>
+    <string name="leave_no_code">No code: this %1$s was new</string>
+    <string name="leave_new_confirm">This %1$s was new. It will be emptied and return to first setup. Everything made after the link is lost. Continue?</string>
+    <string name="leave_new_yes">Yes, empty it</string>
+    <string name="leave_cancel">Cancel</string>
+    <string name="leave_working">Working...</string>
+    <string name="leave_code_short">The code must be 16 letters or digits.</string>
+    <string name="leave_done">%1$s will restart. Please wait.</string>
+    <string name="leave_err_wrong_code">FAILED: the recovery code is wrong.</string>
+    <string name="leave_err_locked">FAILED: too many wrong codes. Try again after %1$d minutes.</string>
+    <string name="leave_err_no_backup">This %1$s has no data from before the link, because it was new. Choose the option without a code.</string>
+    <string name="leave_err_has_backup">FAILED: this %1$s has data from before the link. Enter the recovery code.</string>
+    <string name="leave_err_not_local">FAILED: this can only be done on this %1$s itself.</string>
+    <string name="leave_err_generic">FAILED: not successful (%1$s).</string>
+    <string name="leave_err_network">FAILED: %1$s does not answer. Try again.</string>
+</resources>

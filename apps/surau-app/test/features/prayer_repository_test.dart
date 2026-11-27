@@ -32,7 +32,7 @@ class _Reach implements ReachSink {
 final _t0 = DateTime.utc(2026, 11, 10, 2);
 
 class _Rig {
-  _Rig(Future<http.Response> Function(http.Request r) handler, {RawPost? rawPost}) {
+  _Rig(Future<http.Response> Function(http.Request r) handler) {
     box = FakeBox(handler);
     final gateway = BoxGateway(
       client: box.client(Uri.parse('https://127.0.0.1:8443')),
@@ -42,7 +42,7 @@ class _Rig {
       now: () => _t0,
       onSessionExpired: () => expired++,
     );
-    repo = PrayerRepository(gateway, rawPost: rawPost);
+    repo = PrayerRepository(gateway);
   }
 
   late final FakeBox box;
@@ -362,11 +362,11 @@ void main() {
         text: 'a',
         overlap: 'replace',
         expectSha256: 'ab12',
-        confirmName: 'Surau D\'Waqaf',
+        confirmName: 'Surau Contoh',
       );
       expect(rig.lastBody['dryRun'], isFalse);
       expect(rig.lastBody['expectSha256'], 'ab12');
-      expect(rig.lastBody['confirmName'], 'Surau D\'Waqaf');
+      expect(rig.lastBody['confirmName'], 'Surau Contoh');
       expect(rig.lastBody['overlap'], 'replace');
       expect(a.id, '12');
       expect(a.inserted, 28);
@@ -476,6 +476,7 @@ void main() {
       expect(rig.last.url.queryParameters['year'], '2027');
     });
   });
+
 
   group('errors', () {
     Future<PrayerError> failWith(int status, Object body, Future<void> Function(PrayerRepository r) call) async {

@@ -6,8 +6,9 @@ import type { JsonWebKey } from '../auth/crypto.ts';
  * the private half is sealed in the box's `sync.key`). SECURITY code, shared by every use:
  *
  *  - the camera address a phone sends through the cloud (`cameraRelayCrypto.ts`, label `maxcom-camera-relay-v1`);
- *  - the YouTube grant the cloud hands over to the box once, and the OAuth client it delivers to a linked box
- *    (`youtubeBoxCloud.ts`, labels `maxcom-youtube-handover-v1` and `maxcom-youtube-client-v1`).
+ *  - the OAuth client the cloud delivers to a linked box for YouTube (`youtubeBoxCloud.ts`, label
+ *    `maxcom-youtube-client-v1`). (Until 2026.11.15 a YouTube grant the cloud held was handed over too, under a label
+ *    of its own; the cloud holds none now.)
  *
  * A fresh ephemeral P-256 key per message, ECDH, HKDF-SHA256 (info `<label>\n<aad>`) into an AES-256-GCM key; the
  * associated text is authenticated too. Each use has its own label, so a value sealed for one use never opens as

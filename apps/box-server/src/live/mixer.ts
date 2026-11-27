@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { connect } from 'node:net';
 import { PassThrough } from 'node:stream';
@@ -82,6 +83,13 @@ export interface MixArgsInput {
    * `deviceMic` source) is not lifted again. Everything else (web/iPad feed, box Mic-in, IP camera sound) is.
    */
   appLevelled?: boolean;
+  /** ffmpeg's log level (default `warning`; `info` while the debug flag file exists). */
+  logLevel?: 'warning' | 'info';
+  /**
+   * A third output for YouTube: the same copied picture plus the same mix as AAC, published to this path (same login as
+   * the first output). The mix is decoded once and encoded twice (`asplit`). Left out, the arguments are as before.
+   */
+  ytOutputPath?: string;
 }
 
 export const MIX_PATHS = { camera: 'surau-cam', ingest: 'surau-in', deviceMic: 'surau-mic' } as const;
@@ -125,18 +133,18 @@ const PASS_RE = /^[A-Za-z0-9]{8,128}$/;
 // through an argument array (never a shell); only what the dshow input string could misread is refused.
 // eslint-disable-next-line no-control-regex
 const DEVICE_NAME_BAD = /[\u0000-\u001f\u007f"=:�]/u;
-function deviceNameOk(name: string): boolean {
+export function deviceNameOk(name: string): boolean {
   return name.length >= 1 && name.length <= 120 && !DEVICE_NAME_BAD.test(name);
 }
 const PATH_RE = /^[a-z][a-z0-9-]{0,31}$/;
 
-function intIn(name: string, v: number, lo: number, hi: number): number {
+export function intIn(name: string, v: number, lo: number, hi: number): number {
   if (!Number.isInteger(v) || v < lo || v > hi) throw new RangeError(`mixer: ${name} must be an integer ${lo}..${hi}`);
   return v;
 }
 
 /** 0..100 percent to the ffmpeg volume factor, two decimals (only digits and one dot can result). */
-function factor(pct: number): string {
+export function factor(pct: number): string {
   return (intIn('volume', pct, 0, 100) / 100).toFixed(2);
 }
 
@@ -144,7 +152,7 @@ function seconds(ms: number): string {
   return (intIn('headroomMs', ms, 0, MAX_DELAY_MS) / 1000).toFixed(3);
 }
 
-function rtspUrl(i: MixArgsInput, path: string): string {
+export function rtspUrl(i: Pick<MixArgsInput, 'rtspPort' | 'rtspUser' | 'rtspPass'>, path: string): string {
   const port = intIn('rtspPort', i.rtspPort ?? 8554, 1, 65535);
   if (!PATH_RE.test(path)) throw new RangeError('mixer: bad path');
   let auth = '';
@@ -173,7 +181,9 @@ export function mixArgs(i: MixArgsInput): string[] {
 
   const allRtsp = i.added.length > 0 && i.added.every((a) => a.id === 'deviceMic');
   const args: string[] = allRtsp ? ['-copyts'] : [];
-  args.push('-hide_banner', '-loglevel', 'warning', '-y');
+  args.push('-hide_banner', '-loglevel', i.logLevel === 'info' ? 'info' : 'warning', '-y');
+  // the debug flag is on: no progress lines to bury the real messages (the default arguments stay as they were)
+  if (i.logLevel === 'info') args.push('-nostats');
   if (i.control === 'zmq') args.push('-nostdin');
 
   // Added sources first (inputs 0..n-1), the unit LAST (input n): see the header, input order.
@@ -221,15 +231,22 @@ export function mixArgs(i: MixArgsInput): string[] {
     mixIn.push(`[c${n + 1}]`);
     taps.push(`[t${n + 1}]`);
   });
+  // one mix; with a YouTube rendition it is split so the sound is encoded twice but never decoded or mixed twice
+  const out = i.outputPath ?? 'surau';
+  if (i.ytOutputPath !== undefined && i.ytOutputPath === out) throw new RangeError('mixer: the YouTube path must differ from the output path');
+  const mixEnd = i.ytOutputPath === undefined ? '[mix]' : ',asplit=2[mix][mixyt]';
   const zmq = i.control === 'zmq' ? `,azmq=bind_address=tcp\\\\://127.0.0.1\\\\:${zmqPort}` : '';
-  g.push(mixIn.length > 1 ? `${mixIn.join('')}amix=inputs=${mixIn.length}:normalize=0,aresample=async=1${zmq}${level}[mix]` : `[c0]aresample=async=1${zmq}${level}[mix]`);
+  g.push(mixIn.length > 1 ? `${mixIn.join('')}amix=inputs=${mixIn.length}:normalize=0,aresample=async=1${zmq}${level}${mixEnd}` : `[c0]aresample=async=1${zmq}${level}${mixEnd}`);
   g.push(taps.length > 1 ? `${taps.join('')}amerge=inputs=${taps.length},aformat=sample_fmts=s16[mon]` : '[t0]aformat=sample_fmts=s16[mon]');
 
   args.push('-filter_complex', g.join(';'));
   // Output 1: the copied picture + the mix as Opus, to MediaMTX.
-  const out = i.outputPath ?? 'surau';
   args.push('-map', `${unitIdx}:v`, '-map', '[mix]', '-c:v', 'copy', '-c:a', 'libopus', '-b:a', '96k', '-ar', '48000', '-ac', '2', '-f', 'rtsp', '-rtsp_transport', 'tcp', rtspUrl(i, out));
-  // Output 2: the PCM monitor (s16le, 16 kHz, channel 0 = reference, channel n = added source n after its delay).
+  // Output 2 (only with a YouTube rendition): the same copied picture + the same mix as AAC (YouTube's RTMP needs AAC, the TVs' WebRTC needs Opus).
+  if (i.ytOutputPath !== undefined) {
+    args.push('-map', `${unitIdx}:v`, '-map', '[mixyt]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-f', 'rtsp', '-rtsp_transport', 'tcp', rtspUrl(i, i.ytOutputPath));
+  }
+  // The last output: the PCM monitor (s16le, 16 kHz, channel 0 = reference, channel n = added source n after its delay).
   args.push('-map', '[mon]', '-c:a', 'pcm_s16le', '-ar', String(MONITOR_RATE), '-f', 's16le', 'pipe:1');
   return args;
 }
@@ -370,6 +387,9 @@ export interface MixerStatus {
   missing: AddedAudioId[];
   commandsSent: number;
   lastCommandError: string | null;
+  /** Runs ended on purpose because the monitor went silent, or by `kick()` (not counted as failures). */
+  stalls: number;
+  lastStall: { reason: string; atMs: number } | null;
 }
 
 export type SpawnFn = (cmd: string, args: string[], opts: SpawnOptions) => ChildProcess;
@@ -415,6 +435,18 @@ export interface MixerOptions {
   stableMs?: number;
   killAfterMs?: number;
   now?: () => number;
+  /** A run with no monitor bytes for this long (after its start grace) is ended as stalled (default 20000). */
+  stallMs?: number;
+  /** The first monitor bytes of a run may take this long (default 25000). */
+  startGraceMs?: number;
+  /** B4: the waits before the relaunch after the 3rd, 4th and 5th (and later) consecutive stall (default 10 s, 30 s, 60 s). */
+  stallBackoffMs?: readonly [number, number, number];
+  /** B4: a run that produced monitor bytes for this long is healthy and ends the streak of stalls (default 60000). */
+  healthyRunMs?: number;
+  /** Receives the combiner's own log lines and events (kinds `stderr`, `launch`, `exit`, `stall`). Text is already redacted. Never throws into the mixer. */
+  log?: (kind: string, text: string) => void;
+  /** While this file exists, the next launches run ffmpeg with `-loglevel info` (a switch for finding a cause). */
+  debugFlagPath?: string;
 }
 
 export interface MixerStartConfig {
@@ -422,6 +454,8 @@ export interface MixerStartConfig {
   unitHasAudio: boolean;
   unitVolume: number;
   added: MixAdded[];
+  /** Publish an AAC rendition of the mix to this path as well (see `MixArgsInput.ytOutputPath`). */
+  ytOutputPath?: string;
 }
 
 function childEnv(): NodeJS.ProcessEnv {
@@ -434,9 +468,11 @@ function childEnv(): NodeJS.ProcessEnv {
 }
 
 /** ffmpeg's words for a filter this build does not have (only the two of the leveller count). */
-const LEVELLER_MISSING_RE = /(?:no such filter|unknown filter)\W+(?:compand|alimiter)(?![a-z])/i;
+export const LEVELLER_MISSING_RE =/(?:no such filter|unknown filter)\W+(?:compand|alimiter)(?![a-z])/i;
 
 const MONITOR_CAP_BYTES = 1024 * 1024;
+/** A camera address with a login, whatever its host, never goes to a log. */
+export const URL_LOGIN_RE =/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]*@/gi;
 
 export class Mixer {
   /** Monitor PCM (s16le, 16 kHz). Lives across restarts; chunks are dropped, never queued, when nobody reads it. */
@@ -468,6 +504,22 @@ export class Mixer {
   private relaunchNoLeveller = false;
   /** The leveller probe is pending: no launch from any other path until it settles (the one launch after it uses the latest cfg). */
   private probing = false;
+  /** `held` values the start config gave (id to value); they survive a lost/back cycle and a unit switch. */
+  private heldGiven = new Map<AddedAudioId, boolean>();
+  private stalls = 0;
+  /** B4: stalls in a row without a healthy run in between. */
+  private stallStreak = 0;
+  /** B4: the wait the planned relaunch makes before it launches (0 = at once). */
+  private plannedDelayMs = 0;
+  private lastStall: { reason: string; atMs: number } | null = null;
+  private watch: ReturnType<typeof setInterval> | null = null;
+  private runs = 0;
+  /** Monitor bytes of the current run and the time of the last chunk. */
+  private runBytes = 0;
+  private lastDataAt = 0;
+  /** stderr message kind to its last logged time, and how many were left out (see relay.ts, `throttle`). */
+  private seen = new Map<string, number>();
+  private suppressed = new Map<string, number>();
 
   constructor(o: MixerOptions) {
     this.o = o;
@@ -498,6 +550,8 @@ export class Mixer {
       missing: [...this.lost],
       commandsSent: this.commandsSent,
       lastCommandError: this.lastCommandError,
+      stalls: this.stalls,
+      lastStall: this.lastStall === null ? null : { ...this.lastStall },
     };
   }
 
@@ -505,6 +559,7 @@ export class Mixer {
   start(cfg: MixerStartConfig): void {
     if (this.cfg !== null || this.stopped) return;
     this.cfg = { ...cfg, added: cfg.added.map((a) => ({ ...a })) };
+    for (const a of cfg.added) if (a.held !== undefined) this.heldGiven.set(a.id, a.held);
     this.state = 'starting';
     if (this.levellerOn !== null || this.o.levellerProbe === undefined) {
       this.launch();
@@ -564,7 +619,7 @@ export class Mixer {
     }
     if (ok) {
       const a = this.cfg.added.find((x) => x.id === id);
-      if (a !== undefined) delete a.held; // default rule: held until aligned when the reference is audible
+      if (a !== undefined) this.resetHeld(a); // default rule: held until aligned when the reference is audible
     }
     this.restartNow();
   }
@@ -575,12 +630,21 @@ export class Mixer {
     if (this.cfg.unit === unit && (unitHasAudio === undefined || unitHasAudio === this.cfg.unitHasAudio)) return;
     this.cfg.unit = unit;
     if (unitHasAudio !== undefined) this.cfg.unitHasAudio = unitHasAudio;
-    for (const a of this.cfg.added) delete a.held; // new unit, new lock
+    for (const a of this.cfg.added) this.resetHeld(a); // new unit, new lock
     this.restartNow();
+  }
+
+  /**
+   * Ends the current run at once and starts the next without the back-off (the owner saw that the output is gone).
+   * Counted in `stalls`. Does nothing when stopped, not started, or while a relaunch it asked for is already under way.
+   */
+  kick(reason: string): void {
+    this.endRun(String(reason).replace(/[^\w .:=-]/g, '_').slice(0, 80) || 'kick');
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
+    this.clearWatch();
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     const c = this.child;
@@ -634,19 +698,106 @@ export class Mixer {
       outputPath: this.o.outputPath,
       leveller: this.levellerOn !== false,
       appLevelled: this.o.appLevelled === true,
+      logLevel: this.debugOn() ? 'info' : 'warning',
+      ytOutputPath: cfg.ytOutputPath,
     });
   }
 
-  private restartNow(): void {
+  /** The `held` of a source after its input came back or the unit changed: what the start config said, else the default rule. */
+  private resetHeld(a: MixAdded): void {
+    const given = this.heldGiven.get(a.id);
+    if (given === undefined) delete a.held;
+    else a.held = given;
+  }
+
+  private clearWatch(): void {
+    if (this.watch !== null) clearInterval(this.watch);
+    this.watch = null;
+  }
+
+  /** One line to the owner's log; redacted again, camera logins removed, and a failing logger changes nothing. */
+  private emit(kind: string, text: string): void {
+    const log = this.o.log;
+    if (log === undefined) return;
+    try {
+      log(kind, this.redact(text).text.replace(URL_LOGIN_RE, '$1***@'));
+    } catch {
+      /* a logger must not stop the live */
+    }
+  }
+
+  /** The same stderr line again and again is logged once per 10 s per kind, with a count of the ones left out (as the relay does). */
+  private throttle(text: string): string | null {
+    const kind = text.replace(/0x[0-9a-f]+/gi, '#').replace(/-?\d+(?:\.\d+)?/g, '#');
+    const at = this.now();
+    const last = this.seen.get(kind);
+    if (last !== undefined && at - last < 10_000) {
+      this.suppressed.set(kind, (this.suppressed.get(kind) ?? 0) + 1);
+      return null;
+    }
+    if (this.seen.size >= 200) {
+      this.seen.clear();
+      this.suppressed.clear();
+    }
+    this.seen.set(kind, at);
+    const n = this.suppressed.get(kind);
+    this.suppressed.delete(kind);
+    return n ? `${text} (${n} similar lines left out)` : text;
+  }
+
+  /** A run ended on purpose (silent monitor or a kick): count it, write the block, relaunch without back-off and without a failure mark. */
+  private endRun(reason: string): void {
+    if (this.cfg === null || this.stopped || this.probing) return;
+    const c = this.child;
+    const alive = c !== null && c.exitCode === null && c.signalCode === null;
+    if (alive && this.planned) return; // a relaunch is already under way
+    this.stalls++;
+    const at = this.now();
+    this.lastStall = { reason, atMs: at };
+    const since = this.startedAt > 0 ? Math.max(0, Math.round((at - this.startedAt) / 1000)) : 0;
+    this.emit('stall', [`reason=${reason}`, `seconds since launch=${since}`, `monitor bytes in this run=${this.runBytes}`, 'stderr tail:', ...this.stderrTail.map((l) => `  ${l}`)].join('\n'));
+    // B4: a run that gave monitor bytes for a minute was healthy and ends the streak; the 3rd stall in a row and every later one wait before the relaunch
+    if (this.runBytes > 0 && this.lastDataAt - this.startedAt >= (this.o.healthyRunMs ?? 60_000)) this.stallStreak = 0;
+    this.stallStreak += 1;
+    const waits = this.o.stallBackoffMs ?? [10_000, 30_000, 60_000];
+    const wait = this.stallStreak >= 3 ? (waits[Math.min(this.stallStreak - 3, 2)] ?? 0) : 0;
+    if (wait > 0) this.emit('backoff', `${this.stallStreak} stalls in a row without a healthy run: the next relaunch waits ${Math.round(wait / 1000)} s`);
+    this.restartNow(wait);
+  }
+
+  /** The debug flag file exists: ffmpeg runs with `-loglevel info` (a file, because the launcher passes no free environment to the box). */
+  private debugOn(): boolean {
+    const p = this.o.debugFlagPath;
+    if (p === undefined || p === '') return false;
+    try {
+      return existsSync(p);
+    } catch {
+      return false;
+    }
+  }
+
+  /** B4: the next launch comes after `ms` (state `retrying`); a later `restartNow` still launches at once. */
+  private launchLater(ms: number): void {
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.state = 'retrying';
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      this.launch();
+    }, ms);
+  }
+
+  private restartNow(delayMs = 0): void {
     if (this.probing) return; // the launch after the probe reads the latest cfg/lost state
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     const c = this.child;
     if (c === null || c.exitCode !== null || c.signalCode !== null) {
-      this.launch();
+      if (delayMs > 0) this.launchLater(delayMs);
+      else this.launch();
       return;
     }
     this.planned = true;
+    this.plannedDelayMs = delayMs;
     this.state = 'retrying';
     try {
       c.kill('SIGTERM');
@@ -685,15 +836,38 @@ export class Mixer {
     }
     this.child = proc;
     this.planned = false;
+    this.plannedDelayMs = 0;
+    this.runs++;
+    this.emit('launch', `run ${this.runs}: ffmpeg ${args.join(' ')}`);
     // a new run starts on a frame boundary: readers drop what is left of the old one
     this.sink.emit('restart');
     this.startedAt = this.now();
+    this.runBytes = 0;
+    this.lastDataAt = this.startedAt;
     this.stderrTail = [];
     this.state = 'running';
     proc.stdin?.on('error', () => {
       /* a closed pipe at exit; the exit handler reports */
     });
+    // the monitor watchdog: silence for stallMs after the start grace ends the run (a stuck ffmpeg prints nothing and never exits)
+    this.clearWatch();
+    const stallMs = this.o.stallMs ?? 20_000;
+    const graceMs = this.o.startGraceMs ?? 25_000;
+    this.watch = setInterval(
+      () => {
+        if (this.child !== proc || this.stopped) return;
+        const at = this.now();
+        if (at - this.startedAt < graceMs || at - this.lastDataAt < stallMs) return;
+        this.endRun('monitor_silent');
+      },
+      Math.max(10, Math.min(2000, Math.round(Math.min(stallMs, graceMs) / 4))),
+    );
+    this.watch.unref();
     proc.stdout?.on('data', (d: Buffer) => {
+      if (this.child === proc) {
+        this.runBytes += d.length;
+        this.lastDataAt = this.now();
+      }
       if (this.sink.writableLength < MONITOR_CAP_BYTES) this.sink.write(d);
     });
     let buf = '';
@@ -702,12 +876,15 @@ export class Mixer {
       buf += chunk;
       if (buf.length > 65_536) buf = buf.slice(-65_536);
       let n: number;
-      while ((n = buf.indexOf('\n')) >= 0) {
-        const line = this.redact(buf.slice(0, n).replace(/\r$/, '')).text.slice(0, 300);
+      // ffmpeg ends its progress lines with a bare carriage return: a line ends at either one
+      while ((n = buf.search(/[\r\n]/)) >= 0) {
+        const line = this.redact(buf.slice(0, n)).text.slice(0, 300);
         buf = buf.slice(n + 1);
         if (line === '') continue;
         this.stderrTail.push(line);
         if (this.stderrTail.length > 12) this.stderrTail.shift();
+        const shown = this.throttle(line);
+        if (shown !== null) this.emit('stderr', shown);
         if (this.levellerOn === true && LEVELLER_MISSING_RE.test(line)) {
           this.levellerOn = false;
           this.relaunchNoLeveller = true;
@@ -721,10 +898,15 @@ export class Mixer {
       }
     });
     let settled = false;
-    const finish = (reason: string): void => {
+    const finish = (reason: string, code?: number | null, signal?: string | null): void => {
       if (settled) return;
       settled = true;
-      if (this.child === proc) this.child = null;
+      if (this.child === proc) {
+        this.child = null;
+        this.clearWatch();
+      }
+      const ran = Math.max(0, Math.round((this.now() - this.startedAt) / 1000));
+      this.emit('exit', code === undefined ? `${reason} after ${ran} s` : `code=${code ?? 'null'} signal=${signal ?? 'none'} after ${ran} s`);
       if (this.stopped) return;
       if (this.relaunchNoLeveller) {
         this.relaunchNoLeveller = false;
@@ -734,7 +916,10 @@ export class Mixer {
       }
       if (this.planned) {
         this.restarts++;
-        this.launch();
+        const delay = this.plannedDelayMs;
+        this.plannedDelayMs = 0;
+        if (delay > 0) this.launchLater(delay);
+        else this.launch();
         return;
       }
       this.lastError = this.stderrTail[this.stderrTail.length - 1] ?? reason;
@@ -744,7 +929,7 @@ export class Mixer {
       this.lastError = `spawn ${e.code ?? 'error'}`;
       finish(this.lastError);
     });
-    proc.on('close', (code) => finish(`ffmpeg exited with code ${code ?? 'null'}`));
+    proc.on('close', (code, signal) => finish(`ffmpeg exited with code ${code ?? 'null'}`, code, signal));
   }
 
   /** An unplanned end of a run: back off and start again, or give up after too many in a row. */

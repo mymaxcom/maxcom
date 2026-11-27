@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { VIDEO_LIMITS } from '@surau/core';
 import { tilawahPlanOf } from '../../audio/tilawah.ts';
 import { assetSrc } from '../../content/assets.ts';
 import type { CardProps } from '../../content/ContentLayer.tsx';
 import { isPreview } from '../../data/preview.ts';
+import { LiveDecoderContext } from '../../video/decoder.ts';
 import { readPlayerMessage, youtubeEmbedUrl, YT_ORIGIN } from '../../video/youtube.ts';
 import { headerBottom } from './PosterScreen.tsx';
 
@@ -46,6 +47,8 @@ export function VideoScreen({ content, itemId, startedAt, view, onRendered, onFi
   const v = content.videos?.find((x) => x.id === itemId);
   const preview = isPreview();
   const tilawahBusy = tilawahPlanOf(view, content) !== null;
+  // O31: the live player holds the page's one video decoder (a weak box runs one at a time): no second picture.
+  const liveBusy = useContext(LiveDecoderContext);
   const online = !offlineNow();
   const isYoutube = v?.source !== 'upload';
   const file = v?.source === 'upload' ? assetSrc(v.assetId) : null;
@@ -68,7 +71,7 @@ export function VideoScreen({ content, itemId, startedAt, view, onRendered, onFi
   soundRef.current = sound;
   const [failed, setFailed] = useState(false);
   const [ratio, setRatio] = useState<number | null>(null);
-  const playable = !!v && !failed && !tilawahBusy && (isYoutube ? embed !== null && online : file !== null);
+  const playable = !!v && !failed && !tilawahBusy && !liveBusy && (isYoutube ? embed !== null && online : file !== null);
   const rendered = playable;
 
   useEffect(() => {

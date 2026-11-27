@@ -22,7 +22,7 @@ describe('field metadata', () => {
     expect(fieldMeta('autoTone', 'override')?.hidden).toBe(true);
     const hidden = Object.entries(FIELD_META).flatMap(([f, t]) => Object.entries(t!).filter(([, m]) => m.hidden).map(([p]) => `${f}.${p}`));
     expect(hidden.sort()).toEqual([
-      'autoTone.override', 'liveYoutube.nextLiveOn', 'liveYoutube.relayFrom', 'pengumuman.daysAhead', 'programKhas.daysAhead', 'system.suspendedAt', 'themeStyle.enabled',
+      'autoTone.override', 'liveCamera.avOffsetMs.boxInput', 'liveCamera.avOffsetMs.deviceMic', 'liveYoutube.autoQuality', 'liveYoutube.maxBitrateKbps', 'liveYoutube.nextLiveOn', 'liveYoutube.relayFrom', 'pengumuman.daysAhead', 'programKhas.daysAhead', 'system.suspendedAt', 'themeStyle.enabled', 'tvProfiles.enabled',
     ]);
   });
   it('[K17] settings nothing reads are hidden yet still validate, so old data loads', () => {
@@ -101,9 +101,17 @@ describe('field metadata', () => {
     expect(n).toBeGreaterThan(10);
   });
   it('marks the Lanjutan fields as system scope', () => {
-    expect(FIELD_META.liveYoutube!.maxBitrateKbps!.scope).toBe('system');
+    expect(FIELD_META.liveYoutube!.relayVideo!.scope).toBe('system');
+    // the bitrate is a live setting, not a system one: no system scope, no Lanjutan row
+    expect(FIELD_META.liveYoutube!.maxBitrateKbps!.scope).toBeUndefined();
+    expect(isSystemField('liveYoutube', 'maxBitrateKbps')).toBe(false);
+    expect(LANJUTAN_ROWS.find((r) => r.feature === 'liveYoutube')!.fields).toEqual(['relayVideo']);
     expect(fieldMeta('tilawah', 'cacheMaxMb')!.scope).toBe('system');
     expect(fieldMeta('liveYoutube', 'privacy')).toBeUndefined();
+    // no manual quality or sound-delay setting: the keys stay (defaults, stored values) but the form never shows them
+    for (const [f, k] of [['liveYoutube', 'maxBitrateKbps'], ['liveYoutube', 'autoQuality'], ['liveCamera', 'avOffsetMs.deviceMic'], ['liveCamera', 'avOffsetMs.boxInput']] as const) {
+      expect(fieldMeta(f, k)?.hidden, `${f}.${k}`).toBe(true);
+    }
     // the surau's YouTube choice has its own control on the Live screen: not offered in Tetapan, and any live role may change it
     expect(fieldMeta('liveYoutube', 'nextLiveOn')!.hidden).toBe(true);
     expect(isSystemField('liveYoutube', 'nextLiveOn')).toBe(false);
@@ -119,7 +127,7 @@ describe('field metadata', () => {
     for (const c of ['default', 'colourful', 'creative', 'oldschool', 'minimal']) expect(validateFeatureSettings('kioskTemplate', { templateId: c }).ok, c).toBe(true);
     expect(isSystemField('kioskTemplate', 'templateId')).toBe(false);
     expect(FEATURE_DESC.kioskTemplate.ms).toContain('Setiap skrin boleh diubah suai');
-    expect(HIDDEN_FEATURES).toEqual(['themeStyle', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage']);
+    expect(HIDDEN_FEATURES).toEqual(['themeStyle', 'tvProfiles', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage']);
   });
 });
 
@@ -133,7 +141,8 @@ describe('system scope', () => {
   it('says when a patch needs system:write', () => {
     expect(patchNeedsSystemWrite('liveYoutube', { privacy: 'public' })).toBe(false);
     expect(patchNeedsSystemWrite('liveYoutube', { relayVideo: 'copy' })).toBe(true);
-    expect(patchNeedsSystemWrite('liveYoutube', { privacy: 'public', maxBitrateKbps: 2000 })).toBe(true);
+    expect(patchNeedsSystemWrite('liveYoutube', { privacy: 'public', maxBitrateKbps: 2000 })).toBe(false);
+    expect(patchNeedsSystemWrite('liveYoutube', { privacy: 'public', relayVideo: 'reencode' })).toBe(true);
     expect(patchNeedsSystemWrite('cloudSync', { enabled: false })).toBe(true);
     expect(patchNeedsSystemWrite('system', {})).toBe(true);
     expect(patchNeedsSystemWrite('dataSources', { esolat: { url: 'https://x.my' } })).toBe(true);

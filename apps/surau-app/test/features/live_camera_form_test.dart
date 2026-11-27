@@ -61,7 +61,17 @@ class _Cam {
   /// When set, the test waits for it.
   Completer<void>? testGate;
 
+  /// Lane X: the control opt-in the box keeps with the camera, and what the app PUT to change it.
+  Map<String, Object?> control = {
+    'enabled': false,
+    'protocol': 'http',
+    'profile': {'preset': 1, 'focus': 'continuous', 'tracking': 'off', 'exposureEv': 0.0},
+    'applyOnLive': false,
+  };
+  final List<Map<String, dynamic>> controlPuts = [];
+
   Map<String, Object?> masked() => {
+    'control': control,
     'configured': url.isNotEmpty,
     'url': url.isEmpty || password == null || password!.isEmpty ? url : url.replaceFirst('rtsp://', 'rtsp://${username ?? ''}:$_dots@'),
     'username': username,
@@ -78,7 +88,7 @@ Map<String, Object?> _okTest({bool audio = true}) => {
   'hasAudio': audio,
   'codecs': audio ? ['H264', 'MPEG-4 Audio'] : ['H264'],
   'transport': 'tcp',
-  'message': 'Berjaya. Kotak menerima gambar dari kamera.',
+  'message': 'Berjaya. MAXCOM menerima gambar dari kamera.',
 };
 
 Map<String, Object?> _failTest(String code, String message) => {
@@ -98,8 +108,10 @@ Future<(ShellHarness, _Cam)> openForm(
   bool configured = true,
   String name = 'Kamera Mimbar',
   String transport = 'auto',
+  Map<String, Object?>? control,
 }) async {
   final cam = _Cam(configured: configured);
+  if (control != null) cam.control = control;
   final h = await pumpShell(tester, roles: roles);
   h.settings['liveCamera'] = {'enabled': enabled, 'name': name, 'transport': transport};
   h.container.invalidate(settingsProvider);
@@ -129,6 +141,13 @@ Future<(ShellHarness, _Cam)> openForm(
     }
     if (b['password'] is String) cam.password = b['password'] as String;
     if (changedAddress && stored != cam.url) cam.lastTest = null;
+    return jsonResponse(200, cam.masked());
+  };
+  h.handlers['PUT /api/live/camera/control'] = (r) async {
+    final b = jsonDecode(r.body) as Map<String, dynamic>;
+    cam.controlPuts.add(b);
+    if (cam.url.isEmpty) return jsonResponse(404, {'errors': ['Alamat kamera belum disimpan.'], 'code': 'not_configured'});
+    cam.control = {...cam.control, for (final e in b.entries) if (e.key != 'protocol') e.key: e.value};
     return jsonResponse(200, cam.masked());
   };
   h.handlers['DELETE /api/live/camera'] = (r) async {
@@ -182,7 +201,7 @@ void main() {
     testWidgets('shows name, address, login, dots for the password, audio from the last test, Lanjutan folded', (tester) async {
       final (h, _) = await openForm(tester);
       expect(find.text('Kamera luaran'), findsWidgets);
-      expect(find.text('Guna kamera luaran'), findsOneWidget);
+      expect(find.text('Tawarkan kamera luaran'), findsOneWidget);
       expect(find.text('Dipaparkan sebagai pilihan sebelum siaran'), findsOneWidget);
       expect((tester.widget<TextField>(k('camera-name')).controller!.text), 'Kamera Mimbar');
       // The address as the box answered it: password as dots, not the password.
@@ -191,7 +210,7 @@ void main() {
       expect(k('camera-password-dots'), findsOneWidget);
       expect(k('camera-password'), findsNothing);
       expect(find.text('Tukar kata laluan'), findsOneWidget);
-      expect(find.text('Disimpan bersulit di kotak MAXCOM sahaja, tidak di awan. Tidak dipaparkan semula.'), findsOneWidget);
+      expect(find.text('Disimpan bersulit di MAXCOM sahaja, tidak di awan. Tidak dipaparkan semula.'), findsOneWidget);
       expect(find.text('Ada, AAC'), findsOneWidget);
       expect(find.text('Audio kamera digunakan bersama gambarnya. Sumber lain boleh ditambah dan dicampur sebelum setiap siaran.'), findsOneWidget);
       expect(find.text('Uji sambungan'), findsOneWidget);
@@ -203,8 +222,8 @@ void main() {
         expect(find.text(x), findsOneWidget);
       }
       expect(find.text('Akan datang'), findsNWidgets(3));
-      expect(find.text('Telefon atau kotak yang menarik video mesti berada pada Wi-Fi surau yang sama dengan kamera. Internet tidak diperlukan untuk siaran ke skrin surau.'), findsOneWidget);
-      expect(find.textContaining('kotak'), findsWidgets, reason: 'the camera texts of the mockups say "kotak MAXCOM"');
+      expect(find.text('Telefon atau MAXCOM yang menarik video mesti berada pada Wi-Fi surau yang sama dengan kamera. Internet tidak diperlukan untuk siaran ke skrin surau.'), findsOneWidget);
+      expect(find.textContaining('MAXCOM'), findsWidgets, reason: 'the camera texts of the mockups say "MAXCOM"');
       // nothing to save yet
       expect(tester.widget<FilledButton>(save).enabled, isFalse);
       await expectGoldens(tester, h.app, 'camera_form');
@@ -218,12 +237,28 @@ void main() {
       expect(find.text('Cari kamera di rangkaian'), findsOneWidget);
     });
 
+    testWidgets('B7: Kecerahan gambar is on the page, Automatik by default, and the choice is saved with the settings', (tester) async {
+      final (h, _) = await openForm(tester);
+      await reveal(tester, k('camera-brightness-card'));
+      expect(find.text('Kecerahan gambar'), findsOneWidget);
+      await tester.tap(find.descendant(of: k('camera-brightness-card'), matching: find.text('Automatik')));
+      await settle(tester);
+      await tester.tap(find.text('Cerah').last);
+      await settle(tester);
+      await reveal(tester, save);
+      await tester.tap(save);
+      await settle(tester);
+      final put = h.box.seen.where((r) => r.method == 'PUT' && r.url.path == '/api/settings/liveCamera').single;
+      expect(jsonDecode(put.body), {'brightness': 'bright'});
+    });
+
     testWidgets('Pengangkutan sits inside Lanjutan: Automatik, TCP, UDP; the choice is saved with the settings', (tester) async {
       final (h, _) = await openForm(tester);
       await reveal(tester, k('camera-lanjutan'));
       await tester.tap(k('camera-lanjutan'));
       await settle(tester);
-      expect(find.text('Automatik'), findsOneWidget);
+      // the transport choice and, below the card, the picture brightness choice (also Automatik by default)
+      expect(find.text('Automatik'), findsNWidgets(2));
       expect(find.text('TCP'), findsOneWidget);
       expect(find.text('UDP'), findsOneWidget);
       expect(find.textContaining('Automatik cuba TCP dahulu'), findsOneWidget);
@@ -292,7 +327,7 @@ void main() {
       expect(find.text('rtsp://10.168.1.50:554/stream1'), findsOneWidget);
       expect(find.text('Kosongkan jika ada dalam alamat'), findsNWidgets(2));
       expect(k('camera-password'), findsOneWidget);
-      expect(find.text('Disimpan bersulit di kotak MAXCOM sahaja, tidak di awan.'), findsOneWidget);
+      expect(find.text('Disimpan bersulit di MAXCOM sahaja, tidak di awan.'), findsOneWidget);
       expect(find.text('Belum diketahui. Dikesan semasa Uji sambungan.'), findsOneWidget);
       await reveal(tester, k('camera-lanjutan'));
       await tester.tap(k('camera-lanjutan'));
@@ -420,6 +455,27 @@ void main() {
     });
   });
 
+  group('[G2] Set semula kepada lalai on the camera page', () {
+    testWidgets('leaves the camera ON with its name, address and login; only the advanced choices go back', (tester) async {
+      final (h, cam) = await openForm(tester, transport: 'udp');
+      expect(find.text('Set semula kepada lalai'), findsNothing, reason: 'in the page menu, not 8 px under Simpan');
+      await tester.tap(k('feature-menu'));
+      await settle(tester);
+      await tester.tap(k('feature-reset'));
+      await settle(tester);
+      expect(find.text('Pilihan lanjutan akan dikembalikan kepada lalai. Kamera kekal dihidupkan.'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Set semula kepada lalai'));
+      await settle(tester);
+      final put = h.box.seen.where((r) => r.method == 'PUT' && r.url.path == '/api/settings/liveCamera').single;
+      final body = jsonDecode(put.body) as Map<String, dynamic>;
+      expect(body.containsKey('enabled'), isFalse, reason: 'audit id 1915: the reset switched the camera off');
+      expect(body.containsKey('name'), isFalse, reason: 'audit id 1915: the reset renamed it "Kamera luaran"');
+      expect(body['transport'], 'auto');
+      expect(cam.puts, isEmpty, reason: 'the sealed record (address, login) is not touched');
+      expect(cam.deletes, 0);
+    });
+  });
+
   group('mockups 10 to 15: Uji sambungan', () {
     testWidgets('10 running: the button is disabled and says who is connecting to what', (tester) async {
       final (h, cam) = await openForm(tester);
@@ -432,7 +488,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       expect(k('camera-test-running'), findsOneWidget);
-      expect(find.text('Kotak MAXCOM sedang menyambung ke kamera'), findsOneWidget);
+      expect(find.text('MAXCOM sedang menyambung ke kamera'), findsOneWidget);
       expect(find.text('Menghubungi 10.168.1.50. Ini mengambil masa hingga 15 saat.'), findsOneWidget);
       expect(tester.widget<OutlinedButton>(k('camera-test')).onPressed, isNull);
       await goldensUnsettled(tester, h.app, 'camera_test_running');
@@ -451,7 +507,7 @@ void main() {
       // The address that was typed is saved first: the box tests the saved record.
       expect(cam.puts.single['url'], 'rtsp://10.168.1.50:554/stream1');
       expect(cam.tests.single, {'transport': 'auto'});
-      expect(find.text('Berjaya. Kotak menerima gambar dari kamera.'), findsOneWidget);
+      expect(find.text('Berjaya. MAXCOM menerima gambar dari kamera.'), findsOneWidget);
       for (final chip in ['H.264', 'Audio AAC', 'Pengangkutan TCP']) {
         expect(find.text(chip), findsOneWidget, reason: chip);
       }
@@ -471,7 +527,7 @@ void main() {
     });
 
     for (final c in <(String, String, String, String, String)>[
-      ('12', 'unreachable', 'Gagal: kamera tidak dapat dihubungi', 'Kotak tidak mendapat jawapan dari 10.168.1.50.', 'camera_test_unreachable'),
+      ('12', 'unreachable', 'Gagal: kamera tidak dapat dihubungi', 'MAXCOM tidak mendapat jawapan dari 10.168.1.50.', 'camera_test_unreachable'),
       ('13', 'login', 'Gagal: nama pengguna atau kata laluan salah', 'Kamera menolak log masuk.', 'camera_test_login'),
       ('14', 'codec', 'Gagal: codec tidak disokong, guna H.264', 'Tukar pengekodan strim utama kepada H.264', 'camera_test_codec'),
       ('15', 'path', 'Gagal: alamat strim tidak dijumpai', 'Kamera menjawab tetapi tiada strim di alamat ini.', 'camera_test_path'),
@@ -603,6 +659,96 @@ void main() {
     });
   });
 
+  group('Lane X: Benarkan kawalan kamera', () {
+    testWidgets('a saved camera shows the switch, off, with its note; switching it on tells the box and keeps the form', (tester) async {
+      final (h, cam) = await openForm(tester);
+      await reveal(tester, k('camera-control-switch'));
+      expect(find.text('Benarkan kawalan kamera'), findsOneWidget);
+      expect(find.text('Hanya untuk kamera yang menyokong kawalan melalui rangkaian.'), findsOneWidget);
+      expect(tester.widget<SwitchListTile>(k('camera-control-switch')).value, isFalse);
+      await expectGoldens(tester, h.app, 'camera_form_control');
+      await tester.tap(k('camera-control-switch'));
+      await settle(tester);
+      expect(cam.controlPuts, [
+        {'enabled': true},
+      ]);
+      expect(tester.widget<SwitchListTile>(k('camera-control-switch')).value, isTrue);
+      // the address typed before is still there
+      expect(tester.widget<TextField>(k('camera-url')).controller!.text, 'rtsp://siaran:$_dots@10.168.1.50:554/stream1');
+      expect(k('camera-control-error'), findsNothing);
+      // and off again
+      await tester.tap(k('camera-control-switch'));
+      await settle(tester);
+      expect(cam.controlPuts.last, {'enabled': false});
+      expect(tester.widget<SwitchListTile>(k('camera-control-switch')).value, isFalse);
+    });
+
+    testWidgets('the profile fields appear under the switch only while it is on, with the defaults; each change is saved at once', (tester) async {
+      final (_, cam) = await openForm(tester);
+      expect(k('camera-profile'), findsNothing);
+      await reveal(tester, k('camera-control-switch'));
+      await tester.tap(k('camera-control-switch'));
+      await settle(tester);
+      await reveal(tester, k('camera-profile'));
+      for (final t in ['Kedudukan', 'Fokus', 'Jejak automatik', 'Kecerahan', 'Berterusan', 'Sekali', 'Manual', 'Tutup', 'Orang', 'Terapkan semasa siaran bermula']) {
+        expect(find.text(t), findsOneWidget, reason: t);
+      }
+      expect(tester.widget<Text>(k('camera-profile-ev')).data, '0.0');
+      expect(tester.widget<SwitchListTile>(k('camera-profile-on-live')).value, isFalse);
+      await tester.tap(find.descendant(of: k('camera-profile-focus'), matching: find.text('Sekali')));
+      await settle(tester);
+      expect(cam.controlPuts.last, {
+        'profile': {'preset': 1, 'focus': 'single', 'tracking': 'off', 'exposureEv': 0.0},
+      });
+      await tester.tap(find.descendant(of: k('camera-profile-tracking'), matching: find.text('Orang')));
+      await settle(tester);
+      await tester.tap(find.descendant(of: k('camera-profile-preset'), matching: find.text('3')));
+      await settle(tester);
+      await reveal(tester, k('camera-profile-brighter'));
+      await tester.tap(k('camera-profile-brighter'));
+      await settle(tester);
+      expect(cam.controlPuts.last, {
+        'profile': {'preset': 3, 'focus': 'single', 'tracking': 'human', 'exposureEv': 0.5},
+      });
+      expect(tester.widget<Text>(k('camera-profile-ev')).data, '+0.5');
+      await reveal(tester, k('camera-profile-on-live'));
+      await tester.tap(k('camera-profile-on-live'));
+      await settle(tester);
+      expect(cam.controlPuts.last, {'applyOnLive': true});
+      expect(tester.widget<SwitchListTile>(k('camera-profile-on-live')).value, isTrue);
+    });
+
+    testWidgets('golden: the profile fields under the switch', (tester) async {
+      final (h, _) = await openForm(tester, control: {'enabled': true, 'protocol': 'http', 'profile': {'preset': 2, 'focus': 'single', 'tracking': 'off', 'exposureEv': -1.5}, 'applyOnLive': true});
+      await reveal(tester, k('camera-profile'));
+      await expectGoldens(tester, h.app, 'camera_form_profile');
+    });
+
+    testWidgets('brightness stops at +3.0', (tester) async {
+      final (_, cam) = await openForm(tester, control: {'enabled': true, 'protocol': 'http', 'profile': {'preset': 1, 'focus': 'continuous', 'tracking': 'off', 'exposureEv': 3.0}, 'applyOnLive': false});
+      expect(cam.control['enabled'], isTrue);
+      await reveal(tester, k('camera-profile-brighter'));
+      expect(tester.widget<IconButton>(k('camera-profile-brighter')).onPressed, isNull);
+      expect(tester.widget<IconButton>(k('camera-profile-darker')).onPressed, isNotNull);
+    });
+
+    testWidgets('no camera saved: no switch (there is nothing to control)', (tester) async {
+      await openForm(tester, configured: false);
+      expect(k('camera-control-switch'), findsNothing);
+    });
+
+    testWidgets('a box that refuses is told in the app words and the switch stays as it was', (tester) async {
+      final (h, cam) = await openForm(tester);
+      h.handlers['PUT /api/live/camera/control'] = (r) async => jsonResponse(404, {'errors': ['x'], 'code': 'not_configured'});
+      await reveal(tester, k('camera-control-switch'));
+      await tester.tap(k('camera-control-switch'));
+      await settle(tester);
+      expect(k('camera-control-error'), findsOneWidget);
+      expect(tester.widget<SwitchListTile>(k('camera-control-switch')).value, isFalse);
+      expect(cam.controlPuts, isEmpty);
+    });
+  });
+
   group('who sees it', () {
     for (final role in ['ajk', 'media', 'treasurer']) {
       testWidgets('$role does not: the route is refused, nothing is asked of the camera route', (tester) async {
@@ -703,7 +849,7 @@ void main() {
       'd': 'Mgiv-LvGFamfSh93EKF5BuhllvQSDIO-GKY9TTdPZ98',
     };
     const boxId = 'aaaa000000000001';
-    const pending = 'Dihantar ke kotak. Akan digunakan selepas kotak menerima (biasanya dalam 2 minit).';
+    const pending = 'Dihantar ke MAXCOM. Akan digunakan selepas MAXCOM menerima (biasanya dalam 2 minit).';
 
     Map<String, Object?> view({
       bool configured = false,
@@ -843,7 +989,7 @@ void main() {
       h.handlers['GET /api/live/camera'] = (r) async => jsonResponse(200, view(failure: 'bad_address', seq: 2));
       await go(tester, h);
       await reveal(tester, k('camera-cloud-refused'));
-      expect(find.textContaining('Kotak tidak menerima alamat itu'), findsOneWidget);
+      expect(find.textContaining('MAXCOM tidak menerima alamat itu'), findsOneWidget);
       expect(k('camera-pending'), findsNothing);
     });
 
@@ -880,7 +1026,7 @@ void main() {
       await tester.tap(save);
       await settle(tester);
       expect(puts, 0);
-      expect(find.text('Kotak belum disambung ke awan, jadi kamera hanya boleh ditetapkan di Wi-Fi surau.'), findsOneWidget);
+      expect(find.text('MAXCOM belum disambung ke awan, jadi kamera hanya boleh ditetapkan di Wi-Fi surau.'), findsOneWidget);
     });
 
     testWidgets('on the surau Wi-Fi the ONVIF search and the test are there and the note is not', (tester) async {

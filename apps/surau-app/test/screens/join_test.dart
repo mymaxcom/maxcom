@@ -217,7 +217,7 @@ void main() {
     testWidgets('the review shows the surau, the inviter, and the box id and fingerprint the BOX gave', (t) async {
       await t.pumpWidget(screen(initialCode: fixturePayload(exp: fixtureExpToday), info: (b, ca) async => infoOf()));
       await t.pumpAndSettle();
-      expect(find.text('Sertai Surau D\'Waqaf?'), findsOneWidget);
+      expect(find.text('Sertai Surau Contoh?'), findsOneWidget);
       expect(find.text('Assalamualaikum, Ustaz Ali'), findsWidgets);
       expect(find.text('Dijemput oleh Encik Hafiz'), findsOneWidget);
       expect(find.textContaining('Jemputan sah hingga'), findsOneWidget);

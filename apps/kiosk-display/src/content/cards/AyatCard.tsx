@@ -1,5 +1,6 @@
 import type { AyatCard as AyatData } from '@surau/core';
 import { surahNameFor, t } from '../../i18n.ts';
+import type { Lang } from '../../i18n.ts';
 import type { CardProps } from '../ContentLayer.tsx';
 import { arabicIndic, pageAt, useFit } from '../paging.ts';
 import { useScale } from '../scale.ts';
@@ -133,9 +134,26 @@ function rangeLabel(a: AyatData): string {
   return a.ayatTo > a.ayatFrom ? `${a.ayatFrom}-${a.ayatTo}` : String(a.ayatFrom);
 }
 
+/**
+ * A credit line of the box (written in BM: "Terjemahan: ...", "Tulisan Al-Quran: ...", "versi ...") with its fixed words
+ * in the TV language; the names stay as they are.
+ */
+export function creditFor(text: string, lang: Lang): string {
+  if (lang === 'ms') return text;
+  const w = lang === 'ar'
+    ? { tr: 'الترجمة: ', font: 'خط المصحف: ', audio: 'التلاوة: ', ver: ', الإصدار ' }
+    : { tr: 'Translation: ', font: 'Quran script: ', audio: 'Recitation: ', ver: ', version ' };
+  return text
+    .replace(/^Terjemahan: /, w.tr)
+    .replace(/^Tulisan Al-Quran: /, w.font)
+    .replace(/^Bacaan: /, w.audio)
+    .replace(/, versi /, w.ver);
+}
+
 export function AyatCard({ view, lang, content, startedAt, durationSeconds }: CardProps) {
   const a = content.ayat.today;
   const f = view.settings.ayatCard as unknown as { showTranslation?: unknown; textSize?: unknown };
+  // Tetapan decides on every TV, an Arabic one too (F30: only the zikir is Arabic-only).
   const showTranslation = f.showTranslation !== false;
   const size = textSizeOf(f.textSize);
   const scale = useScale();
@@ -184,11 +202,12 @@ export function AyatCard({ view, lang, content, startedAt, durationSeconds }: Ca
         ) : null}
       </div>
       <footer class="ayat__credit">
-        <span>{content.credits.translation}</span>
+        {/* the translation credit stays when Tetapan hides the translation */}
+        <span>{creditFor(content.credits.translation, lang)}</span>
         {content.credits.font ? (
           <>
             <span class="sep" aria-hidden="true" />
-            <span>{content.credits.font}</span>
+            <span>{creditFor(content.credits.font, lang)}</span>
           </>
         ) : null}
       </footer>

@@ -74,11 +74,11 @@ void main() {
       h.handlers['POST /api/auth/leave'] = (r) async => jsonResponse(200, {'ok': true});
       await tapKey(tester, 'this-device-leave');
       expect(find.text('Keluar dari surau'), findsWidgets);
-      expect(find.textContaining('Telefon ini akan dikeluarkan daripada Surau D\'Waqaf'), findsOneWidget);
+      expect(find.textContaining('Telefon ini akan dikeluarkan daripada Surau Contoh'), findsOneWidget);
       await tapKey(tester, 'leave-confirm');
       expect(h.box.byPath('/api/auth/leave')?.method, 'POST');
       expect(find.text('Anda sudah keluar'), findsOneWidget);
-      expect(find.textContaining('tidak lagi menyertai Surau D\'Waqaf'), findsOneWidget);
+      expect(find.textContaining('tidak lagi menyertai Surau Contoh'), findsOneWidget);
       expect((h.deps.key as FakeDeviceKey).clearCalls, 1, reason: 'wiped before the message, so a killed app leaves nothing behind');
       expect(await h.deps.boxStore.load(), isNull);
       await tapKey(tester, 'left-join-other');
@@ -180,7 +180,7 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('scan-paste')), boxQrText('setup'));
       await tapText(tester, 'Teruskan');
       expect(find.text('Telefon ini sudah menyertai surau lain'), findsOneWidget);
-      expect(find.text('Keluar dari Surau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Keluar dari Surau Contoh'), findsOneWidget);
     });
   });
 

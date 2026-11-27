@@ -8,7 +8,7 @@ import { useContent } from '../src/data/content.ts';
 /**
  * Videos tied to a prayer (afterPrayer, 2026.11.14): outside the rotation, played once a day right after the prayer's
  * zikir screen (after the solat phase when there is no zikir screen). 2026-11-03 is a Tuesday: Asar solat ends 16:45
- * (zikir 16:45 to 16:55), Maghrib countdown 18:48. 2026-11-06 is a Friday.
+ * (zikir 16:45 for 20 s per item, ceiling 10 minutes), Maghrib countdown 18:48. 2026-11-06 is a Friday.
  */
 const DATE = '2026-11-03';
 const FRI = '2026-11-06';
@@ -29,10 +29,10 @@ const plain = (id: string, extra: Partial<KioskVideo> = {}): KioskVideo => ({
 });
 const ZIKIR = [{ id: 'z1', updatedAt: 'x', updatedBy: 't', title: 'Zikir', text: 'x', order: 1 }];
 
-function content(videos: KioskVideo[], opts: { zikir?: boolean; slots?: TilawahSlot[] } = {}): KioskContent {
+function content(videos: KioskVideo[], opts: { zikir?: boolean; zikirCount?: number; slots?: TilawahSlot[] } = {}): KioskContent {
   return {
     date: DATE, kuliah: [], pengumuman: [], ticker: [], posters: [], programKhas: [], takwim: [], hadisToday: [], worldTimes: [], tugasan: [],
-    ayat: { today: null, tomorrow: null }, zikir: opts.zikir === false ? [] : (ZIKIR as unknown as KioskContent['zikir']),
+    ayat: { today: null, tomorrow: null }, zikir: opts.zikir === false ? [] : (Array.from({ length: opts.zikirCount ?? 1 }, (_, i) => ({ ...ZIKIR[0]!, id: `z${i}`, order: i })) as unknown as KioskContent['zikir']),
     tilawah: { slots: opts.slots ?? [], available: { 36: { reciter: 'Husary_64kbps', reciterName: 'Husary', ayatCount: 83 } } },
     credits: { translation: '', font: '', audio: '' }, videos,
   };
@@ -75,10 +75,11 @@ describe('a video with afterPrayer', () => {
 
   it('plays right after the zikir screen of that prayer, for its own length, and not before or after', () => {
     const { shown } = open(content([tied('t', 'asar')]), DATE);
-    expect(shown('16:54', 59)).toBeNull(); // the zikir screen still holds the stage
-    expect(shown('16:55')).toBe('t');
-    expect(shown('16:55', 119)).toBe('t');
-    expect(shown('16:57')).toBeNull(); // 120 s later: over
+    // one zikir item x 20 s after the solat end (16:45): the zikir screen holds the stage until 16:45:20, not 10 minutes
+    expect(shown('16:45', 19)).toBeNull();
+    expect(shown('16:45', 20)).toBe('t');
+    expect(shown('16:46', 19)).toBe('t');
+    expect(shown('16:47', 20)).toBeNull(); // 120 s later: over
   });
 
   it('with the zikir off, plays right after the solat phase', () => {
@@ -87,6 +88,16 @@ describe('a video with afterPrayer', () => {
     expect(shown('16:45')).toBe('t');
     expect(shown('16:46', 59)).toBe('t');
     expect(shown('16:47')).toBeNull();
+  });
+
+  it('the video starts at the solat end + the zikir length: 3 items x 20 s = 60 s, a long list is cut at the ceiling', () => {
+    const three = open(content([tied('t', 'asar')], { zikirCount: 3 }), DATE);
+    expect(three.shown('16:45', 59)).toBeNull();
+    expect(three.shown('16:46')).toBe('t');
+    cleanup();
+    const long = open(content([tied('t', 'asar')], { zikirCount: 100 }), DATE);
+    expect(long.shown('16:54', 59)).toBeNull();
+    expect(long.shown('16:55')).toBe('t');
   });
 
   it('with the zikir on but no zikir items (no screen), plays right after the solat phase', () => {
@@ -101,7 +112,7 @@ describe('a video with afterPrayer', () => {
     const { shown } = open(content([tied('t', 'zohor')]), FRI);
     expect(shown('12:50')).toBeNull();
     expect(shown('13:26')).toBeNull(); // where an ordinary day's zohor ends
-    expect(shown(hhmm(end.endsAt))).toBe('t');
+    expect(shown(hhmm(end.startsAt), 20)).toBe('t'); // the Jumaat solat end + 1 zikir x 20 s
   });
 
   it('is never shown during a prayer phase (countdown, iqamah, solat) and starts only when that prayer is over', () => {
@@ -109,59 +120,59 @@ describe('a video with afterPrayer', () => {
     expect(shown('18:49')).toBeNull(); // the countdown
     expect(shown('18:58', 30)).toBeNull(); // masuk waktu / iqamah
     expect(shown('19:09')).toBeNull(); // solat
-    expect(shown('19:32', 59)).toBeNull(); // Maghrib solat ends 19:23, its zikir screen runs to 19:33
-    expect(shown('19:33')).toBe('u');
+    expect(shown('19:23', 19)).toBeNull(); // Maghrib solat ends 19:23, its one zikir item runs to 19:23:20
+    expect(shown('19:23', 20)).toBe('u');
   });
 
   it('does not start when the next recitation or phase would cut it short', () => {
-    // a recitation 60 minutes before... starts at 16:58: a 300 s video at 16:55 has 180 s, a 120 s one fits
+    // a recitation 60 minutes before... starts at 16:48: a 300 s video at 16:45:20 has 160 s, a 120 s one fits
     const slot: TilawahSlot = {
-      id: 'ts', updatedAt: 'x', updatedBy: 't', days: ['daily'], before: 'maghrib', minutesBefore: 120, surah: 36, enabled: true,
+      id: 'ts', updatedAt: 'x', updatedBy: 't', days: ['daily'], before: 'maghrib', minutesBefore: 130, surah: 36, enabled: true,
     };
     const long = open(content([tied('t', 'asar', { durationSec: 300 })], { slots: [slot] }), DATE, { tilawah: { enabled: true } });
-    expect(long.shown('16:55')).toBeNull();
-    expect(long.shown('16:55', 30)).toBeNull();
+    expect(long.shown('16:45', 20)).toBeNull();
+    expect(long.shown('16:45', 50)).toBeNull();
     cleanup();
     const short = open(content([tied('t', 'asar', { durationSec: 120 })], { slots: [slot] }), DATE, { tilawah: { enabled: true } });
-    expect(short.shown('16:55')).toBe('t');
+    expect(short.shown('16:45', 20)).toBe('t');
   });
 
   it('respects days, from and to', () => {
-    expect(open(content([tied('t', 'asar', { days: ['sabtu'] })]), DATE).shown('16:55')).toBeNull();
+    expect(open(content([tied('t', 'asar', { days: ['sabtu'] })]), DATE).shown('16:45', 20)).toBeNull();
     cleanup();
-    expect(open(content([tied('t', 'asar', { days: ['selasa'] })]), DATE).shown('16:55')).toBe('t');
+    expect(open(content([tied('t', 'asar', { days: ['selasa'] })]), DATE).shown('16:45', 20)).toBe('t');
     cleanup();
-    expect(open(content([tied('t', 'asar', { from: '2026-11-04' })]), DATE).shown('16:55')).toBeNull();
+    expect(open(content([tied('t', 'asar', { from: '2026-11-04' })]), DATE).shown('16:45', 20)).toBeNull();
     cleanup();
-    expect(open(content([tied('t', 'asar', { to: '2026-11-02' })]), DATE).shown('16:55')).toBeNull();
+    expect(open(content([tied('t', 'asar', { to: '2026-11-02' })]), DATE).shown('16:45', 20)).toBeNull();
     cleanup();
-    expect(open(content([tied('t', 'asar', { from: DATE, to: DATE })]), DATE).shown('16:55')).toBe('t');
+    expect(open(content([tied('t', 'asar', { from: DATE, to: DATE })]), DATE).shown('16:45', 20)).toBe('t');
   });
 
   it('plays once a day: after it ends or fails it does not come back, even on a reload of the page', () => {
     const c = content([tied('t', 'asar')]);
     const first = open(c, DATE);
-    expect(first.shown('16:55')).toBe('t');
-    first.shown('16:55', 20);
+    expect(first.shown('16:45', 20)).toBe('t');
+    first.shown('16:45', 40);
     act(() => first.hook.result.current.skip!(first.hook.result.current.current!.startedAt));
-    expect(first.shown('16:55', 21)).toBeNull();
-    expect(first.shown('16:56')).toBeNull();
+    expect(first.shown('16:45', 41)).toBeNull();
+    expect(first.shown('16:46')).toBeNull();
     expect(JSON.parse(localStorage.getItem('surau.afterPrayerDone') ?? '[]')).toEqual([`${DATE}|t`]);
     first.hook.unmount();
     // the page is reloaded within the same window: it is not shown again
     const again = open(c, DATE);
-    expect(again.shown('16:56')).toBeNull();
+    expect(again.shown('16:46')).toBeNull();
     // yesterday's mark does not hold today
     cleanup();
     localStorage.setItem('surau.afterPrayerDone', JSON.stringify(['2026-11-02|t']));
-    expect(open(c, DATE).shown('16:55')).toBe('t');
+    expect(open(c, DATE).shown('16:45', 20)).toBe('t');
   });
 
   it('while it plays its start stays fixed as the clock runs', () => {
     const { hook, shown } = open(content([tied('t', 'asar')]), DATE);
-    shown('16:55');
+    shown('16:45', 20);
     const started = hook.result.current.current!.startedAt.getTime();
-    shown('16:55', 40);
+    shown('16:45', 60);
     expect(hook.result.current.current!.startedAt.getTime()).toBe(started);
     expect(hook.result.current.current!.slot).toMatchObject({ feature: 'videos', itemId: 't', durationSeconds: 120 });
   });

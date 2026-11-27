@@ -16,7 +16,7 @@ const vectors = JSON.parse(readFileSync(fileURLToPath(new URL('../../../packages
   scenarios: { name: string; report?: { expected: MonthReport } }[];
 };
 const report: MonthReport = vectors.scenarios.find((s) => s.name.startsWith('10'))!.report!.expected;
-const SURAU = { name: 'Surau D\'Waqaf', kind: 'surau', shortAddress: 'Taman Seri, Klang' };
+const SURAU = { name: 'Surau Contoh', kind: 'surau', shortAddress: 'Taman Seri, Klang' };
 
 /** A 40-line cross-reference walker: every xref offset must point at the object it names; returns what it found. */
 function walk(pdf: Buffer): { objects: number; pages: number; text: string } {
@@ -49,7 +49,7 @@ describe('renderReportPdf', () => {
     expect(w.pages).toBe(footerPages(w.text));
     expect(w.objects).toBe(4 + 2 * w.pages);
     expect(w.text).toContain('(Penyata Kewangan Bulanan)');
-    expect(w.text).toContain('(Surau D\'Waqaf)');
+    expect(w.text).toContain('(Surau Contoh)');
     expect(w.text).toContain('(Oktober 2026)');
     expect(w.text).toContain('(RM 1,500.00)');
     expect(w.text).toContain('(\\(RM 150.00\\))'); // a negative is in brackets
@@ -89,7 +89,7 @@ describe('renderReportPdf', () => {
     const w = walk(renderReportPdf(big, SURAU));
     expect(w.pages).toBeGreaterThan(5);
     expect(w.pages).toBe(footerPages(w.text));
-    expect((w.text.match(/Surau D'Waqaf, Penyata Kewangan Bulanan, Oktober 2026/g) ?? []).length).toBe(w.pages - 1);
+    expect((w.text.match(/Surau Contoh, Penyata Kewangan Bulanan, Oktober 2026/g) ?? []).length).toBe(w.pages - 1);
     expect((w.text.match(/muka \d+\//g) ?? []).length).toBe(w.pages);
   });
 
@@ -108,7 +108,7 @@ describe('renderReportPdf', () => {
 
 describe('fileSlug', () => {
   it('keeps letters and digits only', () => {
-    expect(fileSlug('Surau D\'Waqaf')).toBe('Surau-D-Waqaf');
+    expect(fileSlug('Surau Contoh')).toBe('Surau-Contoh');
     expect(fileSlug('  ../Masjid "Al-Hidayah" #2 ')).toBe('Masjid-Al-Hidayah-2');
     expect(fileSlug('***')).toBe('Surau');
   });
@@ -132,7 +132,7 @@ describe('report routes', () => {
     const treasurer = await loginAs(app, 'treasurer');
     const ajk = await loginAs(app, 'ajk');
     putFeature(app.surau.db, 'finance', { enabled: true }, 'test', undefined, 'sdm');
-    putFeature(app.surau.db, 'surauInfo', { name: 'Surau D\'Waqaf' }, 'test', undefined, 'sdm');
+    putFeature(app.surau.db, 'surauInfo', { name: 'Surau Contoh' }, 'test', undefined, 'sdm');
     const funds = (await app.inject({ method: 'GET', url: '/api/finance/funds', headers: treasurer.headers })).json().funds as { id: string }[];
     const perIn = ((await app.inject({ method: 'GET', url: '/api/finance/perihal', headers: treasurer.headers })).json().perihal as { id: string; direction: string }[]).find((p) => p.direction === 'in')!.id;
     await app.inject({
@@ -151,7 +151,7 @@ describe('report routes', () => {
     const pdf = await r.app.inject({ method: 'GET', url: '/api/finance/report/2026-11.pdf', headers: r.treasurer.headers });
     expect(pdf.statusCode).toBe(200);
     expect(pdf.headers['content-type']).toBe('application/pdf');
-    expect(pdf.headers['content-disposition']).toBe('attachment; filename="Penyata-Kewangan-Surau-D-Waqaf-2026-11.pdf"');
+    expect(pdf.headers['content-disposition']).toBe('attachment; filename="Penyata-Kewangan-Surau-Contoh-2026-11.pdf"');
     expect(pdf.headers['cache-control']).toBe('no-store');
     expect(walk(pdf.rawPayload).text).toContain('(RM 1,346.80)');
     const row = r.app.surau.db.prepare("SELECT entity_id, after_json FROM change_log WHERE entity = 'finance:report'").get()!;

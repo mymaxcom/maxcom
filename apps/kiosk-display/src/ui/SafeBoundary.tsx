@@ -85,7 +85,7 @@ export function SafeScreen({ today, settings, lang }: Omit<SafeBoundaryProps, 'c
         </div>
         {date ? <div class="safe__date">{date}</div> : null}
         {times ? (
-          <div class="safe__times glass" role="list" aria-label="Waktu solat">
+          <div class="safe__times glass" role="list" aria-label={t('barCaption', lang)}>
             {times.map((row) => (
               <div key={row.name} role="listitem" class={`pcell${row.name === 'imsak' || row.name === 'syuruk' ? ' is-minor' : ''}`} data-prayer={row.name}>
                 <span class="pcell__label">{row.label}</span>

@@ -12,12 +12,12 @@ import 'web_external_live.dart';
 
 export 'web_external_live.dart';
 
-class WebPublisher implements LivePublisher {
+class WebPublisher implements LivePublisher, LiveRecordingControl {
   WebPublisher({
     Future<String?> Function()? tokenProvider,
     Uri? box,
     int segmentMinutes = 15,
-    int maxBitrateKbps = 2500,
+    int maxBitrateKbps = 3500,
     Future<void> Function(LiveAudioMix mix)? audioChanger,
     Future<void> Function(LiveAudioMix mix, {String? video, int? avOffsetMs})?
     audioSender,
@@ -81,6 +81,9 @@ class WebPublisher implements LivePublisher {
       throw UnsupportedError(_off);
   Future<void> useMicOnly() async => throw UnsupportedError(_off);
   void setPreviewSound(bool on) {}
+
+  @override
+  Future<void> setRecording(bool on) async {}
   void setFallbackOffset(int ms) {}
   Future<void> saveFallbackOffset() async => throw UnsupportedError(_off);
   Future<bool> switchToIpadCamera() async => false;

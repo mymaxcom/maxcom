@@ -12,6 +12,9 @@ import 'dart:typed_data';
 import 'resumable_client.dart';
 import 'upload_queue.dart';
 
+/// How often a running upload tells the box it is alive (`POST /api/youtube/upload/progress`).
+const Duration uploadAliveEvery = Duration(minutes: 2);
+
 /// A file read in slices; the browser one wraps a `Blob`.
 abstract class SliceSource {
   int get length;
@@ -40,6 +43,7 @@ class UploadLoop {
     required this.openSource,
     required this.emit,
     this.maxSessions = 5,
+    this.aliveEvery = uploadAliveEvery,
   });
 
   final ResumableClient resumable;
@@ -48,6 +52,9 @@ class UploadLoop {
 
   /// New sessions tried for one part when YouTube keeps losing them.
   final int maxSessions;
+
+  /// How often a running upload says it is alive, on a timer (not only when a chunk ends).
+  final Duration aliveEvery;
 
   /// Runs every unfinished part of [job] in order. Returns when the job is
   /// finished, stopped ([shouldStop]) or a part ended in `failed`/`quota`.
@@ -207,14 +214,49 @@ class UploadLoop {
         }
 
         if (videoId == null) {
-          final out = await resumable.upload(
-            uri,
-            bytes,
-            offset: offset,
-            shouldStop: shouldStop,
-            onProgress: (o) =>
-                _ev(job, part, UploadPartState.uploading, offset: o),
-          );
+          final alive = auth.api;
+          final liveId = uploadId;
+          var lastAlive = DateTime.fromMillisecondsSinceEpoch(0);
+          var claimLost = false;
+          // F7: the box counts quiet time from this call; it answers `ok: false` when the claim is gone.
+          void ping() {
+            if (alive is! UploadProgress) return;
+            lastAlive = DateTime.now();
+            unawaited(
+              (alive as UploadProgress).progress(liveId).then((ok) {
+                if (!ok) claimLost = true;
+              }).catchError((Object _) {}),
+            );
+          }
+
+          void sayAlive() {
+            if (DateTime.now().difference(lastAlive) < aliveEvery) return;
+            ping();
+          }
+
+          ping();
+          // A slow link may take longer than the quiet window for one chunk: the timer keeps the claim alive.
+          final timer = Timer.periodic(aliveEvery, (_) => ping());
+          final UploadOutcome out;
+          try {
+            out = await resumable.upload(
+              uri,
+              bytes,
+              offset: offset,
+              shouldStop: () => claimLost || shouldStop(),
+              onProgress: (o) {
+                sayAlive();
+                _ev(job, part, UploadPartState.uploading, offset: o);
+              },
+            );
+          } finally {
+            timer.cancel();
+          }
+          if (claimLost && out is UploadStopped) {
+            // another device took the live over: this one stops for good and says so
+            _ev(job, part, UploadPartState.failed, error: 'claim_lost');
+            return false;
+          }
           switch (out) {
             case UploadComplete(videoId: final vid):
               _ev(

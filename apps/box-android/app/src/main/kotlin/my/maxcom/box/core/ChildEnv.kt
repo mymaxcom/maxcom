@@ -5,7 +5,7 @@ object ChildEnv {
     /** The computed keys, in the order of the contract. A test pins this set. */
     val COMPUTED_KEYS: List<String> = listOf(
         "SURAU_DB", "SURAU_DATA_DIR", "SURAU_LIVE_TOOLS", "SURAU_PORT", "SURAU_HTTPS_PORT",
-        "SURAU_KIOSK_TOKEN", "LD_LIBRARY_PATH", "SSL_CERT_FILE", "TMPDIR", "HOME", "PATH", "TZ",
+        "SURAU_KIOSK_TOKEN", "SURAU_LEAVE_SECRET", "LD_LIBRARY_PATH", "SSL_CERT_FILE", "TMPDIR", "HOME", "PATH", "TZ",
     )
 
     const val PORT = 8787
@@ -14,9 +14,13 @@ object ChildEnv {
     private val TOKEN = Regex("^[0-9a-fA-F]{64}$")
     private val TZ_ID = Regex("^[A-Za-z0-9_+\\-]+(/[A-Za-z0-9_+\\-]+){0,2}$")
 
-    /** Throws [IllegalArgumentException] for a token that is not 64 hex or a time zone id that is not plain. */
-    fun build(paths: BoxPaths, config: BoxConfig, token: String, timeZoneId: String): Map<String, String> {
+    /**
+     * Throws [IllegalArgumentException] for a token or leave secret that is not 64 hex or a time zone id that is not plain.
+     * The leave secret lets the maintenance screen (same app) ask the box server to leave a follow; it is new at each start.
+     */
+    fun build(paths: BoxPaths, config: BoxConfig, token: String, timeZoneId: String, leaveSecret: String): Map<String, String> {
         require(TOKEN.matches(token)) { "token must be 64 hex characters" }
+        require(TOKEN.matches(leaveSecret)) { "leave secret must be 64 hex characters" }
         require(timeZoneId.length <= 64 && TZ_ID.matches(timeZoneId)) { "invalid time zone id" }
         val env = LinkedHashMap<String, String>()
         env["SURAU_DB"] = paths.db.path
@@ -25,6 +29,7 @@ object ChildEnv {
         env["SURAU_PORT"] = PORT.toString()
         env["SURAU_HTTPS_PORT"] = HTTPS_PORT.toString()
         env["SURAU_KIOSK_TOKEN"] = token
+        env["SURAU_LEAVE_SECRET"] = leaveSecret
         env["LD_LIBRARY_PATH"] = paths.runtimeLib.path + ":" + paths.nativeLibDir.path
         env["SSL_CERT_FILE"] = paths.certPem.path
         env["TMPDIR"] = paths.tmp.path

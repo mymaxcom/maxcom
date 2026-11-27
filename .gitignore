@@ -13,8 +13,6 @@ ui-preview/*
 !ui-preview/fixtures/
 /data/
 apps/box-server/data/
-/mdb-export/
-import-report.json
 
 # Surau app: release signing material and build output (never committed)
 apps/surau-app/android/key.properties
@@ -36,6 +34,8 @@ MAXCOM-Ops-*
 
 # Flutter golden failure output (generated on a failed run)
 apps/surau-app/test/goldens/failures/
+# stray output of the removed importer (kept on disk, never committed)
+import-report.json
 
 # Test TLS material made by scripts/gen-test-fixtures.mjs (test keys; never committed)
 apps/box-server/test/fixtures/test-box*.pfx

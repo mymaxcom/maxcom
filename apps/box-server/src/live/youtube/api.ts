@@ -2,10 +2,14 @@ import { LOCAL_SURAU_ID } from '../../tenant.ts';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import type { LiveStatus, YoutubeAccountReason, YoutubeAccountState, YoutubeLastGood, YoutubeMeta } from '@surau/core';
+import { youtubeBusyOnPeer } from '@surau/core';
+import type { LiveStatus, YoutubeAccountReason, YoutubeAccountState, YoutubeLastGood, YoutubeMeta, YoutubeOpenBroadcast } from '@surau/core';
+import { removeSecretFromBackups } from '../../link/backupInfo.ts';
 import { getSettings } from '../../settingsStore.ts';
+import type { LiveSessionStore } from '../sessionStore.ts';
+import { LiveError } from '../sessions.ts';
 import type { YoutubeLeg } from '../sessions.ts';
-import { GOOGLE_HOSTS, YoutubeAuth, YoutubeError, failureOf, googleDetail, googleRequest } from './oauth.ts';
+import { GOOGLE_HOSTS, YoutubeAuth, YoutubeError, failureOf, fetchFailure, googleDetail, googleRequest } from './oauth.ts';
 import type { SigninBegin, SigninInfo, SigninPoll, YoutubeReason } from './oauth.ts';
 
 const API = 'https://www.googleapis.com/youtube/v3';
@@ -14,6 +18,25 @@ const HEALTH_MS = 10_000;
 /** A resumable upload session lives a week at Google; the device is told to start a fresh one after that. */
 const UPLOAD_SESSION_MS = 7 * 24 * 3_600_000;
 const SESSION_BODY_CAP = 64 * 1024;
+/** Y8: a complete that failed (no internet, a token Google withdrew) is tried again this often until it lands. */
+const COMPLETE_RETRY_MS = 60_000;
+/*
+ * Y11 IS DORMANT (operator decision 23 Nov 2026, kept for future reference, not wired):
+ * - `setPeersOpen` has no caller, so `peersBusy()` / `busyOnPeer()` always answer false and `createNew` never refuses
+ *   with `busy_other_box`. `probe()` (Y1) has no caller either; Y1 is met by clearing `lastError` at every start.
+ * - Why: in the multi-box model a box linked to another is a FOLLOWER (`app.ts` `followerAtStart`), and a follower runs
+ *   no live tools and no YouTube (`link/routes.ts` FOLLOWER_OPEN). Linked boxes therefore never both stream, so a
+ *   linked-peers check could never fire.
+ * - Unlinked boxes are separate entities by decision, even with the same surau/masjid name or the same YouTube
+ *   account: each may stream to YouTube independently (as far as YouTube itself allows several live streams on one
+ *   channel). No cloud-side "one live per channel" check is wanted.
+ * - If the link model ever lets two linked boxes both go live, wire `setPeersOpen` in `app.ts` over an authenticated
+ *   box-to-box call (not the kiosk token) and revisit the `GET /api/youtube/open-broadcast` permission row.
+ */
+/** Y11 (dormant, see above): how long the box waits for its linked peers before it goes on without their answer. */
+const PEERS_WAIT_MS = 3_000;
+/** Y6: the refusal of a sign-out while a broadcast is open (the app shows the server's sentence as it is). */
+export const SIGNOUT_BROADCAST_OPEN = { status: 409, code: 'youtube_broadcast_open', message: 'Siaran YouTube belum ditutup. Cuba lagi dalam beberapa minit.' } as const;
 
 export type VideoPrivacy = 'private' | 'unlisted' | 'public';
 
@@ -82,12 +105,43 @@ export interface YoutubeService extends YoutubeLeg {
   videoOrigin(videoId: string): Promise<{ publishedAt: string | null; channelId: string | null; ownChannelId: string | null } | null>;
   /** A grant is stored here, even one Google has since withdrawn (release 2026.11.13). */
   holdsGrant(): boolean;
-  /** Box: keeps the grant the cloud handed over and proves it with one refresh (`oauth.ts` `adopt`). */
-  adoptGrant(g: { refreshToken: string; channelId: string; channelTitle: string; scope: string }): Promise<'ok' | 'invalid_grant' | 'failed'>;
   /** Box: one forced refresh of the stored grant (a handover whose acknowledgement did not get through). */
   proveGrant(): Promise<'ok' | 'invalid_grant' | 'failed'>;
   /** Box: the cloud's grant was withdrawn by Google before it could move: show the re-sign-in state. */
   markRevoked(): void;
+
+  // ---- 2026.11.15 (Siaran langsung revamp). All additive: `YoutubeLeg` and every method above keep their shape.
+
+  /**
+   * Y1: the look at "Mula siaran". One cheap authorised read (quota 1; the token is refreshed first when it is due),
+   * so "no internet" is what Google says NOW, never what an earlier live left behind. Sets and returns the status's
+   * `lastError` (null = reachable and signed in). Also learns the channel id when the sign-in could not read it.
+   * Never throws. DORMANT: no caller (see the Y11 note at the top of this file).
+   */
+  probe(): Promise<YoutubeReason | null>;
+  /** The YouTube channel id of THIS box's sign-in (public); null when signed out or not known. */
+  channelId(): string | null;
+  /**
+   * Y11: this box's open broadcast for a linked peer that asks, or null. The newest when several are open. `boxId`
+   * is added by the route. Ids only.
+   */
+  openBroadcast(): { channelId: string | null; broadcastId: string } | null;
+  /**
+   * Y11: true when a linked peer on the SAME channel id has a broadcast open (`youtubeBusyOnPeer`). A peer that does
+   * not answer in 3 s, a box with no peers and a box whose channel id is unknown are never busy. `createBroadcastFor`
+   * asks this itself before it makes a NEW broadcast and refuses with reason `busy_other_box`; the live start may ask
+   * first to refuse with 409 `youtube_busy_other_box`. Never throws.
+   */
+  busyOnPeer(): Promise<boolean>;
+  /** Y11: how this box asks its linked peers; null = no peers. DORMANT: never called (see the Y11 note at the top). */
+  setPeersOpen(fn: (() => Promise<YoutubeOpenBroadcast[]>) | null): void;
+  /** D1: where the YouTube gaps of a live are written (`live/sessionStore.ts`); null = not recorded. */
+  setSessionStore(store: Pick<LiveSessionStore, 'appendGap'> | null): void;
+  /**
+   * Y8: tries again every complete that failed. Runs by itself once a minute while one is waiting and right after a
+   * new sign-in; returns how many broadcasts are still waiting. Never throws.
+   */
+  retryCompletes(): Promise<number>;
 }
 
 /** A broadcast the service has open. Ids and times only: never a key or a token. */
@@ -96,6 +150,8 @@ interface OpenRec {
   streamId: string;
   createdAt: string;
   seenAt: string;
+  /** Y8: `complete` was asked and failed; it is tried again until it lands. */
+  ending?: boolean;
 }
 
 /** How long an open broadcast may go unseen by the box before the cloud's sweep treats it as an orphan. */
@@ -139,6 +195,12 @@ export interface YoutubeServiceDeps {
   onChange?: () => void;
   /** First and later daily looks at the grant (a box only; default 5 minutes after start, then every 24 hours). */
   grantCheck?: { firstMs?: number; everyMs?: number; off?: boolean };
+  /** D1: where YouTube gaps are written (also `setSessionStore`). A box only. */
+  sessionStore?: Pick<LiveSessionStore, 'appendGap'> | null;
+  /** Y11: asks the linked peers for their open broadcast (also `setPeersOpen`). A box only. */
+  peersOpen?: (() => Promise<YoutubeOpenBroadcast[]>) | null;
+  /** Y8: pause between tries of a failed complete (default 60 s). */
+  completeRetryMs?: number;
 }
 const DAY_MS = 24 * 3_600_000;
 
@@ -160,6 +222,8 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
     onSignedIn: (channelTitle) => {
       audit(signInActor, 'signin', { channelTitle }, surauOf);
       changed();
+      // Y8: a broadcast the withdrawn grant could not close is closed with the new one
+      void retryCompletes();
     },
     // a box keeps the last good sign-in and the end of a sign-in across restarts
     persistState: (deps.role ?? 'box') === 'box',
@@ -188,6 +252,11 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
   let streamIdLive: string | null = null;
   let timer: NodeJS.Timeout | null = null;
   let polling = false;
+  let sessionStore: Pick<LiveSessionStore, 'appendGap'> | null = deps.sessionStore ?? null;
+  let peersOpen: (() => Promise<YoutubeOpenBroadcast[]>) | null = deps.peersOpen ?? null;
+  /** D1: since when YouTube has not been receiving the running broadcast (ISO time); null while it receives. */
+  let gapFrom: string | null = null;
+  let completeTimer: NodeJS.Timeout | null = null;
 
   const audit = (actor: string, entityId: string, after: Record<string, unknown>, surauId: string): void => {
     db.prepare('INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
@@ -282,7 +351,7 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
       return location;
     } catch (e) {
       if (e instanceof YoutubeError) throw e;
-      throw new YoutubeError('network');
+      throw fetchFailure(e);
     } finally {
       clearTimeout(timer);
     }
@@ -368,6 +437,7 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
             streamId: idOk(r.streamId) ? r.streamId : '',
             createdAt: typeof r.createdAt === 'string' ? r.createdAt : at,
             seenAt: typeof r.seenAt === 'string' ? r.seenAt : at,
+            ...(r.ending === true ? { ending: true as const } : {}),
           });
         }
       } else if (idOk(j.broadcastId)) {
@@ -421,6 +491,7 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
     state = 'created';
     health = null;
     lastError = null;
+    gapFrom = null;
     stopTimer();
     if (streamIdLive !== null) {
       timer = setInterval(() => void pollHealth(), deps.healthMs ?? HEALTH_MS);
@@ -436,11 +507,16 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
       const status = s?.status as { streamStatus?: unknown; healthStatus?: { status?: unknown } } | undefined;
       const h = status?.healthStatus?.status;
       health = typeof h === 'string' && HEALTHS.has(h) ? (h as Health) : null;
-      if (status?.streamStatus === 'active' && state === 'created') state = 'live';
+      const active = status?.streamStatus === 'active';
+      if (active && state === 'created') state = 'live';
       lastError = null;
+      // D1: once the broadcast went live, "not active" or `noData` is a gap (the state itself stays `live`)
+      if (state === 'live') markReceiving(active && health !== 'noData');
     } catch (e) {
       // a failed health read never stops the broadcast; it only shows as a short reason
       lastError = e instanceof YoutubeError ? e.reason : 'network';
+      // D1: Google cannot be reached from here, so the relay cannot reach it either: the gap starts now
+      if (state === 'live' && lastError === 'network') markReceiving(false);
     } finally {
       polling = false;
     }
@@ -451,11 +527,99 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
     timer = null;
   }
 
+  /**
+   * D1: the box's own record of when YouTube was not receiving. A gap opens at the first look that says so and is
+   * written, closed, at the first look that says it receives again (or when the broadcast is completed). Whole
+   * seconds only; a gap under one second is not written. A box only: the cloud holds no session record.
+   */
+  function markReceiving(receiving: boolean): void {
+    if (role !== 'box') return;
+    const at = now().toISOString();
+    if (!receiving) {
+      gapFrom ??= at;
+      return;
+    }
+    closeGap(at);
+  }
+  function closeGap(at: string): void {
+    const from = gapFrom;
+    gapFrom = null;
+    if (from === null || broadcastId === null || sessionStore === null) return;
+    if (Date.parse(at) - Date.parse(from) < 1000) return;
+    const sessionId = recOf(broadcastId)?.[0];
+    if (sessionId === undefined) return;
+    try {
+      sessionStore.appendGap(sessionId, { from, to: at, kind: 'youtube', broadcastId });
+    } catch {
+      /* the record never breaks a live */
+    }
+  }
+
+  /** Y8: the completes that failed, tried again. One pass; the timer stops when none is left. */
+  async function retryCompletes(): Promise<number> {
+    try {
+      if (auth.signedIn()) {
+        for (const [k, r] of [...open]) {
+          if (r.ending !== true) continue;
+          try {
+            await finish(r.broadcastId, r.streamId === '' ? null : r.streamId);
+            open.delete(k);
+            persistOpen();
+            if (broadcastId === r.broadcastId) {
+              state = 'complete';
+              streamIdLive = null;
+              lastError = null;
+            }
+          } catch {
+            /* the next pass */
+          }
+        }
+      }
+    } catch {
+      /* never throws */
+    }
+    const left = [...open.values()].filter((r) => r.ending === true).length;
+    if (left === 0 && completeTimer !== null) {
+      clearInterval(completeTimer);
+      completeTimer = null;
+    }
+    return left;
+  }
+  function scheduleCompleteRetry(): void {
+    if (completeTimer !== null) return;
+    completeTimer = setInterval(() => void retryCompletes(), deps.completeRetryMs ?? COMPLETE_RETRY_MS);
+    completeTimer.unref();
+  }
+
+  /** Y11: the peers' open broadcasts; a peer that fails or is slow counts as "nothing open". */
+  async function peersBusy(): Promise<boolean> {
+    const ask = peersOpen;
+    const own = auth.channelId();
+    if (role !== 'box' || ask === null || own === null) return false;
+    let wait: NodeJS.Timeout | null = null;
+    try {
+      const answers = await Promise.race([
+        ask(),
+        new Promise<YoutubeOpenBroadcast[]>((resolve) => {
+          wait = setTimeout(() => resolve([]), PEERS_WAIT_MS);
+          wait.unref();
+        }),
+      ]);
+      return youtubeBusyOnPeer(own, Array.isArray(answers) ? answers : []);
+    } catch {
+      return false;
+    } finally {
+      if (wait !== null) clearTimeout(wait);
+    }
+  }
+
   async function createNew(req: { sessionId: string; meta: YoutubeMeta }, sessionKey: string): Promise<{ broadcastId: string; watchUrl: string; key: string }> {
     let stream: { id: string; key: string } | null = null;
     let id = '';
     let bound = false;
     try {
+      // Y11: one live per channel between linked boxes; boxes on different channels never block each other
+      if (await peersBusy()) throw new YoutubeError('busy_other_box', 409);
       stream = await createStream();
       const created = await call(
         'POST',
@@ -518,9 +682,13 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
       const sessionKey = req.sessionId;
       const running = creating.get(sessionKey);
       if (running !== undefined) return running;
+      // Y1: every start is a fresh attempt; what an earlier live left behind (a failed health read, a failed
+      // complete) says nothing about this one
+      lastError = null;
+      if (state === 'error') state = broadcastId === null ? 'none' : 'complete';
       const p = (async () => {
         const rec = open.get(sessionKey);
-        if (rec !== undefined && rec.streamId !== '') {
+        if (rec !== undefined && rec.streamId !== '' && rec.ending !== true) {
           try {
             const st = items(await call('GET', 'liveStreams', { part: 'cdn', id: rec.streamId }))[0];
             const key = keyOf(st);
@@ -561,7 +729,11 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
     },
 
     async complete(id: string): Promise<void> {
-      if (broadcastId === id) stopTimer();
+      if (broadcastId === id) {
+        stopTimer();
+        // D1: a gap still open when the live ends closes with it
+        closeGap(now().toISOString());
+      }
       const found = recOf(id);
       const streamId = found !== undefined ? found[1].streamId : broadcastId === id ? streamIdLive : null;
       try {
@@ -569,6 +741,12 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
       } catch (e) {
         lastError = e instanceof YoutubeError ? e.reason : 'network';
         state = 'error';
+        // Y8: not left for the next box start: tried again every minute, and at the next sign-in
+        if (found !== undefined && role === 'box') {
+          found[1].ending = true;
+          persistOpen();
+          scheduleCompleteRetry();
+        }
         throw e;
       }
       if (found !== undefined) {
@@ -578,6 +756,9 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
       if (broadcastId === id) {
         state = 'complete';
         streamIdLive = null;
+        // Y1: the live is over and closed: nothing of it blocks the next one
+        lastError = null;
+        health = null;
       }
     },
 
@@ -597,7 +778,9 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
             await finish(r.broadcastId, r.streamId === '' ? null : r.streamId);
             open.delete(k);
           } catch {
-            /* the record stays; the next start tries again */
+            // Y8: the record stays and is tried again every minute, not only at the next start
+            r.ending = true;
+            scheduleCompleteRetry();
           }
         }
         persistOpen();
@@ -652,6 +835,7 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
         health,
         watchUrl,
         lastError: lastError ?? auth.lastError(),
+        channelId: signedIn ? auth.channelId() : null,
         signIn: auth.signInState(),
         account: v,
       };
@@ -690,19 +874,75 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
     },
 
     async signout(actor: string, surauId: string = surauOf): Promise<void> {
+      // Y6: a broadcast still open (running, or kept for a restart of the same kuliah) would be left open on the
+      // channel with no grant to close it: refused until it is closed. A grant Google already withdrew can close
+      // nothing, so then the sign-out goes through and the records are dropped.
+      // A `LiveError`, so the sign-out route answers 409 with this code and sentence as it does for `live_busy`.
+      if (open.size > 0 && auth.signedIn()) throw new LiveError(SIGNOUT_BROADCAST_OPEN.status, SIGNOUT_BROADCAST_OPEN.code, SIGNOUT_BROADCAST_OPEN.message);
       stopTimer();
-      await auth.signout();
+      if (completeTimer !== null) clearInterval(completeTimer);
+      completeTimer = null;
+      const { revoked } = await auth.signout();
+      open.clear();
+      persistOpen();
       broadcastId = null;
       watchUrl = null;
+      streamIdLive = null;
+      gapFrom = null;
       state = 'none';
       health = null;
       lastError = null;
-      audit(actor, 'signout', {}, surauId);
+      // Y7: no copy of the token outlives the sign-out: every backup folder of this box, whatever its kind
+      let backupFiles = 0;
+      if (role === 'box') {
+        try {
+          backupFiles = removeSecretFromBackups(deps.dataDir, 'youtube');
+        } catch {
+          console.error('YouTube: the sign-in could not be removed from a backup folder');
+        }
+      }
+      // `revoked false`: Google did not confirm; the grant may still stand there until it is removed in the Google account
+      audit(actor, 'signout', { revoked, ...(backupFiles > 0 ? { backupFiles } : {}) }, surauId);
       changed();
     },
 
+    async probe(): Promise<YoutubeReason | null> {
+      try {
+        const token = await auth.accessToken();
+        const r = await googleRequest(deps.fetchImpl, `${API}/channels?${new URLSearchParams({ part: 'id', mine: 'true' }).toString()}`, { headers: { Authorization: `Bearer ${token}` } }, { timeoutMs });
+        if (r.status === 401) {
+          auth.invalidateAccess();
+          await auth.accessToken();
+        } else if (r.status < 200 || r.status >= 300) throw failureOf(r.status, r.json);
+        else {
+          const first = items(r.json ?? {})[0];
+          if (typeof first?.id === 'string') auth.setChannel(first.id, '');
+        }
+        lastError = null;
+        if (state === 'error') state = broadcastId === null ? 'none' : 'complete';
+      } catch (e) {
+        lastError = e instanceof YoutubeError ? e.reason : fetchFailure(e).reason;
+      }
+      return lastError;
+    },
+
+    channelId: () => (auth.signedIn() ? auth.channelId() : null),
+
+    openBroadcast() {
+      const newest = [...open.values()].sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1))[0];
+      return newest === undefined ? null : { channelId: auth.channelId(), broadcastId: newest.broadcastId };
+    },
+
+    busyOnPeer: () => peersBusy(),
+    setPeersOpen(fn) {
+      peersOpen = fn;
+    },
+    setSessionStore(store) {
+      sessionStore = store;
+    },
+    retryCompletes: () => retryCompletes(),
+
     holdsGrant: () => auth.hasGrant(),
-    adoptGrant: (g) => auth.adopt(g),
     proveGrant: () => auth.prove(),
     markRevoked: () => auth.markRevoked(),
 
@@ -771,12 +1011,15 @@ export function createYoutubeService(deps: YoutubeServiceDeps): YoutubeService {
       return {
         publishedAt: typeof sn.publishedAt === 'string' ? sn.publishedAt : null,
         channelId: typeof sn.channelId === 'string' ? sn.channelId : null,
-        ownChannelId: auth.channelId(),
+        // Y10: a sign-in that could not read its channel at the time learns it here, so the check is never skipped
+        ownChannelId: await auth.readOwnChannel().catch(() => null),
       };
     },
 
     shutdown(): void {
       stopTimer();
+      if (completeTimer !== null) clearInterval(completeTimer);
+      completeTimer = null;
       stopGrantCheck();
       auth.shutdown();
     },

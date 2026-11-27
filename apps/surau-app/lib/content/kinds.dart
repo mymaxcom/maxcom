@@ -24,7 +24,7 @@ export '../features/labels_content.dart' show dayLabelsMs;
 /// sha256 of core content/schema.ts + content/types.ts (CRLF as LF) this
 /// port was written against; kinds_test fails when core moved on.
 const String contentSourceHash =
-    '6e2f6007cf3919cd55252b439145690c6a0fdecd128efef2486b6596b12db85a';
+    'bbc08bd7d150b8afd45e738c4aa783c85f170c115faf48bdf951f625568a1f16';
 
 enum FieldType {
   text,
@@ -405,6 +405,8 @@ const List<ContentKindSpec> contentKinds = [
       FieldSpec(key: 'order', type: FieldType.int, labelMs: 'Susunan', min: 0, max: 1000000),
       FieldSpec(key: 'textAr', type: FieldType.multiline, labelMs: 'Teks Arab'),
       FieldSpec(key: 'textMs', type: FieldType.multiline, labelMs: 'Terjemahan'),
+      // Shown on a TV set to English; empty = the TV shows the Malay translation.
+      FieldSpec(key: 'textEn', type: FieldType.multiline, labelMs: 'Terjemahan bahasa Inggeris', required: false),
       FieldSpec(key: 'repeat', type: FieldType.int, labelMs: 'Bilangan ulangan', required: false, min: 1, max: 10000),
     ],
   ),

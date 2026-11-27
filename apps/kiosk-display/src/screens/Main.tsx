@@ -7,7 +7,7 @@ import { pengumumanPicture } from '../content/cards/PengumumanCard.tsx';
 import { programKhasPicture } from '../content/cards/ProgramKhasCard.tsx';
 import { useCardPictureFailures } from '../content/cardPictures.ts';
 import { activeTickerItems, Ticker } from '../content/Ticker.tsx';
-import { ZikirOverlay, zikirAt } from '../content/ZikirOverlay.tsx';
+import { ZikirOverlay, zikirAt, zikirOptions } from '../content/ZikirOverlay.tsx';
 import { ArabZikirScreen } from './content/ArabZikirScreen.tsx';
 import { arabLookFor } from './content/arabLook.ts';
 import type { ArabBase } from './content/arabLook.ts';
@@ -47,6 +47,8 @@ interface RegionProps extends MainProps {
   onShown: (feature: SlotFeature | null, arab?: ArabBase | null) => void;
   /** Whether the zikir overlay holds the band (Main lays the header out for an empty band only without it), and whether it is the Arabic-led look. */
   onZikir: (on: boolean, arab?: boolean) => void;
+  /** Main has the zikir layout on (its answer to onZikir): the zikir is put in the band only then (F32). */
+  zikirStage: boolean;
 }
 
 /** Whether the card on screen is a picture screen the ticker gives way to (rule 13). */
@@ -67,7 +69,7 @@ const NO_STRIP: ReadonlySet<SlotFeature> = new Set<SlotFeature>(['posters', 'vid
  * The rotating content region: content, tilawah, ticker and zikir. Everything that can throw while rendering
  * content lives in here, behind its own quiet boundary, so a bad card never takes the prayer screen down.
  */
-function ContentRegion({ view, lang, shown, onTicker, onShown, onZikir }: RegionProps) {
+function ContentRegion({ view, lang, shown, onTicker, onShown, onZikir, zikirStage }: RegionProps) {
   const { settings, now } = view;
   const env = useArabEnv();
   const c = useContent(view);
@@ -94,16 +96,24 @@ function ContentRegion({ view, lang, shown, onTicker, onShown, onZikir }: Region
   const zs = settings.zikirSelepasSolat as unknown as { durationSeconds?: unknown; minutesAfterSolat?: unknown };
   const zItem = showZikir && c.content && c.zikir ? zikirAt(c.content.zikir, now, c.zikir, num(zs.durationSeconds, 20), num(zs.minutesAfterSolat, 10))?.item : undefined;
   const zArabic = !!zItem && zItem.textAr.trim() !== '';
-  const zikirArab = showZikir && (arabLookFor('zikir', env.looks, { arabic: zArabic, tetapanArabic: true }) || (env.forced === 'arab-zikir' && zArabic));
+  // Tetapan `look`: 'theme' leaves it to the theme, 'plain' never, 'arab' always (with Arabic). A preview that forces one
+  // of the two zikir screens shows that screen whatever the setting says.
+  const { look } = zikirOptions(settings);
+  const byLook = look === 'plain' ? false : look === 'arab' ? zArabic : arabLookFor('zikir', env.looks, { arabic: zArabic, tetapanArabic: true });
+  const zikirArab = showZikir && (env.forced === 'arab-zikir' ? zArabic : env.forced === 'zikir' ? false : byLook);
   useLayoutEffect(() => {
     onZikir(showZikir, zikirArab);
     return () => onZikir(false, false);
   }, [showZikir, zikirArab, onZikir]);
 
+  // F32: the zikir enters the band only once Main has the zikir layout. Put in before that (while the stage still had
+  // the idle header or a card's band), its text measured its fit in a closed box, came up small or in pages, and the
+  // layout changed around it a render later: the flicker. Until Main answers (the same task, before the frame is
+  // drawn) the band holds nothing.
   return (
     <>
       {showZikir && c.content && c.zikir ? (
-        zikirArab ? (
+        !zikirStage ? null : zikirArab ? (
           <ArabZikirScreen view={view} lang={lang} content={c.content} zikir={c.zikir} />
         ) : (
           <ZikirOverlay view={view} lang={lang} content={c.content} zikir={c.zikir} />
@@ -184,7 +194,7 @@ export function Main({ view, lang, onScreen, forceShell = false }: MainProps) {
       data-idle={idle ? 'true' : 'false'}
     >
       {shell ? (
-        <ContentShell view={view} lang={lang} />
+        <ContentShell view={view} lang={lang} hideClock={zikirOn && !zikirOptions(settings).showClock} />
       ) : (
         <div class="ident">
           <div class={`ident__head region-brand has-logo`}>
@@ -214,7 +224,7 @@ export function Main({ view, lang, onScreen, forceShell = false }: MainProps) {
 
       {/* Rotating content: mounted only here, so every prayer phase unmounts it (and stops tilawah). */}
       <QuietBoundary>
-        <ContentRegion view={view} lang={lang} shown={shownFeature} onTicker={setHasTicker} onShown={onShown} onZikir={onZikir} />
+        <ContentRegion view={view} lang={lang} shown={shownFeature} onTicker={setHasTicker} onShown={onShown} onZikir={onZikir} zikirStage={zikirOn} />
       </QuietBoundary>
 
       <EmergencyBand view={view} lang={lang} />

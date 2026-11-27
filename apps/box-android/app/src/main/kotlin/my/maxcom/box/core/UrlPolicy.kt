@@ -9,7 +9,8 @@ import java.net.URI
  * must be exactly `localhost:<port>` or `127.0.0.1:<port>`, lower case, no trailing dot, no user info.
  *
  * One exception, below the page: a Video item's player. A frame may load the player document ([allowsPlayerFrame]) and
- * that frame may fetch from the player's hosts ([allowsPlayerResource]). The main frame never leaves [allows].
+ * that frame may fetch from the player's hosts ([allowsPlayerResource]): the YouTube/Google video domains and their
+ * subdomains, plus exactly `www.google.com` (a player script). The main frame never leaves [allows].
  */
 class UrlPolicy(private val port: Int) {
     fun allows(url: String): Boolean {
@@ -45,7 +46,7 @@ class UrlPolicy(private val port: Int) {
      */
     fun allowsPlayerResource(url: String): Boolean {
         val host = playerUri(url)?.host ?: return false
-        return PLAYER_HOSTS.any { host == it || host.endsWith(".$it") }
+        return host in PLAYER_EXACT_HOSTS || PLAYER_HOSTS.any { host == it || host.endsWith(".$it") }
     }
 
     /** A strict HTTPS address: no user info, no explicit port, a plain lower-case DNS host name. */
@@ -72,6 +73,12 @@ class UrlPolicy(private val port: Int) {
 
         /** The player's hosts: the frame, its script, the video stream, the pictures and static files. */
         private val PLAYER_HOSTS = listOf("youtube-nocookie.com", "youtube.com", "googlevideo.com", "ytimg.com", "ggpht.com", "gstatic.com")
+
+        /**
+         * Hosts allowed by exact match only, no subdomains: the player loads one script from `www.google.com`, but
+         * `google.com` also serves accounts, mail and more, so a suffix match would open far too much.
+         */
+        private val PLAYER_EXACT_HOSTS = setOf("www.google.com")
 
         /** The page origin the kiosk loads: a loopback host name, so embedded players see a named origin, not a bare IP. */
         const val KIOSK_HOST = "localhost"

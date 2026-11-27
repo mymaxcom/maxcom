@@ -6,4 +6,4 @@
 const List<String> opsSystemFeatures = ['dataSources', 'cloudSync', 'system'];
 
 /// LANJUTAN_ROWS from core: the Lanjutan deep links into an ordinary feature page.
-const List<Map<String, Object?>> opsLanjutanRows = [{'feature': 'liveYoutube', 'fields': ['relayVideo', 'maxBitrateKbps'], 'labelMs': 'Penyiaran YouTube', 'labelEn': 'YouTube relay'}, {'feature': 'tilawah', 'fields': ['cacheMaxMb'], 'labelMs': 'Ruang simpanan tilawah', 'labelEn': 'Recitation storage'}];
+const List<Map<String, Object?>> opsLanjutanRows = [{'feature': 'liveYoutube', 'fields': ['relayVideo'], 'labelMs': 'Penyiaran YouTube', 'labelEn': 'YouTube relay'}, {'feature': 'tilawah', 'fields': ['cacheMaxMb'], 'labelMs': 'Ruang simpanan tilawah', 'labelEn': 'Recitation storage'}];

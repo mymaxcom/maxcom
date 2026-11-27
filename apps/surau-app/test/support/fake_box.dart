@@ -2,8 +2,8 @@
 // 12): one entry point over the shared fakes.
 //
 // `ShellHarness` (test/features/shell/harness.dart) is the `FakeBox` with
-// Surau D'Waqaf seeded the way `scripts/seed-content.mjs` and the
-// mdb-export fixture read: real-sounding people (Ustaz Ali, Aminah binti
+// Surau Contoh seeded the way `scripts/seed-content.mjs` does:
+// real-sounding people (Ustaz Ali, Aminah binti
 // Yusof, Encik Hafiz), kuliah with penceramah and kitab, pengumuman,
 // posters, petugas and tilawah slots; `installT9Routes` adds the kiosk
 // bundle, Islamic status and prayer data answers. Screens are pumped

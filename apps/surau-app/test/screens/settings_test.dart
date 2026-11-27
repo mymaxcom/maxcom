@@ -57,7 +57,30 @@ String screenText(WidgetTester tester) => tester
     .where((t) => t.isNotEmpty)
     .join(' | ');
 
+/// Simpan is the last thing on the page (the reset moved into the page menu,
+/// G2): scroll to it, then tap.
+Future<void> tapSave(WidgetTester tester) async {
+  await reveal(tester, save);
+  await tester.tap(save);
+}
+
 bool saveEnabled(WidgetTester tester) => tester.widget<FilledButton>(save).enabled;
+
+/// The page menu's "Set semula kepada lalai" (G2: moved away from Simpan).
+Future<void> openResetMenu(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('feature-menu')));
+  await settle(tester);
+  await tester.tap(find.byKey(const ValueKey('feature-reset')));
+  await settle(tester);
+}
+
+/// A repository whose device has synced and holds no row for the feature (B4).
+class _NoRowRepo extends SettingsRepository {
+  _NoRowRepo(super.gateway, {super.onSaved});
+
+  @override
+  Future<bool> rowMissing(String feature) async => true;
+}
 
 void main() {
   testWidgets('the list, a feature page and a feature help follow the app language (ms, en, ar)', (tester) async {
@@ -138,7 +161,7 @@ void main() {
       if (find.descendant(of: row, matching: find.text('Sentiasa hidup')).evaluate().isNotEmpty) locked++;
     }
     expect(locked, 9, reason: 'prayerBar, clock, prayerSequenceSafety, zone, location, prayerSources, prayerCalc, surauInfo, language; the Lanjutan features are hidden from an admin');
-    expect(off, unorderedEquals(['firstAzanSubuh', 'tilawah', 'appLock', 'finance', 'tabungCard']), reason: 'the features with no settings are switches now; Kewangan and Kad tabung are off until switched on');
+    expect(off, unorderedEquals(['firstAzanSubuh', 'tilawah', 'appLock', 'finance', 'tabungCard', 'youtubeCatchUp']), reason: 'the features with no settings are switches now; Kewangan and Kad tabung are off until switched on; this test surau has the catch-up upload switched off (harness)');
 
     await reveal(tester, find.text('Kiraan detik iqamah'));
     await tester.tap(find.text('Kiraan detik iqamah'));
@@ -221,8 +244,7 @@ void main() {
     }
     expect(find.text('Nilai Jumaat disalin ke semua hari'), findsOneWidget);
 
-    await reveal(tester, save);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     final put = h.box.byPath('/api/settings/iqamahCountdown')!;
     expect(put.method, 'PUT');
@@ -258,8 +280,7 @@ void main() {
     expect(cellText(tester, 'jumaat', 'subuh'), '15', reason: 'the unsaved edit stays');
     expect(cellText(tester, 'ahad', 'zohor'), '20', reason: 'the other device value is shown');
     expect(find.text('Tetapan ini telah diubah di peranti lain. Simpan akan menggantikannya.'), findsOneWidget);
-    await reveal(tester, save);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(jsonDecode(h.box.byPath('/api/settings/iqamahCountdown')!.body), {
       'minutes': {
@@ -275,7 +296,7 @@ void main() {
     await settle(tester);
     await tester.enterText(find.byKey(const ValueKey('setting-screenSeconds')), '90');
     await settle(tester);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(jsonDecode(h.box.byPath('/api/settings/masukWaktu')!.body), {'enabled': false, 'screenSeconds': 90});
     expect(
@@ -307,7 +328,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Hidupkan'));
     await settle(tester);
     expect(saveEnabled(tester), isTrue);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(jsonDecode(h.box.byPath('/api/settings/appLock')!.body), {'enabled': true});
   });
@@ -321,7 +342,7 @@ void main() {
     await tester.tap(featureSwitch);
     await settle(tester);
     expect(tester.widget<Switch>(featureSwitch).value, isFalse);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(jsonDecode(h.box.byPath('/api/settings/appLock')!.body), {'enabled': false});
   });
@@ -355,7 +376,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('setting-screenSeconds-plus')));
     await settle(tester);
     expect(tester.widget<TextField>(field).controller!.text, '600', reason: 'max 600');
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(jsonDecode(h.box.byPath('/api/settings/masukWaktu')!.body), {'screenSeconds': 600});
 
@@ -365,7 +386,7 @@ void main() {
     expect(find.text('Tengah malam'), findsOneWidget);
     await tester.tap(find.text('Tengah malam'));
     await settle(tester);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(jsonDecode(h.box.byPath('/api/settings/hijriDate')!.body), {'switchAt': 'midnight'});
   });
@@ -384,28 +405,117 @@ void main() {
     expect(find.text('Ciri tidak dijumpai.'), findsOneWidget);
   });
 
-  testWidgets('Set semula kepada lalai: confirm, then PUT enabled plus every default', (tester) async {
+  testWidgets('[G2] Set semula kepada lalai sits in the page menu: confirm, then PUT every default and NOT the switch', (tester) async {
     final h = await openSettings(tester, '/settings/iqamahCountdown');
-    final reset = find.text('Set semula kepada lalai');
-    await reveal(tester, reset);
-    await tester.tap(reset);
-    await settle(tester);
+    expect(find.text('Set semula kepada lalai'), findsNothing, reason: 'no longer a button under Simpan');
+    await openResetMenu(tester);
     expect(find.text('Set semula Kiraan detik iqamah?'), findsOneWidget);
     await tester.tap(find.text('Batal'));
     await settle(tester);
     expect(h.box.byPath('/api/settings/iqamahCountdown'), isNull);
 
-    await reveal(tester, reset);
-    await tester.tap(reset);
-    await settle(tester);
+    await openResetMenu(tester);
     expect(find.text('Set semula Kiraan detik iqamah?'), findsOneWidget, reason: screenText(tester));
     await tester.tap(find.widgetWithText(FilledButton, 'Set semula kepada lalai'));
     await settle(tester);
     final put = h.box.byPath('/api/settings/iqamahCountdown')!;
     expect(put.method, 'PUT');
     final f = features.firstWhere((x) => x.key == 'iqamahCountdown');
-    expect(jsonDecode(put.body), defaultsPatch(f));
+    final body = jsonDecode(put.body) as Map<String, dynamic>;
+    expect(body, resetPatch(f));
+    expect(body.containsKey('enabled'), isFalse, reason: 'a reset never switches a feature on or off');
+    expect(body.keys.toSet(), f.defaults.keys.toSet());
     expect(find.text('Tetapan asal dipulihkan'), findsOneWidget);
+  });
+
+  testWidgets('[B4] the first save of the catch-up page (no stored row) sends the whole page, the switch included', (tester) async {
+    final h = await pumpShell(
+      tester,
+      roles: const ['admin'],
+      features: const {'youtubeCatchUp': true},
+      overrides: [
+        settingsRepositoryProvider.overrideWith((ref) {
+          final g = ref.watch(gatewayProvider);
+          return g == null ? null : _NoRowRepo(g, onSaved: () => ref.invalidate(settingsProvider));
+        }),
+      ],
+    );
+    h.router.go('/settings/youtubeCatchUp');
+    await settle(tester);
+    // the page shows the registry defaults: the switch already looks ON
+    expect(tester.widget<Switch>(featureSwitch).value, isTrue);
+    // one touch: the segment, as on 22 Nov
+    await reveal(tester, find.text('Sentiasa ganti'));
+    await tester.tap(find.text('Sentiasa ganti'));
+    await settle(tester);
+    await tapSave(tester);
+    await settle(tester);
+    final put = h.box.byPath('/api/settings/youtubeCatchUp')!;
+    expect(jsonDecode(put.body), {
+      'enabled': true,
+      'wifiOnly': true,
+      'joinSegments': true,
+      'replaceGappyLive': 'always',
+    });
+  });
+
+  testWidgets('[B4] a feature whose row is stored still sends only the changed keys', (tester) async {
+    final h = await openSettings(tester, '/settings/youtubeCatchUp');
+    await reveal(tester, find.text('Sentiasa ganti'));
+    await tester.tap(find.text('Sentiasa ganti'));
+    await settle(tester);
+    await tapSave(tester);
+    await settle(tester);
+    expect(jsonDecode(h.box.byPath('/api/settings/youtubeCatchUp')!.body), {'replaceGappyLive': 'always'});
+  });
+
+  testWidgets('[G6] a tap on the segment that is already chosen keeps it and throws nothing', (tester) async {
+    await openSettings(tester, '/settings/youtubeCatchUp');
+    await reveal(tester, find.text('Tanya dahulu'));
+    await tester.tap(find.text('Tanya dahulu'));
+    await settle(tester);
+    expect(tester.takeException(), isNull);
+    final seg = tester.widget<SegmentedButton<String>>(find.byKey(const ValueKey('setting-replaceGappyLive')));
+    expect(seg.selected, {'ask'});
+    expect(saveEnabled(tester), isFalse, reason: 'nothing changed');
+  });
+
+  testWidgets('[G4] another device changes the feature while the page is open: the hint with Muat semula', (tester) async {
+    final h = await openSettings(tester, '/settings/beeps');
+    expect(find.byKey(const ValueKey('settings-changed-now')), findsNothing);
+    // this person has an unsaved edit
+    tester.widget<Slider>(find.byKey(const ValueKey('setting-volume'))).onChanged!(55);
+    await settle(tester);
+    // the other admin's change arrives (the health poll sees a new version)
+    h.handlers['GET /api/settings'] = (r) async => jsonResponse(200, {
+      ...settingsJson(),
+      'beeps': {'enabled': true, 'volume': 40},
+    });
+    h.container.invalidate(settingsProvider);
+    await settle(tester);
+    expect(find.text('Tetapan ini baru diubah pada peranti lain'), findsOneWidget);
+    expect(tester.widget<Slider>(find.byKey(const ValueKey('setting-volume'))).value, 55, reason: 'the unsaved edit stays until the person decides');
+    await tester.tap(find.widgetWithText(TextButton, 'Muat semula'));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('settings-changed-now')), findsNothing);
+    expect(tester.widget<Slider>(find.byKey(const ValueKey('setting-volume'))).value, 40, reason: 'the unsaved edit is dropped: the values MAXCOM holds');
+    expect(saveEnabled(tester), isFalse);
+  });
+
+  testWidgets('[G4] this page\'s own save shows no "changed elsewhere" hint', (tester) async {
+    final h = await openSettings(tester, '/settings/beeps');
+    h.handlers['PUT /api/settings/beeps'] = (r) async {
+      final all = {...settingsJson(), 'beeps': {'enabled': true, 'volume': 55}};
+      h.handlers['GET /api/settings'] = (r) async => jsonResponse(200, all);
+      return jsonResponse(200, all);
+    };
+    tester.widget<Slider>(find.byKey(const ValueKey('setting-volume'))).onChanged!(55);
+    await settle(tester);
+    await tapSave(tester);
+    await settle(tester);
+    expect(h.box.byPath('/api/settings/beeps'), isNotNull);
+    expect(find.byKey(const ValueKey('settings-changed-now')), findsNothing);
+    expect(tester.widget<Slider>(find.byKey(const ValueKey('setting-volume'))).value, 55);
   });
 
   testWidgets('a 400 from the box shows errors[0]; a 403 the app sentence', (tester) async {
@@ -416,15 +526,14 @@ void main() {
     await reveal(tester, find.byKey(const ValueKey('setting-message')));
     await tester.enterText(find.byKey(const ValueKey('setting-message')), 'Sila senyapkan telefon');
     await settle(tester);
-    await reveal(tester, save);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(find.text('Mesej tidak diterima oleh MAXCOM.'), findsOneWidget);
 
     h.handlers['PUT /api/settings/solatScreen'] = (r) async => jsonResponse(403, {
       'errors': ['forbidden'],
     });
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(find.text('Tiada kebenaran untuk tindakan ini'), findsOneWidget);
   });
@@ -438,7 +547,7 @@ void main() {
     h.box.seen.clear();
     tester.widget<Slider>(find.byKey(const ValueKey('setting-volume'))).onChanged!(55);
     await settle(tester);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(find.text('MAXCOM tidak dapat dihubungi. Cuba lagi di surau.'), findsWidgets);
     expect(h.box.byPath('/api/settings/beeps'), isNull);
@@ -451,7 +560,7 @@ void main() {
     await settle(tester);
     expect(find.text('Anda boleh melihat tetapan tetapi tidak mengubahnya.'), findsOneWidget);
     expect(save, findsNothing);
-    expect(find.text('Set semula kepada lalai'), findsNothing);
+    expect(find.byKey(const ValueKey('feature-menu')), findsNothing, reason: 'no reset for a reader');
     expect(find.text('Salin ke semua hari'), findsNothing);
     expect(find.byType(Switch), findsNWidgets(2), reason: 'the feature and beep');
     for (final sw in tester.widgetList<Switch>(find.byType(Switch))) {
@@ -524,7 +633,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('background-default-2')));
       await settle(tester);
       await reveal(tester, save);
-      await tester.tap(save);
+      await tapSave(tester);
       await settle(tester);
       expect(savedBackgrounds(h), {
         'images': ['default-1'],
@@ -549,7 +658,7 @@ void main() {
         findsOneWidget,
       );
       await reveal(tester, save);
-      await tester.tap(save);
+      await tapSave(tester);
       await settle(tester);
       expect(savedBackgrounds(h), {
         'images': ['default-1', otherPicture, fixtureAssetPoster],
@@ -614,7 +723,7 @@ void main() {
         findsOneWidget,
       );
       await reveal(tester, save);
-      await tester.tap(save);
+      await tapSave(tester);
       await settle(tester);
       expect(savedBackgrounds(h), {
         'images': ['default-1', 'default-2', id],
@@ -643,8 +752,7 @@ void main() {
     final decoded = img.decodeJpg(h.assetsPosted.last.$2)!;
     expect(decoded.width, 90, reason: 'the 160 x 90 poster turned a quarter is 90 wide');
     expect(decoded.width / decoded.height, closeTo(16 / 9, 0.05), reason: 'cut to the TV frame');
-    await reveal(tester, save);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(savedBackgrounds(h), {
       'images': ['default-1', 'default-2', baked],
@@ -744,7 +852,7 @@ void main() {
     expect(audioUrl.controller!.text, 'https://everyayah.com/data');
     expect(audioUrl.keyboardType, TextInputType.url);
     expect(audioUrl.textCapitalization, TextCapitalization.none);
-    expect(find.text('Set semula kepada lalai'), findsOneWidget);
+    expect(find.byKey(const ValueKey('feature-menu')), findsOneWidget, reason: 'the reset is in the page menu');
     await expectGoldens(tester, h.app, 'settings_data_sources');
 
     // A plain http address is refused by the app itself (core's rule), in
@@ -779,7 +887,7 @@ void main() {
     await settle(tester);
     await reveal(tester, save);
     expect(saveEnabled(tester), isTrue);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(jsonDecode(h.box.byPath('/api/settings/dataSources')!.body), {
       'esolat': {'url': 'https://esolat.example.my/index.php'},
@@ -811,8 +919,7 @@ void main() {
       findsNothing,
       reason: 'typing clears it',
     );
-    await reveal(tester, save);
-    await tester.tap(save);
+    await tapSave(tester);
     await settle(tester);
     expect(find.text('Tetapan disimpan'), findsOneWidget, reason: screenText(tester));
   }, skip: !kOpsBuild);
@@ -862,7 +969,7 @@ void main() {
       await settle(tester);
       expect(saveEnabled(tester), isTrue);
       await reveal(tester, save);
-      await tester.tap(save);
+      await tapSave(tester);
       await settle(tester);
       final sent = jsonDecode(h.box.byPath('/api/settings/surauInfo')!.body) as Map<String, dynamic>;
       final logo = sent['logo'] as Map<String, dynamic>;
@@ -889,7 +996,7 @@ void main() {
       await settle(tester);
       expect(find.text('Pilih gambar'), findsOneWidget);
       await reveal(tester, save);
-      await tester.tap(save);
+      await tapSave(tester);
       await settle(tester);
       expect(jsonDecode(h.box.seen.where((r) => r.method == 'PUT').last.body), {'logo': ''});
       expect(find.text('Logo mesti gambar PNG atau JPEG.'), findsOneWidget);
@@ -902,7 +1009,7 @@ void main() {
       await tester.pump(const Duration(seconds: 5));
       await settle(tester);
       await reveal(tester, save);
-      await tester.tap(save);
+      await tapSave(tester);
       await settle(tester);
       await reveal(tester, find.byKey(const ValueKey('setting-logo')));
       expect(
@@ -931,7 +1038,7 @@ void main() {
       final sw = find.descendant(of: find.byKey(const ValueKey('setting-showName')), matching: find.byType(Switch));
       expect(find.text('Paparkan nama surau juga'), findsOneWidget);
       expect(tester.widget<Switch>(sw).value, isTrue);
-      expect(find.text('SURAU D\'WAQAF'), findsOneWidget, reason: 'the name beside the logo in the preview');
+      expect(find.text('SURAU CONTOH'), findsOneWidget, reason: 'the name beside the logo in the preview');
       await settleImages(tester);
       await expectGoldens(tester, h.app, 'settings_surau_info_logo');
 
@@ -940,9 +1047,9 @@ void main() {
       await reveal(tester, sw);
       await tester.tap(sw);
       await settle(tester);
-      expect(find.text('SURAU D\'WAQAF'), findsNothing);
+      expect(find.text('SURAU CONTOH'), findsNothing);
       await reveal(tester, save);
-      await tester.tap(save);
+      await tapSave(tester);
       await settle(tester);
       expect(jsonDecode(h.box.byPath('/api/settings/surauInfo')!.body), {'showName': false});
 
@@ -987,7 +1094,7 @@ void main() {
       await tester.pump(const Duration(seconds: 5));
       await settle(tester);
       await reveal(tester, save);
-      await tester.tap(save);
+      await tapSave(tester);
       await settle(tester);
       final sent = jsonDecode(h.box.byPath('/api/settings/surauInfo')!.body) as Map<String, dynamic>;
       expect((sent['logo'] as Map)['bg'], 'card');

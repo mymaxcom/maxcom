@@ -382,22 +382,22 @@ describe('GET /surau-logo and the app icons', () => {
     const manifest = async () => (await app.inject({ method: 'GET', url: '/app/manifest.json' })).json();
 
     // empty: the automatic rule
-    await put({ name: 'Surau D\'Waqaf' });
-    expect((await manifest()).short_name).toBe('Surau');
+    await put({ name: 'Surau Contoh Utama' });
+    expect((await manifest()).short_name).toBe('Surau Contoh');
     const html0 = await app.inject({ method: 'GET', url: '/app/' });
-    expect(html0.body).toContain('content="Surau"');
-    expect(html0.body).toContain('<title>Surau</title>');
+    expect(html0.body).toContain('content="Surau Contoh"');
+    expect(html0.body).toContain('<title>Surau Contoh</title>');
     const etag0 = String(html0.headers.etag);
 
     // set
-    expect((await put({ shortName: 'SDM' })).statusCode).toBe(200);
-    expect((await manifest()).short_name).toBe('SDM');
-    expect((await manifest()).name).toBe('Surau D\'Waqaf');
+    expect((await put({ shortName: 'SCT' })).statusCode).toBe(200);
+    expect((await manifest()).short_name).toBe('SCT');
+    expect((await manifest()).name).toBe('Surau Contoh Utama');
     for (const url of ['/app/', '/app/index.html']) {
       const r = await app.inject({ method: 'GET', url });
       expect(r.statusCode, url).toBe(200);
-      expect(r.body, url).toContain('<meta name="apple-mobile-web-app-title" content="SDM">');
-      expect(r.body, url).toContain('<title>SDM</title>');
+      expect(r.body, url).toContain('<meta name="apple-mobile-web-app-title" content="SCT">');
+      expect(r.body, url).toContain('<title>SCT</title>');
       expect(r.headers['cache-control']).toBe('no-cache');
       expect(String(r.headers.etag)).not.toBe(etag0);
     }
@@ -408,18 +408,18 @@ describe('GET /surau-logo and the app icons', () => {
     // a PUT that omits shortName keeps it
     expect((await put({ kind: 'masjid' })).statusCode).toBe(200);
     const reread = openDb(join(d, 's.db'));
-    try { expect(getSettings(reread, 'sdm').surauInfo.shortName).toBe('SDM'); } finally { reread.close(); }
-    expect((await manifest()).short_name).toBe('SDM');
+    try { expect(getSettings(reread, 'sdm').surauInfo.shortName).toBe('SCT'); } finally { reread.close(); }
+    expect((await manifest()).short_name).toBe('SCT');
 
     // refused
     expect((await put({ shortName: 'x'.repeat(13) })).statusCode).toBe(400);
     expect((await put({ shortName: '<b>' })).statusCode).toBe(400);
     expect((await put({ shortName: 'A&B' })).statusCode).toBe(400);
-    expect((await manifest()).short_name).toBe('SDM');
+    expect((await manifest()).short_name).toBe('SCT');
 
     // cleared: back to the automatic rule
     await put({ shortName: '' });
-    expect((await manifest()).short_name).toBe('Surau');
+    expect((await manifest()).short_name).toBe('Surau Contoh');
   });
 
   it('withHomeScreenName escapes and leaves the html alone without a short name', () => {

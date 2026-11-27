@@ -288,7 +288,7 @@ async function runLoop() {
   const mainScript = join(root, 'current', 'apps', 'box-server', 'src', 'main.ts');
   const reaped = reapOrphan(pidFile, mainScript);
   if (reaped !== null) {
-    console.log(`MAXCOM: kotak yatim PID ${reaped} dihentikan`);
+    console.log(`MAXCOM: proses MAXCOM Kiosk Box yatim PID ${reaped} dihentikan`);
   }
 
   const env = childEnv(root, config, process.env);

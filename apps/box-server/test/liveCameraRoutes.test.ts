@@ -22,8 +22,8 @@ afterEach(async () => {
   for (const h of harnesses.splice(0)) await h.close();
   for (const m of minis.splice(0)) await m.close();
 });
-async function make(): Promise<LiveHarness> {
-  const h = await startLiveHarness();
+async function make(o: Parameters<typeof startLiveHarness>[0] = {}): Promise<LiveHarness> {
+  const h = await startLiveHarness(o);
   harnesses.push(h);
   return h;
 }
@@ -264,7 +264,7 @@ describe('the MediaMTX configuration with a camera', () => {
     expect(before).not.toMatch(/lihat123|rtsp:\/\/viewer/);
   });
 
-  it('the template adds only the four publisher paths of plan 4.6', () => {
+  it('the template adds only the publisher paths of plan 4.6, the AAC rendition path and the two solo sound paths', () => {
     const t = readFileSync(new URL('../src/live/mediamtx.template.yml', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
     const paths = t.slice(t.indexOf('\npaths:\n') + 8);
     const names = [...paths.matchAll(/^ {2}([A-Za-z0-9_-]+):\n {4}source: (\S+)/gm)].map((m) => [m[1], m[2]]);
@@ -274,9 +274,196 @@ describe('the MediaMTX configuration with a camera', () => {
       ['surau-cam', 'publisher'],
       ['surau-mic', 'publisher'],
       ['surau-in', 'publisher'],
+      ['surau-yt', 'publisher'],
+      ['surau-snd', 'publisher'],
+      ['surau-snd-aac', 'publisher'],
       ['surau-uji', 'publisher'],
     ]);
     expect(t).not.toMatch(/rtsp:\/\/\d/);
     expect(t).toMatch(/^rtmp: no$/m);
+  });
+});
+
+// 2026.11.15, Lane A task A4 (C5 and the operator's camera-pull decision): who gets the full camera address while a
+// live runs, the "camera in use" flag in the status, and joining the shared picture through the box.
+describe('A4: camera/source during a live, the camera-in-use flag, joining the shared picture', () => {
+  const SDP = 'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n';
+  const whep = (h: LiveHarness, headers: Record<string, string>, method: 'POST' | 'DELETE', url: string) =>
+    h.app.inject({ method, url, headers: method === 'POST' ? { ...headers, 'content-type': 'application/sdp' } : headers, ...(method === 'POST' ? { payload: SDP } : {}), remoteAddress: LAN });
+  async function withCamera(o: Parameters<typeof startLiveHarness>[0] = {}): Promise<{ h: LiveHarness; owner: Awaited<ReturnType<typeof loginAs>>; other: Awaited<ReturnType<typeof loginAs>> }> {
+    const h = await make(o);
+    const owner = await loginAs(h.app, 'live');
+    const other = await loginAs(h.app, 'live');
+    expect((await call(h, 'PUT', '/api/live/camera', owner.headers, { url: ADDRESS })).statusCode).toBe(200);
+    expect((await call(h, 'PUT', '/api/settings/liveCamera', owner.headers, { enabled: true })).statusCode).toBe(200);
+    return { h, owner, other };
+  }
+  const external = (h: LiveHarness, over: Record<string, unknown> = {}) => startBody(h, { video: 'external', ...over });
+
+  it('with no live anyone holding live:control reads the address (the phone reads it before it starts), and no flag is set', async () => {
+    const { h, owner, other } = await withCamera();
+    for (const who of [owner, other]) expect((await call(h, 'GET', '/api/live/camera/source', who.headers)).json()).toEqual({ url: ADDRESS });
+    expect((await call(h, 'GET', '/api/live/status', owner.headers)).json().cameraUse).toEqual([]);
+  });
+
+  it('the starting phone pulls: it reads the address, the status flags the camera, a second device is refused with camera_in_use (success and refusal)', async () => {
+    const { h, owner, other } = await withCamera();
+    const start = await call(h, 'POST', '/api/live/start', owner.headers, external(h));
+    expect(start.statusCode).toBe(200);
+    expect(start.json().session).toMatchObject({ videoPath: 'device', mine: true });
+    const mine = await call(h, 'GET', '/api/live/camera/source', owner.headers);
+    expect(mine.statusCode).toBe(200);
+    expect(mine.json()).toEqual({ url: ADDRESS });
+
+    const flagOwner = (await call(h, 'GET', '/api/live/status', owner.headers)).json().cameraUse;
+    const flagOther = (await call(h, 'GET', '/api/live/status', other.headers)).json().cameraUse;
+    expect(flagOwner).toEqual([{ cameraId: 'external', sessionId: start.json().session.id, via: 'device', by: { name: expect.stringMatching(/^Peranti \d+$/), mine: true }, since: start.json().session.startedAt }]);
+    expect(flagOther).toEqual([{ ...flagOwner[0], by: { name: flagOwner[0].by.name, mine: false } }]);
+    // the flag names the device by its display name only
+    expect(JSON.stringify(flagOther)).not.toContain(owner.deviceId);
+
+    const refused = await call(h, 'GET', '/api/live/camera/source', other.headers);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().code).toBe('camera_in_use');
+    expect(refused.body).not.toContain('lihat123');
+    expect(refused.body).not.toContain('10.168.1.20');
+    expect(refused.headers['cache-control']).toBe('no-store');
+    // the refusal is on record, without the address
+    const rows = h.app.surau.db.prepare("SELECT entity_id, after_json FROM change_log WHERE entity = 'live-camera' ORDER BY id").all() as Array<{ entity_id: string; after_json: string }>;
+    expect(rows.at(-1)).toMatchObject({ entity_id: 'source-refused' });
+    expect(JSON.parse(rows.at(-1)!.after_json)).toMatchObject({ code: 'camera_in_use' });
+    expect(changeLogText(h.app)).not.toContain('lihat123');
+
+    // the live ends: the flag clears and the address is readable again
+    await call(h, 'POST', '/api/live/stop', owner.headers, {});
+    expect((await call(h, 'GET', '/api/live/status', other.headers)).json().cameraUse).toEqual([]);
+    expect((await call(h, 'GET', '/api/live/camera/source', other.headers)).statusCode).toBe(200);
+  });
+
+  it('C5: during a live on the phone camera another live:control device is refused (403); the owner switching to the camera mid-live reads it and sets the flag', async () => {
+    const { h, owner, other } = await withCamera();
+    await call(h, 'POST', '/api/live/start', owner.headers, startBody(h));
+    const refused = await call(h, 'GET', '/api/live/camera/source', other.headers);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().code).toBe('not_owner');
+    expect(refused.body).not.toContain('lihat123');
+    expect((await call(h, 'GET', '/api/live/status', other.headers)).json().cameraUse).toEqual([]);
+    h.clock.t += 5000;
+    expect((await call(h, 'GET', '/api/live/camera/source', owner.headers)).json()).toEqual({ url: ADDRESS });
+    const flag = (await call(h, 'GET', '/api/live/status', other.headers)).json().cameraUse;
+    expect(flag).toMatchObject([{ cameraId: 'external', via: 'device', by: { mine: false }, since: new Date(h.clock.t).toISOString() }]);
+    // now the camera is held: the second device gets the in-use answer
+    expect((await call(h, 'GET', '/api/live/camera/source', other.headers)).json().code).toBe('camera_in_use');
+  });
+
+  it('a second device joins the shared picture through the box while the camera is in use, one viewer per device; not during a phone-camera live', async () => {
+    const { h, owner, other } = await withCamera();
+    const media = await loginAs(h.app, 'media');
+    await call(h, 'POST', '/api/live/start', owner.headers, external(h));
+    h.fake.webSessionId = 'join-1';
+    const ok = await whep(h, other.headers, 'POST', '/api/live/preview/whep');
+    expect(ok.statusCode).toBe(201);
+    expect(ok.headers.location).toBe('/api/live/preview/whep/join-1');
+    expect(h.fake.requests.some((q) => q.method === 'POST' && q.url === '/surau/whep')).toBe(true);
+    // a second viewer of the same device replaces its first one
+    h.fake.webSessionId = 'join-2';
+    expect((await whep(h, other.headers, 'POST', '/api/live/preview/whep')).statusCode).toBe(201);
+    expect(h.fake.requests.some((q) => q.method === 'DELETE' && q.url === '/surau/whep/join-1')).toBe(true);
+    // each device closes only its own viewer
+    expect((await whep(h, owner.headers, 'DELETE', '/api/live/preview/whep/join-2')).statusCode).toBe(404);
+    expect((await whep(h, other.headers, 'DELETE', '/api/live/preview/whep/join-2')).statusCode).toBe(204);
+    // Media has no live:control: refused at the door
+    expect((await whep(h, media.headers, 'POST', '/api/live/preview/whep')).statusCode).toBe(403);
+    // five further devices: four join, the fifth is told the picture has too many viewers
+    const codes: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const d = await loginAs(h.app, 'live');
+      h.fake.webSessionId = `more-${i}`;
+      codes.push((await whep(h, d.headers, 'POST', '/api/live/preview/whep')).statusCode);
+    }
+    expect(codes).toEqual([201, 201, 201, 201, 429]);
+
+    await call(h, 'POST', '/api/live/stop', owner.headers, {});
+    await h.app.liveSessions!.settled();
+    await call(h, 'POST', '/api/live/start', owner.headers, startBody(h));
+    const refused = await whep(h, other.headers, 'POST', '/api/live/preview/whep');
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().code).toBe('not_owner');
+  });
+
+  it('Q5: a joined device that went away without a DELETE loses its slot after the TTL, and its reader is closed; one that still polls keeps it', async () => {
+    // the clock jumps half an hour here: the monitor is kept away, or it would end the pictureless live meanwhile
+    const { h, owner } = await withCamera({ live: { monitorMs: 3_600_000 } });
+    await call(h, 'POST', '/api/live/start', owner.headers, external(h));
+    const devices: Array<Awaited<ReturnType<typeof loginAs>>> = [];
+    for (let i = 0; i < 4; i++) {
+      const d = await loginAs(h.app, 'live');
+      devices.push(d);
+      h.fake.webSessionId = `dead-${i}`;
+      expect((await whep(h, d.headers, 'POST', '/api/live/preview/whep')).statusCode).toBe(201);
+    }
+    const fifth = await loginAs(h.app, 'live');
+    h.fake.webSessionId = 'fifth-1';
+    // the cap stands while the four are fresh
+    expect((await whep(h, fifth.headers, 'POST', '/api/live/preview/whep')).json()).toMatchObject({ code: 'too_many_viewers' });
+    // 20 minutes on, the first device still polls the status (its viewer is open); the other three are gone
+    h.clock.t += 20 * 60 * 1000;
+    expect((await call(h, 'GET', '/api/live/status', devices[0]!.headers)).statusCode).toBe(200);
+    h.clock.t += 11 * 60 * 1000;
+    const ok = await whep(h, fifth.headers, 'POST', '/api/live/preview/whep');
+    expect(ok.statusCode).toBe(201);
+    expect(ok.headers.location).toBe('/api/live/preview/whep/fifth-1');
+    // the readers the dead devices left are closed at MediaMTX; the polling device keeps its own
+    // (the close is not awaited by the route: it lands a moment later)
+    await vi.waitFor(() => {
+      for (const i of [1, 2, 3]) expect(h.fake.requests.some((q) => q.method === 'DELETE' && q.url === `/surau/whep/dead-${i}`)).toBe(true);
+    }, 5000);
+    expect(h.fake.requests.some((q) => q.method === 'DELETE' && q.url === '/surau/whep/dead-0')).toBe(false);
+    expect((await whep(h, devices[0]!.headers, 'DELETE', '/api/live/preview/whep/dead-0')).statusCode).toBe(204);
+    // the owner's own preview never counts as a joined device
+    h.fake.webSessionId = 'own-1';
+    expect((await whep(h, owner.headers, 'POST', '/api/live/preview/whep')).statusCode).toBe(201);
+  });
+});
+
+// 2026.11.15, Lane B task O4: the pulling device releases the camera it holds.
+describe('O4: POST /api/live/camera/release', () => {
+  async function pulled(): Promise<{ h: LiveHarness; owner: Awaited<ReturnType<typeof loginAs>>; other: Awaited<ReturnType<typeof loginAs>>; sessionId: string }> {
+    const h = await make();
+    const owner = await loginAs(h.app, 'live');
+    const other = await loginAs(h.app, 'live');
+    expect((await call(h, 'PUT', '/api/live/camera', owner.headers, { url: ADDRESS })).statusCode).toBe(200);
+    expect((await call(h, 'PUT', '/api/settings/liveCamera', owner.headers, { enabled: true })).statusCode).toBe(200);
+    const start = await call(h, 'POST', '/api/live/start', owner.headers, startBody(h, { video: 'external' }));
+    expect(start.statusCode).toBe(200);
+    return { h, owner, other, sessionId: start.json().session.id as string };
+  }
+
+  it('the flag set by the owner own pull is cleared by release (204); the address is then not handed to a second device', async () => {
+    const { h, owner, other, sessionId } = await pulled();
+    expect((await call(h, 'GET', '/api/live/camera/source', owner.headers)).statusCode).toBe(200);
+    expect((await call(h, 'GET', '/api/live/status', other.headers)).json().cameraUse).toHaveLength(1);
+    const r = await call(h, 'POST', '/api/live/camera/release', owner.headers, { sessionId });
+    expect(r.statusCode).toBe(204);
+    expect((await call(h, 'GET', '/api/live/status', other.headers)).json().cameraUse).toEqual([]);
+    // a repeat is a plain success
+    expect((await call(h, 'POST', '/api/live/camera/release', owner.headers, { sessionId })).statusCode).toBe(204);
+    // no address leaks through the other device after the release
+    const again = await call(h, 'GET', '/api/live/camera/source', other.headers);
+    expect(again.statusCode).toBe(403);
+    expect(again.body).not.toContain('lihat123');
+  });
+
+  it('another device is refused and the flag stays; a wrong or missing session id is refused', async () => {
+    const { h, owner, other, sessionId } = await pulled();
+    await call(h, 'GET', '/api/live/camera/source', owner.headers);
+    const refused = await call(h, 'POST', '/api/live/camera/release', other.headers, { sessionId });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().code).toBe('not_owner');
+    expect((await call(h, 'GET', '/api/live/status', owner.headers)).json().cameraUse).toHaveLength(1);
+    expect((await call(h, 'POST', '/api/live/camera/release', owner.headers, { sessionId: 'nope' })).json().code).toBe('no_session');
+    expect((await call(h, 'POST', '/api/live/camera/release', owner.headers, {})).statusCode).toBe(400);
+    const media = await loginAs(h.app, 'media');
+    expect((await call(h, 'POST', '/api/live/camera/release', media.headers, { sessionId })).statusCode).toBe(403);
   });
 });

@@ -1,10 +1,11 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { childEnv } from './childEnv.ts';
 import type { ChildProcess } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync, writeSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import http from 'node:http';
 import { isIP } from 'node:net';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MIN_MEDIAMTX_VERSION, liveTools } from './tools.ts';
 import type { LiveTools } from './tools.ts';
@@ -30,6 +31,16 @@ export interface RenderOptions {
   /** The box's own MediaMTX password (clear); only its hash is written into the file. */
   password: string;
   template?: string;
+  /**
+   * MediaMTX `writeQueueSize` (packets queued per reader before it is called too slow). Default: 16384 on Windows, 8192
+   * elsewhere (the Android box has less memory). A power of two, 256 to 65536.
+   */
+  writeQueue?: number;
+}
+
+/** The write queue a box gets when none is set: a slow upload becomes delay, not frames thrown away. */
+export function defaultWriteQueue(platform: NodeJS.Platform = process.platform): number {
+  return platform === 'win32' ? 16384 : 8192;
 }
 
 /** True for 127.0.0.0/8, ::1 and link-local addresses: never a candidate a phone or iPad can use. */
@@ -67,7 +78,10 @@ export function renderMediamtxConfig(o: RenderOptions): string {
   }
   const hosts = webrtcAdvertisedHosts(o.lanIps);
   const template = o.template ?? readFileSync(TEMPLATE_PATH, 'utf8');
+  const queue = o.writeQueue ?? defaultWriteQueue();
+  if (!Number.isInteger(queue) || queue < 256 || queue > 65536 || (queue & (queue - 1)) !== 0) throw new Error('mediamtx config: write queue must be a power of two, 256 to 65536');
   const values: Record<string, string> = {
+    WRITE_QUEUE: String(queue),
     HOSTS: `[${hosts.map(yamlQuote).join(', ')}]`,
     BOX_PASS_HASH: yamlQuote(mediamtxPasswordHash(o.password)),
     MEDIA_HOST: mediaBindHost(o.lanIps),
@@ -123,6 +137,10 @@ function writeSecretFile(path: string, text: string): void {
  * Credentials that must never reach a log: the per-session publisher password, the SRT passphrase and the
  * relay read password. MediaMTX logs the whole SRT stream id (which carries the publisher password), so the
  * supervisor redacts every line against this set. Each value is also held URL-encoded when that differs.
+ *
+ * C6: a value of three characters is kept (a three-character camera password used to slip through). Anything shorter
+ * would blank ordinary log text, so the camera login also registers its address forms (`user:pass`, `:pass@`), which
+ * cover a one or two character password where it is actually printed: inside the camera address.
  */
 export interface LiveSecrets {
   add(...values: Array<string | null | undefined>): void;
@@ -130,13 +148,14 @@ export interface LiveSecrets {
 }
 
 const MAX_LIVE_SECRETS = 512;
+const MIN_SECRET_CHARS = 3;
 
 export function createLiveSecrets(): LiveSecrets {
   const set = new Set<string>();
   return {
     add(...values): void {
       for (const v of values) {
-        if (typeof v !== 'string' || v.length < 4) continue;
+        if (typeof v !== 'string' || v.length < MIN_SECRET_CHARS) continue;
         for (const form of [v, encodeURIComponent(v)]) {
           set.delete(form);
           set.add(form);
@@ -196,6 +215,63 @@ export interface SupervisorOptions {
   killAfterMs?: number;
   logMaxBytes?: number;
   onEvent?: (event: MediamtxEvent) => void;
+  /** K5: after it gave up, the supervisor tries again this often (default 5 minutes); a box restart is no longer needed. */
+  reviveMs?: number;
+}
+
+const REVIVE_MS = 5 * 60_000;
+/** A process id as a pid file may hold it: digits only, above the system's own first ids. */
+const PID_RE = /^[0-9]{1,7}$/;
+
+export interface ReapDeps {
+  platform?: NodeJS.Platform;
+  /** The image name of a running process (`mediamtx.exe`), or null when no such process runs. */
+  imageOf?: (pid: number) => string | null;
+  kill?: (pid: number) => void;
+}
+
+/** The image name of a process on Windows, from `tasklist` (a fixed command with a numeric argument; no shell). */
+function windowsImageOf(pid: number): string | null {
+  try {
+    const out = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', timeout: 5000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    const m = /^"([^"]+)","(\d+)"/m.exec(out);
+    return m !== null && Number(m[2]) === pid ? (m[1] as string) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * K5: a MediaMTX that outlived a crashed box server still holds the media ports, so the new one can never start. The
+ * supervisor records the process id of every MediaMTX it starts (`<dataDir>/live/mediamtx.pid`); before a start this
+ * ends the recorded process, but only when a process with that id still runs AND its image is the MediaMTX executable
+ * (a reused id of another program is left alone). Windows only: elsewhere the child dies with its parent. Returns the
+ * process id it ended, or null. Never throws.
+ */
+export function reapStaleMediamtx(pidFile: string, exe: string, deps: ReapDeps = {}): number | null {
+  if ((deps.platform ?? process.platform) !== 'win32') return null;
+  let text: string;
+  try {
+    text = readFileSync(pidFile, 'utf8').trim();
+  } catch {
+    return null;
+  }
+  try {
+    rmSync(pidFile, { force: true });
+  } catch {
+    /* the record is rewritten at the next spawn */
+  }
+  if (!PID_RE.test(text)) return null;
+  const pid = Number(text);
+  if (!Number.isSafeInteger(pid) || pid <= 4 || pid === process.pid) return null;
+  const image = (deps.imageOf ?? windowsImageOf)(pid);
+  if (image === null || image.toLowerCase() !== basename(exe).toLowerCase()) return null;
+  try {
+    (deps.kill ?? ((p: number): void => void process.kill(p, 'SIGKILL')))(pid);
+  } catch {
+    return null;
+  }
+  return pid;
 }
 
 const STABLE_RUN_MS = 60_000;
@@ -243,6 +319,8 @@ export function startMediamtx(o: SupervisorOptions): MediamtxSupervisor {
     return list.filter((x) => x.length > 0).sort((a, b) => b.length - a.length);
   };
   const liveDir = join(o.dataDir, 'live');
+  const pidFile = join(liveDir, 'mediamtx.pid');
+  const reviveMs = o.reviveMs ?? REVIVE_MS;
   const log = new RotatingLog(join(liveDir, 'mediamtx.out.log'), o.logMaxBytes ?? 5 * 1024 * 1024);
   const args = o.args ?? (o.configPath !== undefined ? [o.configPath] : []);
 
@@ -265,7 +343,9 @@ export function startMediamtx(o: SupervisorOptions): MediamtxSupervisor {
       /* observers never break supervision */
     }
   };
-  const clean = (text: string): string => currentSecrets().reduce((acc, s) => acc.split(s).join('***'), text);
+  // the longest value first: a short one inside a longer one (`abc` in `viewer:abc`) must not leave the rest standing
+  const clean = (text: string): string =>
+    [...currentSecrets()].sort((a, b) => b.length - a.length).reduce((acc, s) => (s === '' ? acc : acc.split(s).join('***')), text);
 
   function pipeLines(stream: NodeJS.ReadableStream, tag: string): () => void {
     let partial = '';
@@ -288,7 +368,17 @@ export function startMediamtx(o: SupervisorOptions): MediamtxSupervisor {
     try {
       // cwd is the live folder: MediaMTX drops auto.crt / auto.key into its working directory
       mkdirSync(liveDir, { recursive: true });
-      proc = spawn(o.exe, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, cwd: liveDir });
+      // K5: a MediaMTX an earlier run of the box left behind (a crash) would hold the ports this one needs
+      const reaped = reapStaleMediamtx(pidFile, o.exe);
+      if (reaped !== null) console.warn(`MediaMTX: a process left by an earlier run was ended (pid ${reaped})`);
+      proc = spawn(o.exe, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, cwd: liveDir, env: childEnv() });
+      if (proc.pid !== undefined) {
+        try {
+          writeFileSync(pidFile, String(proc.pid));
+        } catch {
+          /* without the record the next start simply has nothing to check */
+        }
+      }
     } catch {
       onGone(null, null);
       return;
@@ -311,6 +401,12 @@ export function startMediamtx(o: SupervisorOptions): MediamtxSupervisor {
       flushErr();
       child = null;
       since = null;
+      // the process ended and was seen to end: its record goes (a crash of the box itself leaves it for the next start)
+      try {
+        rmSync(pidFile, { force: true });
+      } catch {
+        /* best effort */
+      }
       resolveExited();
       onGone(code, signal);
     };
@@ -332,7 +428,14 @@ export function startMediamtx(o: SupervisorOptions): MediamtxSupervisor {
     if (recent.length >= maxRestarts) {
       state = 'failed';
       emit({ type: 'failed' });
-      console.warn('MediaMTX keeps crashing and was given up on; live video is unavailable until the box restarts (the kiosk is unaffected)');
+      console.warn(`MediaMTX keeps crashing and was given up on; live video is unavailable, the next try is in ${Math.round(reviveMs / 60_000)} min (the kiosk is unaffected)`);
+      // K5: not for ever. A cause that goes away (a port another program held, a full disk) must not need a box restart.
+      timer = setTimeout(() => {
+        recent = [];
+        streak = 0;
+        spawnOnce();
+      }, reviveMs);
+      timer.unref();
       return;
     }
     recent.push(now);
@@ -511,6 +614,26 @@ export class MediamtxApi {
       bytesReceived: typeof j.bytesReceived === 'number' ? j.bytesReceived : 0,
       tracks,
     };
+  }
+
+  /**
+   * The ids of the WebRTC sessions that read one path right now (read only), or null when the media server gives no
+   * usable answer (path unknown, an answer without a readers list). Other reader kinds (the box's own ffmpeg legs) are
+   * not listed. The caller compares counts only: nothing proves these ids equal the ids the box stored from a WHEP
+   * `Location` header.
+   */
+  async pathWebrtcReaders(name: string): Promise<string[] | null> {
+    if (!NAME_RE.test(name)) throw new Error('mediamtx api: bad path name');
+    const r = await this.request('GET', `/v3/paths/get/${name}`);
+    if (r.status < 200 || r.status >= 300) return null;
+    const j = (r.json ?? {}) as { readers?: unknown };
+    if (!Array.isArray(j.readers)) return null;
+    const ids: string[] = [];
+    for (const x of j.readers) {
+      const e = x as { type?: unknown; id?: unknown } | null;
+      if (e !== null && typeof e === 'object' && typeof e.type === 'string' && e.type.toLowerCase() === 'webrtcsession') ids.push(typeof e.id === 'string' ? e.id : '');
+    }
+    return ids;
   }
 
   async pathsPatch(name: string, patch: Record<string, unknown>): Promise<void> {

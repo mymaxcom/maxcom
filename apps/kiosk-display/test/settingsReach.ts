@@ -75,6 +75,10 @@ export const REACH: Record<string, Record<string, Reach>> = {
     enabled: { none: 'hidden', why: 'the feature has no generic page (HIDDEN_FEATURES); Ubah suai edits styles' },
     styles: by(`${K}app.tsx`, `${K}themes/styleVars.ts`), packs: by(`${K}themes/index.ts`),
   },
+  tvProfiles: {
+    enabled: { none: 'hidden', why: 'always on and hidden from Tetapan (HIDDEN_FEATURES, FieldMeta hidden): the per-TV editor of the admin app is its only control' },
+    tvs: { none: 'hidden', why: 'read by the box server, not by the TV page: the box lays the profile of each TV over the surau values before it serves the bundle (kioskSettingsForTv)' },
+  },
   kuliahCard: { enabled: by(ROT), durationSeconds: by(ROT), order: by(ROT), daysAhead: by(ROT) },
   penceramahPhoto: { enabled: by(`${K}screens/content/KuliahScreen.tsx`), shape: by(`${K}screens/content/KuliahScreen.tsx`) },
   kitabCover: { enabled: by(`${K}screens/content/KuliahScreen.tsx`) },
@@ -106,7 +110,11 @@ export const REACH: Record<string, Record<string, Reach>> = {
     showTranslation: by(`${K}content/cards/AyatCard.tsx`, `${K}screens/content/ArabAyatScreen.tsx`),
     textSize: by(`${K}content/cards/AyatCard.tsx`, `${K}screens/content/ArabAyatScreen.tsx`),
   },
-  zikirSelepasSolat: { enabled: by(ROT), durationSeconds: by(`${K}content/ZikirOverlay.tsx`), minutesAfterSolat: by(`${K}content/ZikirOverlay.tsx`) },
+  zikirSelepasSolat: {
+    enabled: by(ROT), durationSeconds: by(`${K}content/ZikirOverlay.tsx`), minutesAfterSolat: by(`${K}content/ZikirOverlay.tsx`),
+    startAfterMinutes: by(ROT), showClock: by(`${K}content/ZikirOverlay.tsx`), showTimeLeft: by(`${K}content/ZikirOverlay.tsx`),
+    look: by(`${K}content/ZikirOverlay.tsx`, `${K}screens/Main.tsx`),
+  },
   quranReader: { enabled: { none: 'hidden', why: 'the feature is hidden from Tetapan as planned (HIDDEN_FEATURES); nothing on the TV reads it yet' } },
   tilawah: { enabled: by(ROT), reciter: by(`${K}audio/tilawah.ts`), volume: by(`${K}audio/tilawah.ts`), cacheMaxMb: by(`${B}islamic/fetch.ts`) },
   beeps: { enabled: by(`${K}ui/Beep.ts`), volume: by(`${K}ui/Beep.ts`) },
@@ -119,7 +127,8 @@ export const REACH: Record<string, Record<string, Reach>> = {
     relayFrom: { none: 'hidden', why: 'planned (Dirancang), hidden from Tetapan (FieldMeta hidden): only the box relays today; direct phone to YouTube is on the roadmap (Dirancang)' },
     relayVideo: by(`${B}live/sessions.ts`), titleTemplate: { by: [`${C}live/youtubeMeta.ts`], needle: /settings\.titleTemplate/ },
     descriptionTemplate: { by: [`${C}live/youtubeMeta.ts`], needle: /settings\.descriptionTemplate/ },
-    maxBitrateKbps: by(`${B}live/sessions.ts`),
+    maxBitrateKbps: { none: 'hidden', why: 'hidden from Tetapan (FieldMeta hidden): the relay limit is fixed at 3500 kbps in live/sessions.ts and a stored value is ignored' },
+    autoQuality: { none: 'hidden', why: 'hidden from Tetapan (FieldMeta hidden): no user control; live/sessions.ts reads it only to switch the relay quality ladder off when it is explicitly false' },
     nextLiveOn: { none: 'hidden', why: 'hidden from Tetapan (FieldMeta hidden): the surau-wide YouTube choice for the next live, set from the Live screen of the app (box route PUT /api/live/youtube/next-live); the TV never reads it' },
   },
   recording: {
@@ -132,7 +141,8 @@ export const REACH: Record<string, Record<string, Reach>> = {
     enabled: by(`${A}features/live/live_source.dart`),
     name: by(`${A}features/live/live_source.dart`),
     transport: by(`${B}live/cameraRoutes.ts`, `${A}features/live/live_source.dart`),
-    avOffsetMs: by(`${B}live/sessions.ts`, `${A}features/live/live_controller.dart`),
+    brightness: by(`${A}features/live/live_controller.dart`, `${B}live/sessions.ts`),
+    avOffsetMs: { none: 'hidden', why: 'hidden from Tetapan (FieldMeta hidden): the live session reads it (live/sessions.ts) and the app no longer shows it' },
   },
 
   finance: {
@@ -155,12 +165,13 @@ export const REACH: Record<string, Record<string, Reach>> = {
     joinSegments: by(`${A}upload/upload_providers.dart`), replaceGappyLive: by(`${A}upload/upload_providers.dart`),
   },
   recordingCleanup: {
-    enabled: { by: [`${A}upload/recording_cleanup.dart`], needle: /clean\??\[['"]enabled['"]\]/ },
-    keepDays: { by: [`${A}upload/recording_cleanup.dart`], needle: /clean\??\[['"]keepDays['"]\]/ },
+    enabled: { by: [`${A}upload/recording_cleanup.dart`], needle: /featureOnIn\(clean, ['"]recordingCleanup['"]\)/ },
+    keepDays: { by: [`${A}upload/recording_cleanup.dart`], needle: /featureValue\(['"]recordingCleanup['"], clean, ['"]keepDays['"]\)/ },
   },
   appLock: { enabled: by(`${B}auth/appLock.ts`) },
   system: {
-    enabled: locked(), noVideoSeconds: by(`${B}app.ts`), cloudWakeSeconds: by(`${B}app.ts`), syncHistoryDays: by(`${B}sync/trim.ts`),
+    enabled: locked(), noVideoSeconds: by(`${B}app.ts`), cloudWakeSeconds: { none: 'gap', why: 'the cloud wait it set was read by the YouTube cloud leg, removed in the YouTube phase 4 clean-up; no code reads it now, so it stays in the registry (older boxes and apps still carry it) until it is retired' },
+    syncHistoryDays: by(`${B}sync/trim.ts`),
     suspendedAt: { none: 'hidden', why: 'set by the fleet tools, never typed in Tetapan; already skipped by the app settings form and search' },
   },
 };

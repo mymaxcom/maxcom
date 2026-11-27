@@ -19,8 +19,10 @@ import '../app/shell.dart';
 import '../app/theme.dart';
 import '../box/box_address.dart';
 import '../box/box_client.dart';
+import '../box/open_by_name.dart';
 import '../features/common/error_text.dart';
 import '../features/common/help_card.dart';
+import '../features/common/open_by_name_notice.dart';
 import '../features/common/ltr.dart';
 import '../features/people/people_api.dart';
 import '../features/people/people_words.dart';
@@ -310,6 +312,15 @@ class _ThisDeviceScreenState extends ConsumerState<ThisDeviceScreen> {
             ],
           ),
           if (box != null) ...[
+            if (enrolmentNameOriginToOffer(page: ref.watch(pageOriginProvider), box: box.box, name: box.name)
+                case final byName?) ...[
+              const SizedBox(height: 12),
+              OpenByNameNotice(
+                origin: byName,
+                body: s.openByNameDeviceBody(byName.toString()),
+                onOpen: ref.read(originOpenerProvider),
+              ),
+            ],
             const SizedBox(height: 12),
             TechnicalDetails(
               boxAddress: boxAddressText(box.box, name: box.name),

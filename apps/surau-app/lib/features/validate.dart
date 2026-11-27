@@ -108,6 +108,7 @@ SettingRule? ruleFor(String name) {
   // Explicit cases first: both names also match the generic minutes rule below.
   if (name == 'adjustMinutes') return const SettingRule.int(-30, 30);
   if (name == 'imsakMinutes') return const SettingRule.int(5, 20);
+  if (name == 'startAfterMinutes') return const SettingRule.int(0, 30);
   if (name == 'minutes' ||
       name.startsWith('minutes') ||
       name.endsWith('Minutes')) {
@@ -177,6 +178,8 @@ SettingRule? ruleFor(String name) {
       return const SettingRule.enumOf(['box', 'phone']);
     case 'transport':
       return const SettingRule.enumOf(['auto', 'tcp', 'udp']);
+    case 'brightness':
+      return const SettingRule.enumOf(['auto', 'normal', 'bright', 'brighter']);
     case 'avOffsetMs':
       // Core's AV_OFFSET_CHOICES: 0 to 2000 ms in steps of 50.
       return SettingRule.intOf([for (var i = 0; i <= 2000; i += 50) '$i']);
@@ -191,7 +194,7 @@ SettingRule? ruleFor(String name) {
     case 'relayVideo':
       return const SettingRule.enumOf(['copy', 'reencode']);
     case 'maxBitrateKbps':
-      return const SettingRule.int(500, 6000);
+      return const SettingRule.int(1000, 8000);
     case 'titleTemplate':
       return const SettingRule.text(1, 100);
     case 'descriptionTemplate':
@@ -202,6 +205,8 @@ SettingRule? ruleFor(String name) {
       return const SettingRule.enumOf(['round', 'square']);
     case 'textSize':
       return const SettingRule.enumOf(['s', 'm', 'l']);
+    case 'look':
+      return const SettingRule.enumOf(['theme', 'plain', 'arab']);
     case 'ds.name':
       return SettingRule.text(1, 60, re: _sourceNameRe, what: 'plain');
     case 'ds.url':

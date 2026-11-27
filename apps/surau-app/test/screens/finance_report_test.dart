@@ -60,7 +60,7 @@ void main() {
     await tester.pumpWidget(h.app(const ReportScreen(initialYm: _oct)));
     await settle(tester);
 
-    expect(find.text('Surau D\'Waqaf'), findsWidgets);
+    expect(find.text('Surau Contoh'), findsWidgets);
     expect(find.text('Penyata Kewangan Bulanan'), findsOneWidget);
     expect(find.text('Oktober 2026'), findsOneWidget);
     expect(find.text('DRAF: belum dimuktamadkan'), findsOneWidget);
@@ -143,7 +143,7 @@ void main() {
     await reveal(tester, find.byKey(const Key('finr-download')));
     await tester.tap(find.byKey(const Key('finr-download')));
     await settle(tester);
-    expect(h.ops.savedNames, ['Penyata-Kewangan-Surau-D-Waqaf-2026-10.pdf']);
+    expect(h.ops.savedNames, ['Penyata-Kewangan-Surau-Contoh-2026-10.pdf']);
     expect(find.text('PDF disimpan dalam Muat turun.'), findsOneWidget);
     expect(find.byKey(const Key('finr-live-only')), findsNothing);
   });
@@ -170,7 +170,7 @@ void main() {
     h.ops.shareResult = const ShareResult('email');
     await tester.tap(find.byKey(const Key('finr-share-go')));
     await settle(tester);
-    expect(h.ops.sharedNames, ['Penyata-Kewangan-Surau-D-Waqaf-2026-10.pdf']);
+    expect(h.ops.sharedNames, ['Penyata-Kewangan-Surau-Contoh-2026-10.pdf']);
     expect(h.box.shared, [(_oct, 'email')]);
   });
 

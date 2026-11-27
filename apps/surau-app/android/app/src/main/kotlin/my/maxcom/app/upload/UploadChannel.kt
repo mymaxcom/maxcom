@@ -10,7 +10,6 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
-import android.util.Base64
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.Data
@@ -24,7 +23,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.util.concurrent.TimeUnit
-import org.json.JSONObject
+import my.maxcom.app.live.LiveEngine
 
 /** Where the worker's events leave for Dart (the app may be closed: then they are dropped; `status` replays). */
 object UploadEvents {
@@ -40,9 +39,9 @@ object UploadEvents {
  * MethodChannel `my.maxcom/upload` and EventChannel `my.maxcom/upload/events` (Plan 6 Task 10).
  * Register from `configureFlutterEngine`: `UploadChannel.register(flutterEngine, this)`.
  *
- * `enqueue` carries the job, the cloud base URL, the session token and the root CA once; they go
- * straight into the work request and are not stored, logged or put in the notification. Errors to
- * Dart carry reason codes only.
+ * `enqueue` carries the job and nothing else (2026.11.15, U7): each part already holds the Google upload
+ * address the app got from the MAXCOM box, so no session token, box address or certificate crosses this channel or
+ * reaches WorkManager. The address is not logged or put in the notification. Errors to Dart carry reason codes only.
  */
 class UploadChannel private constructor(private val context: Context) :
     MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
@@ -57,19 +56,19 @@ class UploadChannel private constructor(private val context: Context) :
             EventChannel(flutter.dartExecutor.binaryMessenger, EVENTS).setStreamHandler(ch)
         }
 
+        /** The digest of the last request queued per job (a hash: no address, no name). */
+        const val ENQUEUED_PREFS = "maxcom_upload_enqueued"
+
         /** The unique work request of one job. */
-        fun request(jobJson: String, base: String, token: String, caB64: String, allowMobile: Boolean) =
+        fun request(jobJson: String, allowMobile: Boolean) =
             OneTimeWorkRequestBuilder<UploadWorker>()
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(UploadPlan.networkType(allowMobile)).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .setInputData(
-                    Data.Builder()
-                        .putString(UploadWorker.KEY_JOB, jobJson)
-                        .putString(UploadWorker.KEY_BASE, base)
-                        .putString(UploadWorker.KEY_TOKEN, token)
-                        .putString(UploadWorker.KEY_CA, caB64)
-                        .build(),
+                    Data.Builder().apply {
+                        for ((k, v) in UploadPlan.inputValues(jobJson)) putString(k, v)
+                    }.build(),
                 )
                 .build()
     }
@@ -99,13 +98,28 @@ class UploadChannel private constructor(private val context: Context) :
                 if (id == null) result.error("bad_args", null, null) else {
                     WorkManager.getInstance(context).cancelUniqueWork(UploadWorker.workName(id))
                     PrefsStateStore(context).clear(id)
+                    context.getSharedPreferences(ENQUEUED_PREFS, Context.MODE_PRIVATE).edit().remove(id).apply()
                     UploadWorker.joinedFile(context, id).delete()
                     result.success(null)
                 }
             }
             "status" -> result.success(status())
             "network" -> result.success(network())
-            "findSegments" -> result.success(findSegments(call.argument<List<String>>("names") ?: emptyList()))
+            "findSegments" -> {
+                // U2: the files of a live that just ended are still being handed to the gallery. The look-up waits
+                // for that (off the main thread), so a file is never found in the app folder a moment before the
+                // gallery copy removes it.
+                val names = call.argument<List<String>>("names") ?: emptyList()
+                Thread({
+                    val found = try {
+                        LiveEngine.peek()?.awaitPublished()
+                        findSegments(names)
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                    main.post { try { result.success(found) } catch (_: RuntimeException) {} }
+                }, "maxcom-find").start()
+            }
             // Joins the pieces of one live into one file (MediaMuxer, no re-encode), then removes the pieces.
             "mergeRecordings" -> {
                 val names = call.argument<List<String>>("names")
@@ -129,6 +143,7 @@ class UploadChannel private constructor(private val context: Context) :
         }
         Thread({
             val answer: Map<String, Any?> = try {
+                LiveEngine.peek()?.awaitPublished() // U2: join only what has arrived in the gallery
                 val env = AndroidMergeEnv(context, ::findSegments, ::deleteRecordings)
                 when (val r = RecordingMerger.merge(env, names)) {
                     is MergeResult.Nothing -> mapOf("merged" to false, "name" to r.name)
@@ -148,30 +163,33 @@ class UploadChannel private constructor(private val context: Context) :
     }
 
     private fun enqueue(call: MethodCall, result: MethodChannel.Result) {
+        // Only the job is read. Anything else an older caller still sends is ignored here and never stored.
         val job = call.argument<Map<String, Any?>>("job")
-        val base = call.argument<String>("base")
-        val token = call.argument<String>("token")
-        if (job == null || base == null || token == null) {
+        val id = job?.get("id") as? String
+        if (job == null || id == null) {
             result.error("bad_args", null, null)
             return
         }
-        val ca = call.argument<ByteArray>("ca")
-        val caB64 = if (ca == null) "" else Base64.encodeToString(ca, Base64.NO_WRAP)
-        val jobJson = JSONObject(job).toString()
-        val id = job["id"] as? String
-        if (id == null) {
+        val jobJson = try {
+            UploadPlan.workJob(job)
+        } catch (_: Exception) {
             result.error("bad_args", null, null)
             return
         }
-        if (!UploadPlan.fitsInput(jobJson, base, token, caB64)) {
+        if (!UploadPlan.fitsInput(jobJson)) {
             result.error("job_too_large", null, null)
             return
         }
-        val req = request(jobJson, base, token, caB64, job["allowMobile"] == true)
-        // REPLACE: the new request carries the fresh session token; the worker keeps its own
-        // progress, so the replaced run resumes where it was.
-        WorkManager.getInstance(context)
-            .enqueueUniqueWork(UploadWorker.workName(id), ExistingWorkPolicy.REPLACE, req)
+        val req = request(jobJson, job["allowMobile"] == true)
+        // U8: the same job again keeps the running worker; only a changed job (a new upload address, mobile data
+        // allowed) replaces it, and the worker then resumes from its own saved progress.
+        val digests = context.getSharedPreferences(ENQUEUED_PREFS, Context.MODE_PRIVATE)
+        val digest = UploadPlan.jobDigest(jobJson)
+        val keep = UploadPlan.keepExisting(digests.getString(id, null), digest)
+        digests.edit().putString(id, digest).apply()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            UploadWorker.workName(id), if (keep) ExistingWorkPolicy.KEEP else ExistingWorkPolicy.REPLACE, req,
+        )
         result.success(null)
     }
 
@@ -186,6 +204,9 @@ class UploadChannel private constructor(private val context: Context) :
                         uploadId = p.uploadId, uploadUri = p.uploadUri, videoId = p.videoId,
                         joined = if (s.joined) true else null,
                         total = if (s.joined) s.joinedBytes else null,
+                        // B1: the reason is replayed too, and a dead upload address is dropped on the app's side as well
+                        error = p.error,
+                        clearSession = p.error == UploadJobRunner.NEEDS_BEGIN && p.uploadUri == null && p.videoId == null,
                     ).toMap(),
                 )
             }
@@ -197,13 +218,13 @@ class UploadChannel private constructor(private val context: Context) :
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val net = cm.activeNetwork ?: return "none"
         val caps = cm.getNetworkCapabilities(net) ?: return "none"
-        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return "none"
-        return when {
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "wifi"
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
-            else -> "wifi"
-        }
+        return UploadPlan.networkKind(
+            internet = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+            wifiOrEthernet = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET),
+            cellular = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR),
+            unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+        )
     }
 
     /**

@@ -1,7 +1,7 @@
 # Golden screenshots
 
 Every screen of the surau app, rendered in Bahasa Malaysia over the
-realistic box of `test/support/fake_box.dart` (Surau D'Waqaf: Ustaz
+realistic box of `test/support/fake_box.dart` (Surau Contoh: Ustaz
 Ali the admin, Aminah binti Yusof the treasurer, kuliah, pengumuman,
 posters, petugas) through the production providers. Each name below exists
 at the three sizes of `test/golden_sizes.dart` unless marked phone only:

@@ -23,7 +23,7 @@ class _Cloud implements UploadApi {
     n++;
     return UploadBegun(
       uploadId: 'up$n',
-      uploadUri: 'https://www.googleapis.com/upload/session/$n',
+      uploadUri: 'https://www.googleapis.com/upload/youtube/session/$n',
       expiresAt: DateTime.utc(2026, 11, 13),
       title: 't',
     );
@@ -42,6 +42,22 @@ class _Cloud implements UploadApi {
     uploadLimit: 100,
     resetsAt: DateTime.utc(2026, 11, 7, 8),
   );
+}
+
+/// A cloud that also takes the "still alive" call of a running upload.
+class _AliveCloud extends _Cloud implements UploadProgress {
+  final List<String> alive = [];
+  bool failing = false;
+
+  /// What the box answers: false is `ok: false` (the claim was taken over).
+  bool claimHeld = true;
+
+  @override
+  Future<bool> progress(String uploadId) async {
+    alive.add(uploadId);
+    if (failing) throw StateError('box away');
+    return claimHeld;
+  }
 }
 
 /// A cloud that answers `begin` with an address of its own choosing.
@@ -91,10 +107,11 @@ void main() {
   late _Cloud cloud;
   late List<UploadEvent> events;
 
-  UploadLoop loop(http.Client c) => UploadLoop(
-    resumable: ResumableClient(client: c, sleep: (_) async {}),
+  UploadLoop loop(http.Client c, {int? chunk, Duration? aliveEvery}) => UploadLoop(
+    resumable: ResumableClient(client: c, sleep: (_) async {}, chunkSize: chunk ?? 8 * 1024 * 1024),
     openSource: (_) async => _Mem(100),
     emit: events.add,
+    aliveEvery: aliveEvery ?? uploadAliveEvery,
   );
 
   UploadAuth auth() => UploadAuth(
@@ -116,6 +133,47 @@ void main() {
     );
     expect(cloud.begins.single.part, isNull);
     expect(cloud.begins.single.replaceLiveVideoId, 'live1');
+    expect(cloud.dones, [('up1', 'v1')]);
+  });
+
+  test('a running upload tells the box it is alive, once per two minutes, and a failed call changes nothing', () async {
+    final c = _AliveCloud()..failing = true;
+    cloud = c;
+    await loop(MockClient((_) async => _ok('v1'))).run(_job(), auth(), shouldStop: () => false);
+    expect(c.alive, ['up1']);
+    expect(c.dones, [('up1', 'v1')]);
+  });
+
+  test('F7: the alive call runs on a timer while one slow chunk is in flight, not only when a chunk ends', () async {
+    final c = _AliveCloud();
+    cloud = c;
+    final slow = MockClient((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 260));
+      return _ok('v1');
+    });
+    await loop(slow, aliveEvery: const Duration(milliseconds: 40)).run(_job(), auth(), shouldStop: () => false);
+    expect(c.alive.length, greaterThanOrEqualTo(4), reason: 'one at the start, then one per tick');
+    expect(c.dones, [('up1', 'v1')]);
+  });
+
+  test('F7: when the box answers ok:false the upload stops with claim_lost and done is never called', () async {
+    final c = _AliveCloud()..claimHeld = false;
+    cloud = c;
+    var puts = 0;
+    final chunked = MockClient((_) async {
+      puts++;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      return http.Response('', 308, headers: {'range': 'bytes=0-${puts * 10 - 1}'});
+    });
+    await loop(chunked, chunk: 10).run(_job(), auth(), shouldStop: () => false);
+    expect(puts, lessThan(10), reason: 'it did not send every chunk');
+    expect(events.last.state, UploadPartState.failed);
+    expect(events.last.error, 'claim_lost');
+    expect(c.dones, isEmpty);
+  });
+
+  test('an older cloud without the progress call uploads as before', () async {
+    await loop(MockClient((_) async => _ok('v1'))).run(_job(), auth(), shouldStop: () => false);
     expect(cloud.dones, [('up1', 'v1')]);
   });
 
@@ -159,7 +217,7 @@ void main() {
           source: 'web:1',
           bytes: 100,
           uploadId: 'upX',
-          uploadUri: 'https://www.googleapis.com/upload/session/X',
+          uploadUri: 'https://www.googleapis.com/upload/youtube/session/X',
           offset: 10,
           state: UploadPartState.queued,
         ),
@@ -172,16 +230,29 @@ void main() {
   });
 
   group('the upload address must be Google (S1)', () {
-    test('only https on googleapis.com or a subdomain passes', () {
+    test('only https on www.googleapis.com under /upload/youtube/ passes (S3)', () {
       for (final ok in [
         'https://www.googleapis.com/upload/youtube/v3/videos?upload_id=x',
-        'https://upload.googleapis.com/x',
-        'https://a.b.googleapis.com/x',
-        'https://WWW.GOOGLEAPIS.COM/x',
+        'https://WWW.GOOGLEAPIS.COM/upload/youtube/v3/videos?uploadType=resumable&upload_id=a..b',
+        'https://www.googleapis.com:443/upload/youtube/v3/videos?upload_id=x',
       ]) {
         expect(isYoutubeUploadUri(ok), isTrue, reason: ok);
       }
       for (final bad in [
+        // S3: any other Google host, and any other path of the right host
+        'https://upload.googleapis.com/x',
+        'https://a.b.googleapis.com/x',
+        'https://WWW.GOOGLEAPIS.COM/x',
+        'https://bucket.storage.googleapis.com/upload/youtube/v3/videos?upload_id=x',
+        'https://storage.googleapis.com/upload/youtube/v3/videos',
+        'https://www.googleapis.com/upload/storage/v1/b/x/o',
+        'https://www.googleapis.com/upload/youtube',
+        'https://www.googleapis.com/upload/youtubex/v3/videos',
+        'https://www.googleapis.com/upload/youtube/../storage/v1/b/x/o',
+        'https://www.googleapis.com/upload/youtube/%2e%2e/storage/v1/b/x/o',
+        'https://www.googleapis.com/upload/youtube/%2E%2E/storage/v1/b/x/o',
+        'https://www.googleapis.com:8443/upload/youtube/v3/videos',
+        'https://www.googleapis.com./upload/youtube/v3/videos',
         'http://www.googleapis.com/x',
         'https://evil.example/x',
         'https://googleapis.com.evil.example/x',

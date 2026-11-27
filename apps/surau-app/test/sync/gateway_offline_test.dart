@@ -96,11 +96,15 @@ void main() {
       expect(box.seen, isEmpty);
     });
 
-    test('settings are keyed by feature and carry no bookkeeping', () async {
+    test('settings from the local copy (the box away) are keyed by feature and carry no bookkeeping', () async {
+      // G1 (2026.11.15): the settings are read fresh when the box answers; the
+      // local copy is the fallback, see test/features/settings_fresh_test.dart
+      boxAway = true;
       final r = await gw.get('/api/settings');
       expect(r.value, {
         'clock': {'enabled': true},
       });
+      expect(r.stale, isTrue);
     });
 
     test('[K5] a settings save is queued here and says so; a live-only one is not', () async {
@@ -147,15 +151,16 @@ void main() {
     });
 
     test('stale follows the last sync', () async {
+      // a list read: the settings are no longer a pure local read (G1)
       expect(
-        (await gw.get('/api/settings')).stale,
+        (await gw.get('/api/users')).stale,
         isTrue,
         reason: 'never synced',
       );
       await engine.sync();
-      expect((await gw.get('/api/settings')).stale, isFalse);
+      expect((await gw.get('/api/users')).stale, isFalse);
       clock = clock.add(const Duration(minutes: 30));
-      expect((await gw.get('/api/settings')).stale, isTrue);
+      expect((await gw.get('/api/users')).stale, isTrue);
     });
 
     test('a path the store does not hold goes to the network', () async {

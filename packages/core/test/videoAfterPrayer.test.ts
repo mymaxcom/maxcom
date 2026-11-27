@@ -67,23 +67,45 @@ describe('afterPrayer: out of the rotation, and where it plays', () => {
   });
   it('plays right after the zikir screen when the zikir feature is on and has items', () => {
     const [s] = plan(content([v('t', 1, { afterPrayer: 'asar' })], Z));
-    expect(hhmm(s!.startsAt)).toBe('16:55'); // solat end 16:45 + 10 minutes of zikir
+    expect(s!.startsAt.getTime()).toBe(klInstant(DATE, '16:45:20').getTime()); // solat end 16:45 + 1 zikir x 20 s (not the 10 minute ceiling)
   });
-  it('plays right after the solat phase when the zikir is on but has no screen (no items, or 0 minutes)', () => {
-    expect(hhmm(plan(content([v('t', 1, { afterPrayer: 'asar' })], []))[0]!.startsAt)).toBe('16:45');
-    expect(hhmm(plan(content([v('t', 1, { afterPrayer: 'asar' })], Z), { zikirSelepasSolat: { minutesAfterSolat: 0 } })[0]!.startsAt)).toBe('16:45');
-    expect(hhmm(plan(content([v('t', 1, { afterPrayer: 'asar' })], Z), { zikirSelepasSolat: { minutesAfterSolat: 3 } })[0]!.startsAt)).toBe('16:48');
+  it('the anchor is the solat end + the shared zikir span; a long list is capped by the ceiling', () => {
+    const three = [{ id: 'a' }, { id: 'b' }, { id: 'c' }] as never;
+    const [a] = plan(content([v('t', 1, { afterPrayer: 'asar' })], three), { zikirSelepasSolat: { durationSeconds: 30 } });
+    expect(a!.startsAt.getTime()).toBe(klInstant(DATE, '16:46:30').getTime());
+    const many = Array.from({ length: 40 }, (_, i) => ({ ...Z[0]!, id: `zz${i}`, order: i }));
+    const [b] = plan(content([v('t', 1, { afterPrayer: 'asar' })], many as never), { zikirSelepasSolat: { durationSeconds: 20, minutesAfterSolat: 5 } });
+    expect(hhmm(b!.startsAt)).toBe('16:50'); // 40 x 20 s = 800 s, cut at 5 minutes
+    const win = zikirWindow(klInstant(DATE, '16:46'), days, resolveSettings({ zikirSelepasSolat: { minutesAfterSolat: 5 } }), undefined, 40);
+    expect(win!.endsAt.getTime()).toBe(b!.startsAt.getTime());
+  });
+  it('a zikir start offset moves the video after the zikir too; with no zikir screen the offset is ignored', () => {
+    const [s] = plan(content([v('t', 1, { afterPrayer: 'asar' })], Z), { zikirSelepasSolat: { startAfterMinutes: 4 } });
+    expect(s!.startsAt.getTime()).toBe(klInstant(DATE, '16:49:20').getTime()); // 16:45 + 4 min + 1 x 20 s
+    const win = zikirWindow(klInstant(DATE, '16:49:10'), days, resolveSettings({ zikirSelepasSolat: { startAfterMinutes: 4 } }), undefined, 1);
+    expect(win!.endsAt.getTime()).toBe(s!.startsAt.getTime());
+    const [n] = plan(content([v('t', 1, { afterPrayer: 'asar' })], []), { zikirSelepasSolat: { startAfterMinutes: 4 } });
+    expect(n!.startsAt.getTime()).toBe(klInstant(DATE, '16:45').getTime());
+  });
+  it('plays right after the solat phase when the zikir has no screen (no items, or 0 minutes)', () => {
+    const at = klInstant(DATE, '16:45').getTime(); // asar solat ends 16:45:00 on this day
+    expect(plan(content([v('t', 1, { afterPrayer: 'asar' })], []))[0]!.startsAt.getTime()).toBe(at);
+    expect(plan(content([v('t', 1, { afterPrayer: 'asar' })], Z), { zikirSelepasSolat: { minutesAfterSolat: 0 } })[0]!.startsAt.getTime()).toBe(at);
+  });
+  it('with a 3 minute ceiling and one item the zikir screen still lasts its own 20 s, not the ceiling', () => {
+    const s = plan(content([v('t', 1, { afterPrayer: 'asar' })], Z), { zikirSelepasSolat: { minutesAfterSolat: 3 } })[0]!;
+    expect(s.startsAt.getTime()).toBe(klInstant(DATE, '16:45:20').getTime()); // 1 item x 20 s, below the 180 s ceiling
   });
   it('Friday zohor means after Jumaat (khutbah, iqamah and the Jumaat solat), then the zikir screen', () => {
     const fri = '2026-11-06';
     const win = zikirWindow(klInstant(fri, '13:50'), days, resolveSettings({}));
     expect(win?.prayer).toBe('jumaat');
     const [s] = plan(content([v('t', 1, { afterPrayer: 'zohor' })], Z), {}, fri);
-    expect(s!.startsAt.getTime()).toBe(win!.endsAt.getTime());
+    expect(s!.startsAt.getTime()).toBe(win!.startsAt.getTime() + 20_000); // 1 zikir x 20 s
     const [n] = plan(content([v('t', 1, { afterPrayer: 'zohor' })], Z), { zikirSelepasSolat: { enabled: false } }, fri);
-    expect(n!.startsAt.getTime()).toBe(win!.endsAt.getTime() - 10 * 60_000);
+    expect(n!.startsAt.getTime()).toBe(win!.startsAt.getTime());
     // an ordinary day's zohor is not that time
-    expect(plan(content([v('t', 1, { afterPrayer: 'zohor' })], Z))[0]!.startsAt.getTime()).not.toBe(win!.endsAt.getTime());
+    expect(plan(content([v('t', 1, { afterPrayer: 'zohor' })], Z))[0]!.startsAt.getTime()).not.toBe(win!.startsAt.getTime() + 20_000);
   });
   it('each of the five prayers has its own start, in order', () => {
     const all = (['subuh', 'zohor', 'asar', 'maghrib', 'isyak'] as const).map((p, i) => v(p, i, { afterPrayer: p }));
@@ -105,11 +127,11 @@ describe('afterPrayer: out of the rotation, and where it plays', () => {
     expect(b!.startsAt.getTime()).toBe(a!.startsAt.getTime() + 90_000);
   });
   it('a showing that would start inside a prayer phase is left out (a long chain runs into the Maghrib countdown at 18:48)', () => {
-    // 600 s each from 16:55: the 12th starts 18:45, the 13th would start 18:55, inside the countdown (18:48 to 18:58)
-    const chain = Array.from({ length: 13 }, (_, k) => v(`c${k}`, k, { afterPrayer: 'asar', durationSec: 600 }));
+    // 600 s each from 16:45:20: the 13th starts 18:45:20, the 14th would start 18:55:20, inside the countdown (18:48 to 18:58)
+    const chain = Array.from({ length: 14 }, (_, k) => v(`c${k}`, k, { afterPrayer: 'asar', durationSec: 600 }));
     const slots = plan(content(chain, Z));
-    expect(slots).toHaveLength(12);
-    expect(hhmm(slots[11]!.startsAt)).toBe('18:45');
+    expect(slots).toHaveLength(13);
+    expect(hhmm(slots[12]!.startsAt)).toBe('18:45');
   });
   it('no day, another date, or no afterPrayer item gives nothing', () => {
     const c = content([v('t', 1, { afterPrayer: 'asar' })], Z);

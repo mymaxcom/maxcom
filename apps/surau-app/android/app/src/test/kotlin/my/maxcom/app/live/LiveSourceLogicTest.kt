@@ -146,13 +146,37 @@ class LiveSourceLogicTest {
     }
 
     @Test
-    fun phoneCameraMuteIsLiftedOnlyWhileMicInIsAdded() {
+    fun phoneMuteMutesTheMicrophoneAlsoWhileMicInIsAdded() {
         val withBox = mix(box = true to 100, video = VideoKind.PHONE)
         val without = mix(video = VideoKind.PHONE)
         assertTrue(SourceLogic.effectiveMuted(true, without))
-        assertFalse(SourceLogic.effectiveMuted(true, withBox))
+        assertTrue(SourceLogic.effectiveMuted(true, withBox))
         assertFalse(SourceLogic.effectiveMuted(false, withBox))
         assertFalse(SourceLogic.effectiveMuted(false, without))
+    }
+
+    @Test
+    fun liftSwitchesReachTheRoutingAndAreOnByDefault() {
+        val r = MicRouting()
+        assertTrue(r.liftMic)
+        assertTrue(r.liftCamera)
+        assertTrue(SourceLogic.applyLift(r, SourceLogic.LIFT_CAMERA, false))
+        assertFalse(r.liftCamera)
+        assertTrue(r.liftMic)
+        assertTrue(SourceLogic.applyLift(r, SourceLogic.LIFT_MIC, false))
+        assertFalse(r.liftMic)
+        assertTrue(SourceLogic.applyLift(r, SourceLogic.LIFT_MIC, true))
+        assertTrue(r.liftMic)
+        assertFalse(SourceLogic.applyLift(r, "boxInput", false))
+        assertFalse(SourceLogic.applyLift(r, null, false))
+    }
+
+    @Test
+    fun phoneVolumeFollowsTheMix() {
+        val r = MicRouting()
+        assertEquals(100, r.phoneVolume)
+        SourceLogic.applyMixToRouting(r, AudioMixCfg(MixEntry(false, 100), MixEntry(true, 35), MixEntry(false, 100)))
+        assertEquals(35, r.phoneVolume)
     }
 
     // ---- lost camera ----

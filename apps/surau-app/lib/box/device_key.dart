@@ -24,6 +24,17 @@ abstract class DeviceKey {
 
   /// Deletes the key. Idempotent.
   Future<void> clear();
+
+  /// Makes a NEW key in a separate pending slot and returns its public JWK (self-checked). The key in use is not
+  /// touched: [exists], [publicJwk] and [sign] still answer for it. Replaces an earlier pending key.
+  /// The pending key becomes the key only through [commitPending]; a failed enrolment calls [discardPending].
+  Future<Map<String, String>> generatePending();
+
+  /// The pending key becomes THE key and the old one is deleted. Throws [StateError] when there is no pending key.
+  Future<void> commitPending();
+
+  /// Deletes the pending key, if any. The key in use stays. Idempotent.
+  Future<void> discardPending();
 }
 
 /// The device key for this platform: Android Keystore, or WebCrypto in the browser.
@@ -32,15 +43,23 @@ DeviceKey platformDeviceKey() => platform.createPlatformDeviceKey();
 /// Signs a probe with the freshly generated key and checks it against the public JWK. If the
 /// store returned a public key that does not match its private key (or a malformed signature)
 /// the key is cleared and a [StateError] is thrown, so enrolment never sends a bad key.
-Future<void> deviceKeySelfCheck(DeviceKey key, Map<String, String> jwk) async {
+///
+/// [sign] signs with the key under test (default: the key's own `sign`; a pending key passes its own signer) and
+/// [onFail] removes that key (default: `key.clear()`).
+Future<void> deviceKeySelfCheck(
+  DeviceKey key,
+  Map<String, String> jwk, {
+  Future<Uint8List> Function(Uint8List message)? sign,
+  Future<void> Function()? onFail,
+}) async {
   try {
     final probe = Uint8List.fromList(utf8.encode('surau-self-check'));
-    final sig = await key.sign(probe);
+    final sig = await (sign ?? key.sign)(probe);
     if (sig.length != 64 || !verifyP256(jwk, probe, sig)) {
       throw StateError('self-check');
     }
   } catch (_) {
-    await key.clear();
+    await (onFail ?? key.clear)();
     throw StateError('Kunci peranti tidak sah. Cuba lagi'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
   }
 }

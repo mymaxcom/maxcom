@@ -12,6 +12,8 @@ export interface ContentShellProps {
   lang: Lang;
   /** Whatever the shell holds beside its head (nothing today: the card region and the strip belong to Main). */
   children?: ComponentChildren;
+  /** No clock in the head (the zikir screen with Tetapan zikir showClock off); the next-prayer chip stays. */
+  hideClock?: boolean;
 }
 
 /**
@@ -21,7 +23,7 @@ export interface ContentShellProps {
  * rotation keeps one mounted layer across a switch between the main layout and the shell. The clock and the chip
  * sit in one row (`.shell-top`) so a clock with seconds can never run under the chip.
  */
-export function ContentShell({ view, lang, children }: ContentShellProps) {
+export function ContentShell({ view, lang, children, hideClock = false }: ContentShellProps) {
   const { settings, now, hijri, logo, tz } = view;
   const showName = nameShownOf(settings, logo);
   const timeFormat = settings.prayerBar.timeFormat === '24h' ? '24h' : '12h';
@@ -50,7 +52,7 @@ export function ContentShell({ view, lang, children }: ContentShellProps) {
       </div>
       <div class="shell-top">
         <NextChip view={view} lang={lang} />
-        <Clock now={now} timeFormat={timeFormat} showSeconds={showSeconds} lang={lang} variant="shell" tz={tz} />
+        {hideClock ? null : <Clock now={now} timeFormat={timeFormat} showSeconds={showSeconds} lang={lang} variant="shell" tz={tz} />}
       </div>
       {children}
     </>

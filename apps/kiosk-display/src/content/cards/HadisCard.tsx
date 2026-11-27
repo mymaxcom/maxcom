@@ -1,6 +1,7 @@
-import { gradeLabelMs, hadisDisplayText, hadisPlan } from '@surau/core';
+import { gradeLabelMs, HADIS_GRADES, hadisDisplayText, hadisPlan } from '@surau/core';
 import type { HadisSettings } from '@surau/core';
 import { t } from '../../i18n.ts';
+import type { Lang } from '../../i18n.ts';
 import type { CardProps } from '../ContentLayer.tsx';
 import { pageAt, splitForPages, useFit } from '../paging.ts';
 import { useScale } from '../scale.ts';
@@ -57,7 +58,28 @@ export interface HadisSlot {
  * hadis, one part per slot) and by the layout's own fit. Shared by the card and the content screens: null when the
  * hadis is gone. `ref` goes on the box whose overflow the fit measures.
  */
-export function useHadisSlot({ content, itemId, view, page, startedAt, durationSeconds }: CardProps, opts: { fitMax?: number } = {}): HadisSlot | null {
+/** The grade chip in the TV language: the Arabic term on an Arabic TV, the romanised term (as BM writes it) otherwise. */
+export function hadisGradeLabel(grade: string, lang: Lang): string {
+  if (lang === 'ar') return HADIS_GRADES.find((g) => g.key === grade)?.ar ?? gradeLabelMs(grade);
+  return gradeLabelMs(grade);
+}
+
+/**
+ * The attribution line in the TV language. The box writes it in BM ("Muttafaq alaih (al-Bukhari dan Muslim)",
+ * "Riwayat Muslim"); an English or Arabic TV gets the fixed words in its language and the collectors' names as they are.
+ */
+export function hadisAttributionFor(text: string, lang: Lang): string {
+  if (lang === 'ms') return text;
+  const words = lang === 'ar'
+    ? { agreed: 'متفق عليه', narrated: 'رواه ', and: ' و ' }
+    : { agreed: 'Agreed upon', narrated: 'Narrated by ', and: ' and ' };
+  return text
+    .replace(/^Muttafaq alaih/i, words.agreed)
+    .replace(/^Riwayat /, words.narrated)
+    .replace(/ dan /g, words.and);
+}
+
+export function useHadisSlot({ content, itemId, view, page, startedAt, durationSeconds, lang }: CardProps, opts: { fitMax?: number } = {}): HadisSlot | null {
   const h = (itemId === null ? content.hadisToday[0] : content.hadisToday.find((x) => x.id === itemId)) ?? null;
   const settings = (view.settings?.hadis ?? {}) as Partial<HadisSettings>;
   const part = page ?? 0;
@@ -70,7 +92,7 @@ export function useHadisSlot({ content, itemId, view, page, startedAt, durationS
   const showAr = settings.showArabic !== false;
   const showMalay = settings.showMalay !== false;
   const hasAr = plan.mode === 'single' && plan.showAr && showAr && !!h.textAr;
-  // Malay is hidden only when the Arabic is there to stand in for it.
+  // Malay is hidden only when the Arabic is there to stand in for it; Tetapan decides on an Arabic TV too (F30).
   const malayOn = showMalay || !hasAr;
 
   const parts = plan.mode === 'parts' ? plan.parts : null;
@@ -84,12 +106,13 @@ export function useHadisSlot({ content, itemId, view, page, startedAt, durationS
   const sub = nPages > 1 ? pageAt(view.now, startedAt, durationSeconds / nPages, nPages, view.tz) : 0;
   const shown = plan2[sub] ?? { ar: null, ms: '' };
 
-  const grade = settings.showGrade !== false && h.grade ? gradeLabelMs(h.grade) : null;
+  const grade = settings.showGrade !== false && h.grade ? hadisGradeLabel(h.grade, lang) : null;
   const attribution =
     settings.showAttribution !== false && h.attribution
-      ? h.attributionLong
-        ? `${h.attribution} (${h.attributionLong.replace(/^Riwayat /, '')})`
-        : h.attribution
+      ? hadisAttributionFor(
+        h.attributionLong ? `${h.attribution} (${h.attributionLong.replace(/^Riwayat /, '')})` : h.attribution,
+        lang,
+      )
       : null;
   return { h, tier: plan.tier, parts, partIndex, nPages, sub, shown, text, malayOn, grade, attribution, ref, fit };
 }

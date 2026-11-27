@@ -47,6 +47,33 @@ class AndroidDeviceKey implements DeviceKey {
   }
 
   @override
+  Future<Map<String, String>> generatePending() async {
+    final point = await _guard(() => _bytes('generatePending'));
+    final jwk = jwkFromUncompressedPoint(point);
+    await deviceKeySelfCheck(
+      this,
+      jwk,
+      sign: (m) async => derToP1363(await _guard(() => _bytes('signPending', m))),
+      onFail: discardPending,
+    );
+    return jwk;
+  }
+
+  @override
+  Future<void> commitPending() => _guard(() async {
+        await _ch.invokeMethod<void>('commitPending');
+      });
+
+  @override
+  Future<void> discardPending() async {
+    try {
+      await _ch.invokeMethod<void>('discardPending');
+    } on PlatformException {
+      // Nothing to delete or the store is unavailable.
+    }
+  }
+
+  @override
   Future<void> clear() async {
     try {
       await _ch.invokeMethod<void>('clear');

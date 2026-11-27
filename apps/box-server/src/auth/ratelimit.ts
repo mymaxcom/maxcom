@@ -8,6 +8,10 @@ export interface RateLimiterOptions {
 export interface RateLimiter {
   hit(key: string): { ok: boolean; retryAfterSec: number };
   reset(key: string): void;
+  /** Whether a hit would be refused now, without recording one (for limits that count failures only). */
+  check?(key: string): { ok: boolean; retryAfterSec: number };
+  /** Gives back the newest hit of a key (a slot taken before a check that then passed). */
+  release?(key: string): void;
 }
 
 const MAX_KEYS = 10_000;
@@ -53,6 +57,16 @@ export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
     },
     reset(key: string): void {
       buckets.delete(key);
+    },
+    release(key: string): void {
+      const stamps = buckets.get(key);
+      if (stamps !== undefined && stamps.length > 0) stamps.pop();
+    },
+    check(key: string): { ok: boolean; retryAfterSec: number } {
+      const t = now();
+      const stamps = (buckets.get(key) ?? []).filter((s) => s > t - opts.windowMs && s <= t);
+      if (stamps.length < opts.max) return { ok: true, retryAfterSec: 0 };
+      return { ok: false, retryAfterSec: Math.max(1, Math.ceil((stamps[0]! + opts.windowMs - t) / 1000)) };
     },
   };
 }

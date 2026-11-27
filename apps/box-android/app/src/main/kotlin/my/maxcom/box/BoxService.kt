@@ -35,6 +35,7 @@ import my.maxcom.box.core.BundledRelease
 import my.maxcom.box.core.CaMeta
 import my.maxcom.box.core.CertLog
 import my.maxcom.box.core.ChildEnv
+import my.maxcom.box.core.LeaveSecret
 import my.maxcom.box.core.DbBackup
 import my.maxcom.box.core.LeafDecision
 import my.maxcom.box.core.LeafPolicy
@@ -115,6 +116,10 @@ class BoxService : Service() {
     @Volatile
     private var token: String = ""
 
+    /** The per-start secret for `/api/follow/revert` and `/api/follow/empty`; new at each start, memory only (O20). */
+    @Volatile
+    private var leaveSecret: String = ""
+
     private val stateListener: (BoxSnapshot) -> Unit = { s ->
         try {
             ServiceNotification.update(this, ServiceNotification.textFor(s.status))
@@ -167,6 +172,7 @@ class BoxService : Service() {
         watchdog?.shutdownNow()
         watchdog = null
         BoxState.removeListener(stateListener)
+        LeaveSecret.clear()
         if (watchStarted) netWatch.stop()
         try { responder?.stop() } catch (e: Exception) { Log.w(TAG, "name stop failed: " + e.javaClass.simpleName) }
         responder = null
@@ -240,6 +246,8 @@ class BoxService : Service() {
             mark("persediaan bermula")
             // Step 6 (token) is replaced at every service start; a retry after a failure gets a new one too.
             token = newToken()
+            leaveSecret = newToken()
+            LeaveSecret.set(leaveSecret)
             BoxState.send(BoxEvent.ServiceStarted(token))
             step("Membuka keluaran", 1)
             prepareRelease()
@@ -617,12 +625,13 @@ class BoxService : Service() {
         val tz = TimeZone.getDefault().id.takeIf { Regex("^[A-Za-z0-9_+\\-]+(/[A-Za-z0-9_+\\-]+){0,2}$").matches(it) } ?: DEFAULT_TZ
         // Fail early, before the supervisor thread exists, when the child environment would be refused.
         try {
-            ChildEnv.build(paths, config, token, tz)
+            ChildEnv.build(paths, config, token, tz, leaveSecret)
         } catch (e: IllegalArgumentException) {
             fail("GAGAL: persekitaran pelayan tidak sah.")
         }
         val log = boxLog
         log.addSecret(token)
+        log.addSecret(leaveSecret)
         val reaper = ProcReaper(
             exeNames = setOf("libnode.so", "libmediamtx.so", "libffmpeg.so"),
             nativeLibDir = paths.nativeLibDir,
@@ -643,7 +652,7 @@ class BoxService : Service() {
             envProvider = {
                 val c = (BoxConfig.read(paths.boxConfig) as? BoxConfigRead.Ok)?.config
                     ?: error("box-config.json is invalid")
-                ChildEnv.build(paths, c, token, tz)
+                ChildEnv.build(paths, c, token, tz, leaveSecret)
             },
             onState = { s -> onSupervisorState(s) },
             cwdProvider = { paths.workDir },

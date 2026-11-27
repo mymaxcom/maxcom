@@ -5,11 +5,23 @@
 // segments with MediaMuxer, and speaks the same resumable protocol as
 // `resumable_client.dart`.
 //
-// What crosses the channel: the job, the cloud base URL, the session token
-// and the cloud's root CA (DER) once in `enqueue`. The token and the upload
-// URI end up in WorkManager's own app-private input data (builder's call 8);
-// neither is logged, shown in the notification or sent back in an error.
-// Errors to Dart are reason codes only.
+// What crosses the channel (2026.11.15, B1 and U7): the job and nothing else.
+// The app itself asks the MAXCOM box for the Google upload address
+// (`upload/begin`) and tells it when the video is up (`upload/done`); the
+// worker only sends the bytes to that address. So the session token, the box
+// address and the certificate of [UploadAuth] never cross this channel and
+// never reach WorkManager. The upload address is not logged, shown in the
+// notification or sent back in an error. Errors to Dart are reason codes only.
+//
+// What the worker says back (`UploadEvent`):
+// - `uploaded` on the wire: YouTube has the part and gave its `videoId`. It
+//   arrives here as the Dart state of that name when [UploadPartState] has
+//   one, else as `uploading` with the full offset and the `videoId` set. The
+//   event carries the `uploadId` to confirm with.
+// - `queued` with error `needs_begin` (and `clearSession` when an address
+//   died): the part has no usable upload address; get one and start again.
+// - `failed` with `runner_error`, `empty_file`, `bad_upload_uri`,
+//   `source_missing` or `rejected_<status>`; `queued` with `network`.
 
 import 'dart:async';
 
@@ -127,15 +139,15 @@ class AndroidUploadRunner implements UploadRunner {
     return s.length > 40 ? s.substring(0, 40) : s;
   }
 
+  /// Queues [job] for the worker. Each part to send carries the Google upload
+  /// address in `uploadUri` (from the box's `upload/begin`); a part without one
+  /// comes back as `queued` with `needs_begin`. [auth] is NOT sent: the worker
+  /// has no business with the box, and the session token must not be stored
+  /// in WorkManager.
   @override
   Future<void> start(UploadJob job, UploadAuth auth) async {
     try {
-      await _method.invokeMethod<void>('enqueue', {
-        'job': job.toJson(),
-        'base': auth.base.toString(),
-        'token': auth.token,
-        'ca': auth.caDer,
-      });
+      await _method.invokeMethod<void>('enqueue', {'job': job.toJson()});
     } on PlatformException catch (e) {
       throw StateError(e.code);
     } on MissingPluginException {
@@ -167,11 +179,29 @@ class AndroidUploadRunner implements UploadRunner {
 
   static final RegExp _codeRe = RegExp(r'^[a-z0-9_]{1,40}$');
 
+  /// The worker's word for "YouTube has it, the box is not told yet".
+  static const uploadedWire = 'uploaded';
+
+  /// The worker's reason for "this part needs an upload address from the box".
+  static const needsBegin = 'needs_begin';
+
   void _onEvent(dynamic e) {
     if (e is! Map) return;
-    final state = UploadPartState.values.where((s) => s.name == e['state']);
+    var state = UploadPartState.values.where((s) => s.name == e['state']);
     final jobId = e['jobId'];
     final part = e['partIndex'];
+    final total = (e['total'] as num?)?.toInt();
+    var offset = (e['offset'] as num?)?.toInt();
+    if (e['state'] == uploadedWire) {
+      // YouTube has the part; the box is told by the app. Only with the video
+      // id: an "uploaded" without one is not a real "uploaded" and is dropped
+      // (the queue would wait for a confirmation it can never send).
+      final id = e['videoId'];
+      if (id is! String || id.isEmpty) return;
+      // Without a Dart state of that name it reads as: sent in full, video id known.
+      if (state.isEmpty) state = [UploadPartState.uploading];
+      offset ??= total;
+    }
     if (state.isEmpty || jobId is! String || part is! num) return;
     final err = e['error'];
     _events.add(
@@ -179,8 +209,8 @@ class AndroidUploadRunner implements UploadRunner {
         jobId: jobId,
         partIndex: part.toInt(),
         state: state.first,
-        offset: (e['offset'] as num?)?.toInt(),
-        total: (e['total'] as num?)?.toInt(),
+        offset: offset,
+        total: total,
         uploadId: e['uploadId'] as String?,
         uploadUri: e['uploadUri'] as String?,
         videoId: e['videoId'] as String?,

@@ -89,6 +89,7 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'GET', pattern: /^\/api\/kiosk\/cloud$/, permission: 'kiosk:read', sample: '/api/kiosk/cloud', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/kiosk\/live\/whep$/, permission: 'kiosk:read', sample: '/api/kiosk/live/whep', tenant: 'required' },
   { method: 'DELETE', pattern: /^\/api\/kiosk\/live\/whep\/[^/]+$/, permission: 'kiosk:read', sample: '/api/kiosk/live/whep/x', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/kiosk\/live\/whep\/[^/]+\/alive$/, permission: 'kiosk:read', sample: '/api/kiosk/live/whep/x/alive', tenant: 'required' },
   // Shared on purpose (Plan 14 section 3.1): content-addressed assets and the reference audio cache.
   { method: 'GET', pattern: /^\/assets\/[^/.]+$/, permission: 'kiosk:read', sample: `/assets/${'a'.repeat(64)}`, tenant: 'none' },
   { method: 'GET', pattern: /^\/islamic\/audio\/.+$/, permission: 'kiosk:read', sample: '/islamic/audio/x/001/001.mp3', tenant: 'none' },
@@ -178,6 +179,34 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'POST', pattern: /^\/api\/kiosk\/pair\/approve$/, permission: 'devices:manage', sample: '/api/kiosk/pair/approve', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/kiosk\/pair\/pending$/, permission: 'devices:manage', sample: '/api/kiosk/pair/pending', tenant: 'required' },
 
+  // Several boxes in one surau (box only; a cloud does not register these routes). The box-to-box rows are public:
+  // the one-time code of the QR and the other box's identity signature decide, in link/session.ts.
+  { method: 'GET', pattern: /^\/api\/link\/status$/, permission: 'devices:manage', sample: '/api/link/status', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/link\/(pin|show|scan|approve|agree|cancel)$/, permission: 'devices:manage', sample: '/api/link/show', tenant: 'required' },
+  { method: 'PUT', pattern: /^\/api\/link\/answers$/, permission: 'devices:manage', sample: '/api/link/answers', tenant: 'required' },
+  { method: 'GET', pattern: /^\/api\/kiosk\/link$/, permission: 'kiosk:read', sample: '/api/kiosk/link', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/link\/peer\/(hello|message|order)$/, permission: 'public', sample: '/api/link/peer/hello', tenant: 'none' },
+  // Store move (phase 2B): the list answers only a signed message of the session's peer; a file only its read token.
+  { method: 'POST', pattern: /^\/api\/link\/peer\/store\/list$/, permission: 'public', sample: '/api/link/peer/store/list', tenant: 'none' },
+  { method: 'GET', pattern: /^\/api\/link\/peer\/store\/file$/, permission: 'public', sample: '/api/link/peer/store/file', tenant: 'none' },
+  // A follower answers a phone of its old store: where the surau is managed now, with a one-time join ticket (phase 2C).
+  { method: 'POST', pattern: /^\/api\/follow\/move(\/challenge)?$/, permission: 'public', sample: '/api/follow/move', tenant: 'none' },
+  // phase 2D, "Putuskan pautan": who may answer for which box is decided in link/unlink.ts (a follower's Pentadbir of
+  // link day may hold a lower role here), so status / answer / agree need a session only
+  { method: 'GET', pattern: /^\/api\/unlink\/status$/, permission: 'session', sample: '/api/unlink/status', tenant: 'none' },
+  { method: 'PUT', pattern: /^\/api\/unlink\/answer$/, permission: 'session', sample: '/api/unlink/answer', tenant: 'none' },
+  { method: 'POST', pattern: /^\/api\/unlink\/agree$/, permission: 'session', sample: '/api/unlink/agree', tenant: 'none' },
+  { method: 'POST', pattern: /^\/api\/unlink\/(start|cancel|switch|drop-kept)$/, permission: 'devices:manage', sample: '/api/unlink/start', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/unlink\/peer\/report$/, permission: 'public', sample: '/api/unlink/peer/report', tenant: 'none' },
+  { method: 'POST', pattern: /^\/api\/unlink\/peer\/store\/list$/, permission: 'public', sample: '/api/unlink/peer/store/list', tenant: 'none' },
+  { method: 'GET', pattern: /^\/api\/unlink\/peer\/store\/file$/, permission: 'public', sample: '/api/unlink/peer/store/file', tenant: 'none' },
+  // D2: a follower leaves by itself; the route answers the box's own loopback caller only, and only with the per-start leave secret (follow/revert.ts)
+  { method: 'POST', pattern: /^\/api\/follow\/(revert|empty)$/, permission: 'public', sample: '/api/follow/revert', tenant: 'none' },
+  { method: 'GET', pattern: /^\/api\/link\/backup$/, permission: 'devices:manage', sample: '/api/link/backup', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/link\/backup\/(drop|restore)$/, permission: 'devices:manage', sample: '/api/link/backup/drop', tenant: 'required' },
+  { method: 'GET', pattern: /^\/api\/boxes$/, permission: 'devices:manage', sample: '/api/boxes', tenant: 'required' },
+  { method: 'DELETE', pattern: /^\/api\/boxes\/[^/]+$/, permission: 'devices:manage', sample: '/api/boxes/none', tenant: 'required' },
+
   { method: 'GET', pattern: /^\/api\/pki\/status$/, permission: 'devices:manage', sample: '/api/pki/status', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/audit$/, permission: 'audit:read', sample: '/api/audit', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/finance\/report\/[^/]+\.pdf$/, permission: 'finance:write', sample: '/api/finance/report/2026-10.pdf', tenant: 'required' },
@@ -207,12 +236,19 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'POST', pattern: /^\/api\/live\/recordings\/[^/]+\/pieces\/[^/]+$/, permission: 'live:control', sample: '/api/live/recordings/abcdef123456/pieces/0', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/live\/recordings\/[^/]+\/join$/, permission: 'live:control', sample: '/api/live/recordings/abcdef123456/join', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/recordings\/[^/]+\/file$/, permission: 'live:control', sample: '/api/live/recordings/abcdef123456/file', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/live\/recordings\/[^/]+\/link$/, permission: 'live:control', sample: '/api/live/recordings/abcdef123456/link', tenant: 'required' },
+  // Public with the token: the link is the credential (random 32 bytes, 15 minutes, surau network only; checked in the handler).
+  { method: 'GET', pattern: /^\/api\/live\/recordings\/dl\/[^/]+$/, permission: 'public', sample: '/api/live/recordings/dl/0000000000000000000000000000000000000000000000000000000000000000', tenant: 'none' },
   { method: 'DELETE', pattern: /^\/api\/live\/recordings\/[^/]+$/, permission: 'live:control', sample: '/api/live/recordings/abcdef123456', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/status$/, permission: 'live:control', sample: '/api/live/status', tenant: 'required' },
+  // 2026.11.15: the last lives of this box (no secret, no device id)
+  { method: 'GET', pattern: /^\/api\/live\/sessions\/recent$/, permission: 'live:control', sample: '/api/live/sessions/recent', tenant: 'required' },
   // the surau's live notice: any live:control holder reads and edits it (last edit wins); the frame is one still of the running picture
   { method: 'GET', pattern: /^\/api\/live\/notice$/, permission: 'live:control', sample: '/api/live/notice', tenant: 'required' },
   { method: 'PATCH', pattern: /^\/api\/live\/notice$/, permission: 'live:control', sample: '/api/live/notice', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/notice\/frame\.jpg$/, permission: 'live:control', sample: '/api/live/notice/frame.jpg', tenant: 'required' },
+  // Skrin and Merakam during a live: the same callers as Stop (the route decides: the starter, settings:write, any live:control holder for a box-pulled live)
+  { method: 'POST', pattern: /^\/api\/live\/outputs$/, permission: 'live:control', sample: '/api/live/outputs', tenant: 'required' },
   // the starting device changes the audio mix of a running live (the route refuses every other device)
   { method: 'POST', pattern: /^\/api\/live\/audio$/, permission: 'live:control', sample: '/api/live/audio', tenant: 'required' },
   // the starting device's preview of the combined stream (the route refuses every other device)
@@ -222,6 +258,10 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'GET', pattern: /^\/api\/live\/audio-inputs$/, permission: 'live:control', sample: '/api/live/audio-inputs', tenant: 'required' },
   { method: 'PUT', pattern: /^\/api\/live\/audio-input$/, permission: 'live:settings', sample: '/api/live/audio-input', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/audio-inputs\/level$/, permission: 'live:control', sample: '/api/live/audio-inputs/level', tenant: 'required' },
+  // build 5: the test of every capture device before Start (live:control), and the per-TV "show the live" switch (live:settings)
+  { method: 'POST', pattern: /^\/api\/live\/audio-inputs\/test$/, permission: 'live:control', sample: '/api/live/audio-inputs/test', tenant: 'required' },
+  { method: 'GET', pattern: /^\/api\/live\/audio-inputs\/test$/, permission: 'live:control', sample: '/api/live/audio-inputs/test', tenant: 'required' },
+  { method: 'PUT', pattern: /^\/api\/live\/tv-show$/, permission: 'live:settings', sample: '/api/live/tv-show', tenant: 'required' },
   // external camera (plan 4.2, 4.3): configuration, test and discovery are live:settings; the phone reads the full address with live:control
   { method: 'GET', pattern: /^\/api\/live\/camera$/, permission: 'live:settings', sample: '/api/live/camera', tenant: 'required' },
   { method: 'PUT', pattern: /^\/api\/live\/camera$/, permission: 'live:settings', sample: '/api/live/camera', tenant: 'required' },
@@ -230,10 +270,15 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'POST', pattern: /^\/api\/live\/camera\/discover$/, permission: 'live:settings', sample: '/api/live/camera/discover', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/live\/camera\/discover\/fill$/, permission: 'live:settings', sample: '/api/live/camera/discover/fill', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/camera\/source$/, permission: 'live:control', sample: '/api/live/camera/source', tenant: 'required' },
+  // Lane X: network control of the camera. The opt-in is a setting; the actions are for the people running the live
+  { method: 'PUT', pattern: /^\/api\/live\/camera\/control$/, permission: 'live:settings', sample: '/api/live/camera/control', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/live\/camera\/control$/, permission: 'live:control', sample: '/api/live/camera/control', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/live\/camera\/release$/, permission: 'live:control', sample: '/api/live/camera/release', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/live\/whip$/, permission: 'live:control', sample: '/api/live/whip', tenant: 'required' },
   { method: 'DELETE', pattern: /^\/api\/live\/whip\/[^/]+$/, permission: 'live:control', sample: '/api/live/whip/x', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/youtube\/ingest$/, permission: 'live:control', sample: '/api/live/youtube/ingest', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/live\/youtube\/status$/, permission: 'live:control', sample: '/api/live/youtube/status', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/live\/youtube\/start$/, permission: 'live:control', sample: '/api/live/youtube/start', tenant: 'required' },
   // the surau's one YouTube choice for the next live: anyone who may start a live may change it (last change wins)
   { method: 'PUT', pattern: /^\/api\/live\/youtube\/next-live$/, permission: 'live:control', sample: '/api/live/youtube/next-live', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/live\/youtube\/signin$/, permission: 'live:settings', sample: '/api/live/youtube/signin', tenant: 'required' },
@@ -254,6 +299,13 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'GET', pattern: /^\/api\/sync\/youtube\/client$/, permission: 'session_or_site', sample: '/api/sync/youtube/client', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/youtube\/upload\/begin$/, permission: 'live:control', sample: '/api/youtube/upload/begin', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/youtube\/upload\/done$/, permission: 'live:control', sample: '/api/youtube/upload/done', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/youtube\/upload\/progress$/, permission: 'live:control', sample: '/api/youtube/upload/progress', tenant: 'required' },
+  // 2026.11.15 (routes in live/youtube/routes.ts): a device gives up its own open upload; a linked box asks whether a
+  // broadcast is open here. The answer of the second holds only what the watch page shows (box id, channel id,
+  // broadcast id); it is asked with the kiosk token a linked box already holds at its main box.
+  { method: 'POST', pattern: /^\/api\/youtube\/upload\/abandon$/, permission: 'live:control', sample: '/api/youtube/upload/abandon', tenant: 'required' },
+  // Y11 DORMANT (23 Nov 2026): no caller; see `live/youtube/api.ts`. Revisit this row before the route is used.
+  { method: 'GET', pattern: /^\/api\/youtube\/open-broadcast$/, permission: 'kiosk:read', sample: '/api/youtube/open-broadcast', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/youtube\/verify$/, permission: 'live:control', sample: '/api/youtube/verify', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/youtube\/quota$/, permission: 'live:control', sample: '/api/youtube/quota', tenant: 'required' },
 
@@ -263,6 +315,11 @@ export const ROUTE_PERMISSIONS: readonly RouteRule[] = [
   { method: 'POST', pattern: /^\/api\/sync\/people-ids$/, permission: 'session_or_site', sample: '/api/sync/people-ids', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/sync\/theme-support$/, permission: 'session_or_site', sample: '/api/sync/theme-support', tenant: 'required' },
   { method: 'GET', pattern: /^\/api\/sync\/changes$/, permission: 'session_or_site', sample: '/api/sync/changes', tenant: 'required' },
+  // multi-box 2B (B3): a linked box puts its surau to sleep, wakes it, or makes the cloud copy equal to itself. Site
+  // only (a person's session is answered 404 by the handler) and signed with the box's sync key (sync/boxCall.ts).
+  { method: 'POST', pattern: /^\/api\/sync\/sleep$/, permission: 'session_or_site', sample: '/api/sync/sleep', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/sync\/wake$/, permission: 'session_or_site', sample: '/api/sync/wake', tenant: 'required' },
+  { method: 'POST', pattern: /^\/api\/sync\/reset-from-box$/, permission: 'session_or_site', sample: '/api/sync/reset-from-box', tenant: 'required' },
   { method: 'POST', pattern: /^\/api\/sync\/link$/, permission: 'public', sample: '/api/sync/link', tenant: 'none' },
   { method: 'POST', pattern: /^\/api\/sync\/claim$/, permission: 'public', sample: '/api/sync/claim', tenant: 'none' },
   { method: 'GET', pattern: /^\/api\/sync\/status$/, permission: 'health:read', sample: '/api/sync/status', tenant: 'required' },
@@ -480,6 +537,8 @@ export interface Limiters {
   pairBegin: RateLimiter;
   /** 5 / 15 min per user on PIN change (guards the current-PIN check). */
   pinChange: RateLimiter;
+  /** 5 WRONG PINs / 15 min per user on the multi-box PIN proofs (link, unlink, backups); a right PIN is not counted. */
+  linkPin: RateLimiter;
   /** 20 / 15 min per user on renaming their own phone. */
   deviceName: RateLimiter;
   /** 3 / 60 min per IP on recovery completion. */
@@ -502,6 +561,8 @@ export interface Limiters {
   cameraDiscover: RateLimiter;
   /** 10 / min per session on the ONVIF address fill (each try is a login attempt on the camera). */
   cameraFill: RateLimiter;
+  /** 10 / min per device on camera control (each call is a message to the camera on the LAN). */
+  cameraControl: RateLimiter;
 }
 
 export function createLimiters(now?: () => number): Limiters {
@@ -514,6 +575,7 @@ export function createLimiters(now?: () => number): Limiters {
     enrolIp: createRateLimiter({ windowMs: 10 * min, max: 5, ...c }),
     pairBegin: createRateLimiter({ windowMs: 10 * min, max: 3, ...c }),
     pinChange: createRateLimiter({ windowMs: 15 * min, max: 5, ...c }),
+    linkPin: createRateLimiter({ windowMs: 15 * min, max: 5, ...c }),
     deviceName: createRateLimiter({ windowMs: 15 * min, max: 20, ...c }),
     recoveryIp: createRateLimiter({ windowMs: 60 * min, max: 3, ...c }),
     joinGlobal: createRateLimiter({ windowMs: 24 * 60 * min, max: 20, ...c }),
@@ -525,6 +587,7 @@ export function createLimiters(now?: () => number): Limiters {
     cameraSource: createRateLimiter({ windowMs: min, max: 30, ...c }),
     cameraDiscover: createRateLimiter({ windowMs: min, max: 6, ...c }),
     cameraFill: createRateLimiter({ windowMs: min, max: 10, ...c }),
+    cameraControl: createRateLimiter({ windowMs: min, max: 10, ...c }),
   };
 }
 
@@ -575,6 +638,7 @@ export function bearerToken(request: FastifyRequest): string | null {
 }
 
 const MSG_SUSPENDED = 'Surau ini digantung oleh MAXCOM';
+const MSG_ASLEEP = 'Salinan awan surau ini dibekukan kerana kotaknya kini dipautkan kepada kotak lain';
 
 /** What a phone of a suspended surau may still call on the cloud: who am I, sign out, leave. */
 const SUSPENDED_MAY_CALL = new Set(['GET /api/auth/me', 'POST /api/auth/logout', 'POST /api/auth/leave']);
@@ -591,6 +655,26 @@ function surauSuspendedFor(db: DatabaseSync, identity: AuthContext | SiteAuth): 
     identity.kind === 'site'
       ? db.prepare('SELECT 1 AS x FROM suraus WHERE id = ? AND suspended_at IS NOT NULL').get(identity.surauId)
       : db.prepare('SELECT 1 AS x FROM devices d JOIN suraus s ON s.id = d.surau_id WHERE d.id = ? AND s.suspended_at IS NOT NULL').get(identity.deviceId);
+  return row !== undefined;
+}
+
+/** Calls a sleeping surau's box still makes: its own sleep (idempotent) and its wake. Checked by their handlers. */
+const ASLEEP_MAY_CALL = new Set(['POST /api/sync/sleep', 'POST /api/sync/wake']);
+
+/** A write (not GET/HEAD/OPTIONS) to the cloud, other than the sleep and wake calls themselves. */
+function asleepRefuses(method: string, rawUrl: string): boolean {
+  const m = method.toUpperCase();
+  if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return false;
+  const path = normalisePath(rawUrl);
+  return path === null || !ASLEEP_MAY_CALL.has(`${m} ${path}`);
+}
+
+/** The identity's own surau (a site's, or the session device's) sleeps (multi-box 2B: its box follows another box). */
+function surauAsleepFor(db: DatabaseSync, identity: AuthContext | SiteAuth): boolean {
+  const row =
+    identity.kind === 'site'
+      ? db.prepare('SELECT 1 AS x FROM suraus WHERE id = ? AND asleep_at IS NOT NULL').get(identity.surauId)
+      : db.prepare('SELECT 1 AS x FROM devices d JOIN suraus s ON s.id = d.surau_id WHERE d.id = ? AND s.asleep_at IS NOT NULL').get(identity.deviceId);
   return row !== undefined;
 }
 
@@ -653,6 +737,18 @@ export function authHook(ctx: AuthzContext) {
       surauSuspendedFor(ctx.db, identity)
     ) {
       return reply.code(403).header('Cache-Control', 'no-store').send({ errors: [MSG_SUSPENDED], code: 'surau_suspended' });
+    }
+
+    // A sleeping surau (multi-box 2B) is read-only on the cloud: its box follows another box now, and nothing may
+    // change the copy the cloud keeps of it. Reads still answer; a phone may still sign out and leave; the box may
+    // still sleep it again (idempotent) and wake it. Same reach as the suspended check (an ops device is not stopped).
+    if (
+      ctx.role === 'cloud' && identity !== null && identity.kind !== 'kiosk' &&
+      asleepRefuses(request.method, request.raw.url ?? '/') &&
+      !(identity.kind === 'user' && suspendedMayCall(request.method, request.raw.url ?? '/')) &&
+      surauAsleepFor(ctx.db, identity)
+    ) {
+      return reply.code(409).header('Cache-Control', 'no-store').send({ errors: [MSG_ASLEEP], code: 'surau_asleep' });
     }
 
     const deny401 = (): FastifyReply =>

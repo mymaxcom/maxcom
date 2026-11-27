@@ -3,24 +3,33 @@ import type { DatabaseSync } from 'node:sqlite';
 import { actorOf, deviceOf } from '../actor.ts';
 import type { Limiters } from '../auth/authz.ts';
 import { reqSurau } from '../reqSurau.ts';
+import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { getSettings } from '../settingsStore.ts';
-import { CAMERA_MSG, CameraError, cameraPullUrl } from './camera.ts';
+import { CAMERA_MSG, CameraError, cameraHostOf, cameraPullUrl } from './camera.ts';
 import type { CameraStore, CameraTestCode, CameraTester, PullMode } from './camera.ts';
+import { LiveError } from './sessions.ts';
 import type { LiveSessions } from './sessions.ts';
 import { ONVIF_MSG, OnvifClient, OnvifError } from './onvif.ts';
-import { maskCameraUrl } from '@surau/core';
+import { maskCameraUrl, CAMERA_CONTROL_PROTOCOLS, parseCameraProfile } from '@surau/core';
+import type { CameraControlSetting } from '@surau/core';
+import { CameraController, CONTROL_MSG, parseControlRequest } from './cameraControl.ts';
 
 export interface CameraRouteDeps {
   db: DatabaseSync;
   store: CameraStore;
   /** The box tester; null when the box has no MediaMTX client (the test then answers "unavailable"). */
   tester: CameraTester | null;
-  sessions: Pick<LiveSessions, 'current'>;
-  limiters: Pick<Limiters, 'cameraTest' | 'cameraSource' | 'cameraDiscover' | 'cameraFill'>;
+  /** `cameraAddressFor` decides who may read the full address during a live (C5, the "camera in use" flag); the box always passes its sessions (only a bare test stand-in leaves it out). */
+  sessions: Pick<LiveSessions, 'current'> & Partial<Pick<LiveSessions, 'cameraAddressFor' | 'releaseCamera'>>;
+  limiters: Pick<Limiters, 'cameraTest' | 'cameraSource' | 'cameraDiscover' | 'cameraFill' | 'cameraControl'>;
   /** The box's own LAN addresses: an address pointing at the box itself is refused. */
   boxIps: readonly string[];
   /** ONVIF discovery (O1); the real network client when left out. */
   onvif?: OnvifClient;
+  /** Network control of the camera (Lane X); the real controller (fixed ports) when left out. */
+  control?: CameraController;
+  /** Called once after the camera record was removed (the link backup drops its copy); errors are swallowed. */
+  onCameraRemoved?: () => void;
 }
 
 /** Fixed result texts (BM); the box never returns anything MediaMTX or the camera said. */
@@ -42,9 +51,16 @@ const TOO_MANY = 'Terlalu banyak percubaan. Cuba sebentar lagi.';
 const MODES: readonly PullMode[] = ['auto', 'tcp', 'udp'];
 
 /** Routes of the external camera; every one has a row in ROUTE_PERMISSIONS (auth/authz.ts). */
-export function registerCameraRoutes(app: FastifyInstance, deps: CameraRouteDeps): void {
+/** What the box can do with the camera outside a request. */
+export interface CameraRouteHandle {
+  /** Sends the saved profile once when the opt-in and the "apply when a live starts" switch are both on. Best effort: never throws, never waits longer than the camera's own timeouts. */
+  applyOnLive(): Promise<void>;
+}
+
+export function registerCameraRoutes(app: FastifyInstance, deps: CameraRouteDeps): CameraRouteHandle {
   const { store, tester } = deps;
   const onvif = deps.onvif ?? new OnvifClient({ boxIps: deps.boxIps });
+  const controller = deps.control ?? new CameraController({ boxIps: deps.boxIps });
 
   const audit = (request: FastifyRequest, entityId: string, after: Record<string, unknown>): void => {
     deps.db
@@ -88,6 +104,11 @@ export function registerCameraRoutes(app: FastifyInstance, deps: CameraRouteDeps
   app.delete('/api/live/camera', async (request, reply) => {
     try {
       store.clear();
+      try {
+        deps.onCameraRemoved?.();
+      } catch {
+        /* removing the camera never fails because of what listens to it */
+      }
       audit(request, 'clear', {});
       return reply.header('Cache-Control', 'no-store').send(store.getMasked());
     } catch (error) {
@@ -126,8 +147,91 @@ export function registerCameraRoutes(app: FastifyInstance, deps: CameraRouteDeps
       if (!hit.ok) return reply.code(429).header('Retry-After', String(hit.retryAfterSec)).header('Cache-Control', 'no-store').send({ errors: [TOO_MANY], code: 'too_many' });
       const record = store.get();
       if (record === null) return reply.code(404).header('Cache-Control', 'no-store').send({ errors: [CAMERA_MSG.nothing], code: 'not_configured' });
+      // C5 and the "camera in use" flag: while a live holds the camera only the device that pulls it gets the address;
+      // everyone else joins the shared picture through the box. The refusal is on record too.
+      try {
+        deps.sessions.cameraAddressFor?.(deviceOf(request) ?? null);
+      } catch (error) {
+        if (!(error instanceof LiveError)) throw error;
+        audit(request, 'source-refused', { device: deviceOf(request) ?? null, code: error.code });
+        return reply.code(error.status).header('Cache-Control', 'no-store').send({ errors: [error.message], code: error.code });
+      }
       audit(request, 'source-read', { device: deviceOf(request) ?? null });
       return reply.header('Cache-Control', 'no-store').send({ url: cameraPullUrl(record) });
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  // O4: the device that pulled the camera lets go of it (its "camera in use" flag clears); only the live's own device may.
+  app.post('/api/live/camera/release', async (request, reply) => {
+    try {
+      const a = request.auth;
+      const deviceId = a != null && a.kind === 'user' ? a.deviceId : null;
+      const b = request.body;
+      const sessionId = typeof b === 'object' && b !== null && typeof (b as { sessionId?: unknown }).sessionId === 'string' ? (b as { sessionId: string }).sessionId : '';
+      if (sessionId === '') return reply.code(400).header('Cache-Control', 'no-store').send({ errors: ['Sesi siaran tidak sah.'], code: 'bad_session' });
+      try {
+        deps.sessions.releaseCamera?.(deviceId, sessionId);
+      } catch (error) {
+        if (!(error instanceof LiveError)) throw error;
+        return reply.code(error.status).header('Cache-Control', 'no-store').send({ errors: [error.message], code: error.code });
+      }
+      audit(request, 'source-release', { device: deviceId });
+      return reply.code(204).header('Cache-Control', 'no-store').send();
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  // Lane X: the opt-in for network control of the camera and its profile (live:settings). The address is not touched.
+  // Every field is optional but the body must change something; a field that is present must be valid.
+  app.put('/api/live/camera/control', async (request, reply) => {
+    try {
+      const bad = (): FastifyReply => reply.code(400).header('Cache-Control', 'no-store').send({ errors: [CONTROL_MSG.badAction], code: 'bad_setting' });
+      const b = request.body;
+      if (typeof b !== 'object' || b === null || Array.isArray(b)) return bad();
+      const o = b as { enabled?: unknown; protocol?: unknown; profile?: unknown; applyOnLive?: unknown };
+      if (o.enabled !== undefined && typeof o.enabled !== 'boolean') return bad();
+      if (o.applyOnLive !== undefined && typeof o.applyOnLive !== 'boolean') return bad();
+      if (o.protocol !== undefined && !(CAMERA_CONTROL_PROTOCOLS as readonly unknown[]).includes(o.protocol)) return bad();
+      const profile = o.profile === undefined ? null : parseCameraProfile(o.profile);
+      if (o.profile !== undefined && profile === null) return bad();
+      if (o.enabled === undefined && o.protocol === undefined && o.profile === undefined && o.applyOnLive === undefined) return bad();
+      const now = store.getMasked().control;
+      const next: CameraControlSetting = {
+        enabled: o.enabled ?? now.enabled,
+        protocol: (o.protocol as CameraControlSetting['protocol'] | undefined) ?? now.protocol,
+        profile: profile ?? now.profile,
+        applyOnLive: o.applyOnLive ?? now.applyOnLive,
+      };
+      if (!store.setControl(next)) return reply.code(404).header('Cache-Control', 'no-store').send({ errors: [CAMERA_MSG.nothing], code: 'not_configured' });
+      audit(request, 'control-setting', { enabled: next.enabled, protocol: next.protocol, profile: next.profile, applyOnLive: next.applyOnLive });
+      return reply.header('Cache-Control', 'no-store').send(store.getMasked());
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  // Lane X: one fixed action to the saved camera (live:control). The target is ALWAYS the saved camera's host; with the
+  // opt-in off (the default) the route does not exist as far as the caller can tell and nothing is sent.
+  app.post('/api/live/camera/control', async (request, reply) => {
+    try {
+      const record = store.get();
+      const setting = store.getMasked().control;
+      if (record === null || !setting.enabled) return reply.code(404).header('Cache-Control', 'no-store').send({ errors: ['Kawalan kamera tidak dihidupkan.'], code: 'control_off' });
+      const key = deviceOf(request) ?? limitKey(request);
+      const hit = deps.limiters.cameraControl.hit(key);
+      if (!hit.ok) return reply.code(429).header('Retry-After', String(hit.retryAfterSec)).header('Cache-Control', 'no-store').send({ errors: [TOO_MANY], code: 'too_many' });
+      const action = parseControlRequest(request.body);
+      if (action === null) return reply.code(400).header('Cache-Control', 'no-store').send({ errors: [CONTROL_MSG.badAction], code: 'bad_action' });
+      const host = cameraHostOf(cameraPullUrl(record));
+      if (host === null) throw new CameraError(400, 'bad_address', CAMERA_MSG.badAddress);
+      // applyProfile sends the SAVED profile (never one from the request); it is one call for the limit
+      const result = action.action === 'applyProfile' ? await controller.applyProfile(host, setting.protocol, setting.profile) : await controller.send(host, setting.protocol, action);
+      // what was asked and whether it was answered; never the address
+      audit(request, 'control', { ...action, protocol: setting.protocol, sent: result.sent, confirmed: result.confirmed, ...(result.steps !== undefined ? { steps: result.steps } : {}) });
+      return reply.header('Cache-Control', 'no-store').send(result);
     } catch (error) {
       return fail(reply, error);
     }
@@ -167,4 +271,21 @@ export function registerCameraRoutes(app: FastifyInstance, deps: CameraRouteDeps
       return fail(reply, error);
     }
   });
+  return {
+    async applyOnLive(): Promise<void> {
+      try {
+        const record = store.get();
+        const setting = store.getMasked().control;
+        if (record === null || !setting.enabled || !setting.applyOnLive) return;
+        const host = cameraHostOf(cameraPullUrl(record));
+        if (host === null) return;
+        const result = await controller.applyProfile(host, setting.protocol, setting.profile);
+        deps.db
+          .prepare('INSERT INTO change_log (surau_id, at, actor, entity, entity_id, before_json, after_json, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .run(LOCAL_SURAU_ID, new Date().toISOString(), 'system', 'live-camera', 'control', null, JSON.stringify({ action: 'applyProfile', when: 'live-start', protocol: setting.protocol, sent: result.sent, confirmed: result.confirmed, steps: result.steps ?? [] }), null);
+      } catch {
+        /* a live never fails or waits because of the camera's profile */
+      }
+    },
+  };
 }

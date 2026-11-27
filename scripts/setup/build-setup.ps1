@@ -236,7 +236,7 @@ foreach ($n in 'setup.ps1', 'MaxcomSetup.psm1', 'doctor.ps1', 'uninstall.ps1', '
   Add-Plan "setup/$n" (Join-Path $setupSrc $n)
 }
 foreach ($n in 'box-ca.ps1', 'box-cert-renew.ps1', 'install-cert-renew-task.ps1', 'install-box-task.ps1',
-  'ensure-box-firewall.ps1', 'ensure-live-firewall.ps1', 'install-live-tools.ps1') {
+  'ensure-box-firewall.ps1', 'ensure-live-firewall.ps1', 'install-live-tools.ps1', 'leave-surau.ps1') {
   Add-Plan "setup/$n" (Join-Path $scriptsSrc $n)
 }
 foreach ($n in 'launcher.mjs', 'start.cmd', 'cli.mjs', 'maxcom.cmd') { Add-Plan "setup/$n" (Join-Path $updateSrc $n) }

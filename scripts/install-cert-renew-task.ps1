@@ -3,9 +3,11 @@
   MAXCOM: register (or remove) the scheduled task MaxcomCertRenew. Windows PowerShell 5.1.
 
 .DESCRIPTION
-  The task runs scripts\box-cert-renew.ps1 daily at 03:30 and at system start (with a random delay of
-  up to 10 minutes), whether anyone is logged on or not, with highest privileges. It keeps the box
-  HTTPS leaf certificate fresh so devices never have to do anything.
+  The task runs scripts\box-cert-renew.ps1 daily at 03:30, at system start (with a random delay of
+  up to 10 minutes) and every 15 minutes, whether anyone is logged on or not, with highest privileges.
+  It keeps the box HTTPS leaf certificate fresh so devices never have to do anything. The 15 minute
+  run is cheap (it reads two small files and logs one line a day when nothing is due): it puts the
+  local name the box claimed (boxN-surau.local) into the leaf soon after the claim or a change.
 
   WHICH ACCOUNT: the task runs as an account that can use the root CA private key.
     - Store LocalMachine, a hand-run box (the default of box-ca.ps1): the key is in LocalMachine\My
@@ -201,17 +203,19 @@ $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg -Work
 $randomDelay = New-TimeSpan -Minutes 10
 $daily = New-ScheduledTaskTrigger -Daily -At '03:30' -RandomDelay $randomDelay
 $startup = New-ScheduledTaskTrigger -AtStartup -RandomDelay $randomDelay
+# every 15 minutes, for ten years: the local name the box claims is added to the leaf soon after it changes
+$every = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650)
 $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType $logon -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
   -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 1)
 
-$task = New-ScheduledTask -Action $action -Trigger @($daily, $startup) -Principal $principal -Settings $settings `
+$task = New-ScheduledTask -Action $action -Trigger @($daily, $startup, $every) -Principal $principal -Settings $settings `
   -Description 'Renews the MAXCOM HTTPS leaf certificate before it expires (scripts\box-cert-renew.ps1).'
 
 if ($DryRun) {
   Write-Output "DRYRUN task    : $taskName"
   Write-Output "DRYRUN account : $account (logon $logon, run level Highest, CA store $store)"
-  Write-Output "DRYRUN triggers: daily 03:30 (random delay up to 10 minutes); at startup (random delay up to 10 minutes)"
+  Write-Output "DRYRUN triggers: daily 03:30 (random delay up to 10 minutes); at startup (random delay up to 10 minutes); every 15 minutes"
   Write-Output "DRYRUN command : powershell.exe $arg"
   exit 0
 }
@@ -222,7 +226,7 @@ if ($logon -eq 'Password') {
 } else {
   Register-ScheduledTask -TaskName $taskName -InputObject $task -Force | Out-Null
 }
-Write-Output "Registered task $taskName for $account (logon $logon): daily 03:30 and at startup. Log: $(if ($LogDir -ne '') { Join-Path $LogDir 'cert-renew.log' } else { Join-Path (Join-Path $dataFull 'logs') 'cert-renew.log' })"
+Write-Output "Registered task $taskName for $account (logon $logon): daily 03:30, at startup and every 15 minutes. Log: $(if ($LogDir -ne '') { Join-Path $LogDir 'cert-renew.log' } else { Join-Path (Join-Path $dataFull 'logs') 'cert-renew.log' })"
 if ($logon -eq 'Interactive') {
   Write-Output 'NOTE: the CA key is in CurrentUser\My, so the task only runs while this user is logged on (pass -Password to change that).'
 }

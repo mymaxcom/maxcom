@@ -52,8 +52,11 @@ const Map<String, String> featureHelpMs = {
 };
 
 const Map<String, String> settingLabelsMs = {
+  // tvProfiles (the TV editor draws its own rows)
+  'tvs': 'TV',
   // liveCamera (the Kamera luaran form draws its own rows; these name the leaves)
   'transport': 'Pengangkutan',
+  'brightness': 'Kecerahan gambar',
   'avOffsetMs': 'Imbangan masa audio',
   'deviceMic': 'Mikrofon peranti',
   'boxInput': 'Mic-in pada kotak',
@@ -157,6 +160,10 @@ const Map<String, String> settingLabelsMs = {
   'showTranslation': 'Papar terjemahan',
   'textSize': 'Saiz teks',
   'minutesAfterSolat': 'Minit selepas solat',
+  'startAfterMinutes': 'Mula selepas solat (minit)',
+  'showClock': 'Papar jam',
+  'showTimeLeft': 'Papar masa berbaki',
+  'look': 'Rupa skrin zikir',
   'reciter': 'Qari',
   'cacheMaxMb': 'Ruang simpanan (MB)',
   // kewangan dan kad tabung
@@ -187,6 +194,7 @@ const Map<String, String> settingLabelsMs = {
   'descriptionTemplate': 'Templat keterangan',
   'maxBitrateKbps': 'Kadar bit maksimum (kbps)',
   'nextLiveOn': 'YouTube untuk siaran seterusnya',
+  'autoQuality': 'Kualiti automatik',
   'segmentMinutes': 'Panjang setiap fail rakaman (minit)',
   'keepOnDevice': 'Simpan rakaman di peranti',
   // audio
@@ -232,7 +240,9 @@ String sourceLeafLabelMs(String name) =>
 
 /// English labels for the same names.
 const Map<String, String> settingLabelsEn = {
+  'tvs': 'TVs',
   'transport': 'Transport',
+  'brightness': 'Picture brightness',
   'avOffsetMs': 'Audio timing offset',
   'deviceMic': 'Device microphone',
   'boxInput': 'Box microphone input',
@@ -330,6 +340,10 @@ const Map<String, String> settingLabelsEn = {
   'showTranslation': 'Show translation',
   'textSize': 'Text size',
   'minutesAfterSolat': 'Minutes after prayer',
+  'startAfterMinutes': 'Start after the prayer (minutes)',
+  'showClock': 'Show the clock',
+  'showTimeLeft': 'Show the time left',
+  'look': 'Zikir screen look',
   'reciter': 'Reciter',
   'cacheMaxMb': 'Storage (MB)',
   // finance and donation card
@@ -359,6 +373,7 @@ const Map<String, String> settingLabelsEn = {
   'descriptionTemplate': 'Description template',
   'maxBitrateKbps': 'Maximum bitrate (kbps)',
   'nextLiveOn': 'YouTube for the next live',
+  'autoQuality': 'Automatic quality',
   'segmentMinutes': 'Length of each recording file (minutes)',
   'keepOnDevice': 'Keep the recording on the device',
   'volume': 'Volume',
@@ -388,6 +403,7 @@ String settingLabelMs(String name) => settingLabelsMs[name] ?? name;
 /// BM names of the choices of an enum setting, by setting name then value.
 const Map<String, Map<String, String>> choiceLabelsMs = {
   'transport': {'auto': 'Automatik', 'tcp': 'TCP', 'udp': 'UDP'},
+  'brightness': {'auto': 'Automatik', 'normal': 'Biasa', 'bright': 'Cerah', 'brighter': 'Lebih cerah'},
   'timeFormat': {'12h': '12 jam', '24h': '24 jam'},
   'switchAt': {'maghrib': 'Waktu Maghrib', 'midnight': 'Tengah malam'},
   'lang': {'auto': 'Automatik', 'ms': 'Bahasa Melayu', 'en': 'English', 'ar': 'العربية'},
@@ -431,6 +447,7 @@ const Map<String, Map<String, String>> choiceLabelsMs = {
   'speed': {'slow': 'Perlahan', 'normal': 'Biasa', 'fast': 'Pantas'},
   'shape': {'round': 'Bulat', 'square': 'Segi empat'},
   'textSize': {'s': 'Kecil', 'm': 'Sederhana', 'l': 'Besar'},
+  'look': {'theme': 'Ikut tema', 'plain': 'Biasa', 'arab': 'Arab utama'},
   'kind': {'surau': 'Surau', 'masjid': 'Masjid'},
   'method': {
     'auto': 'Auto (ikut negara)',
@@ -502,13 +519,22 @@ const Map<String, String> settingHelpMs = {
       'Untuk siaran dari pelayar sahaja; siaran dari aplikasi Android tidak '
       'melalui MAXCOM. Salin terus guna CPU MAXCOM paling sedikit. Kod semula '
       'untuk telefon yang hantar kadar bit terlalu tinggi.',
-  'maxBitrateKbps': 'Ikut kelajuan muat naik internet surau.',
+  'maxBitrateKbps':
+      'Ikut kelajuan muat naik internet surau. Biarkan sekurang-kurangnya 30% '
+      'kelajuan muat naik untuk kegunaan lain. Julat 1000 hingga 8000 kbps. '
+      'Berkuat kuasa pada siaran seterusnya.',
   'nextLiveOn': 'Pilihan bersama untuk semua pentadbir: siaran seterusnya ke YouTube atau tidak.',
+  'autoQuality': 'Jika internet perlahan, gambar diturunkan ke 480p supaya siaran tidak terputus. Kembali sendiri apabila internet pulih.',
   'cacheMaxMb':
       'Muat turun audio berhenti bila had dicapai; audio lama tidak dipadam. '
       'Satu juzuk lebih kurang 40 MB.',
   'fontSize': 'Saiz asas teks. Saiz teks di Ubah suai menambah skala di atasnya.',
   'textSize': 'Saiz asas teks. Saiz teks di Ubah suai menambah skala di atasnya.',
+  'minutesAfterSolat': 'Paling lama zikir dipaparkan, dikira dari mula zikir.',
+  'startAfterMinutes': 'Zikir bermula sekian minit selepas solat tamat. 0 bermaksud terus selepas solat.',
+  'showClock': 'Jam kekal di bahagian atas skrin semasa zikir.',
+  'showTimeLeft': 'Kiraan kecil masa berbaki sehingga zikir tamat.',
+  'look': 'Ikut tema memilih rupa yang dipadankan dengan tema. Arab utama memaparkan teks Arab besar dalam bulatan tasbih.',
   'segmentMinutes': 'Fail pendek lebih selamat jika telefon terputus.',
   'noVideoSeconds':
       'Berapa lama tiada gambar dari telefon sebelum amaran muncul di aplikasi.',
@@ -542,6 +568,7 @@ const Map<String, Map<String, String>> choiceHelpMs = {
 /// English names of the choices of an enum setting, by setting name then value.
 const Map<String, Map<String, String>> choiceLabelsEn = {
   'transport': {'auto': 'Automatic', 'tcp': 'TCP', 'udp': 'UDP'},
+  'brightness': {'auto': 'Automatic', 'normal': 'Normal', 'bright': 'Bright', 'brighter': 'Brighter'},
   'timeFormat': {'12h': '12 hours', '24h': '24 hours'},
   'switchAt': {'maghrib': 'At Maghrib', 'midnight': 'At midnight'},
   'lang': {'auto': 'Automatic', 'ms': 'Bahasa Melayu', 'en': 'English', 'ar': 'العربية'},
@@ -585,6 +612,7 @@ const Map<String, Map<String, String>> choiceLabelsEn = {
   'speed': {'slow': 'Slow', 'normal': 'Normal', 'fast': 'Fast'},
   'shape': {'round': 'Round', 'square': 'Square'},
   'textSize': {'s': 'Small', 'm': 'Medium', 'l': 'Large'},
+  'look': {'theme': 'Follow the theme', 'plain': 'Plain', 'arab': 'Arabic first'},
   'kind': {'surau': 'Surau', 'masjid': 'Masjid'},
   'method': {
     'auto': 'Auto (by country)',
@@ -660,8 +688,12 @@ const Map<String, String> settingHelpEn = {
       'For broadcasts from the browser only; a broadcast from the Android app does '
       'not go through MAXCOM. Copy as is uses the least MAXCOM CPU. Re-encode is for '
       'phones that send too high a bit rate.',
-  'maxBitrateKbps': "Follow the surau's internet upload speed.",
+  'maxBitrateKbps':
+      "Match the surau internet upload speed. Leave at least 30% of the upload "
+      'speed for other use. Range 1000 to 8000 kbps. Takes effect from the next '
+      'live.',
   'nextLiveOn': 'Shared by all admins: whether the next live goes to YouTube.',
+  'autoQuality': 'When the internet is slow the picture drops to 480p so the broadcast does not cut. It returns by itself.',
   'cacheMaxMb':
       'The audio download stops when the limit is reached; old audio is not deleted. '
       'One juz is about 40 MB.',
@@ -677,6 +709,11 @@ const Map<String, String> settingHelpEn = {
       'More often means changes from home arrive sooner, but the cloud is woken more often.',
   'fontSize': 'The base text size. Text size in Customise adds a scale on top of it.',
   'textSize': 'The base text size. Text size in Customise adds a scale on top of it.',
+  'minutesAfterSolat': 'The longest the zikir shows, counted from its start.',
+  'startAfterMinutes': 'The zikir starts this many minutes after the prayer ends. 0 means right after the prayer.',
+  'showClock': 'The clock stays at the top of the screen during the zikir.',
+  'showTimeLeft': 'A small count of the time left until the zikir ends.',
+  'look': 'Follow the theme uses the look that goes with the theme. Arabic first shows the Arabic large in a ring of prayer beads.',
   'lang':
       'The language of the TV screen, not of the app on the phone. Automatic follows location: '
       'BM in Malaysia, English in other countries.',

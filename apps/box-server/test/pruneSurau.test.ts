@@ -4,16 +4,17 @@
  * the fleet route, the CLI (`surau-delete`, `surau-prune`), the daily automatic prune and the new daily cap default.
  */
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createUser } from '../src/auth/users.ts';
 import { sha256hex } from '../src/auth/crypto.ts';
 import { run as usersCli } from '../src/cli/users.ts';
 import { putItem } from '../src/content/store.ts';
 import { openDb } from '../src/db.ts';
-import { autoPruneDays, backupBeforePrune, emptySuraus, pruneEmptySuraus, startAutoPrune } from '../src/surau/prune.ts';
+import { ageEncrypt, autoPruneDays, backupBeforePrune, backupRecipient, emptySuraus, PruneBackupError, pruneEmptySuraus, startAutoPrune } from '../src/surau/prune.ts';
 import { createSurau, deleteEmptySurau, getSurau, listSuraus, SurauError, surauUsage } from '../src/surau/registry.ts';
 import { isStaleRegistration } from '../src/sync/workerRegs.ts';
 import { approveSite, autoSurauDailyCap, DEFAULT_AUTO_SURAU_DAILY_CAP } from '../src/sync/sites.ts';
@@ -25,11 +26,20 @@ import type { TestCloud } from './support/fakeCloud.ts';
 import { FakeWorker } from './support/fakeWorker.ts';
 
 const cleanups: (() => Promise<void> | void)[] = [];
+beforeEach(() => {
+  // never read the machine's real /etc/maxcom/backup.recipient: point at a file that does not exist
+  process.env.MAXCOM_BACKUP_RECIPIENT_FILE = join(tmpdir(), 'maxcom-test-no-such-recipient-file');
+  // most tests here use a plain copy: opt in explicitly (the default is to refuse, see the fail-closed tests)
+  process.env.MAXCOM_PRUNE_PLAIN_BACKUP = '1';
+});
 afterEach(async () => {
   for (const c of cleanups.splice(0)) await c();
   delete process.env.MAXCOM_AUTO_SURAU_DAILY_CAP;
   delete process.env.MAXCOM_AUTO_PRUNE_DAYS;
   delete process.env.SURAU_ROLE;
+  delete process.env.MAXCOM_BACKUP_RECIPIENT_FILE;
+  delete process.env.MAXCOM_AGE_BIN;
+  delete process.env.MAXCOM_PRUNE_PLAIN_BACKUP;
 });
 
 const DAY = 24 * 3_600_000;
@@ -325,8 +335,10 @@ describe('prune', () => {
     const done = pruneEmptySuraus(db, { now, olderThanMs: DAY, apply: true, backupDir: dir, onDeleted: (id) => gone.push(id), log: (l) => logs.push(l) });
     expect(done.deleted.map((c) => c.id)).toEqual([oldEmpty.id]);
     expect(gone).toEqual([oldEmpty.id]);
-    expect(logs).toHaveLength(1);
-    expect(logs[0]).toContain(oldEmpty.id);
+    const deletedLogs = logs.filter((l) => l.includes('dipadam'));
+    expect(deletedLogs).toHaveLength(1);
+    expect(deletedLogs[0]).toContain(oldEmpty.id);
+    expect(logs.some((l) => l.includes('tidak disulitkan'))).toBe(true);
     expect(listSuraus(db).map((s) => s.id).sort()).toEqual([newEmpty.id, oldFull.id].sort());
     expect(done.backup).toMatch(/pre-prune-2026-11-2\dT\d\d-\d\d-\d\d-\d{3}Z-[0-9a-f]{6}\.db$/);
     expect(readdirSync(dir)).toHaveLength(1);
@@ -369,7 +381,7 @@ describe('prune', () => {
     await new Promise((r) => setTimeout(r, 120));
     stop();
     expect(listSuraus(db).map((s) => s.id)).toEqual([young.id]);
-    expect(logs).toHaveLength(1);
+    expect(logs.filter((l) => l.includes('dipadam'))).toHaveLength(1);
     expect(readdirSync(dir)).toHaveLength(1);
   });
 });
@@ -670,5 +682,310 @@ describe('the cloud app wires the daily prune', () => {
     age(box.app.surau.db, stray.id, 30 * DAY);
     await new Promise((r) => setTimeout(r, 400));
     expect(getSurau(box.app.surau.db, stray.id)).not.toBeNull();
+  });
+});
+
+describe('the pre-prune copy is encrypted when a backup recipient is configured', () => {
+  const RCPT = `age1${'q'.repeat(58)}`;
+  const fakeEncrypt = (plain: string, out: string): void => writeFileSync(out, Buffer.concat([Buffer.from('AGE:'), readFileSync(plain)]));
+  const failing = (): void => {
+    throw new Error('age gagal: tiada');
+  };
+  const emptyOld = (db: DatabaseSync, now: Date): string => {
+    const x = createSurau(db, { name: 'Kosong' }, 'test');
+    age(db, x.id, 3 * DAY, now.getTime());
+    return x.id;
+  };
+  const NOW = new Date(START + 10 * DAY);
+
+  it('recipient present + encrypt ok: only the .age remains, the plain copy is gone, 0600 where supported', () => {
+    const db = openDb(':memory:');
+    const dir = join(tmpDir(), 'backups');
+    const path = backupBeforePrune(db, dir, NOW, { recipient: RCPT, encrypt: fakeEncrypt });
+    expect(path).toMatch(/\.db\.age$/);
+    const files = readdirSync(dir);
+    expect(files).toEqual([path.slice(dir.length + 1)]);
+    expect(files.filter((f) => f.endsWith('.db'))).toHaveLength(0);
+    expect(statSync(path).size).toBeGreaterThan(0);
+    if (process.platform !== 'win32') expect(statSync(path).mode & 0o777).toBe(0o600);
+  });
+
+  it('the encrypt step gets the recipient and the plain and output paths as values', () => {
+    const db = openDb(':memory:');
+    const seen: string[][] = [];
+    const p = backupBeforePrune(db, join(tmpDir(), 'backups'), NOW, {
+      recipient: RCPT,
+      encrypt: (a, o, r) => {
+        seen.push([a, o, r]);
+        fakeEncrypt(a, o);
+      },
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]![2]).toBe(RCPT);
+    expect(seen[0]![1]).toBe(`${seen[0]![0]}.age`);
+    expect(p).toBe(seen[0]![1]);
+  });
+
+  it('encrypt fails: throws, no plain or partial file is left, and prune deletes no surau', () => {
+    const db = openDb(':memory:');
+    const id = emptyOld(db, NOW);
+    const dir = join(tmpDir(), 'backups');
+    const logs: string[] = [];
+    const partial = (_a: string, o: string): void => {
+      writeFileSync(o, 'partial');
+      failing();
+    };
+    expect(() => backupBeforePrune(db, dir, NOW, { recipient: RCPT, encrypt: partial })).toThrow(/age gagal/);
+    expect(readdirSync(dir)).toEqual([]);
+    expect(() => pruneEmptySuraus(db, { now: NOW, olderThanMs: DAY, apply: true, backupDir: dir, backup: { recipient: RCPT, encrypt: partial }, log: (l) => logs.push(l) })).toThrow(PruneBackupError);
+    expect(readdirSync(dir)).toEqual([]);
+    expect(getSurau(db, id)).toBeDefined();
+    expect(logs.some((l) => l.includes('sandaran gagal'))).toBe(true);
+  });
+
+  const addOrphan = (db: DatabaseSync): void => {
+    db.prepare("INSERT INTO prayer_days (surau_id, zone, date, json) VALUES ('gone0000', 'Z', '2026-11-14', '{}')").run();
+    db.prepare("INSERT INTO meta (surau_id, key, value) VALUES ('gone0000', 'k', '1')").run();
+  };
+  const orphanCount = (db: DatabaseSync): number => count(db, "SELECT COUNT(*) AS n FROM prayer_days WHERE surau_id = 'gone0000'") + count(db, "SELECT COUNT(*) AS n FROM meta WHERE surau_id = 'gone0000'");
+
+  it('backup fails with candidates and orphan rows: throws PruneBackupError, orphans stay, no surau deleted', () => {
+    const db = openDb(':memory:');
+    const id = emptyOld(db, NOW);
+    addOrphan(db);
+    const dir = join(tmpDir(), 'backups');
+    let err: unknown;
+    try {
+      pruneEmptySuraus(db, { now: NOW, olderThanMs: DAY, apply: true, backupDir: dir, backup: { recipient: RCPT, encrypt: failing } });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(PruneBackupError);
+    expect((err as Error).message).toMatch(/Sandaran.*age gagal: tiada/);
+    expect(orphanCount(db)).toBe(2);
+    expect(getSurau(db, id)).toBeDefined();
+  });
+
+  it('backup ok with candidates and orphan rows: orphans removed and suraus deleted', () => {
+    const db = openDb(':memory:');
+    const id = emptyOld(db, NOW);
+    addOrphan(db);
+    const dir = join(tmpDir(), 'backups');
+    const r = pruneEmptySuraus(db, { now: NOW, olderThanMs: DAY, apply: true, backupDir: dir, backup: { recipient: RCPT, encrypt: fakeEncrypt } });
+    expect(r.deleted.map((d) => d.id)).toEqual([id]);
+    expect(r.backup).toMatch(/\.db\.age$/);
+    expect(orphanCount(db)).toBe(0);
+    expect(getSurau(db, id)).toBeNull();
+  });
+
+  it('apply with no candidates: orphans removed, no backup written', () => {
+    const db = openDb(':memory:');
+    addOrphan(db);
+    const dir = join(tmpDir(), 'backups');
+    const r = pruneEmptySuraus(db, { now: NOW, olderThanMs: DAY, apply: true, backupDir: dir, backup: { recipient: RCPT, encrypt: failing } });
+    expect(r.candidates).toEqual([]);
+    expect(r.backup).toBeNull();
+    expect(orphanCount(db)).toBe(0);
+    expect(existsSync(dir) ? readdirSync(dir) : []).toEqual([]);
+  });
+
+  it('an empty .age output counts as a failure', () => {
+    const db = openDb(':memory:');
+    const dir = join(tmpDir(), 'backups');
+    expect(() => backupBeforePrune(db, dir, NOW, { recipient: RCPT, encrypt: (_a, o) => writeFileSync(o, '') })).toThrow(/kosong/);
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it('with a recipient file and a missing age binary (env), prune throws and deletes nothing', () => {
+    const dir = tmpDir();
+    const file = join(dir, 'rcpt');
+    writeFileSync(file, `${RCPT}\n`);
+    process.env.MAXCOM_BACKUP_RECIPIENT_FILE = file;
+    process.env.MAXCOM_AGE_BIN = join(dir, 'no-such-age-binary');
+    const db = openDb(':memory:');
+    const id = emptyOld(db, NOW);
+    expect(() => pruneEmptySuraus(db, { now: NOW, olderThanMs: DAY, apply: true, backupDir: join(dir, 'backups') })).toThrow(PruneBackupError);
+    expect(getSurau(db, id)).toBeDefined();
+    expect(existsSync(join(dir, 'backups')) ? readdirSync(join(dir, 'backups')) : []).toEqual([]);
+  });
+
+  it('the real age step runs the binary without a shell (a fake script binary)', () => {
+    const dir = tmpDir();
+    const missing = { MAXCOM_AGE_BIN: join(dir, 'missing') };
+    expect(() => ageEncrypt(join(dir, 'x.db'), join(dir, 'x.db.age'), RCPT, missing)).toThrow(/age gagal/);
+    if (process.platform === 'win32') return; // the fake binary is a shell script
+    const bin = join(dir, 'fake-age');
+    writeFileSync(bin, '#!/bin/sh\nprintf "%s|" "$@" > "$4.args"\ncp "$5" "$4"\n');
+    chmodSync(bin, 0o755);
+    const plain = join(dir, 'x.db');
+    writeFileSync(plain, 'data');
+    ageEncrypt(plain, join(dir, 'x.db.age'), RCPT, { MAXCOM_AGE_BIN: bin });
+    expect(readFileSync(join(dir, 'x.db.age'), 'utf8')).toBe('data');
+    expect(readFileSync(join(dir, 'x.db.age.args'), 'utf8')).toBe(`-r|${RCPT}|-o|${join(dir, 'x.db.age')}|${plain}|`);
+  });
+
+  it('an invalid recipient value is treated as none by backupRecipient and is never used', () => {
+    const dir = tmpDir();
+    const file = join(dir, 'rcpt');
+    for (const bad of ['age1short', `${RCPT}; rm -rf /`, `AGE1${'q'.repeat(58)}`, '-o /etc/passwd', '']) {
+      writeFileSync(file, bad);
+      const logs: string[] = [];
+      expect(backupRecipient({ MAXCOM_BACKUP_RECIPIENT_FILE: file }, (l) => logs.push(l))).toBeNull();
+      expect(logs).toHaveLength(1);
+    }
+    writeFileSync(file, `  ${RCPT}\n`);
+    expect(backupRecipient({ MAXCOM_BACKUP_RECIPIENT_FILE: file })).toBe(RCPT);
+    expect(backupRecipient({ MAXCOM_BACKUP_RECIPIENT_FILE: join(dir, 'missing') })).toBeNull();
+  });
+
+  describe('fails closed without a valid recipient', () => {
+    const seed = (db: DatabaseSync): string => emptyOld(db, NOW);
+    const listing = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir) : []);
+
+    it('missing recipient file: PruneBackupError, no file in the backups folder, no surau deleted', () => {
+      delete process.env.MAXCOM_PRUNE_PLAIN_BACKUP;
+      const db = openDb(':memory:');
+      const id = seed(db);
+      const dir = join(tmpDir(), 'backups');
+      const env = { MAXCOM_BACKUP_RECIPIENT_FILE: join(tmpDir(), 'nope') };
+      expect(() => pruneEmptySuraus(db, { now: NOW, olderThanMs: DAY, apply: true, backupDir: dir, backup: { env } })).toThrow(PruneBackupError);
+      expect(() => pruneEmptySuraus(db, { now: NOW, olderThanMs: DAY, apply: true, backupDir: dir, backup: { env } })).toThrow(/tiada atau tidak boleh dibaca/);
+      expect(listing(dir)).toEqual([]);
+      expect(getSurau(db, id)).toBeDefined();
+    });
+
+    it('invalid recipient content: the same, and the message names the cause', () => {
+      delete process.env.MAXCOM_PRUNE_PLAIN_BACKUP;
+      const db = openDb(':memory:');
+      const id = seed(db);
+      const dir = join(tmpDir(), 'backups');
+      const file = join(tmpDir(), 'rcpt');
+      writeFileSync(file, 'garbage');
+      const env = { MAXCOM_BACKUP_RECIPIENT_FILE: file };
+      expect(() => pruneEmptySuraus(db, { now: NOW, olderThanMs: DAY, apply: true, backupDir: dir, backup: { env } })).toThrow(PruneBackupError);
+      expect(() => backupBeforePrune(db, dir, NOW, { env })).toThrow(/bukan kunci awam age yang sah/);
+      expect(listing(dir)).toEqual([]);
+      expect(getSurau(db, id)).toBeDefined();
+    });
+
+    it('an explicit recipient: null without allowPlain throws too', () => {
+      delete process.env.MAXCOM_PRUNE_PLAIN_BACKUP;
+      const db = openDb(':memory:');
+      const dir = join(tmpDir(), 'backups');
+      expect(() => backupBeforePrune(db, dir, NOW, { recipient: null })).toThrow(/MAXCOM_PRUNE_PLAIN_BACKUP=1/);
+      expect(listing(dir)).toEqual([]);
+    });
+
+    it('MAXCOM_PRUNE_PLAIN_BACKUP=1 allows a plain copy and logs that it is not encrypted; any other value does not', () => {
+      const db = openDb(':memory:');
+      const dir = join(tmpDir(), 'backups');
+      const logs: string[] = [];
+      const p = backupBeforePrune(db, dir, NOW, { env: { MAXCOM_PRUNE_PLAIN_BACKUP: '1' }, log: (l) => logs.push(l) });
+      expect(p).toMatch(/\.db$/);
+      expect(readdirSync(dir)).toHaveLength(1);
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toContain('tidak disulitkan');
+      expect(() => backupBeforePrune(db, join(tmpDir(), 'b2'), NOW, { env: { MAXCOM_PRUNE_PLAIN_BACKUP: 'true' } })).toThrow(/tidak dibenarkan/);
+    });
+
+    it('the allowPlain option allows a plain copy too (also with recipient: null)', () => {
+      delete process.env.MAXCOM_PRUNE_PLAIN_BACKUP;
+      const db = openDb(':memory:');
+      const dir = join(tmpDir(), 'backups');
+      const logs: string[] = [];
+      const p = backupBeforePrune(db, dir, NOW, { allowPlain: true, recipient: null, log: (l) => logs.push(l) });
+      expect(p).toMatch(/\.db$/);
+      expect(logs[0]).toContain('tidak disulitkan');
+    });
+
+    it('a dry run never throws for a missing recipient and writes nothing', () => {
+      delete process.env.MAXCOM_PRUNE_PLAIN_BACKUP;
+      const db = openDb(':memory:');
+      const id = seed(db);
+      const dir = join(tmpDir(), 'backups');
+      const r = pruneEmptySuraus(db, { now: NOW, olderThanMs: DAY, backupDir: dir });
+      expect(r.candidates.map((c) => c.id)).toEqual([id]);
+      expect(r.deleted).toEqual([]);
+      expect(existsSync(dir)).toBe(false);
+    });
+  });
+
+  describe('a plain copy that cannot be removed is never silent', () => {
+    const failPlainRemoval = (path: string): void => {
+      if (path.endsWith('.db')) throw new Error('EBUSY');
+      rmSync(path, { force: true });
+    };
+
+    it('encryption ok, plain removal fails: the .age is returned and one loud line names the plain file', () => {
+      const db = openDb(':memory:');
+      const dir = join(tmpDir(), 'backups');
+      const logs: string[] = [];
+      const p = backupBeforePrune(db, dir, NOW, { recipient: RCPT, encrypt: fakeEncrypt, remove: failPlainRemoval, log: (l) => logs.push(l) });
+      expect(p).toMatch(/\.db\.age$/);
+      expect(logs.some((l) => l.includes('AMARAN') && l.includes('salinan biasa'))).toBe(true);
+      expect(readdirSync(dir).filter((f) => f.endsWith('.db'))).toHaveLength(1);
+    });
+
+    it('encryption fails and the plain copy cannot be removed: the thrown message says the plain copy is still there', () => {
+      const db = openDb(':memory:');
+      const dir = join(tmpDir(), 'backups');
+      expect(() => backupBeforePrune(db, dir, NOW, { recipient: RCPT, encrypt: failing, remove: failPlainRemoval })).toThrow(/AMARAN.*masih ada/);
+    });
+  });
+
+  it('retention counts plain and encrypted copies together (newest 7 by name), and only the exact pattern', () => {
+    const db = openDb(':memory:');
+    const dir = join(tmpDir(), 'backups');
+    mkdirSync(dir, { recursive: true });
+    const other = join(dir, 'pre-prune-keep-me.db.age');
+    writeFileSync(other, 'x');
+    const mk = (i: number, ext: string): string => `pre-prune-2026-11-0${i}T10-00-00-000Z-aaaaa${i}${ext}`;
+    for (let i = 1; i <= 5; i++) writeFileSync(join(dir, mk(i, '.db.age')), 'x');
+    for (let i = 6; i <= 9; i++) writeFileSync(join(dir, mk(i, '.db')), 'x');
+    backupBeforePrune(db, dir, NOW, { recipient: RCPT, encrypt: fakeEncrypt });
+    const kept = readdirSync(dir).filter((f) => f !== 'pre-prune-keep-me.db.age');
+    expect(kept).toHaveLength(7);
+    expect(kept.some((f) => /2026-11-0[123]T/.test(f))).toBe(false);
+    expect(kept.some((f) => f.includes('2026-11-09T'))).toBe(true);
+    expect(kept.filter((f) => f.endsWith('.db'))).toEqual([]); // the kept plain ones were encrypted
+    expect(existsSync(other)).toBe(true);
+  });
+
+  it('older plain copies still in the folder are encrypted too; one that fails is kept, logged, and does not abort', () => {
+    const db = openDb(':memory:');
+    const dir = join(tmpDir(), 'backups');
+    mkdirSync(dir, { recursive: true });
+    const ok = 'pre-prune-2026-11-01T10-00-00-000Z-aaaaa1.db';
+    const bad = 'pre-prune-2026-11-02T10-00-00-000Z-bbbbb2.db';
+    writeFileSync(join(dir, ok), 'old-ok');
+    writeFileSync(join(dir, bad), 'old-bad');
+    const logs: string[] = [];
+    const enc = (a: string, o: string): void => {
+      if (a.endsWith('bbbbb2.db')) failing();
+      fakeEncrypt(a, o);
+    };
+    const p = backupBeforePrune(db, dir, NOW, { recipient: RCPT, encrypt: enc, log: (l) => logs.push(l) });
+    expect(p).toMatch(/\.db\.age$/);
+    const files = readdirSync(dir);
+    expect(files).toContain(`${ok}.age`);
+    expect(files).not.toContain(ok);
+    expect(files).toContain(bad);
+    expect(files).not.toContain(`${bad}.age`);
+    expect(readFileSync(join(dir, `${ok}.age`), 'utf8')).toBe('AGE:old-ok');
+    expect(logs.some((l) => l.includes(bad))).toBe(true);
+  });
+
+  it('the daily automatic prune logs a failed backup, deletes nothing and keeps running', async () => {
+    const db = openDb(':memory:');
+    const id = emptyOld(db, NOW);
+    const logs: string[] = [];
+    const dir = join(tmpDir(), 'backups');
+    const stop = startAutoPrune({ db, now: () => NOW, days: 1, backupDir: dir, log: (l) => logs.push(l), firstDelayMs: 5, intervalMs: 30, backup: { recipient: RCPT, encrypt: failing } });
+    cleanups.push(stop);
+    await settle();
+    await settle();
+    expect(logs.filter((l) => l.includes('sandaran gagal')).length).toBeGreaterThanOrEqual(2);
+    expect(logs.some((l) => l.includes('larian automatik gagal'))).toBe(false);
+    expect(getSurau(db, id)).toBeDefined();
   });
 });

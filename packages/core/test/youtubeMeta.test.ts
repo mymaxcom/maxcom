@@ -11,7 +11,7 @@ const penceramah: Penceramah = { ...base, id: 'p1', name: 'Ustaz Ahmad Fauzi' };
 const kitab: Kitab = { ...base, id: 'b1', title: 'Riyadhus Salihin' };
 const settings = resolveSettings({}).liveYoutube;
 const now = new Date('2026-11-05T10:00:00Z');
-const surauName = 'Surau D\'Waqaf';
+const surauName = 'Surau Contoh';
 const run = (over: Partial<Parameters<typeof youtubeMetaFor>[0]> = {}) =>
   youtubeMetaFor({ kuliah, penceramah, kitab, surauName, settings, now, ...over });
 
@@ -19,15 +19,15 @@ describe('youtubeMetaFor', () => {
   it('fills the default templates', () => {
     const m = run();
     expect(m.title).toBe('Kuliah Maghrib: Ustaz Ahmad Fauzi');
-    expect(m.description).toBe('Bab Solat\nKitab: Riyadhus Salihin\nSurau D\'Waqaf, 5 November 2026');
+    expect(m.description).toBe('Bab Solat\nKitab: Riyadhus Salihin\nSurau Contoh, 5 November 2026');
     expect(m.privacy).toBe('unlisted');
   });
   it('drops the kitab line without a kitab', () => {
-    expect(run({ kitab: null }).description).toBe('Bab Solat\nSurau D\'Waqaf, 5 November 2026');
+    expect(run({ kitab: null }).description).toBe('Bab Solat\nSurau Contoh, 5 November 2026');
   });
   it('drops the first line without a topic and keeps a sensible title', () => {
     const k = { ...kuliah, topic: undefined };
-    expect(run({ kuliah: k }).description).toBe('Kitab: Riyadhus Salihin\nSurau D\'Waqaf, 5 November 2026');
+    expect(run({ kuliah: k }).description).toBe('Kitab: Riyadhus Salihin\nSurau Contoh, 5 November 2026');
     const t = run({ kuliah: k, settings: { ...settings, titleTemplate: '{label}: {topic}' } });
     expect(t.title).toBe('Kuliah Maghrib');
   });
@@ -51,7 +51,7 @@ describe('youtubeMetaFor', () => {
   });
   it('an empty title becomes Kuliah <surau>', () => {
     const m = run({ settings: { ...settings, titleTemplate: '{topic}{kitab}' }, kuliah: { ...kuliah, topic: undefined }, kitab: null });
-    expect(m.title).toBe('Kuliah Surau D\'Waqaf');
+    expect(m.title).toBe('Kuliah Surau Contoh');
   });
   it('caps the description at 5000 characters', () => {
     const m = run({ settings: { ...settings, descriptionTemplate: 'x'.repeat(500) } });
@@ -67,17 +67,21 @@ describe('live settings rules', () => {
   it('has the planned defaults', () => {
     const s = resolveSettings({});
     expect(s.liveOnKiosk).toMatchObject({ audio: false, volume: 50, showStrip: true, fit: 'cover' });
-    expect(s.liveYoutube).toMatchObject({ privacy: 'unlisted', relayVideo: 'copy', maxBitrateKbps: 2500, nextLiveOn: true });
+    expect(s.liveYoutube).toMatchObject({ privacy: 'unlisted', relayVideo: 'copy', maxBitrateKbps: 3500, nextLiveOn: true, autoQuality: true });
     expect(s.recording).toMatchObject({ segmentMinutes: 15, keepOnDevice: true });
   });
   it('liveYoutube', () => {
     expect(v('liveYoutube', { privacy: 'secret' })).toBe(false);
     expect(v('liveYoutube', { privacy: 'unlisted' })).toBe(true);
     expect(v('liveYoutube', { maxBitrateKbps: 100 })).toBe(false);
-    expect(v('liveYoutube', { maxBitrateKbps: 6001 })).toBe(false);
-    expect(v('liveYoutube', { maxBitrateKbps: 500 })).toBe(true);
+    expect(v('liveYoutube', { maxBitrateKbps: 999 })).toBe(false);
+    expect(v('liveYoutube', { maxBitrateKbps: 1000 })).toBe(true);
+    expect(v('liveYoutube', { maxBitrateKbps: 8000 })).toBe(true);
+    expect(v('liveYoutube', { maxBitrateKbps: 8001 })).toBe(false);
     expect(v('liveYoutube', { nextLiveOn: false })).toBe(true);
     expect(v('liveYoutube', { nextLiveOn: 'no' })).toBe(false);
+    expect(v('liveYoutube', { autoQuality: false })).toBe(true);
+    expect(v('liveYoutube', { autoQuality: 'no' })).toBe(false);
     expect(v('liveYoutube', { relayVideo: 'reencode' })).toBe(true);
     expect(v('liveYoutube', { relayVideo: 'x' })).toBe(false);
     expect(v('liveYoutube', { titleTemplate: '' })).toBe(false);

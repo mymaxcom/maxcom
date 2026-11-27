@@ -54,11 +54,11 @@ void main() {
         expiresAt: fixedNow().add(const Duration(minutes: 9, seconds: 30)),
       ),
     ),
-    'signed-in': const LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau D\'Waqaf')),
+    'signed-in': const LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau Contoh')),
     'expired': const LiveBoxStatus(youtube: YoutubeAccount.signedOut(reason: YoutubeSignOutReason.expired)),
     'revoked': const LiveBoxStatus(youtube: YoutubeAccount.signedOut(reason: YoutubeSignOutReason.revoked)),
     // 2026.11.13: away from the surau the cloud answers with the box's flag; no sign-in or sign-out button
-    'away-signed-in': const LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau D\'Waqaf'), youtubeSignInHere: false),
+    'away-signed-in': const LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau Contoh'), youtubeSignInHere: false),
     'away-signed-out': const LiveBoxStatus(youtubeSignInHere: false),
   };
   for (final lang in [AppLang.ms, AppLang.en]) {
@@ -81,7 +81,7 @@ void main() {
           expect(find.byKey(const ValueKey('live-youtube-signout')), findsNothing);
           expect(find.byIcon(Icons.login_rounded), findsNothing);
           if (e.value.youtube.signedIn) {
-            expect(find.textContaining('Surau D\'Waqaf'), findsWidgets);
+            expect(find.textContaining('Surau Contoh'), findsWidgets);
           }
         }
         await _shot(tester, '${e.key}-${lang.code}');

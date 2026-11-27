@@ -23,6 +23,10 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
+// Every case in the two PowerShell-spawning groups below starts powershell.exe one or more times (about 2 to 13 s each
+// alone, several times that when other test files load the machine). Only those groups get the longer limit.
+const PS_CASE_TIMEOUT_MS = 120_000;
+
 describe('setup.ps1 static checks', () => {
   it('setup.ps1 and Pasang MAXCOM.cmd are pure ASCII with CRLF line ends', () => {
     for (const text of [src, cmd]) {
@@ -140,7 +144,7 @@ function listFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-describe.runIf(isWin)('setup.ps1 runs', () => {
+describe.runIf(isWin)('setup.ps1 runs', { timeout: PS_CASE_TIMEOUT_MS }, () => {
   it('-DryRun prints the eleven steps in order and creates nothing', () => {
     const e = makeEnv();
     const suffix = Math.random().toString(36).slice(2, 8);
@@ -430,7 +434,7 @@ describe('setup.ps1 locks %ProgramData%\\MAXCOM before data\\ (static)', () => {
   });
 });
 
-describe.runIf(isWin)('setup.ps1 ProgramData folder and installed layout', () => {
+describe.runIf(isWin)('setup.ps1 ProgramData folder and installed layout', { timeout: PS_CASE_TIMEOUT_MS }, () => {
   /** A data folder whose parent ("MaxcomHome") is <base>\pd, created by the test. */
   function homeEnv() {
     const e = makeEnv();

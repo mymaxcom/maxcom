@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/providers.dart';
+import '../box/box_address.dart' show currentIpOrigin;
 import '../box/cloud_origin.dart';
 import '../box/locator.dart';
 import '../features/enrol/enrol_flow.dart' show EnrolledBox;
@@ -25,10 +26,12 @@ const String _metaLastWake = 'lastWake';
 /// this app has no store builder.
 final localStoreProvider = FutureProvider<LocalStore?>((ref) async {
   final build = ref.watch(appDepsProvider).localStoreBuilder;
-  final box = ref.watch(enrolledBoxProvider);
-  if (build == null || box == null) return null;
+  // Only the box's id: the enrolled record also changes when the box's address, name or cloud is learned, and
+  // a store reopened for that rebuilt the upload queue under a running job (U8) and the sync engine with it.
+  final boxId = ref.watch(enrolledBoxProvider.select((b) => b?.boxId));
+  if (build == null || boxId == null) return null;
   final store = build();
-  await store.open(box.boxId);
+  await store.open(boxId);
   return store;
 });
 
@@ -172,7 +175,7 @@ final syncEngineProvider = Provider<SyncEngine?>((ref) {
       // none anywhere: a base that answers then asks for a silent unlock.
       tokenFor: (base) {
         if (session.offline) return null;
-        final issued = session.base ?? box.box;
+        final issued = session.base ?? currentIpOrigin(box);
         return base.authority == issued.authority
             ? session.token
             : tokens.get(base);
@@ -193,6 +196,7 @@ final syncEngineProvider = Provider<SyncEngine?>((ref) {
       if (ref.mounted) ref.read(sessionKeeperProvider).kick();
     },
     onWakeNeeded: () => wake?.wakeSoon(cloudOriginOf(box)),
+    clockOffsetMs: () => ref.mounted ? ref.read(boxClockOffsetProvider) : null,
     // A copy made before the ID, phone and delete fields is rebuilt once.
     snapshotFormat: kSnapshotFormat,
   );
@@ -271,7 +275,10 @@ class SyncCoordinator {
         wake: wake,
         boxReachable: () async {
           try {
-            await DirectBoxLocator(clientFor: deps.enrolledClient).locate(box);
+            // the IP last proved for the box, not the enrolment-time one
+            final direct = currentIpOrigin(box);
+            await DirectBoxLocator(clientFor: deps.enrolledClient)
+                .locate(direct == box.box ? box : boxAt(box, direct));
             return true;
           } on Object {
             return false;

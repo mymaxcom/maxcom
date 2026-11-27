@@ -5,6 +5,7 @@ import { FEATURES } from './registry.ts';
 import { THEME_NAME_RE } from '../theme/catalog.ts';
 import { sanitizeThemeStyles, themeStylesError } from '../theme/style.ts';
 import { packsError, sanitizePacks } from '../theme/packs.ts';
+import { sanitizeTvProfiles, tvProfilesError } from './tvProfiles.ts';
 import { SURAHS } from '../islamic/surahs.ts';
 import { AV_OFFSET_CHOICES } from '../live/sources.ts';
 import { isCountryCode } from '../prayer/countries.ts';
@@ -46,6 +47,7 @@ function ruleFor(name: string): Rule | undefined {
   // Explicit cases first: both names also match the generic minutes rule below, which would allow 0..120.
   if (name === 'adjustMinutes') return { t: 'int', min: -30, max: 30 };
   if (name === 'imsakMinutes') return { t: 'int', min: 5, max: 20 };
+  if (name === 'startAfterMinutes') return { t: 'int', min: 0, max: 30 };
   if (name === 'minutes' || name.startsWith('minutes') || name.endsWith('Minutes')) return MIN120;
   if (name === 'screenSeconds' || name === 'endWarningSeconds' || name === 'durationSeconds') return SEC600;
   // Every amount setting is whole sen, up to RM 1 billion.
@@ -77,9 +79,10 @@ function ruleFor(name: string): Rule | undefined {
     case 'syncHistoryDays': return { t: 'intSet', vals: [180, 365] };
     case 'message': return { t: 'text', min: 0, max: 100 };
     case 'transport': return { t: 'enum', vals: ['auto', 'tcp', 'udp'] };
+    case 'brightness': return { t: 'enum', vals: ['auto', 'normal', 'bright', 'brighter'] };
     case 'avOffsetMs': return { t: 'intSet', vals: AV_OFFSET_CHOICES };
     case 'relayVideo': return { t: 'enum', vals: ['copy', 'reencode'] };
-    case 'maxBitrateKbps': return { t: 'int', min: 500, max: 6000 };
+    case 'maxBitrateKbps': return { t: 'int', min: 1000, max: 8000 };
     case 'titleTemplate': return { t: 'text', min: 1, max: 100 };
     case 'descriptionTemplate': return { t: 'text', min: 0, max: 500 };
     case 'speed': return { t: 'enum', vals: ['slow', 'normal', 'fast'] };
@@ -90,6 +93,7 @@ function ruleFor(name: string): Rule | undefined {
     case 'perDay': return { t: 'int', min: 1, max: 10 };
     case 'fontSize': return { t: 'enum', vals: ['auto', 's', 'm', 'l'] };
     case 'textSize': return { t: 'enum', vals: ['s', 'm', 'l'] };
+    case 'look': return { t: 'enum', vals: ['theme', 'plain', 'arab'] };
     case 'ds.name': return { t: 'text', min: 1, max: 60, re: /^[^<>\x00-\x1f\x7f]+$/, what: 'plain text' };
     case 'ds.url': return { t: 'sourceUrl' };
     case 'name': return { t: 'text', min: 1, max: 80 };
@@ -124,10 +128,15 @@ function ruleFor(name: string): Rule | undefined {
   }
 }
 
-/** Fields that hold one whole map: checked by their own function on write, sanitised on read, replaced whole on save. */
-export const MAP_FIELDS: ReadonlySet<string> = new Set(['styles', 'packs']);
-const mapFieldError = (k: string, v: unknown): string | null => (k === 'styles' ? themeStylesError(v) : packsError(v));
-const mapFieldClean = (k: string, v: unknown): unknown => (k === 'styles' ? sanitizeThemeStyles(v) : sanitizePacks(v));
+/** Fields that hold one whole map: checked by their own function on write and sanitised on read. A box saves them whole, or one entry at a time (see `ENTRY_MAPS` in the box's settings store). */
+const MAP_CHECKS: Record<string, { error: (v: unknown) => string | null; clean: (v: unknown) => unknown }> = {
+  styles: { error: themeStylesError, clean: sanitizeThemeStyles },
+  packs: { error: packsError, clean: sanitizePacks },
+  tvs: { error: tvProfilesError, clean: sanitizeTvProfiles },
+};
+export const MAP_FIELDS: ReadonlySet<string> = new Set(Object.keys(MAP_CHECKS));
+const mapFieldError = (k: string, v: unknown): string | null => MAP_CHECKS[k]!.error(v);
+const mapFieldClean = (k: string, v: unknown): unknown => MAP_CHECKS[k]!.clean(v);
 
 const MAX_TEXT = 500;
 const HEX_RE = /^#[0-9A-Fa-f]{6}$/;

@@ -213,11 +213,11 @@ describe('dry run, apply, overlap and undo', () => {
 });
 
 describe('templates', () => {
-  const info = { name: 'Surau D\'Waqaf', kind: 'surau' as const, country: 'MY', place: 'SGR01' };
+  const info = { name: 'Surau Contoh', kind: 'surau' as const, country: 'MY', place: 'SGR01' };
   it('csv: the comment, the header and a row for every day, and it parses back once filled', () => {
     const t = csvTemplate(2027, info);
     const lines = t.replace(/^﻿/, '').trim().split('\r\n');
-    expect(lines[0]).toBe('# Surau D\'Waqaf, surau, MY, SGR01');
+    expect(lines[0]).toBe('# Surau Contoh, surau, MY, SGR01');
     expect(lines[1]).toBe('tarikh,imsak,subuh,syuruk,dhuha,zohor,asar,maghrib,isyak,nota');
     expect(lines).toHaveLength(2 + 365);
     expect(csvTemplate(2028, info).trim().split('\r\n')).toHaveLength(2 + 366);
@@ -228,7 +228,7 @@ describe('templates', () => {
     const book = openXlsx(xlsxTemplate(2027, info, new Date('2026-11-10T00:00:00Z')));
     expect(book.sheets.map((s) => s.name)).toEqual(['Jadual']);
     const rows = book.readSheet(book.sheets[0]!.part);
-    expect(rows[0]).toEqual(['# Surau D\'Waqaf, surau, MY, SGR01']);
+    expect(rows[0]).toEqual(['# Surau Contoh, surau, MY, SGR01']);
     expect(rows[1]).toEqual(['tarikh', 'imsak', 'subuh', 'syuruk', 'dhuha', 'zohor', 'asar', 'maghrib', 'isyak', 'nota']);
     expect(rows).toHaveLength(2 + 365);
     expect(rows[2]![0]).toBe('2027-01-01');

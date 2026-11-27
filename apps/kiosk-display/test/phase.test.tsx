@@ -248,7 +248,7 @@ describe('surau name comes from settings.surauInfo', () => {
     cleanup();
     const r = show(makeView('2026-11-03', '16:12', { settings: custom }));
     expect(r.getByText('Masjid Al-Falah')).toBeTruthy();
-    expect(r.queryByText('Surau D\'Waqaf')).toBeNull();
+    expect(r.queryByText('Surau Contoh')).toBeNull();
   });
   it('leaves the text name out of the phase head when showName is false and a logo is shown', () => {
     const LOGO = '/surau-logo?v=0123456789abcdef';

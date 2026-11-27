@@ -37,6 +37,35 @@ export const AV_OFFSET_CHOICES: readonly number[] = Array.from({ length: AV_OFFS
 
 export const VOLUME_STEP = 5;
 
+/** The join delay a solo microphone starts with when nothing was set by hand (ms). */
+export const SOLO_DEFAULT_DELAY_MS = 400;
+
+/** One sound only: when several are enabled the first of these is kept. */
+export const SOLO_PRIORITY: readonly AudioSourceId[] = ['boxInput', 'deviceMic', 'camera'];
+
+/**
+ * A copy of the mix with at most ONE source enabled. Kept: `prefer` when it is enabled, else the first enabled source in
+ * SOLO_PRIORITY. A source at volume 0 counts as not enabled when another enabled source is above 0. Volumes are left as
+ * they are; none enabled stays none.
+ */
+export function soloAudioMix(mix: LiveAudioMix, prefer?: AudioSourceId): LiveAudioMix {
+  const out: LiveAudioMix = {
+    camera: { ...mix.camera },
+    deviceMic: { ...mix.deviceMic },
+    boxInput: { ...mix.boxInput },
+  };
+  const enabled = SOLO_PRIORITY.filter((id) => out[id].enabled);
+  if (enabled.length === 0) return out;
+  let keep: AudioSourceId;
+  if (prefer !== undefined && out[prefer]?.enabled) keep = prefer;
+  else {
+    const audible = enabled.filter((id) => out[id].volume > 0);
+    keep = (audible.length > 0 ? audible : enabled)[0]!;
+  }
+  for (const id of AUDIO_SOURCE_IDS) out[id].enabled = id === keep;
+  return out;
+}
+
 /** What this device and box can offer right now. `runner` is the device that starts the live (default: the phone). */
 export interface AudioCaps {
   /** The external camera has an audio track (from the last "Uji sambungan"). Ignored for the phone camera. */
@@ -46,6 +75,12 @@ export interface AudioCaps {
   /** The box reports an audio input ("Mic-in pada kotak"). */
   boxInput: boolean;
   runner?: LiveSource;
+  /**
+   * The box pulls the external camera (a box-pulled live). With a jack input and a start request that carries no audio
+   * block the default mix is the box microphone at 100 and the camera sound at 0 (the speaker's microphone is the main
+   * sound; the camera's own is only the reference of the aligner). Additive; absent reads as false.
+   */
+  boxPulled?: boolean;
 }
 
 /** Codes the app turns into the messages of plan 4.7. */
@@ -73,21 +108,25 @@ export interface AudioPlan {
 const clampVolume = (v: number): number => Math.min(100, Math.max(0, Math.round(v / VOLUME_STEP) * VOLUME_STEP));
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-export function defaultAudioMix(video: LiveVideoSource): LiveAudioMix {
-  return {
-    camera: { enabled: video === 'external', volume: 100 },
+export function defaultAudioMix(video: LiveVideoSource, boxMain = false): LiveAudioMix {
+  // box microphone main (a box-pulled live on a box with a jack input): the camera's sound stays in the graph at 0
+  const main = boxMain && video === 'external';
+  return soloAudioMix({
+    camera: { enabled: video === 'external', volume: main ? 0 : 100 },
     deviceMic: { enabled: video === 'phone', volume: 100 },
-    boxInput: { enabled: false, volume: 100 },
-  };
+    boxInput: { enabled: main, volume: 100 },
+  });
 }
 
 /**
  * A usable mix from whatever was stored or sent: bad parts fall back to the default, volumes are clamped to 0..100 and
- * rounded to steps of 5, sources this device or box does not have are switched off, and `camera.enabled` follows the
- * camera's audio track (the user silences the camera with volume 0, never by dropping it). Never throws.
+ * rounded to steps of 5, sources this device or box does not have are switched off, and `camera.enabled` can only stay on when
+ * the picture is the external camera and it has an audio track (the user can turn the camera sound off, or silence it
+ * with volume 0). Never throws.
  */
 export function normaliseAudioMix(video: LiveVideoSource, mix: unknown, caps: AudioCaps): LiveAudioMix {
-  const out = defaultAudioMix(video);
+  // only a request with no audio block at all gets the box-microphone default; a block the person sent is never rewritten
+  const out = defaultAudioMix(video, caps.boxPulled === true && caps.boxInput && !isObj(mix));
   const src = isObj(mix) ? mix : {};
   for (const id of AUDIO_SOURCE_IDS) {
     const e = src[id];
@@ -96,10 +135,10 @@ export function normaliseAudioMix(video: LiveVideoSource, mix: unknown, caps: Au
     if (typeof e.volume === 'number' && Number.isFinite(e.volume)) out[id].volume = clampVolume(e.volume);
   }
   // The camera's audio belongs to the external camera's picture: with the phone camera it does not exist.
-  out.camera.enabled = video === 'external' && caps.cameraHasAudio;
+  out.camera.enabled = out.camera.enabled && video === 'external' && caps.cameraHasAudio;
   if (!caps.deviceMic) out.deviceMic.enabled = false;
   if (!caps.boxInput) out.boxInput.enabled = false;
-  return out;
+  return soloAudioMix(out);
 }
 
 /** The plan every part of the system follows for a start request or an audio change. */
@@ -120,7 +159,8 @@ export function audioPlanOf(video: LiveVideoSource, mix: unknown, caps: AudioCap
 
   // The iPad cannot mix the camera picture with its microphone itself: the box does. Mic-in is always on the box.
   const mixedOn: AudioPlan['mixedOn'] = added.includes('boxInput') || (video === 'external' && runner === 'web') ? 'box' : 'device';
-  const align: AudioPlan['align'] = added.length === 0 ? 'none' : reference === null ? 'manual' : 'auto';
+  // one sound only: an added source is joined to the picture with the hand-set (or default) delay, never measured
+  const align: AudioPlan['align'] = added.length === 0 ? 'none' : 'manual';
   const audible = (Object.keys(m) as AudioSourceId[]).some((id) => m[id].enabled && m[id].volume > 0);
 
   if (video === 'external' && !caps.cameraHasAudio) notes.push('camera_no_audio');

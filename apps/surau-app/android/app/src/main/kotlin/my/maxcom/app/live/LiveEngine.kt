@@ -4,6 +4,10 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.graphics.Color
@@ -12,6 +16,7 @@ import android.hardware.display.DisplayManager
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.os.BatteryManager
@@ -28,6 +33,7 @@ import android.view.Surface
 import android.util.Log
 import android.view.TextureView
 import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.gl.render.filters.ExposureFilterRender
 import com.pedro.encoder.input.gl.render.filters.`object`.TextObjectFilterRender
 import com.pedro.encoder.input.sources.OrientationConfig
 import com.pedro.encoder.input.sources.OrientationForced
@@ -48,11 +54,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import my.maxcom.app.upload.RecordingGuard
 
 /**
  * Pure rules the engine and its unit tests share.
  */
 object LiveLogic {
+    /** B11: only an engine that neither sends nor is stopping may let its prepared camera go on request. */
+    fun mayReleasePrepared(live: Boolean, stopping: Boolean): Boolean = !live && !stopping
+
     /** Reconnect delay for attempt 1, 2, 3 ...: 2, 4, 8, 16, then 30 s for ever. */
     fun backoffSeconds(attempt: Int): Int {
         if (attempt <= 1) return 2
@@ -209,6 +220,14 @@ class LiveEngine private constructor(private val app: Context) {
                 instance ?: LiveEngine(context.applicationContext).also { Diag.init(context); instance = it }
             }
 
+        /** The engine if this process has made one; the upload side asks it to finish handing files to the gallery. */
+        fun peek(): LiveEngine? = instance
+
+        /** How long a caller waits for the gallery copies of a live that just ended. */
+        const val PUBLISH_WAIT_MS = 120_000L
+        private const val LATE_PROBES = 3
+        private const val LATE_PROBE_MS = 5_000L
+
         const val RECORD_SUBDIR = "Movies/MAXCOM"
         private const val SESSION_PREFS = "maxcom_live_session"
         private const val SESSION_KEY = "names"
@@ -216,6 +235,8 @@ class LiveEngine private constructor(private val app: Context) {
         private const val SESSION_SEP = ","
         private const val TAG = "MaxcomLive"
         private const val LOW_BATTERY_PERCENT = 15
+        /** B7: `auto` brightness looks at the light every this many engine ticks (2 s each). */
+        private const val BRIGHTNESS_EVERY_TICKS = 3
         private const val STOP_RECORD_BATTERY_PERCENT = 5
         private const val LOW_STORAGE_BYTES = 1_500L * 1024 * 1024
         private const val STOP_RECORD_STORAGE_BYTES = 300L * 1024 * 1024
@@ -231,12 +252,23 @@ class LiveEngine private constructor(private val app: Context) {
 
     @Volatile var sink: Sink? = null
 
+    // What was last said, for a screen that attaches later (3.2 item 1); and the rule that ends a live nobody watches.
+    private val replay = EventReplay()
+    private val unattended = UnattendedRule()
+
+    /** Called on the main thread whenever a live has ended, by whatever path (N1: the screen-on flag is cleared there). */
+    @Volatile var onLiveEnded: (() -> Unit)? = null
+
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     // The stop runs here, off the main thread; the recorder step has its own
     // thread so a hung muxer can be given up on (StopSequence).
     private val stopExec = Executors.newSingleThreadExecutor()
     private val recordExec = Executors.newCachedThreadPool()
+    // A6: the camera's AAC sound is decoded here, off the RTSP receive thread.
+    private val camAudioExec = Executors.newSingleThreadExecutor { r -> Thread(r, "maxcom-cam-audio").apply { isDaemon = true } }
+    // U9: a segment is closed, probed and listed here, in order, never on the main thread.
+    private val segExec = Executors.newSingleThreadExecutor()
 
     // A stop is under way: no preview teardown, prepare or start until it ends.
     @Volatile private var stopping = false
@@ -268,6 +300,21 @@ class LiveEngine private constructor(private val app: Context) {
     @Volatile private var camW = 0
     @Volatile private var camH = 0
     private var lostFilter: TextObjectFilterRender? = null
+
+    // B7: picture brightness. One exposure filter in the GL chain, present only while a lift is wanted.
+    private var brightnessLevel = PictureBrightness.AUTO
+    private var exposureFilter: ExposureFilterRender? = null
+    private var appliedStep = 0
+    private val autoBrightness = PictureBrightness.Auto()
+    @Volatile private var lastLux: Float? = null
+    private var lightRegistered = false
+    private var brightnessTicks = 0
+    private val lightListener = object : SensorEventListener {
+        override fun onSensorChanged(e: SensorEvent) {
+            if (e.values.isNotEmpty()) lastLux = e.values[0]
+        }
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
     private var liveStartedEpochMs = 0L
     private var endedByCamera = false
     private val camSilence = SilenceTracker()
@@ -301,7 +348,11 @@ class LiveEngine private constructor(private val app: Context) {
     private var nameIndex = 0
     // The exact names this live wrote (the only files the clean-up and the catch-up may ever use).
     private val sessionNames = mutableListOf<String>()
-    private var publishedBytes = 0L
+    @Volatile private var publishedBytes = 0L
+    // B3: whether the running segment can hold a real picture. A phone-camera segment always does; an
+    // external-camera one only if the camera delivered a decoded frame since the segment began.
+    private var segmentSawPhone = false
+    private var segmentFramesMark = 0L
     private var recordError: String? = null
     private var recordHalted = false
     private val warnings = mutableSetOf<String>()
@@ -320,14 +371,14 @@ class LiveEngine private constructor(private val app: Context) {
     /** The microphone the app wants and the one the system routed; shared by both audio sources. */
     val micRouting = MicRouting().also { r ->
         r.onRouted = { routed, unavailable ->
-            emit(
-                mapOf(
-                    "type" to "micRouted",
-                    "id" to routed?.id, "name" to routed?.name, "kind" to routed?.kind,
-                    // a name only (never a device number); null = the wanted microphone is in use
-                    "unavailable" to unavailable,
-                ),
+            val e = mapOf(
+                "type" to "micRouted",
+                "id" to routed?.id, "name" to routed?.name, "kind" to routed?.kind,
+                // a name only (never a device number); null = the wanted microphone is in use
+                "unavailable" to unavailable,
             )
+            main.post { replay.onMicRouted(e) }
+            emit(e)
         }
     }
 
@@ -356,40 +407,95 @@ class LiveEngine private constructor(private val app: Context) {
         micRouting.prefer(id?.takeIf { it.isNotBlank() && it.length <= 200 })
     }
 
-    private fun phase(v: String) = emit(mapOf("type" to "phase", "value" to v))
+    private fun phase(v: String) {
+        replay.onPhase(v)
+        emit(mapOf("type" to "phase", "value" to v))
+    }
 
-    private fun output(name: String, state: String, retryInSec: Int? = null, message: String? = null) =
-        emit(
-            mapOf(
-                "type" to "output", "name" to name, "state" to state,
-                "retryInSec" to retryInSec, "message" to message,
+    private fun output(name: String, state: String, retryInSec: Int? = null, message: String? = null) {
+        val e = mapOf(
+            "type" to "output", "name" to name, "state" to state,
+            "retryInSec" to retryInSec, "message" to message,
+        )
+        replay.onOutput(e)
+        emit(e)
+    }
+
+    /**
+     * A screen attached (the channel's `onListen`): it is told the present state at once, so a screen opened again
+     * during a live shows that live and not an idle page. Main thread.
+     */
+    fun replayState() {
+        // Only a live (or its stop under way) is replayed: an idle engine has nothing a new screen must catch up on.
+        if (!live && !stopping) return
+        val rec = if (live && recordCfg != null) recordingMap() else null
+        for (e in replay.events(warnings.toList(), rec)) emit(e)
+        emitAudio()
+    }
+
+    /** The picture is being sent right now: the leg to the box is up (or, with no such leg, the YouTube one). */
+    fun streamingNow(): Boolean =
+        live && !stopping && (if (wantKiosk) replay.isUp("kiosk") else wantYoutube && replay.isUp("youtube"))
+
+    /** What the service's session facts need at start. */
+    private fun beginSession(sessionId: String?) {
+        LiveService.session.begin(
+            LiveSessionFacts(
+                sessionId = LiveSessionHolder.cleanId(sessionId), startedAtMs = liveStartedEpochMs,
+                kiosk = wantKiosk, youtube = wantYoutube, video = videoKind, recording = recordCfg != null,
             ),
         )
+    }
+
+    /** Every live end passes here once (main thread): the facts go, the screen-on flag goes, an idle engine is let go. */
+    private fun liveEnded() {
+        LiveService.session.end()
+        unattended.reset()
+        try { onLiveEnded?.invoke() } catch (_: Exception) {}
+        releaseIfIdle()
+    }
+
+    /**
+     * N1: the engine is released when a live has ended (or the screen has gone) and nothing is attached to it: no
+     * event listener and no preview. With a screen attached it stays prepared, so the next Mula siaran needs no new
+     * prepare. Main thread.
+     */
+    fun releaseIfIdle() {
+        if (live || stopping || !prepared) return
+        if (sink != null || previewView != null) return
+        Diag.log("engine_release_idle")
+        release()
+    }
 
     private fun warn(kind: String, active: Boolean) {
         val changed = if (active) warnings.add(kind) else warnings.remove(kind)
         if (changed) emit(mapOf("type" to "warning", "kind" to kind, "active" to active))
     }
 
-    private fun recordingEvent() = emit(
-        mapOf(
-            "type" to "recording", "segments" to segmentIndex,
-            "bytes" to publishedBytes + (segmentFile?.length() ?: 0L),
-            "lastError" to recordError,
-        ),
+    private fun recordingMap(): Map<String, Any?> = mapOf(
+        "type" to "recording", "segments" to segmentIndex,
+        "bytes" to publishedBytes + (segmentFile?.length() ?: 0L),
+        "lastError" to recordError,
     )
+
+    private fun recordingEvent() = emit(recordingMap())
 
     // ---- prepare and preview ----
 
     /** Names of the cameras present: `back` and/or `front`. */
     fun cameras(): List<String> {
-        val cm = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val out = mutableListOf<String>()
-        for (id in cm.cameraIdList) {
-            when (cm.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)) {
-                CameraCharacteristics.LENS_FACING_BACK -> if ("back" !in out) out += "back"
-                CameraCharacteristics.LENS_FACING_FRONT -> if ("front" !in out) out += "front"
+        // C9: an external-camera live may run without the camera permission; the list is then empty, never a crash.
+        try {
+            val cm = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            for (id in cm.cameraIdList) {
+                when (cm.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)) {
+                    CameraCharacteristics.LENS_FACING_BACK -> if ("back" !in out) out += "back"
+                    CameraCharacteristics.LENS_FACING_FRONT -> if ("front" !in out) out += "front"
+                }
             }
+        } catch (e: Exception) {
+            Diag.error("cameras_failed", e)
         }
         return out
     }
@@ -409,7 +515,10 @@ class LiveEngine private constructor(private val app: Context) {
             return Built(cam, mc)
         }
         val ext = spec.camera ?: throw IllegalArgumentException("camera_source_missing")
-        val audio = RtspAudioSource(AUDIO_RATE)
+        // A6: AAC is decoded on its own worker, not on the RTSP receive thread. A1: the saved offset holds the camera
+        // sound back so it stays level with the picture.
+        val audio = RtspAudioSource(AUDIO_RATE, decodeOn = camAudioExec)
+        audio.setSyncOffsetMs(SourceLogic.cameraSyncMs(spec.avOffsetMs))
         val al = AudioAligner(ALIGN_RATE, ALIGN_MAX_LAG_MS)
         val mixed = MixedAudioSource(audio, al, ALIGN_RATE, routing = micRouting, am = audioManager)
         val holder = arrayOfNulls<RtspVideoSource>(1)
@@ -419,6 +528,8 @@ class LiveEngine private constructor(private val app: Context) {
         )
         holder[0] = video
         video.onLinkState = { st -> main.post { onCameraLink(video, st) } }
+        // C1: far fewer pictures arrive than the camera sends (the phone's Wi-Fi is weak): the screen is told.
+        video.onIngestWeak = { weak -> main.post { if (video === rtspVideo) warn(SourceLogic.WARN_WEAK_INGEST, weak) } }
         mixed.onAlignChange = { _, _ -> main.post { emitAudio() } }
         mixed.setManualOffsetMs(spec.avOffsetMs)
         pendingExternal = ExternalParts(video, audio, mixed, al, ext)
@@ -483,6 +594,7 @@ class LiveEngine private constructor(private val app: Context) {
             if (cam != null && front != (cam.getCameraFacing() == CameraHelper.Facing.FRONT)) cam.switchCamera()
             commitSources(sp, built)
             stream = ms
+            applyForceRender()
             Diag.log("source_prepare", "video=${sp.video.wire} transport=${sp.camera?.transport?.name?.lowercase() ?: "-"}")
             applyMixSettings()
             if (videoKind == VideoKind.EXTERNAL) main.postDelayed(meterTick, METER_MS)
@@ -507,6 +619,20 @@ class LiveEngine private constructor(private val app: Context) {
             teardown(); "resolution_unsupported"
         } catch (e: RuntimeException) {
             teardown(); "prepare_failed"
+        }
+    }
+
+    /**
+     * B3 and D5: with the external camera the GL side draws only when a decoded frame arrives, so a camera that sends
+     * nothing gave the encoder nothing: an empty recording, and no way to draw "Siaran akan bersambung sebentar lagi"
+     * into the stream. Force render makes the engine draw at a steady rate from whatever the texture holds (the last
+     * picture, or black before the first), for the external source only. The phone camera keeps its own pace.
+     */
+    private fun applyForceRender() {
+        try {
+            stream?.getGlInterface()?.setForceRender(videoKind == VideoKind.EXTERNAL, 30)
+        } catch (e: Exception) {
+            Log.w(TAG, "force render failed: ${e.javaClass.simpleName}")
         }
     }
 
@@ -663,6 +789,7 @@ class LiveEngine private constructor(private val app: Context) {
             try { s.stopPreview(true) } catch (_: RuntimeException) {}
         }
         previewing = false
+        releaseIfIdle()
     }
 
     private fun attachPreviewIfReady() {
@@ -694,7 +821,7 @@ class LiveEngine private constructor(private val app: Context) {
         stream = null; camera = null; mic = null; prepared = false; previewing = false
         // The camera address and its sources go with the session; nothing of it is kept.
         rtspVideo = null; rtspAudio = null; mixedAudio = null; aligner = null; extCam = null; pendingExternal = null
-        lostFilter = null; camW = 0; camH = 0; endedByCamera = false
+        lostFilter = null; exposureFilter = null; appliedStep = 0; camW = 0; camH = 0; endedByCamera = false
         videoKind = VideoKind.PHONE
     }
 
@@ -706,11 +833,16 @@ class LiveEngine private constructor(private val app: Context) {
         rtmpsUrl: String?,
         record: RecordCfg?,
         videoBitrateKbps: Int,
+        sessionId: String? = null,
     ): String? {
         val s = stream ?: return "not_prepared"
         if (live) return "already_live"
         if (stopping) return "stopping"
         if (srt == null && rtmpsUrl == null && record == null) return "no_output"
+        // F2: a mute left from an earlier live does not carry into this one
+        userMuted = false
+        micRouting.resetForNewLive()
+        applyMixSettings()
         live = true
         Diag.log("live_start", "kiosk=${srt != null} youtube=${rtmpsUrl != null} record=${record != null}")
         startedAt = SystemClock.elapsedRealtime()
@@ -740,10 +872,14 @@ class LiveEngine private constructor(private val app: Context) {
             }
             if (srt != null || rtmpsUrl != null) s.setVideoBitrateOnFly(videoBitrateKbps * 1000)
         } catch (e: RuntimeException) {
+            Diag.log("stop_path", "path=${StopPath.START_FAILED}")
             stop()
             return "start_failed"
         }
+        beginSession(sessionId)
+        unattended.reset()
         phase("live")
+        beginBrightness()
         main.postDelayed(tick, 2000)
         if (videoKind == VideoKind.EXTERNAL) {
             // the meter loop runs from prepare; make sure it is on (a stop never ends it while prepared)
@@ -772,6 +908,7 @@ class LiveEngine private constructor(private val app: Context) {
                 try {
                     output("youtube", "connecting")
                     s!!.startStream(MultiType.RTMP, 0, rtmpsUrl!!)
+                    LiveService.session.youtubeOpened()
                     null
                 } catch (e: RuntimeException) {
                     wantYoutube = false
@@ -789,8 +926,10 @@ class LiveEngine private constructor(private val app: Context) {
      * [done] runs there. Owned by this process singleton, not by the
      * activity: if the activity goes away the stop still finishes.
      */
-    fun stopAsync(done: () -> Unit) {
+    fun stopAsync(path: String = StopPath.SCREEN, done: () -> Unit) {
         if (stopping) { stopWaiters.add(done); return }
+        // B12: every stop says which path asked for it.
+        Diag.log("stop_path", "path=$path")
         stopping = true
         stopWaiters.add(done)
         val s = stream
@@ -800,11 +939,14 @@ class LiveEngine private constructor(private val app: Context) {
         main.removeCallbacks(rotate)
         val wasRecording = recording
         val file = segmentFile
+        val frames = segmentSourceFrames()
         val kiosk = wantKiosk
         val youtube = wantYoutube
         Diag.log("stop_begin", "live=$live recording=$wasRecording")
         phase("stopping")
         stopExec.execute {
+            // A segment change in flight closes its file first (the recorder is not stopped twice at once).
+            try { segExec.submit {}.get(StopSequence.STOP_RECORD_TIMEOUT_MS + 2_000, TimeUnit.MILLISECONDS) } catch (_: Exception) {}
             val finished = StopSequence.run(
                 stopRecord = if (wasRecording && s != null) ({ s.stopRecord() }) else null,
                 stopOutputs = {
@@ -813,7 +955,7 @@ class LiveEngine private constructor(private val app: Context) {
                         try { if (youtube) s.stopStream(MultiType.RTMP, 0) } catch (_: Exception) {}
                     }
                 },
-                release = { main.post { completeStop(file, wasRecording, kiosk, youtube) } },
+                release = { completeStop(file, wasRecording, frames, kiosk, youtube) },
                 timeoutMs = StopSequence.STOP_RECORD_TIMEOUT_MS,
                 recordExecutor = recordExec,
                 log = { e, f -> Diag.log(e, f) },
@@ -822,20 +964,32 @@ class LiveEngine private constructor(private val app: Context) {
         }
     }
 
-    private fun completeStop(file: File?, wasRecording: Boolean, kiosk: Boolean, youtube: Boolean) {
+    /**
+     * The end of the ordered stop (stop thread). The last file is probed and its name listed BEFORE the stop is
+     * answered (U2: the app asks for the names of the live right after), then the state is settled on the main thread.
+     */
+    private fun completeStop(file: File?, wasRecording: Boolean, frames: Long, kiosk: Boolean, youtube: Boolean) {
+        segExec.execute {
+            // Also a segment whose writing failed part-way: the probe decides what it is worth.
+            // Q7: the settle is posted even when the probe throws, or `stopping` would stay set for ever.
+            StopSequence.finish(
+                finalize = if (file != null) ({ finalizeSegment(file, frames) }) else null,
+                settle = { main.post { settleStop(wasRecording || file != null, kiosk, youtube) } },
+                log = { e, f -> Diag.log(e, f) },
+            )
+        }
+    }
+
+    private fun settleStop(wasRecording: Boolean, kiosk: Boolean, youtube: Boolean) {
         if (wasRecording) {
             recording = false
             segmentFile = null
-            if (file != null && file.exists()) {
-                publishedBytes += file.length()
-                Diag.log("record_finish", "bytes=${file.length()}")
-                io.execute { publishToGallery(file) }
-            }
             recordingEvent()
         }
         if (kiosk) output("kiosk", "down")
         if (youtube) output("youtube", "down")
         wantKiosk = false; wantYoutube = false; live = false
+        endBrightness()
         recordCfg = null
         val s = stream
         if (pendingPreviewStop && s != null) {
@@ -853,6 +1007,7 @@ class LiveEngine private constructor(private val app: Context) {
         val waiters = stopWaiters.toList()
         stopWaiters.clear()
         waiters.forEach { try { it() } catch (_: Exception) {} }
+        liveEnded()
     }
 
     /** Synchronous stop for start failure and release; the channel uses [stopAsync]. */
@@ -867,13 +1022,14 @@ class LiveEngine private constructor(private val app: Context) {
         phase("stopping")
         if (s != null) {
             // The recording is finished (moov written) before anything is released.
-            try { if (recording) finishSegment(s) } catch (e: Exception) { Log.w(TAG, "finish failed: ${e.javaClass.simpleName}") }
+            try { if (recording) finishSegmentBlocking(s) } catch (e: Exception) { Log.w(TAG, "finish failed: ${e.javaClass.simpleName}") }
             try { if (wantKiosk) s.stopStream(MultiType.SRT, 0) } catch (_: Exception) {}
             try { if (wantYoutube) s.stopStream(MultiType.RTMP, 0) } catch (_: Exception) {}
         }
         if (wantKiosk) output("kiosk", "down")
         if (wantYoutube) output("youtube", "down")
         wantKiosk = false; wantYoutube = false; live = false
+        endBrightness()
         recordCfg = null
         // Still prepared (preview on)? Follow the device again; a released
         // session stays closed.
@@ -882,6 +1038,23 @@ class LiveEngine private constructor(private val app: Context) {
             watchDisplay()
         }
         phase("stopped")
+        LiveService.session.end()
+        unattended.reset()
+        try { onLiveEnded?.invoke() } catch (_: Exception) {}
+    }
+
+    /**
+     * A stop nobody tapped on the screen for (the notification's "Hentikan siaran", the camera lost for ten minutes,
+     * a live left unattended): the screen, if one is attached, gets `ended` with [reason]; then the same ordered stop
+     * as the screen's, and the foreground service goes. [done] runs on the main thread at the end.
+     */
+    fun stopFromSystem(path: String, reason: String, done: () -> Unit = {}) {
+        if (!live || stopping) { done(); return }
+        emit(mapOf("type" to "ended", "reason" to reason))
+        stopAsync(path) {
+            try { LiveService.stop(app) } catch (_: RuntimeException) {}
+            done()
+        }
     }
 
     fun switchCamera() {
@@ -938,9 +1111,14 @@ class LiveEngine private constructor(private val app: Context) {
         return null
     }
 
-    /** The fixed offset ("Imbangan masa audio"), used only while the camera has no audio track. */
+    /**
+     * "Imbangan masa audio": for a camera with no audio track it is the fixed delay of the added microphone; for a
+     * camera with its own sound it is how long that sound is held back to stay level with the picture (A1).
+     */
     fun setAvOffsetMs(ms: Int) {
-        mixedAudio?.setManualOffsetMs(ClapPlan.clampOffset(ms))
+        val v = ClapPlan.clampOffset(ms)
+        mixedAudio?.setManualOffsetMs(v)
+        rtspAudio?.setSyncOffsetMs(SourceLogic.cameraSyncMs(v))
     }
 
     /**
@@ -989,6 +1167,9 @@ class LiveEngine private constructor(private val app: Context) {
             }
             if (spec.video == VideoKind.PHONE) restorePhoneOrientation = true
             commitSources(spec, built)
+            LiveService.session.videoChanged(spec.video)
+            segmentSawPhone = true // the running segment has frames of more than one source: never judged empty
+            applyForceRender()
             setLostOverlay(false) // the new source starts connecting, the old one's message goes
             applyMixSettings()
             setAvOffsetMs(spec.avOffsetMs)
@@ -1070,6 +1251,81 @@ class LiveEngine private constructor(private val app: Context) {
         }
     }
 
+    // ---- picture brightness (B7) ----
+
+    /** The setting `liveCamera.brightness`; takes effect at once during a live, otherwise at the next start. Main thread. */
+    fun setBrightness(level: String?) {
+        brightnessLevel = PictureBrightness.clean(level)
+        if (live) beginBrightness()
+    }
+
+    /** Starts the level in force: a fixed lift at once, or `auto` listening to the light and lifting only when dark. */
+    private fun beginBrightness() {
+        autoBrightness.reset()
+        val fixed = PictureBrightness.fixedStep(brightnessLevel)
+        brightnessTicks = 0
+        if (fixed != null) {
+            stopLight()
+            applyBrightnessStep(fixed)
+        } else {
+            applyBrightnessStep(0)
+            if (PictureBrightness.followsLight(brightnessLevel, videoKind == VideoKind.EXTERNAL)) startLight() else stopLight()
+        }
+    }
+
+    /** Called on every engine tick (2 s): `auto` looks at the light every third tick. */
+    private fun brightnessTick() {
+        if (!PictureBrightness.followsLight(brightnessLevel, videoKind == VideoKind.EXTERNAL) || !live) return
+        brightnessTicks++
+        if (brightnessTicks % BRIGHTNESS_EVERY_TICKS != 0) return
+        applyBrightnessStep(autoBrightness.update(lastLux, SystemClock.elapsedRealtime()))
+    }
+
+    private fun endBrightness() {
+        stopLight()
+        applyBrightnessStep(0)
+    }
+
+    private fun startLight() {
+        if (lightRegistered) return
+        try {
+            val sm = app.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+            val sensor = sm.getDefaultSensor(Sensor.TYPE_LIGHT) ?: return // no sensor: no lift
+            lightRegistered = sm.registerListener(lightListener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+        } catch (_: RuntimeException) {
+        }
+    }
+
+    private fun stopLight() {
+        if (!lightRegistered) return
+        lightRegistered = false
+        lastLux = null
+        try {
+            (app.getSystemService(Context.SENSOR_SERVICE) as SensorManager).unregisterListener(lightListener)
+        } catch (_: RuntimeException) {
+        }
+    }
+
+    /** Puts the exposure lift of [step] in the GL chain; step 0 takes the filter out. Main thread. */
+    private fun applyBrightnessStep(step: Int) {
+        val gl = stream?.getGlInterface()
+        if (gl == null) { exposureFilter = null; appliedStep = 0; return }
+        if (step == appliedStep && (step == 0) == (exposureFilter == null)) return
+        try {
+            if (step == 0) {
+                exposureFilter?.let { gl.removeFilter(it) }
+                exposureFilter = null
+            } else {
+                val f = exposureFilter ?: ExposureFilterRender().also { gl.addFilter(it); exposureFilter = it }
+                f.setExposure(PictureBrightness.evOf(step))
+            }
+            appliedStep = step
+            Diag.log("brightness", "step=$step level=$brightnessLevel")
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "brightness failed: ${e.javaClass.simpleName}")
+        }
+    }
+
     /** The camera picture size became known (or changed): keep its shape, then frame it. Main thread. */
     private fun onCameraSize(w: Int, h: Int) {
         if (videoKind != VideoKind.EXTERNAL || (w == camW && h == camH)) return
@@ -1105,7 +1361,11 @@ class LiveEngine private constructor(private val app: Context) {
                 }
             }
             main.post { onCameraSize(size?.first ?: 0, size?.second ?: 0) }
-            val s = LibVideoSink(surface, cw, ch, app.applicationContext)
+            val src = owner()
+            val s = LibVideoSink(
+                surface, cw, ch, app.applicationContext,
+                onDecoder = { e -> src?.onDecoder?.invoke(e) }, frameWatch = src?.frameWatch,
+            )
             inner = s
             s.configure(mime, sps, pps, vps)
         }
@@ -1140,8 +1400,7 @@ class LiveEngine private constructor(private val app: Context) {
         if (!SourceLogic.lostExpired(base, System.currentTimeMillis())) return
         endedByCamera = true
         Diag.log("camera_lost_stop")
-        emit(mapOf("type" to "ended", "reason" to SourceLogic.ENDED_CAMERA_LOST))
-        stopAsync { try { LiveService.stop(app) } catch (_: RuntimeException) {} }
+        stopFromSystem(StopPath.CAMERA_LOST, SourceLogic.ENDED_CAMERA_LOST)
     }
 
     /** One `audio` event: a row per source with its level and state, the mixed level, the camera link. */
@@ -1283,11 +1542,29 @@ class LiveEngine private constructor(private val app: Context) {
         clap("idle")
     }
 
+    /**
+     * B11: the picture of the next live is taken elsewhere (the MAXCOM Kiosk Box pulls the camera, or another device
+     * holds it). An engine that is prepared but sends nothing lets its camera, or its own pull of the network camera,
+     * go, also while the screen is open. A live that runs or is stopping is never touched. True when the engine
+     * holds nothing afterwards.
+     */
+    fun releasePrepared(): Boolean {
+        if (!LiveLogic.mayReleasePrepared(live, stopping)) return false
+        if (stream == null && !prepared) return true
+        Diag.log("engine_release_prepared")
+        release()
+        phase("idle")
+        return true
+    }
+
     fun release() {
         guard.close()
         unwatchDisplay()
         prepared = false // stop() then leaves the orientation guard closed
-        if (live) stop()
+        if (live) {
+            Diag.log("stop_path", "path=${StopPath.RELEASE}")
+            stop()
+        }
         teardown()
     }
 
@@ -1384,10 +1661,15 @@ class LiveEngine private constructor(private val app: Context) {
 
     private val rotate = Runnable {
         val s = stream ?: return@Runnable
-        if (recordCfg == null || !live || !recording) return@Runnable
-        finishSegment(s)
-        if (!recordHalted) startSegment() // startSegment schedules the next rotation
+        if (recordCfg == null || !live || !recording || stopping) return@Runnable
+        // startSegment schedules the next rotation
+        finishSegmentAsync(s) { if (live && !stopping && !recordHalted && recordCfg != null) startSegment() }
     }
+
+    /** How many camera pictures the running segment can hold: see [segmentSawPhone]. Main thread. */
+    private fun segmentSourceFrames(): Long =
+        if (segmentSawPhone || videoKind == VideoKind.PHONE) Long.MAX_VALUE
+        else ((rtspVideo?.decodedFrames ?: 0L) - segmentFramesMark).coerceAtLeast(0L)
 
     private fun startSegment() {
         val s = stream ?: return
@@ -1413,8 +1695,10 @@ class LiveEngine private constructor(private val app: Context) {
             })
             segmentFile = file
             recording = true
-            synchronized(sessionNames) { sessionNames.add(file.name) }
-            saveSessionNames()
+            // B3: the name joins the list of this live only when the file is closed and found to hold a recording
+            // (finalizeSegment). Until then the file in the app folder keeps the name taken.
+            segmentSawPhone = videoKind == VideoKind.PHONE
+            segmentFramesMark = rtspVideo?.decodedFrames ?: 0L
             Diag.log("record_start", "segment=$segmentIndex")
             if (cfg.segmentMinutes > 0) main.postDelayed(rotate, cfg.segmentMinutes * 60_000L)
         } catch (e: Exception) {
@@ -1424,25 +1708,117 @@ class LiveEngine private constructor(private val app: Context) {
         recordingEvent()
     }
 
-    /** Closes the running segment and hands the file to the gallery. */
-    private fun finishSegment(s: MultiStream) {
-        main.removeCallbacks(rotate)
-        val file = segmentFile
-        // Bounded: a hung muxer must not freeze the main thread for good.
+    /** Closes the recorder, bounded: a hung muxer is given up on. Any thread but the main one, except [finishSegmentBlocking]. */
+    private fun stopRecordBounded(s: MultiStream) {
         try {
-            recordExec.submit { s.stopRecord() }.get(StopSequence.STOP_RECORD_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+            recordExec.submit { s.stopRecord() }.get(StopSequence.STOP_RECORD_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         } catch (e: Exception) {
             Log.w(TAG, "stopRecord failed: ${e.javaClass.simpleName}")
             Diag.error("stop_record_failed", e)
         }
+    }
+
+    /**
+     * U9: closes the running segment OFF the main thread (the muxer may take seconds to write its index), checks the
+     * file and hands it to the gallery; [then] runs on the main thread afterwards (the next segment starts there).
+     */
+    private fun finishSegmentAsync(s: MultiStream, then: () -> Unit = {}) {
+        main.removeCallbacks(rotate)
+        val file = segmentFile
+        val frames = segmentSourceFrames()
         recording = false
         segmentFile = null
-        if (file != null && file.exists()) {
-            publishedBytes += file.length()
-            Diag.log("record_finish", "bytes=${file.length()}")
-            io.execute { publishToGallery(file) }
+        segExec.execute {
+            stopRecordBounded(s)
+            finalizeSegment(file, frames)
+            main.post {
+                recordingEvent()
+                then()
+            }
         }
+    }
+
+    /** The same on the calling thread: only for the synchronous [stop] (a failed start, a release), which must not return early. */
+    private fun finishSegmentBlocking(s: MultiStream) {
+        main.removeCallbacks(rotate)
+        val file = segmentFile
+        val frames = segmentSourceFrames()
+        stopRecordBounded(s)
+        recording = false
+        segmentFile = null
+        segExec.execute { finalizeSegment(file, frames) }
         recordingEvent()
+    }
+
+    /** Size, a video track and its length, read from the closed file. Never throws. */
+    private fun probeRecording(file: File): RecordingGuard.Probe {
+        val bytes = try { file.length() } catch (_: Exception) { 0L }
+        if (bytes <= 0L) return RecordingGuard.Probe(0L, false, 0L)
+        val ex = MediaExtractor()
+        return try {
+            ex.setDataSource(file.absolutePath)
+            var video = false
+            var durMs = 0L
+            for (i in 0 until ex.trackCount) {
+                val f = ex.getTrackFormat(i)
+                if (f.getString(MediaFormat.KEY_MIME)?.startsWith("video/") != true) continue
+                video = true
+                if (f.containsKey(MediaFormat.KEY_DURATION)) durMs = maxOf(durMs, f.getLong(MediaFormat.KEY_DURATION) / 1000)
+            }
+            RecordingGuard.Probe(bytes, video, durMs)
+        } catch (_: Exception) {
+            RecordingGuard.Probe(bytes, false, 0L) // no index: not a recording a player can open
+        } finally {
+            try { ex.release() } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * B3: a closed segment is PROBED before its name is kept and before it goes to the gallery. A file with nothing in
+     * it, with no video track, with no length, or recorded while the external camera never delivered a picture, is not
+     * listed (so it is never queued for upload) and not published. An empty file is deleted; one that only lacks its
+     * index is left in the app folder, untouched. Runs on [segExec].
+     */
+    private fun finalizeSegment(file: File?, sourceFrames: Long, lateTry: Int = 0) {
+        if (file == null || !file.exists()) return
+        val probe = probeRecording(file)
+        when (RecordingGuard.judgeSegment(probe, sourceFrames)) {
+            RecordingGuard.SegmentVerdict.KEEP -> {
+                synchronized(sessionNames) { if (file.name !in sessionNames) sessionNames.add(file.name) }
+                saveSessionNames()
+                publishedBytes += probe.bytes
+                Diag.log("record_finish", "bytes=${probe.bytes} ms=${probe.durationMs} late=$lateTry")
+                io.execute { publishToGallery(file) }
+                if (lateTry > 0) main.post { recordError = RecordNote.merge(recordError, null); recordingEvent() }
+            }
+            RecordingGuard.SegmentVerdict.DISCARD -> {
+                Diag.log("record_empty", "bytes=${probe.bytes} video=${probe.hasVideo} ms=${probe.durationMs} frames=${sourceFrames.coerceAtMost(9999)}")
+                try { file.delete() } catch (_: Exception) {}
+                main.post { recordError = RecordNote.merge(recordError, RecordingGuard.EMPTY_RECORDING); recordingEvent() }
+            }
+            RecordingGuard.SegmentVerdict.LEAVE -> {
+                Diag.log("record_unreadable", "bytes=${probe.bytes} try=$lateTry")
+                main.post { recordError = RecordNote.merge(recordError, RecordingGuard.EMPTY_RECORDING); recordingEvent() }
+                // A muxer that was given up on after ten seconds may still be writing its index: look again a few
+                // times before the file is left for good. A file that becomes readable is kept and published late.
+                if (lateTry < LATE_PROBES) {
+                    main.postDelayed({ segExec.execute { finalizeSegment(file, sourceFrames, lateTry + 1) } }, LATE_PROBE_MS)
+                }
+            }
+        }
+    }
+
+    /**
+     * Waits (not on the main thread) until the files of the last live are in the gallery, at most [timeoutMs]. The
+     * upload side calls it before it looks the files up, so a file is never found in the app folder a moment before
+     * the gallery copy removes it (U2).
+     */
+    fun awaitPublished(timeoutMs: Long = PUBLISH_WAIT_MS): Boolean = try {
+        segExec.submit {}.get(timeoutMs, TimeUnit.MILLISECONDS)
+        io.submit {}.get(timeoutMs, TimeUnit.MILLISECONDS)
+        true
+    } catch (_: Exception) {
+        false
     }
 
     /**
@@ -1458,7 +1834,7 @@ class LiveEngine private constructor(private val app: Context) {
         if (galleryHas(file.name)) {
             synchronized(sessionNames) { sessionNames.remove(file.name) }
             saveSessionNames()
-            main.post { recordError = "publish_failed"; recordingEvent() }
+            main.post { recordError = RecordNote.merge(recordError, "publish_failed"); recordingEvent() }
             return
         }
         val values = ContentValues().apply {
@@ -1480,7 +1856,7 @@ class LiveEngine private constructor(private val app: Context) {
             file.delete()
         } catch (e: Exception) {
             uri?.let { try { resolver.delete(it, null, null) } catch (_: Exception) {} }
-            main.post { recordError = "publish_failed"; recordingEvent() }
+            main.post { recordError = RecordNote.merge(recordError, "publish_failed"); recordingEvent() }
         }
     }
 
@@ -1509,9 +1885,23 @@ class LiveEngine private constructor(private val app: Context) {
                 ),
             )
             checkDevice()
+            brightnessTick()
             if (recording) recordingEvent()
+            if (!stopping && unattended.shouldEnd(ScreenWatch.attached(sink != null, screenInteractive()), wantKiosk, replay.isUp("kiosk"), SystemClock.elapsedRealtime())) {
+                // 3.2 item 4: nobody is watching and the box has not been reached for ten minutes. The recording is kept.
+                Diag.log("unattended_stop")
+                stopFromSystem(StopPath.UNATTENDED, UnattendedRule.REASON)
+                return
+            }
             main.postDelayed(this, 2000)
         }
+    }
+
+    /** Q15: false while the phone is locked or the screen is off. */
+    private fun screenInteractive(): Boolean = try {
+        (app.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+    } catch (_: Exception) {
+        true
     }
 
     private fun checkDevice() {
@@ -1525,7 +1915,7 @@ class LiveEngine private constructor(private val app: Context) {
                 val pct = level * 100 / scale
                 warn("lowBattery", pct < LOW_BATTERY_PERCENT)
                 if (pct < STOP_RECORD_BATTERY_PERCENT && recording) {
-                    recordHalted = true; finishSegment(s); recordError = "battery_low"; recordingEvent()
+                    recordHalted = true; finishSegmentAsync(s); recordError = RecordNote.BATTERY_LOW; recordingEvent()
                 }
             }
         }
@@ -1540,7 +1930,7 @@ class LiveEngine private constructor(private val app: Context) {
             val free = StatFs(dir.absolutePath).availableBytes
             warn("lowStorage", free < LOW_STORAGE_BYTES)
             if (free < STOP_RECORD_STORAGE_BYTES && recording) {
-                recordHalted = true; finishSegment(s); recordError = "storage_low"; recordingEvent()
+                recordHalted = true; finishSegmentAsync(s); recordError = RecordNote.STORAGE_LOW; recordingEvent()
             }
         }
     }

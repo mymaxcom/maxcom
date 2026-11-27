@@ -29,6 +29,35 @@ object RecordingGuard {
         return path == appDir.trimEnd('/') + "/" + name
     }
 
+    // ---- B3: is a closed recording file a recording at all? ----
+
+    /** What was read from a closed file: its size, whether it has a video track, and that track's length. */
+    class Probe(val bytes: Long, val hasVideo: Boolean, val durationMs: Long)
+
+    enum class SegmentVerdict {
+        /** A recording: its name is kept for the live and the file goes to the gallery. */
+        KEEP,
+        /** Nothing in it (no bytes, or no picture from the camera at all): deleted, never listed, never published. */
+        DISCARD,
+        /** Bytes without an index a player can read: left where it is, never listed, never published. */
+        LEAVE,
+    }
+
+    /** The reason code the screen gets for a segment that was not kept. */
+    const val EMPTY_RECORDING = "empty_recording"
+
+    /**
+     * The rule for one closed segment. [sourceFrames] is how many camera pictures arrived while it was recorded (the
+     * phone's own camera always counts as many). A size check alone is not enough: a header-only MP4 has bytes but no
+     * track or no length, and an external camera that never connected leaves a file of blank frames.
+     */
+    fun judgeSegment(p: Probe, sourceFrames: Long): SegmentVerdict = when {
+        p.bytes <= 0L -> SegmentVerdict.DISCARD
+        sourceFrames <= 0L -> SegmentVerdict.DISCARD
+        !p.hasVideo || p.durationMs <= 0L -> SegmentVerdict.LEAVE
+        else -> SegmentVerdict.KEEP
+    }
+
     /** The names Dart asked for that may be considered at all: valid, unique, at most [MAX_NAMES]. */
     fun askedNames(asked: List<String>): List<String> =
         asked.filter { isRecordingName(it) }.distinct().take(MAX_NAMES)

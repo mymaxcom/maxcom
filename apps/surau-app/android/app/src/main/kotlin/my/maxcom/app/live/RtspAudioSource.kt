@@ -249,6 +249,8 @@ fun downmix(interleaved: ShortArray, channels: Int): ShortArray {
  * connection, with the SDP audio track or null) and [onSample]; read from the mixer thread with [read].
  *
  * [decoderFactory] builds the AAC decoder (a fake in tests). [nowMs] is injected for the silent/lost judgement.
+ * [decodeOn] (A6): when given, the samples are decoded on that single worker instead of the RTSP receive thread, so a
+ * slow AAC decode can no longer hold back the camera's video packets; without it (tests, G.711) decoding is inline.
  */
 class RtspAudioSource(
     private val targetRate: Int,
@@ -263,6 +265,7 @@ class RtspAudioSource(
     prebufferMs: Int = 100,
     syncOffsetMs: Int = 0,
     private val lostAfterMs: Long = 1500,
+    private val decodeOn: java.util.concurrent.Executor? = null,
 ) {
     @Volatile var codec: CameraAudioCodec = CameraAudioCodec.NONE
         private set
@@ -283,11 +286,32 @@ class RtspAudioSource(
 
     private fun msToSamples(ms: Int) = (ms.toLong() * targetRate / 1000).toInt()
 
-    /** T0 item 5: the constant that keeps the sound level with the picture, in ms (held back by this much more). */
+    /** The offset in use now (A1), in ms. */
+    @Volatile var syncOffsetMs: Int = max(0, syncOffsetMs)
+        private set
+
+    /**
+     * T0 item 5: the constant that keeps the sound level with the picture, in ms (held back by this much more). A1:
+     * the engine now sets it from the camera's saved "Imbangan masa audio" at prepare, at a source switch and when the
+     * stepper moves; until 2026.11.15 nothing called it, so the camera's lip sync was whatever the phone happened to give.
+     */
     fun setSyncOffsetMs(ms: Int, prebufferMs: Int = 100) {
-        ring.prebuffer = msToSamples(prebufferMs + max(0, ms))
-        ring.maxLatency = msToSamples(prebufferMs + max(0, ms) + 400)
+        val v = max(0, ms)
+        syncOffsetMs = v
+        ring.prebuffer = msToSamples(prebufferMs + v)
+        ring.maxLatency = msToSamples(prebufferMs + v + 400)
     }
+
+    /** The samples the ring holds back before it gives sound: prebuffer plus the sync offset (for tests). */
+    val holdSamples: Int get() = ring.prebuffer
+
+    // A6: at most this many packets wait for the decode worker; more than that and the newest are dropped (a stalled
+    // decoder must not grow a queue without end).
+    private val backlog = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** Packets dropped because the decode worker was behind. */
+    @Volatile var decodeDropped = 0L
+        private set
 
     /** A new connection: [codec] is the SDP audio codec (null = no audio track). */
     @Synchronized
@@ -313,8 +337,36 @@ class RtspAudioSource(
         }
     }
 
-    @Synchronized
+    /** One audio packet from the RTSP receive thread. AAC goes to the decode worker when there is one (A6). */
     fun onSample(data: ByteArray, off: Int, len: Int) {
+        val worker = decodeOn
+        if (worker == null || codec != CameraAudioCodec.AAC) {
+            decodeNow(data, off, len)
+            return
+        }
+        if (backlog.get() >= MAX_BACKLOG) {
+            decodeDropped++
+            return
+        }
+        // The client reuses its buffer: the packet is copied before it leaves this thread.
+        val copy = data.copyOfRange(off, off + len)
+        backlog.incrementAndGet()
+        try {
+            worker.execute {
+                try {
+                    decodeNow(copy, 0, copy.size)
+                } catch (_: Exception) {
+                } finally {
+                    backlog.decrementAndGet()
+                }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            backlog.decrementAndGet()
+        }
+    }
+
+    @Synchronized
+    private fun decodeNow(data: ByteArray, off: Int, len: Int) {
         val pcm: ShortArray = when (codec) {
             CameraAudioCodec.G711_ALAW -> G711.decodeAlaw(data, off, len)
             CameraAudioCodec.G711_ULAW -> G711.decodeUlaw(data, off, len)
@@ -366,6 +418,8 @@ class RtspAudioSource(
     val underruns: Int get() = ring.underruns
 
     companion object {
+        const val MAX_BACKLOG = 64
+
         /** Maps the RTSP client's SDP audio codec constants (0 AAC, 1 Opus, 2 G.711 u-law, 3 G.711 a-law). */
         fun codecFromSdp(sdpAudioCodec: Int): CameraAudioCodec = when (sdpAudioCodec) {
             0 -> CameraAudioCodec.AAC

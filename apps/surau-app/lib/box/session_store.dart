@@ -103,4 +103,7 @@ class SurauInfoPrefsStore implements SurauInfoStore {
   @override
   Future<void> save(SurauInfo info) =>
       _prefs.setString(_infoKey, jsonEncode(info.toJson()));
+
+  @override
+  Future<void> clear() => _prefs.remove(_infoKey);
 }

@@ -6,7 +6,81 @@ import type { YoutubeState } from './stateStore.ts';
 import type { YoutubeTokens } from './tokenStore.ts';
 
 /** Short, stable reasons. Raw Google bodies, tokens and codes never become an error message. */
-export type YoutubeReason = 'quota' | 'forbidden' | 'network' | 'reauthorise' | 'not_configured' | 'bad_response' | 'not_found';
+export type YoutubeReason =
+  | 'quota'
+  | 'forbidden'
+  | 'network'
+  | 'reauthorise'
+  | 'not_configured'
+  | 'bad_response'
+  | 'not_found'
+  /** Y9: live streaming is not switched on for the channel (Google `liveStreamingNotEnabled`). */
+  | 'live_not_enabled'
+  /** Y9: the box clock is wrong (Google's certificate reads as not valid yet or expired, or the start time was refused). */
+  | 'clock_wrong'
+  /** Y9: Google refused the operator's OAuth client file (`invalid_client`, `unauthorized_client`, `deleted_client`). */
+  | 'client_refused'
+  /** Y11: a linked box on the SAME channel id has a broadcast open. */
+  | 'busy_other_box';
+
+/**
+ * The wire code of a reason (the `code` of a refusal, the warning of a live start). The frozen codes of the
+ * 2026.11.15 route shapes are `youtube_live_not_enabled`, `box_clock_wrong` and `youtube_busy_other_box`; every
+ * other reason is `youtube_<reason>`, as before.
+ */
+export function youtubeErrorCode(reason: YoutubeReason): string {
+  return reason === 'clock_wrong' ? 'box_clock_wrong' : `youtube_${reason}`;
+}
+
+/** The BM sentence of the reasons new in 2026.11.15 (the app shows the server's sentence as it is); null for the older ones. */
+export function youtubeErrorText(reason: YoutubeReason): string | null {
+  switch (reason) {
+    case 'live_not_enabled':
+      return 'Siaran langsung belum diaktifkan pada saluran YouTube ini.';
+    case 'clock_wrong':
+      return 'Jam MAXCOM tidak tepat. Betulkan jam dan cuba lagi.';
+    case 'client_refused':
+      return 'Fail klien YouTube ditolak oleh Google. Hubungi Pentadbir MAXCOM.';
+    case 'busy_other_box':
+      return 'YouTube sedang digunakan oleh MAXCOM Kiosk Box lain.';
+    default:
+      return null;
+  }
+}
+
+/** The HTTP status a refusal with this reason gets from a route. */
+export function youtubeErrorStatus(reason: YoutubeReason): number {
+  switch (reason) {
+    case 'quota':
+      return 429;
+    case 'forbidden':
+      return 403;
+    case 'not_found':
+      return 404;
+    case 'not_configured':
+    case 'reauthorise':
+    case 'live_not_enabled':
+    case 'clock_wrong':
+    case 'client_refused':
+    case 'busy_other_box':
+      return 409;
+    default:
+      return 502;
+  }
+}
+
+/** TLS failures that mean "this machine's date is wrong": Google's certificate is not valid yet, or already expired. */
+const CLOCK_TLS_CODES: ReadonlySet<string> = new Set(['CERT_NOT_YET_VALID', 'CERT_HAS_EXPIRED']);
+
+/** A failed fetch as a short reason: `clock_wrong` for a certificate date failure, else `network`. Never the raw error. */
+export function fetchFailure(e: unknown): YoutubeError {
+  for (let x: unknown = e, i = 0; i < 4 && typeof x === 'object' && x !== null; i++) {
+    const code = (x as { code?: unknown }).code;
+    if (typeof code === 'string' && CLOCK_TLS_CODES.has(code)) return new YoutubeError('clock_wrong');
+    x = (x as { cause?: unknown }).cause;
+  }
+  return new YoutubeError('network');
+}
 
 export class YoutubeError extends Error {
   readonly reason: YoutubeReason;
@@ -89,7 +163,7 @@ export async function googleRequest(
     return { status: res.status, json };
   } catch (e) {
     if (e instanceof YoutubeError) throw e;
-    throw new YoutubeError('network');
+    throw fetchFailure(e);
   } finally {
     clearTimeout(timer);
   }
@@ -112,6 +186,10 @@ export function googleDetail(json: Record<string, unknown> | null): string {
 /** Maps an HTTP failure to a short reason. */
 export function failureOf(status: number, json: Record<string, unknown> | null): YoutubeError {
   const detail = googleDetail(json);
+  // Y9: three causes a person can act on get their own reason (they used to read as a generic failure)
+  if (/^(invalid_client|unauthorized_client|deleted_client)$/.test(detail)) return new YoutubeError('client_refused', status, detail);
+  if (/^liveStreamingNotEnabled$/i.test(detail)) return new YoutubeError('live_not_enabled', status, detail);
+  if (/^invalidScheduledStartTime$/i.test(detail)) return new YoutubeError('clock_wrong', status, detail);
   if (status === 401) return new YoutubeError('reauthorise', status, detail);
   if (status === 403 && /quota|rateLimit|dailyLimit/i.test(detail)) return new YoutubeError('quota', status, detail);
   if (status === 403) return new YoutubeError('forbidden', status, detail);
@@ -572,33 +650,6 @@ export class YoutubeAuth {
     return this.tokens !== null;
   }
 
-  /**
-   * Keeps a grant the cloud held before this release, then proves it with one refresh. `invalid_grant` drops it
-   * here (Google withdrew it: the status shows the re-sign-in state); any other failure keeps it for the next try.
-   * Nothing here revokes at Google, logs or returns the token.
-   */
-  async adopt(g: { refreshToken: string; channelId: string; channelTitle: string; scope: string }): Promise<'ok' | 'invalid_grant' | 'failed'> {
-    this.cancelTimer();
-    this.pending = null;
-    this.outcome = null;
-    this.needsReauth = false;
-    this.unreadable = false;
-    this.lastErrorReason = null;
-    // an earlier "withdrawn" note must not outlive the new grant; the proof below writes the new truth
-    this.remember({ lastGood: this.persisted.lastGood, out: null });
-    this.tokens = {
-      refreshToken: g.refreshToken,
-      accessToken: '',
-      expiresAt: 0,
-      channelId: g.channelId,
-      channelTitle: g.channelTitle.slice(0, 100),
-      scope: g.scope || YOUTUBE_SCOPE,
-      streamId: null,
-    };
-    this.store.save(this.tokens);
-    return this.prove();
-  }
-
   /** One forced refresh of the stored grant: `ok`, `invalid_grant` (dropped here, never revoked), or `failed`. */
   async prove(): Promise<'ok' | 'invalid_grant' | 'failed'> {
     if (this.tokens === null) return 'failed';
@@ -642,8 +693,30 @@ export class YoutubeAuth {
     }
   }
 
-  /** The sign-in is dropped even when Google cannot be reached; the revoke is best effort. */
-  async signout(): Promise<void> {
+  /** Fills in a channel id (and title) the sign-in could not read at the time. Never replaces a known id. */
+  setChannel(id: string, title: string): void {
+    const t = this.tokens;
+    if (t === null || id === '' || t.channelId !== '') return;
+    this.tokens = { ...t, channelId: id, channelTitle: t.channelTitle !== '' ? t.channelTitle : title.slice(0, 100) };
+    this.store.save(this.tokens);
+  }
+
+  /** The owner's own channel, read with the stored grant (quota 1); the id is kept when the sign-in had none. */
+  async readOwnChannel(): Promise<string | null> {
+    const known = this.channelId();
+    if (known !== null) return known;
+    const c = await this.readChannel(await this.accessToken());
+    this.setChannel(c.id, c.title);
+    return this.channelId();
+  }
+
+  /**
+   * The sign-in is dropped even when Google cannot be reached; the revoke is best effort. `revoked` says whether
+   * Google confirmed it (Y7: a failed revoke is written to the change log, not hidden). Revoking withdraws the grant
+   * of this Google account for the operator's client everywhere (Y5): another box signed in to the same account must
+   * sign in again, and shows that as `reauthorise` with its date.
+   */
+  async signout(): Promise<{ revoked: boolean }> {
     const t = this.tokens;
     this.tokens = null;
     this.pending = null;
@@ -654,12 +727,13 @@ export class YoutubeAuth {
     this.lastErrorReason = null;
     this.store.clear();
     this.markOut('signed_out', false);
-    if (t !== null) {
-      try {
-        await this.post(REVOKE_URL, { token: t.refreshToken });
-      } catch {
-        /* revoking is a courtesy */
-      }
+    if (t === null) return { revoked: false };
+    try {
+      const r = await this.post(REVOKE_URL, { token: t.refreshToken });
+      // 400 `invalid_token`: Google no longer knows it, which is the same end
+      return { revoked: r.status === 200 || googleDetail(r.json) === 'invalid_token' };
+    } catch {
+      return { revoked: false };
     }
   }
 }

@@ -1771,6 +1771,13 @@ class SEn extends S {
   String get contentSearchHint => 'Search';
 
   @override
+  String get contentZikirSettings => 'Zikir display settings';
+
+  @override
+  String get contentZikirSettingsHint =>
+      'When the zikir starts, the time per zikir, the clock and the screen look';
+
+  @override
   String get contentNoMatch => 'No match.';
 
   @override
@@ -5307,77 +5314,6 @@ class SEn extends S {
   String get impGoRecords => 'See import records';
 
   @override
-  String get impMysoTitle => 'Import previous display data';
-
-  @override
-  String get impMysoIntro =>
-      'Upload this surau\'s export zip from its previous display system. Content and timer settings are merged; prayer times are not included.';
-
-  @override
-  String get impMysoPick => 'Pick the zip file';
-
-  @override
-  String get impMysoPickHelp =>
-      'Made with the MAXCOM export script. Limit 64 MB.';
-
-  @override
-  String get impMysoTooBig => 'File too large. The limit is 64 MB.';
-
-  @override
-  String get impMysoWorking => 'Uploading and checking';
-
-  @override
-  String get impMysoMismatchTitle => 'Different surau name';
-
-  @override
-  String impMysoMismatch(String file, String target) {
-    return 'This file is from \"$file\"; import into \"$target\"?';
-  }
-
-  @override
-  String get impMysoMismatchYes => 'Yes, import into this surau';
-
-  @override
-  String impMysoNameInFile(String name) {
-    return 'Name in the file: $name';
-  }
-
-  @override
-  String impMysoTarget(String name) {
-    return 'Target: $name';
-  }
-
-  @override
-  String get impMysoPlanTitle => 'Trial run';
-
-  @override
-  String get impMysoKind => 'Kind';
-
-  @override
-  String get impMysoCreated => 'New';
-
-  @override
-  String get impMysoUpdated => 'Updated';
-
-  @override
-  String get impMysoSame => 'Same';
-
-  @override
-  String get impMysoSkipped => 'Skipped';
-
-  @override
-  String get impMysoTimers => 'Use the timer settings from the previous system';
-
-  @override
-  String get impMysoImport => 'Import';
-
-  @override
-  String get impMysoDiscard => 'Discard';
-
-  @override
-  String get impMysoDone => 'Previous display data import finished';
-
-  @override
   String get rekTitle => 'Import records';
 
   @override
@@ -8768,4 +8704,2334 @@ class SEn extends S {
   @override
   String get liveRecBadPieceNote =>
       'A recording file is not valid and MAXCOM did not accept it. Every part is kept as it was.';
+
+  @override
+  String get linkTitle => 'Link MAXCOM Kiosk Boxes';
+
+  @override
+  String get linkEntryIntro =>
+      'Link two MAXCOM Kiosk Boxes that are already set up. One becomes the main Box and the other follows it.';
+
+  @override
+  String get linkCheckLan =>
+      'MAXCOM Kiosk Boxes can only be linked on the surau Wi-Fi.';
+
+  @override
+  String get linkCheckLive => 'Stop the live broadcast first, then try again.';
+
+  @override
+  String get linkCheckFollower =>
+      'This MAXCOM Kiosk Box is a follower Box. Link from the main Box.';
+
+  @override
+  String get linkChoiceShow => 'Show a code on this TV';
+
+  @override
+  String get linkChoiceShowSub =>
+      'The admin of the other MAXCOM Kiosk Box scans it with their app.';
+
+  @override
+  String get linkChoiceScan => 'Scan the code of another MAXCOM Kiosk Box';
+
+  @override
+  String get linkChoiceScanSub =>
+      'Scan the code shown on the TV of another MAXCOM Kiosk Box, or of a new Box.';
+
+  @override
+  String get linkPinTitle => 'Confirm with your PIN';
+
+  @override
+  String get linkPinLabel => 'Your PIN';
+
+  @override
+  String linkPinBodyShow(String name) {
+    return '$name will show the link code on its TV for 5 minutes.';
+  }
+
+  @override
+  String linkPinBodyScan(String name) {
+    return 'Your PIN is needed to link your MAXCOM Kiosk Box with $name.';
+  }
+
+  @override
+  String get linkPinBodyAgree =>
+      'Your PIN is needed again because it was entered a while ago.';
+
+  @override
+  String get linkShowCode => 'Show code';
+
+  @override
+  String linkWaitTitle(String name) {
+    return 'Link code on the TV of $name';
+  }
+
+  @override
+  String get linkWaitBody =>
+      'Ask the admin of the other MAXCOM Kiosk Box to scan that code with the MAXCOM app connected to their Box.';
+
+  @override
+  String linkWaitExpires(String time) {
+    return 'The code expires in $time';
+  }
+
+  @override
+  String get linkWaitFact1 => 'Single use, valid for 5 minutes';
+
+  @override
+  String get linkWaitFact2 =>
+      'Signed by this MAXCOM Kiosk Box. A picture of the code is useless once it expires.';
+
+  @override
+  String get linkWaitFact3 => 'No data is copied until you agree';
+
+  @override
+  String get linkWaitClose => 'Close the code now';
+
+  @override
+  String get linkCalling => 'Checking both MAXCOM Kiosk Boxes';
+
+  @override
+  String get linkCallingBody => 'No data has been sent yet.';
+
+  @override
+  String get linkScanHint =>
+      'Point at the link code on the TV of the other MAXCOM Kiosk Box. This phone and both Boxes must be on the same surau Wi-Fi.';
+
+  @override
+  String get linkScanPasteLabel => 'Paste the link code';
+
+  @override
+  String linkConfirmTitle(String name) {
+    return 'Link with $name?';
+  }
+
+  @override
+  String get linkFingerprint => 'Key fingerprint of that MAXCOM Kiosk Box';
+
+  @override
+  String get linkConfirmBody =>
+      'Make sure this fingerprint is what you expect. No data is sent before both admins agree.';
+
+  @override
+  String get linkRescan => 'Scan again';
+
+  @override
+  String get linkStopTitle => 'Linking stopped';
+
+  @override
+  String linkStopVersion(String name, String release) {
+    return 'The MAXCOM Kiosk Box $name runs version $release. Update that Box, then try again.';
+  }
+
+  @override
+  String linkStopOlder(String name) {
+    return 'The MAXCOM Kiosk Box $name runs an older version. Update that Box, then try again.';
+  }
+
+  @override
+  String get linkStopOlderUnnamed =>
+      'One of the MAXCOM Kiosk Boxes runs an older version. Update that Box, then try again.';
+
+  @override
+  String get linkStopNothingChanged =>
+      'Nothing was changed on either MAXCOM Kiosk Box.';
+
+  @override
+  String linkCodeApproveTitle(String name) {
+    return '$name wants to link';
+  }
+
+  @override
+  String linkCodeApproveFacts(int users, int content) {
+    return '$users users, $content content items';
+  }
+
+  @override
+  String linkCodeApproveBody(String name) {
+    return 'Compare this code with the code on the phone of the admin of $name. They must match.';
+  }
+
+  @override
+  String get linkCodeNewBoxBody =>
+      'Compare this code with the code on the TV of the new MAXCOM Kiosk Box. They must match.';
+
+  @override
+  String get linkApprove => 'Agree';
+
+  @override
+  String get linkReject => 'Decline';
+
+  @override
+  String get linkSameCode => 'Same code';
+
+  @override
+  String get linkCodeNoData =>
+      'No data has been copied yet. After you agree, you answer two questions.';
+
+  @override
+  String get linkCodeShowTitle =>
+      'Show this code to the admin of the other MAXCOM Kiosk Box';
+
+  @override
+  String linkWaitingApproval(String name) {
+    return 'Waiting for the admin of $name to agree';
+  }
+
+  @override
+  String get linkCodeMismatchTitle => 'Not the same code?';
+
+  @override
+  String get linkCodeMismatch =>
+      'Press Cancel. Another Box may be trying to link.';
+
+  @override
+  String get linkBoxThis => 'This Box';
+
+  @override
+  String linkBoxThisNamed(String name) {
+    return '$name (this Box)';
+  }
+
+  @override
+  String get linkQIntroTitle => 'Connected, nothing has been changed yet';
+
+  @override
+  String linkQIntro(String a, String b) {
+    return '$a and $b now know each other. Answer the questions below. The other admin sees the same answers and presses Agree; that starts the link.';
+  }
+
+  @override
+  String get linkQ1Title => 'Whose data is kept?';
+
+  @override
+  String get linkQ1Hint =>
+      'The data of the other MAXCOM Kiosk Box is replaced.';
+
+  @override
+  String get linkQ2Title => 'Which MAXCOM Kiosk Box becomes the main Box?';
+
+  @override
+  String get linkQ2Hint =>
+      'The main MAXCOM Kiosk Box keeps the data, talks to the cloud and YouTube, and sends a copy to the follower Box within seconds. Phones and iPads manage through the main Box only.';
+
+  @override
+  String get linkQ3Title => 'Phones of the other Box\'s people';
+
+  @override
+  String linkQ3Hint(String name) {
+    return 'The people of $name who have a phone, whether their data is replaced or moved to the main Box.';
+  }
+
+  @override
+  String get linkQ3Direct => 'Connect straight to the main Box';
+
+  @override
+  String get linkQ3DirectHint =>
+      'Everyone who has a phone, admins included, connects to the main Box by themselves with no join code. Both admins already agreed with their PIN.';
+
+  @override
+  String get linkQ3Code => 'Ask for a join code for admins';
+
+  @override
+  String get linkQ3CodeHint =>
+      'Other people connect by themselves. Admins need a join code from an admin of the main Box.';
+
+  @override
+  String get linkFactContent => 'Content';
+
+  @override
+  String linkFactContentValue(int content, int posters, int videos) {
+    return '$content items, $posters posters, $videos videos';
+  }
+
+  @override
+  String get linkFactFinance => 'Finance records';
+
+  @override
+  String get linkFactPeople => 'People';
+
+  @override
+  String get linkFactLastEdit => 'Last edit';
+
+  @override
+  String get linkNoEdit => 'No edits';
+
+  @override
+  String get linkFactDevice => 'Device';
+
+  @override
+  String get linkFactStorage => 'Free storage';
+
+  @override
+  String get linkFactYoutube => 'YouTube';
+
+  @override
+  String get linkFactCloud => 'MAXCOM cloud';
+
+  @override
+  String get linkYes => 'Yes';
+
+  @override
+  String get linkNo => 'No';
+
+  @override
+  String get linkDeviceWindows => 'Windows PC';
+
+  @override
+  String get linkDeviceAndroid => 'Android Box';
+
+  @override
+  String get linkDeviceOther => 'MAXCOM Kiosk Box';
+
+  @override
+  String get linkConnCable => 'cable';
+
+  @override
+  String get linkConnWifi => 'Wi-Fi';
+
+  @override
+  String get linkRecommended => 'Recommended';
+
+  @override
+  String linkAdvice(String name, String hardware) {
+    return 'Recommended: $name ($hardware)';
+  }
+
+  @override
+  String get linkFixedNew => 'A new MAXCOM Kiosk Box has no data';
+
+  @override
+  String linkFixedFollowers(String name) {
+    return '$name already has follower MAXCOM Kiosk Boxes, so it stays the main Box and its data is kept.';
+  }
+
+  @override
+  String get linkCaseXOff =>
+      'In this release the main MAXCOM Kiosk Box must be the Box whose data is kept.';
+
+  @override
+  String get linkCrossTitle => 'Data and main MAXCOM Kiosk Box differ';
+
+  @override
+  String linkCrossBody(String kept, String master, String other) {
+    return 'The data of $kept is copied once to $master, then $master becomes the main MAXCOM Kiosk Box. $other becomes the follower Box.';
+  }
+
+  @override
+  String get linkReplacedTitle => 'What will be replaced';
+
+  @override
+  String linkReplacedLine(
+    String name,
+    int content,
+    int posters,
+    int videos,
+    int finance,
+    String kept,
+  ) {
+    return 'The data of $name will be replaced: $content items, $posters posters, $videos videos, $finance finance records. The data of $kept is kept.';
+  }
+
+  @override
+  String linkReplacedNone(String kept) {
+    return 'Nothing is replaced. All the data of $kept is kept.';
+  }
+
+  @override
+  String linkBackupLine(String time) {
+    return 'Both MAXCOM Kiosk Boxes are backed up first: $time. The link can be cut at any time and each Box can go back to this backup.';
+  }
+
+  @override
+  String linkFinanceTick(String name) {
+    return 'I understand the finance records of $name are not merged. I exported the report if needed.';
+  }
+
+  @override
+  String linkFinanceCount(int n, String name) {
+    return '$n finance records of $name stay in the backup.';
+  }
+
+  @override
+  String get linkFinanceFirst => 'Tick the finance records confirmation first.';
+
+  @override
+  String get linkMore => 'More details';
+
+  @override
+  String linkMorePeople(int a, String nameA, int b, String nameB) {
+    return 'The people of both MAXCOM Kiosk Boxes are merged: $a on $nameA, $b on $nameB.';
+  }
+
+  @override
+  String linkMoreYoutubeKept(String name) {
+    return 'YouTube: the sign-in of $name is kept.';
+  }
+
+  @override
+  String get linkMoreYoutubeAgain =>
+      'YouTube: you need to sign in again after the link.';
+
+  @override
+  String get linkMoreCloud =>
+      'Cloud: the cloud copy is updated by the main MAXCOM Kiosk Box.';
+
+  @override
+  String get linkMoreCamera =>
+      'Surau camera: the camera settings follow the data that is kept.';
+
+  @override
+  String get linkMoreBrowser =>
+      'Browser screens need to be paired again after the link.';
+
+  @override
+  String linkAgreeButton(String kept, String master) {
+    return 'Agree: keep the data of $kept, $master becomes the main Box';
+  }
+
+  @override
+  String linkWaitingFor(String name) {
+    return 'Waiting for $name';
+  }
+
+  @override
+  String linkNameAgreed(String name) {
+    return '$name: agreed';
+  }
+
+  @override
+  String linkNameNotYet(String name) {
+    return '$name: not yet agreed';
+  }
+
+  @override
+  String get linkAnswersChangeable =>
+      'You can change the answers until both admins agree.';
+
+  @override
+  String get linkStaleNotice =>
+      'The other admin changed the choices. Check them and agree again.';
+
+  @override
+  String get linkProgressTitle => 'Linking in progress';
+
+  @override
+  String get linkProgressStarting => 'The link is starting';
+
+  @override
+  String linkProgressStep(int n, int total, String name) {
+    return 'Step $n of $total: $name';
+  }
+
+  @override
+  String linkProgressStepPercent(int n, int total, String name, int percent) {
+    return 'Step $n of $total: $name, $percent%';
+  }
+
+  @override
+  String get linkProgressNote =>
+      'Do not switch off either MAXCOM Kiosk Box. Edits are refused until the link is done.';
+
+  @override
+  String get linkStepBackup => 'backing up the data';
+
+  @override
+  String get linkStepPeople => 'merging the people';
+
+  @override
+  String get linkStepCommit => 'completing the link';
+
+  @override
+  String get linkStepFinish => 'finishing the link';
+
+  @override
+  String get linkStepWorking => 'linking the MAXCOM Kiosk Boxes';
+
+  @override
+  String get linkDoneTitle => 'Link complete';
+
+  @override
+  String get linkDoneBody =>
+      'Both MAXCOM Kiosk Boxes are now linked. Settings and content are managed from the main Box.';
+
+  @override
+  String linkDoneMaster(String master, String other) {
+    return '$master is now the main MAXCOM Kiosk Box. $other follows it.';
+  }
+
+  @override
+  String get linkDoneBackup =>
+      'The backups of both MAXCOM Kiosk Boxes are kept. The link can be cut at any time.';
+
+  @override
+  String get linkDoneNext =>
+      'People on the follower MAXCOM Kiosk Box: join the main Box with a join code, then set a new PIN.';
+
+  @override
+  String get linkDoneList => 'See the TV screens and MAXCOM Kiosk Boxes';
+
+  @override
+  String get linkDoneClose => 'Done';
+
+  @override
+  String get linkFailedTitle => 'Linking cancelled';
+
+  @override
+  String linkFollowerTitle(String name) {
+    return 'Your surau is now managed from the main MAXCOM Kiosk Box $name.';
+  }
+
+  @override
+  String get linkFollowerTitleNoName =>
+      'Your surau is now managed from the main MAXCOM Kiosk Box.';
+
+  @override
+  String get linkCodePinRequired => 'Enter your PIN to continue.';
+
+  @override
+  String get linkCodeWrongPin => 'Wrong PIN. Try again.';
+
+  @override
+  String get linkCodeLocked =>
+      'The PIN is locked for a while. Try again later.';
+
+  @override
+  String get linkCodeWrongStep =>
+      'This step has changed. The screen is updated.';
+
+  @override
+  String get linkCodeWrongSide =>
+      'This button is for the admin of the other MAXCOM Kiosk Box.';
+
+  @override
+  String get linkCodeSessionOpen =>
+      'A link is already running on this MAXCOM Kiosk Box. Cancel it or wait until it ends.';
+
+  @override
+  String get linkCodeNoHttps =>
+      'This MAXCOM Kiosk Box has no secure connection (HTTPS) yet, so it cannot be linked.';
+
+  @override
+  String get linkCodeLinkLocked =>
+      'Too many failed link attempts. Try again after an hour.';
+
+  @override
+  String get linkCodeBadQr => 'This is not a valid MAXCOM Kiosk Box link code.';
+
+  @override
+  String get linkCodeSameBox =>
+      'This is your own Box. Scan the code on the TV of the other Box.';
+
+  @override
+  String get linkCodeCodeUsed =>
+      'This code has already been used. Ask for a new one.';
+
+  @override
+  String get linkCodeCodeExpired => 'This code has expired. Ask for a new one.';
+
+  @override
+  String get linkCodePeerUnreachable =>
+      'The other MAXCOM Kiosk Box cannot be reached. Make sure both Boxes are on the same surau Wi-Fi.';
+
+  @override
+  String get linkCodePeerRefused =>
+      'The other MAXCOM Kiosk Box did not accept the request. Check and try again.';
+
+  @override
+  String get linkCodeBadHello =>
+      'The MAXCOM Kiosk Box that answered is not the Box in the code. The link was not continued.';
+
+  @override
+  String get linkCodeVersion =>
+      'Both MAXCOM Kiosk Boxes must run the same version. Update the older Box, then try again.';
+
+  @override
+  String get linkCodeBothHaveFollowers =>
+      'Both MAXCOM Kiosk Boxes already have follower Boxes. A main Box can only be linked with a Box that has no followers.';
+
+  @override
+  String get linkCodeBothNew =>
+      'Neither MAXCOM Kiosk Box is set up. Set up one Box first.';
+
+  @override
+  String get linkCodeFixedAnswer =>
+      'This answer cannot be changed for these two MAXCOM Kiosk Boxes.';
+
+  @override
+  String get linkCodeKeepNewBox =>
+      'A new MAXCOM Kiosk Box has no data to keep.';
+
+  @override
+  String get linkCodeFinanceTick =>
+      'Tick that you understand the finance records are not merged.';
+
+  @override
+  String get linkCodeRejected => 'The link was declined.';
+
+  @override
+  String get linkCodeLinking => 'A link is in progress. Try again shortly.';
+
+  @override
+  String get linkCodeNotFound => 'That MAXCOM Kiosk Box was not found.';
+
+  @override
+  String get linkCodeBadMessage => 'The answer was not valid. Try again.';
+
+  @override
+  String get linkCodeUnknown => 'The link could not continue. Try again.';
+
+  @override
+  String get linkOutcomeFailed =>
+      'The link could not be completed. Check both MAXCOM Kiosk Boxes, then try again.';
+
+  @override
+  String get linkOutcomeCancelled =>
+      'You cancelled the link. Nothing was changed.';
+
+  @override
+  String get linkOutcomeCancelledByPeer =>
+      'The admin of the other MAXCOM Kiosk Box cancelled the link. Nothing was changed.';
+
+  @override
+  String get linkOutcomeRejectedByPeer =>
+      'The admin of the other MAXCOM Kiosk Box declined the link. Nothing was changed.';
+
+  @override
+  String get linkOutcomeExpired =>
+      'Time ran out before the link was done. Nothing was changed.';
+
+  @override
+  String get linkOutcomeApproveTimeout =>
+      'The code was not agreed within 2 minutes. Nothing was changed.';
+
+  @override
+  String get linkOutcomeRestart =>
+      'The MAXCOM Kiosk Box restarted during the link. Nothing was changed; start the link again.';
+
+  @override
+  String get tvsTitle => 'TV screens and MAXCOM Kiosk Boxes';
+
+  @override
+  String get tvsIntro =>
+      'One main MAXCOM Kiosk Box for the whole surau. Settings and content are made once; every TV follows within seconds.';
+
+  @override
+  String tvsCount(int a, int b) {
+    return '$a of $b screens connected';
+  }
+
+  @override
+  String get tvsSectionBoxes => 'MAXCOM Kiosk Boxes';
+
+  @override
+  String get tvsSectionBrowsers => 'Browser screens';
+
+  @override
+  String get tvsMainBox => 'Main Box';
+
+  @override
+  String get tvsFollowerBox => 'Follower Box';
+
+  @override
+  String get tvsBrowserScreen => 'Browser screen';
+
+  @override
+  String tvsRoleLine(String role, String version) {
+    return '$role, version $version';
+  }
+
+  @override
+  String get tvsConnected => 'Connected';
+
+  @override
+  String tvsAwaySince(String when) {
+    return 'No contact since $when';
+  }
+
+  @override
+  String get tvsNeverSeen => 'Never connected';
+
+  @override
+  String tvsNotSeenSince(String date) {
+    return 'Not seen since $date';
+  }
+
+  @override
+  String get tvsRemoveStaleBody =>
+      'Remove: this MAXCOM Kiosk Box is emptied, including its backup. If this Box is switched on again and still follows, it empties itself.';
+
+  @override
+  String tvsLinkedOn(String date) {
+    return 'Linked on $date';
+  }
+
+  @override
+  String get tvsRemoved => 'Removed';
+
+  @override
+  String tvsRemovedOn(String date) {
+    return 'Removed on $date';
+  }
+
+  @override
+  String get tvsOpenSettings => 'Settings for this TV';
+
+  @override
+  String get tvsRemove => 'Remove';
+
+  @override
+  String tvsRemoveTitle(String name) {
+    return 'Remove $name?';
+  }
+
+  @override
+  String get tvsRemoveBody =>
+      'Remove: this MAXCOM Kiosk Box is emptied, including its backup.';
+
+  @override
+  String tvsRemovedToast(String name) {
+    return '$name was removed.';
+  }
+
+  @override
+  String get tvsLinkOther => 'Link another MAXCOM Kiosk Box';
+
+  @override
+  String get tvsOlderBox =>
+      'This MAXCOM Kiosk Box does not support linking yet. Update this Box first.';
+
+  @override
+  String get tvsEmpty => 'There are no screens to show.';
+
+  @override
+  String get tvEdTitle => 'Settings for this TV';
+
+  @override
+  String tvEdFor(String name) {
+    return 'For $name only. The others follow the surau settings.';
+  }
+
+  @override
+  String get tvEdName => 'TV name';
+
+  @override
+  String get tvEdFollows => 'Follows the surau';
+
+  @override
+  String get tvEdChanged => 'Changed';
+
+  @override
+  String get tvEdReset => 'Reset';
+
+  @override
+  String get tvEdLiveSection => 'Live broadcast';
+
+  @override
+  String get tvEdShow => 'Show the broadcast on this TV';
+
+  @override
+  String get tvEdShowYes => 'Show';
+
+  @override
+  String get tvEdShowNo => 'Do not show';
+
+  @override
+  String get tvEdShowOn => 'The lecture camera is shown';
+
+  @override
+  String get tvEdShowOff => 'This TV stays on the normal display';
+
+  @override
+  String get tvEdSound => 'Broadcast sound';
+
+  @override
+  String get tvEdSoundYes => 'With sound';
+
+  @override
+  String get tvEdSoundNo => 'Without sound';
+
+  @override
+  String get tvEdSoundOn => 'Sound from this TV';
+
+  @override
+  String get tvEdSoundOff => 'Picture only (avoids echo)';
+
+  @override
+  String get tvEdVolume => 'Broadcast volume';
+
+  @override
+  String get tvEdDisplay => 'Display';
+
+  @override
+  String get tvEdTemplate => 'Template';
+
+  @override
+  String get tvEdTemplatePickTitle => 'Template for this TV';
+
+  @override
+  String get tvEdTemplatePickHint =>
+      'Choose one for this TV only, or follow the surau.';
+
+  @override
+  String get tvEdLang => 'TV language';
+
+  @override
+  String get tvEdLangAuto => 'Automatic';
+
+  @override
+  String get tvEdLangMs => 'Bahasa Melayu';
+
+  @override
+  String get tvEdLangEn => 'English';
+
+  @override
+  String get tvEdLangAr => 'العربية';
+
+  @override
+  String get tvEdContent => 'Content';
+
+  @override
+  String get tvEdHide => 'Kinds hidden on this TV';
+
+  @override
+  String get tvEdHideNone => 'None; every kind is shown';
+
+  @override
+  String get tvEdHideHint =>
+      'Tap to hide on this TV. The content is still shown on other TVs. Prayer times, azan and iqamah cannot be hidden.';
+
+  @override
+  String get tvEdSounds => 'TV sounds';
+
+  @override
+  String get tvEdBeeps => 'Prayer time beeps';
+
+  @override
+  String get tvEdBeepsSub => 'Before the azan and iqamah';
+
+  @override
+  String get tvEdAzan => 'Azan';
+
+  @override
+  String get tvEdAzanSub => 'Played on this TV';
+
+  @override
+  String get tvEdAzanOffSub => 'Not played (a nearby TV already plays it)';
+
+  @override
+  String get tvEdTilawah => 'Recitation';
+
+  @override
+  String get tvEdTilawahSub => 'Before Subuh and on Friday';
+
+  @override
+  String get tvEdOn => 'On';
+
+  @override
+  String get tvEdOff => 'Off';
+
+  @override
+  String get tvEdSaved => 'The TV settings were saved.';
+
+  @override
+  String get tvKindKuliah => 'Lectures';
+
+  @override
+  String get tvKindPengumuman => 'Announcements';
+
+  @override
+  String get tvKindTicker => 'Ticker';
+
+  @override
+  String get tvKindPoster => 'Posters';
+
+  @override
+  String get tvKindVideo => 'Videos';
+
+  @override
+  String get tvKindProgramKhas => 'Special programmes';
+
+  @override
+  String get tvKindTakwim => 'Calendar';
+
+  @override
+  String get tvKindHadis => 'Hadith';
+
+  @override
+  String get tvKindWorldTime => 'World times';
+
+  @override
+  String get tvKindTugasan => 'Duties';
+
+  @override
+  String get tvKindZikir => 'Dhikr';
+
+  @override
+  String get tvKindTabung => 'Surau fund';
+
+  @override
+  String backupLine(String time, String size) {
+    return 'Backup before the link: $time, $size';
+  }
+
+  @override
+  String get backupDrop => 'Remove the backup';
+
+  @override
+  String get backupDropTitle => 'Remove the backup?';
+
+  @override
+  String backupDropBody(String date) {
+    return 'After this, this Box cannot go back to the data of $date.';
+  }
+
+  @override
+  String get backupWordDrop => 'REMOVE';
+
+  @override
+  String backupConfirmLabel(String word) {
+    return 'Type $word to confirm';
+  }
+
+  @override
+  String backupKeptLine(String date) {
+    return 'This choice can be changed until $date';
+  }
+
+  @override
+  String get backupKeptDrop => 'Remove the old data';
+
+  @override
+  String get backupKeptDropTitle => 'Remove the old data?';
+
+  @override
+  String backupKeptDropBody(String size) {
+    return 'The old data ($size) is removed and cannot be recovered.';
+  }
+
+  @override
+  String get backupRestore => 'Go back to the data from before the link';
+
+  @override
+  String get backupRestoreTitle => 'Go back to the data from before the link?';
+
+  @override
+  String backupRestoreBody(String date) {
+    return 'The data goes back to $date. This Box restarts. Admin phones keep working; other phones join it again with a QR code from an Admin.';
+  }
+
+  @override
+  String get backupWordRestore => 'RESTORE';
+
+  @override
+  String get backupDroppedToast => 'The backup was removed.';
+
+  @override
+  String get backupKeptDroppedToast => 'The old data was removed.';
+
+  @override
+  String get backupRestoredToast =>
+      'This Box is restarting. Every phone must join it again.';
+
+  @override
+  String get linkCodeHasFollowers =>
+      'This Box still has follower Boxes. Remove them first.';
+
+  @override
+  String get linkCodeKeptExists =>
+      'The old data is still kept. Remove the old data first.';
+
+  @override
+  String get linkCodeOtherVolume =>
+      'The backup is on another drive and cannot be restored here.';
+
+  @override
+  String get linkCodeConfirmRequired => 'Type the confirmation word first.';
+
+  @override
+  String get linkCodeNoBackup => 'There is no backup any more.';
+
+  @override
+  String linkCodeKeptData(String date) {
+    return 'The old data is kept until $date. Remove the old data to link now.';
+  }
+
+  @override
+  String get linkCodeKeptDataNoDate =>
+      'The old data is still kept. Remove the old data to link now.';
+
+  @override
+  String get liveViewersTitle => 'TVs showing the live';
+
+  @override
+  String get liveViewerPlaying => 'showing';
+
+  @override
+  String get liveViewerConnecting => 'joining';
+
+  @override
+  String get liveViewerOff => 'not showing the live';
+
+  @override
+  String get peopleTabScreens => 'TVs and Boxes';
+
+  @override
+  String get linkPeopleTitle => 'People after the link';
+
+  @override
+  String linkPeopleAdded(int count, String box) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count people added from $box',
+      one: '1 person added from $box',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String linkPeopleAddedNone(String box) {
+    return 'No new people from $box to add.';
+  }
+
+  @override
+  String get linkPeopleSameTitle => 'The same (same phone number)';
+
+  @override
+  String get linkPeopleSameHint =>
+      'They are on both Boxes and listed once. Their roles on the kept Box stand.';
+
+  @override
+  String get linkPeopleRolesTitle => 'Different roles';
+
+  @override
+  String linkPeopleRoleHead(String name, String phone4) {
+    return '$name, phone ending $phone4';
+  }
+
+  @override
+  String linkPeopleRoleStays(String roles) {
+    return 'Stays: $roles';
+  }
+
+  @override
+  String linkPeopleRoleOther(String box, String roles) {
+    return 'On $box: $roles';
+  }
+
+  @override
+  String linkPeopleRoleAddLabel(String box) {
+    return 'Add one role from $box:';
+  }
+
+  @override
+  String get linkPeopleRoleChangeNote =>
+      'This choice makes a new revision. Both admins\' agreements are cleared and must be given again.';
+
+  @override
+  String get linkPeopleNoRole => 'no role';
+
+  @override
+  String get linkPeopleNamesTitle => 'Same name';
+
+  @override
+  String linkPeopleNameAsk(String name, String box, String keptName) {
+    return '$name on $box has the same name as $keptName, but the phone number does not match.';
+  }
+
+  @override
+  String get linkPeopleSameYes => 'Same person';
+
+  @override
+  String get linkPeopleSameNo => 'Different person';
+
+  @override
+  String get linkPeopleAdminsTitle => 'Admins after the link';
+
+  @override
+  String get linkPeopleAdminsNone => 'No admins';
+
+  @override
+  String linkPeopleTickets(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n phones will be asked to connect to the main Box',
+      one: '1 phone will be asked to connect to the main Box',
+      zero: 'No phones will be asked to connect to the main Box',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get linkCodePeopleAnswer =>
+      'The choices about people no longer fit the lists. Look at the People part above again.';
+
+  @override
+  String moveAskTitle(String master) {
+    return 'Your surau is now managed from the main MAXCOM Kiosk Box $master. Connect now?';
+  }
+
+  @override
+  String get moveAskBody =>
+      'One tap, then set a new PIN. You do not need a join code.';
+
+  @override
+  String get moveConnect => 'Connect now';
+
+  @override
+  String get moveLater => 'Later';
+
+  @override
+  String get moveChecking => 'Checking your Box';
+
+  @override
+  String movePinBody(String master) {
+    return 'Set a new PIN for $master. The old PIN does not come along.';
+  }
+
+  @override
+  String moveWorking(String master) {
+    return 'Connecting to $master';
+  }
+
+  @override
+  String moveDone(String master) {
+    return 'You are now connected to $master.';
+  }
+
+  @override
+  String get moveDoneButton => 'Continue';
+
+  @override
+  String get moveNeedCodeTitle => 'A join code is needed';
+
+  @override
+  String moveNeedCode(String master) {
+    return 'Ask the admin of $master for a join code.';
+  }
+
+  @override
+  String get moveNeedCodeNoName => 'Ask the admin for a join code.';
+
+  @override
+  String get moveAway =>
+      'Open the app on the surau Wi-Fi once to connect to the main Box';
+
+  @override
+  String get moveTooMany => 'Too many attempts. Try again shortly.';
+
+  @override
+  String get moveWrongBox =>
+      'The Box that answered is not the main Box named. Nothing was changed.';
+
+  @override
+  String get moveBadPointer =>
+      'The answer of the old Box could not be read. Try again or ask the admin for a join code.';
+
+  @override
+  String get moveRetry => 'Try again';
+
+  @override
+  String get moveJoinScan => 'Scan join code';
+
+  @override
+  String get moveJoinPaste => 'Paste code';
+
+  @override
+  String get moveJoinHint =>
+      'An admin of the main box makes the join code in Users & devices. Scan that QR code or paste its text.';
+
+  @override
+  String get moveJoinCodeLabel => 'Join code';
+
+  @override
+  String get moveBannerTitle => 'Connect to the main box';
+
+  @override
+  String get moveBannerBody =>
+      'Your surau is now run from the main box. Connect to keep using the app.';
+
+  @override
+  String get openByNameTitle => 'Open by the MAXCOM name';
+
+  @override
+  String openByNameBody(String origin) {
+    return 'MAXCOM\'s IP address can change. If this iPad or computer is enrolled through the IP address, it has to be enrolled again when that address changes. Open $origin and scan this code again there.';
+  }
+
+  @override
+  String openByNameButton(String host) {
+    return 'Open $host';
+  }
+
+  @override
+  String get openByNameKeepIp => 'Continue with the IP address';
+
+  @override
+  String openByNameDeviceBody(String origin) {
+    return 'This device is enrolled through an IP address. If the MAXCOM address changes, this enrolment can no longer be used. To keep it, open $origin and enrol this device there.';
+  }
+
+  @override
+  String get liveDestUnconfirmed => 'Not yet confirmed with MAXCOM';
+
+  @override
+  String get liveDestSaving => 'Saving the choice';
+
+  @override
+  String get liveDestPerBoxNote =>
+      'This choice is kept for this MAXCOM Kiosk Box only. Each MAXCOM Kiosk Box uses its own YouTube channel.';
+
+  @override
+  String get liveDestRecUnavailable => 'Recording: Not available';
+
+  @override
+  String get liveMineTitle => 'Your broadcast is still running';
+
+  @override
+  String get liveMineResume => 'Resume';
+
+  @override
+  String get liveMineStillSending =>
+      'The broadcast is still being sent from this phone';
+
+  @override
+  String get liveStoppedCameraLost =>
+      'The broadcast was stopped because the external camera was disconnected';
+
+  @override
+  String get liveStoppedByBox => 'The broadcast was stopped by MAXCOM';
+
+  @override
+  String get liveStoppedByAdmin => 'The broadcast was stopped by an admin';
+
+  @override
+  String get liveVideoPathLabel => 'Video is taken by';
+
+  @override
+  String get liveVideoPathDevice => 'This phone';
+
+  @override
+  String get liveVideoPathBox => 'MAXCOM Kiosk Box';
+
+  @override
+  String get liveVideoPathBoxNote =>
+      'The phone only controls the broadcast. Recording on the phone is not available.';
+
+  @override
+  String get liveCamCtlTitle => 'Camera control';
+
+  @override
+  String get liveCamCtlBrightness => 'Brightness';
+
+  @override
+  String get liveCamCtlBrightnessDown => 'Reduce brightness';
+
+  @override
+  String get liveCamCtlBrightnessUp => 'Increase brightness';
+
+  @override
+  String get liveCamCtlPosition => 'Position';
+
+  @override
+  String get liveCamCtlHome => 'Home';
+
+  @override
+  String get liveCamCtlTracking => 'Auto tracking';
+
+  @override
+  String get liveCamCtlSent => 'Command sent to the camera';
+
+  @override
+  String get liveCamCtlConfirmed => 'The camera answered';
+
+  @override
+  String get liveCamCtlFailed => 'The command did not reach the camera';
+
+  @override
+  String get liveCamCtlAllow => 'Allow camera control';
+
+  @override
+  String get liveCamCtlAllowNote =>
+      'Only for cameras that support control over the network.';
+
+  @override
+  String get liveCamCtlApply => 'Apply camera settings';
+
+  @override
+  String get liveCamCtlFocus => 'Focus';
+
+  @override
+  String get liveCamCtlFocusContinuous => 'Continuous';
+
+  @override
+  String get liveCamCtlFocusSingle => 'Single';
+
+  @override
+  String get liveCamCtlFocusManual => 'Manual';
+
+  @override
+  String get liveCamCtlTrackingOff => 'Off';
+
+  @override
+  String get liveCamCtlTrackingHuman => 'Person';
+
+  @override
+  String get liveCamCtlApplyOnLive => 'Apply when the live starts';
+
+  @override
+  String get liveCamCtlProfileTitle => 'Camera settings';
+
+  @override
+  String get liveCameraHeavyWarn =>
+      'The camera stream is too large for YouTube. Lower it to 720p, 3 to 4 Mbps on the camera.';
+
+  @override
+  String get liveRecNoBoxPullStart =>
+      'Recording is not offered because the video is taken by the MAXCOM Kiosk Box. This phone does not receive the camera picture, so there is nothing to record on the phone. To record, choose Video is taken by: This phone.';
+
+  @override
+  String get liveRecNoBoxPullSummary =>
+      'This broadcast was not recorded on the phone because the video was taken by the MAXCOM Kiosk Box, not by this phone. If YouTube was selected, a copy of the broadcast is on YouTube.';
+
+  @override
+  String liveCameraInUseBy(String device, String since) {
+    return 'The camera has been in use by $device since $since.';
+  }
+
+  @override
+  String liveCameraInUseByBox(String since) {
+    return 'The camera has been in use by the MAXCOM Kiosk Box since $since.';
+  }
+
+  @override
+  String get liveCameraJoinNote =>
+      'This phone shows the same picture through MAXCOM and does not connect to the camera directly.';
+
+  @override
+  String get errcCameraInUse =>
+      'The camera is in use by another device. The picture is shared through MAXCOM.';
+
+  @override
+  String get liveWarnWeakPhoneWifi =>
+      'The phone\'s Wi-Fi signal is weak. The picture may stutter.';
+
+  @override
+  String get errcResumeMismatch =>
+      'The running broadcast does not match these choices. Stop that broadcast first, then start again.';
+
+  @override
+  String get errcYoutubeLiveNotEnabled =>
+      'Live streaming is not yet enabled on this YouTube channel.';
+
+  @override
+  String get errcBoxClockWrong =>
+      'The MAXCOM clock is wrong. Correct the clock and try again.';
+
+  @override
+  String get errcYoutubeBusyOtherBox =>
+      'YouTube is in use by another MAXCOM Kiosk Box.';
+
+  @override
+  String get errcTooManyViewers =>
+      'The limit of screens showing the live broadcast has been reached';
+
+  @override
+  String get errcYoutubeBroadcastOpen =>
+      'The YouTube broadcast is not closed yet. Try again in a few minutes.';
+
+  @override
+  String get errcAlreadyUploading =>
+      'The recording of this broadcast is already being uploaded from another device.';
+
+  @override
+  String get liveNotifStop => 'Stop the broadcast';
+
+  @override
+  String get syncBoxFailed => 'Cannot sync with MAXCOM';
+
+  @override
+  String get settingsChangedElsewhereNow =>
+      'These settings were just changed on another device';
+
+  @override
+  String get settingsReload => 'Reload';
+
+  @override
+  String get settingsMaybeStale => 'May not be up to date';
+
+  @override
+  String get cameraResetBody =>
+      'The advanced options will be returned to their defaults. The camera stays switched on.';
+
+  @override
+  String get cameraFoundByPort => 'Devices that answer on the camera port';
+
+  @override
+  String get uploadReasonNoBox => 'Cannot reach MAXCOM';
+
+  @override
+  String get uploadAwaitingConfirm => 'Awaiting confirmation';
+
+  @override
+  String get uploadErrorEmptyFile => 'The recording file is empty';
+
+  @override
+  String get uploadEarlierEntry => 'Upload an earlier recording';
+
+  @override
+  String liveGapReplaceAsk(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other:
+          'The last broadcast was interrupted for $minutes minutes. Replace it with the full recording?',
+      one: 'The last broadcast was interrupted for 1 minute. Replace it with the full recording?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get liveGapReplaceYes => 'Replace';
+
+  @override
+  String get liveGapReplaceNo => 'No';
+
+  @override
+  String get liveYoutubeSignOutOtherBoxes =>
+      'Other MAXCOM Kiosk Boxes that use this YouTube account must be connected again.';
+
+  @override
+  String get errcYoutubeClientRefused =>
+      'The YouTube client file was refused by Google. Contact the MAXCOM Administrator.';
+
+  @override
+  String get errcUploadAbandoned => 'This upload was cancelled';
+
+  @override
+  String get liveStoppedUnattended =>
+      'The broadcast was stopped because the phone lost its connection to MAXCOM for more than 10 minutes';
+
+  @override
+  String get liveWarnCameraH265 =>
+      'The camera sends H.265 video, which cannot be broadcast through MAXCOM. Switch the camera to H.264.';
+
+  @override
+  String get unlinkTitle => 'Unlink';
+
+  @override
+  String unlinkSheetTitle(String name) {
+    return 'Unlink: $name';
+  }
+
+  @override
+  String get unlinkSheetLineFollower =>
+      'This Box will run on its own again. Choose the data it uses afterwards.';
+
+  @override
+  String unlinkSheetLineMaster(String name) {
+    return '$name will run on its own. Choose the data this Box uses afterwards.';
+  }
+
+  @override
+  String unlinkEligibleAny(String name) {
+    return 'None of the earlier admins of $name is still active. You are made an admin of $name.';
+  }
+
+  @override
+  String unlinkPhoneNote(String name) {
+    return 'After this, this phone leaves the main Box and joins $name. You set a new PIN there.';
+  }
+
+  @override
+  String unlinkAnsweredBy(String name) {
+    return 'Answered by $name';
+  }
+
+  @override
+  String unlinkChoiceBack(String date) {
+    return 'Go back to the data from before the link (backup of $date)';
+  }
+
+  @override
+  String get unlinkChoiceBackNoDate =>
+      'Go back to the data from before the link';
+
+  @override
+  String get unlinkChoiceBackNote =>
+      'This Box returns to how it was on that date. Changes made after that are not on this Box.';
+
+  @override
+  String get unlinkChoiceCarry => 'Carry on with the current data, separately';
+
+  @override
+  String get unlinkChoiceCarryNoteFollower =>
+      'This Box keeps the current content and settings and becomes a surau of its own.';
+
+  @override
+  String get unlinkChoiceCarryNoteMaster =>
+      'This Box keeps the current data. Nothing changes on this Box.';
+
+  @override
+  String get unlinkChoiceEmpty => 'Empty this Box (back to the setup screen)';
+
+  @override
+  String get unlinkChoiceEmptyNote =>
+      'This Box is emptied and starts again at the setup screen.';
+
+  @override
+  String unlinkNumChanges(int n, String date) {
+    return '$n changes since $date will not be on this Box afterwards.';
+  }
+
+  @override
+  String get unlinkNumNoChanges => 'No changes since the backup was made.';
+
+  @override
+  String get unlinkNumKept7 =>
+      'The current data is kept for 7 more days, then removed.';
+
+  @override
+  String unlinkNumPeopleLead(String date) {
+    return 'The list of users goes back to how it was on $date.';
+  }
+
+  @override
+  String unlinkNumPeopleBack(int n, String names) {
+    return '$n people removed after that come back: $names.';
+  }
+
+  @override
+  String unlinkNumPeopleAbsent(int n, String names) {
+    return '$n people added after that are not there: $names.';
+  }
+
+  @override
+  String unlinkNumFinance(int n) {
+    return '$n finance entries stay on the main Box. This Box starts with an empty ledger.';
+  }
+
+  @override
+  String get unlinkTickLabel =>
+      'I understand the finance records stay on the main Box.';
+
+  @override
+  String unlinkNumVideos(int n) {
+    return '$n videos do not fit and are not copied:';
+  }
+
+  @override
+  String unlinkVideoLine(String title, String size) {
+    return '$title ($size)';
+  }
+
+  @override
+  String unlinkRemovePeople(String name, int n) {
+    return 'Remove the users who came from $name ($n people)';
+  }
+
+  @override
+  String get unlinkYoutubeKept =>
+      'YouTube: this Box keeps the sign-in it uses.';
+
+  @override
+  String get unlinkYoutubeReturns =>
+      'YouTube: the sign-in in the backup returns to this Box.';
+
+  @override
+  String get unlinkYoutubeSignIn => 'YouTube: sign in again on this Box.';
+
+  @override
+  String get unlinkYoutubeNone =>
+      'YouTube: no sign-in. Sign in on this Box yourself (it takes about a minute).';
+
+  @override
+  String get unlinkAgree => 'Agree';
+
+  @override
+  String get unlinkChangeAnswer => 'Change my answer';
+
+  @override
+  String get unlinkConfirmTitle => 'Confirm this choice';
+
+  @override
+  String get unlinkConfirmBody =>
+      'This choice leaves changes behind. The data left behind is kept for 7 days, then removed.';
+
+  @override
+  String get unlinkAgreePinBody => 'Enter your PIN to agree.';
+
+  @override
+  String get unlinkWord => 'UNLINK';
+
+  @override
+  String get unlinkSideFollower => 'Follower Box';
+
+  @override
+  String get unlinkSideMaster => 'Main Box';
+
+  @override
+  String get unlinkStartBody =>
+      'Each MAXCOM Kiosk Box asks its own admin what happens to its data. Nothing changes until both agree.';
+
+  @override
+  String unlinkStartPhoneNote(String name) {
+    return 'The admin who answers for $name leaves the main Box with their phone and joins $name.';
+  }
+
+  @override
+  String get unlinkStartTimeNote =>
+      'If nobody answers within 20 minutes, nothing changes and the link stays.';
+
+  @override
+  String get unlinkStartButton => 'Start';
+
+  @override
+  String get unlinkStartPinBody => 'Enter your PIN to start.';
+
+  @override
+  String get unlinkWaitingTitle => 'Waiting for the other admin';
+
+  @override
+  String get unlinkWaitingBody =>
+      'Your answer is saved. The link is cut after the other admin agrees. Nothing changes before that.';
+
+  @override
+  String get unlinkWaitingOther =>
+      'Another admin answers on their phone. Nothing changes until everyone agrees.';
+
+  @override
+  String get unlinkProgressTitle => 'The link is being cut';
+
+  @override
+  String get unlinkProgressStarting => 'The work is starting';
+
+  @override
+  String get unlinkProgressNote =>
+      'Do not switch off either MAXCOM Kiosk Box until it is finished.';
+
+  @override
+  String get unlinkStepCopy => 'copying data for the follower Box';
+
+  @override
+  String get unlinkStepBack => 'restoring the data from before the link';
+
+  @override
+  String get unlinkStepCarryOn => 'keeping the current data';
+
+  @override
+  String get unlinkStepEmpty => 'emptying the Box';
+
+  @override
+  String get unlinkStepJoin => 'waiting for the phone to join the follower Box';
+
+  @override
+  String unlinkJoinTitle(String name) {
+    return 'Connect to $name';
+  }
+
+  @override
+  String unlinkJoinBody(String name) {
+    return 'This phone now belongs to $name. Set a new PIN to join it. The link is fully cut after that.';
+  }
+
+  @override
+  String unlinkJoinWaitTitle(String name) {
+    return 'Waiting for the phone of the admin of $name';
+  }
+
+  @override
+  String get unlinkJoinWaitBody =>
+      'The link is fully cut after the admin joins that Box with their phone and sets a PIN. That Box keeps running on its own meanwhile.';
+
+  @override
+  String get unlinkDoneTitle => 'Link cut';
+
+  @override
+  String unlinkDoneBody(String name) {
+    return '$name now runs on its own.';
+  }
+
+  @override
+  String get unlinkFailedTitle => 'The link was not cut';
+
+  @override
+  String get unlinkKeptSection => 'Old data after the link was cut';
+
+  @override
+  String get unlinkKeptNone => 'There is no old data kept.';
+
+  @override
+  String unlinkKeptMasterRow(String name) {
+    return 'Main Box, after $name left';
+  }
+
+  @override
+  String unlinkKeptFollowerRow(String name) {
+    return '$name';
+  }
+
+  @override
+  String get unlinkKeptChosenBack =>
+      'Choice: go back to the data from before the link';
+
+  @override
+  String get unlinkKeptChosenCarry => 'Choice: carry on with the current data';
+
+  @override
+  String get unlinkSwitch => 'Change choice';
+
+  @override
+  String get unlinkSwitchTitle => 'Change the choice?';
+
+  @override
+  String unlinkSwitchBodyToBack(String date) {
+    return 'This Box goes back to the data from before the link. The current data is kept until $date.';
+  }
+
+  @override
+  String unlinkSwitchBodyToCarry(String date) {
+    return 'This Box carries on with the current data. The backup is kept until $date.';
+  }
+
+  @override
+  String get unlinkSwitchedToast => 'Choice changed. This Box is working.';
+
+  @override
+  String get unlinkDropBody =>
+      'The old data is removed and cannot be restored.';
+
+  @override
+  String get unlinkCodeOpen => 'An unlink is already running.';
+
+  @override
+  String get unlinkCodeNotLinked => 'This Box is not linked any more.';
+
+  @override
+  String get unlinkCodeNotAllowed =>
+      'You cannot answer for this Box. Another admin answers.';
+
+  @override
+  String get unlinkCodeSamePhone => 'One phone cannot answer for both Boxes.';
+
+  @override
+  String get unlinkCodeOptionUnavailable =>
+      'This choice is not available for this Box.';
+
+  @override
+  String get unlinkCodeStaleSession =>
+      'This unlink has changed or ended. The screen is updated.';
+
+  @override
+  String get unlinkCodeKeptOver => 'The time to change the choice is over.';
+
+  @override
+  String get unlinkCodeNoKept => 'There is no old data kept.';
+
+  @override
+  String get unlinkCodeNotLocal =>
+      'This can only be done on the maintenance screen of that Box itself.';
+
+  @override
+  String get unlinkCodeWrongCode => 'The recovery code is wrong.';
+
+  @override
+  String get unlinkCodeHasBackup =>
+      'This Box has a backup. Use go back to the data from before the link.';
+
+  @override
+  String unlinkKeptMasterNamed(String master, String follower) {
+    return '$master, after $follower left';
+  }
+
+  @override
+  String unlinkKeptListLine(String date) {
+    return 'Old data kept until $date';
+  }
+
+  @override
+  String get unlinkVideosNotFitTitle =>
+      'These videos do not fit on that Box and are not copied:';
+
+  @override
+  String get unlinkJoinStay => 'Stay here';
+
+  @override
+  String unlinkJoinStayNote(String master, String follower) {
+    return 'If you stay here, this phone is signed out of $master once $follower has been joined. Choose Connect now to keep managing $follower with this phone.';
+  }
+
+  @override
+  String get linkRecoveryTitle => 'Save this code';
+
+  @override
+  String get errcSurauAsleep =>
+      'This surau\'s cloud copy is being brought up to date from its MAXCOM Kiosk Box. Try again shortly.';
+
+  @override
+  String get liveYoutubeLaterButton => 'Broadcast on YouTube';
+
+  @override
+  String get liveYoutubeLaterHint =>
+      'This live is going to the surau screen only. You can add YouTube now.';
+
+  @override
+  String get liveYoutubeLaterStarting => 'Starting YouTube';
+
+  @override
+  String get liveYoutubeLaterNotSignedIn =>
+      'YouTube is not connected on this MAXCOM. Connect the YouTube account in Settings first.';
+
+  @override
+  String get liveYoutubeLaterNotOwner =>
+      'Only the device that started this live, or an administrator, can add YouTube to it.';
+
+  @override
+  String get liveYoutubeLaterBusy =>
+      'YouTube is being started already. Try again shortly.';
+
+  @override
+  String get liveRecNoSpaceNote =>
+      'MAXCOM does not have enough space to join the recording. Save or remove older recordings first. Every part is kept as it was.';
+
+  @override
+  String get uploadErrorClaimLost =>
+      'The upload was stopped because another device took over this live. Nothing more is needed.';
+
+  @override
+  String get liveYoutubeLaterSheetTitle => 'Broadcast on YouTube';
+
+  @override
+  String get liveYoutubeLaterTitleLabel => 'Title on YouTube';
+
+  @override
+  String get liveYoutubeLaterPrivacyLabel => 'Visibility';
+
+  @override
+  String get liveYoutubePrivacyPrivate => 'Private';
+
+  @override
+  String get liveYoutubePrivacyUnlisted => 'Unlisted';
+
+  @override
+  String get liveYoutubePrivacyPublic => 'Public';
+
+  @override
+  String get liveYoutubeLaterConfirm => 'Broadcast now';
+
+  @override
+  String get liveYoutubeLaterConfirmNote =>
+      'The live will start to show on YouTube with this title and visibility.';
+
+  @override
+  String get liveYoutubeLaterUpdateBox => 'Update MAXCOM to use this feature.';
+
+  @override
+  String get liveYoutubeLaterNoSession =>
+      'This live has already ended. Start a new live.';
+
+  @override
+  String get liveYoutubeLaterBadRequest =>
+      'The title or visibility is not valid. Check it and try again.';
+
+  @override
+  String get liveYoutubeLaterYoutubeOff =>
+      'YouTube is turned off in the settings of this MAXCOM.';
+
+  @override
+  String get liveYoutubeLaterToolsMissing =>
+      'The YouTube broadcast tools are not installed on this MAXCOM yet.';
+
+  @override
+  String get liveYoutubeLaterNoInternet =>
+      'MAXCOM has no internet connection. Try again shortly.';
+
+  @override
+  String get liveYoutubeLaterPrivacyNotAllowed =>
+      'This visibility is more open than the surau settings allow. Choose a more restricted one.';
+
+  @override
+  String unlinkJoinWebBody(String name) {
+    return 'You are using a web browser. Open the web app of $name to join it. There you choose a device name and a new PIN.';
+  }
+
+  @override
+  String unlinkJoinWebOpen(String name) {
+    return 'Open the app of $name';
+  }
+
+  @override
+  String get unlinkJoinWebTrust =>
+      'The browser may ask you to trust that MAXCOM once. Accept, then continue.';
+
+  @override
+  String get unlinkJoinWebFailed =>
+      'The browser could not open that app. Try again.';
+
+  @override
+  String unlinkJoinUnreachable(String name) {
+    return 'This phone cannot reach $name. Check the network connection and try again.';
+  }
+
+  @override
+  String get unlinkNumBackRecovery =>
+      'Admin phones keep working. Other phones join again with a QR code from an Admin. The recovery code is only needed if no Admin phone is left.';
+
+  @override
+  String get unlockUseRecoveryCode => 'Use the recovery code';
+
+  @override
+  String get unlockRecoveryHint =>
+      'This MAXCOM has no Admin who can sign in. Scan the recovery QR code on the MAXCOM TV screen, then enter the recovery code written on paper.';
+
+  @override
+  String get linkKeptOtherBox =>
+      'That old data is kept on the other MAXCOM. Remove the old data there, with its Admin\'s phone, to link now.';
+
+  @override
+  String get liveCtlNoVideo =>
+      'The picture is not shown on this device. Watch it on the TV or on YouTube.';
+
+  @override
+  String get liveCtlCloseApp =>
+      'Close the camera app (OBSBOT) during the broadcast.';
+
+  @override
+  String get liveCtlCloseAppWhy =>
+      'Two readers drop the picture to 4 to 6 frames a second.';
+
+  @override
+  String get liveCtlLevels => 'Sound levels';
+
+  @override
+  String liveCtlStartedBy(String name, String device, String time) {
+    return 'Started by $name from $device, $time';
+  }
+
+  @override
+  String liveCtlStartedByNoDevice(String name, String time) {
+    return 'Started by $name, $time';
+  }
+
+  @override
+  String get liveCtlTvsSub => 'The surau screens, over the surau Wi-Fi';
+
+  @override
+  String get liveCtlTvsWaiting => 'The waiting card is shown';
+
+  @override
+  String get liveCtlTvsOff => 'The surau screens are off for this broadcast';
+
+  @override
+  String get liveCtlYtWaiting => 'Waiting for the picture';
+
+  @override
+  String get liveCtlYtNo => 'No';
+
+  @override
+  String liveCtlCamOk(String mbps) {
+    return 'Connected, $mbps Mbps';
+  }
+
+  @override
+  String get liveCtlCamConnected => 'Connected';
+
+  @override
+  String liveCtlCamSlow(String mbps) {
+    return 'Connected, slow picture ($mbps Mbps)';
+  }
+
+  @override
+  String get liveCtlCamGone => 'Disconnected';
+
+  @override
+  String liveCtlSubOnAir(int vol) {
+    return 'On air, $vol%';
+  }
+
+  @override
+  String liveCtlSubOff(int vol) {
+    return '$vol%, not on air';
+  }
+
+  @override
+  String get liveCtlSubBenched => 'Paused for now, tried again later';
+
+  @override
+  String get liveCtlSubWaitingCam => 'Waiting for the camera';
+
+  @override
+  String get liveCtlSubMeanwhile => 'Used for now';
+
+  @override
+  String get liveCtlRecHere => 'Recording on this iPad';
+
+  @override
+  String get liveCtlWatchYoutube => 'Watch on YouTube';
+
+  @override
+  String get liveQuietTitle =>
+      'The broadcast is still running, no device is in control';
+
+  @override
+  String liveQuietBody(int minutes) {
+    return 'The device that started the broadcast has not been seen for $minutes minutes. The broadcast to the TVs and YouTube goes on.';
+  }
+
+  @override
+  String get liveQuietStop => 'Stop the broadcast';
+
+  @override
+  String get liveKioskRestored =>
+      'YouTube could not be broadcast. The surau screen was switched back on so the broadcast stays on air.';
+
+  @override
+  String get liveCamSlowTitle => 'The camera picture is slow';
+
+  @override
+  String get liveMicBenchedTitle =>
+      'The MAXCOM microphone is paused for now, the camera sound is used';
+
+  @override
+  String get liveMicBenchedBody =>
+      'The broadcast is not silent. The MAXCOM microphone is tried again by itself within 1 minute.';
+
+  @override
+  String get liveCamGoneTitle =>
+      'The camera is disconnected, the broadcast goes on';
+
+  @override
+  String get liveCamGoneBody =>
+      'The TVs show the waiting card. The picture and sound return by themselves when the camera connects again. The broadcast is not stopped automatically; press Stop when the lecture is over.';
+
+  @override
+  String get liveStopOtherTitle => 'Stop the broadcast';
+
+  @override
+  String liveStopOtherBody(String name, String device) {
+    return 'This broadcast was started by $name from $device. Stop it?';
+  }
+
+  @override
+  String liveStopOtherBodyNoDevice(String name) {
+    return 'This broadcast was started by $name. Stop it?';
+  }
+
+  @override
+  String liveStopOtherLog(String name) {
+    return 'Your name and the name of $name are written to the change log.';
+  }
+
+  @override
+  String get liveLeaveBoxPulled =>
+      'The broadcast is carried on by MAXCOM. Open the app again to control or stop it.';
+
+  @override
+  String get liveAudioBoxMicMain => 'MAXCOM microphone (main)';
+
+  @override
+  String get liveAudioBoxMicMainHint =>
+      'Mic-in on MAXCOM. The speaker\'s voice, always in the mix.';
+
+  @override
+  String get liveAudioCamBoxHint =>
+      'Raise only if you want the sound of the hall';
+
+  @override
+  String get liveAudioCamNotOnAir => 'Not on air';
+
+  @override
+  String get liveAudioBoxMicOnAir => 'On air';
+
+  @override
+  String get liveSyncTitle => 'Sound and picture sync';
+
+  @override
+  String get liveSyncAuto => 'Automatic sync';
+
+  @override
+  String get liveSyncAutoBody =>
+      'The MAXCOM microphone sound is delayed to match the camera picture. It is measured by itself from the camera sound.';
+
+  @override
+  String get liveSyncBusy => 'Syncing (the sound stays on air)';
+
+  @override
+  String liveSyncBusyBody(int ms) {
+    return 'The MAXCOM microphone stays on air at the delay of the last broadcast (+$ms ms) while MAXCOM measures.';
+  }
+
+  @override
+  String get liveSyncManual => 'Manual adjustment';
+
+  @override
+  String get liveSyncManualBody =>
+      'Delay the sound to match the camera picture. Watch the speaker\'s lips on the TV while you adjust.';
+
+  @override
+  String get liveSyncRange => '0 to 2000 ms, steps of 50 ms.';
+
+  @override
+  String get liveSyncBack => 'Back to automatic';
+
+  @override
+  String get liveSyncLess => 'Less by 50 ms';
+
+  @override
+  String get liveSyncMore => 'More by 50 ms';
+
+  @override
+  String get liveDestPickOne => 'Choose at least one destination';
+
+  @override
+  String get liveDestLastOne =>
+      'The last destination cannot be turned off during a broadcast';
+
+  @override
+  String get liveDestKioskOldBox =>
+      'Update the MAXCOM Kiosk Box for this choice';
+
+  @override
+  String get liveDestKioskOffSub => 'Off for this broadcast';
+
+  @override
+  String get liveDestKioskLabelOff => 'Surau screens: No';
+
+  @override
+  String get liveDestRecSwitchNotNow =>
+      'Cannot be changed during a broadcast on this device';
+
+  @override
+  String get liveCtlTvsTitle => 'TVs showing';
+
+  @override
+  String get liveCtlDuration => 'Broadcast time';
+
+  @override
+  String get liveMicLostBoxTitle => 'The MAXCOM microphone is not detected';
+
+  @override
+  String get liveMicLostBoxBody =>
+      'The broadcast may be silent. Check the microphone connection on MAXCOM.';
+
+  @override
+  String get liveMicLostDeviceTitle => 'The device microphone is not detected';
+
+  @override
+  String get liveMicLostDeviceBody =>
+      'The broadcast may be silent. Check the microphone on the device that sends the broadcast.';
+
+  @override
+  String get liveRecordingStopped => 'Stopped, the file so far is kept';
+
+  @override
+  String get liveRetrying => 'Trying again';
+
+  @override
+  String get liveDestYoutubeLive =>
+      'Can be turned on during a broadcast, cannot be turned off';
+
+  @override
+  String get liveSyncRangeSaved =>
+      '0 to 2000 ms, steps of 50 ms. Kept for the next broadcasts on this MAXCOM.';
+
+  @override
+  String get liveDestLiveYt => 'To YouTube only';
+
+  @override
+  String get liveDestLiveRec =>
+      'Recording only, nothing goes to the surau screen or YouTube';
+
+  @override
+  String get liveCtlSubMicLost => 'Not detected';
+
+  @override
+  String get liveTvShowTitle => 'Show the live on this TV';
+
+  @override
+  String get liveTvShowHint =>
+      'Turn it off for a Box that is slow during a live. That Box\'s TV keeps its normal display.';
+
+  @override
+  String get liveTvShowServer => 'Live server';
+
+  @override
+  String get liveTvShowOff => 'Normal display during a live';
+
+  @override
+  String get liveTvShowAllOff => 'No TV will show the live.';
+
+  @override
+  String liveTvShowSwitch(String name) {
+    return 'Show the live, $name';
+  }
+
+  @override
+  String liveTvShowCpuNow(int n) {
+    return 'CPU $n%';
+  }
+
+  @override
+  String liveTvShowCpuLast(int n) {
+    return 'CPU $n% during the last live';
+  }
+
+  @override
+  String liveCtlTvsShowing(int n, String names) {
+    return 'TVs showing the live: $n ($names)';
+  }
+
+  @override
+  String liveCtlTvNormal(String name) {
+    return '$name: normal display';
+  }
+
+  @override
+  String get liveViewerShowing => 'showing the live';
+
+  @override
+  String get liveViewerNormal => 'normal display';
+
+  @override
+  String get liveViewersHint =>
+      'Change it in Live settings, Show the live on this TV.';
+
+  @override
+  String liveBusyTitle(String name, int n) {
+    return '$name is too busy (CPU $n%)';
+  }
+
+  @override
+  String get liveBusyBody =>
+      'The picture may be jerky on the TVs and YouTube. Another TV shows the live, so this Box\'s TV can go back to its normal display. It can be turned back on in Live settings.';
+
+  @override
+  String get liveBusyAction => 'Turn off the live display on this Box';
+
+  @override
+  String get liveBusyLater => 'Not now';
+
+  @override
+  String get liveMicSilentTitle => 'No sound from the MAXCOM microphone';
+
+  @override
+  String liveMicSilentBody(int n) {
+    return 'The live has been on air without the speaker\'s voice for $n minutes.';
+  }
+
+  @override
+  String get liveMicSilentTip1 =>
+      'Check the microphone cable in the MAXCOM mic-in socket.';
+
+  @override
+  String get liveMicSilentTip2 =>
+      'Use a USB sound card that has a microphone input.';
+
+  @override
+  String get liveMicSilentTip3 => 'Or turn up the external camera sound.';
+
+  @override
+  String get liveMicSilentUseCamera => 'Use the camera sound';
+
+  @override
+  String liveMicSilentRow(String time) {
+    return 'On air, no sound since $time';
+  }
+
+  @override
+  String get liveMicSilentCamTitle => 'Camera sound in use';
+
+  @override
+  String get liveMicSilentCamBody =>
+      'The live now has sound from the external camera. If the MAXCOM microphone gets sound again, it is heard again.';
+
+  @override
+  String get liveMicTestHint =>
+      'Speak into the microphone during the 5 second test. Pick an input that has sound.';
+
+  @override
+  String get liveMicTestBusy => 'Testing...';
+
+  @override
+  String get liveMicTestSound => 'Tested: has sound';
+
+  @override
+  String get liveMicTestSilent => 'Tested: silent';
+
+  @override
+  String get liveMicTestFailed => 'Could not be tested';
+
+  @override
+  String get liveMicTestNone => 'Not tested';
+
+  @override
+  String get liveMicTestAgain => 'Test again (5 seconds)';
+
+  @override
+  String liveMicTestAt(String time) {
+    return 'Tested at $time.';
+  }
+
+  @override
+  String get liveMicTestSilentTitle => 'The chosen input is silent';
+
+  @override
+  String get liveMicTestSilentBody =>
+      'The live would go on air without the speaker\'s voice. Pick another input or check the cable, then test again.';
+
+  @override
+  String get liveYoutubeLaterWhySignIn =>
+      'YouTube is not connected on the MAXCOM yet.';
+
+  @override
+  String get liveYoutubeLaterWhyUnreachable => 'The MAXCOM cannot be reached.';
+
+  @override
+  String get liveYoutubeLaterWhyStarter =>
+      'Only the device that started the live can add YouTube.';
+
+  @override
+  String get liveTvShowFailed => 'The choice could not be saved. Try again.';
+
+  @override
+  String get liveCtlSubNoSound => 'No sound';
+
+  @override
+  String get liveAudioSwitchConfirm =>
+      'Change the sound? The broadcast pauses for a moment (2 to 3 seconds).';
+
+  @override
+  String get liveAudioSwitchDo => 'Change';
+
+  @override
+  String get liveAudioSwitchCancel => 'Cancel';
+
+  @override
+  String get liveWarnMicDropsTitle =>
+      'The MAXCOM microphone sound is breaking up';
+
+  @override
+  String get liveWarnMicDropsBody =>
+      'Check the microphone cable or choose the camera sound.';
+
+  @override
+  String get liveWarnBehindTitle => 'Upload to YouTube is slow';
+
+  @override
+  String liveWarnBehindBody(int seconds) {
+    return 'The broadcast is $seconds seconds behind. It carries on.';
+  }
+
+  @override
+  String get liveWarnQualityTitle => 'Picture quality lowered (480p)';
+
+  @override
+  String get liveWarnQualityBody =>
+      'The internet is slow. The quality returns by itself when the internet recovers.';
+
+  @override
+  String liveRelayReconnects(int count) {
+    return 'The connection to YouTube was resumed $count times';
+  }
 }

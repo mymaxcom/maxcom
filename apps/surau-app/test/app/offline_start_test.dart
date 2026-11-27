@@ -172,7 +172,7 @@ class Rig {
           name: 'Ustaz Ali',
           roles: const ['admin'],
           at: DateTime.utc(2026, 11, 10),
-          surauName: 'Surau D\'Waqaf',
+          surauName: 'Surau Contoh',
         ),
       );
     }

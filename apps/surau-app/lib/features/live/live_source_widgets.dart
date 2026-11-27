@@ -7,12 +7,15 @@
 // of their own beyond a stepper value.
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../l10n/generated/s.dart';
 import '../labels.dart' show appLangOf;
 import '../labels_cam.dart';
+import '../shell/live_camera_gateway.dart' show CameraControlOutcome, LiveCameraProfile;
 import 'live_source.dart';
 import 'live_widgets.dart';
 import 'publisher.dart';
@@ -290,7 +293,13 @@ class VideoSourceBody extends StatelessWidget {
     required this.readOnly,
     required this.onPick,
     this.onOpenCamera,
+    this.onPath,
   });
+
+  /// "Video diambil oleh: Telefon ini / MAXCOM Kiosk Box" under the external
+  /// camera, on an Android phone only (a browser cannot pull a camera: the box
+  /// always does). Null hides the choice.
+  final void Function(String path)? onPath;
 
   final LiveSourceState source;
   final bool ipad;
@@ -413,6 +422,45 @@ class VideoSourceBody extends StatelessWidget {
           onTap: () => onPick(VideoSourceKind.external),
         ),
       );
+      final pickPath = onPath;
+      if (!phoneOn && !ipad && pickPath != null) {
+        final s = S.of(context);
+        children.add(
+          Padding(
+            key: const ValueKey('video-path'),
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(s.liveVideoPathLabel, style: text.labelLarge!.copyWith(color: SurauColors.muted)),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  key: const ValueKey('video-path-choice'),
+                  segments: [
+                    ButtonSegment(value: videoPathDevice, label: Text(s.liveVideoPathDevice, textAlign: TextAlign.center)),
+                    ButtonSegment(value: videoPathBox, label: Text(s.liveVideoPathBox, textAlign: TextAlign.center)),
+                  ],
+                  selected: {source.videoPath == videoPathBox ? videoPathBox : videoPathDevice},
+                  showSelectedIcon: false,
+                  onSelectionChanged: readOnly
+                      ? null
+                      : (sel) {
+                          if (sel.isNotEmpty) pickPath(sel.first);
+                        },
+                ),
+                if (source.boxPull) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    s.liveVideoPathBoxNote,
+                    key: const ValueKey('video-path-box-note'),
+                    style: text.bodySmall!.copyWith(color: SurauColors.muted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }
       if (!phoneOn && cam.reachable == false) {
         children.add(
           Container(
@@ -438,6 +486,67 @@ class VideoSourceBody extends StatelessWidget {
   }
 }
 
+// ---- the shared picture ----
+
+/// The picture of a live this device does not pull itself (another device
+/// holds the camera, or the box pulls it): shown THROUGH the box, never by a
+/// second pull of the camera. The box's own still of the running live
+/// ([fetch], `GET /api/live/notice/frame.jpg`) is read again every [every].
+class SharedPictureView extends StatefulWidget {
+  const SharedPictureView({super.key, required this.fetch, this.every = const Duration(seconds: 10)});
+
+  /// The latest still as JPEG bytes; null (or a throw) while the box has none.
+  final Future<Uint8List?> Function() fetch;
+  final Duration every;
+
+  @override
+  State<SharedPictureView> createState() => _SharedPictureViewState();
+}
+
+class _SharedPictureViewState extends State<SharedPictureView> {
+  Uint8List? _frame;
+  Timer? _timer;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+    _timer = Timer.periodic(widget.every, (_) => unawaited(_load()));
+  }
+
+  Future<void> _load() async {
+    if (_busy) return;
+    _busy = true;
+    try {
+      final b = await widget.fetch();
+      if (mounted && b != null && b.isNotEmpty) setState(() => _frame = b);
+    } on Object {
+      // no still yet: the last one (or the placeholder) stays
+    } finally {
+      _busy = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final frame = _frame;
+    return ColoredBox(
+      key: const ValueKey('live-shared-picture'),
+      color: SurauColors.glass,
+      child: frame == null
+          ? const Center(child: Icon(Icons.connected_tv_rounded, size: 44, color: Colors.white54))
+          : Image.memory(frame, fit: BoxFit.contain, gaplessPlayback: true, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+    );
+  }
+}
+
 // ---- "Audio" ----
 
 class AudioCardBody extends StatelessWidget {
@@ -452,7 +561,19 @@ class AudioCardBody extends StatelessWidget {
     required this.onMute,
     required this.onUseOnly,
     this.offsetBlock,
+    this.onToggle,
+    this.onLift,
+    this.onRowMute,
+    this.syncBlock,
   });
+
+  /// The sync block of the box microphone in a box-pulled live (three states), after the rows.
+  final Widget? syncBlock;
+
+  /// A phone input's on/off switch, a row's loudness lift and a row's own mute (volume to 0 and back).
+  final void Function(String id, bool on)? onToggle;
+  final void Function(String id, bool on)? onLift;
+  final void Function(String id)? onRowMute;
 
   final List<AudioRowModel> rows;
   final List<AudioNotice> notices;
@@ -480,9 +601,13 @@ class AudioCardBody extends StatelessWidget {
             onVolume: onVolume,
             onRemove: onRemove,
             onMute: onMute,
+            onToggle: onToggle,
+            onLift: onLift,
+            onRowMute: onRowMute,
             extra: rows[i].manual && offsetBlock != null ? offsetBlock!(rows[i]) : null,
           ),
         ],
+        if (syncBlock != null) ...[const Divider(height: 1), syncBlock!],
         if (canAdd) ...[
           if (rows.isNotEmpty) const Divider(height: 1),
           InkWell(
@@ -516,6 +641,9 @@ class AudioRowTile extends StatelessWidget {
     required this.onRemove,
     required this.onMute,
     this.extra,
+    this.onToggle,
+    this.onLift,
+    this.onRowMute,
   });
 
   final AudioRowModel row;
@@ -523,6 +651,9 @@ class AudioRowTile extends StatelessWidget {
   final void Function(String id) onRemove;
   final VoidCallback onMute;
   final Widget? extra;
+  final void Function(String id, bool on)? onToggle;
+  final void Function(String id, bool on)? onLift;
+  final void Function(String id)? onRowMute;
 
   IconData get _icon => switch (row.id) {
     idCamera => row.dim ? Icons.videocam_off_rounded : Icons.videocam_rounded,
@@ -578,6 +709,15 @@ class AudioRowTile extends StatelessWidget {
                   ),
                 ),
                 if (row.slider || row.mute) Padding(padding: const EdgeInsetsDirectional.only(top: 6), child: LevelMeter(row.level)),
+                if (row.toggle != null)
+                  Semantics(
+                    label: '${liveAudioInputUse(lang)}: ${row.name}',
+                    child: Switch(
+                      key: ValueKey('audio-switch-${row.id}'),
+                      value: row.toggle!,
+                      onChanged: row.readOnly || !row.toggleEnabled || onToggle == null ? null : (v) => onToggle!(row.id, v),
+                    ),
+                  ),
                 if (row.removable)
                   IconButton(
                     key: ValueKey('audio-remove-${row.id}'),
@@ -603,7 +743,7 @@ class AudioRowTile extends StatelessWidget {
                         max: 100,
                         divisions: 20,
                         semanticFormatterCallback: (v) => '${v.round()}%',
-                        onChanged: row.readOnly ? null : (v) => onVolume(row.id, v.round()),
+                        onChanged: row.readOnly || !row.on ? null : (v) => onVolume(row.id, v.round()),
                       ),
                     ),
                     SizedBox(
@@ -616,6 +756,19 @@ class AudioRowTile extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+              ),
+            if (row.rowMute && !row.readOnly && onRowMute != null)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(top: 8, end: 12),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: OutlinedButton.icon(
+                    key: ValueKey('audio-rowmute-${row.id}'),
+                    onPressed: () => onRowMute!(row.id),
+                    icon: Icon(row.volume == 0 || !row.on ? Icons.volume_up_rounded : Icons.volume_off_rounded, size: 18),
+                    label: Text(row.volume == 0 || !row.on ? liveAudioUnmuteSource(lang) : liveAudioMuteSource(lang)),
+                  ),
                 ),
               ),
             if (row.mute && !row.readOnly)
@@ -631,10 +784,24 @@ class AudioRowTile extends StatelessWidget {
                   ),
                 ),
               ),
+            if (row.lift != null)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(top: 4, end: 4),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(liveAudioLift(lang), style: text.bodySmall!.copyWith(color: SurauColors.muted))),
+                    Switch(
+                      key: ValueKey('audio-lift-${row.id}'),
+                      value: row.lift!,
+                      onChanged: row.readOnly || onLift == null ? null : (v) => onLift!(row.id, v),
+                    ),
+                  ],
+                ),
+              ),
             if (row.hint != null)
               Padding(
                 padding: const EdgeInsetsDirectional.only(top: 6, end: 12),
-                child: Text(row.hint!, style: text.bodySmall!.copyWith(color: SurauColors.muted)),
+                child: Text(row.hint!, key: ValueKey('audio-hint-${row.id}'), style: text.bodySmall!.copyWith(color: SurauColors.muted)),
               ),
             if (extra != null) Padding(padding: const EdgeInsetsDirectional.only(top: 10, end: 12), child: extra),
           ],
@@ -659,7 +826,6 @@ class AddAudioSheet extends StatelessWidget {
     final lang = appLangOf(context);
     final text = Theme.of(context).textTheme;
     final ext = source.external;
-    final mix = source.mix;
     Widget item({
       required String id,
       required IconData icon,
@@ -730,14 +896,14 @@ class AddAudioSheet extends StatelessWidget {
                 icon: Icons.mic_rounded,
                 title: ipad ? liveAudioIpadMicRow(lang) : liveAudioPhoneMicRow(lang),
                 hint: liveAudioMicHint(lang, ipad),
-                added: mix.deviceMic.enabled,
+                added: source.listed.contains(idDeviceMic),
               ),
             item(
               id: idBoxInput,
               icon: Icons.settings_input_component_rounded,
               title: liveAudioBoxInputRow(lang),
               hint: liveAudioAddBoxHint(lang),
-              added: mix.boxInput.enabled,
+              added: source.listed.contains(idBoxInput),
               reason: source.boxInputAvailable ? null : (source.boxInputReason ?? liveAudioBoxInputMissing(lang)),
             ),
             Align(
@@ -756,11 +922,13 @@ class AddAudioSheet extends StatelessWidget {
 /// The fallback for a camera with no audio track: a stepper (0 to 2000 ms,
 /// steps of 50) and the clap test.
 class OffsetBlock extends StatelessWidget {
-  const OffsetBlock({super.key, required this.ms, required this.onStep, required this.onClap});
+  const OffsetBlock({super.key, required this.ms, required this.onStep, this.onClap});
 
   final int ms;
   final void Function(int delta) onStep;
-  final VoidCallback onClap;
+
+  /// "Uji tepukan"; null where it cannot work (a box-pulled live shows no picture on this device).
+  final VoidCallback? onClap;
 
   @override
   Widget build(BuildContext context) {
@@ -802,7 +970,8 @@ class OffsetBlock extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          if (onClap != null) const SizedBox(height: 8),
+          if (onClap != null)
           OutlinedButton.icon(
             key: const ValueKey('audio-clap'),
             onPressed: onClap,
@@ -996,6 +1165,332 @@ class MixedLevelChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(silent ? liveNoSound(lang) : liveMixedLevel(lang), style: text.labelMedium!.copyWith(color: Colors.white)),
           if (!silent) ...[const SizedBox(width: 8), LevelMeter(level)],
+        ],
+      ),
+    );
+  }
+}
+
+// ---- "Kawalan kamera" (Lane X) ----
+
+/// The exposure steps the camera accepts, in tenths of an EV (the box moves any other value to the nearest one).
+const List<int> cameraExposureSteps = [-30, -27, -23, -20, -17, -13, -10, -7, -3, 0, 3, 7, 10, 13, 17, 20, 23, 27, 30];
+
+/// The call of one camera action: the gateway's `controlLiveCamera`.
+typedef CameraControlSend =
+    Future<CameraControlOutcome> Function({double? exposure, int? preset, bool resetPosition, bool? aiTracking, bool applyProfile});
+
+/// "+1.3", "0.0", "-2.7": a step in tenths as people read it.
+String cameraExposureLabel(int tenths) => '${tenths > 0 ? '+' : ''}${(tenths / 10).toStringAsFixed(1)}';
+
+/// The collapsed "Kawalan kamera" row under the external camera: Kecerahan (minus and plus), Kedudukan (1, 2, 3, Asal)
+/// and Jejak automatik. Drawn only while the camera's control opt-in is on. Each tap is one call; the box says whether
+/// the camera answered and the row shows it quietly, never as a failure of the live.
+class CameraControlRow extends StatefulWidget {
+  const CameraControlRow({super.key, required this.send, this.hasBrightness = true, this.profile});
+
+  final CameraControlSend send;
+
+  /// False for a camera whose method has no brightness command (the buttons are left out).
+  final bool hasBrightness;
+
+  /// The saved profile: after "Terapkan tetapan kamera" the row shows its brightness and tracking.
+  final LiveCameraProfile? profile;
+
+  @override
+  State<CameraControlRow> createState() => _CameraControlRowState();
+}
+
+class _CameraControlRowState extends State<CameraControlRow> {
+  bool _open = false;
+  bool _busy = false;
+  int _step = cameraExposureSteps.indexOf(0);
+  bool _tracking = false;
+  String? _status;
+
+  /// Runs one call and says what came back; [onSent] updates the shown value only when the message left the box.
+  Future<void> _run(Future<CameraControlOutcome> Function() call, void Function() onSent) async {
+    if (_busy) return;
+    final s = S.of(context);
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    String status;
+    var sent = false;
+    try {
+      final out = await call();
+      sent = out.sent;
+      status = !out.sent
+          ? s.liveCamCtlFailed
+          : out.confirmed
+          ? s.liveCamCtlConfirmed
+          : s.liveCamCtlSent;
+    } on Object {
+      status = s.liveCamCtlFailed;
+    }
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _status = status;
+      if (sent) onSent();
+    });
+  }
+
+  /// The main button: the box sends the saved profile (preset, focus, tracking, brightness) in one call.
+  void _apply() {
+    unawaited(
+      _run(() => widget.send(applyProfile: true), () {
+        final p = widget.profile;
+        if (p == null) return;
+        _step = cameraExposureSteps.indexOf((p.exposureEv * 10).round()).clamp(0, cameraExposureSteps.length - 1);
+        _tracking = p.tracking == 'human';
+      }),
+    );
+  }
+
+  void _bright(int delta) {
+    final next = (_step + delta).clamp(0, cameraExposureSteps.length - 1);
+    if (next == _step) return;
+    unawaited(_run(() => widget.send(exposure: cameraExposureSteps[next] / 10), () => _step = next));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final text = Theme.of(context).textTheme;
+    final muted = text.bodySmall!.copyWith(color: SurauColors.muted);
+    Widget line(String title, Widget trailing) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(child: Text(title, style: text.titleSmall)),
+          trailing,
+        ],
+      ),
+    );
+    return Card(
+      key: const ValueKey('camera-control-row'),
+      margin: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            key: const ValueKey('camera-control-toggle'),
+            onTap: () => setState(() => _open = !_open),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 52),
+              child: Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 12, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.tune_rounded, color: SurauColors.teal),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(s.liveCamCtlTitle, style: text.titleSmall)),
+                    Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: SurauColors.muted),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 12),
+            child: FilledButton.icon(
+              key: const ValueKey('camera-control-apply'),
+              onPressed: _busy ? null : _apply,
+              icon: const Icon(Icons.auto_fix_high_rounded),
+              label: Text(s.liveCamCtlApply),
+            ),
+          ),
+          if (!_open && _status != null)
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 12),
+              child: Text(_status!, key: const ValueKey('camera-control-status'), style: muted),
+            ),
+          if (_open)
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (widget.hasBrightness)
+                    line(
+                      s.liveCamCtlBrightness,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton.outlined(
+                            key: const ValueKey('camera-control-darker'),
+                            tooltip: s.liveCamCtlBrightnessDown,
+                            onPressed: _busy || _step == 0 ? null : () => _bright(-1),
+                            icon: const Icon(Icons.remove_rounded),
+                          ),
+                          SizedBox(
+                            width: 64,
+                            child: Text(
+                              cameraExposureLabel(cameraExposureSteps[_step]),
+                              key: const ValueKey('camera-control-ev'),
+                              textAlign: TextAlign.center,
+                              style: text.titleMedium,
+                            ),
+                          ),
+                          IconButton.outlined(
+                            key: const ValueKey('camera-control-brighter'),
+                            tooltip: s.liveCamCtlBrightnessUp,
+                            onPressed: _busy || _step == cameraExposureSteps.length - 1 ? null : () => _bright(1),
+                            icon: const Icon(Icons.add_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(s.liveCamCtlPosition, style: text.titleSmall),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final n in const [1, 2, 3])
+                        OutlinedButton(
+                          key: ValueKey('camera-control-preset-$n'),
+                          onPressed: _busy ? null : () => unawaited(_run(() => widget.send(preset: n), () {})),
+                          child: Text('$n'),
+                        ),
+                      OutlinedButton(
+                        key: const ValueKey('camera-control-home'),
+                        onPressed: _busy ? null : () => unawaited(_run(() => widget.send(resetPosition: true), () {})),
+                        child: Text(s.liveCamCtlHome),
+                      ),
+                    ],
+                  ),
+                  SwitchListTile(
+                    key: const ValueKey('camera-control-tracking'),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(s.liveCamCtlTracking, style: text.titleSmall),
+                    value: _tracking,
+                    onChanged: _busy ? null : (v) => unawaited(_run(() => widget.send(aiTracking: v), () => _tracking = v)),
+                  ),
+                  if (_status != null) Text(_status!, key: const ValueKey('camera-control-status'), style: muted),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// How the box microphone is lined up with the camera picture (U4): measured by the box, being measured, or set by
+/// hand.
+enum BoxSyncMode { auto, busy, manual }
+
+/// "Segerak bunyi dan gambar": the three states of the box microphone's sync. The microphone is on air in every one
+/// of them; the stepper (0 to 2000 ms, steps of 50) appears in the manual state.
+class BoxSyncBlock extends StatelessWidget {
+  const BoxSyncBlock({
+    super.key,
+    required this.mode,
+    required this.ms,
+    required this.onManual,
+    required this.onAuto,
+    required this.onStep,
+    this.enabled = true,
+    this.saved = false,
+  });
+
+  /// The step is kept for the next live too (the person holds `live:settings`); the range line says so only then.
+  final bool saved;
+
+  final BoxSyncMode mode;
+
+  /// The delay in force (measured, last good, or set by hand).
+  final int ms;
+  final VoidCallback onManual;
+  final VoidCallback onAuto;
+  final void Function(int delta) onStep;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final text = Theme.of(context).textTheme;
+    final (icon, title, body, ink) = switch (mode) {
+      BoxSyncMode.auto => (Icons.check_circle_outline_rounded, s.liveSyncAuto, s.liveSyncAutoBody, LiveColors.healthyInk),
+      BoxSyncMode.busy => (Icons.sync_rounded, s.liveSyncBusy, s.liveSyncBusyBody(ms), LiveColors.waitingInk),
+      BoxSyncMode.manual => (Icons.tune_rounded, s.liveSyncManual, s.liveSyncManualBody, SurauColors.ink),
+    };
+    return Padding(
+      key: const ValueKey('live-box-sync'),
+      padding: const EdgeInsetsDirectional.fromSTEB(20, 12, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(s.liveSyncTitle, style: text.titleSmall)),
+              if (mode != BoxSyncMode.manual)
+                Text(
+                  '+$ms ms',
+                  key: const ValueKey('live-box-sync-ms'),
+                  style: text.labelMedium!.copyWith(color: SurauColors.muted),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            key: ValueKey('live-box-sync-state-${mode.name}'),
+            children: [
+              Icon(icon, size: 20, color: ink),
+              const SizedBox(width: 8),
+              Expanded(child: Text(title, style: text.titleSmall!.copyWith(color: ink))),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(body, style: text.bodySmall!.copyWith(color: SurauColors.muted)),
+          if (mode == BoxSyncMode.manual) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                IconButton.outlined(
+                  key: const ValueKey('live-box-sync-minus'),
+                  tooltip: s.liveSyncLess,
+                  onPressed: !enabled || ms <= 0 ? null : () => onStep(-50),
+                  icon: const Icon(Icons.remove_rounded),
+                ),
+                Expanded(
+                  child: Text(
+                    '+$ms ms',
+                    key: const ValueKey('live-box-sync-value'),
+                    textAlign: TextAlign.center,
+                    style: text.titleMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                  ),
+                ),
+                IconButton.outlined(
+                  key: const ValueKey('live-box-sync-plus'),
+                  tooltip: s.liveSyncMore,
+                  onPressed: !enabled || ms >= 2000 ? null : () => onStep(50),
+                  icon: const Icon(Icons.add_rounded),
+                ),
+              ],
+            ),
+            Text(saved ? s.liveSyncRangeSaved : s.liveSyncRange, key: const ValueKey('live-box-sync-range'), style: text.bodySmall!.copyWith(color: SurauColors.muted)),
+            TextButton.icon(
+              key: const ValueKey('live-box-sync-auto'),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: enabled ? onAuto : null,
+              icon: const Icon(Icons.sync_rounded, size: 18),
+              label: Text(s.liveSyncBack),
+            ),
+          ] else
+            TextButton.icon(
+              key: const ValueKey('live-box-sync-manual'),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: enabled ? onManual : null,
+              icon: const Icon(Icons.tune_rounded, size: 18),
+              label: Text(s.liveSyncManual),
+            ),
         ],
       ),
     );

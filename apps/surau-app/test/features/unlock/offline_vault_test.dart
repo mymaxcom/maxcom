@@ -53,13 +53,13 @@ void main() {
         name: 'Ustaz Ali',
         roles: const ['admin', 'ajk'],
         at: clock,
-        surauName: 'Surau D\'Waqaf',
+        surauName: 'Surau Contoh',
       ),
     );
     final p = await v.profile();
     expect(p!.userId, 'u1');
     expect(p.user.roles, ['admin', 'ajk']);
-    expect(p.surauName, 'Surau D\'Waqaf');
+    expect(p.surauName, 'Surau Contoh');
     final raw = await store.getDoc(OfflineVault.collection, 'profile');
     expect(raw!.keys.toSet(), {'userId', 'name', 'roles', 'at', 'surauName'});
     expect(jsonEncode(raw), isNot(contains('token')));

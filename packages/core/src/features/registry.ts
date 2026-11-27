@@ -3,6 +3,7 @@
 import type { ImageRef } from '../image.ts';
 import type { ThemeStyles } from '../theme/style.ts';
 import type { InstalledPacks } from '../theme/packs.ts';
+import type { TvProfiles } from './tvProfiles.ts';
 import type { AddedAudioId } from '../live/sources.ts';
 
 export type FeatureGroup = 'solat' | 'skrin' | 'kandungan' | 'quran' | 'audio' | 'live' | 'kewangan' | 'jemaah' | 'awan' | 'keselamatan' | 'lanjutan';
@@ -20,7 +21,7 @@ export type FeatureKey =
   | 'prayerBar' | 'clock' | 'prayerSequenceSafety' | 'zone' | 'azanCountdown' | 'masukWaktu'
   | 'iqamahCountdown' | 'solatScreen' | 'jumaat' | 'tarawih' | 'syurukWarning' | 'imsakBeep'
   | 'isyraq' | 'firstAzanSubuh' | 'dataSources' | 'location' | 'prayerCalc' | 'prayerSources'
-  | 'surauInfo' | 'hijriDate' | 'backgrounds' | 'autoTone' | 'language' | 'orientation' | 'kioskTemplate' | 'themeStyle'
+  | 'surauInfo' | 'hijriDate' | 'backgrounds' | 'autoTone' | 'language' | 'orientation' | 'kioskTemplate' | 'themeStyle' | 'tvProfiles'
   | 'kuliahCard' | 'penceramahPhoto' | 'kitabCover' | 'pengumuman' | 'ticker' | 'posters' | 'videos'
   | 'programKhas' | 'takwim' | 'hadis' | 'worldTimes' | 'tugasan'
   | 'ayatCard' | 'zikirSelepasSolat' | 'quranReader' | 'tilawah'
@@ -64,6 +65,8 @@ export type KioskTemplateId = (typeof KIOSK_TEMPLATE_IDS)[number];
 export interface KioskTemplateSettings extends FeatureSettings { templateId: string }
 /** Per-theme menu values and installed pack records; each map is one whole value. */
 export interface ThemeStyleSettings extends FeatureSettings { styles: ThemeStyles; packs: InstalledPacks }
+/** Per-TV choices keyed by TV id (`self` or a paired device id); each TV is one atomic row. A missing field follows the surau. */
+export interface TvProfilesSettings extends FeatureSettings { tvs: TvProfiles }
 
 /** Typed views keyed by feature; features not listed use the plain FeatureSettings shape. */
 export interface TypedSettings {
@@ -79,6 +82,7 @@ export interface TypedSettings {
   autoTone: AutoToneSettings;
   kioskTemplate: KioskTemplateSettings;
   themeStyle: ThemeStyleSettings;
+  tvProfiles: TvProfilesSettings;
   surauInfo: SurauInfoSettings;
   dataSources: DataSourcesSettings;
   location: LocationSettings;
@@ -118,6 +122,8 @@ export interface LiveYoutubeSettings extends FeatureSettings {
    * live:control, every device), synced like any other field; a block (signed out, no internet) never changes it.
    */
   nextLiveOn: boolean;
+  /** When the internet is slow the YouTube picture drops to 480p and returns by itself. */
+  autoQuality: boolean;
 }
 /** MAXCOM system values (Lanjutan; Pentadbir MAXCOM only). suspendedAt is the reversible stop flag. */
 export interface SystemSettings extends FeatureSettings {
@@ -134,6 +140,8 @@ export interface RecordingSettings extends FeatureSettings { segmentMinutes: num
 export interface LiveCameraSettings extends FeatureSettings {
   name: string;
   transport: 'auto' | 'tcp' | 'udp';
+  /** B7: picture brightness of the live. `auto` lifts the picture only when it is dark; the others are fixed lifts. */
+  brightness: 'auto' | 'normal' | 'bright' | 'brighter';
   avOffsetMs: Record<AddedAudioId, number>;
 }
 export interface DataSource { name: string; url: string }
@@ -258,6 +266,7 @@ export const FEATURES: readonly FeatureDef[] = [
   def('orientation', 'skrin', false, true, { mode: 'landscape' }, 'Orientasi skrin', 'Screen orientation', 'اتجاه الشاشة'),
   def('kioskTemplate', 'skrin', false, true, { templateId: 'default' }, 'Templat paparan', 'Display template', 'قالب العرض'),
   def('themeStyle', 'skrin', false, true, { styles: {}, packs: {} }, 'Gaya tema', 'Theme style', 'نمط القالب'),
+  def('tvProfiles', 'skrin', true, true, { tvs: {} }, 'Pilihan setiap TV', 'Per-TV choices', 'خيارات كل تلفاز'),
 
   def('kuliahCard', 'kandungan', false, true, { durationSeconds: 15, order: 1, daysAhead: 7 }, 'Kad kuliah', 'Lecture card', 'بطاقة الدروس'),
   def('penceramahPhoto', 'kandungan', false, true, { shape: 'round' }, 'Gambar penceramah', 'Speaker photo', 'صورة المحاضر'),
@@ -288,7 +297,12 @@ export const FEATURES: readonly FeatureDef[] = [
   def('ayatCard', 'quran', false, true,
     { durationSeconds: 20, order: 9, pick: 'daily', surah: 2, ayatFrom: 255, ayatTo: 255, showTranslation: true, textSize: 'm' },
     'Kad ayat', 'Verse card', 'بطاقة الآية'),
-  def('zikirSelepasSolat', 'quran', false, true, { durationSeconds: 20, minutesAfterSolat: 10 }, 'Zikir selepas solat', 'Post-prayer zikir', 'أذكار بعد الصلاة'),
+  // `startAfterMinutes`: the zikir starts this long after the solat ends (0 = at once); `minutesAfterSolat` is its ceiling,
+  // counted from its own start. `showClock` keeps the clock in the head while it shows, `showTimeLeft` adds a small
+  // countdown, `look` is the theme's choice ('theme'), always the plain panel ('plain') or always the Arabic-led ring ('arab').
+  def('zikirSelepasSolat', 'quran', false, true,
+    { durationSeconds: 20, minutesAfterSolat: 10, startAfterMinutes: 0, showClock: true, showTimeLeft: false, look: 'theme' },
+    'Zikir selepas solat', 'Post-prayer zikir', 'أذكار بعد الصلاة'),
   def('quranReader', 'quran', false, true, {}, 'Pembaca Al-Quran', 'Quran reader', 'قارئ القرآن'),
   def('tilawah', 'quran', false, false, { reciter: 'Husary_64kbps', volume: 40, cacheMaxMb: 300 }, 'Tilawah', 'Recitation', 'التلاوة'),
 
@@ -304,13 +318,14 @@ export const FEATURES: readonly FeatureDef[] = [
       relayVideo: 'copy',
       titleTemplate: '{label}: {penceramah}',
       descriptionTemplate: '{topic}\nKitab: {kitab}\n{surau}, {date}',
-      maxBitrateKbps: 2500,
+      maxBitrateKbps: 3500,
       nextLiveOn: true,
+      autoQuality: true,
     },
     'Siaran langsung YouTube', 'Live on YouTube', 'البث المباشر على YouTube'),
   def('recording', 'live', false, true, { segmentMinutes: 15, keepOnDevice: true }, 'Rakaman', 'Recording', 'التسجيل'),
   def('liveCamera', 'live', false, false,
-    { name: 'Kamera luaran', transport: 'auto', avOffsetMs: { deviceMic: 0, boxInput: 0 } },
+    { name: 'Kamera luaran', transport: 'auto', brightness: 'auto', avOffsetMs: { deviceMic: 0, boxInput: 0 } },
     'Kamera luaran', 'External camera', 'الكاميرا الخارجية'),
 
   def('finance', 'kewangan', false, false,

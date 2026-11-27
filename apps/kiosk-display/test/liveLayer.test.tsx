@@ -10,6 +10,8 @@ const holder = vi.hoisted(() => ({
   view: null as unknown as KioskView,
   live: null as unknown as LiveView,
   beeps: [] as Array<string | null>,
+  // true: the stand-in hook answers like the real one, which ignores every event while the TV's liveOnKiosk is off
+  honourSettings: false,
 }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyFn = (...a: any[]) => any;
@@ -18,7 +20,12 @@ const whep = vi.hoisted(() => ({
   close: null as unknown as import('vitest').Mock<AnyFn>,
 }));
 vi.mock('../src/data/kiosk.ts', () => ({ useKiosk: () => holder.view }));
-vi.mock('../src/data/live.ts', () => ({ useLive: () => holder.live }));
+vi.mock('../src/data/live.ts', () => ({
+  useLive: (settings: { liveOnKiosk?: { enabled?: boolean } }) =>
+    holder.honourSettings && settings.liveOnKiosk?.enabled !== true
+      ? { live: false, since: null, kuliah: null, audio: false, volume: 50, playable: true }
+      : holder.live,
+}));
 vi.mock('../src/data/whep.ts', () => ({ openWhep: (...a: unknown[]) => whep.open(...a) }));
 vi.mock('../src/ui/Beep.ts', () => ({
   useBeep: (s: KioskState) => {
@@ -66,6 +73,7 @@ beforeEach(() => {
   holder.live = ON_AIR;
   holder.view = NORMAL();
   holder.beeps = [];
+  holder.honourSettings = false;
 });
 afterEach(() => {
   cleanup();
@@ -106,6 +114,23 @@ describe('the live screen (the live takes priority)', () => {
     expect(whep.open).toHaveBeenCalledTimes(1);
     expect(whep.open.mock.calls[0]![0]).toBe(video);
     expect(whep.open.mock.calls[0]![1]).toMatchObject({ audio: false, volume: 50 });
+  });
+
+  it('onDecodeStuck warns and tells the Android host to recover', () => {
+    const videoStuck = vi.fn();
+    (window as unknown as Record<string, unknown>).MaxcomHost = { videoStuck };
+    (window as unknown as Record<string, unknown>).__mxHostKey = 'key-1';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      renderLive(<App />);
+      const opts = whep.open.mock.calls[0]![1] as { onDecodeStuck: () => void };
+      opts.onDecodeStuck();
+      expect(videoStuck).toHaveBeenCalledWith('key-1');
+      expect(warn).toHaveBeenCalledWith('kiosk live: video arrives but no frame decodes; asking the host to recover');
+    } finally {
+      delete (window as unknown as Record<string, unknown>).MaxcomHost;
+      delete (window as unknown as Record<string, unknown>).__mxHostKey;
+    }
   });
 
   it('the video sits outside the live screen (owned by the app, above the phase switch), in clear mode', () => {
@@ -246,5 +271,109 @@ describe('preview mode', () => {
     expect(r.container.querySelector('.screen--phase')).toBeTruthy();
     expect(r.queryByTestId('live-video')).toBeNull();
     expect(r.queryByTestId('live-strip')).toBeNull();
+  });
+});
+
+// 2026.11.15, Lane A tasks A6 and A7: the TV holds the last picture through a short drop (D3, D4) and says when the box is full (K4).
+describe('A6/A7: held frame through a drop, and the too-many-viewers message', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  const stateOf = () => (whep.open.mock.calls[0]![1] as { onState: (s: string) => void }).onState;
+
+  it('D3/D4: the player drops a moment before the box says waiting: the picture and the live screen stay, the card shows, then it resumes (success path)', () => {
+    const r = render(<App />);
+    const video = r.getByTestId('live-video');
+    act(() => {
+      fireEvent(video, new Event('playing'));
+    });
+    expect(stageOf(r).getAttribute('data-live')).toBe('clear');
+    // MediaMTX closed the viewer: the player retries before the box's next monitor round has said `waiting`
+    act(() => stateOf()('retrying'));
+    expect(stageOf(r).getAttribute('data-live')).toBe('clear');
+    expect(r.container.querySelector('.live')!.getAttribute('data-playing')).toBe('true');
+    act(() => {
+      vi.advanceTimersByTime(2500);
+    });
+    holder.live = { ...ON_AIR, waiting: true };
+    r.rerender(<App />);
+    act(() => {
+      vi.advanceTimersByTime(30000);
+    });
+    expect(stageOf(r).getAttribute('data-live')).toBe('clear');
+    expect(r.getByTestId('live-video')).toBe(video);
+    expect(r.getByTestId('live-lost').textContent).toBe('Siaran akan bersambung sebentar lagi');
+    // the phone is back: the same player plays again and the card goes
+    holder.live = ON_AIR;
+    r.rerender(<App />);
+    act(() => {
+      fireEvent(video, new Event('playing'));
+    });
+    expect(stageOf(r).getAttribute('data-live')).toBe('clear');
+    expect(r.container.querySelector('[data-testid="live-lost"]')).toBeNull();
+    expect(r.getByTestId('live-video')).toBe(video);
+    expect(whep.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('D3: a drop the box never calls waiting leaves the live screen after the short hold', () => {
+    const r = render(<App />);
+    const video = r.getByTestId('live-video');
+    act(() => {
+      fireEvent(video, new Event('playing'));
+    });
+    act(() => stateOf()('retrying'));
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(stageOf(r).getAttribute('data-live')).toBe('clear');
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(stageOf(r).getAttribute('data-live')).toBe('none');
+  });
+
+  it('K4: when every viewer slot is taken the TV says so and keeps its normal screen; the message goes when the picture plays', () => {
+    const r = render(<App />);
+    const video = r.getByTestId('live-video');
+    expect(r.container.querySelector('[data-testid="live-toomany"]')).toBeNull();
+    act(() => stateOf()('toomany'));
+    act(() => stateOf()('retrying'));
+    const note = r.getByTestId('live-toomany');
+    expect(note.textContent).toBe('Terlalu banyak TV sedang menonton siaran langsung. TV ini akan cuba lagi sebentar lagi.');
+    expect(note.getAttribute('role')).toBe('status');
+    expect(stageOf(r).getAttribute('data-live')).toBe('none');
+    act(() => stateOf()('playing'));
+    act(() => {
+      fireEvent(video, new Event('playing'));
+    });
+    expect(r.container.querySelector('[data-testid="live-toomany"]')).toBeNull();
+    expect(stageOf(r).getAttribute('data-live')).toBe('clear');
+  });
+});
+
+describe('F1 pinned on the TV page: the per-TV show switch off (liveOnKiosk.enabled false)', () => {
+  it('a live event mounts no player and no live screen, and the normal screen stays', () => {
+    holder.honourSettings = true;
+    holder.live = ON_AIR;
+    holder.view = makeView('2026-11-05', '15:50', { settings: { liveOnKiosk: { enabled: false } } });
+    const r = render(<App />);
+    expect(r.container.querySelector('video')).toBeNull();
+    expect(r.queryByTestId('live-video')).toBeNull();
+    expect(r.queryByTestId('live-strip')).toBeNull();
+    expect(r.container.querySelector('.screen--live')).toBeNull();
+    expect(whep.open).not.toHaveBeenCalled();
+    expect(stageOf(r).getAttribute('data-live')).toBe('none');
+    expect(stageOf(r).getAttribute('data-screen')).not.toBe('live');
+    // the phase machine's own screen for that moment is on show (the prayer table of a normal day)
+    expect(r.container.querySelectorAll('[data-prayer]').length).toBeGreaterThan(0);
+  });
+
+  it('the same live with the switch on mounts the player and the live screen (the check above is not vacuous)', () => {
+    holder.honourSettings = true;
+    holder.live = ON_AIR;
+    holder.view = NORMAL();
+    const r = renderLive(<App />);
+    expect(r.queryByTestId('live-video')).not.toBeNull();
+    expect(stageOf(r).getAttribute('data-screen')).toBe('live');
+    expect(whep.open).toHaveBeenCalledTimes(1);
   });
 });

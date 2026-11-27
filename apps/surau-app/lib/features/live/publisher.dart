@@ -67,6 +67,12 @@ class RecordingState {
   final int segments;
   final int bytes;
   final String? lastError;
+
+  /// The recording is really being made: on, and not stopped by `no_data`, `storage_low`, `stopped` or a recorder that
+  /// cannot run. Only then does it count as a destination of the live.
+  bool get active => on && !_stoppedCodes.contains(lastError);
+
+  static const _stoppedCodes = {'no_data', 'storage_low', 'stopped', 'no_recorder', 'recorder_unavailable'};
 }
 
 class StreamStats {
@@ -86,7 +92,17 @@ class StreamStats {
 }
 
 /// What the device itself warns about while live.
-enum Warning { lowBattery, hot, screenLockRisk, lowStorage, noInternet }
+enum Warning {
+  lowBattery,
+  hot,
+  screenLockRisk,
+  lowStorage,
+  noInternet,
+
+  /// The phone receives far fewer frames from the external camera than the
+  /// camera sends (the native `weakIngest` warning): its Wi-Fi is weak.
+  weakIngest,
+}
 
 // ---- The external camera and the audio mix on the phone (plan rev 4, task K2).
 // All of it is additive: a publisher that knows nothing of it keeps the
@@ -193,6 +209,16 @@ enum ClapPhase { idle, capturing, ready, replaying, failed }
 /// Why the engine ended a live by itself: the lost camera ran out its 10
 /// minutes ("Siaran dihentikan kerana kamera terputus lebih 10 minit.").
 const String endedCameraLost = 'camera_lost';
+
+/// The person ended the live from the phone's notification ("Hentikan siaran").
+const String endedNotificationStop = 'notification_stop';
+
+/// The engine ended an unattended live itself: no screen attached and the box
+/// out of reach for 10 minutes. The recording is kept.
+const String endedUnattended = 'unattended';
+
+/// `RecordingState.lastError` of a recording that held no picture (nothing is kept or queued).
+const String recordingEmpty = 'empty_recording';
 
 /// The external camera to pull. [url] is the full RTSP address from
 /// `GET /api/live/camera/source` and may hold the login: keep it in memory
@@ -381,9 +407,16 @@ class PublisherTargets {
     this.kuliahId,
     this.ingestUrl,
     this.youtubeUrl,
+    this.sessionId,
   });
 
   final LiveOutputs outputs;
+
+  /// The box's session id this start belongs to (2026.11.15): an engine that
+  /// outlives the screen keeps it and answers it in
+  /// [LiveSessionHolder.status], so a reopened app can tell its own live.
+  /// Null in tests and for a publisher that keeps nothing.
+  final String? sessionId;
 
   /// The kuliah broadcast, or null for `Tanpa kuliah`.
   final String? kuliahId;
@@ -437,6 +470,24 @@ abstract class LivePublisher {
 
   /// A platform view on Android, an `HtmlElementView` on the web.
   Widget preview(BuildContext context);
+}
+
+/// Local recording switched on or off DURING a live (Rakam in "Destinasi siaran"). Off ends the running piece and
+/// keeps the file so far; on starts a new piece. A publisher that cannot do it does not implement this.
+abstract interface class LiveRecordingControl {
+  Future<void> setRecording(bool on);
+}
+
+/// B7: the phone's own picture brightness (Android only; the browser lets the box do it). The level is the
+/// `liveCamera.brightness` setting: `auto`, `normal`, `bright` or `brighter`; anything else counts as `auto`.
+abstract interface class LiveBrightnessControl {
+  Future<void> setBrightness(String level);
+}
+
+/// F1: keeps this phone's screen on while it only controls a live (the box pulls the camera, so the engine runs
+/// nothing and cannot do it). The controller sets it for a control-only session and clears it at the end.
+abstract interface class LiveScreenKeep {
+  Future<void> keepScreenOn(bool on);
 }
 
 /// What a publisher that mixes on the device can do beyond [LivePublisher]
@@ -494,4 +545,64 @@ abstract interface class LiveMicControl {
   /// default). A running live and its recording carry on. False when the
   /// microphone could not be opened; nothing changes then.
   Future<bool> setMicrophone(String? deviceId);
+}
+
+/// The loudness lift ("Naikkan suara perlahan") of one source, switched while the engine runs (2026.11.15).
+abstract interface class LiveLiftControl {
+  /// [id] is `camera` (the camera's own sound) or `deviceMic` (the phone microphone in use).
+  Future<void> setLift(String id, bool on);
+}
+
+// ---- The live an engine still holds after the screen went away (2026.11.15
+// revamp, frozen in Lane 0). Additive: a publisher that keeps nothing beyond
+// the screen does not implement it.
+
+/// What the engine still knows of the live it is running: enough for the
+/// screen to re-attach after the app was reopened. Never a stream key, a
+/// passphrase or an address.
+class PublisherSession {
+  const PublisherSession({
+    required this.sessionId,
+    required this.startedAt,
+    required this.streaming,
+    this.youtube = false,
+    this.video = VideoSourceKind.phone,
+    this.recordings = const [],
+  });
+
+  /// The box's session id the engine was started for.
+  final String sessionId;
+  final DateTime startedAt;
+
+  /// The picture is still being sent to the box right now.
+  final bool streaming;
+
+  /// The engine carries its own YouTube leg in this live.
+  final bool youtube;
+  final VideoSourceKind video;
+
+  /// The recordings of this live so far (as [LivePublisher.sessionRecordings]).
+  final List<String> recordings;
+
+  @override
+  String toString() => 'PublisherSession($sessionId, streaming: $streaming)';
+}
+
+/// A publisher that can let go of what [LivePublisher.prepare] opened while
+/// no live runs (B11): with the MAXCOM Kiosk Box pulling the camera, or the
+/// camera held by another device, this phone keeps neither its own camera
+/// nor a pull of the network camera open. The source asks
+/// `publisher is LivePreparedRelease`.
+abstract interface class LivePreparedRelease {
+  /// Closes the prepared camera or pull and goes back to idle. Does nothing
+  /// during a live, a start or a stop. Never throws.
+  Future<void> releasePrepared();
+}
+
+/// A publisher whose engine outlives the screen (the Android one: the
+/// foreground service owns the session). The screen asks
+/// `publisher is LiveSessionHolder`.
+abstract interface class LiveSessionHolder {
+  /// The live the engine holds, or null when it holds none.
+  Future<PublisherSession?> status();
 }

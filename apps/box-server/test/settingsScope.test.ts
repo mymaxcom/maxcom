@@ -52,10 +52,12 @@ describe('system settings need system:write on the settings route', () => {
     expect(s).toMatchObject({ relayVideo: 'reencode', maxBitrateKbps: 3000 });
     expect((await put(app, admin.headers, 'liveYoutube', { privacy: 'public' })).statusCode).toBe(200);
     // one system key hidden in an otherwise ordinary patch refuses the whole patch
-    const mixed = await put(app, admin.headers, 'liveYoutube', { privacy: 'private', maxBitrateKbps: 2000 });
+    const mixed = await put(app, admin.headers, 'liveYoutube', { privacy: 'private', relayVideo: 'copy' });
     expect(mixed.statusCode).toBe(403);
     const again = (await app.inject({ method: 'GET', url: '/api/settings', headers: admin.headers })).json().liveYoutube;
-    expect(again).toMatchObject({ privacy: 'public', maxBitrateKbps: 3000 });
+    expect(again).toMatchObject({ privacy: 'public', relayVideo: 'reencode' });
+    // the bitrate is a live setting: an admin writes it without system:write
+    expect((await put(app, admin.headers, 'liveYoutube', { maxBitrateKbps: 2000 })).statusCode).toBe(200);
   });
 
   it('the system feature, cloud sync, the data sources and the tilawah disk budget', async () => {

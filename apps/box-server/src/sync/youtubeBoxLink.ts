@@ -5,7 +5,7 @@ import { getSettings } from '../settingsStore.ts';
 import { LOCAL_SURAU_ID } from '../tenant.ts';
 import { BOX_REPORT_HEADERS, cloudFetch } from './agent.ts';
 import { loadSyncKey, normaliseCloudUrl } from './syncKey.ts';
-import { openClient, openHandover } from './youtubeSeal.ts';
+import { openClient } from './youtubeSeal.ts';
 
 /**
  * The box's half of "YouTube held by the box only" (release 2026.11.13; cloud half `youtubeBoxCloud.ts`).
@@ -13,10 +13,9 @@ import { openClient, openHandover } from './youtubeSeal.ts';
  *
  *  - The OAuth client (D2): a linked box takes the operator's client file from the cloud, sealed to this box, and
  *    keeps it as `secret/youtube-client.json`. An unlinked box keeps a file the operator placed.
- *  - The handover: a grant the cloud held before this release moves here once, with NO re-sign-in. The box opens it
- *    with its own key, proves it with one refresh, then acknowledges; only then does the cloud delete its copy (never
- *    revoking it). Not while a live runs. A grant Google already withdrew leaves the box asking for one sign-in at the
- *    surau ("ditarik balik").
+ *  - The handover is over (2026.11.15, phase 4): the cloud holds no grant, so nothing is taken from it. The box only
+ *    settles ("nothing to move") on its first round. What stays is the finishing of one a box began before: a grant
+ *    it adopted and has not yet acknowledged, or one Google withdrew that the cloud has not yet heard about.
  *  - The flag: after a sign-in, a sign-out, a handover or a withdrawn grant, the box pushes {signedIn, channelTitle,
  *    revoked} so the app can show it away from the surau. Never a token.
  *
@@ -33,18 +32,12 @@ const FLAG_KEY = 'youtube_flag_sent';
 /** When the flag was last taken by the cloud (ms): it is sent again at least once a day, even when unchanged (M3). */
 const FLAG_AT_KEY = 'youtube_flag_sent_at';
 const FLAG_REPEAT_MS = 24 * 3_600_000;
-/** While the handover is unsettled the box asks the cloud to wake at most this often per hour (as the camera wake does). */
-const WAKES_PER_HOUR = 3;
-/** The hourly wake times are kept here, so a restart does not reset the cap. */
-const WAKES_KEY = 'youtube_wakes';
-/** The box stops waking the cloud for an unsettled handover after this long (a restart, or a settings or sign-in change, starts it again). */
-const WAKE_WINDOW_MS = 24 * 3_600_000;
 /** The repeat of a withdrawn-grant acknowledgement backs off by try (F8): 2 min, 10 min, 1 h, then every 6 h, for 3 days, then once a day. */
 const REVOKED_RETRY_MS = [2 * 60_000, 10 * 60_000, 3_600_000, 6 * 3_600_000] as const;
 const REVOKED_SLOW_AFTER_MS = 3 * 86_400_000;
 const REVOKED_SLOW_RETRY_MS = 86_400_000;
 
-export type HandoverOutcome = 'skipped' | 'held' | 'none' | 'busy' | 'claimed' | 'adopted' | 'revoked' | 'failed';
+export type HandoverOutcome = 'skipped' | 'held' | 'none' | 'adopted' | 'revoked' | 'failed';
 export type ClientOutcome = 'skipped' | 'written' | 'same' | 'none' | 'failed';
 
 export interface YoutubeBoxLinkOptions {
@@ -53,14 +46,10 @@ export interface YoutubeBoxLinkOptions {
   now: () => Date;
   boxId: string;
   service: YoutubeService;
-  /** True while this box runs a live (no handover then). */
-  isLive: () => boolean;
   fetchImpl?: typeof fetch | undefined;
   cloudUrl?: string | null | undefined;
   /** Run the timer (default true). Tests drive `cycle` themselves. */
   auto?: boolean | undefined;
-  /** Asks the cloud to wake (the sync agent's signed `/wake`); left out, the box never wakes it for the handover. */
-  wake?: (() => Promise<boolean>) | undefined;
 }
 
 /** What the box remembers about the handover (ids only). */
@@ -81,10 +70,6 @@ export class YoutubeBoxLink {
   private clientOk = false;
   private timer: NodeJS.Timeout | null = null;
   private first: NodeJS.Timeout | null = null;
-  /** The last handover question reached the cloud (true), or did not (false); null before the first one. */
-  private cloudReached: boolean | null = null;
-  /** When this process first asked the cloud to wake for the handover now unsettled; null = not yet (or a change since). */
-  private wakeSince: number | null = null;
 
   constructor(o: YoutubeBoxLinkOptions) {
     this.o = o;
@@ -98,14 +83,14 @@ export class YoutubeBoxLink {
   }
 
   /**
-   * Why the sign-in cannot be judged yet: this box holds no grant of its own, the handover (a grant the cloud may
-   * still hold for this surau) has not been looked at, and so the answer is "not known", never "signed out".
-   * Null once the box holds a grant, the handover is settled, or the box is not linked.
+   * Why the sign-in cannot be judged yet: this box holds no grant of its own and has not yet settled the old handover
+   * (its first round after the start does, with no call to the cloud), so the answer is "not known", never "signed
+   * out". Null once the box holds a grant, the handover is settled, or the box is not linked.
    */
-  unknownReason(): 'handover_pending' | 'cloud_unreachable' | null {
+  unknownReason(): 'handover_pending' | null {
     try {
       if (this.link() === null || this.o.service.holdsGrant() || this.state() !== null) return null;
-      return this.cloudReached === false ? 'cloud_unreachable' : 'handover_pending';
+      return 'handover_pending';
     } catch {
       return null;
     }
@@ -162,10 +147,8 @@ export class YoutubeBoxLink {
       } catch {
         json = {};
       }
-      this.cloudReached = true;
       return { status: res.status, json };
     } catch {
-      this.cloudReached = false;
       return null;
     }
   }
@@ -232,7 +215,11 @@ export class YoutubeBoxLink {
     return res.json.acknowledged === true;
   }
 
-  /** One look for a grant the cloud still holds for this surau; never while a live runs. */
+  /**
+   * Settles the old handover. The cloud holds no grant now, so nothing is asked of it: a box with no state yet is
+   * simply "done" ("nothing to move"). What is still finished here is a handover begun by an earlier version: a
+   * grant adopted whose acknowledgement did not get through, and one Google withdrew that the cloud has not heard.
+   */
   async handover(): Promise<HandoverOutcome> {
     try {
       if (this.link() === null) return 'skipped';
@@ -269,67 +256,9 @@ export class YoutubeBoxLink {
         this.setState(ok ? { state: 'done' } : { state: 'revoked' });
         return ok ? 'adopted' : 'revoked';
       }
-      // a grant signed in here already: nothing to take (the cloud keeps the old one for a box not yet updated)
-      if (svc.holdsGrant()) {
-        this.setState({ state: 'done' });
-        return 'held';
-      }
-      // not during a live, nor while a person is signing in here (that sign-in decides)
-      if (this.o.isLive() || svc.info().signIn?.state === 'pending') return 'busy';
-      const link = this.link();
-      if (link === null) return 'skipped';
-      const res = await this.call('POST', '/api/sync/youtube/handover');
-      if (res === null) return 'failed';
-      if (res.status === 404) {
-        // only the cloud's own "nothing to move" settles it; any other 404 (no route, a site it does not know) is tried again
-        if (res.json.code !== 'none') return 'failed';
-        this.setState({ state: 'done' });
-        return 'none';
-      }
-      if (res.status === 409 && res.json.code === 'claimed') {
-        // D4: another box of this surau holds it; this one shows the flag only
-        this.setState({ state: 'done' });
-        return 'claimed';
-      }
-      if (res.status === 409) return 'busy';
-      if (res.status === 410) {
-        svc.markRevoked();
-        this.setState({ state: 'revoked' });
-        return 'revoked';
-      }
-      if (res.status !== 200) return 'failed';
-      const id = res.json.handoverId;
-      if (typeof id !== 'string' || id === '' || id.length > 64 || res.json.boxId !== this.o.boxId || typeof res.json.sealed !== 'string') return 'failed';
-      let g: Record<string, unknown>;
-      try {
-        const v: unknown = JSON.parse(openHandover(link.privateJwk, res.json.sealed, this.o.boxId, id));
-        if (!isRec(v)) return 'failed';
-        g = v;
-      } catch {
-        return 'failed';
-      }
-      if (g.v !== 1 || g.boxId !== this.o.boxId || g.handoverId !== id || typeof g.refreshToken !== 'string' || g.refreshToken === '' || g.refreshToken.length > 2048) return 'failed';
-      // a sign-in made here while the answer was out wins: the cloud's copy stays for now
-      if (svc.holdsGrant() || this.o.isLive() || svc.info().signIn?.state === 'pending') return 'busy';
-      const proof = await svc.adoptGrant({
-        refreshToken: g.refreshToken,
-        channelId: typeof g.channelId === 'string' ? g.channelId : '',
-        channelTitle: typeof g.channelTitle === 'string' ? g.channelTitle : '',
-        scope: typeof g.scope === 'string' ? g.scope : '',
-      });
-      if (proof === 'invalid_grant') {
-        // the handover id is kept with the state until the cloud has heard (M3)
-        const t = this.o.now().getTime();
-        this.setState({ state: 'revoked', id, n: 1, since: t, at: t });
-        if (await this.ack(id, false, 'invalid_grant')) this.setState({ state: 'revoked' });
-        return 'revoked';
-      }
-      // kept before anything is said: a lost answer cannot lose the grant
-      this.setState({ state: 'adopted', id });
-      if (proof === 'failed') return 'failed';
-      if (!(await this.ack(id, true))) return 'failed';
+      // no state yet: the cloud holds no grant (a grant signed in here is this box's own), so there is nothing to move
       this.setState({ state: 'done' });
-      return 'adopted';
+      return svc.holdsGrant() ? 'held' : 'none';
     } catch {
       return 'failed';
     }
@@ -337,9 +266,11 @@ export class YoutubeBoxLink {
 
   // ---- the flag --------------------------------------------------------------------------------------------------
 
-  private flag(): { signedIn: boolean; channelTitle: string | null; revoked: boolean } {
+  private flag(): { signedIn: boolean; channelTitle: string | null; revoked: boolean; signedOut?: true } {
     const i = this.o.service.info();
-    return { signedIn: i.signedIn, channelTitle: i.signedIn ? i.channelTitle : null, revoked: !i.signedIn && i.lastError === 'reauthorise' };
+    // `signedOut` (Y7): a person signed out here, so the cloud drops its old copy of the grant too. Only then.
+    const signedOut = !i.signedIn && i.state === 'signedOut' && i.reason === 'signed_out';
+    return { signedIn: i.signedIn, channelTitle: i.signedIn ? i.channelTitle : null, revoked: !i.signedIn && i.lastError === 'reauthorise', ...(signedOut ? { signedOut: true as const } : {}) };
   }
 
   /** Pushes the non-secret flag when it differs from the last one the cloud took. */
@@ -358,7 +289,13 @@ export class YoutubeBoxLink {
       // unchanged and sent within the day: nothing to say. Older than a day, it goes again: another box of the surau
       // may have written its own flag in the meantime, and the holder's word replaces it.
       if (last !== undefined && last.value === text && Number.isFinite(at) && t - at < FLAG_REPEAT_MS && t >= at) return true;
-      const res = await this.call('PUT', '/api/sync/youtube/flag', f);
+      let res = await this.call('PUT', '/api/sync/youtube/flag', f);
+      // a cloud from before 2026.11.15 takes exactly the three old keys: the flag goes again without the new one
+      if (res !== null && res.status === 400 && f.signedOut === true) {
+        const { signedOut: _drop, ...old } = f;
+        void _drop;
+        res = await this.call('PUT', '/api/sync/youtube/flag', old);
+      }
       if (res === null || (res.status !== 200 && res.status !== 409)) return false;
       // 409: another box of this surau holds the flag; nothing is stored, so a later round asks again (Q6)
       if (res.status === 409) return false;
@@ -380,56 +317,15 @@ export class YoutubeBoxLink {
     } catch {
       /* ignore */
     }
-    this.wakeSince = null;
     void this.pushFlag();
   }
 
-  /** The wake times of the last hour, from the database (they survive a restart). */
-  private recentWakes(now: number): number[] {
-    try {
-      const r = this.o.db.prepare('SELECT value FROM sync_state WHERE key = ?').get(WAKES_KEY);
-      const v: unknown = typeof r?.value === 'string' ? JSON.parse(r.value) : [];
-      return Array.isArray(v) ? v.filter((t): t is number => typeof t === 'number' && Number.isFinite(t) && now - t < 3_600_000 && t <= now).slice(-WAKES_PER_HOUR) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  private wakeAllowed(): boolean {
-    const now = this.o.now().getTime();
-    // not for ever: 24 hours after the first wake of this run, the handover is left to the next restart or settings change
-    if (this.wakeSince !== null && now - this.wakeSince > WAKE_WINDOW_MS) return false;
-    const wakes = this.recentWakes(now);
-    if (wakes.length >= WAKES_PER_HOUR) return false;
-    wakes.push(now);
-    try {
-      this.o.db.prepare('INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(WAKES_KEY, JSON.stringify(wakes));
-    } catch {
-      /* the cap then holds for this run only */
-    }
-    this.wakeSince ??= now;
-    return true;
-  }
-
-  /** Whether the handover could run at all: it needs the operator's client, from the cloud or placed here. Unknown until it was looked for once. */
-  private handoverCanRun(): boolean {
-    return !this.clientChecked || this.clientOk || this.o.service.configured();
-  }
-
-  /** One round: the client (once per start, or while none is set), the handover, then the flag. Never throws. */
+  /** One round: the client (once per start, or while none is set), the handover (settled locally), then the flag. Never throws. */
   cycle(): Promise<void> {
     if (this.busy !== null) return this.busy;
     this.busy = (async () => {
       try {
-        if (this.link() === null) {
-          // sync switched off or unlinked: a later link starts the wake window afresh
-          this.wakeSince = null;
-          return;
-        }
-        // the handover is not settled and the cloud may be asleep (a box upgraded in the evening, nothing to sync):
-        // ask it to wake, bounded, so the handover settles without a person waking the cloud (F1). Not when the handover
-        // cannot run (no client on either side), and not for more than 24 hours of one run.
-        if (this.o.wake !== undefined && this.unknownReason() !== null && this.handoverCanRun() && this.wakeAllowed()) await this.o.wake().catch(() => false);
+        if (this.link() === null) return;
         if (!this.clientChecked || !this.o.service.configured()) {
           const c = await this.fetchClient();
           if (c !== 'failed') this.clientChecked = true;
@@ -437,8 +333,9 @@ export class YoutubeBoxLink {
         }
         // a box that already has a client (placed by the operator) counts as ready (Q2): no cloud client file is needed
         if (!this.clientOk && this.o.service.configured()) this.clientOk = true;
-        // a box without the cloud's client could get invalid_grant from Google and make the cloud drop a good grant
-        if (this.clientOk) await this.handover();
+        // finishing an earlier handover proves the grant with Google, which needs the client (without it a failed proof
+        // could be taken for a withdrawn grant); settling "nothing to move" needs no client and no cloud
+        if (this.clientOk || this.state() === null) await this.handover();
         await this.pushFlag();
       } catch {
         /* the next round tries again */

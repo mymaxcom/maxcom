@@ -263,6 +263,15 @@ class PinnedEnrolTrust implements EnrolTrust {
     await _sink.saveCaDer(sha, der);
   }
 
+  @override
+  void routeName(String name, String ip) => _trust.routes.set(name, ip);
+
+  @override
+  void unrouteName(String name) => _trust.routes.remove(name);
+
+  @override
+  String? routeOf(String name) => _trust.routes.addressOf(name);
+
   /// The `clientFor` of [EnrolFlow]: pinned to the CA just checked.
   BoxClient clientFor(Uri box) => BoxClient(
     box,

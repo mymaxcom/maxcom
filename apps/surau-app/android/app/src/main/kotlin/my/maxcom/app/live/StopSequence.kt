@@ -51,4 +51,17 @@ object StopSequence {
         }
         return finished
     }
+
+    /**
+     * Q7: the end of the stop. The last file is probed ([finalize], null without a file), then the state is settled.
+     * [settle] always runs: a probe that throws is logged by its type only and must not leave the stop open for ever.
+     */
+    fun finish(finalize: (() -> Unit)?, settle: () -> Unit, log: (String, String) -> Unit) {
+        try {
+            finalize?.invoke()
+        } catch (e: Throwable) {
+            try { log("stop_finalize_failed", "type=" + e.javaClass.simpleName) } catch (_: Throwable) {}
+        }
+        settle()
+    }
 }

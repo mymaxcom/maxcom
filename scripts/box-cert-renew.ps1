@@ -3,11 +3,20 @@
   MAXCOM: renew the box HTTPS leaf certificate before it lapses. Windows PowerShell 5.1.
 
 .DESCRIPTION
-  Run daily by the scheduled task MaxcomCertRenew (scripts\install-cert-renew-task.ps1).
+  Run daily, at start and every 15 minutes by the scheduled task MaxcomCertRenew
+  (scripts\install-cert-renew-task.ps1).
   Reads <DataDir>\pki\box-leaf.cer. When it expires within ThresholdDays (default 60), or is missing
   or unreadable, it runs scripts\box-ca.ps1 -Renew for the first non-loopback IPv4 address in the
   current leaf's SAN, with the Store, Surau name and Days that box-ca.ps1 recorded in
-  <DataDir>\pki\box-ca.json when the leaf was first made. The box server notices the new leaf within
+  <DataDir>\pki\box-ca.json when the leaf was first made.
+  LOCAL NAME: the box service claims a numbered local name on the LAN (boxN-surau.local) and records the
+  number in <DataDir>\box-name.json. That file is written by the box account, so it is NOT trusted: the
+  script takes only the integer N from it (1 to 99, at most 1 KB, a plain file, never a link) and builds
+  the name itself; anything else in the file is ignored. When the root is a v2 root (box-ca.json says
+  rootGeneration v2) and the leaf does not carry the claimed name, the leaf is renewed at once with
+  -BoxName, so a name change shows within 15 minutes. A renewal for any other reason keeps the claimed name
+  (or, with no valid claim, the numbered name the old leaf already had). A legacy root never carries a
+  numbered name, so nothing is renewed for one. The box server notices the new leaf within
   an hour and starts using it; no restart and no action on any device is needed (devices trust the
   root, not the leaf).
   One line per run is appended to <LogDir>\cert-renew.log (last 200 lines kept; LogDir defaults to
@@ -79,6 +88,7 @@ if ($logLinks.Count -gt 0) {
   exit 1
 }
 $leafFile = Join-Path $pkiDir 'box-leaf.cer'
+$claimFile = Join-Path $dataFull 'box-name.json'
 $metaFile = Join-Path $pkiDir 'box-ca.json'
 $caScript = Join-Path $PSScriptRoot 'box-ca.ps1'
 
@@ -90,10 +100,51 @@ function Write-RenewLog([string]$status, [string]$message) {
   New-Item -ItemType Directory -Force -Path $logDir | Out-Null
   $lines = @()
   if (Test-Path $logFile) { $lines = @(Get-Content -Path $logFile -Encoding ASCII) }
+  # The task runs every 15 minutes: one SKIP line a day is enough, so renewals and failures stay in the 200 lines.
+  if ($status -eq 'SKIP' -and $lines.Count -gt 0) {
+    $last = [string]$lines[$lines.Count - 1]
+    if ($last.StartsWith((Get-Date).ToString('yyyy-MM-dd')) -and $last -match '^\S+ SKIP ') { Write-Output $line; return }
+  }
   $lines = @($lines + $line)
   if ($lines.Count -gt 200) { $lines = $lines[($lines.Count - 200)..($lines.Count - 1)] }
   [System.IO.File]::WriteAllText($logFile, (($lines -join "`r`n") + "`r`n"), (New-Object System.Text.ASCIIEncoding))
   Write-Output $line
+}
+
+# The number the box claimed, from <DataDir>\box-name.json, or $null. The file is written by the box account, so only
+# the integer N is taken (1 to 99), and only from a small plain file; the name is built here, never read.
+function Read-ClaimedName {
+  $fs = $null
+  try {
+    # The file is opened ONCE and the handle kept: FileShare.Read means nothing can write, rename or replace it while it
+    # is open, so what is checked below is what is read. At most 1 KB is read, whatever the file holds.
+    $fs = New-Object System.IO.FileStream($claimFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+    $item = Get-Item -LiteralPath $claimFile -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or $item.Length -gt 1024 -or $fs.Length -gt 1024) { return $null }
+    $buf = New-Object byte[] 1025
+    $got = 0
+    while ($got -lt 1025) {
+      $n = $fs.Read($buf, $got, 1025 - $got)
+      if ($n -le 0) { break }
+      $got += $n
+    }
+    if ($got -gt 1024) { return $null }
+    $text = [System.Text.Encoding]::ASCII.GetString($buf, 0, $got)
+    if ($text -notmatch '^\s*\{[^{}]*\}\s*$') { return $null }
+    $m = [regex]::Match($text, '"n"\s*:\s*([1-9][0-9]?)\s*[,}]')
+    if (-not $m.Success) { return $null }
+    return ('box{0}-surau.local' -f [int]$m.Groups[1].Value)
+  } catch { return $null } finally { if ($null -ne $fs) { $fs.Dispose() } }
+}
+
+# The numbered name the leaf carries now ('boxN-surau.local'), or $null.
+function Get-LeafBoxName($cert) {
+  if ($null -eq $cert) { return $null }
+  $ext = $cert.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.17' } | Select-Object -First 1
+  if ($null -eq $ext) { return $null }
+  $m = [regex]::Match($ext.Format($false), '(?i)\bbox([1-9][0-9]?)-surau\.local\b')
+  if (-not $m.Success) { return $null }
+  return ('box{0}-surau.local' -f [int]$m.Groups[1].Value)
 }
 
 function Read-Leaf {
@@ -108,11 +159,20 @@ try {
   if ($dataLinks.Count -gt 0) { throw ('GAGAL: data, secret atau pki (atau folder di atasnya) ialah pautan (reparse point); tiada apa diubah: ' + ($dataLinks -join ', ')) }
   $leaf = Read-Leaf
   $reason = $null
+  # The claimed local name matters only under a v2 root (box-ca.json is in pki\, which the box account cannot write).
+  $v2 = $false
+  if (Test-Path -LiteralPath $metaFile) {
+    try { $v2 = ([string](Get-Content -Path $metaFile -Raw -Encoding ASCII | ConvertFrom-Json).rootGeneration -ceq 'v2') } catch { $v2 = $false }
+  }
+  $claimed = $null
+  if ($v2) { $claimed = Read-ClaimedName }
+  $leafName = Get-LeafBoxName $leaf
   if ($null -eq $leaf) { $reason = 'leaf missing or unreadable' }
   elseif ($Force) { $reason = 'forced' }
   else {
     $daysLeft = [math]::Floor(($leaf.NotAfter.ToUniversalTime() - (Get-Date).ToUniversalTime()).TotalDays)
     if ($daysLeft -lt $ThresholdDays) { $reason = "leaf expires in $daysLeft days" }
+    elseif ($null -ne $claimed -and $leafName -cne $claimed) { $reason = "local name $claimed is not in the leaf" }
     else {
       Write-RenewLog 'SKIP' ("leaf valid until {0} ({1} days left)" -f $leaf.NotAfter.ToString('yyyy-MM-dd'), $daysLeft)
       exit 0
@@ -144,6 +204,12 @@ try {
   if ($CheckOnly) { Write-RenewLog 'WOULD-RENEW' "$reason; ip $ip store $store days $days"; exit 0 }
 
   $caArgs = @{ Ip = $ip; DataDir = $dataFull; Days = $days; Surau = $surau; Store = $store; Renew = $true }
+  # The name for the new leaf: the claimed one, else the one the old leaf had. Only under a v2 root, and only a name
+  # built from an integer 1 to 99 above (box-ca.ps1 checks the exact shape again).
+  if ($v2) {
+    if ($null -ne $claimed) { $caArgs['BoxName'] = $claimed }
+    elseif ($null -ne $leafName) { $caArgs['BoxName'] = $leafName.ToLowerInvariant() }
+  }
   if ($meta.noTrust -eq $true) { $caArgs['NoTrust'] = $true }
   # The account box-ca.ps1 -ServiceAccount recorded. The box runs as LOCAL SERVICE and nothing else: any other
   # value (a file the box account could have changed) stops the renewal instead of being granted Modify.

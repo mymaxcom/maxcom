@@ -1,12 +1,14 @@
 import { fingerprintGroups, parseBoxQr } from '@surau/core';
 import type { BoxStateView } from '@surau/core';
 import type { KioskView } from '../data/kiosk.ts';
-import { tb, tbx } from '../i18n-box.ts';
+import type { LinkView } from '../data/linkState.ts';
+import { tb, tbx, tl } from '../i18n-box.ts';
 import type { BoxLang } from '../i18n-box.ts';
 import type { Lang } from '../i18n.ts';
 import { QrCard } from '../ui/QrCard.tsx';
 import { BoxClock, BoxHead, textAttrs } from './BoxChrome.tsx';
 import type { BoxLangProps } from './BoxChrome.tsx';
+import { SetupLinkBlock } from './Link.tsx';
 
 /** Largest edge of the code: 7 device pixels a module on a 1080p panel for the usual payload. */
 const QR_REM = 42;
@@ -18,6 +20,10 @@ export interface BoxScreenProps extends BoxLangProps {
   surauLang?: Lang;
   /** OK on the remote does the same; a click is for a box with a mouse attached. */
   onNetCheck?: () => void;
+  /** The box's link state for its own TV: the setup screen shows the link QR beside the setup QR when there is one. */
+  link?: LinkView | null;
+  /** The box's clock minus this TV's clock, for the link QR's countdown. */
+  linkOffsetMs?: number;
 }
 
 /** The box's own https origin as signed into the QR: '' when it has none, null when there is no readable code. */
@@ -82,7 +88,7 @@ export function NetCheckButton({
 }
 
 /** First boot: the QR that makes the first phone the Pentadbir. Mockup screen 1. */
-export function Setup({ box, view, lang, onLang, focus, onNetCheck }: BoxScreenProps) {
+export function Setup({ box, view, lang, onLang, focus, onNetCheck, link, linkOffsetMs }: BoxScreenProps) {
   const { settings, now } = view;
   const timeFormat = settings.prayerBar.timeFormat === '24h' ? '24h' : '12h';
   const origin = originOf(box.qr?.payload);
@@ -143,6 +149,7 @@ export function Setup({ box, view, lang, onLang, focus, onNetCheck }: BoxScreenP
           {noCert ? <p class="box-warn">{tb('setupNoHttps', lang)}</p> : null}
           <p class="box-note">{tb('setupNeedsCamera', lang)}</p>
           {box.appDownloadUrl !== '' ? <p class="box-note">{tbx('setupApp', lang, { url: box.appDownloadUrl })}</p> : null}
+          <SetupLinkBlock qr={link?.qr ?? null} offsetMs={linkOffsetMs ?? 0} lang={lang} />
         </div>
         <footer class="box-foot glass" {...txt}>
           <div class="netitems">
@@ -166,6 +173,7 @@ export function Setup({ box, view, lang, onLang, focus, onNetCheck }: BoxScreenP
         caption={tb('setupCodeOnce', lang)}
         rem={QR_REM}
         keyFp={box.keyFp}
+        hint={link?.qr ? tl('setupNewSurau', lang) : undefined}
         lang={lang}
       />
     </div>

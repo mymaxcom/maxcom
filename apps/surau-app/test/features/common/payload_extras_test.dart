@@ -12,7 +12,7 @@ void main() {
     final x = EnrolPayloadExtras.parse(
       fixturePayload(roles: ['admin', 'media']),
     );
-    expect(x.surau!.name, 'Surau D\'Waqaf');
+    expect(x.surau!.name, 'Surau Contoh');
     expect(x.surau!.kind, 'surau');
     expect(x.help!.name, 'Encik Hafiz');
     expect(x.help!.phone, '012-345 6789');

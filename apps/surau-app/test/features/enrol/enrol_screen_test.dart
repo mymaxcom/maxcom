@@ -164,7 +164,7 @@ void main() {
 
       await pasteAndContinue(tester, fixturePayload(exp: fixtureExpToday));
 
-      expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Surau Contoh'), findsOneWidget);
       expect(find.text('Assalamualaikum, Ustaz Ali'), findsOneWidget);
       expect(find.text('Pentadbir'), findsOneWidget);
       expect(
@@ -229,7 +229,7 @@ void main() {
         Uri.parse('https://127.0.0.1:8443'),
       ], reason: 'the box named in the code, once');
       expect(find.byKey(const ValueKey('surau-logo')), findsOneWidget);
-      expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Surau Contoh'), findsOneWidget);
 
       await pumpAtSize(
         tester,
@@ -241,7 +241,7 @@ void main() {
         GoldenSize.phone,
       );
       expect(find.byKey(const ValueKey('surau-logo')), findsNothing);
-      expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Surau Contoh'), findsOneWidget);
     },
   );
 
@@ -375,7 +375,7 @@ void main() {
       await typePin(tester, '280419', '280419');
       await tapEnrol(tester);
       expect(find.text('Peranti didaftarkan'), findsOneWidget);
-      expect(find.text('Ustaz Ali\nSurau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Ustaz Ali\nSurau Contoh'), findsOneWidget);
       expect(
         find.text('Lain kali, buka aplikasi ini dan masukkan PIN anda.'),
         findsOneWidget,
@@ -389,9 +389,9 @@ void main() {
       expect(body['deviceName'], 'Telefon Ali');
       expect((body['publicJwk'] as Map).keys.toSet(), {'kty', 'crv', 'x', 'y'});
       expect(done?.box.deviceId, 'dev-1');
-      expect(done?.surau?.name, 'Surau D\'Waqaf');
+      expect(done?.surau?.name, 'Surau Contoh');
       final cached = await infoStore.load();
-      expect(cached?.name, 'Surau D\'Waqaf');
+      expect(cached?.name, 'Surau Contoh');
       expect(cached?.help?.phone, '012-345 6789');
     },
   );
@@ -542,7 +542,7 @@ void main() {
     await choose(tester, 'Saya sudah ada PIN');
     await tapEnrol(tester);
     expect(
-      find.text('Tidak dapat menghubungi Surau D\'Waqaf'),
+      find.text('Tidak dapat menghubungi Surau Contoh'),
       findsOneWidget,
     );
     expect(find.text('Hubungi Encik Hafiz'), findsOneWidget);
@@ -732,7 +732,7 @@ void main() {
         await settleImages(tester);
         expect(find.byKey(const ValueKey('surau-logo')), findsOneWidget);
         expect(
-          find.text('Surau D\'Waqaf'),
+          find.text('Surau Contoh'),
           findsNothing,
           reason: 'the logo is the name',
         );

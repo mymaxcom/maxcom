@@ -89,4 +89,28 @@ class DiagAndStopTest {
         assertFalse(ok)
         assertEquals(listOf("outputs", "release"), order)
     }
+
+    @Test
+    fun q7_aThrowingFinalizeStillSettlesTheStop() {
+        val order = mutableListOf<String>()
+        val events = mutableListOf<String>()
+        StopSequence.finish(
+            finalize = { order.add("finalize"); throw IllegalStateException("secret-detail") },
+            settle = { order.add("settle") },
+            log = { e, f -> events.add("$e $f") },
+        )
+        assertEquals(listOf("finalize", "settle"), order)
+        // the failure is on record by its type only
+        assertEquals(listOf("stop_finalize_failed type=IllegalStateException"), events)
+    }
+
+    @Test
+    fun q7_finalizeThenSettleAndNoFileStillSettles() {
+        val order = mutableListOf<String>()
+        val events = mutableListOf<String>()
+        StopSequence.finish(finalize = { order.add("finalize") }, settle = { order.add("settle") }, log = { e, _ -> events.add(e) })
+        StopSequence.finish(finalize = null, settle = { order.add("settle") }, log = { e, _ -> events.add(e) })
+        assertEquals(listOf("finalize", "settle", "settle"), order)
+        assertTrue(events.isEmpty())
+    }
 }

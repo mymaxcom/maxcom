@@ -1,17 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { join } from 'node:path';
 import { klInstant } from '@surau/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../src/app.ts';
 import { putItem } from '../src/content/store.ts';
 import { putFeature } from '../src/settingsStore.ts';
+import { generateSyncKeyPair } from '../src/sync/syncKey.ts';
 import { insertSite } from './support/sites.ts';
 import type { TestSite } from './support/sites.ts';
 import type { FakeGoogle } from './support/fakeGoogle.ts';
+import { buildBox } from './support/boxGrant.ts';
 import { buildCloud } from './support/fakeCloud.ts';
-import { seedCloudGrant } from './support/cloudGrant.ts';
 import { withUploadApi } from './support/fakeGoogleUpload.ts';
 import { startFakeGoogle } from './support/fakeGoogle.ts';
 import { TEST_PIN, loginAs } from './authHelpers.ts';
@@ -31,14 +30,12 @@ describe('youtube uploads scoped by surau_id', () => {
     const up = withUploadApi(g);
     const clock = { t: klInstant('2026-11-05', '19:00').getTime(), now: (): Date => new Date(clock.t) };
     up.snippet = () => ({ publishedAt: new Date(clock.t + 1000).toISOString(), channelId: 'UC-surau' });
-    const cloud = buildCloud('boxid0001', { now: clock.now, fetchImpl: up.fetchImpl });
+    // the box holds the grant (2026.11.13); the rows of a surau that is not this box's are still kept apart
+    const cloud = buildBox('boxid0001', { now: clock.now, fetchImpl: up.fetchImpl });
     closers.push(cloud.close, g.close);
     const app = cloud.app;
     mkdirSync(join(cloud.dir, 'secret'), { recursive: true });
     writeFileSync(join(cloud.dir, 'secret', 'youtube-client.json'), JSON.stringify({ client_id: 'cid', client_secret: 'secret' }));
-
-    // the grant the cloud held from before release 2026.11.13 (the cloud makes no new one)
-    seedCloudGrant(cloud.dir, clock.now);
 
     const { db } = app.surau;
     const pen = putItem(db, 'penceramah', { name: 'Ustaz' }, 'test', undefined, 'sdm');
@@ -84,16 +81,14 @@ describe('youtube uploads scoped by surau_id', () => {
   });
 });
 
-describe('[L1] one YouTube sign-in per surau on the cloud', () => {
+describe('[L1] the cloud holds no YouTube sign-in for any surau', () => {
   const B = 'zbravo-surau';
-  const BOX_A = 'boxid0001';
-  const BOX_B = 'boxid0002';
+  const BOX_A = 'aaaa000000000001';
+  const BOX_B = 'bbbb000000000001';
 
   async function rig(): Promise<{
     app: FastifyInstance;
-    dir: string;
     g: FakeGoogle;
-    clock: { t: number };
     adminA: Awaited<ReturnType<typeof loginAs>>;
     adminB: Awaited<ReturnType<typeof loginAs>>;
     siteA: TestSite;
@@ -113,89 +108,26 @@ describe('[L1] one YouTube sign-in per surau on the cloud', () => {
     const adminB = await loginAs(cloud.app, 'admin', TEST_PIN, B);
     const siteA = insertSite(db, { boxId: BOX_A, surauId: DEFAULT_SURAU });
     const siteB = insertSite(db, { boxId: BOX_B, surauId: B });
-    return { app: cloud.app, dir: cloud.dir, g, clock, adminA, adminB, siteA, siteB };
+    // a linked site has the public half of its sync key on the cloud (the flag route seals nothing, but asks for it)
+    for (const boxId of [BOX_A, BOX_B]) db.prepare('UPDATE sites SET public_jwk = ? WHERE box_id = ?').run(JSON.stringify(generateSyncKeyPair().publicJwk), boxId);
+    return { app: cloud.app, g, adminA, adminB, siteA, siteB };
   }
 
-  /** The grant a surau's cloud sign-in left before release 2026.11.13 (the cloud makes no new one). */
-  async function signIn(r: Awaited<ReturnType<typeof rig>>, who: { surauId: string }): Promise<void> {
-    seedCloudGrant(r.dir, () => new Date(r.clock.t), who.surauId);
-  }
   const status = (r: Awaited<ReturnType<typeof rig>>, who: { headers: Record<string, string> }) =>
     r.app.inject({ method: 'GET', url: '/api/live/youtube/status', headers: who.headers });
-  const broadcast = (r: Awaited<ReturnType<typeof rig>>, site: TestSite, sessionId: string) =>
-    r.app.inject({
-      method: 'POST',
-      url: '/api/cloud/youtube/broadcast',
-      headers: site.headers,
-      payload: { sessionId, meta: { title: 'Kuliah Maghrib', description: 'Bab Solat', privacy: 'unlisted' } },
-    });
+  const flag = (r: Awaited<ReturnType<typeof rig>>, site: TestSite, body: object) =>
+    r.app.inject({ method: 'PUT', url: '/api/sync/youtube/flag', headers: site.headers, payload: body });
 
-  it('[L1] surau A signed in: surau B is signed out, and B cannot sign A out', async () => {
+  it('[L1] the status away from the surau is the own box flag of each surau: A signed in, B signed out', async () => {
     const r = await rig();
-    await signIn(r, { surauId: DEFAULT_SURAU });
-    expect((await status(r, r.adminA)).json()).toMatchObject({ signedIn: true });
-    expect((await status(r, r.adminB)).json()).toMatchObject({ signedIn: false });
-    // 2026.11.13: no sign-out on the cloud at all (it would revoke the grant the box holds)
-    const out = await r.app.inject({ method: 'POST', url: '/api/live/youtube/signout', headers: r.adminB.headers });
-    expect(out.statusCode).toBe(409);
-    expect(out.json().code).toBe('youtube_at_box');
-    expect((await status(r, r.adminA)).json()).toMatchObject({ signedIn: true });
-    // B's own site cannot make a broadcast on A's account
-    const res = await broadcast(r, r.siteB, 'sess-b');
-    expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe('youtube_not_configured');
-    expect(r.g.calls.some((c) => c.path === '/youtube/v3/liveBroadcasts' && c.method === 'POST')).toBe(false);
+    expect((await flag(r, r.siteA, { signedIn: true, channelTitle: 'Saluran A' })).statusCode).toBe(200);
+    expect((await status(r, r.adminA)).json()).toMatchObject({ signedIn: true, channelTitle: 'Saluran A', heldBy: 'box' });
+    expect((await status(r, r.adminB)).json()).toMatchObject({ signedIn: false, channelTitle: null });
   });
 
-  it('[L1] the token file name carries the surau id and no code path reads the shared file', async () => {
+  it('[L1] sign-out, sign-in and its poll are refused on the cloud for every surau (2026.11.13); B cannot sign A out', async () => {
     const r = await rig();
-    await signIn(r, { surauId: DEFAULT_SURAU });
-    await signIn(r, { surauId: B });
-    expect(existsSync(join(r.dir, 'secret', `youtube-token-${DEFAULT_SURAU}.json`))).toBe(true);
-    expect(existsSync(join(r.dir, 'secret', `youtube-token-${B}.json`))).toBe(true);
-    expect(existsSync(join(r.dir, 'secret', 'youtube-token.json'))).toBe(false);
-    // B's sign-out is refused on the cloud (2026.11.13): both files stay, Google is never asked to revoke
-    expect((await r.app.inject({ method: 'POST', url: '/api/live/youtube/signout', headers: r.adminB.headers })).statusCode).toBe(409);
-    expect(existsSync(join(r.dir, 'secret', `youtube-token-${B}.json`))).toBe(true);
-    expect(existsSync(join(r.dir, 'secret', `youtube-token-${DEFAULT_SURAU}.json`))).toBe(true);
-    expect(r.g.count('/revoke')).toBe(0);
-  });
-
-  it('[L1] a broadcast carries its own surau name and a surau cannot end a live of another', async () => {
-    const r = await rig();
-    await signIn(r, { surauId: DEFAULT_SURAU });
-    await signIn(r, { surauId: B });
-    const a = await broadcast(r, r.siteA, 'sess-a');
-    expect(a.statusCode).toBe(200);
-    const b = await broadcast(r, r.siteB, 'sess-b');
-    expect(b.statusCode).toBe(200);
-    const titles = r.g.calls.filter((c) => c.path === '/youtube/v3/liveStreams' && c.method === 'POST').map((c) => (c.json!.snippet as { title: string }).title);
-    expect(titles).toEqual(['MAXCOM Surau Alfa', 'MAXCOM Surau Bravo']);
-    // A cannot end B's broadcast
-    const end = await r.app.inject({ method: 'POST', url: '/api/cloud/youtube/complete', headers: r.siteA.headers, payload: { broadcastId: b.json().broadcastId } });
-    expect(end.statusCode).toBe(404);
-  });
-
-  it('[L1] verify of another surau video id is refused; the own one answers', async () => {
-    const r = await rig();
-    await signIn(r, { surauId: DEFAULT_SURAU });
-    await signIn(r, { surauId: B });
-    const a = await broadcast(r, r.siteA, 'sess-a');
-    const id = a.json().broadcastId as string;
-    const liveA = await loginAs(r.app, 'live');
-    const liveB = await loginAs(r.app, 'live', TEST_PIN, B);
-    const mine = await r.app.inject({ method: 'POST', url: '/api/youtube/verify', headers: liveA.headers, payload: { videoIds: [id] } });
-    expect(mine.statusCode).toBe(200);
-    const theirs = await r.app.inject({ method: 'POST', url: '/api/youtube/verify', headers: liveB.headers, payload: { videoIds: [id] } });
-    expect(theirs.statusCode).toBe(400);
-    expect(theirs.json().code).toBe('unknown_video');
-  });
-
-  it('[L1] sign-out, sign-in and its poll are refused on the cloud for every surau, live or not (2026.11.13)', async () => {
-    const r = await rig();
-    await signIn(r, { surauId: DEFAULT_SURAU });
-    await signIn(r, { surauId: B });
-    expect((await broadcast(r, r.siteA, 'sess-a')).statusCode).toBe(200);
+    await flag(r, r.siteA, { signedIn: true, channelTitle: 'Saluran A' });
     for (const who of [r.adminA, r.adminB]) {
       for (const url of ['/api/live/youtube/signout', '/api/live/youtube/signin', '/api/live/youtube/signin/poll']) {
         const out = await r.app.inject({ method: 'POST', url, headers: who.headers });
@@ -208,18 +140,26 @@ describe('[L1] one YouTube sign-in per surau on the cloud', () => {
     expect(r.g.count('/device/code')).toBe(0);
   });
 
-  it('[L1] the old shared token and open-broadcast files are gone after the first start of a cloud', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'surau-cloud-old-'));
-    mkdirSync(join(dir, 'secret'), { recursive: true });
-    mkdirSync(join(dir, 'live'), { recursive: true });
-    writeFileSync(join(dir, 'secret', 'youtube-token.json'), 'old');
-    writeFileSync(join(dir, 'live', 'youtube-open.json'), '{}');
-    const app = buildApp(join(dir, 'cloud.db'), { dataDir: dir, role: 'cloud', boxId: 'boxid0000' });
-    closers.push(async () => {
-      await app.close().catch(() => undefined);
-      rmSync(dir, { recursive: true, force: true });
-    });
-    expect(existsSync(join(dir, 'secret', 'youtube-token.json'))).toBe(false);
-    expect(existsSync(join(dir, 'live', 'youtube-open.json'))).toBe(false);
+  it('[L1] no site makes a broadcast on the cloud, on any surau: the old box leg answers youtube_at_box', async () => {
+    const r = await rig();
+    for (const site of [r.siteA, r.siteB]) {
+      const res = await r.app.inject({
+        method: 'POST',
+        url: '/api/cloud/youtube/broadcast',
+        headers: site.headers,
+        payload: { sessionId: 'sess-1', meta: { title: 'Kuliah Maghrib', description: 'Bab Solat', privacy: 'unlisted' } },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe('youtube_at_box');
+    }
+    expect(r.g.calls).toHaveLength(0);
+  });
+
+  it('[L1] verify of a video id is refused on the cloud for every surau: the box answers it', async () => {
+    const r = await rig();
+    const liveB = await loginAs(r.app, 'live', TEST_PIN, B);
+    const res = await r.app.inject({ method: 'POST', url: '/api/youtube/verify', headers: liveB.headers, payload: { videoIds: ['someVideo001'] } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('youtube_at_box');
   });
 });

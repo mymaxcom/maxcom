@@ -232,6 +232,8 @@ export interface AlignerOptions {
   onState: (id: AddedAudioId, state: AlignState) => void;
   /** The delay the combiner started with (default 1000 ms; never 0). */
   initialDelayMs?: number;
+  /** The delay each source started with, when they differ (falls back to `initialDelayMs`). */
+  initialDelaysMs?: Partial<Record<AddedAudioId, number>>;
   maxDelayMs?: number;
   windowMs?: number;
   stepMs?: number;
@@ -290,8 +292,8 @@ export class Aligner {
     this.maxDelay = opts.maxDelayMs ?? MAX_DELAY_MS;
     this.rings = Array.from({ length: this.channels }, () => new Int16Array(this.winSamples));
     this.snap = Array.from({ length: this.channels }, () => new Int16Array(this.winSamples));
-    const d0 = Math.max(this.minDelay, Math.round(opts.initialDelayMs ?? DEFAULT_INITIAL_DELAY_MS));
     opts.added.forEach((id, i) => {
+      const d0 = Math.max(this.minDelay, Math.round(opts.initialDelaysMs?.[id] ?? opts.initialDelayMs ?? DEFAULT_INITIAL_DELAY_MS));
       this.src.set(id, {
         channel: i + 1,
         state: 'searching',
@@ -360,6 +362,22 @@ export class Aligner {
     if (!s) return;
     s.manual = true;
     this.setState(id, s, 'manual');
+  }
+
+  /** Back from a hand-set offset: the source goes on the aligner again from `searching`, starting at `delayMs`. */
+  setAuto(id: AddedAudioId, delayMs: number): void {
+    const s = this.src.get(id);
+    if (!s) return;
+    s.manual = false;
+    s.delayMs = Math.min(this.maxDelay, Math.max(this.minDelay, Math.round(delayMs)));
+    s.recent = [];
+    s.settleUntil = this.total + this.winSamples;
+    s.corrected = false;
+    s.lockedOnce = false;
+    s.quietTicks = 0;
+    s.searchSoundMs = 0;
+    s.lastResidualMs = undefined;
+    this.setState(id, s, 'searching');
   }
 
   private setState(id: AddedAudioId, s: PerSource, st: AlignState): void {

@@ -297,12 +297,10 @@ $apk = $null
 $sfx = ''
 if ($DebugBuild) { $sfx = '-debug' }
 if ($Version -ne '') {
+  # a build above 0 is in the name: MAX-Kiosk-Server-<version>-b<N>-<abi>.apk; the highest N wins over build 0
   $apk = Join-Path $ApkDir "MAX-Kiosk-Server-$Version-$abi$sfx.apk"
-  if (-not (Test-Path -LiteralPath $apk)) {
-    # a build above 0 is in the name: MAX-Kiosk-Server-<version>-b<N>-<abi>.apk, the highest N
-    $withBuild = @(Get-ChildItem -LiteralPath $ApkDir -Filter "MAX-Kiosk-Server-$Version-b?-$abi$sfx.apk" -File -ErrorAction SilentlyContinue | Sort-Object Name -Descending)
-    if ($withBuild.Count -gt 0) { $apk = $withBuild[0].FullName }
-  }
+  $withBuild = @(Get-ChildItem -LiteralPath $ApkDir -Filter "MAX-Kiosk-Server-$Version-b?-$abi$sfx.apk" -File -ErrorAction SilentlyContinue | Sort-Object Name -Descending)
+  if ($withBuild.Count -gt 0) { $apk = $withBuild[0].FullName }
   if (-not (Test-Path -LiteralPath $apk)) { Fail 2 "fail APK tiada: $apk" }
 } else {
   $found = @(Get-ChildItem -LiteralPath $ApkDir -Filter "MAX-Kiosk-Server-*-$abi$sfx.apk" -File -ErrorAction SilentlyContinue |

@@ -34,7 +34,7 @@ class BrowserMicDevices implements MicDevices {
     final all = await web.window.navigator.mediaDevices.enumerateDevices().toDart;
     return [
       for (final d in all.toDart)
-        if (d.kind == 'audioinput') MicInfo(deviceId: d.deviceId, label: d.label),
+        if (d.kind == 'audioinput') MicInfo(deviceId: d.deviceId, label: d.label, kind: kindFromBrowserLabel(d.label)),
     ];
   }
 }

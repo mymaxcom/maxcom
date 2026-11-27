@@ -23,6 +23,7 @@
 
 import 'dart:async';
 
+import '../features/settings_defaults.dart';
 import '../store/local_store.dart';
 import 'upload_queue.dart';
 
@@ -51,10 +52,11 @@ class CleanupSettings {
     Map<String, dynamic>? live, [
     Map<String, dynamic>? recording,
   ]) {
-    final days = clean?['keepDays'];
-    final keep = recording?['keepOnDevice'] != false;
+    final days = featureValue('recordingCleanup', clean, 'keepDays');
+    final keep = featureValue('recording', recording, 'keepOnDevice') != false;
     return CleanupSettings(
-      enabled: clean == null ? true : clean['enabled'] == true,
+      // the registry's default when the row, or its switch, is not stored (B2)
+      enabled: featureOnIn(clean, 'recordingCleanup'),
       keepDays: !keep
           ? 0
           : days is num && const [0, 1, 3, 7, 30].contains(days.toInt())
@@ -520,7 +522,13 @@ class RecordingCleanup {
       r = c.record;
       if (c.verdict == null) return;
       if (c.verdict == false) {
-        // gone, still processing or made private since: wait for a new verification
+        // gone, still processing or made private since: wait for a new verification.
+        // Only `verifiedAt` is cleared: the person's choice (keep or delete)
+        // is left as it is, on purpose. It is their answer about this
+        // recording, not a result of the check, so a failed re-verification
+        // must not ask them again; when the video verifies once more, the
+        // same choice applies (a delete still needs that fresh verification
+        // first, and a keep stays kept).
         await _put(r.copyWith(verifiedAt: null));
         return;
       }

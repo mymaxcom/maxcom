@@ -144,7 +144,7 @@ Future<_Up> _open(
   Future<void> Function(UploadQueue q, _FakeRunner r)? seed,
   bool quota = true,
   LiveBoxStatus box = const LiveBoxStatus(
-    youtube: YoutubeAccount.signedIn('Surau D\'Waqaf'),
+    youtube: YoutubeAccount.signedIn('Surau Contoh'),
   ),
   String go = '/upload',
 }) async {
@@ -293,7 +293,7 @@ Future<_Up> _stopShortLive(WidgetTester tester, {bool catchUp = true}) async {
     catchUp: catchUp,
     go: '/live',
     box: const LiveBoxStatus(
-      youtube: YoutubeAccount.signedIn('Surau D\'Waqaf'),
+      youtube: YoutubeAccount.signedIn('Surau Contoh'),
       sessionId: 'box-sess-7',
       youtubeSeconds: 1500,
       watchUrl: 'https://www.youtube.com/watch?v=abc123',
@@ -549,7 +549,7 @@ void main() {
         tester,
         go: '/live',
         box: const LiveBoxStatus(
-          youtube: YoutubeAccount.signedIn('Surau D\'Waqaf'),
+          youtube: YoutubeAccount.signedIn('Surau Contoh'),
           sessionId: 'box-sess-7',
           youtubeSeconds: 1500,
           watchUrl: 'https://www.youtube.com/watch?v=abc123',
@@ -587,7 +587,7 @@ void main() {
         tester,
         go: '/live',
         box: const LiveBoxStatus(
-          youtube: YoutubeAccount.signedIn('Surau D\'Waqaf'),
+          youtube: YoutubeAccount.signedIn('Surau Contoh'),
           warnings: {'cloud_unreachable'},
         ),
       );
@@ -601,7 +601,7 @@ void main() {
         tester,
         go: '/live',
         box: const LiveBoxStatus(
-          youtube: YoutubeAccount.signedIn('Surau D\'Waqaf'),
+          youtube: YoutubeAccount.signedIn('Surau Contoh'),
           recordingsPending: 2,
         ),
       );

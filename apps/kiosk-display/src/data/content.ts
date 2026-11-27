@@ -367,7 +367,7 @@ export function useContent(view: KioskView): ContentView {
     if (roomChecked.current.has(key)) return false;
     roomChecked.current.add(key);
     if (roomChecked.current.size > 50) roomChecked.current = new Set([key]);
-    const room = videoRoomSeconds(view.now, today ?? null, settings, content?.tilawah.slots ?? [], tarawihMonthFor(view.now, today ? [today] : [], settings) ?? hijriMonth);
+    const room = videoRoomSeconds(view.now, today ?? null, settings, content?.tilawah.slots ?? [], tarawihMonthFor(view.now, today ? [today] : [], settings) ?? hijriMonth, content?.zikir.length ?? 0);
     return room < natural.slot.durationSeconds;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [natural, skipped]);
@@ -437,7 +437,7 @@ export function useContent(view: KioskView): ContentView {
   const afterSlots = useMemo((): AfterPrayerSlot[] => {
     if (!content) return [];
     return videoAfterPrayerSlots(content, settings, view.now, today ?? null, afterMonth).filter(
-      (a) => videoRoomSeconds(new Date(a.startsAt.getTime() - 1), today ?? null, settings, content.tilawah.slots, afterMonth) >= a.durationSeconds,
+      (a) => videoRoomSeconds(new Date(a.startsAt.getTime() - 1), today ?? null, settings, content.tilawah.slots, afterMonth, content.zikir.length) >= a.durationSeconds,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, settings, klDate, today, afterMonth]);
@@ -464,11 +464,18 @@ export function useContent(view: KioskView): ContentView {
     return { slot: { feature: 'videos', itemId: afterNow.itemId, durationSeconds: afterNow.durationSeconds }, index: -1, startedAt: afterNow.startsAt };
   }, [afterNow, rotationCurrent, preview, playNow, playNowVideo, playNowSeconds, second]);
 
+  // The zikir window needs the item count: until the content is there it is never computed with an unknown count (that
+  // gave the full ceiling, then a shorter window once the list arrived: a flicker). Without content the last window
+  // computed stays (null on a fresh mount: wait for the content).
+  const lastZikir = useRef<ReturnType<typeof zikirWindow>>(null);
   const zikir = useMemo(() => {
+    if (!content) return keptZikirWindow(lastZikir.current, view.now);
     const days = today ? [today] : [];
     const month = tarawihMonthFor(view.now, days, settings) ?? view.hijri?.m;
-    return zikirWindow(view.now, days, settings, month);
-  }, [view.now, today, settings, view.hijri]);
+    const w = zikirWindow(view.now, days, settings, month, content.zikir.length);
+    lastZikir.current = w;
+    return w;
+  }, [view.now, today, settings, view.hijri, content]);
 
   const urlOverride = useMemo(() => {
     try {
@@ -484,14 +491,30 @@ export function useContent(view: KioskView): ContentView {
   const themeCard = themeScreen ? cardOfScreen(themeScreen) : null;
   const forced = themeScreen !== null && isForcedScreen(themeScreen);
   const override: SlotFeature | null = preview && previewPoster ? 'posters' : themeCard ?? (forced ? null : urlOverride);
+  // Preview: a fake window that repeats every full pass over the items, so the editor shows the zikir items whatever
+  // minutesAfterSolat is (the live window still treats 0 minutes as no zikir).
   const zikirOut = themeScreen === 'zikir' || themeScreen === 'arab-zikir'
-    ? {
-        prayer: 'zohor' as const,
-        endsAt: new Date(view.now.getTime() + Math.max(1, num(settings.zikirSelepasSolat.minutesAfterSolat, 10)) * 60_000),
-      }
+    ? previewZikirWindow(view.now, content?.zikir.length ?? 0, settings.zikirSelepasSolat.durationSeconds)
     : forced ? null : zikir;
 
   return { forced, content, rotation, current, zikir: zikirOut, override, skip };
+}
+
+/** The window kept while the content is missing: only while it has not ended (a past window must not show a zikir screen). */
+export function keptZikirWindow(last: ReturnType<typeof zikirWindow>, now: Date): ReturnType<typeof zikirWindow> {
+  return last !== null && last.endsAt.getTime() > now.getTime() ? last : null;
+}
+
+/**
+ * The editor preview's zikir window: every item once at `durationSeconds` (20 s when unset), repeating. It does not use
+ * minutesAfterSolat, so the preview is never blank for a surau whose setting is 0. Null with no item.
+ */
+export function previewZikirWindow(now: Date, itemCount: number, durationSeconds: unknown): { prayer: 'zohor'; startsAt: Date; endsAt: Date } | null {
+  if (!(itemCount > 0)) return null;
+  const d = num(durationSeconds, 20);
+  const spanMs = itemCount * (d > 0 ? d : 20) * 1000;
+  const start = Math.floor(now.getTime() / spanMs) * spanMs;
+  return { prayer: 'zohor', startsAt: new Date(start), endsAt: new Date(start + spanMs) };
 }
 
 const AFTER_DONE_KEY = 'surau.afterPrayerDone';

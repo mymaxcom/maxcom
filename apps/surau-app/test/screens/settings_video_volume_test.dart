@@ -79,8 +79,9 @@ void main() {
     expect(find.byKey(_slider), findsNothing);
     expect(find.text('Kelantangan video'), findsNothing);
 
-    await reveal(tester, find.text('Set semula kepada lalai'));
-    await tester.tap(find.text('Set semula kepada lalai'));
+    await tester.tap(find.byKey(const ValueKey('feature-menu')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('feature-reset')));
     await settle(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Set semula kepada lalai'));
     await settle(tester);

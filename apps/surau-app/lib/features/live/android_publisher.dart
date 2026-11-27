@@ -6,6 +6,30 @@
 // [LivePublisher] seam. The stream key and passphrase cross the channel once
 // in `start`; nothing here stores, logs or prints them, and engine messages
 // that are not plain reason codes are replaced before they reach a state.
+//
+// 2026.11.15 (B9): the engine and its foreground service outlive the screen.
+// The service keeps the session facts, so this publisher is a
+// [LiveSessionHolder]: `status()` asks the service for the live it still runs.
+// The box's session id reaches the service through [liveSessionId] (set it
+// before `start`, or after it once the id is known). When a screen attaches
+// during a live the engine replays its present state as ordinary events
+// (phase, outputs, recording, warnings), so the states of this publisher
+// catch up by themselves.
+//
+// Channel additions (all additive; the existing maps are unchanged):
+// - method `status` answers null, or `{sessionId, startedAt (epoch ms),
+//   streaming, youtube, kiosk, video ('phone' | 'external'), recording,
+//   recordings: [names]}`.
+// - method `setSession` takes `{sessionId}`; `start` takes one more key,
+//   `sessionId`.
+// - event `ended` has two more reasons: `notification_stop` (the person
+//   tapped "Hentikan siaran" in the notification) and `unattended` (no screen
+//   attached and the box unreachable for ten minutes); `camera_lost` as before.
+// - event `warning` has one more kind, `weakIngest` (far fewer pictures
+//   arrive from the camera than it sends). It is dropped here until [Warning]
+//   has a value of that name.
+// - event `recording` may carry `lastError: 'empty_recording'` (a segment with
+//   nothing in it was not kept).
 
 import 'dart:async';
 
@@ -35,10 +59,11 @@ class _MetricsWatcher with WidgetsBindingObserver {
   void didChangeMetrics() => onTurn();
 }
 
-class AndroidPublisher implements LivePublisher, LiveSourceControl, LiveMicControl {
+class AndroidPublisher
+    implements LivePublisher, LiveSourceControl, LiveMicControl, LiveLiftControl, LiveSessionHolder, LivePreparedRelease, LiveBrightnessControl, LiveScreenKeep {
   AndroidPublisher({
     this.segmentMinutes = 15,
-    this.videoBitrateKbps = 2500,
+    this.videoBitrateKbps = 3500,
     this.recordDir = 'Movies/MAXCOM',
     bool Function()? portraitProvider,
   }) : _portraitProvider = portraitProvider ?? _deviceIsPortrait {
@@ -77,6 +102,77 @@ class AndroidPublisher implements LivePublisher, LiveSourceControl, LiveMicContr
   StreamSubscription<dynamic>? _events;
   PublisherState _state = PublisherState.initial;
   bool _recordingOn = true;
+  String? _liveSessionId;
+
+  /// The box's session id of the live this publisher sends (a handle, not a
+  /// secret). The foreground service keeps it, so [status] can name the live
+  /// after the screen went away. Set it before [start]; set after [start]
+  /// (the id became known later) it is handed to the service at once.
+  String? get liveSessionId => _liveSessionId;
+
+  set liveSessionId(String? id) {
+    _liveSessionId = id;
+    if (id == null || id.isEmpty) return;
+    final p = _state.phase;
+    if (p != PublisherPhase.live && p != PublisherPhase.starting) return;
+    unawaited(
+      methodChannel
+          .invokeMethod<void>('setSession', {'sessionId': id})
+          .catchError((Object _) {}),
+    );
+  }
+
+  /// The live the service still holds, or null. A screen opened again during
+  /// a live reads this to re-attach: the engine keeps sending, and its
+  /// present state arrives as ordinary events. Never a key or an address.
+  @override
+  Future<PublisherSession?> status() async {
+    final Map<Object?, Object?>? r;
+    try {
+      r = await methodChannel.invokeMethod<Map<Object?, Object?>>('status');
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+    if (r == null) return null;
+    final id = r['sessionId'];
+    final at = r['startedAt'];
+    if (id is! String || at is! num) return null;
+    final video = r['video'] == VideoSourceKind.external.name
+        ? VideoSourceKind.external
+        : VideoSourceKind.phone;
+    final names = r['recordings'];
+    final session = PublisherSession(
+      sessionId: id,
+      startedAt: DateTime.fromMillisecondsSinceEpoch(at.toInt()),
+      streaming: r['streaming'] == true,
+      youtube: r['youtube'] == true,
+      video: video,
+      recordings: [
+        if (names is List)
+          for (final n in names)
+            if (n is String) n,
+      ],
+    );
+    // What the events do not carry: the source and whether Rakam is on.
+    _recordingOn = r['recording'] == true;
+    if (id.isNotEmpty) _liveSessionId = id;
+    if (_state.video != video || _state.recording.on != _recordingOn) {
+      _emit(
+        _state.copyWith(
+          video: video,
+          recording: RecordingState(
+            on: _recordingOn,
+            segments: _state.recording.segments,
+            bytes: _state.recording.bytes,
+            lastError: _state.recording.lastError,
+          ),
+        ),
+      );
+    }
+    return session;
+  }
 
   @override
   Stream<PublisherState> get states => _controller.stream;
@@ -194,6 +290,23 @@ class AndroidPublisher implements LivePublisher, LiveSourceControl, LiveMicContr
   Future<void> setAvOffset(int ms) => _call('setAvOffset', ms);
 
   @override
+  Future<void> setBrightness(String level) => _call('setBrightness', {'level': level});
+
+  @override
+  Future<void> keepScreenOn(bool on) async {
+    try {
+      await _call('keepScreen', on);
+    } on PublisherException {
+      // the screen may time out as before; a live never stops for it
+    } on MissingPluginException {
+      // an engine without the method keeps what it has
+    }
+  }
+
+  @override
+  Future<void> setLift(String id, bool on) => _call('setLift', {'id': id, 'on': on});
+
+  @override
   Future<void> clapCapture() => _call('clapCapture');
 
   @override
@@ -241,10 +354,15 @@ class AndroidPublisher implements LivePublisher, LiveSourceControl, LiveMicContr
           : null,
       'video': {'bitrateKbps': videoBitrateKbps, 'fps': 30, 'gopSeconds': 2},
       'audio': {'bitrateKbps': 128, 'sampleRate': 48000, 'stereo': false},
+      // The box's session id, for the service's `status` (a handle only):
+      // the one this start belongs to, else the one set on the publisher.
+      'sessionId': t.sessionId ?? _liveSessionId,
     };
     _emit(
       _state.copyWith(
         phase: PublisherPhase.starting,
+        // the engine starts every live unmuted (F2)
+        muted: false,
         outputs: PublisherOutputs(
           kiosk: t.outputs.kiosk ? OutputState.connecting : null,
           youtube: t.outputs.youtube ? OutputState.connecting : null,
@@ -276,6 +394,26 @@ class AndroidPublisher implements LivePublisher, LiveSourceControl, LiveMicContr
       await methodChannel.invokeMethod<void>('startYoutube', target);
     } on PlatformException catch (e) {
       throw PublisherException(_code(e.code) ?? 'error');
+    }
+  }
+
+  @override
+  Future<void> releasePrepared() async {
+    final p = _state.phase;
+    // only what a prepare opened and no live uses
+    if (p != PublisherPhase.ready && p != PublisherPhase.error && p != PublisherPhase.stopped) return;
+    try {
+      final released = await methodChannel.invokeMethod<bool>('release');
+      // the engine refuses under a live or a stop: its own events say where it stands
+      if (released == false) return;
+      final now = _state.phase;
+      if (now == PublisherPhase.ready || now == PublisherPhase.error || now == PublisherPhase.stopped) {
+        _emit(_state.copyWith(phase: PublisherPhase.idle));
+      }
+    } on PlatformException {
+      // the camera stays as it was; the next prepare or state event says so
+    } on MissingPluginException {
+      // an engine without the method keeps what it has
     }
   }
 

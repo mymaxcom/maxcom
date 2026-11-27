@@ -34,7 +34,7 @@ final _profile = OfflineProfile(
   name: 'Ustaz Ali',
   roles: const ['admin'],
   at: DateTime.utc(2026, 11, 11),
-  surauName: 'Surau D\'Waqaf',
+  surauName: 'Surau Contoh',
 );
 
 class _Entered {
@@ -293,7 +293,7 @@ void main() {
       await frames(t);
       await typeDigits(t, '280419');
       expect(
-        find.text('Tidak dapat menghubungi Surau D\'Waqaf'),
+        find.text('Tidak dapat menghubungi Surau Contoh'),
         findsOneWidget,
       );
       up = true;

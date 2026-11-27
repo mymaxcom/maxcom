@@ -183,6 +183,17 @@ abstract class EnrolTrust {
   /// Keeps the CA just established on the phone. Called only after the join succeeded (a 201 or a completed
   /// enrolment), never before.
   Future<void> commit(String? caSha256);
+
+  /// Native only: from now on the box's local [name] opens [ip] (the table
+  /// the pinned clients share). The certificate is still checked for the
+  /// name against the pinned CA, so a wrong [ip] can only fail.
+  void routeName(String name, String ip);
+
+  /// Forgets the address given to [name] by [routeName].
+  void unrouteName(String name);
+
+  /// The address [name] opens now, or null (so a failed attempt can put it back).
+  String? routeOf(String name);
 }
 
 class BrowserEnrolTrust implements EnrolTrust {
@@ -196,6 +207,15 @@ class BrowserEnrolTrust implements EnrolTrust {
 
   @override
   Future<void> commit(String? caSha256) async {}
+
+  @override
+  void routeName(String name, String ip) {}
+
+  @override
+  void unrouteName(String name) {}
+
+  @override
+  String? routeOf(String name) => null;
 }
 
 /// Why the box's certificate could not be trusted (the app words each one).
@@ -298,8 +318,14 @@ class EnrolFlow {
     required this.platform,
     this.surauInfoStore,
     this.pageOrigin,
+    this.replacing = false,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
+
+  /// True when the phone enrols at another box while it is still enrolled at the old one (a follower it leaves for
+  /// the main box). The old record and key are then replaced only once the new enrolment has succeeded; the caller
+  /// clears the old box's local copy after that.
+  final bool replacing;
 
   /// Builds the client for the box named in the payload (Task 4 gives a
   /// client pinned to the enrolled CA).
@@ -329,6 +355,15 @@ class EnrolFlow {
     if (payload.exp <= _now().millisecondsSinceEpoch) {
       throw const EnrolExpired();
     }
+    // A web page can only enrol at its own origin: a payload (a link in a message, say) whose box is not this page's
+    // origin is refused, the same sentence as a text that is no invitation.
+    final page = pageOrigin;
+    if (page != null && page.hasAuthority && page.host.isNotEmpty) {
+      final target = enrolOrigin(payload, page: page);
+      if (target.host.toLowerCase() != page.host.toLowerCase() || target.port != (page.hasPort ? page.port : target.port)) {
+        throw const FormatException('bukan kotak halaman ini'); // lang-ok: diagnostic exception text, not shown; screens map the error type to S
+      }
+    }
     return payload;
   }
 
@@ -343,7 +378,7 @@ class EnrolFlow {
   }) async {
     // Never touch the key of a working enrolment: no generate() and no
     // clear() unless the person has forgotten the box first.
-    if (await store.load() != null && await key.exists()) {
+    if (!replacing && await store.load() != null && await key.exists()) {
       throw const EnrolAlreadyEnrolled();
     }
     final payload = inspect(payloadText);
@@ -360,61 +395,169 @@ class EnrolFlow {
     }
     final box = enrolOrigin(payload, page: pageOrigin);
 
-    await trust.establish(box, payload.caSha256);
-
-    final jwk = await key.generate();
-    final publicJwk = {
-      'kty': jwk['kty']!,
-      'crv': jwk['crv']!,
-      'x': jwk['x']!,
-      'y': jwk['y']!,
-    };
-
-    final EnrolResult result;
-    try {
-      result = await clientFor(box).enrolComplete(
-        code: payload.code,
-        publicJwk: publicJwk,
-        deviceName: deviceName.trim(),
-        platform: platform,
-        pin: pin,
-      );
-    } on BoxError catch (e) {
-      await key.clear();
-      if (e.status == 400 && e.message.startsWith('PIN sudah ditetapkan')) { // lang-ok: box wire text, matched exactly
-        throw const EnrolPinExists();
+    // Native, the payload names the box by its local name: Android cannot
+    // resolve it, so find the address from the payload's IPs and prove it.
+    String? provenIp;
+    String? previousRoute;
+    TrustError? loopTrustError;
+    if (pageOrigin == null && trust.pinsCa) {
+      final r = await _establishByName(box, payload);
+      provenIp = r.ip;
+      previousRoute = r.previous;
+      loopTrustError = r.error;
+    }
+    if (provenIp == null) {
+      try {
+        await trust.establish(box, payload.caSha256);
+      } on Object {
+        // The loop's own trust failure says more than the fallback's.
+        if (loopTrustError != null) throw loopTrustError;
+        rethrow;
       }
-      rethrow;
-    } catch (_) {
-      await key.clear();
-      rethrow;
     }
 
-    final enrolled = EnrolledBox(
-      box: box,
-      boxId: payload.boxId,
-      deviceId: result.deviceId,
-      userId: result.userId,
-      userName: payload.user,
-      roles: result.roles,
-      caSha256: payload.caSha256,
-      appLock: result.appLock ?? payload.appLock ?? true,
-      cloud: payload.cloud == null ? null : Uri.parse(payload.cloud!),
-      // The QR's name is a hint, kept so the locator may try it; it is only
-      // trusted after a handshake to the pinned CA with a matching boxId.
-      name: payload.name,
-      lastIp: isIpv4(box.host)
-          ? box.host
-          : (payload.ips.isEmpty ? null : payload.ips.first),
-    );
-    await trust.commit(payload.caSha256);
-    await store.save(enrolled);
+    // The route the proven IP set is kept only once the enrolment is saved;
+    // any failure before that puts the table back as it was.
+    var saved = false;
+    final EnrolledBox enrolled;
+    final bool pinRequired;
+    var pendingKey = false;
+    try {
+      // Replacing an enrolment: the new key waits in a pending slot and the old key stays usable until the new
+      // enrolment is saved. A failure at any point discards only the pending key.
+      final Map<String, String> jwk;
+      if (replacing) {
+        jwk = await key.generatePending();
+        pendingKey = true;
+      } else {
+        jwk = await key.generate();
+      }
+      Future<void> dropKey() => pendingKey ? key.discardPending() : key.clear();
+      final publicJwk = {
+        'kty': jwk['kty']!,
+        'crv': jwk['crv']!,
+        'x': jwk['x']!,
+        'y': jwk['y']!,
+      };
+
+      final EnrolResult result;
+      try {
+        result = await clientFor(box).enrolComplete(
+          code: payload.code,
+          publicJwk: publicJwk,
+          deviceName: deviceName.trim(),
+          platform: platform,
+          pin: pin,
+        );
+      } on BoxError catch (e) {
+        await dropKey();
+        if (e.status == 400 && e.message.startsWith('PIN sudah ditetapkan')) { // lang-ok: box wire text, matched exactly
+          throw const EnrolPinExists();
+        }
+        rethrow;
+      } catch (_) {
+        await dropKey();
+        rethrow;
+      }
+
+      pinRequired = result.pinRequired;
+      enrolled = EnrolledBox(
+        box: box,
+        boxId: payload.boxId,
+        deviceId: result.deviceId,
+        userId: result.userId,
+        userName: payload.user,
+        roles: result.roles,
+        caSha256: payload.caSha256,
+        appLock: result.appLock ?? payload.appLock ?? true,
+        cloud: payload.cloud == null ? null : Uri.parse(payload.cloud!),
+        // The QR's name is a hint, kept so the locator may try it; it is only
+        // trusted after a handshake to the pinned CA with a matching boxId.
+        name: provenIp != null ? box.host : payload.name,
+        lastIp: provenIp ??
+            (isIpv4(box.host)
+                ? box.host
+                : (payload.ips.isEmpty ? null : payload.ips.first)),
+      );
+      try {
+        await trust.commit(payload.caSha256);
+        await store.save(enrolled);
+      } catch (_) {
+        if (pendingKey) await key.discardPending();
+        rethrow;
+      }
+      saved = true;
+      if (pendingKey) await key.commitPending();
+    } catch (_) {
+      // The key generation itself failed or the self-check threw: nothing pending may stay behind.
+      if (pendingKey && !saved) await key.discardPending();
+      rethrow;
+    } finally {
+      if (!saved && provenIp != null) _restoreRoute(box.host, previousRoute);
+    }
     final surau = EnrolPayloadExtras.parse(payloadText).surauWithHelp;
-    if (surau != null) await surauInfoStore?.save(surau);
+    // a payload without surau info must not leave the previous surau's copy standing
+    if (surau != null) {
+      await surauInfoStore?.save(surau);
+    } else {
+      await surauInfoStore?.clear();
+    }
     return EnrolOutcome(
       box: enrolled,
-      pinPending: result.pinRequired && enrolled.appLock,
+      pinPending: pinRequired && enrolled.appLock,
       surau: surau,
     );
+  }
+
+  /// Puts the route of [name] back to [previous] (removes it when null).
+  void _restoreRoute(String name, String? previous) {
+    if (previous == null) {
+      trust.unrouteName(name);
+    } else {
+      trust.routeName(name, previous);
+    }
+  }
+
+  /// When [box] (the origin the payload enrols at) is a box name, tries each
+  /// IPv4 the payload lists, in order: fetch and check the root CA there
+  /// (the bytes are checked against the QR's hash, so the origin does not
+  /// matter), point the name at that IP, and ask the name for `/api/box/info`
+  /// through the pinned client; the boxId must be the payload's. The first IP
+  /// that passes wins and its route stays ([previous] is what the name had
+  /// before, for the caller to restore on a later failure); a failed one puts
+  /// the table back as it was. A root that does not match the QR's hash is
+  /// the same for every IP and is rethrown at once. Other failures move on
+  /// to the next IP; the last trust error is returned in [error] for the
+  /// caller's fallback to prefer. [ip] is null when [box] is no name, the
+  /// payload lists no IPv4 or none passed (the caller then enrols at [box]
+  /// as it is).
+  Future<({String? ip, String? previous, TrustError? error})> _establishByName(
+    Uri box,
+    EnrolPayload payload,
+  ) async {
+    final name = box.host;
+    if (!isBoxName(name)) return (ip: null, previous: null, error: null);
+    final previous = trust.routeOf(name);
+    TrustError? trustError;
+    final seen = <String>{};
+    for (final ip in payload.ips) {
+      if (!isIpv4(ip) || !seen.add(ip)) continue;
+      try {
+        await trust.establish(box.replace(host: ip), payload.caSha256);
+        trust.routeName(name, ip);
+        final info = await clientFor(box).getJson('/api/box/info');
+        if (info['boxId'] != payload.boxId) {
+          throw const BoxUnreachable('bukan kotak ini'); // lang-ok: diagnostic exception text, not shown
+        }
+        return (ip: ip, previous: previous, error: null);
+      } on Object catch (e) {
+        _restoreRoute(name, previous);
+        if (e is TrustError) {
+          if (e.kind == TrustKind.rootMismatch) rethrow;
+          trustError ??= e;
+        }
+      }
+    }
+    return (ip: null, previous: null, error: trustError);
   }
 }

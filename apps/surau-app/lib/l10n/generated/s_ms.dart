@@ -1783,6 +1783,13 @@ class SMs extends S {
   String get contentSearchHint => 'Cari';
 
   @override
+  String get contentZikirSettings => 'Tetapan paparan zikir';
+
+  @override
+  String get contentZikirSettingsHint =>
+      'Bila zikir bermula, tempoh setiap zikir, jam dan rupa skrin';
+
+  @override
   String get contentNoMatch => 'Tiada padanan.';
 
   @override
@@ -5314,77 +5321,6 @@ class SMs extends S {
   String get impGoRecords => 'Lihat Rekod import';
 
   @override
-  String get impMysoTitle => 'Import data paparan lama';
-
-  @override
-  String get impMysoIntro =>
-      'Muat naik fail zip eksport dari sistem paparan lama surau ini. Kandungan dan tetapan pemasa digabung; waktu solat tidak termasuk.';
-
-  @override
-  String get impMysoPick => 'Pilih fail zip';
-
-  @override
-  String get impMysoPickHelp =>
-      'Dibuat dengan skrip eksport MAXCOM. Had 64 MB.';
-
-  @override
-  String get impMysoTooBig => 'Fail terlalu besar. Had ialah 64 MB.';
-
-  @override
-  String get impMysoWorking => 'Sedang memuat naik dan menyemak';
-
-  @override
-  String get impMysoMismatchTitle => 'Nama surau berbeza';
-
-  @override
-  String impMysoMismatch(String file, String target) {
-    return 'Fail ini daripada \"$file\"; import ke \"$target\"?';
-  }
-
-  @override
-  String get impMysoMismatchYes => 'Ya, import ke surau ini';
-
-  @override
-  String impMysoNameInFile(String name) {
-    return 'Nama dalam fail: $name';
-  }
-
-  @override
-  String impMysoTarget(String name) {
-    return 'Sasaran: $name';
-  }
-
-  @override
-  String get impMysoPlanTitle => 'Larian percubaan';
-
-  @override
-  String get impMysoKind => 'Jenis';
-
-  @override
-  String get impMysoCreated => 'Baharu';
-
-  @override
-  String get impMysoUpdated => 'Kemas kini';
-
-  @override
-  String get impMysoSame => 'Sama';
-
-  @override
-  String get impMysoSkipped => 'Langkau';
-
-  @override
-  String get impMysoTimers => 'Guna tetapan pemasa dari sistem lama';
-
-  @override
-  String get impMysoImport => 'Import';
-
-  @override
-  String get impMysoDiscard => 'Buang';
-
-  @override
-  String get impMysoDone => 'Import data paparan lama selesai';
-
-  @override
   String get rekTitle => 'Rekod import';
 
   @override
@@ -8774,4 +8710,2322 @@ class SMs extends S {
   @override
   String get liveRecBadPieceNote =>
       'Fail rakaman tidak sah dan tidak diterima oleh MAXCOM. Setiap bahagian disimpan seperti asalnya.';
+
+  @override
+  String get linkTitle => 'Pautkan MAXCOM Kiosk Box';
+
+  @override
+  String get linkEntryIntro =>
+      'Pautkan dua MAXCOM Kiosk Box yang sudah disediakan. Satu menjadi Box utama, yang lain mengikutnya.';
+
+  @override
+  String get linkCheckLan =>
+      'Pautan MAXCOM Kiosk Box hanya boleh dibuat di Wi-Fi surau.';
+
+  @override
+  String get linkCheckLive =>
+      'Hentikan siaran langsung dahulu, kemudian cuba lagi.';
+
+  @override
+  String get linkCheckFollower =>
+      'MAXCOM Kiosk Box ini ialah Box pengikut. Buat pautan dari Box utama.';
+
+  @override
+  String get linkChoiceShow => 'Papar kod di TV ini';
+
+  @override
+  String get linkChoiceShowSub =>
+      'Pentadbir MAXCOM Kiosk Box yang satu lagi mengimbas kod itu dengan aplikasi mereka.';
+
+  @override
+  String get linkChoiceScan => 'Imbas kod MAXCOM Kiosk Box lain';
+
+  @override
+  String get linkChoiceScanSub =>
+      'Imbas kod yang dipaparkan di TV MAXCOM Kiosk Box lain, atau di TV Box baharu.';
+
+  @override
+  String get linkPinTitle => 'Sahkan dengan PIN anda';
+
+  @override
+  String get linkPinLabel => 'PIN anda';
+
+  @override
+  String linkPinBodyShow(String name) {
+    return '$name akan memaparkan kod pautan di TV selama 5 minit.';
+  }
+
+  @override
+  String linkPinBodyScan(String name) {
+    return 'PIN diperlukan untuk memautkan MAXCOM Kiosk Box anda dengan $name.';
+  }
+
+  @override
+  String get linkPinBodyAgree =>
+      'PIN diperlukan semula kerana sudah lama sejak anda memasukkannya.';
+
+  @override
+  String get linkShowCode => 'Tunjuk kod';
+
+  @override
+  String linkWaitTitle(String name) {
+    return 'Kod pautan di TV $name';
+  }
+
+  @override
+  String get linkWaitBody =>
+      'Minta pentadbir MAXCOM Kiosk Box yang satu lagi mengimbas kod itu dengan aplikasi MAXCOM yang disambung ke Box mereka.';
+
+  @override
+  String linkWaitExpires(String time) {
+    return 'Kod tamat dalam $time';
+  }
+
+  @override
+  String get linkWaitFact1 => 'Sekali guna, sah 5 minit';
+
+  @override
+  String get linkWaitFact2 =>
+      'Ditandatangani oleh MAXCOM Kiosk Box ini. Gambar kod tidak berguna selepas tamat.';
+
+  @override
+  String get linkWaitFact3 => 'Tiada data disalin sehingga anda bersetuju';
+
+  @override
+  String get linkWaitClose => 'Tutup kod sekarang';
+
+  @override
+  String get linkCalling => 'Menyemak kedua-dua MAXCOM Kiosk Box';
+
+  @override
+  String get linkCallingBody => 'Belum ada data dihantar.';
+
+  @override
+  String get linkScanHint =>
+      'Halakan ke kod pautan di TV MAXCOM Kiosk Box lain. Telefon ini dan kedua-dua Box mesti berada di Wi-Fi surau yang sama.';
+
+  @override
+  String get linkScanPasteLabel => 'Tampal kod pautan';
+
+  @override
+  String linkConfirmTitle(String name) {
+    return 'Pautkan dengan $name?';
+  }
+
+  @override
+  String get linkFingerprint => 'Cap jari kunci MAXCOM Kiosk Box itu';
+
+  @override
+  String get linkConfirmBody =>
+      'Pastikan cap jari ini sama dengan yang anda jangka. Tiada data dihantar sebelum kedua-dua pentadbir bersetuju.';
+
+  @override
+  String get linkRescan => 'Imbas semula';
+
+  @override
+  String get linkStopTitle => 'Pautan dihentikan';
+
+  @override
+  String linkStopVersion(String name, String release) {
+    return 'MAXCOM Kiosk Box $name menggunakan versi $release. Kemas kini Box itu, kemudian cuba lagi.';
+  }
+
+  @override
+  String linkStopOlder(String name) {
+    return 'MAXCOM Kiosk Box $name menggunakan versi yang lebih lama. Kemas kini Box itu, kemudian cuba lagi.';
+  }
+
+  @override
+  String get linkStopOlderUnnamed =>
+      'Salah satu MAXCOM Kiosk Box menggunakan versi yang lebih lama. Kemas kini Box itu, kemudian cuba lagi.';
+
+  @override
+  String get linkStopNothingChanged =>
+      'Tiada apa-apa diubah di kedua-dua MAXCOM Kiosk Box.';
+
+  @override
+  String linkCodeApproveTitle(String name) {
+    return 'Box $name mahu dipautkan';
+  }
+
+  @override
+  String linkCodeApproveFacts(int users, int content) {
+    return '$users pengguna, $content kandungan';
+  }
+
+  @override
+  String linkCodeApproveBody(String name) {
+    return 'Bandingkan kod ini dengan kod di telefon pentadbir $name. Kod mesti sama.';
+  }
+
+  @override
+  String get linkCodeNewBoxBody =>
+      'Bandingkan kod ini dengan kod di TV MAXCOM Kiosk Box baharu. Kod mesti sama.';
+
+  @override
+  String get linkApprove => 'Setuju';
+
+  @override
+  String get linkReject => 'Tolak';
+
+  @override
+  String get linkSameCode => 'Kod sama';
+
+  @override
+  String get linkCodeNoData =>
+      'Belum ada data disalin. Selepas Setuju, anda menjawab dua soalan.';
+
+  @override
+  String get linkCodeShowTitle =>
+      'Tunjukkan kod ini kepada pentadbir MAXCOM Kiosk Box yang satu lagi';
+
+  @override
+  String linkWaitingApproval(String name) {
+    return 'Menunggu pentadbir $name bersetuju';
+  }
+
+  @override
+  String get linkCodeMismatchTitle => 'Kod tidak sama?';
+
+  @override
+  String get linkCodeMismatch =>
+      'Tekan Batal. Box lain mungkin sedang cuba dipautkan.';
+
+  @override
+  String get linkBoxThis => 'Box ini';
+
+  @override
+  String linkBoxThisNamed(String name) {
+    return '$name (Box ini)';
+  }
+
+  @override
+  String get linkQIntroTitle => 'Dipautkan, belum ada data diubah';
+
+  @override
+  String linkQIntro(String a, String b) {
+    return '$a dan $b kini saling mengenali. Jawab soalan di bawah. Pentadbir yang satu lagi melihat jawapan yang sama dan menekan Setuju; itu memulakan pautan.';
+  }
+
+  @override
+  String get linkQ1Title => 'Data MAXCOM Kiosk Box mana yang dikekalkan?';
+
+  @override
+  String get linkQ1Hint => 'Data MAXCOM Kiosk Box yang satu lagi diganti.';
+
+  @override
+  String get linkQ2Title => 'MAXCOM Kiosk Box mana menjadi Box utama?';
+
+  @override
+  String get linkQ2Hint =>
+      'MAXCOM Kiosk Box utama menyimpan data, berhubung dengan awan dan YouTube, dan menghantar salinan ke Box pengikut dalam beberapa saat. Telefon dan iPad mengurus melalui Box utama sahaja.';
+
+  @override
+  String get linkQ3Title => 'Telefon pengguna Box ini';
+
+  @override
+  String linkQ3Hint(String name) {
+    return 'Orang di $name yang mempunyai telefon, sama ada data diganti atau dipindahkan ke Box utama.';
+  }
+
+  @override
+  String get linkQ3Direct => 'Sambung terus ke Box utama';
+
+  @override
+  String get linkQ3DirectHint =>
+      'Semua orang yang mempunyai telefon, termasuk pentadbir, menyambung ke Box utama dengan sendiri tanpa kod sertai. Kedua-dua pentadbir sudah bersetuju dengan PIN.';
+
+  @override
+  String get linkQ3Code => 'Minta kod sertai untuk pentadbir';
+
+  @override
+  String get linkQ3CodeHint =>
+      'Orang biasa menyambung dengan sendiri. Pentadbir perlukan kod sertai daripada pentadbir Box utama.';
+
+  @override
+  String get linkFactContent => 'Kandungan';
+
+  @override
+  String linkFactContentValue(int content, int posters, int videos) {
+    return '$content kandungan, $posters poster, $videos video';
+  }
+
+  @override
+  String get linkFactFinance => 'Rekod kewangan';
+
+  @override
+  String get linkFactPeople => 'Pengguna';
+
+  @override
+  String get linkFactLastEdit => 'Suntingan terakhir';
+
+  @override
+  String get linkNoEdit => 'Tiada suntingan';
+
+  @override
+  String get linkFactDevice => 'Peranti';
+
+  @override
+  String get linkFactStorage => 'Ruang kosong';
+
+  @override
+  String get linkFactYoutube => 'YouTube';
+
+  @override
+  String get linkFactCloud => 'Awan MAXCOM';
+
+  @override
+  String get linkYes => 'Ya';
+
+  @override
+  String get linkNo => 'Tidak';
+
+  @override
+  String get linkDeviceWindows => 'PC Windows';
+
+  @override
+  String get linkDeviceAndroid => 'Box Android';
+
+  @override
+  String get linkDeviceOther => 'MAXCOM Kiosk Box';
+
+  @override
+  String get linkConnCable => 'kabel';
+
+  @override
+  String get linkConnWifi => 'Wi-Fi';
+
+  @override
+  String get linkRecommended => 'Disyorkan';
+
+  @override
+  String linkAdvice(String name, String hardware) {
+    return 'Disyorkan: $name ($hardware)';
+  }
+
+  @override
+  String get linkFixedNew => 'MAXCOM Kiosk Box baharu tiada data';
+
+  @override
+  String linkFixedFollowers(String name) {
+    return '$name sudah mempunyai MAXCOM Kiosk Box pengikut, jadi ia kekal sebagai Box utama dan datanya dikekalkan.';
+  }
+
+  @override
+  String get linkCaseXOff =>
+      'Dalam keluaran ini MAXCOM Kiosk Box utama mestilah Box yang datanya dikekalkan.';
+
+  @override
+  String get linkCrossTitle => 'Data dan MAXCOM Kiosk Box utama berbeza';
+
+  @override
+  String linkCrossBody(String kept, String master, String other) {
+    return 'Data $kept disalin sekali ke $master, kemudian $master menjadi MAXCOM Kiosk Box utama. $other menjadi Box pengikut.';
+  }
+
+  @override
+  String get linkReplacedTitle => 'Yang akan diganti';
+
+  @override
+  String linkReplacedLine(
+    String name,
+    int content,
+    int posters,
+    int videos,
+    int finance,
+    String kept,
+  ) {
+    return 'Data $name akan diganti: $content kandungan, $posters poster, $videos video, $finance rekod kewangan. Data $kept dikekalkan.';
+  }
+
+  @override
+  String linkReplacedNone(String kept) {
+    return 'Tiada data diganti. Semua data $kept dikekalkan.';
+  }
+
+  @override
+  String linkBackupLine(String time) {
+    return 'Sandaran kedua-dua MAXCOM Kiosk Box diambil dahulu: $time. Pautan boleh diputuskan bila-bila masa dan setiap Box boleh kembali ke sandaran ini.';
+  }
+
+  @override
+  String linkFinanceTick(String name) {
+    return 'Saya faham rekod kewangan $name tidak digabungkan. Laporan telah dieksport jika perlu.';
+  }
+
+  @override
+  String linkFinanceCount(int n, String name) {
+    return '$n rekod kewangan $name kekal dalam sandaran.';
+  }
+
+  @override
+  String get linkFinanceFirst => 'Tandakan pengesahan rekod kewangan dahulu.';
+
+  @override
+  String get linkMore => 'Butiran lain';
+
+  @override
+  String linkMorePeople(int a, String nameA, int b, String nameB) {
+    return 'Pengguna kedua-dua MAXCOM Kiosk Box digabungkan: $a di $nameA, $b di $nameB.';
+  }
+
+  @override
+  String linkMoreYoutubeKept(String name) {
+    return 'YouTube: log masuk $name dikekalkan.';
+  }
+
+  @override
+  String get linkMoreYoutubeAgain =>
+      'YouTube: perlu log masuk sekali lagi selepas pautan.';
+
+  @override
+  String get linkMoreCloud =>
+      'Awan: salinan awan dikemas kini oleh MAXCOM Kiosk Box utama.';
+
+  @override
+  String get linkMoreCamera =>
+      'Kamera surau: tetapan kamera ikut data yang dikekalkan.';
+
+  @override
+  String get linkMoreBrowser =>
+      'Skrin pelayar perlu dipadankan semula selepas pautan.';
+
+  @override
+  String linkAgreeButton(String kept, String master) {
+    return 'Setuju: kekalkan data $kept, $master menjadi Box utama';
+  }
+
+  @override
+  String linkWaitingFor(String name) {
+    return 'Menunggu $name';
+  }
+
+  @override
+  String linkNameAgreed(String name) {
+    return '$name: setuju';
+  }
+
+  @override
+  String linkNameNotYet(String name) {
+    return '$name: belum setuju';
+  }
+
+  @override
+  String get linkAnswersChangeable =>
+      'Anda boleh mengubah jawapan sehingga kedua-dua pentadbir bersetuju.';
+
+  @override
+  String get linkStaleNotice =>
+      'Pentadbir lain menukar pilihan. Semak dan setuju sekali lagi.';
+
+  @override
+  String get linkProgressTitle => 'Pautan sedang dibuat';
+
+  @override
+  String get linkProgressStarting => 'Pautan sedang bermula';
+
+  @override
+  String linkProgressStep(int n, int total, String name) {
+    return 'Langkah $n daripada $total: $name';
+  }
+
+  @override
+  String linkProgressStepPercent(int n, int total, String name, int percent) {
+    return 'Langkah $n daripada $total: $name, $percent%';
+  }
+
+  @override
+  String get linkProgressNote =>
+      'Jangan matikan kuasa kedua-dua MAXCOM Kiosk Box. Suntingan ditolak sehingga pautan siap.';
+
+  @override
+  String get linkStepBackup => 'menyandarkan data';
+
+  @override
+  String get linkStepPeople => 'menggabungkan pengguna';
+
+  @override
+  String get linkStepCommit => 'memuktamadkan pautan';
+
+  @override
+  String get linkStepFinish => 'menamatkan pautan';
+
+  @override
+  String get linkStepWorking => 'memautkan MAXCOM Kiosk Box';
+
+  @override
+  String get linkDoneTitle => 'Pautan siap';
+
+  @override
+  String get linkDoneBody =>
+      'Kedua-dua MAXCOM Kiosk Box kini dipautkan. Tetapan dan kandungan diurus dari Box utama.';
+
+  @override
+  String linkDoneMaster(String master, String other) {
+    return '$master kini MAXCOM Kiosk Box utama. $other mengikutnya.';
+  }
+
+  @override
+  String get linkDoneBackup =>
+      'Sandaran kedua-dua MAXCOM Kiosk Box disimpan. Pautan boleh diputuskan bila-bila masa.';
+
+  @override
+  String get linkDoneNext =>
+      'Pengguna di MAXCOM Kiosk Box pengikut: sertai Box utama dengan kod sertai, kemudian tetapkan PIN baharu.';
+
+  @override
+  String get linkDoneList => 'Lihat skrin TV dan MAXCOM Kiosk Box';
+
+  @override
+  String get linkDoneClose => 'Selesai';
+
+  @override
+  String get linkFailedTitle => 'Pautan dibatalkan';
+
+  @override
+  String linkFollowerTitle(String name) {
+    return 'Surau anda kini diurus dari MAXCOM Kiosk Box utama $name.';
+  }
+
+  @override
+  String get linkFollowerTitleNoName =>
+      'Surau anda kini diurus dari MAXCOM Kiosk Box utama.';
+
+  @override
+  String get linkCodePinRequired => 'Masukkan PIN anda untuk meneruskan.';
+
+  @override
+  String get linkCodeWrongPin => 'PIN salah. Cuba lagi.';
+
+  @override
+  String get linkCodeLocked =>
+      'PIN dikunci buat sementara. Cuba lagi sebentar lagi.';
+
+  @override
+  String get linkCodeWrongStep =>
+      'Langkah ini sudah berubah. Skrin dikemas kini.';
+
+  @override
+  String get linkCodeWrongSide =>
+      'Butang ini untuk pentadbir MAXCOM Kiosk Box yang satu lagi.';
+
+  @override
+  String get linkCodeSessionOpen =>
+      'Satu pautan sedang berjalan di MAXCOM Kiosk Box ini. Batalkan dahulu atau tunggu ia tamat.';
+
+  @override
+  String get linkCodeNoHttps =>
+      'MAXCOM Kiosk Box ini belum mempunyai sambungan selamat (HTTPS), jadi belum boleh dipautkan.';
+
+  @override
+  String get linkCodeLinkLocked =>
+      'Terlalu banyak percubaan pautan yang gagal. Cuba semula selepas satu jam.';
+
+  @override
+  String get linkCodeBadQr =>
+      'Kod ini bukan kod pautan MAXCOM Kiosk Box yang sah.';
+
+  @override
+  String get linkCodeSameBox =>
+      'Ini Box anda sendiri. Imbas kod di TV Box yang satu lagi.';
+
+  @override
+  String get linkCodeCodeUsed => 'Kod ini sudah digunakan. Minta kod baharu.';
+
+  @override
+  String get linkCodeCodeExpired => 'Kod ini sudah tamat. Minta kod baharu.';
+
+  @override
+  String get linkCodePeerUnreachable =>
+      'MAXCOM Kiosk Box yang satu lagi tidak dapat dihubungi. Pastikan kedua-dua Box berada di Wi-Fi surau yang sama.';
+
+  @override
+  String get linkCodePeerRefused =>
+      'MAXCOM Kiosk Box yang satu lagi tidak menerima permintaan itu. Semak dan cuba lagi.';
+
+  @override
+  String get linkCodeBadHello =>
+      'MAXCOM Kiosk Box yang menjawab bukan Box dalam kod itu. Pautan tidak diteruskan.';
+
+  @override
+  String get linkCodeVersion =>
+      'Kedua-dua MAXCOM Kiosk Box mesti menjalankan versi yang sama. Kemas kini Box yang lebih lama, kemudian cuba lagi.';
+
+  @override
+  String get linkCodeBothHaveFollowers =>
+      'Kedua-dua MAXCOM Kiosk Box sudah mempunyai Box pengikut. Box utama hanya boleh dipautkan dengan Box yang tiada pengikut.';
+
+  @override
+  String get linkCodeBothNew =>
+      'Kedua-dua MAXCOM Kiosk Box belum disediakan. Sediakan satu Box dahulu.';
+
+  @override
+  String get linkCodeFixedAnswer =>
+      'Jawapan ini tidak boleh diubah untuk dua MAXCOM Kiosk Box ini.';
+
+  @override
+  String get linkCodeKeepNewBox =>
+      'MAXCOM Kiosk Box baharu tiada data untuk dikekalkan.';
+
+  @override
+  String get linkCodeFinanceTick =>
+      'Tandakan bahawa anda faham rekod kewangan tidak digabungkan.';
+
+  @override
+  String get linkCodeRejected => 'Pautan ditolak.';
+
+  @override
+  String get linkCodeLinking => 'Pautan sedang dibuat. Cuba sebentar lagi.';
+
+  @override
+  String get linkCodeNotFound => 'MAXCOM Kiosk Box itu tidak ditemui.';
+
+  @override
+  String get linkCodeBadMessage => 'Jawapan tidak sah. Cuba lagi.';
+
+  @override
+  String get linkCodeUnknown => 'Pautan tidak dapat diteruskan. Cuba lagi.';
+
+  @override
+  String get linkOutcomeFailed =>
+      'Pautan tidak dapat disiapkan. Semak keadaan kedua-dua MAXCOM Kiosk Box, kemudian cuba lagi.';
+
+  @override
+  String get linkOutcomeCancelled =>
+      'Anda membatalkan pautan. Tiada data diubah.';
+
+  @override
+  String get linkOutcomeCancelledByPeer =>
+      'Pentadbir MAXCOM Kiosk Box yang satu lagi membatalkan pautan. Tiada data diubah.';
+
+  @override
+  String get linkOutcomeRejectedByPeer =>
+      'Pentadbir MAXCOM Kiosk Box yang satu lagi menolak pautan. Tiada data diubah.';
+
+  @override
+  String get linkOutcomeExpired =>
+      'Masa tamat sebelum pautan selesai. Tiada data diubah.';
+
+  @override
+  String get linkOutcomeApproveTimeout =>
+      'Kod tidak disetujui dalam masa 2 minit. Tiada data diubah.';
+
+  @override
+  String get linkOutcomeRestart =>
+      'MAXCOM Kiosk Box dimulakan semula semasa pautan. Tiada data diubah; mulakan pautan sekali lagi.';
+
+  @override
+  String get tvsTitle => 'Skrin TV dan MAXCOM Kiosk Box';
+
+  @override
+  String get tvsIntro =>
+      'Satu MAXCOM Kiosk Box utama untuk seluruh surau. Tetapan dan kandungan dibuat sekali; setiap TV ikut dalam beberapa saat.';
+
+  @override
+  String tvsCount(int a, int b) {
+    return '$a daripada $b skrin bersambung';
+  }
+
+  @override
+  String get tvsSectionBoxes => 'MAXCOM Kiosk Box';
+
+  @override
+  String get tvsSectionBrowsers => 'Skrin pelayar';
+
+  @override
+  String get tvsMainBox => 'Box utama';
+
+  @override
+  String get tvsFollowerBox => 'Box pengikut';
+
+  @override
+  String get tvsBrowserScreen => 'Skrin pelayar';
+
+  @override
+  String tvsRoleLine(String role, String version) {
+    return '$role, versi $version';
+  }
+
+  @override
+  String get tvsConnected => 'Bersambung';
+
+  @override
+  String tvsAwaySince(String when) {
+    return 'Tiada hubungan sejak $when';
+  }
+
+  @override
+  String get tvsNeverSeen => 'Belum pernah bersambung';
+
+  @override
+  String tvsNotSeenSince(String date) {
+    return 'Tidak dilihat sejak $date';
+  }
+
+  @override
+  String get tvsRemoveStaleBody =>
+      'Tanggalkan: MAXCOM Kiosk Box ini dikosongkan, termasuk sandarannya. Jika Box ini dihidupkan semula dan masih mengikut, ia mengosongkan dirinya sendiri.';
+
+  @override
+  String tvsLinkedOn(String date) {
+    return 'Dipautkan $date';
+  }
+
+  @override
+  String get tvsRemoved => 'Ditanggalkan';
+
+  @override
+  String tvsRemovedOn(String date) {
+    return 'Ditanggalkan $date';
+  }
+
+  @override
+  String get tvsOpenSettings => 'Tetapan TV ini';
+
+  @override
+  String get tvsRemove => 'Tanggalkan';
+
+  @override
+  String tvsRemoveTitle(String name) {
+    return 'Tanggalkan $name?';
+  }
+
+  @override
+  String get tvsRemoveBody =>
+      'Tanggalkan: MAXCOM Kiosk Box ini dikosongkan, termasuk sandarannya.';
+
+  @override
+  String tvsRemovedToast(String name) {
+    return '$name ditanggalkan.';
+  }
+
+  @override
+  String get tvsLinkOther => 'Pautkan MAXCOM Kiosk Box lain';
+
+  @override
+  String get tvsOlderBox =>
+      'MAXCOM Kiosk Box ini belum menyokong pautan Box. Kemas kini Box ini dahulu.';
+
+  @override
+  String get tvsEmpty => 'Tiada skrin untuk dipaparkan.';
+
+  @override
+  String get tvEdTitle => 'Tetapan TV ini';
+
+  @override
+  String tvEdFor(String name) {
+    return 'Untuk $name sahaja. Yang lain ikut tetapan surau.';
+  }
+
+  @override
+  String get tvEdName => 'Nama TV';
+
+  @override
+  String get tvEdFollows => 'Ikut surau';
+
+  @override
+  String get tvEdChanged => 'Diubah';
+
+  @override
+  String get tvEdReset => 'Set semula';
+
+  @override
+  String get tvEdLiveSection => 'Siaran langsung';
+
+  @override
+  String get tvEdShow => 'Papar siaran di TV ini';
+
+  @override
+  String get tvEdShowYes => 'Papar';
+
+  @override
+  String get tvEdShowNo => 'Tidak papar';
+
+  @override
+  String get tvEdShowOn => 'Kamera kuliah dipaparkan';
+
+  @override
+  String get tvEdShowOff => 'TV ini kekal pada paparan biasa';
+
+  @override
+  String get tvEdSound => 'Bunyi siaran';
+
+  @override
+  String get tvEdSoundYes => 'Dengan bunyi';
+
+  @override
+  String get tvEdSoundNo => 'Tanpa bunyi';
+
+  @override
+  String get tvEdSoundOn => 'Bunyi dari TV ini';
+
+  @override
+  String get tvEdSoundOff => 'Gambar sahaja (elak gema)';
+
+  @override
+  String get tvEdVolume => 'Kelantangan siaran';
+
+  @override
+  String get tvEdDisplay => 'Paparan';
+
+  @override
+  String get tvEdTemplate => 'Templat';
+
+  @override
+  String get tvEdTemplatePickTitle => 'Templat untuk TV ini';
+
+  @override
+  String get tvEdTemplatePickHint =>
+      'Pilih satu untuk TV ini sahaja, atau ikut surau.';
+
+  @override
+  String get tvEdLang => 'Bahasa TV';
+
+  @override
+  String get tvEdLangAuto => 'Automatik';
+
+  @override
+  String get tvEdLangMs => 'Bahasa Melayu';
+
+  @override
+  String get tvEdLangEn => 'English';
+
+  @override
+  String get tvEdLangAr => 'العربية';
+
+  @override
+  String get tvEdContent => 'Kandungan';
+
+  @override
+  String get tvEdHide => 'Jenis disembunyi di TV ini';
+
+  @override
+  String get tvEdHideNone => 'Tiada; semua jenis dipaparkan';
+
+  @override
+  String get tvEdHideHint =>
+      'Ketik untuk sembunyikan di TV ini. Kandungan masih dipaparkan di TV lain. Waktu solat, azan dan iqamah tidak boleh disembunyikan.';
+
+  @override
+  String get tvEdSounds => 'Bunyi TV';
+
+  @override
+  String get tvEdBeeps => 'Bip waktu solat';
+
+  @override
+  String get tvEdBeepsSub => 'Sebelum azan dan iqamah';
+
+  @override
+  String get tvEdAzan => 'Azan';
+
+  @override
+  String get tvEdAzanSub => 'Dimainkan di TV ini';
+
+  @override
+  String get tvEdAzanOffSub =>
+      'Tidak dimainkan (TV berdekatan sudah memainkannya)';
+
+  @override
+  String get tvEdTilawah => 'Tilawah';
+
+  @override
+  String get tvEdTilawahSub => 'Sebelum Subuh dan Jumaat';
+
+  @override
+  String get tvEdOn => 'Hidup';
+
+  @override
+  String get tvEdOff => 'Mati';
+
+  @override
+  String get tvEdSaved => 'Tetapan TV disimpan.';
+
+  @override
+  String get tvKindKuliah => 'Kuliah';
+
+  @override
+  String get tvKindPengumuman => 'Pengumuman';
+
+  @override
+  String get tvKindTicker => 'Teks bergerak';
+
+  @override
+  String get tvKindPoster => 'Poster';
+
+  @override
+  String get tvKindVideo => 'Video';
+
+  @override
+  String get tvKindProgramKhas => 'Program khas';
+
+  @override
+  String get tvKindTakwim => 'Takwim';
+
+  @override
+  String get tvKindHadis => 'Hadis';
+
+  @override
+  String get tvKindWorldTime => 'Waktu dunia';
+
+  @override
+  String get tvKindTugasan => 'Tugasan';
+
+  @override
+  String get tvKindZikir => 'Zikir';
+
+  @override
+  String get tvKindTabung => 'Tabung surau';
+
+  @override
+  String backupLine(String time, String size) {
+    return 'Sandaran sebelum pautan: $time, $size';
+  }
+
+  @override
+  String get backupDrop => 'Buang sandaran';
+
+  @override
+  String get backupDropTitle => 'Buang sandaran?';
+
+  @override
+  String backupDropBody(String date) {
+    return 'Selepas ini Box ini tidak boleh kembali ke data $date.';
+  }
+
+  @override
+  String get backupWordDrop => 'BUANG';
+
+  @override
+  String backupConfirmLabel(String word) {
+    return 'Taip $word untuk mengesahkan';
+  }
+
+  @override
+  String backupKeptLine(String date) {
+    return 'Pilihan ini boleh ditukar hingga $date';
+  }
+
+  @override
+  String get backupKeptDrop => 'Buang data lama';
+
+  @override
+  String get backupKeptDropTitle => 'Buang data lama?';
+
+  @override
+  String backupKeptDropBody(String size) {
+    return 'Data lama ($size) dibuang dan tidak boleh dipulihkan.';
+  }
+
+  @override
+  String get backupRestore => 'Kembali ke data sebelum dipautkan';
+
+  @override
+  String get backupRestoreTitle => 'Kembali ke data sebelum dipautkan?';
+
+  @override
+  String backupRestoreBody(String date) {
+    return 'Data kembali ke keadaan $date. Box ini dimulakan semula. Telefon Pentadbir terus berfungsi; telefon lain menyertainya sekali lagi dengan kod QR daripada Pentadbir.';
+  }
+
+  @override
+  String get backupWordRestore => 'KEMBALI';
+
+  @override
+  String get backupDroppedToast => 'Sandaran dibuang.';
+
+  @override
+  String get backupKeptDroppedToast => 'Data lama dibuang.';
+
+  @override
+  String get backupRestoredToast =>
+      'Box ini dimulakan semula. Setiap telefon perlu menyertainya sekali lagi.';
+
+  @override
+  String get linkCodeHasFollowers =>
+      'Box ini masih mempunyai Box pengikut. Tanggalkan mereka dahulu.';
+
+  @override
+  String get linkCodeKeptExists =>
+      'Data lama masih ada. Buang data lama dahulu.';
+
+  @override
+  String get linkCodeOtherVolume =>
+      'Sandaran berada di storan lain dan tidak boleh dipulihkan di sini.';
+
+  @override
+  String get linkCodeConfirmRequired => 'Taip perkataan pengesahan dahulu.';
+
+  @override
+  String get linkCodeNoBackup => 'Tiada sandaran lagi.';
+
+  @override
+  String linkCodeKeptData(String date) {
+    return 'Data lama disimpan hingga $date. Buang data lama untuk memaut sekarang.';
+  }
+
+  @override
+  String get linkCodeKeptDataNoDate =>
+      'Data lama masih disimpan. Buang data lama untuk memaut sekarang.';
+
+  @override
+  String get liveViewersTitle => 'TV yang memaparkan siaran';
+
+  @override
+  String get liveViewerPlaying => 'memaparkan';
+
+  @override
+  String get liveViewerConnecting => 'menyambung';
+
+  @override
+  String get liveViewerOff => 'tidak memaparkan siaran';
+
+  @override
+  String get peopleTabScreens => 'TV dan Box';
+
+  @override
+  String get linkPeopleTitle => 'Pengguna selepas pautan';
+
+  @override
+  String linkPeopleAdded(int count, String box) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count orang ditambah daripada $box',
+      one: '1 orang ditambah daripada $box',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String linkPeopleAddedNone(String box) {
+    return 'Tiada orang baharu daripada $box untuk ditambah.';
+  }
+
+  @override
+  String get linkPeopleSameTitle => 'Sama (nombor telefon sama)';
+
+  @override
+  String get linkPeopleSameHint =>
+      'Mereka ada di kedua-dua Box dan hanya disenaraikan sekali. Peranan di Box yang dikekalkan terus berlaku.';
+
+  @override
+  String get linkPeopleRolesTitle => 'Peranan yang berbeza';
+
+  @override
+  String linkPeopleRoleHead(String name, String phone4) {
+    return '$name, telefon berakhir $phone4';
+  }
+
+  @override
+  String linkPeopleRoleStays(String roles) {
+    return 'Kekal: $roles';
+  }
+
+  @override
+  String linkPeopleRoleOther(String box, String roles) {
+    return 'Di $box: $roles';
+  }
+
+  @override
+  String linkPeopleRoleAddLabel(String box) {
+    return 'Tambah satu peranan daripada $box:';
+  }
+
+  @override
+  String get linkPeopleRoleChangeNote =>
+      'Pilihan ini membuat semakan baharu. Persetujuan kedua-dua pentadbir dibatalkan dan perlu diberi semula.';
+
+  @override
+  String get linkPeopleNoRole => 'tiada peranan';
+
+  @override
+  String get linkPeopleNamesTitle => 'Nama yang sama';
+
+  @override
+  String linkPeopleNameAsk(String name, String box, String keptName) {
+    return '$name di $box ada nama yang sama dengan $keptName, tetapi nombor telefonnya tidak sepadan.';
+  }
+
+  @override
+  String get linkPeopleSameYes => 'Orang yang sama';
+
+  @override
+  String get linkPeopleSameNo => 'Orang berbeza';
+
+  @override
+  String get linkPeopleAdminsTitle => 'Pentadbir selepas pautan';
+
+  @override
+  String get linkPeopleAdminsNone => 'Tiada pentadbir';
+
+  @override
+  String linkPeopleTickets(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n telefon akan diminta menyambung ke Box utama',
+      zero: 'Tiada telefon akan diminta menyambung ke Box utama',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get linkCodePeopleAnswer =>
+      'Pilihan tentang pengguna tidak lagi sesuai dengan senarai. Lihat semula bahagian Pengguna di atas.';
+
+  @override
+  String moveAskTitle(String master) {
+    return 'Surau anda kini diurus dari MAXCOM Kiosk Box utama $master. Sambung sekarang?';
+  }
+
+  @override
+  String get moveAskBody =>
+      'Satu ketik, kemudian tetapkan PIN baharu. Anda tidak perlu kod sertai.';
+
+  @override
+  String get moveConnect => 'Sambung sekarang';
+
+  @override
+  String get moveLater => 'Kemudian';
+
+  @override
+  String get moveChecking => 'Menyemak Box anda';
+
+  @override
+  String movePinBody(String master) {
+    return 'Tetapkan PIN baharu untuk $master. PIN lama tidak dibawa.';
+  }
+
+  @override
+  String moveWorking(String master) {
+    return 'Menyambung ke $master';
+  }
+
+  @override
+  String moveDone(String master) {
+    return 'Anda kini disambungkan ke $master.';
+  }
+
+  @override
+  String get moveDoneButton => 'Teruskan';
+
+  @override
+  String get moveNeedCodeTitle => 'Perlu kod sertai';
+
+  @override
+  String moveNeedCode(String master) {
+    return 'Minta kod sertai daripada Pentadbir $master.';
+  }
+
+  @override
+  String get moveNeedCodeNoName => 'Minta kod sertai daripada Pentadbir.';
+
+  @override
+  String get moveAway =>
+      'Buka aplikasi di Wi-Fi surau sekali untuk menyambung ke Box utama';
+
+  @override
+  String get moveTooMany =>
+      'Terlalu banyak percubaan. Cuba lagi sebentar lagi.';
+
+  @override
+  String get moveWrongBox =>
+      'Box yang menjawab bukan Box utama yang dinyatakan. Tiada apa yang diubah.';
+
+  @override
+  String get moveBadPointer =>
+      'Jawapan Box lama tidak dapat dibaca. Cuba lagi atau minta kod sertai daripada Pentadbir.';
+
+  @override
+  String get moveRetry => 'Cuba lagi';
+
+  @override
+  String get moveJoinScan => 'Imbas kod sertai';
+
+  @override
+  String get moveJoinPaste => 'Tampal kod';
+
+  @override
+  String get moveJoinHint =>
+      'Pentadbir Box utama membuat kod sertai di Pengguna & peranti. Imbas kod QR itu atau tampal teksnya.';
+
+  @override
+  String get moveJoinCodeLabel => 'Kod sertai';
+
+  @override
+  String get moveBannerTitle => 'Sambung ke Box utama';
+
+  @override
+  String get moveBannerBody =>
+      'Surau anda kini diurus dari Box utama. Sambung untuk terus menggunakan aplikasi.';
+
+  @override
+  String get openByNameTitle => 'Buka melalui nama MAXCOM';
+
+  @override
+  String openByNameBody(String origin) {
+    return 'Alamat IP MAXCOM boleh berubah. Jika iPad atau komputer ini didaftarkan melalui alamat IP, ia perlu didaftarkan semula apabila alamat itu berubah. Buka $origin dan imbas kod ini sekali lagi di sana.';
+  }
+
+  @override
+  String openByNameButton(String host) {
+    return 'Buka $host';
+  }
+
+  @override
+  String get openByNameKeepIp => 'Teruskan dengan alamat IP';
+
+  @override
+  String openByNameDeviceBody(String origin) {
+    return 'Peranti ini didaftarkan melalui alamat IP. Jika alamat MAXCOM berubah, pendaftaran ini tidak dapat digunakan lagi. Untuk kekal, buka $origin dan daftarkan peranti ini di sana.';
+  }
+
+  @override
+  String get liveDestUnconfirmed => 'Belum dapat disahkan dengan MAXCOM';
+
+  @override
+  String get liveDestSaving => 'Menyimpan pilihan';
+
+  @override
+  String get liveDestPerBoxNote =>
+      'Pilihan ini disimpan untuk MAXCOM Kiosk Box ini sahaja. Setiap MAXCOM Kiosk Box menggunakan saluran YouTube sendiri.';
+
+  @override
+  String get liveDestRecUnavailable => 'Rakaman: Tidak tersedia';
+
+  @override
+  String get liveMineTitle => 'Siaran anda masih berjalan';
+
+  @override
+  String get liveMineResume => 'Sambung semula';
+
+  @override
+  String get liveMineStillSending => 'Siaran masih dihantar dari telefon ini';
+
+  @override
+  String get liveStoppedCameraLost =>
+      'Siaran dihentikan kerana kamera luaran terputus';
+
+  @override
+  String get liveStoppedByBox => 'Siaran dihentikan oleh MAXCOM';
+
+  @override
+  String get liveStoppedByAdmin => 'Siaran dihentikan oleh pentadbir';
+
+  @override
+  String get liveVideoPathLabel => 'Video diambil oleh';
+
+  @override
+  String get liveVideoPathDevice => 'Telefon ini';
+
+  @override
+  String get liveVideoPathBox => 'MAXCOM Kiosk Box';
+
+  @override
+  String get liveVideoPathBoxNote =>
+      'Telefon hanya mengawal siaran. Rakaman pada telefon tidak tersedia.';
+
+  @override
+  String get liveCamCtlTitle => 'Kawalan kamera';
+
+  @override
+  String get liveCamCtlBrightness => 'Kecerahan';
+
+  @override
+  String get liveCamCtlBrightnessDown => 'Kurangkan kecerahan';
+
+  @override
+  String get liveCamCtlBrightnessUp => 'Tambah kecerahan';
+
+  @override
+  String get liveCamCtlPosition => 'Kedudukan';
+
+  @override
+  String get liveCamCtlHome => 'Asal';
+
+  @override
+  String get liveCamCtlTracking => 'Jejak automatik';
+
+  @override
+  String get liveCamCtlSent => 'Arahan dihantar ke kamera';
+
+  @override
+  String get liveCamCtlConfirmed => 'Kamera menjawab';
+
+  @override
+  String get liveCamCtlFailed => 'Arahan tidak sampai ke kamera';
+
+  @override
+  String get liveCamCtlAllow => 'Benarkan kawalan kamera';
+
+  @override
+  String get liveCamCtlAllowNote =>
+      'Hanya untuk kamera yang menyokong kawalan melalui rangkaian.';
+
+  @override
+  String get liveCamCtlApply => 'Terapkan tetapan kamera';
+
+  @override
+  String get liveCamCtlFocus => 'Fokus';
+
+  @override
+  String get liveCamCtlFocusContinuous => 'Berterusan';
+
+  @override
+  String get liveCamCtlFocusSingle => 'Sekali';
+
+  @override
+  String get liveCamCtlFocusManual => 'Manual';
+
+  @override
+  String get liveCamCtlTrackingOff => 'Tutup';
+
+  @override
+  String get liveCamCtlTrackingHuman => 'Orang';
+
+  @override
+  String get liveCamCtlApplyOnLive => 'Terapkan semasa siaran bermula';
+
+  @override
+  String get liveCamCtlProfileTitle => 'Tetapan kamera';
+
+  @override
+  String get liveCameraHeavyWarn =>
+      'Strim kamera terlalu besar untuk YouTube. Turunkan kepada 720p, 3 hingga 4 Mbps pada kamera.';
+
+  @override
+  String get liveRecNoBoxPullStart =>
+      'Rakam tidak ditawarkan kerana video diambil oleh MAXCOM Kiosk Box. Telefon ini tidak menerima gambar kamera, jadi tiada apa yang boleh dirakam pada telefon. Untuk merakam, pilih Video diambil oleh: Telefon ini.';
+
+  @override
+  String get liveRecNoBoxPullSummary =>
+      'Siaran ini tidak dirakam pada telefon kerana video diambil oleh MAXCOM Kiosk Box, bukan oleh telefon ini. Jika YouTube dipilih, salinan siaran ada di YouTube.';
+
+  @override
+  String liveCameraInUseBy(String device, String since) {
+    return 'Kamera sedang digunakan oleh $device sejak $since.';
+  }
+
+  @override
+  String liveCameraInUseByBox(String since) {
+    return 'Kamera sedang digunakan oleh MAXCOM Kiosk Box sejak $since.';
+  }
+
+  @override
+  String get liveCameraJoinNote =>
+      'Telefon ini memaparkan gambar yang sama melalui MAXCOM dan tidak menyambung terus ke kamera.';
+
+  @override
+  String get errcCameraInUse =>
+      'Kamera sedang digunakan oleh peranti lain. Gambar dikongsi melalui MAXCOM.';
+
+  @override
+  String get liveWarnWeakPhoneWifi =>
+      'Isyarat Wi-Fi telefon lemah. Gambar mungkin tersekat.';
+
+  @override
+  String get errcResumeMismatch =>
+      'Siaran yang sedang berjalan tidak sama dengan pilihan ini. Hentikan siaran itu dahulu, kemudian mula semula.';
+
+  @override
+  String get errcYoutubeLiveNotEnabled =>
+      'Siaran langsung belum diaktifkan pada saluran YouTube ini.';
+
+  @override
+  String get errcBoxClockWrong =>
+      'Jam MAXCOM tidak tepat. Betulkan jam dan cuba lagi.';
+
+  @override
+  String get errcYoutubeBusyOtherBox =>
+      'YouTube sedang digunakan oleh MAXCOM Kiosk Box lain.';
+
+  @override
+  String get errcTooManyViewers => 'Had paparan siaran langsung telah dicapai';
+
+  @override
+  String get errcYoutubeBroadcastOpen =>
+      'Siaran YouTube belum ditutup. Cuba lagi dalam beberapa minit.';
+
+  @override
+  String get errcAlreadyUploading =>
+      'Rakaman siaran ini sedang dimuat naik dari peranti lain.';
+
+  @override
+  String get liveNotifStop => 'Hentikan siaran';
+
+  @override
+  String get syncBoxFailed => 'Tidak dapat menyelaras dengan MAXCOM';
+
+  @override
+  String get settingsChangedElsewhereNow =>
+      'Tetapan ini baru diubah pada peranti lain';
+
+  @override
+  String get settingsReload => 'Muat semula';
+
+  @override
+  String get settingsMaybeStale => 'Mungkin belum terkini';
+
+  @override
+  String get cameraResetBody =>
+      'Pilihan lanjutan akan dikembalikan kepada lalai. Kamera kekal dihidupkan.';
+
+  @override
+  String get cameraFoundByPort => 'Peranti yang menjawab pada port kamera';
+
+  @override
+  String get uploadReasonNoBox => 'Tidak dapat menghubungi MAXCOM';
+
+  @override
+  String get uploadAwaitingConfirm => 'Menunggu pengesahan';
+
+  @override
+  String get uploadErrorEmptyFile => 'Fail rakaman kosong';
+
+  @override
+  String get uploadEarlierEntry => 'Muat naik rakaman terdahulu';
+
+  @override
+  String liveGapReplaceAsk(int minutes) {
+    return 'Siaran tadi terputus selama $minutes minit. Gantikan dengan rakaman penuh?';
+  }
+
+  @override
+  String get liveGapReplaceYes => 'Ganti';
+
+  @override
+  String get liveGapReplaceNo => 'Tidak';
+
+  @override
+  String get liveYoutubeSignOutOtherBoxes =>
+      'MAXCOM Kiosk Box lain yang menggunakan akaun YouTube ini perlu disambung semula.';
+
+  @override
+  String get errcYoutubeClientRefused =>
+      'Fail klien YouTube ditolak oleh Google. Hubungi Pentadbir MAXCOM.';
+
+  @override
+  String get errcUploadAbandoned => 'Muat naik ini telah dibatalkan';
+
+  @override
+  String get liveStoppedUnattended =>
+      'Siaran dihentikan kerana sambungan telefon ke MAXCOM terputus lebih 10 minit';
+
+  @override
+  String get liveWarnCameraH265 =>
+      'Kamera menghantar video H.265, yang tidak dapat disiarkan melalui MAXCOM. Tukar kamera kepada H.264.';
+
+  @override
+  String get unlinkTitle => 'Putuskan pautan';
+
+  @override
+  String unlinkSheetTitle(String name) {
+    return 'Putuskan pautan: $name';
+  }
+
+  @override
+  String get unlinkSheetLineFollower =>
+      'Box ini akan berjalan sendiri semula. Pilih data yang digunakan selepas ini.';
+
+  @override
+  String unlinkSheetLineMaster(String name) {
+    return '$name akan berjalan sendiri. Pilih data yang digunakan oleh Box ini selepas ini.';
+  }
+
+  @override
+  String unlinkEligibleAny(String name) {
+    return 'Tiada Pentadbir lama $name yang masih aktif. Anda dijadikan Pentadbir $name.';
+  }
+
+  @override
+  String unlinkPhoneNote(String name) {
+    return 'Selepas ini telefon ini meninggalkan Box utama dan menyertai $name. Anda menetapkan PIN baharu di sana.';
+  }
+
+  @override
+  String unlinkAnsweredBy(String name) {
+    return 'Dijawab oleh $name';
+  }
+
+  @override
+  String unlinkChoiceBack(String date) {
+    return 'Kembali ke data sebelum dipautkan (sandaran $date)';
+  }
+
+  @override
+  String get unlinkChoiceBackNoDate => 'Kembali ke data sebelum dipautkan';
+
+  @override
+  String get unlinkChoiceBackNote =>
+      'Box ini kembali seperti pada tarikh itu. Perubahan selepas itu tiada pada Box ini.';
+
+  @override
+  String get unlinkChoiceCarry =>
+      'Teruskan dengan data sekarang secara berasingan';
+
+  @override
+  String get unlinkChoiceCarryNoteFollower =>
+      'Box ini menyimpan kandungan dan tetapan sekarang dan menjadi surau berasingan.';
+
+  @override
+  String get unlinkChoiceCarryNoteMaster =>
+      'Box ini menyimpan data sekarang. Tiada apa-apa yang berubah pada Box ini.';
+
+  @override
+  String get unlinkChoiceEmpty =>
+      'Kosongkan Box ini (kembali ke skrin persediaan)';
+
+  @override
+  String get unlinkChoiceEmptyNote =>
+      'Box ini dikosongkan dan bermula semula di skrin persediaan.';
+
+  @override
+  String unlinkNumChanges(int n, String date) {
+    return '$n perubahan sejak $date tiada pada Box ini selepas ini.';
+  }
+
+  @override
+  String get unlinkNumNoChanges => 'Tiada perubahan sejak sandaran dibuat.';
+
+  @override
+  String get unlinkNumKept7 =>
+      'Data sekarang disimpan 7 hari lagi sebelum dibuang.';
+
+  @override
+  String unlinkNumPeopleLead(String date) {
+    return 'Senarai pengguna kembali seperti pada $date.';
+  }
+
+  @override
+  String unlinkNumPeopleBack(int n, String names) {
+    return '$n orang yang dibuang selepas itu akan kembali: $names.';
+  }
+
+  @override
+  String unlinkNumPeopleAbsent(int n, String names) {
+    return '$n orang yang ditambah selepas itu tiada: $names.';
+  }
+
+  @override
+  String unlinkNumFinance(int n) {
+    return '$n rekod kewangan kekal di Box utama. Box ini bermula dengan lejar kosong.';
+  }
+
+  @override
+  String get unlinkTickLabel => 'Saya faham rekod kewangan kekal di Box utama.';
+
+  @override
+  String unlinkNumVideos(int n) {
+    return '$n video tidak muat dan tidak disalin:';
+  }
+
+  @override
+  String unlinkVideoLine(String title, String size) {
+    return '$title ($size)';
+  }
+
+  @override
+  String unlinkRemovePeople(String name, int n) {
+    return 'Buang pengguna yang datang dari $name ($n orang)';
+  }
+
+  @override
+  String get unlinkYoutubeKept =>
+      'YouTube: Box ini mengekalkan log masuk yang digunakannya.';
+
+  @override
+  String get unlinkYoutubeReturns =>
+      'YouTube: log masuk dalam sandaran kembali ke Box ini.';
+
+  @override
+  String get unlinkYoutubeSignIn =>
+      'YouTube: log masuk sekali lagi di Box ini.';
+
+  @override
+  String get unlinkYoutubeNone =>
+      'YouTube: tiada log masuk. Log masuk sendiri di Box ini (kira-kira seminit).';
+
+  @override
+  String get unlinkAgree => 'Setuju';
+
+  @override
+  String get unlinkChangeAnswer => 'Ubah jawapan';
+
+  @override
+  String get unlinkConfirmTitle => 'Sahkan pilihan ini';
+
+  @override
+  String get unlinkConfirmBody =>
+      'Pilihan ini meninggalkan perubahan di belakang. Data yang ditinggalkan disimpan 7 hari sebelum dibuang.';
+
+  @override
+  String get unlinkAgreePinBody => 'Masukkan PIN anda untuk bersetuju.';
+
+  @override
+  String get unlinkWord => 'PUTUS';
+
+  @override
+  String get unlinkSideFollower => 'Box pengikut';
+
+  @override
+  String get unlinkSideMaster => 'Box utama';
+
+  @override
+  String get unlinkStartBody =>
+      'Setiap MAXCOM Kiosk Box bertanya Pentadbirnya sendiri apa yang berlaku kepada datanya. Tiada apa-apa berubah sehingga kedua-duanya bersetuju.';
+
+  @override
+  String unlinkStartPhoneNote(String name) {
+    return 'Pentadbir yang menjawab untuk $name meninggalkan Box utama dengan telefonnya dan menyertai $name.';
+  }
+
+  @override
+  String get unlinkStartTimeNote =>
+      'Jika tiada jawapan dalam 20 minit, tiada apa-apa berubah dan pautan kekal.';
+
+  @override
+  String get unlinkStartButton => 'Mula';
+
+  @override
+  String get unlinkStartPinBody => 'Masukkan PIN anda untuk memulakan.';
+
+  @override
+  String get unlinkWaitingTitle => 'Menunggu pentadbir yang satu lagi';
+
+  @override
+  String get unlinkWaitingBody =>
+      'Jawapan anda disimpan. Pautan diputuskan selepas pentadbir yang satu lagi bersetuju. Tiada apa-apa berubah sebelum itu.';
+
+  @override
+  String get unlinkWaitingOther =>
+      'Pentadbir lain menjawab di telefonnya. Tiada apa-apa berubah sebelum semua bersetuju.';
+
+  @override
+  String get unlinkProgressTitle => 'Pautan sedang diputuskan';
+
+  @override
+  String get unlinkProgressStarting => 'Kerja sedang bermula';
+
+  @override
+  String get unlinkProgressNote =>
+      'Jangan matikan kuasa kedua-dua MAXCOM Kiosk Box sehingga selesai.';
+
+  @override
+  String get unlinkStepCopy => 'menyalin data untuk Box pengikut';
+
+  @override
+  String get unlinkStepBack => 'mengembalikan data sebelum dipautkan';
+
+  @override
+  String get unlinkStepCarryOn => 'menyimpan data sekarang';
+
+  @override
+  String get unlinkStepEmpty => 'mengosongkan Box';
+
+  @override
+  String get unlinkStepJoin => 'menunggu telefon menyertai Box pengikut';
+
+  @override
+  String unlinkJoinTitle(String name) {
+    return 'Sambung ke $name';
+  }
+
+  @override
+  String unlinkJoinBody(String name) {
+    return 'Telefon ini kini milik $name. Tetapkan PIN baharu untuk menyertainya. Pautan selesai diputuskan selepas itu.';
+  }
+
+  @override
+  String unlinkJoinWaitTitle(String name) {
+    return 'Menunggu telefon Pentadbir $name';
+  }
+
+  @override
+  String get unlinkJoinWaitBody =>
+      'Pautan selesai diputuskan selepas Pentadbir menyertai Box itu dengan telefonnya dan menetapkan PIN. Box itu terus berjalan sendiri sementara itu.';
+
+  @override
+  String get unlinkDoneTitle => 'Pautan diputuskan';
+
+  @override
+  String unlinkDoneBody(String name) {
+    return '$name kini berjalan sendiri.';
+  }
+
+  @override
+  String get unlinkFailedTitle => 'Pautan tidak diputuskan';
+
+  @override
+  String get unlinkKeptSection => 'Data lama selepas pautan diputuskan';
+
+  @override
+  String get unlinkKeptNone => 'Tiada data lama yang disimpan.';
+
+  @override
+  String unlinkKeptMasterRow(String name) {
+    return 'Box utama, selepas $name keluar';
+  }
+
+  @override
+  String unlinkKeptFollowerRow(String name) {
+    return '$name';
+  }
+
+  @override
+  String get unlinkKeptChosenBack =>
+      'Pilihan: kembali ke data sebelum dipautkan';
+
+  @override
+  String get unlinkKeptChosenCarry => 'Pilihan: teruskan dengan data sekarang';
+
+  @override
+  String get unlinkSwitch => 'Tukar pilihan';
+
+  @override
+  String get unlinkSwitchTitle => 'Tukar pilihan?';
+
+  @override
+  String unlinkSwitchBodyToBack(String date) {
+    return 'Box ini kembali ke data sebelum dipautkan. Data sekarang disimpan sehingga $date.';
+  }
+
+  @override
+  String unlinkSwitchBodyToCarry(String date) {
+    return 'Box ini meneruskan dengan data sekarang. Sandaran disimpan sehingga $date.';
+  }
+
+  @override
+  String get unlinkSwitchedToast => 'Pilihan ditukar. Box ini sedang bekerja.';
+
+  @override
+  String get unlinkDropBody => 'Data lama dibuang dan tidak boleh dipulihkan.';
+
+  @override
+  String get unlinkCodeOpen => 'Satu pemutusan pautan sedang berjalan.';
+
+  @override
+  String get unlinkCodeNotLinked => 'Box ini tidak dipautkan lagi.';
+
+  @override
+  String get unlinkCodeNotAllowed =>
+      'Anda tidak boleh menjawab untuk Box ini. Pentadbir lain yang menjawab.';
+
+  @override
+  String get unlinkCodeSamePhone =>
+      'Satu telefon tidak boleh menjawab untuk kedua-dua Box.';
+
+  @override
+  String get unlinkCodeOptionUnavailable =>
+      'Pilihan ini tidak tersedia untuk Box ini.';
+
+  @override
+  String get unlinkCodeStaleSession =>
+      'Pemutusan pautan ini sudah berubah atau tamat. Skrin dikemas kini.';
+
+  @override
+  String get unlinkCodeKeptOver => 'Masa untuk menukar pilihan sudah tamat.';
+
+  @override
+  String get unlinkCodeNoKept => 'Tiada data lama yang disimpan.';
+
+  @override
+  String get unlinkCodeNotLocal =>
+      'Ini hanya boleh dibuat pada skrin penyelenggaraan Box itu sendiri.';
+
+  @override
+  String get unlinkCodeWrongCode => 'Kod pemulihan salah.';
+
+  @override
+  String get unlinkCodeHasBackup =>
+      'Box ini mempunyai sandaran. Gunakan kembali ke data sebelum dipautkan.';
+
+  @override
+  String unlinkKeptMasterNamed(String master, String follower) {
+    return '$master, selepas $follower keluar';
+  }
+
+  @override
+  String unlinkKeptListLine(String date) {
+    return 'Data lama disimpan hingga $date';
+  }
+
+  @override
+  String get unlinkVideosNotFitTitle =>
+      'Video ini tidak muat di Box itu dan tidak disalin:';
+
+  @override
+  String get unlinkJoinStay => 'Kekal di sini';
+
+  @override
+  String unlinkJoinStayNote(String master, String follower) {
+    return 'Jika anda kekal di sini, telefon ini dilog keluar daripada $master apabila $follower sudah disertai. Pilih Sambung sekarang untuk terus mengurus $follower dengan telefon ini.';
+  }
+
+  @override
+  String get linkRecoveryTitle => 'Simpan kod ini';
+
+  @override
+  String get errcSurauAsleep =>
+      'Data surau ini di awan sedang dikemas kini daripada MAXCOM Kiosk Box. Cuba lagi sebentar lagi.';
+
+  @override
+  String get liveYoutubeLaterButton => 'Siarkan ke YouTube';
+
+  @override
+  String get liveYoutubeLaterHint =>
+      'Siaran ini hanya ke skrin surau. Anda boleh menambah YouTube sekarang.';
+
+  @override
+  String get liveYoutubeLaterStarting => 'Memulakan YouTube';
+
+  @override
+  String get liveYoutubeLaterNotSignedIn =>
+      'YouTube belum disambungkan pada MAXCOM ini. Sambungkan akaun YouTube dalam Tetapan dahulu.';
+
+  @override
+  String get liveYoutubeLaterNotOwner =>
+      'Hanya peranti yang memulakan siaran ini, atau pentadbir, boleh menambah YouTube.';
+
+  @override
+  String get liveYoutubeLaterBusy =>
+      'YouTube sedang dimulakan. Cuba sebentar lagi.';
+
+  @override
+  String get liveRecNoSpaceNote =>
+      'Tiada ruang mencukupi pada MAXCOM untuk menyambung rakaman. Simpan atau buang rakaman lama dahulu. Setiap bahagian disimpan seperti asalnya.';
+
+  @override
+  String get uploadErrorClaimLost =>
+      'Muat naik dihentikan kerana peranti lain telah mengambil alih siaran ini. Tiada tindakan diperlukan.';
+
+  @override
+  String get liveYoutubeLaterSheetTitle => 'Siarkan ke YouTube';
+
+  @override
+  String get liveYoutubeLaterTitleLabel => 'Tajuk di YouTube';
+
+  @override
+  String get liveYoutubeLaterPrivacyLabel => 'Keterlihatan';
+
+  @override
+  String get liveYoutubePrivacyPrivate => 'Peribadi';
+
+  @override
+  String get liveYoutubePrivacyUnlisted => 'Tidak disenaraikan';
+
+  @override
+  String get liveYoutubePrivacyPublic => 'Awam';
+
+  @override
+  String get liveYoutubeLaterConfirm => 'Siarkan sekarang';
+
+  @override
+  String get liveYoutubeLaterConfirmNote =>
+      'Siaran akan mula dipaparkan di YouTube dengan tajuk dan keterlihatan ini.';
+
+  @override
+  String get liveYoutubeLaterUpdateBox => 'Kemas kini MAXCOM untuk ciri ini.';
+
+  @override
+  String get liveYoutubeLaterNoSession =>
+      'Siaran ini sudah tamat. Mulakan siaran baharu.';
+
+  @override
+  String get liveYoutubeLaterBadRequest =>
+      'Tajuk atau keterlihatan tidak sah. Semak dan cuba lagi.';
+
+  @override
+  String get liveYoutubeLaterYoutubeOff =>
+      'YouTube dimatikan dalam tetapan MAXCOM ini.';
+
+  @override
+  String get liveYoutubeLaterToolsMissing =>
+      'Alat siaran YouTube belum dipasang pada MAXCOM ini.';
+
+  @override
+  String get liveYoutubeLaterNoInternet =>
+      'MAXCOM tiada sambungan internet. Cuba lagi sebentar lagi.';
+
+  @override
+  String get liveYoutubeLaterPrivacyNotAllowed =>
+      'Keterlihatan ini lebih terbuka daripada yang dibenarkan dalam tetapan surau. Pilih yang lebih terhad.';
+
+  @override
+  String unlinkJoinWebBody(String name) {
+    return 'Anda sedang menggunakan pelayar web. Buka aplikasi web $name untuk menyertainya. Di sana anda memilih nama peranti dan PIN baharu.';
+  }
+
+  @override
+  String unlinkJoinWebOpen(String name) {
+    return 'Buka aplikasi $name';
+  }
+
+  @override
+  String get unlinkJoinWebTrust =>
+      'Pelayar mungkin meminta anda mempercayai MAXCOM itu sekali sahaja. Terima, kemudian teruskan.';
+
+  @override
+  String get unlinkJoinWebFailed =>
+      'Pelayar tidak dapat membuka aplikasi itu. Cuba lagi.';
+
+  @override
+  String unlinkJoinUnreachable(String name) {
+    return 'Telefon ini tidak dapat menghubungi $name. Semak sambungan rangkaian dan cuba lagi.';
+  }
+
+  @override
+  String get unlinkNumBackRecovery =>
+      'Telefon Pentadbir terus berfungsi. Telefon lain menyertai semula dengan kod QR daripada Pentadbir. Kod pemulihan hanya diperlukan jika tiada lagi telefon Pentadbir.';
+
+  @override
+  String get unlockUseRecoveryCode => 'Guna kod pemulihan';
+
+  @override
+  String get unlockRecoveryHint =>
+      'MAXCOM ini tiada Pentadbir yang boleh masuk. Imbas kod QR pemulihan pada skrin TV MAXCOM, kemudian masukkan kod pemulihan yang ditulis di atas kertas.';
+
+  @override
+  String get linkKeptOtherBox =>
+      'Data lama itu disimpan pada MAXCOM yang satu lagi. Buang data lama di sana, dengan telefon Pentadbirnya, untuk memaut sekarang.';
+
+  @override
+  String get liveCtlNoVideo =>
+      'Video tidak dipaparkan pada peranti ini. Lihat pada TV atau YouTube.';
+
+  @override
+  String get liveCtlCloseApp => 'Tutup aplikasi kamera (OBSBOT) semasa siaran.';
+
+  @override
+  String get liveCtlCloseAppWhy =>
+      'Dua pembaca menjatuhkan gambar kepada 4 hingga 6 bingkai sesaat.';
+
+  @override
+  String get liveCtlLevels => 'Paras bunyi';
+
+  @override
+  String liveCtlStartedBy(String name, String device, String time) {
+    return 'Dimulakan oleh $name dari $device, $time';
+  }
+
+  @override
+  String liveCtlStartedByNoDevice(String name, String time) {
+    return 'Dimulakan oleh $name, $time';
+  }
+
+  @override
+  String get liveCtlTvsSub => 'Skrin surau, melalui Wi-Fi surau';
+
+  @override
+  String get liveCtlTvsWaiting => 'Kad menunggu dipaparkan';
+
+  @override
+  String get liveCtlTvsOff => 'Skrin surau dimatikan untuk siaran ini';
+
+  @override
+  String get liveCtlYtWaiting => 'Menunggu gambar';
+
+  @override
+  String get liveCtlYtNo => 'Tidak';
+
+  @override
+  String liveCtlCamOk(String mbps) {
+    return 'Bersambung, $mbps Mbps';
+  }
+
+  @override
+  String get liveCtlCamConnected => 'Bersambung';
+
+  @override
+  String liveCtlCamSlow(String mbps) {
+    return 'Bersambung, gambar perlahan ($mbps Mbps)';
+  }
+
+  @override
+  String get liveCtlCamGone => 'Terputus';
+
+  @override
+  String liveCtlSubOnAir(int vol) {
+    return 'Ke udara, $vol%';
+  }
+
+  @override
+  String liveCtlSubOff(int vol) {
+    return '$vol%, tidak ke udara';
+  }
+
+  @override
+  String get liveCtlSubBenched => 'Dihentikan sementara, dicuba semula';
+
+  @override
+  String get liveCtlSubWaitingCam => 'Menunggu kamera';
+
+  @override
+  String get liveCtlSubMeanwhile => 'Digunakan sementara';
+
+  @override
+  String get liveCtlRecHere => 'Merakam di iPad ini';
+
+  @override
+  String get liveCtlWatchYoutube => 'Lihat di YouTube';
+
+  @override
+  String get liveQuietTitle => 'Siaran masih berjalan, tiada peranti mengawal';
+
+  @override
+  String liveQuietBody(int minutes) {
+    return 'Peranti yang memulakan siaran tidak dilihat sejak $minutes minit. Siaran ke TV dan YouTube diteruskan.';
+  }
+
+  @override
+  String get liveQuietStop => 'Hentikan siaran';
+
+  @override
+  String get liveKioskRestored =>
+      'YouTube tidak dapat disiarkan. Skrin surau dihidupkan semula supaya siaran tetap ke udara.';
+
+  @override
+  String get liveCamSlowTitle => 'Gambar kamera perlahan';
+
+  @override
+  String get liveMicBenchedTitle =>
+      'Mikrofon MAXCOM dihentikan sementara, bunyi kamera digunakan';
+
+  @override
+  String get liveMicBenchedBody =>
+      'Siaran tidak senyap. Mikrofon MAXCOM dicuba semula sendiri dalam 1 minit.';
+
+  @override
+  String get liveCamGoneTitle => 'Kamera terputus, siaran diteruskan';
+
+  @override
+  String get liveCamGoneBody =>
+      'TV memaparkan kad menunggu. Gambar dan bunyi kembali sendiri apabila kamera bersambung semula. Siaran tidak dihentikan secara automatik; tekan Berhenti jika kuliah sudah tamat.';
+
+  @override
+  String get liveStopOtherTitle => 'Hentikan siaran';
+
+  @override
+  String liveStopOtherBody(String name, String device) {
+    return 'Siaran ini dimulakan oleh $name dari $device. Hentikan siaran?';
+  }
+
+  @override
+  String liveStopOtherBodyNoDevice(String name) {
+    return 'Siaran ini dimulakan oleh $name. Hentikan siaran?';
+  }
+
+  @override
+  String liveStopOtherLog(String name) {
+    return 'Nama anda dan nama $name dicatat dalam log perubahan.';
+  }
+
+  @override
+  String get liveLeaveBoxPulled =>
+      'Siaran diteruskan oleh MAXCOM. Buka semula aplikasi untuk mengawal atau menghentikan.';
+
+  @override
+  String get liveAudioBoxMicMain => 'Mikrofon MAXCOM (utama)';
+
+  @override
+  String get liveAudioBoxMicMainHint =>
+      'Mic-in pada MAXCOM. Suara penceramah, sentiasa dalam campuran.';
+
+  @override
+  String get liveAudioCamBoxHint => 'Naikkan hanya jika mahu bunyi dewan';
+
+  @override
+  String get liveAudioCamNotOnAir => 'Tidak ke udara';
+
+  @override
+  String get liveAudioBoxMicOnAir => 'Ke udara';
+
+  @override
+  String get liveSyncTitle => 'Segerak bunyi dan gambar';
+
+  @override
+  String get liveSyncAuto => 'Segerak automatik';
+
+  @override
+  String get liveSyncAutoBody =>
+      'Bunyi mikrofon MAXCOM dilewatkan supaya selari dengan gambar kamera. Diukur sendiri daripada bunyi kamera.';
+
+  @override
+  String get liveSyncBusy => 'Sedang menyegerak (bunyi tetap ke udara)';
+
+  @override
+  String liveSyncBusyBody(int ms) {
+    return 'Mikrofon MAXCOM kekal ke udara pada lewat siaran lepas (+$ms ms) sementara MAXCOM mengukur.';
+  }
+
+  @override
+  String get liveSyncManual => 'Laras manual';
+
+  @override
+  String get liveSyncManualBody =>
+      'Lewatkan bunyi supaya selari dengan gambar kamera. Lihat bibir penceramah pada TV semasa melaras.';
+
+  @override
+  String get liveSyncRange => '0 hingga 2000 ms, langkah 50 ms.';
+
+  @override
+  String get liveSyncBack => 'Kembali ke automatik';
+
+  @override
+  String get liveSyncLess => 'Kurangkan 50 ms';
+
+  @override
+  String get liveSyncMore => 'Tambah 50 ms';
+
+  @override
+  String get liveDestPickOne => 'Pilih sekurang-kurangnya satu destinasi';
+
+  @override
+  String get liveDestLastOne =>
+      'Destinasi terakhir tidak boleh dimatikan semasa siaran';
+
+  @override
+  String get liveDestKioskOldBox =>
+      'Kemas kini MAXCOM Kiosk Box untuk pilihan ini';
+
+  @override
+  String get liveDestKioskOffSub => 'Dimatikan untuk siaran ini';
+
+  @override
+  String get liveDestKioskLabelOff => 'Skrin surau: Tidak';
+
+  @override
+  String get liveDestRecSwitchNotNow =>
+      'Tidak dapat ditukar semasa siaran pada peranti ini';
+
+  @override
+  String get liveCtlTvsTitle => 'TV memaparkan';
+
+  @override
+  String get liveCtlDuration => 'Tempoh siaran';
+
+  @override
+  String get liveMicLostBoxTitle => 'Mikrofon MAXCOM tidak dikesan';
+
+  @override
+  String get liveMicLostBoxBody =>
+      'Siaran mungkin senyap. Semak sambungan mikrofon pada MAXCOM.';
+
+  @override
+  String get liveMicLostDeviceTitle => 'Mikrofon peranti tidak dikesan';
+
+  @override
+  String get liveMicLostDeviceBody =>
+      'Siaran mungkin senyap. Semak mikrofon pada peranti yang menghantar siaran.';
+
+  @override
+  String get liveRecordingStopped => 'Dihentikan, fail setakat ini disimpan';
+
+  @override
+  String get liveRetrying => 'Mencuba semula';
+
+  @override
+  String get liveDestYoutubeLive =>
+      'Boleh dihidupkan semasa siaran, tidak boleh dimatikan';
+
+  @override
+  String get liveSyncRangeSaved =>
+      '0 hingga 2000 ms, langkah 50 ms. Disimpan untuk siaran seterusnya di MAXCOM ini.';
+
+  @override
+  String get liveDestLiveYt => 'Ke YouTube sahaja';
+
+  @override
+  String get liveDestLiveRec =>
+      'Merakam sahaja, tiada siaran ke skrin surau atau YouTube';
+
+  @override
+  String get liveCtlSubMicLost => 'Tidak dikesan';
+
+  @override
+  String get liveTvShowTitle => 'Paparkan siaran langsung';
+
+  @override
+  String get liveTvShowHint =>
+      'Matikan bagi Box yang perlahan semasa siaran. TV Box itu kekal dengan paparan biasa.';
+
+  @override
+  String get liveTvShowServer => 'Pelayan siaran';
+
+  @override
+  String get liveTvShowOff => 'Paparan biasa semasa siaran';
+
+  @override
+  String get liveTvShowAllOff => 'Tiada TV akan memaparkan siaran.';
+
+  @override
+  String liveTvShowSwitch(String name) {
+    return 'Paparkan siaran langsung, $name';
+  }
+
+  @override
+  String liveTvShowCpuNow(int n) {
+    return 'CPU $n%';
+  }
+
+  @override
+  String liveTvShowCpuLast(int n) {
+    return 'CPU $n% semasa siaran lepas';
+  }
+
+  @override
+  String liveCtlTvsShowing(int n, String names) {
+    return 'TV memaparkan siaran: $n ($names)';
+  }
+
+  @override
+  String liveCtlTvNormal(String name) {
+    return '$name: paparan biasa';
+  }
+
+  @override
+  String get liveViewerShowing => 'memaparkan siaran';
+
+  @override
+  String get liveViewerNormal => 'paparan biasa';
+
+  @override
+  String get liveViewersHint =>
+      'Tukar dalam Tetapan siaran, Paparkan siaran langsung.';
+
+  @override
+  String liveBusyTitle(String name, int n) {
+    return '$name terlalu sibuk (CPU $n%)';
+  }
+
+  @override
+  String get liveBusyBody =>
+      'Gambar mungkin tersekat di TV dan YouTube. TV lain memaparkan siaran, jadi TV Box ini boleh kembali ke paparan biasa. Boleh dihidupkan semula dalam Tetapan siaran.';
+
+  @override
+  String get liveBusyAction => 'Matikan paparan siaran pada Box ini';
+
+  @override
+  String get liveBusyLater => 'Bukan sekarang';
+
+  @override
+  String get liveMicSilentTitle => 'Tiada bunyi dari Mikrofon MAXCOM';
+
+  @override
+  String liveMicSilentBody(int n) {
+    return 'Siaran ke udara tanpa suara penceramah sejak $n minit.';
+  }
+
+  @override
+  String get liveMicSilentTip1 =>
+      'Semak kabel mikrofon pada lubang mic-in MAXCOM.';
+
+  @override
+  String get liveMicSilentTip2 =>
+      'Gunakan kad bunyi USB yang ada input mikrofon.';
+
+  @override
+  String get liveMicSilentTip3 => 'Atau naikkan bunyi kamera luaran.';
+
+  @override
+  String get liveMicSilentUseCamera => 'Gunakan bunyi kamera';
+
+  @override
+  String liveMicSilentRow(String time) {
+    return 'Ke udara, tiada bunyi sejak $time';
+  }
+
+  @override
+  String get liveMicSilentCamTitle => 'Bunyi kamera digunakan';
+
+  @override
+  String get liveMicSilentCamBody =>
+      'Siaran kini ada bunyi dari kamera luaran. Jika Mikrofon MAXCOM kembali berbunyi, ia didengar semula.';
+
+  @override
+  String get liveMicTestHint =>
+      'Cakap ke mikrofon semasa ujian 5 saat. Pilih input yang ada bunyi.';
+
+  @override
+  String get liveMicTestBusy => 'Menguji...';
+
+  @override
+  String get liveMicTestSound => 'Diuji: ada bunyi';
+
+  @override
+  String get liveMicTestSilent => 'Diuji: senyap';
+
+  @override
+  String get liveMicTestFailed => 'Tidak dapat diuji';
+
+  @override
+  String get liveMicTestNone => 'Belum diuji';
+
+  @override
+  String get liveMicTestAgain => 'Uji semula (5 saat)';
+
+  @override
+  String liveMicTestAt(String time) {
+    return 'Diuji pada $time.';
+  }
+
+  @override
+  String get liveMicTestSilentTitle => 'Input yang dipilih senyap';
+
+  @override
+  String get liveMicTestSilentBody =>
+      'Siaran akan ke udara tanpa suara penceramah. Pilih input lain atau semak kabel, kemudian uji semula.';
+
+  @override
+  String get liveYoutubeLaterWhySignIn =>
+      'YouTube belum disambungkan pada MAXCOM.';
+
+  @override
+  String get liveYoutubeLaterWhyUnreachable => 'MAXCOM tidak dapat dihubungi.';
+
+  @override
+  String get liveYoutubeLaterWhyStarter =>
+      'Hanya peranti yang memulakan siaran boleh menambah YouTube.';
+
+  @override
+  String get liveTvShowFailed => 'Pilihan tidak dapat disimpan. Cuba lagi.';
+
+  @override
+  String get liveCtlSubNoSound => 'Tiada bunyi';
+
+  @override
+  String get liveAudioSwitchConfirm =>
+      'Tukar bunyi? Siaran berhenti seketika (2 hingga 3 saat).';
+
+  @override
+  String get liveAudioSwitchDo => 'Tukar';
+
+  @override
+  String get liveAudioSwitchCancel => 'Batal';
+
+  @override
+  String get liveWarnMicDropsTitle => 'Bunyi mikrofon MAXCOM terputus-putus';
+
+  @override
+  String get liveWarnMicDropsBody =>
+      'Periksa kabel mikrofon atau pilih bunyi kamera.';
+
+  @override
+  String get liveWarnBehindTitle => 'Muat naik ke YouTube perlahan';
+
+  @override
+  String liveWarnBehindBody(int seconds) {
+    return 'Siaran lewat $seconds saat. Siaran diteruskan.';
+  }
+
+  @override
+  String get liveWarnQualityTitle => 'Kualiti gambar diturunkan (480p)';
+
+  @override
+  String get liveWarnQualityBody =>
+      'Internet perlahan. Kualiti kembali sendiri apabila internet pulih.';
+
+  @override
+  String liveRelayReconnects(int count) {
+    return 'Sambungan ke YouTube disambung semula $count kali';
+  }
 }

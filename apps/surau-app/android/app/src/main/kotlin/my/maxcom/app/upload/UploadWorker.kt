@@ -7,7 +7,6 @@ import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
-import android.util.Base64
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -15,6 +14,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.io.File
 import java.nio.ByteBuffer
+import my.maxcom.app.live.Diag
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -69,18 +70,17 @@ class ChannelSource(private val pfd: android.os.ParcelFileDescriptor) : OpenSour
  * cancel action; the text is numbers only, never a URI or a file name), joins the recorded
  * segments with MediaMuxer when asked, and sends them with [UploadJobRunner].
  *
- * The session token, the cloud base URL and the root CA arrive in WorkManager's input data
- * (Android keeps it in its own app-private database; builder's call 8). The YouTube session URI is
- * additionally kept in the worker's private preferences ([PrefsStateStore]) so a retry resumes. Both
- * die with the job; neither goes to a log or a notification.
+ * 2026.11.15 (B1, U7): the worker talks to Google only. WorkManager's input data holds the job and nothing else
+ * ([UploadPlan.inputValues]): no session token, no box address, no certificate. The Google upload address of each
+ * part comes inside the job (the app got it from the MAXCOM box) and is additionally kept in the worker's private
+ * preferences ([PrefsStateStore]) so a retry resumes; it dies with the job and never goes to a log or a
+ * notification. Nothing leaves [doWork] as an exception (U3): a failure is logged by its class and shown as
+ * `runner_error`.
  */
 class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     companion object {
-        const val KEY_JOB = "job"
-        const val KEY_BASE = "base"
-        const val KEY_TOKEN = "token"
-        const val KEY_CA = "ca"
+        const val KEY_JOB = UploadPlan.KEY_JOB
 
         fun workName(jobId: String) = "maxcom-upload-$jobId"
 
@@ -124,13 +124,37 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        Diag.init(applicationContext)
         val specJson = inputData.getString(KEY_JOB) ?: return@withContext Result.failure()
-        val base = inputData.getString(KEY_BASE) ?: return@withContext Result.failure()
-        val token = inputData.getString(KEY_TOKEN) ?: return@withContext Result.failure()
-        val ca = inputData.getString(KEY_CA)?.takeIf { it.isNotEmpty() }?.let { Base64.decode(it, Base64.DEFAULT) }
-        val spec = try { JobSpec.parse(specJson) } catch (_: Exception) { return@withContext Result.failure() }
+        val spec = try {
+            JobSpec.parse(specJson)
+        } catch (e: Exception) {
+            Diag.error("upload_job_unreadable", e)
+            return@withContext Result.failure()
+        }
+        try {
+            work(spec)
+        } catch (e: CancellationException) {
+            throw e // the system or the person stopped the work: WorkManager's own business
+        } catch (e: Exception) {
+            // U3: no exception ends the worker silently. The class is logged, the card shows a reason.
+            Diag.error("upload_worker_failed", e)
+            val first = spec.parts.firstOrNull { !it.done } ?: spec.parts.firstOrNull()
+            if (first != null) UploadEvents.emit(UploadEvent(spec.id, first.index, "failed", error = "runner_error"))
+            Result.failure()
+        }
+    }
 
-        try { setForeground(foreground(0, 1, 0, 0)) } catch (_: Exception) { /* not allowed now; run without */ }
+    private suspend fun work(spec: JobSpec): Result {
+        Diag.log("upload_worker_start", "parts=${spec.parts.size} attempt=$runAttemptCount")
+        try {
+            setForeground(foreground(0, 1, 0, 0))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Not allowed now (B1d): the upload still runs, without the notification; the reason is on record.
+            Diag.error("upload_foreground_failed", e)
+        }
 
         val store = PrefsStateStore(applicationContext)
         val state = store.load(spec.id) ?: JobState().also { s ->
@@ -146,7 +170,14 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val s = state.parts.getOrPut(p.index) { PartState() }
             if (p.done) s.state = "done"
             if (s.videoId == null && p.videoId != null) s.videoId = p.videoId
-            if (s.uploadUri == null && p.uploadUri != null) { s.uploadUri = p.uploadUri; s.uploadId = p.uploadId; s.offset = p.offset }
+            // The app got a (new) upload address from the box: it wins over what the worker dropped or never had.
+            if (s.videoId == null && p.uploadUri != null && s.uploadUri != p.uploadUri) {
+                val fresh = s.uploadUri != null
+                s.uploadUri = p.uploadUri
+                s.uploadId = p.uploadId
+                s.offset = if (fresh) 0 else p.offset
+                s.error = null
+            }
         }
 
         val emit: (UploadEvent) -> Unit = { UploadEvents.emit(it) }
@@ -155,7 +186,6 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val runner = UploadJobRunner(
             spec = spec,
             state = state,
-            cloud = HttpCloudApi(base, token, ca),
             uploader = ResumableUploader(UrlConnectionTransport(), sleep = { ms -> sleepUnlessStopped(ms) }),
             openSource = { source -> open(spec.id, source) },
             store = store,
@@ -168,9 +198,12 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     nm.notify(notificationId(spec.id), foreground(index, count, sent, total).notification)
                 } catch (_: Exception) {}
             },
+            log = { event, type -> Diag.log(event, "type=$type") },
         )
 
-        when (runner.run(parts)) {
+        val end = runner.run(parts)
+        Diag.log("upload_worker_end", "end=${end.name.lowercase()}")
+        return when (end) {
             RunEnd.DONE -> {
                 joinedFile(applicationContext, spec.id).delete()
                 Result.success()
@@ -180,6 +213,11 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             RunEnd.RETRY, RunEnd.STOPPED -> Result.retry()
         }
     }
+
+    /** No part of the job has an upload address or a video yet (so its files may still be joined into one). */
+    private fun untouched(spec: JobSpec, state: JobState): Boolean =
+        spec.parts.none { it.uploadUri != null || it.videoId != null } &&
+            state.parts.values.none { it.uploadUri != null || it.videoId != null }
 
     /** Joins the segments into one file when asked; falls back to one video per segment. */
     private fun joinIfAsked(
@@ -198,7 +236,10 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 UploadPlan.JoinedFilePlan.REJOIN -> rejoin(spec, state, store, emit, out, known)
             }
         }
-        if (!spec.joinSegments || segments.size < 2 || segments.any { !it.source.startsWith("android:") || it.done }) {
+        // An upload address is made for one file of one size: once any part has one, the parts are sent as they are.
+        if (!spec.joinSegments || segments.size < 2 || segments.any { !it.source.startsWith("android:") || it.done } ||
+            !untouched(spec, state)
+        ) {
             return segments
         }
         emit(UploadEvent(spec.id, 1, "joining", total = segments.sumOf { it.bytes }))

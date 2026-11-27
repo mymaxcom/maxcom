@@ -134,6 +134,25 @@ describe('openWhep', () => {
     await s.close();
   });
 
+  it('O31: a low-memory display asks the box for a lower live height on the offer; others ask for nothing', async () => {
+    const low = whepFetch(created);
+    const a = openWhep(fakeVideo().v, { audio: false, volume: 50, maxHeight: 720, fetchImpl: low.fn, RTCPeerConnectionImpl: PC });
+    await tick();
+    expect(low.calls[0]!.url).toBe('/api/kiosk/live/whep?maxHeight=720');
+    await a.close();
+    const normal = whepFetch(created);
+    const b = openWhep(fakeVideo().v, { audio: false, volume: 50, maxHeight: undefined, fetchImpl: normal.fn, RTCPeerConnectionImpl: PC });
+    await tick();
+    expect(normal.calls[0]!.url).toBe('/api/kiosk/live/whep');
+    await b.close();
+    // a bad value is never sent
+    const bad = whepFetch(created);
+    const c = openWhep(fakeVideo().v, { audio: false, volume: 50, maxHeight: Number.NaN, fetchImpl: bad.fn, RTCPeerConnectionImpl: PC });
+    await tick();
+    expect(bad.calls[0]!.url).toBe('/api/kiosk/live/whep');
+    await c.close();
+  });
+
   it('unmutes with audio on and applies the volume', async () => {
     const { fn } = whepFetch(created);
     const { v } = fakeVideo();
@@ -271,6 +290,331 @@ describe('openWhep', () => {
     const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: undefined as unknown as typeof RTCPeerConnection, onState: (x) => states.push(x) });
     await tick();
     expect(states.at(-1)).toBe('unsupported');
+    await s.close();
+  });
+
+  describe('decode watch', () => {
+    function statsPC(framesDecoded: number | null, kindKey: 'kind' | 'mediaType' = 'kind') {
+      let bytes = 0;
+      const calls = { n: 0 };
+      (FakePC.prototype as unknown as { getStats: unknown }).getStats = async () => {
+        calls.n++;
+        bytes += 100_000;
+        const entries: Record<string, unknown>[] = [
+          { type: 'inbound-rtp', [kindKey]: 'audio', bytesReceived: 5000 },
+          { type: 'inbound-rtp', [kindKey]: 'video', bytesReceived: bytes, ...(framesDecoded === null ? {} : { framesDecoded }) },
+        ];
+        return { forEach: (fn: (e: Record<string, unknown>) => void) => entries.forEach(fn) };
+      };
+      return calls;
+    }
+    afterEach(() => {
+      delete (FakePC.prototype as unknown as { getStats?: unknown }).getStats;
+    });
+
+    it('calls onDecodeStuck once when video bytes grow with no decoded frame, and stops sampling on close()', async () => {
+      const calls = statsPC(0);
+      const { fn } = whepFetch(created);
+      const { v } = fakeVideo();
+      const onDecodeStuck = vi.fn();
+      const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC, onDecodeStuck });
+      await tick();
+      const before = vi.getTimerCount();
+      FakePC.instances[0]!.setConnection('connected');
+      // the stats sampler, and the "still watching" timer every connected player has (K1)
+      expect(vi.getTimerCount()).toBe(before + 2);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(onDecodeStuck).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(onDecodeStuck).toHaveBeenCalledTimes(1);
+      expect(FakePC.instances[0]!.closed).toBe(false);
+      expect(FakePC.instances.length).toBe(1);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(onDecodeStuck).toHaveBeenCalledTimes(1);
+      await s.close();
+      const n = calls.n;
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(calls.n).toBe(n);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('works with the legacy mediaType key', async () => {
+      statsPC(0, 'mediaType');
+      const { fn } = whepFetch(created);
+      const { v } = fakeVideo();
+      const onDecodeStuck = vi.fn();
+      const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC, onDecodeStuck });
+      await tick();
+      FakePC.instances[0]!.setConnection('connected');
+      await vi.advanceTimersByTimeAsync(40_000);
+      expect(onDecodeStuck).toHaveBeenCalledTimes(1);
+      await s.close();
+    });
+
+    it('does not call onDecodeStuck when frames decode, or when framesDecoded is missing', async () => {
+      for (const frames of [12, null]) {
+        statsPC(frames);
+        const { fn } = whepFetch(created);
+        const { v } = fakeVideo();
+        const onDecodeStuck = vi.fn();
+        const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC, onDecodeStuck });
+        await tick();
+        FakePC.instances.at(-1)!.setConnection('connected');
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(onDecodeStuck).not.toHaveBeenCalled();
+        await s.close();
+      }
+    });
+
+    it('a getStats rejection on every sample never reports stuck and closes cleanly', async () => {
+      let n = 0;
+      (FakePC.prototype as unknown as { getStats: unknown }).getStats = async () => {
+        n++;
+        throw new Error('no stats');
+      };
+      const unhandled: unknown[] = [];
+      const onUnhandled = (e: unknown): void => {
+        unhandled.push(e);
+      };
+      process.on('unhandledRejection', onUnhandled);
+      try {
+        const { fn } = whepFetch(created);
+        const { v } = fakeVideo();
+        const onDecodeStuck = vi.fn();
+        const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC, onDecodeStuck });
+        await tick();
+        FakePC.instances[0]!.setConnection('connected');
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(n).toBeGreaterThan(0);
+        expect(onDecodeStuck).not.toHaveBeenCalled();
+        await s.close();
+        expect(vi.getTimerCount()).toBe(0);
+        await tick();
+        expect(unhandled).toEqual([]);
+      } finally {
+        process.off('unhandledRejection', onUnhandled);
+      }
+    });
+
+    it('a throwing onDecodeStuck is contained: no teardown, no retry, no timers left after close()', async () => {
+      statsPC(0);
+      const { fn, calls } = whepFetch(created);
+      const { v } = fakeVideo();
+      const states: WhepState[] = [];
+      const onDecodeStuck = vi.fn(() => {
+        throw new Error('boom');
+      });
+      const s = openWhep(v, {
+        audio: false,
+        volume: 50,
+        fetchImpl: fn,
+        RTCPeerConnectionImpl: PC,
+        onDecodeStuck,
+        onState: (x) => states.push(x),
+      });
+      await tick();
+      FakePC.instances[0]!.setConnection('connected');
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(onDecodeStuck).toHaveBeenCalledTimes(1);
+      expect(FakePC.instances.length).toBe(1);
+      expect(FakePC.instances[0]!.closed).toBe(false);
+      expect(calls.filter((c) => c.init.method === 'POST' && !c.url.endsWith('/alive')).length).toBe(1);
+      expect(states).not.toContain('retrying');
+      expect(states.at(-1)).toBe('playing');
+      await s.close();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('a fake without getStats means no sampling and no timer', async () => {
+      const { fn } = whepFetch(created);
+      const { v } = fakeVideo();
+      const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC, onDecodeStuck: vi.fn() });
+      await tick();
+      const before = vi.getTimerCount();
+      FakePC.instances[0]!.setConnection('connected');
+      // only the "still watching" timer (K1): no stats sampler
+      expect(vi.getTimerCount()).toBe(before + 1);
+      await s.close();
+      expect(vi.getTimerCount()).toBe(before);
+    });
+  });
+});
+
+// 2026.11.15, Lane A tasks A6 and A7: the last picture survives a reconnect (D4), and a full box says so (K4).
+describe('A6/A7: held picture across a retry (D4) and the 429 answer (K4)', () => {
+  it('D4: a dropped connection keeps the last picture on the element while it retries; the new stream replaces it; close() clears it', async () => {
+    const { fn } = whepFetch(created);
+    const { v } = fakeVideo();
+    const states: WhepState[] = [];
+    const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC, onState: (x) => states.push(x) });
+    await tick();
+    const first = new FakeStream();
+    FakePC.instances[0]!.fireTrack(first);
+    FakePC.instances[0]!.setConnection('connected');
+    expect(v.srcObject).toBe(first);
+    // the publisher went away: MediaMTX closed the viewer
+    FakePC.instances[0]!.setConnection('failed');
+    expect(states.at(-1)).toBe('retrying');
+    expect(v.srcObject).toBe(first);
+    expect(first.tracks.every((t) => !t.stopped)).toBe(true);
+    // the retry connects: success path, the new stream takes over and the old one is let go
+    await vi.advanceTimersByTimeAsync(1000);
+    await tick();
+    const second = new FakeStream();
+    FakePC.instances[1]!.fireTrack(second);
+    FakePC.instances[1]!.setConnection('connected');
+    expect(v.srcObject).toBe(second);
+    expect(first.tracks.every((t) => t.stopped)).toBe(true);
+    expect(states.at(-1)).toBe('playing');
+    await s.close();
+    expect(v.srcObject).toBeNull();
+    expect(second.tracks.every((t) => t.stopped)).toBe(true);
+  });
+
+  it('D4: a 404 while the picture is held (the ingest is still away) keeps holding it', async () => {
+    let n = 0;
+    const { fn } = whepFetch(() => (++n === 1 ? created() : new Response('{"errors":["tiada siaran"]}', { status: 404 })));
+    const { v } = fakeVideo();
+    const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC });
+    await tick();
+    const first = new FakeStream();
+    FakePC.instances[0]!.fireTrack(first);
+    FakePC.instances[0]!.setConnection('connected');
+    FakePC.instances[0]!.setConnection('failed');
+    await vi.advanceTimersByTimeAsync(1000);
+    await tick();
+    expect(v.srcObject).toBe(first);
+    await s.close();
+  });
+
+  it('K4: a 429 (every viewer slot taken) is reported as toomany and tried again 15 s later, then plays (success path)', async () => {
+    let n = 0;
+    const { fn, calls } = whepFetch(() => (++n === 1 ? new Response('{"code":"too_many_viewers"}', { status: 429 }) : created()));
+    const { v } = fakeVideo();
+    const states: WhepState[] = [];
+    const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC, onState: (x) => states.push(x) });
+    await tick();
+    expect(states).toContain('toomany');
+    const posts = () => calls.filter((c) => c.init.method === 'POST').length;
+    expect(posts()).toBe(1);
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(posts()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await tick();
+    expect(posts()).toBe(2);
+    FakePC.instances.at(-1)!.setConnection('connected');
+    expect(states.at(-1)).toBe('playing');
+    await s.close();
+  });
+});
+
+describe('A7: the TV says it is still watching (K1)', () => {
+  it('K1: while connected the player posts to its own viewer address 5 s after playing and then every 30 s, and stops when the connection ends or it is closed', async () => {
+    const { fn, calls } = whepFetch(created);
+    const { v } = fakeVideo();
+    const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC });
+    await tick();
+    const alive = () => calls.filter((c) => c.url === '/api/kiosk/live/whep/abc123/alive');
+    // not before the picture is connected
+    await vi.advanceTimersByTimeAsync(6 * 60_000);
+    expect(alive()).toHaveLength(0);
+    FakePC.instances[0]!.setConnection('connected');
+    await vi.advanceTimersByTimeAsync(4_900);
+    expect(alive()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(alive()).toHaveLength(1);
+    expect(alive()[0]!.init).toMatchObject({ method: 'POST', credentials: 'same-origin' });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(alive()).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(alive()).toHaveLength(12);
+    await s.close();
+    await vi.advanceTimersByTimeAsync(20 * 60_000);
+    expect(alive()).toHaveLength(12);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('K1: a connection that ends before the first alive never sends it', async () => {
+    const { fn, calls } = whepFetch(created);
+    const { v } = fakeVideo();
+    const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC });
+    await tick();
+    FakePC.instances[0]!.setConnection('connected');
+    await vi.advanceTimersByTimeAsync(2_000);
+    await s.close();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(calls.filter((c) => c.url.endsWith('/alive'))).toHaveLength(0);
+  });
+});
+
+describe('F6: the page leaving frees the viewer row', () => {
+  const deletes = (calls: Call[]) => calls.filter((c) => c.init.method === 'DELETE');
+
+  it('pagehide sends one DELETE of the current location with keepalive', async () => {
+    const { fn, calls } = whepFetch(created);
+    const { v } = fakeVideo();
+    const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC });
+    await tick();
+    FakePC.instances[0]!.setConnection('connected');
+    expect(deletes(calls)).toHaveLength(0);
+    window.dispatchEvent(new Event('pagehide'));
+    expect(deletes(calls)).toHaveLength(1);
+    expect(deletes(calls)[0]!.url).toBe('/api/kiosk/live/whep/abc123');
+    expect(deletes(calls)[0]!.init).toMatchObject({ method: 'DELETE', credentials: 'same-origin', keepalive: true });
+    await s.close();
+  });
+
+  it('no DELETE after close() on pagehide, and the listener is removed', async () => {
+    const { fn, calls } = whepFetch(created);
+    const { v } = fakeVideo();
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC });
+    await tick();
+    FakePC.instances[0]!.setConnection('connected');
+    const onHide = add.mock.calls.find((c) => c[0] === 'pagehide')![1];
+    await s.close();
+    // close() freed the row itself: one DELETE, without keepalive
+    expect(deletes(calls)).toHaveLength(1);
+    expect(deletes(calls)[0]!.init.keepalive).toBeUndefined();
+    expect(remove.mock.calls.some((c) => c[0] === 'pagehide' && c[1] === onHide)).toBe(true);
+    window.dispatchEvent(new Event('pagehide'));
+    expect(deletes(calls)).toHaveLength(1);
+    add.mockRestore();
+    remove.mockRestore();
+  });
+
+  it('N2: pagehide into the back-forward cache (persisted) sends no DELETE; pageshow persisted reconnects with a new offer', async () => {
+    const { fn, calls } = whepFetch(created);
+    const { v } = fakeVideo();
+    const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC });
+    await tick();
+    FakePC.instances[0]!.setConnection('connected');
+    const posts = (): number => calls.filter((c) => c.init.method === 'POST' && !c.url.endsWith('/alive')).length;
+    expect(posts()).toBe(1);
+    window.dispatchEvent(Object.assign(new Event('pagehide'), { persisted: true }));
+    expect(deletes(calls)).toHaveLength(0);
+    // a pageshow that is no return from the cache changes nothing
+    window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: false }));
+    await tick();
+    expect(posts()).toBe(1);
+    window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
+    await tick();
+    expect(posts()).toBe(2);
+    expect(FakePC.instances).toHaveLength(2);
+    await s.close();
+    // the listener is gone after close(): a later pageshow starts nothing
+    window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
+    await tick();
+    expect(posts()).toBe(2);
+  });
+
+  it('pagehide before the box answered sends nothing (there is no row yet)', async () => {
+    const { fn, calls } = whepFetch(created);
+    const { v } = fakeVideo();
+    const s = openWhep(v, { audio: false, volume: 50, fetchImpl: fn, RTCPeerConnectionImpl: PC });
+    window.dispatchEvent(new Event('pagehide'));
+    expect(deletes(calls)).toHaveLength(0);
     await s.close();
   });
 });

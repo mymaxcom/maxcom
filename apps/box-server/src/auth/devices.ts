@@ -31,14 +31,14 @@ export interface Device {
 const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const MAX_OPEN_CODES = 3;
 
-function newCode(): string {
+export function newCode(): string {
   const bytes = randomBytes(12);
   let raw = '';
   for (const b of bytes) raw += B32[b & 31]; // 32 symbols: the mask is unbiased
   return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
 }
 
-function normaliseCode(code: unknown): string {
+export function normaliseCode(code: unknown): string {
   return typeof code === 'string' ? code.replace(/[\s-]/g, '').toUpperCase() : '';
 }
 

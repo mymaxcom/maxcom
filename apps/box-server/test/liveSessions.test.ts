@@ -259,15 +259,17 @@ describe('live stop', () => {
     expect((await post(h, '/api/live/stop', a.headers, { sessionId: id })).json()).toMatchObject({ stopped: false });
   });
 
-  it('auto-stops with reason timeout when no ingest arrives for 10 minutes', async () => {
+  it('auto-stops with reason timeout when no ingest arrives for 10 minutes (the starting device still polls)', async () => {
     const h = await make({ live: { monitorMs: 3_600_000 } });
     const liveUser = await loginAs(h.app, 'live');
     const id = (await post(h, '/api/live/start', liveUser.headers, startBody(h))).json().session.id as string;
     const sessions = h.app.liveSessions!;
     h.clock.t += 9 * 60_000;
+    sessions.heartbeat(liveUser.deviceId);
     await sessions.tick();
     expect(sessions.current()?.id).toBe(id);
     h.clock.t += 2 * 60_000;
+    sessions.heartbeat(liveUser.deviceId);
     await sessions.tick();
     expect(sessions.current()).toBeNull();
     const rows = h.app.surau.db.prepare("SELECT after_json FROM change_log WHERE entity = 'live' AND entity_id = ? ORDER BY id").all(id) as Array<{ after_json: string }>;
@@ -285,9 +287,11 @@ describe('live stop', () => {
     expect(sessions.current()).not.toBeNull();
     h.fake.setReady(false);
     h.clock.t += 5 * 60_000;
+    sessions.heartbeat(liveUser.deviceId);
     await sessions.tick();
     expect(sessions.current()).not.toBeNull();
     h.clock.t += 6 * 60_000;
+    sessions.heartbeat(liveUser.deviceId);
     await sessions.tick();
     expect(sessions.current()).toBeNull();
   });
@@ -592,5 +596,169 @@ describe('firewall state refresh while live', () => {
     const back = await post(h, '/api/live/start', liveUser.headers, startBody(h));
     expect(back.json().warnings ?? []).not.toContain('media_ports_blocked');
     expect(h.app.liveSessions!.status().warnings).not.toContain('media_ports_blocked');
+  });
+});
+
+// 2026.11.15, Lane A task A1: the status says whose session it is, and the owner asks for it back with `resume`.
+describe('A1: mine in the status, resume, resume_mismatch (B9 box half, S2)', () => {
+  const status = async (h: LiveHarness, headers: Record<string, string>) =>
+    (await h.app.inject({ method: 'GET', url: '/api/live/status', headers, remoteAddress: '10.168.1.40' })).json() as LiveStatus;
+
+  it('B9: the owner sees mine:true, another device mine:false, and no device id is in the answer', async () => {
+    const h = await make();
+    const a = await loginAs(h.app, 'live');
+    const b = await loginAs(h.app, 'live');
+    expect((await status(h, a.headers)).session).toBeNull();
+    await post(h, '/api/live/start', a.headers, startBody(h));
+    const own = await status(h, a.headers);
+    const other = await status(h, b.headers);
+    expect(own.session).toMatchObject({ mine: true, videoPath: 'device' });
+    expect(other.session).toMatchObject({ mine: false });
+    expect(JSON.stringify(own)).not.toContain(a.deviceId);
+    expect(JSON.stringify(other)).not.toContain(a.deviceId);
+    // the additive fields of the frozen contract are there with a session and without one
+    expect(own).toMatchObject({ gapSeconds: 0, broadcastIds: [], cameraUse: [] });
+    expect(typeof own.nextLiveOn).toBe('boolean');
+  });
+
+  it('B9: resume gives the owner the same session and the same working targets (success path)', async () => {
+    const h = await make();
+    const a = await loginAs(h.app, 'live');
+    const first = (await post(h, '/api/live/start', a.headers, startBody(h))).json();
+    const back = await post(h, '/api/live/start', a.headers, startBody(h, { resume: true }));
+    expect(back.statusCode).toBe(200);
+    const body = back.json();
+    expect(body.session.id).toBe(first.session.id);
+    expect(body.session.mine).toBe(true);
+    expect(body.ingest.srt).toEqual(first.ingest.srt);
+    expect(body.ingest.srt.passphrase).toMatch(/^[A-Za-z0-9]{24}$/);
+    // a resume is not a fresh start: the limiter does not count it
+    for (let i = 0; i < 10; i++) expect((await post(h, '/api/live/start', a.headers, startBody(h, { resume: true }))).statusCode).toBe(200);
+  });
+
+  it('S2: a resume whose kuliah, source or outputs differ is 409 resume_mismatch and leaves the session alone', async () => {
+    const h = await make();
+    const a = await loginAs(h.app, 'live');
+    const first = (await post(h, '/api/live/start', a.headers, startBody(h))).json();
+    for (const over of [{ kuliahId: null }, { source: 'web' }, { outputs: { kiosk: true, youtube: true } }]) {
+      const r = await post(h, '/api/live/start', a.headers, startBody(h, { resume: true, ...over }));
+      expect(r.statusCode, JSON.stringify(over)).toBe(409);
+      expect(r.json().code).toBe('resume_mismatch');
+    }
+    expect(h.app.liveSessions!.current()?.id).toBe(first.session.id);
+  });
+
+  it('a resume with nothing running is 409 no_session (it never starts a new live); another device still gets live_busy', async () => {
+    const h = await make();
+    const a = await loginAs(h.app, 'live');
+    const b = await loginAs(h.app, 'live');
+    const none = await post(h, '/api/live/start', a.headers, startBody(h, { resume: true }));
+    expect(none.statusCode).toBe(409);
+    expect(none.json().code).toBe('no_session');
+    expect(h.app.liveSessions!.current()).toBeNull();
+    await post(h, '/api/live/start', a.headers, startBody(h));
+    const busy = await post(h, '/api/live/start', b.headers, startBody(h, { resume: true }));
+    expect(busy.json().code).toBe('live_busy');
+  });
+});
+
+// 2026.11.15, Lane A task A5 (S8): a clean-up that never finishes must not block every later live.
+describe('S8: a hanging clean-up does not block the next start', () => {
+  it('a YouTube complete that never answers: the next start goes on after the bounded wait and keeps its own passphrase (success path)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const yt = fakeYoutube({ complete: () => new Promise<void>(() => undefined) });
+    const h = await make({ live: { monitorMs: 3_600_000, youtube: yt, cleanupWaitMs: 150 } });
+    putFeature(h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
+    const user = await loginAs(h.app, 'live');
+    const body = startBody(h, { kuliahId: null, outputs: { kiosk: true, youtube: true } });
+    const first = await post(h, '/api/live/start', user.headers, body);
+    expect(first.statusCode).toBe(200);
+    expect((await ytSettled(h.app, user.headers)).state).toBe('ready');
+    expect((await post(h, '/api/live/stop', user.headers, {})).json()).toMatchObject({ stopped: true });
+    const t0 = Date.now();
+    const second = await post(h, '/api/live/start', user.headers, startBody(h));
+    expect(second.statusCode).toBe(200);
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(second.json().session.id).not.toBe(first.json().session.id);
+    // the new live's SRT passphrase is the one MediaMTX holds
+    expect(h.fake.paths.get('surau')).toMatchObject({ srtPublishPassphrase: second.json().ingest.srt.passphrase });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('cleanup_slow'))).toBe(true);
+    // and the box still closes: the shutdown does not wait for ever either
+    const t1 = Date.now();
+    await h.app.liveSessions!.shutdown();
+    expect(Date.now() - t1).toBeLessThan(5000);
+  });
+
+  it('a clean-up that does finish is still waited for (no warning)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const h = await make({ live: { monitorMs: 3_600_000, cleanupWaitMs: 5000 } });
+    const user = await loginAs(h.app, 'live');
+    await post(h, '/api/live/start', user.headers, startBody(h));
+    h.fake.apiDelayMs = 60;
+    await post(h, '/api/live/stop', user.headers, {});
+    const again = await post(h, '/api/live/start', user.headers, startBody(h));
+    expect(again.statusCode).toBe(200);
+    expect(h.fake.paths.get('surau')).toMatchObject({ srtPublishPassphrase: again.json().ingest.srt.passphrase });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('cleanup_slow'))).toBe(false);
+  });
+});
+
+// 2026.11.15, Lane A task A6 (D3): a short drop of a phone's own stream keeps the TV on the live with the waiting card.
+describe('A6: waiting state for phone ingest (D3)', () => {
+  it('the box sends live:true, waiting:true during the gap with the same since, resumes on the same since, and gives up after 60 s', async () => {
+    const h = await make({ live: { monitorMs: 3_600_000 } });
+    putFeature(h.app.surau.db, 'liveOnKiosk', { enabled: true }, 'test', undefined, 'sdm');
+    const user = await loginAs(h.app, 'live');
+    await post(h, '/api/live/start', user.headers, startBody(h));
+    const sessions = h.app.liveSessions!;
+    {
+      // before the first picture there is nothing to hold
+      await sessions.tick();
+      expect(sessions.kioskLive()).toMatchObject({ live: false });
+      h.fake.setReady(true, { sourceType: 'srtConn', sourceId: 'c1' });
+      await sessions.tick();
+      const since = sessions.kioskLive().since;
+      expect(sessions.kioskLive()).toMatchObject({ live: true });
+      expect(sessions.kioskLive().waiting).toBeUndefined();
+      // the phone drops for 20 s
+      h.fake.setReady(false);
+      h.clock.t += 2_000;
+      sessions.heartbeat(user.deviceId);
+      await sessions.tick();
+      expect(sessions.kioskLive()).toEqual(expect.objectContaining({ live: true, waiting: true, since }));
+      h.clock.t += 18_000;
+      h.fake.setReady(true, { sourceType: 'srtConn', sourceId: 'c2' });
+      await sessions.tick();
+      // success path: back on air, the same live (the TV keeps its player)
+      expect(sessions.kioskLive()).toEqual(expect.objectContaining({ live: true, since }));
+      expect(sessions.kioskLive().waiting).toBeUndefined();
+      // a drop that lasts: waiting for 60 s, then back to the slides
+      h.fake.setReady(false);
+      h.clock.t += 59_000;
+      sessions.heartbeat(user.deviceId);
+      await sessions.tick();
+      expect(sessions.kioskLive()).toMatchObject({ live: true, waiting: true });
+      h.clock.t += 2_000;
+      sessions.heartbeat(user.deviceId);
+      await sessions.tick();
+      expect(sessions.kioskLive()).toMatchObject({ live: false });
+      expect(sessions.current()).not.toBeNull();
+    }
+  });
+});
+
+// Y9, Y11 (integration with the YouTube lane): the new refusals keep their own code in the live status and on the sign-in routes.
+describe('YouTube refusals with their own codes (Y9, Y11)', () => {
+  it('a broadcast refused for the clock, the channel, the client file or a busy linked box shows its own warning, not no_internet', async () => {
+    for (const [reason, code] of [['clock_wrong', 'box_clock_wrong'], ['live_not_enabled', 'youtube_live_not_enabled'], ['client_refused', 'youtube_client_refused'], ['busy_other_box', 'youtube_busy_other_box'], ['network', 'no_internet']] as const) {
+      const yt = fakeYoutube({ createBroadcastFor: async () => Promise.reject(Object.assign(new Error('refused'), { reason })) });
+      const h = await make({ live: { monitorMs: 3_600_000, youtube: yt } });
+      putFeature(h.app.surau.db, 'liveYoutube', { enabled: true }, 'test', undefined, 'sdm');
+      const user = await loginAs(h.app, 'live');
+      const r = await post(h, '/api/live/start', user.headers, startBody(h, { outputs: { kiosk: true, youtube: true } }));
+      expect(r.statusCode, reason).toBe(200);
+      expect((await ytSettled(h.app, user.headers)).state).toBe('failed');
+      expect(h.app.liveSessions!.status().warnings, reason).toContain(code);
+    }
   });
 });

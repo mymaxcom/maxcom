@@ -158,8 +158,8 @@ describe('decide', () => {
 
 describe('cloud features', () => {
   const byKey = (k: string) => FEATURES.find((f) => f.key === k)!;
-  it('registry has 56 features in 11 groups', () => {
-    expect(FEATURES).toHaveLength(56);
+  it('registry has 57 features in 11 groups', () => {
+    expect(FEATURES).toHaveLength(57);
     expect(new Set(FEATURES.map((f) => f.group)).size).toBe(11);
     expect(byKey('cloudSync').group).toBe('lanjutan');
     expect(byKey('youtubeCatchUp').group).toBe('awan');

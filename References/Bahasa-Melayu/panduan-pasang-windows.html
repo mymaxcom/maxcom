@@ -107,7 +107,7 @@ html[dir=rtl] ol, html[dir=rtl] ul { padding-left: 0; padding-right: 1.6rem; }
 <header class="cover">
 <p class="kicker">MAXCOM R2, panduan pasang Windows</p>
 <h1>Pasang MAX Kiosk Server pada PC Windows</h1>
-<p class="lead">Panduan ini untuk sukarelawan surau. MAX Kiosk Server ialah perisian kotak MAXCOM yang sama pada Windows dan Android; di Windows nama folder dan menu Start kekal MAXCOM. Masa yang diperlukan: kira-kira 20 minit.</p>
+<p class="lead">Panduan ini untuk sukarelawan surau. MAX Kiosk Server ialah perisian MAXCOM Kiosk Box yang sama pada Windows dan Android; di Windows nama folder dan menu Start kekal MAXCOM. Masa yang diperlukan: kira-kira 20 minit.</p>
 </header>
 
 <section id="keperluan">
@@ -137,7 +137,7 @@ Bandingkan kod <code>Hash</code> yang keluar dengan kod dalam fail <code>.sha256
 <li>Klik dua kali fail <code>.exe</code>.</li>
 <li>Windows bertanya <code>Do you want to allow this app to make changes to your device?</code> (UAC). Tekan <code>Yes</code>. Pemasang ini perlu hak pentadbir.</li>
 <li>Pemasang ini belum ditandatangani, jadi Windows SmartScreen mungkin memaparkan <code>Windows protected your PC</code>. Tekan <code>Maklumat lanjut</code> (<code>More info</code>), kemudian tekan <code>Jalankan juga</code> (<code>Run anyway</code>). Langkah ini hanya perlu kerana pemasang belum ditandatangani; teruskan hanya jika kod SHA-256 pada bahagian 2 sepadan.</li>
-<li>Ikut tetingkap pemasang (semua dalam Bahasa Melayu). Jika ada kotak MAXCOM lama pada PC ini, pilih folder datanya pada halaman pertama; jika tidak, biarkan kosong dan tekan <code>Seterusnya</code>, kemudian <code>Pasang</code>.</li>
+<li>Ikut tetingkap pemasang (semua dalam Bahasa Melayu). Jika ada MAXCOM Kiosk Box lama pada PC ini, pilih folder datanya pada halaman pertama; jika tidak, biarkan kosong dan tekan <code>Seterusnya</code>, kemudian <code>Pasang</code>.</li>
 <li>Satu tetingkap konsol dibuka. Jawab tiga soalan di dalamnya:
 <ul>
 <li><code>Nama pendek surau</code>: nama surau anda.</li>
@@ -154,7 +154,7 @@ Bandingkan kod <code>Hash</code> yang keluar dengan kod dalam fail <code>.sha256
 
 <section id="daftar">
 <h2>4. Daftar telefon pertama</h2>
-<p>Imbas kod QR pada skrin dengan aplikasi MAXCOM. Pada telefon atau iPad yang belum percaya kotak, pasang fail sijil akar yang dinyatakan pada baris <code>Fail sijil akar</code> dahulu.</p>
+<p>Imbas kod QR pada skrin dengan aplikasi MAXCOM. Pada telefon atau iPad yang belum percaya MAXCOM Kiosk Box, pasang fail sijil akar yang dinyatakan pada baris <code>Fail sijil akar</code> dahulu.</p>
 </section>
 
 <section id="sekali">
@@ -163,7 +163,7 @@ Bandingkan kod <code>Hash</code> yang keluar dengan kod dalam fail <code>.sha256
 <ol class="steps">
 <li>Alamat IP tetap: pada router surau, tetapkan alamat yang sama sentiasa untuk PC ini (DHCP reservation). Jika alamat bertukar, telefon tidak dapat sambung dan sijil kotak perlu dibuat semula.</li>
 <li>BIOS: tetapkan PC hidup semula selepas bekalan elektrik pulih (pilihan seperti <code>AC Power Recovery</code> atau <code>Restore on AC Power Loss</code>).</li>
-<li>Log masuk automatik untuk PC khas: gunakan akaun Windows biasa tanpa hak pentadbir, khas untuk skrin. Buka <code>netplwiz</code> atau gunakan alat Autologon Microsoft. Sesiapa yang menghidupkan PC akan masuk ke akaun itu, jadi akaun itu tidak boleh ada hak pentadbir. Kotak MAXCOM sendiri bermula sebelum sesiapa log masuk.</li>
+<li>Log masuk automatik untuk PC khas: gunakan akaun Windows biasa tanpa hak pentadbir, khas untuk skrin. Buka <code>netplwiz</code> atau gunakan alat Autologon Microsoft. Sesiapa yang menghidupkan PC akan masuk ke akaun itu, jadi akaun itu tidak boleh ada hak pentadbir. MAXCOM Kiosk Box sendiri bermula sebelum sesiapa log masuk.</li>
 <li>Waktu aktif Windows Update: tetapkan di luar waktu solat supaya PC tidak dimulakan semula ketika azan.</li>
 </ol>
 </section>
@@ -190,8 +190,8 @@ Bandingkan kod <code>Hash</code> yang keluar dengan kod dalam fail <code>.sha256
 </section>
 
 <section id="pindah">
-<h2>8. Pindah dari kotak lama yang dijalankan dengan tangan</h2>
-<p>Hanya untuk surau yang sudah ada kotak MAXCOM dijalankan dari folder pembangun. Jalankan <code>Pasang MAXCOM</code> dengan pilihan <code>-MigrateFrom &lt;folder data lama&gt;</code>. Skrip menunjukkan proses kotak lama dan meminta kebenaran sebelum menghentikannya. Folder lama tidak diubah. Jangan hidupkan kotak lama lagi selagi kotak yang dipasang ini berjalan.</p>
+<h2>8. Pindah dari MAXCOM Kiosk Box lama yang dijalankan dengan tangan</h2>
+<p>Hanya untuk surau yang sudah ada MAXCOM Kiosk Box dijalankan dari folder pembangun. Jalankan <code>Pasang MAXCOM</code> dengan pilihan <code>-MigrateFrom &lt;folder data lama&gt;</code>. Skrip menunjukkan proses MAXCOM Kiosk Box lama dan meminta kebenaran sebelum menghentikannya. Folder lama tidak diubah. Jangan hidupkan Box lama lagi selagi Box yang dipasang ini berjalan.</p>
 </section>
 
 <section id="buang">
@@ -199,6 +199,12 @@ Bandingkan kod <code>Hash</code> yang keluar dengan kod dalam fail <code>.sha256
 <p>Menu Start, folder MAXCOM, <code>Buang MAXCOM</code>. Perisian, tugas dan peraturan tembok api dibuang. Data surau dikekalkan: baris <code>KEKAL: data surau di ...</code> menunjukkan lokasinya (biasanya <code>C:\ProgramData\MAXCOM\data</code>), bersama salinan simpanan di <code>C:\ProgramData\MAXCOM\backups</code>. Sijil akar MAXCOM juga dikekalkan supaya telefon tidak perlu didaftar semula. Data hanya dibuang jika anda menjalankan dengan <code>-RemoveData</code> dan menaip <code>BUANG DATA</code> apabila diminta.</p>
 </section>
 
-<footer class="doc-foot"><span><b>MAXCOM R2 (2026.11.13)</b>, panduan pasang Windows, mymaxcom.my</span><span>Dilesenkan di bawah CC BY-NC-SA 4.0</span></footer>
+<section id="nama-box">
+<h2>10. Nama Box dan lebih daripada satu Box</h2>
+<p>PC Windows memperkenalkan dirinya di rangkaian surau dengan nama bernombor, contohnya <code>box1-surau.local</code>; Box yang kedua menggunakan <code>box2-surau.local</code>. Jika nombor itu sudah digunakan, PC mengambil nombor seterusnya. Nama Box yang dipaparkan dalam aplikasi mengikut bentuk <code>boxN-&lt;nama surau&gt;</code>, sama seperti pada Box Android.</p>
+<p>Jika surau ada lebih daripada satu MAXCOM Kiosk Box, kemas kini semuanya pada masa yang sama, kemudian pautkan dalam aplikasi: <strong>Pengguna &amp; peranti</strong> &gt; <strong>TV dan Box</strong> &gt; <strong>Pautkan MAXCOM Kiosk Box lain</strong>. Kedua-dua Box mesti berada di Wi-Fi surau dan menjalankan versi yang sama. Langkahnya diterangkan dalam panduan pengguna, Bab 10.9.</p>
+</section>
+
+<footer class="doc-foot"><span><b>MAXCOM R2 (2026.11.15)</b>, panduan pasang Windows, mymaxcom.my</span><span>Dilesenkan di bawah CC BY-NC-SA 4.0</span></footer>
 </body>
 </html>

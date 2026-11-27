@@ -7,11 +7,43 @@ feature can be switched on or off.
 *MAXCOM ialah perisian percuma untuk surau, masjid dan musalla: paparan waktu solat, kuliah, pengumuman dan
 kandungan Islam, dengan aplikasi pentadbir untuk telefon dan iPad. Berfungsi tanpa internet.*
 
-## MAXCOM R2 (2026.11.14)
+## MAXCOM R2 (2026.11.15)
 
-MAXCOM R2 is the current release, now at version 2026.11.14: a free, open source system for surau and masjid, used
+MAXCOM R2 is the current release, now at version 2026.11.15: a free, open source system for surau and masjid, used
 under its licence (CC BY-NC-SA 4.0, see "Licence" below). Downloads: [mymaxcom.my](https://mymaxcom.my) or the
 [Releases](https://github.com/mymaxcom/maxcom/releases) of this repository.
+
+### Kemas kini 2026.11.15 / Update 2026.11.15
+
+- **Several MAXCOM Kiosk Boxes in one surau.** Link a box by QR code, as the main box or a follower box, with a
+  backup before linking and an unlink that keeps a backup. Admin phones stay after an unlink and the recovery code
+  stays valid.
+- **External camera control from the app.**
+- **One sound at a time for a live broadcast.** Choose the phone microphone, a wired, USB or Bluetooth microphone,
+  the camera sound or the MAXCOM microphone on the box; turning one on turns the others off.
+- **A sturdier live broadcast.** The box takes the camera video itself and the live runs until Stop is tapped, even
+  when the phone is locked or the camera drops for a moment; phones show a control card instead of the video.
+- **The MAXCOM microphone on its own sound path**, so the sound stays smooth when the camera or the network stutters;
+  a notice appears when the microphone gives no sound.
+- **Automatic broadcast quality.** The system sets the YouTube quality and adjusts it by itself when the upload is
+  slow; the bitrate and sound delay settings are gone.
+- **Broadcast destinations.** Screen, YouTube and Record; YouTube can be turned on during a live, and each box can
+  show or hide the live on its own TV.
+- **TV display options.** Zikir after the prayer (start, clock, time left, look) and time display options.
+- **iPad recordings.** A one-time download link, on the surau network only.
+- **Security and reliability improvements.**
+
+*Kemas kini 2026.11.15: beberapa MAXCOM Kiosk Box dalam satu surau (sambung dengan kod QR, Box utama dan Box pengikut,
+sandaran sebelum menyambung dan putuskan dengan sandaran; telefon Pentadbir kekal dan kod pemulihan masih sah);
+kawalan kamera luaran dari aplikasi; satu bunyi pada satu masa untuk siaran langsung (mikrofon telefon, bicu, USB
+atau Bluetooth, bunyi kamera atau Mikrofon MAXCOM pada Box); siaran langsung lebih mantap (Box mengambil video kamera
+sendiri dan siaran berjalan sehingga Berhenti ditekan; Mikrofon MAXCOM mempunyai laluan bunyi sendiri; kualiti
+siaran YouTube ditetapkan dan dilaraskan secara automatik; destinasi Skrin, YouTube dan Rakam); pilihan
+zikir dan paparan jam atau masa pada TV; pautan muat turun rakaman sekali sahaja untuk iPad; penambahbaikan
+keselamatan dan kebolehpercayaan.*
+
+Upgrading from 2026.11.14: update every MAXCOM Kiosk Box of a surau together, then the MAX Admin Client. No new
+YouTube sign-in is needed. On an iPad, reload the web app after the box is updated.
 
 ### Kemas kini 2026.11.14 / Update 2026.11.14
 

@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../box/wire.dart' show LiveViewerDto;
 import '../../l10n/generated/s.dart';
 import 'publisher.dart';
 
@@ -101,7 +102,8 @@ class StatusLight extends StatelessWidget {
   return switch (o.phase) {
     OutputPhase.connecting => (LightTone.waiting, s.liveConnecting),
     OutputPhase.up => (live ? LightTone.healthy : LightTone.idle, s.liveOn),
-    OutputPhase.retrying => (LightTone.waiting, s.liveRetry(o.retryInSec ?? 0)),
+    // a countdown only when the leg knows the time; the box's relay does not say, so then no number is invented
+    OutputPhase.retrying => (LightTone.waiting, o.retryInSec == null ? s.liveRetrying : s.liveRetry(o.retryInSec!)),
     OutputPhase.down => (LightTone.failed, s.liveDown),
   };
 }
@@ -701,6 +703,7 @@ String warningLabel(S s, Warning w) => switch (w) {
   Warning.screenLockRisk => s.liveWarnScreen,
   Warning.lowStorage => s.liveWarnStorage,
   Warning.noInternet => s.liveWarnNoInternet,
+  Warning.weakIngest => s.liveWarnWeakPhoneWifi,
 };
 
 IconData _warningIcon(Warning w) => switch (w) {
@@ -709,6 +712,7 @@ IconData _warningIcon(Warning w) => switch (w) {
   Warning.screenLockRisk => Icons.screen_lock_portrait_rounded,
   Warning.lowStorage => Icons.sd_card_alert_rounded,
   Warning.noInternet => Icons.wifi_off_rounded,
+  Warning.weakIngest => Icons.network_wifi_1_bar_rounded,
 };
 
 /// Device warnings, most serious first; each one a full sentence chip.
@@ -763,6 +767,63 @@ class WarningChips extends StatelessWidget {
               ],
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// The TVs of the surau while a live runs: one chip each with a dot for its state (watching, joining, off). Drawn only
+/// when the box reports the list.
+class LiveViewerChips extends StatelessWidget {
+  const LiveViewerChips({super.key, required this.viewers});
+
+  final List<LiveViewerDto> viewers;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final text = Theme.of(context).textTheme;
+    String stateWord(String st) => switch (st) {
+      'playing' => s.liveViewerPlaying,
+      'connecting' => s.liveViewerConnecting,
+      _ => s.liveViewerOff,
+    };
+    Color dot(String st) => switch (st) {
+      'playing' => LiveColors.healthy,
+      'connecting' => LiveColors.waiting,
+      _ => SurauColors.outline,
+    };
+    return Column(
+      key: const ValueKey('live-viewers'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(s.liveViewersTitle, style: text.labelMedium!.copyWith(color: SurauColors.muted)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final v in viewers)
+              Semantics(
+                label: '${v.name}, ${stateWord(v.state)}',
+                excludeSemantics: true,
+                child: Container(
+                  key: ValueKey('live-viewer-${v.tvId}'),
+                  constraints: const BoxConstraints(minHeight: 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(color: SurauColors.paperDeep, borderRadius: BorderRadius.circular(SurauTheme.radiusChip)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 10, height: 10, decoration: BoxDecoration(color: dot(v.state), shape: BoxShape.circle)),
+                      const SizedBox(width: 8),
+                      Flexible(child: Text(v.name, style: text.labelMedium!.copyWith(color: SurauColors.ink))),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -961,11 +1022,17 @@ class LiveActionButton extends StatelessWidget {
     required this.phase,
     required this.onStart,
     required this.onStop,
+    this.sessionHeld = false,
   });
 
   final PublisherPhase phase;
   final VoidCallback? onStart;
   final VoidCallback onStop;
+
+  /// This device holds a live session on the box although the publisher is
+  /// not live (it failed, or the app was reopened): the button is Berhenti,
+  /// never Mula siaran (S7, B9).
+  final bool sessionHeld;
 
   @override
   Widget build(BuildContext context) {
@@ -973,7 +1040,8 @@ class LiveActionButton extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     const size = Size.fromHeight(60);
     final label = text.titleMedium!.copyWith(fontWeight: FontWeight.w700);
-    switch (phase) {
+    final held = sessionHeld && phase != PublisherPhase.starting && phase != PublisherPhase.stopping;
+    switch (held ? PublisherPhase.live : phase) {
       case PublisherPhase.live:
         return FilledButton.icon(
           key: const ValueKey('live-stop'),
@@ -1013,5 +1081,128 @@ class LiveActionButton extends StatelessWidget {
           label: Text(s.liveStart),
         );
     }
+  }
+}
+
+// ---- "Siarkan ke YouTube" on a running live (F4) ----
+
+/// What the person confirmed in [showYoutubeLaterSheet].
+class YoutubeLaterChoice {
+  const YoutubeLaterChoice({required this.title, required this.privacy});
+
+  final String title;
+
+  /// `private`, `unlisted` or `public`.
+  final String privacy;
+}
+
+const List<String> _privacyOrder = ['private', 'unlisted', 'public'];
+
+/// The privacy values that are no more open than [max] (the surau setting): never wider than it.
+List<String> youtubePrivacyUpTo(String max) {
+  final at = _privacyOrder.indexOf(max);
+  return _privacyOrder.sublist(0, at < 0 ? 2 : at + 1);
+}
+
+/// A small sheet with the title (prefilled) and the privacy, then a confirm: one tap on the offer never publishes.
+Future<YoutubeLaterChoice?> showYoutubeLaterSheet(
+  BuildContext context, {
+  required String title,
+  required String maxPrivacy,
+}) {
+  return showModalBottomSheet<YoutubeLaterChoice>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (_) => _YoutubeLaterSheet(title: title, maxPrivacy: maxPrivacy),
+  );
+}
+
+class _YoutubeLaterSheet extends StatefulWidget {
+  const _YoutubeLaterSheet({required this.title, required this.maxPrivacy});
+
+  final String title;
+  final String maxPrivacy;
+
+  @override
+  State<_YoutubeLaterSheet> createState() => _YoutubeLaterSheetState();
+}
+
+class _YoutubeLaterSheetState extends State<_YoutubeLaterSheet> {
+  late final TextEditingController _title = TextEditingController(text: widget.title);
+  late String _privacy = youtubePrivacyUpTo(widget.maxPrivacy).last;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    super.dispose();
+  }
+
+  String _label(S s, String p) => switch (p) {
+    'private' => s.liveYoutubePrivacyPrivate,
+    'unlisted' => s.liveYoutubePrivacyUnlisted,
+    _ => s.liveYoutubePrivacyPublic,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final text = Theme.of(context).textTheme;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsetsDirectional.fromSTEB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+        child: Column(
+          key: const ValueKey('live-youtube-later-sheet'),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(s.liveYoutubeLaterSheetTitle, style: text.titleLarge),
+            const SizedBox(height: 14),
+            TextField(
+              key: const ValueKey('live-youtube-later-title'),
+              controller: _title,
+              maxLength: 100,
+              decoration: InputDecoration(labelText: s.liveYoutubeLaterTitleLabel),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            Text(s.liveYoutubeLaterPrivacyLabel, style: text.labelLarge),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final p in youtubePrivacyUpTo(widget.maxPrivacy))
+                  ChoiceChip(
+                    key: ValueKey('live-youtube-later-privacy-$p'),
+                    label: Text(_label(s, p)),
+                    selected: _privacy == p,
+                    onSelected: (_) => setState(() => _privacy = p),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              s.liveYoutubeLaterConfirmNote,
+              style: text.bodySmall!.copyWith(color: SurauColors.muted),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              key: const ValueKey('live-youtube-later-confirm'),
+              onPressed: _title.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.of(context).pop(YoutubeLaterChoice(title: _title.text.trim(), privacy: _privacy)),
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              child: Text(s.liveYoutubeLaterConfirm),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              key: const ValueKey('live-youtube-later-cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(s.actionCancel),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

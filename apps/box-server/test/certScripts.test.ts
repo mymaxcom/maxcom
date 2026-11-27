@@ -185,7 +185,7 @@ describe.runIf(process.platform === 'win32')('box-ca.ps1 -ServiceAccount (Curren
     expect(r.status, r.stderr).toBe(0);
     expect(aclSids(join(dir, 'secret'))).toEqual([mySid(), 'S-1-5-18'].sort());
     const m = JSON.parse(readFileSync(join(dir, 'pki', 'box-ca.json'), 'utf8'));
-    expect(m).toEqual({ ip: '10.168.1.50', store: 'CurrentUser', surau: `${tag}a`, days: 730, noTrust: true });
+    expect(m).toEqual({ ip: '10.168.1.50', store: 'CurrentUser', surau: `${tag}a`, days: 730, noTrust: true, rootGeneration: 'v2' });
     // never printed
     expect(r.stdout).not.toMatch(/pfx\.pass.*[A-Za-z0-9]{32}/);
   }, 120_000);

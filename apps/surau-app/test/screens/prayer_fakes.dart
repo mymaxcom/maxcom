@@ -248,9 +248,6 @@ class FakePrayerRepo implements PrayerRepository {
   BoxGateway get gateway => throw UnimplementedError();
 
   @override
-  RawPost get rawPost => throw UnimplementedError();
-
-  @override
   Future<ImportRecord> importDetail(String id) => throw UnimplementedError();
 }
 

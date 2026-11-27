@@ -546,9 +546,10 @@ describe.skipIf(process.platform !== 'win32')('box-ca.ps1 run (CurrentUser store
     );
   });
 
-  it('works with an absolute -DataDir, constrains the root to the two DNS names only and renews', () => {
+  it('works with an absolute -DataDir, constrains a legacy root to the two DNS names only and renews', () => {
     const dir = tmp();
-    const r = run(dir, `${tag}a`);
+    // a new root is v2 now (the numbered names, see boxNameScripts.test.ts); -LegacyRoot keeps the old two-name form
+    const r = run(dir, `${tag}a`, ['-LegacyRoot']);
     expect(r.status, r.stderr).toBe(0);
     const root = new X509Certificate(readFileSync(join(dir, 'pki', 'root-ca.cer')));
     // Raw DER: critical NameConstraints (2.5.29.30) = permitted [0] with exactly two dNSName ([2]) subtrees.
@@ -585,7 +586,7 @@ describe.skipIf(process.platform !== 'win32')('box-ca.ps1 run (CurrentUser store
     expect(years).toBeGreaterThan(19.9);
     expect(years).toBeLessThan(20.1);
     const meta = JSON.parse(readFileSync(join(dir, 'pki', 'box-ca.json'), 'utf8'));
-    expect(meta).toEqual({ ip: '10.168.1.50', store: 'CurrentUser', surau: name, days: 400, noTrust: true });
+    expect(meta).toEqual({ ip: '10.168.1.50', store: 'CurrentUser', surau: name, days: 400, noTrust: true, rootGeneration: 'v2' });
     const leafBefore = readFileSync(join(dir, 'pki', 'box-leaf.cer'));
     const logFile = join(dir, 'logs', 'cert-renew.log');
     const logLines = (): string[] => readFileSync(logFile, 'utf8').trim().split(/\r?\n/);

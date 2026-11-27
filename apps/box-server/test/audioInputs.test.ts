@@ -368,3 +368,270 @@ describe('routes', () => {
     expect(r.json()).toHaveProperty('level');
   });
 });
+
+describe('test of every capture device (build 5)', () => {
+  const TWO = [
+    '[in#0 @ 1] "Microphone One" (audio)',
+    '[in#0 @ 1] "Microphone Two" (audio)',
+    '[in#0 @ 1] "Bad:Name" (audio)',
+    'Error opening input file dummy.',
+  ].join('\r\n');
+  const vdOf = (mean: string, max: string): string => `x mean_volume: ${mean} dB\nx max_volume: ${max} dB`;
+
+  /** A runner that lists TWO and answers each probe by the device named in `audio=<name>`. */
+  function runnerFor(answers: Record<string, string | Error>) {
+    return vi.fn<Runner>(async (_f, args) => {
+      if (!args.includes('volumedetect')) return { output: TWO, ok: true };
+      const name = String(args[args.indexOf('-i') + 1]).replace(/^audio=/, '');
+      const a = answers[name];
+      if (a instanceof Error) throw a;
+      return { output: a ?? '', ok: true };
+    });
+  }
+  const probes = (run: ReturnType<typeof runnerFor>) => run.mock.calls.filter((c) => c[1].includes('volumedetect'));
+
+  it('runs one 5 s probe per usable device, one after another (N4)', async () => {
+    let open = 0;
+    let peak = 0;
+    const run = vi.fn<Runner>(async (_f, args) => {
+      if (!args.includes('volumedetect')) return { output: TWO, ok: true };
+      open++;
+      peak = Math.max(peak, open);
+      await new Promise((r) => setTimeout(r, 5));
+      open--;
+      return { output: vdOf('-30.0', '-6.0'), ok: true };
+    });
+    const { inputs } = make({ run }, TWO);
+    const r = await inputs.testAll();
+    const p = run.mock.calls.filter((c) => c[1].includes('volumedetect'));
+    expect(p).toHaveLength(2); // the unusable name is not probed
+    for (const c of p) {
+      expect(c[1][c[1].indexOf('-t') + 1]).toBe('5');
+      expect(c[2]).toBe(10_000);
+    }
+    expect(peak).toBe(1);
+    expect(r.seconds).toBe(5);
+    expect(r.results.map((x) => x.name)).toEqual(['Microphone One', 'Microphone Two']);
+    expect(r.results.every((x) => x.code === 'ok')).toBe(true);
+    expect(new Date(r.testedAt!).toISOString()).toBe(r.testedAt);
+  });
+
+  it('silent at a mean of -70 and under, ok above; the chosen device is marked selected', async () => {
+    const run = runnerFor({
+      'Microphone One': vdOf('-70.0', '-50.0'),
+      'Microphone Two': vdOf('-69.9', '-40.0'),
+    });
+    const { inputs } = make({ run }, TWO);
+    inputs.setSelected('Microphone Two');
+    const r = await inputs.testAll();
+    expect(r.results).toEqual([
+      { name: 'Microphone One', selected: false, meanDb: -70, maxDb: -50, code: 'silent' },
+      { name: 'Microphone Two', selected: true, meanDb: -69.9, maxDb: -40, code: 'ok' },
+    ]);
+    expect(probes(run)).toHaveLength(2);
+  });
+
+  it('reads -inf as digital silence at the floor of -90', async () => {
+    const run = runnerFor({ 'Microphone One': vdOf('-inf', '-inf'), 'Microphone Two': vdOf('-20.0', '-3.0') });
+    const { inputs } = make({ run }, TWO);
+    const r = await inputs.testAll();
+    expect(r.results[0]).toMatchObject({ meanDb: -90, maxDb: -90, code: 'silent' });
+  });
+
+  it('a probe that throws or prints no reading fails that device only', async () => {
+    const run = runnerFor({ 'Microphone One': new Error('spawn failed'), 'Microphone Two': 'Could not run graph: Access is denied.' });
+    const { inputs } = make({ run }, TWO);
+    const r = await inputs.testAll();
+    expect(r.results).toEqual([
+      { name: 'Microphone One', selected: false, meanDb: null, maxDb: null, code: 'device_unavailable' },
+      { name: 'Microphone Two', selected: false, meanDb: null, maxDb: null, code: 'access_denied' },
+    ]);
+    const ok = runnerFor({ 'Microphone One': new Error('x'), 'Microphone Two': vdOf('-25.0', '-5.0') });
+    const again = await make({ run: ok }, TWO).inputs.testAll();
+    expect(again.results.map((x) => x.code)).toEqual(['device_unavailable', 'ok']);
+  });
+
+  it('is refused while a live runs', async () => {
+    const run = runnerFor({});
+    const { inputs } = make({ run, isLive: () => true }, TWO);
+    await expect(inputs.testAll()).rejects.toMatchObject({ status: 409, code: 'live_busy' });
+    expect(probes(run)).toHaveLength(0);
+  });
+
+  it('a second call inside 10 s returns the stored result without a probe; a new test after 10 s', async () => {
+    const run = runnerFor({ 'Microphone One': vdOf('-30.0', '-6.0'), 'Microphone Two': vdOf('-30.0', '-6.0') });
+    const { inputs, tick } = make({ run }, TWO);
+    const first = await inputs.testAll();
+    expect(probes(run)).toHaveLength(2);
+    tick(9_000);
+    const second = await inputs.testAll();
+    expect(second).toBe(first);
+    expect(probes(run)).toHaveLength(2);
+    tick(1_500);
+    const third = await inputs.testAll();
+    expect(third).not.toBe(first);
+    expect(probes(run)).toHaveLength(4);
+  });
+
+  it('a call while a test runs waits for and returns the same result', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const run = vi.fn<Runner>(async (_f, args) => {
+      if (!args.includes('volumedetect')) return { output: TWO, ok: true };
+      await gate;
+      return { output: vdOf('-30.0', '-6.0'), ok: true };
+    });
+    const { inputs } = make({ run }, TWO);
+    const a = inputs.testAll();
+    const b = inputs.testAll();
+    release();
+    const [ra, rb] = await Promise.all([a, b]);
+    expect(rb).toBe(ra);
+    expect(run.mock.calls.filter((c) => c[1].includes('volumedetect'))).toHaveLength(2);
+  });
+
+  it('a test started while a level probe runs waits for the probe to end', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let probing = 0;
+    let overlap = false;
+    let first = true;
+    const run = vi.fn<Runner>(async (_f, args) => {
+      if (!args.includes('volumedetect')) return { output: TWO, ok: true };
+      if (first) {
+        first = false;
+        probing++;
+        await gate;
+        probing--;
+        return { output: vdOf('-30.0', '-6.0'), ok: true };
+      }
+      if (probing > 0) overlap = true;
+      return { output: vdOf('-30.0', '-6.0'), ok: true };
+    });
+    const { inputs } = make({ run }, TWO);
+    await inputs.view();
+    inputs.setSelected('Microphone One');
+    const lvl = inputs.level();
+    await new Promise((r) => setTimeout(r, 0));
+    const test = inputs.testAll();
+    await new Promise((r) => setTimeout(r, 0));
+    // the test has not probed any device while the level probe holds the input
+    expect(run.mock.calls.filter((c) => c[1].includes('volumedetect'))).toHaveLength(1);
+    release();
+    await lvl;
+    const res = await test;
+    expect(overlap).toBe(false);
+    expect(res.results.length).toBeGreaterThan(0);
+  });
+
+  it('S2/Q5: idle() waits for a running level probe and for a test, and never rejects', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const run = vi.fn<Runner>(async (_f, args) => {
+      if (!args.includes('volumedetect')) return { output: TWO, ok: true };
+      await gate;
+      return { output: vdOf('-30.0', '-6.0'), ok: true };
+    });
+    const { inputs } = make({ run }, TWO);
+    await inputs.idle(); // nothing running: resolves at once
+    await inputs.view();
+    inputs.setSelected('Microphone One');
+    const lvl = inputs.level();
+    await new Promise((r) => setTimeout(r, 0));
+    let idle = false;
+    const waiting = inputs.idle().then(() => {
+      idle = true;
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(idle).toBe(false);
+    release();
+    await lvl;
+    await waiting;
+    expect(idle).toBe(true);
+    // a test that is running is waited for too
+    const run2 = vi.fn<Runner>(async (_f, args) => {
+      if (!args.includes('volumedetect')) return { output: TWO, ok: true };
+      await new Promise((r) => setTimeout(r, 20));
+      return { output: vdOf('-30.0', '-6.0'), ok: true };
+    });
+    const b = make({ run: run2 }, TWO).inputs;
+    const test = b.testAll();
+    await new Promise((r) => setTimeout(r, 0));
+    await b.idle();
+    expect(b.lastTest().testedAt).not.toBeNull();
+    await test;
+  });
+
+  it('S2/Q5: a live that starts while the test waited for a probe refuses the test, and no device is probed', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let live = false;
+    const run = vi.fn<Runner>(async (_f, args) => {
+      if (!args.includes('volumedetect')) return { output: TWO, ok: true };
+      await gate;
+      return { output: vdOf('-30.0', '-6.0'), ok: true };
+    });
+    const { inputs } = make({ run, isLive: () => live }, TWO);
+    await inputs.view();
+    inputs.setSelected('Microphone One');
+    const lvl = inputs.level();
+    await new Promise((r) => setTimeout(r, 0));
+    const test = inputs.testAll();
+    const refused = expect(test).rejects.toMatchObject({ status: 409, code: 'live_busy' });
+    live = true;
+    release();
+    await lvl;
+    await refused;
+    expect(run.mock.calls.filter((c) => c[1].includes('volumedetect'))).toHaveLength(1);
+    // the refused test left nothing running
+    await inputs.idle();
+  });
+
+  it('lastTest is empty before a test and never starts a probe', async () => {
+    const run = runnerFor({});
+    const { inputs } = make({ run }, TWO);
+    expect(inputs.lastTest()).toEqual({ testedAt: null, seconds: 5, results: [] });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('Android box: an empty result and no ffmpeg run', async () => {
+    const run = runnerFor({});
+    const { inputs } = make({ run, platform: 'android' }, TWO);
+    const r = await inputs.testAll();
+    expect(r.results).toEqual([]);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('routes: POST tests, GET reads the last result, POST during a live is 409 live_busy', async () => {
+    const db = new DatabaseSync(':memory:');
+    let live = false;
+    const run = runnerFor({ 'Microphone One': vdOf('-30.0', '-6.0'), 'Microphone Two': vdOf('-80.0', '-70.0') });
+    const { inputs } = make({ run, isLive: () => live }, TWO);
+    const f = Fastify();
+    f.addHook('onRequest', async (req) => {
+      (req as unknown as { tenant: { surauId: string } }).tenant = { surauId: 'local' };
+    });
+    registerAudioInputRoutes(f, { db, inputs });
+    const empty = await f.inject({ method: 'GET', url: '/api/live/audio-inputs/test' });
+    expect(empty.json()).toEqual({ testedAt: null, seconds: 5, results: [] });
+    expect(probes(run)).toHaveLength(0);
+    const r = await f.inject({ method: 'POST', url: '/api/live/audio-inputs/test' });
+    expect(r.statusCode).toBe(200);
+    expect(r.headers['cache-control']).toBe('no-store');
+    expect(r.json().results.map((x: { code: string }) => x.code)).toEqual(['ok', 'silent']);
+    const g = await f.inject({ method: 'GET', url: '/api/live/audio-inputs/test' });
+    expect(g.json()).toEqual(r.json());
+    live = true;
+    const busy = await f.inject({ method: 'POST', url: '/api/live/audio-inputs/test' });
+    expect(busy.statusCode).toBe(409);
+    expect(busy.json()).toMatchObject({ code: 'live_busy' });
+  });
+});

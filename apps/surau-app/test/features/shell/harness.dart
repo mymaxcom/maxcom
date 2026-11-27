@@ -30,7 +30,6 @@ import 'package:surau_app/features/live/fake_publisher.dart';
 import 'package:surau_app/features/live/live_screen.dart' show livePublisherProvider;
 import 'package:surau_app/features/registry.g.dart';
 import 'package:surau_app/features/settings_widgets/audio_asset_picker.dart' show pickAudioProvider;
-import 'package:surau_app/features/shell/permissions.dart';
 import 'package:surau_app/main.dart';
 import 'package:surau_app/screens/preview_screen.dart';
 
@@ -57,11 +56,25 @@ const Map<String, Object?> healthyJson = {
   'features': ['video', 'posterStretch', 'tvLangAr', 'videoAfterPrayer'],
 };
 
+/// The features that hide a menu entry when off, with the value the test box
+/// answers for them. The app itself has no such list any more: it reads every
+/// default from the registry (`featureDefaultOn`, B2).
+const Map<String, bool> menuFeatureDefaults = {
+  'finance': false,
+  'liveOnKiosk': true,
+  'liveYoutube': true,
+  'jemaahPage': false,
+  // This test surau has the catch-up upload switched off (the registry default
+  // is ON, see settings_fresh_test.dart): the screens of these tests and their
+  // golden images were made without the "Muat naik" menu entry.
+  'youtubeCatchUp': false,
+};
+
 Map<String, Object?> settingsJson([Map<String, bool> features = const {}]) => {
-  for (final e in featureDefaultEnabled.entries) e.key: {'enabled': features[e.key] ?? e.value},
+  for (final e in menuFeatureDefaults.entries) e.key: {'enabled': features[e.key] ?? e.value},
   // Features outside the menu map (appLock) only when a test asks for them.
   for (final e in features.entries)
-    if (!featureDefaultEnabled.containsKey(e.key)) e.key: {'enabled': e.value},
+    if (!menuFeatureDefaults.containsKey(e.key)) e.key: {'enabled': e.value},
   'clock': {'enabled': true, 'showSeconds': false},
   // The real box always answers the lock's own state.
   if (!features.containsKey('appLock')) 'appLock': {'enabled': false},
@@ -341,7 +354,7 @@ Map<String, List<Map<String, Object?>>> contentFixture() {
       },
     ],
     'ticker': [
-      {...meta('t1'), 'text': 'Selamat datang ke Surau D\'Waqaf', 'from': '2026-01-01', 'to': '2026-12-31'},
+      {...meta('t1'), 'text': 'Selamat datang ke Surau Contoh', 'from': '2026-01-01', 'to': '2026-12-31'},
     ],
     'video': [
       {

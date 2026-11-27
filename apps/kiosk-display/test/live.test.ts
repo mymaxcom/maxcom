@@ -152,6 +152,20 @@ describe('useLive', () => {
     expect(seen?.live).toBe(false);
   });
 
+  it('with liveOnKiosk off (the per-TV show switch) a later live event, a state read and a reconnect keep the page not live', async () => {
+    const f = jsonFetch(LIVE_ON);
+    const view = render(h(Probe, { settings: off(), fetchImpl: f as unknown as typeof fetch }));
+    await flush();
+    for (let i = 0; i < 3; i++) {
+      for (const es of FakeES.instances) es.emit('live', JSON.stringify(LIVE_ON));
+      await flush();
+    }
+    expect(seen?.live).toBe(false);
+    expect(seen?.kuliah).toBeNull();
+    expect(f).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
   it('ignores a malformed event payload', async () => {
     render(h(Probe, { settings: on(), fetchImpl: jsonFetch(LIVE_ON) as unknown as typeof fetch }));
     await flush();

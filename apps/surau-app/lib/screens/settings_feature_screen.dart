@@ -1,9 +1,13 @@
 // One feature: its switch (or `Sentiasa hidup` when locked), the form the
 // registry shapes (settings_form.dart), `Simpan` that sends only the
-// changed keys once the patch passes the core-equal validator, and `Set
-// semula kepada lalai` behind a confirm. The box's answer is the form:
+// changed keys once the patch passes the core-equal validator (the whole
+// page on the first save of a feature with no stored row, B4), and `Set
+// semula kepada lalai` in the page menu, behind a confirm (it keeps the
+// feature's switch and a camera's identity, G2). The box's answer is the form:
 // after a save the values on screen are what it stored. An AJK sees the
 // same page with every control read-only and no buttons.
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,11 +98,16 @@ class SettingsFeatureScreen extends ConsumerWidget {
     final read = ref.watch(settingsProvider);
     final value = read.value;
     final Widget body;
+    // The form's own state, for the page menu (the reset lives there, away from Simpan: G2).
+    final formKey = _formKeys.putIfAbsent(f.key, GlobalKey<_FeatureFormState>.new);
     if (value != null) {
       final box = value.value[f.key];
-      body = _FeatureForm(
+      body = KeyedSubtree(
         key: ValueKey('feature-${f.key}'),
+        child: _FeatureForm(
+        key: formKey,
         feature: f,
+        stale: value.stale,
         original: _merge(
           f,
           box is Map ? box.cast<String, dynamic>() : const {},
@@ -106,6 +115,7 @@ class SettingsFeatureScreen extends ConsumerWidget {
         readOnly: !canWrite,
         scrollToLanjutan: scrollToLanjutan,
         unsupported: unsupportedByBox(f.key, box is Map ? box.cast<String, dynamic>() : const {}),
+        ),
       );
     } else if (read.isLoading) {
       body = const Padding(
@@ -145,6 +155,28 @@ class SettingsFeatureScreen extends ConsumerWidget {
     return ShellPage(
       backTo: backTo,
       title: featureLabel(f, ref.watch(appLangProvider)),
+      actions: [
+        if (value != null && canWrite)
+          PopupMenuButton<String>(
+            key: const ValueKey('feature-menu'),
+            tooltip: s.settingsReset,
+            icon: const Icon(Icons.more_vert_rounded),
+            onSelected: (_) => formKey.currentState?.resetFromMenu(),
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                key: const ValueKey('feature-reset'),
+                value: 'reset',
+                child: Row(
+                  children: [
+                    const Icon(Icons.restart_alt_rounded, size: 20, color: SurauColors.muted),
+                    const SizedBox(width: 12),
+                    Flexible(child: Text(s.settingsReset)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+      ],
       // Hadis has two columns on an iPad and a `Simpan` that stays in view;
       // its body scrolls by itself.
       body: value != null && f.key == hadisFeatureKey
@@ -153,6 +185,11 @@ class SettingsFeatureScreen extends ConsumerWidget {
     );
   }
 }
+
+/// One key per feature form, kept for the run: the page menu reaches the
+/// form's state through it, and the form keeps its unsaved edits across the
+/// page's rebuilds.
+final Map<String, GlobalKey<_FeatureFormState>> _formKeys = {};
 
 /// Settings added after the first box release, by feature: a box that does not send one does not know it,
 /// so the form neither draws it nor sends it (an older box answers 400 to an unknown field).
@@ -204,7 +241,12 @@ class _FeatureForm extends ConsumerStatefulWidget {
     required this.readOnly,
     this.scrollToLanjutan = false,
     this.unsupported = const {},
+    this.stale = false,
   });
+
+  /// The values come from this device's copy because MAXCOM did not answer:
+  /// the page says they may be out of date (G1).
+  final bool stale;
 
   /// Settings this box did not send (an older box): not drawn, not reset.
   final Set<String> unsupported;
@@ -227,6 +269,15 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
   /// The box's values changed under unsaved edits: the edits are kept and
   /// this says so, because saving them replaces what the other device set.
   bool _changedElsewhere = false;
+
+  /// The box's values for this feature changed while the page was open, by
+  /// another device (never by this page's own save): "Tetapan ini baru diubah
+  /// pada peranti lain", with "Muat semula" (G4).
+  bool _changedNow = false;
+
+  /// This page's own save or reset is under way: the change of values that
+  /// follows it is not another device's.
+  bool _ownWrite = false;
 
   final GlobalKey _lanjutanKey = GlobalKey();
 
@@ -268,6 +319,28 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
     _error = null;
     // Their own save landing leaves nothing to warn about.
     _changedElsewhere = diffPatch(widget.original, _edited).isNotEmpty;
+    if (_ownWrite) {
+      _ownWrite = false;
+    } else {
+      _changedNow = true;
+    }
+  }
+
+  /// "Muat semula": the values MAXCOM holds now, this page's unsaved edits dropped.
+  void _reload() {
+    setState(() {
+      _edited = copyJson(widget.original) as Map<String, dynamic>;
+      _changedElsewhere = false;
+      _changedNow = false;
+      _error = null;
+    });
+    ref.invalidate(settingsProvider);
+  }
+
+  /// The page menu's "Set semula kepada lalai".
+  void resetFromMenu() {
+    if (_busy || widget.readOnly) return;
+    unawaited(_reset());
   }
 
   /// Lays [patch] (a [diffPatch] result) over [target].
@@ -329,19 +402,26 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
       _busy = true;
       _error = null;
     });
+    _ownWrite = true;
     try {
       await action(repo);
       if (!mounted) return;
-      setState(() => _busy = false);
+      setState(() {
+        _busy = false;
+        _changedNow = false;
+      });
     } on SettingsSaveError catch (e) {
+      _ownWrite = false;
       if (!mounted) return;
       setState(() {
         _busy = false;
         _error = e.text(s);
       });
     } on SessionExpired {
+      _ownWrite = false;
       if (mounted) setState(() => _busy = false);
     } catch (e) {
+      _ownWrite = false;
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -376,7 +456,25 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
     await _run((repo) async {
       // The address and login first: a refused address stops the save and shows under its field.
       if (camera != null && !await camera.save()) return;
-      if (patch.isNotEmpty) await repo.save(widget.feature.key, patch);
+      if (patch.isNotEmpty) {
+        // The first save of a feature with no stored row sends the whole page
+        // (the switch and every value), not only the cell that was touched: a
+        // row holding one cell read as "switched off" everywhere else (B4).
+        final first = await repo.rowMissing(widget.feature.key);
+        if (!mounted) return;
+        await repo.save(
+          widget.feature.key,
+          first
+              ? fullRowPatch(
+                  widget.feature.key,
+                  _edited,
+                  changed: patch,
+                  includeSystem: canSee(ref.read(rolesProvider), 'system:write'),
+                  without: widget.unsupported,
+                )
+              : patch,
+        );
+      }
       if (mounted) {
         toast(
           context,
@@ -394,7 +492,8 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
     final ok = await confirmDialog(
       context,
       title: s.settingsResetTitle(featureLabel(f, ref.read(appLangProvider))),
-      body: s.settingsResetBody,
+      // the camera keeps its switch, name, address and login (G2)
+      body: f.key == liveCameraFeatureKey ? s.cameraResetBody : s.settingsResetBody,
       confirm: s.settingsReset,
     );
     if (!ok || !mounted) return;
@@ -443,14 +542,29 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
       icon: const Icon(Icons.check_rounded),
       label: Text(s.settingsSave),
     );
-    final resetButton = TextButton.icon(
-      onPressed: _busy ? null : _reset,
-      icon: const Icon(Icons.restart_alt_rounded),
-      label: Text(s.settingsReset),
-    );
-
     final lang = ref.watch(appLangProvider);
+    Widget hint(Key key, String label, {String? action, VoidCallback? onAction}) => Padding(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, size: 20, color: SurauColors.muted),
+          const SizedBox(width: 10),
+          Expanded(child: Text(label, style: text.bodyMedium)),
+          if (action != null)
+            TextButton(key: const ValueKey('settings-reload'), onPressed: onAction, child: Text(action)),
+        ],
+      ),
+    );
     final above = <Widget>[
+        if (widget.stale) hint(const ValueKey('settings-maybe-stale'), s.settingsMaybeStale),
+        if (_changedNow)
+          hint(
+            const ValueKey('settings-changed-now'),
+            s.settingsChangedElsewhereNow,
+            action: s.settingsReload,
+            onAction: _busy ? null : _reload,
+          ),
         if (_changedElsewhere && patch.isNotEmpty)
           Padding(
             key: const ValueKey('settings-changed-elsewhere'),
@@ -552,6 +666,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
             enabled: enabled,
             name: values['name'] is String ? values['name'] as String : '',
             transport: values['transport'] is String ? values['transport'] as String : 'auto',
+            brightness: values['brightness'] is String ? values['brightness'] as String : 'auto',
             readOnly: readOnly,
             nameError: errors['name'],
             onChanged: _set,
@@ -589,10 +704,7 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
           Expanded(
             child: ListView(
               padding: SurauTheme.pagePadding,
-              children: [
-                ...above,
-                if (!widget.readOnly) ...[const SizedBox(height: 8), resetButton],
-              ],
+              children: above,
             ),
           ),
           if (!widget.readOnly)
@@ -612,11 +724,8 @@ class _FeatureFormState extends ConsumerState<_FeatureForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ...above,
-        if (!widget.readOnly) ...[
-          saveButton,
-          const SizedBox(height: 8),
-          resetButton,
-        ],
+        // Room under Simpan (where the reset used to be), so a toast never sits on it.
+        if (!widget.readOnly) ...[saveButton, const SizedBox(height: 56)],
       ],
     );
   }

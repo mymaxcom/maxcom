@@ -716,7 +716,7 @@ function Get-BinFiles {
     'cli.mjs', 'maxcom.cmd'
   )
   $optional = @(
-    'doctor.ps1', 'uninstall.ps1', 'switch-release.ps1', 'migrate-data.ps1', 'install-kiosk-task.ps1',
+    'doctor.ps1', 'uninstall.ps1', 'switch-release.ps1', 'migrate-data.ps1', 'install-kiosk-task.ps1', 'leave-surau.ps1',
     'start-kiosk.ps1', 'set-box-power.ps1', 'Semak MAXCOM.cmd', 'Buang MAXCOM.cmd', 'maxcom.ico'
   )
   return @{ Required = $required; Optional = $optional }
@@ -1043,7 +1043,9 @@ function Step-Firewall {
   $S = $script:S
   $sig = Get-TextSha256 ("{0}|{1}|{2}" -f $S.HttpsPort, $S.P.NodeExe, (Get-Sha256Of (Join-Path $S.P.Bin 'ensure-box-firewall.ps1')))
   $rule = Get-NetFirewallRule -DisplayName 'MAXCOM Box HTTPS' -ErrorAction SilentlyContinue
-  if ($null -ne $rule -and (Get-StateValue 'sigTembok') -eq $sig) { return $false }
+  # the UDP 5353 rule (the local name) is checked too: an update that adds it, or a rule someone removed, is repaired here
+  $ruleMdns = Get-NetFirewallRule -DisplayName 'MAXCOM Box mDNS' -ErrorAction SilentlyContinue
+  if ($null -ne $rule -and $null -ne $ruleMdns -and (Get-StateValue 'sigTembok') -eq $sig) { return $false }
   [void](Invoke-SetupScript 'ensure-box-firewall.ps1' @('-HttpsPort', [string]$S.HttpsPort, '-Program', $S.P.NodeExe))
   [void](Update-State @{ sigTembok = $sig })
   return $true

@@ -71,7 +71,7 @@ enum _Step { pin, newPin, confirmNewPin }
 enum _Tone { quiet, error }
 
 /// Why the pad cannot help right now; each shows the help card.
-enum _Stuck { none, locked, unreachable, enrolAgain }
+enum _Stuck { none, locked, unreachable, enrolAgain, follower }
 
 class UnlockScreen extends ConsumerStatefulWidget {
   const UnlockScreen({
@@ -80,6 +80,10 @@ class UnlockScreen extends ConsumerStatefulWidget {
     required this.box,
     required this.onUnlocked,
     required this.onEnrolAgain,
+    this.onMove,
+    this.recoveryProbe,
+    this.onRecover,
+    this.moveDeferred = false,
     this.surauInfo,
     this.offline,
     this.sealPinAfterUnlock = false,
@@ -92,6 +96,21 @@ class UnlockScreen extends ConsumerStatefulWidget {
   final EnrolledBox box;
   final void Function(SessionDto session) onUnlocked;
   final VoidCallback onEnrolAgain;
+
+  /// The box answered `follower`: go to the move screen. Null leaves the screen as it is.
+  final VoidCallback? onMove;
+
+  /// Asks the box whether it is in recovery (no Pentadbir who can sign in), as a restore leaves it. Asked once when
+  /// this phone is shown as revoked; true adds "Guna kod pemulihan". Null never offers it.
+  final Future<bool> Function()? recoveryProbe;
+
+  /// "Guna kod pemulihan": leaves the revoked enrolment and opens the way in with the recovery QR of the TV and the
+  /// recovery code on paper.
+  final VoidCallback? onRecover;
+
+  /// The person chose "Kemudian" on the move screen: a `follower` answer then shows the "Sambung ke Box utama"
+  /// button here instead of opening the move screen again.
+  final bool moveDeferred;
 
   /// The surau's name and helper: the cached copy shows at once, then the
   /// box is asked for a fresh one (public route, no token). Null shows the
@@ -144,6 +163,9 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
 
   /// Lockout end; the pad is dim until then (checked on every tap).
   DateTime? _lockedUntil;
+
+  /// The box said it is in recovery: a revoked phone is then offered "Guna kod pemulihan".
+  bool _inRecovery = false;
 
   /// The box's app lock was off when this screen opened: no pad, the device
   /// key alone opens MAXCOM. [_startedOff] stays for the whole visit (it
@@ -291,6 +313,7 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
             tone: _Tone.error,
           );
         });
+        unawaited(_askRecovery());
       });
     }
     // A silent reconnect was refused by the server (PIN changed, lock
@@ -467,6 +490,9 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
             // ordinary views say so.
             _auto = false;
             _explain(e, s);
+          case UnlockFollower():
+            _auto = false;
+            _explain(e, s);
           case UnlockNotVerified():
             _autoError = s.unlockNotVerified;
           case UnlockTooMany(:final retryAfterSec):
@@ -630,6 +656,14 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
           subline: s.unlockLockedUntil(timeOfDayWords(widget.toLocal(until), lang: appLangOfS(s))),
           tone: _Tone.error,
         );
+      case UnlockFollower() when widget.moveDeferred:
+        _stuck = _Stuck.follower;
+        _say(s.moveBannerTitle, subline: s.moveBannerBody);
+      case UnlockFollower():
+        _say(null);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) widget.onMove?.call();
+        });
       case UnlockPinMissing():
         _step = _Step.pin;
         _typed = '';
@@ -652,6 +686,7 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
         if (e.deviceGone) unawaited(_wipeRevoked());
         _stuck = _Stuck.enrolAgain;
         _say(e.message, subline: s.unlockRevokedHint, tone: _Tone.error);
+        unawaited(_askRecovery());
       case UnlockNoKey():
         _stuck = _Stuck.enrolAgain;
         _say(
@@ -672,6 +707,19 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
             _say(s.biometricFailed, tone: _Tone.error);
         }
     }
+  }
+
+  /// A revoked phone asks the box whether it is in recovery; the answer only adds a button, never changes the screen.
+  Future<void> _askRecovery() async {
+    final probe = widget.recoveryProbe;
+    if (probe == null || widget.onRecover == null) return;
+    var yes = false;
+    try {
+      yes = await probe();
+    } on Object {
+      yes = false;
+    }
+    if (mounted && yes) setState(() => _inRecovery = true);
   }
 
   Future<void> _closeOffline() async {
@@ -833,7 +881,7 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
     final soft = Colors.white.withValues(alpha: 0.72);
     final locked = _locked;
     final stuck = _stuck;
-    final showPad = stuck != _Stuck.enrolAgain;
+    final showPad = stuck != _Stuck.enrolAgain && stuck != _Stuck.follower;
     final padLive = showPad && !locked && !_busy;
 
     final String greeting;
@@ -911,10 +959,31 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
                         ),
                         if (stuck != _Stuck.none) ...[
                           const SizedBox(height: 10),
+                          if (stuck == _Stuck.enrolAgain && _inRecovery) ...[
+                            Text(
+                              s.unlockRecoveryHint,
+                              key: const ValueKey('unlock-recovery-hint'),
+                              textAlign: TextAlign.center,
+                              style: text.bodyMedium!.copyWith(color: soft),
+                            ),
+                            const SizedBox(height: 12),
+                            _GlassButton(
+                              key: const ValueKey('unlock-recovery'),
+                              label: s.unlockUseRecoveryCode,
+                              onPressed: widget.onRecover!,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                           if (stuck == _Stuck.enrolAgain)
                             _GlassButton(
                               label: s.actionEnrolAgain,
                               onPressed: widget.onEnrolAgain,
+                            ),
+                          if (stuck == _Stuck.follower)
+                            _GlassButton(
+                              key: const ValueKey('unlock-move-banner'),
+                              label: s.moveBannerTitle,
+                              onPressed: widget.onMove ?? () {},
                             ),
                           if (stuck == _Stuck.unreachable)
                             _GlassButton(
@@ -1053,7 +1122,7 @@ class _StatusLine extends StatelessWidget {
 
 /// An outlined button that reads on the glass.
 class _GlassButton extends StatelessWidget {
-  const _GlassButton({required this.label, required this.onPressed});
+  const _GlassButton({super.key, required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;

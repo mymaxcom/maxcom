@@ -73,6 +73,18 @@ String? syncErrorWords(S s, String? code) => switch (code) {
   _ => kErrorCodeTexts[code]?.call(s, const {}) ?? s.syncErrFailed,
 };
 
+/// The error line of the sync sheet (B13). A run that found the MAXCOM and
+/// then failed with it ([SyncView.failedVia] `box`) says exactly that: such a
+/// failure says nothing about the cloud, so it never reads "MAXCOM dan awan".
+/// A code with words of its own (unlock, session, a refusal) keeps them.
+String? syncSheetErrorWords(S s, SyncView v) {
+  final code = v.lastError;
+  if (code == null) return null;
+  const own = {'cloud_unreachable', 'needs_unlock', 'session_expired', 'device_revoked'};
+  if (v.failedVia == 'box' && !own.contains(code) && !kErrorCodeTexts.containsKey(code)) return s.syncBoxFailed;
+  return syncErrorWords(s, code);
+}
+
 class _ChipLook {
   const _ChipLook(
     this.icon,
@@ -327,7 +339,7 @@ class _SyncSheetState extends ConsumerState<SyncSheet> {
     final today = deps.toLocal(deps.now());
     final last = v.lastSync;
     final kind = chipKindOf(v);
-    final error = syncErrorWords(s, v.lastError);
+    final error = syncSheetErrorWords(s, v);
 
     final String connection = switch (kind) {
       SyncChipKind.offline => s.syncNoConnection,

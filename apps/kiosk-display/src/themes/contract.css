@@ -482,6 +482,25 @@
 }
 /* The meaning line hangs under the Arabic: its offset grows with the Arabic's own size (text size and Arabic size). */
 .zk-ms { position: absolute; left: 8rem; right: 8rem; top: calc(50% + 6.2rem * var(--scale, 1) * var(--ar-scale, 1)); text-align: center; font-size: calc(1.771rem * var(--scale, 1) * var(--fit, 1)); font-weight: 600; opacity: 0.85; }
+/* 2026.11.15: the Arabic and the meaning in one block over the ring, between the head and the ticker and strip and
+   clear of the side label and the count, so a doa on two or three lines pushes its meaning down instead of running
+   over it. The block is what the fit measures: a text too tall for it shrinks, then pages (the old absolute places
+   stay for a pack that still draws them outside the block). */
+.zk-text {
+  position: absolute;
+  inset-inline-start: 23rem;
+  inset-inline-end: 21rem;
+  top: 8.5rem;
+  bottom: 13rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(1.2rem * var(--scale, 1));
+}
+/* relative, not static: the harakat layer of the Arabic (Hk) is drawn over it by position */
+.zk-text > .zk-ar, .zk-text > .zk-ms { position: relative; inset: auto; transform: none; margin: 0; max-width: 100%; }
 .zk-side { position: absolute; inset-inline-start: 1.042rem; top: 50%; transform: translateY(-50%); width: 21.875rem; }
 .zk-pg { display: block; margin-top: 0.8rem; font-size: 1.4rem; font-weight: 700; opacity: 0.8; }
 .zk-count { position: absolute; inset-inline-end: 2.083rem; top: 50%; transform: translateY(-50%); width: 17.708rem; text-align: center; }

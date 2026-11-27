@@ -10,6 +10,7 @@ import org.junit.Test
 class LiveForegroundTest {
     private val camera = 0x40
     private val microphone = 0x80
+    private val connectedDevice = 0x10
 
     private fun mix(mic: Boolean, video: VideoKind): AudioMixCfg {
         val d = AudioMixCfg.default(video)
@@ -20,6 +21,8 @@ class LiveForegroundTest {
     fun theTypeConstantsAreTheSystemsBits() {
         assertEquals(camera, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
         assertEquals(microphone, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        assertEquals(connectedDevice, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        assertEquals(connectedDevice, LiveForeground.CONNECTED_DEVICE)
     }
 
     @Test
@@ -56,10 +59,47 @@ class LiveForegroundTest {
         val needs = ForegroundNeeds.of(VideoKind.EXTERNAL, mix(false, VideoKind.EXTERNAL))
         assertFalse(needs.camera)
         assertFalse(needs.microphone)
-        // up to API 33 no type at all; from API 34 a type is required, so the microphone alone, never the camera
+        // up to API 33 no type at all; from API 34 a type is required: connectedDevice (C7), never the camera
         assertEquals(0, LiveForeground.types(needs, 33))
-        assertEquals(microphone, LiveForeground.types(needs, 34))
+        assertEquals(connectedDevice, LiveForeground.types(needs, 34))
         assertFalse(LiveForeground.hasCamera(LiveForeground.types(needs, 36)))
+    }
+
+    /** C7: an external-only live used to borrow the MICROPHONE type on Android 14+, with no microphone in use. */
+    @Test
+    fun externalOnlyOnApi34PicksConnectedDevice() {
+        val needs = ForegroundNeeds.of(VideoKind.EXTERNAL, mix(false, VideoKind.EXTERNAL))
+        assertTrue(needs.external)
+        for (sdk in listOf(34, 35, 36)) {
+            val t = LiveForeground.types(needs, sdk)
+            assertEquals("sdk $sdk", connectedDevice, t)
+            assertTrue(LiveForeground.hasConnectedDevice(t))
+            assertFalse("no microphone is used, so its type is not claimed", LiveForeground.hasMicrophone(t))
+            assertFalse(LiveForeground.hasCamera(t))
+        }
+    }
+
+    @Test
+    fun thePhoneSourcesNeverClaimConnectedDevice() {
+        // success path of the other sources: unchanged types
+        val phone = ForegroundNeeds.of(VideoKind.PHONE, mix(true, VideoKind.PHONE))
+        assertFalse(LiveForeground.hasConnectedDevice(LiveForeground.types(phone, 34)))
+        val externalWithMic = ForegroundNeeds.of(VideoKind.EXTERNAL, mix(true, VideoKind.EXTERNAL))
+        assertEquals(microphone, LiveForeground.types(externalWithMic, 34))
+    }
+
+    @Test
+    fun theManifestDeclaresConnectedDeviceAndKeepsDataSync() {
+        val m = listOf("src/main/AndroidManifest.xml", "app/src/main/AndroidManifest.xml").map(::File).first { it.exists() }.readText()
+        assertTrue(m.contains("foregroundServiceType=\"camera|microphone|connectedDevice\""))
+        assertTrue(m.contains("android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"))
+        // the type needs one of the network-change permissions on Android 14+
+        assertTrue(m.contains("android.permission.CHANGE_NETWORK_STATE"))
+        // operator decision 5: the upload keeps its dataSync declaration
+        assertTrue(m.contains("android.permission.FOREGROUND_SERVICE_DATA_SYNC"))
+        assertTrue(m.contains("android:foregroundServiceType=\"dataSync\""))
+        // the service outlives the task
+        assertTrue(m.contains("android:stopWithTask=\"false\""))
     }
 
     @Test
@@ -97,7 +137,8 @@ class LiveForegroundTest {
     @Test
     fun theManifestStillDeclaresBothTypes() {
         val m = listOf("src/main/AndroidManifest.xml", "app/src/main/AndroidManifest.xml").map(::File).first { it.exists() }.readText()
-        assertTrue(m.contains("foregroundServiceType=\"camera|microphone\""))
+        // both are still declared (the connectedDevice type joined them in 2026.11.15, see below)
+        assertTrue(m.contains("foregroundServiceType=\"camera|microphone|"))
         assertTrue(m.contains("FOREGROUND_SERVICE_CAMERA"))
         assertTrue(m.contains("FOREGROUND_SERVICE_MICROPHONE"))
     }

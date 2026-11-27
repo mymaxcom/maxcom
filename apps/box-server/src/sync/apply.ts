@@ -23,6 +23,11 @@ export type VerifiedOp = SyncOp & { userName: string | null };
 
 export interface ApplyCtx {
   now: Date;
+  /**
+   * G3: `clockOffsetMs` of the body of `POST /api/sync/ops` (the box clock minus the device clock, as the app learned
+   * it). Read only for a `settings.put` of a device; the settings store bounds it and never moves a stamp past now.
+   */
+  clockOffsetMs?: number;
   /** change_log origin of what is written: 'app' for a device op, 'box:<boxId>' or 'cloud' for replication. */
   origin: string;
   /** change_log actor, `user:<id>`. */
@@ -320,7 +325,7 @@ export function applyOp(db: DatabaseSync, op: VerifiedOp, ctx: ApplyCtx): OpResu
         // Settings merge field by field inside the store; the op lands if any field was newer.
         const rev = newRev(editedAt, op.deviceId);
         const meta: ChangeMeta = { deviceId: op.deviceId, origin: ctx.origin, opId: op.opId, editedAt, rev, syncedAt: nowIso };
-        const put = putFeatureIn(db, op.entityId as never, op.payload, ctx.actor, op.deviceId, meta, undefined, ctx.surauId);
+        const put = putFeatureIn(db, op.entityId as never, op.payload, ctx.actor, op.deviceId, meta, ctx.clockOffsetMs === undefined ? undefined : { clockOffsetMs: ctx.clockOffsetMs }, ctx.surauId);
         if (put.applied) {
           record(db, ctx.surauId, op.opId, op.deviceId, 'applied', rev, nowIso);
           // A field that lost to a newer stored stamp is named, so the app can show a Konflik card for it.

@@ -179,6 +179,21 @@ describe('validateContent', () => {
   });
 });
 
+describe('zikir English text', () => {
+  it('keeps an optional textEn, trimmed; an empty one is left out', () => {
+    const r = validateContent('zikir', { order: 1, textAr: 'A', textMs: 'B', textEn: '  Glory be to Allah ' });
+    expect(r.ok).toBe(true);
+    expect((r as { value: { textEn?: string } }).value.textEn).toBe('Glory be to Allah');
+    const e = validateContent('zikir', { order: 1, textAr: 'A', textMs: 'B', textEn: '   ' });
+    expect(e.ok).toBe(true);
+    expect((e as { value: Record<string, unknown> }).value.textEn).toBeUndefined();
+    expect(validateContent('zikir', { order: 1, textAr: 'A', textMs: 'B' }).ok).toBe(true);
+  });
+  it('refuses a textEn that is not text', () => {
+    expect(validateContent('zikir', { order: 1, textAr: 'A', textMs: 'B', textEn: 7 }).ok).toBe(false);
+  });
+});
+
 describe('newId', () => {
   it('returns a uuid', () => {
     expect(newId()).toMatch(/^[0-9a-f-]{36}$/);

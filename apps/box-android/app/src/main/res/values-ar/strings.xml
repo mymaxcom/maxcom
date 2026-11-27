@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Arabic. Same keys as values/ (StringsParityTest); box_term and app_name are not translated. -->
+<resources>
+    <!-- Foreground service notification -->
+    <string name="notif_channel_name">خدمة MAXCOM</string>
+    <string name="notif_channel_desc">يبيّن أن خادم MAXCOM يعمل.</string>
+    <string name="notif_title">MAX Kiosk Server يعمل</string>
+    <string name="notif_text_running">خادم المصلى يعمل على هذا الجهاز</string>
+    <string name="notif_text_starting">جارٍ تشغيل MAXCOM</string>
+    <string name="notif_text_waiting_clock">في انتظار ساعة الإنترنت</string>
+    <string name="notif_text_failed">تعذّر تشغيل MAXCOM</string>
+
+    <!-- Maintenance screen -->
+    <string name="maint_title">صيانة MAXCOM</string>
+    <string name="maint_title_word">الصيانة</string>
+    <string name="maint_check">فحص MAXCOM</string>
+    <string name="maint_restart">إعادة تشغيل MAXCOM</string>
+    <string name="maint_exit_android">الخروج إلى أندرويد</string>
+    <string name="maint_android_settings">إعدادات أندرويد</string>
+    <string name="maint_change_home">تغيير التطبيق الرئيسي</string>
+    <string name="maint_back">العودة إلى شاشة MAXCOM</string>
+    <string name="maint_licences">تراخيص البرمجيات</string>
+    <string name="maint_pin_title">رمز PIN للصيانة</string>
+    <string name="maint_pin_hint">من 6 إلى 8 أرقام</string>
+    <string name="maint_pin_set">تعيين رمز PIN</string>
+    <string name="maint_pin_clear">إزالة رمز PIN</string>
+    <string name="maint_pin_enter">أدخل رمز PIN للصيانة</string>
+    <string name="maint_pin_wrong">فشل: رمز PIN خاطئ.</string>
+    <string name="maint_pin_invalid">فشل: يجب أن يكون رمز PIN من 6 إلى 8 أرقام.</string>
+    <string name="maint_ca_keystore">مفتاح شهادة الجذر محفوظ في مخزن مفاتيح أندرويد.</string>
+    <string name="maint_ca_file">مفتاح شهادة الجذر محفوظ في ملف خاص بالتطبيق.</string>
+    <string name="maint_check_ok">نجاح: نجحت جميع الفحوص.</string>
+    <string name="maint_check_fail">فشل: بعض الفحوص لم تنجح.</string>
+    <string name="maint_pin_locked">فشل: مقفل لمدة %1$d ثانية أخرى.</string>
+    <string name="maint_pin_toomany">فشل: محاولات كثيرة جدا. حاول مرة أخرى بعد 5 دقائق.</string>
+    <string name="maint_wifi">إعدادات الواي فاي</string>
+    <string name="maint_pin_change">تغيير رمز PIN للصيانة أو إزالته</string>
+    <string name="maint_pin_new">تعيين رمز PIN للصيانة</string>
+    <string name="maint_rekey">التحويل إلى الاسم boxN-surau.local (شهادة جذر جديدة)</string>
+
+    <!-- Follower box (an extra TV of a main box) -->
+    <string name="follower_line">تلفاز إضافي تابع لـ %1$s</string>
+    <string name="follower_line_no_name">تلفاز إضافي</string>
+    <string name="maint_mode_follower">الوضع: %1$s تابع</string>
+    <string name="maint_unlink">إزالة من المصلى</string>
+    <string name="leave_intro">سيتوقف %1$s هذا عن متابعة %1$s الرئيسي ولن يعرض محتواه بعد الآن.</string>
+    <string name="leave_data">إذا كانت في %1$s هذا بيانات قبل الربط فسيعود إليها. اكتب رمز الاسترداد الذي كان قبل الربط بجهاز التحكم (16 حرفاً أو رقماً، مع الشرطات أو بدونها).</string>
+    <string name="leave_code_hint">رمز الاسترداد</string>
+    <string name="leave_go">العودة إلى البيانات التي كانت قبل الربط</string>
+    <string name="leave_no_code">بلا رمز: كان %1$s هذا جديداً</string>
+    <string name="leave_new_confirm">كان %1$s هذا جديداً. سيتم تفريغه والعودة إلى الإعداد الأول. كل ما تم بعد الربط سيضيع. هل تتابع؟</string>
+    <string name="leave_new_yes">نعم، فرّغه</string>
+    <string name="leave_cancel">إلغاء</string>
+    <string name="leave_working">جارٍ العمل...</string>
+    <string name="leave_code_short">يجب أن يكون الرمز 16 حرفاً أو رقماً.</string>
+    <string name="leave_done">سيعاد تشغيل %1$s. انتظر قليلاً.</string>
+    <string name="leave_err_wrong_code">فشل: رمز الاسترداد خاطئ.</string>
+    <string name="leave_err_locked">فشل: رموز خاطئة كثيرة. حاول مجدداً بعد %1$d دقيقة.</string>
+    <string name="leave_err_no_backup">لا توجد في %1$s هذا بيانات قبل الربط لأنه كان جديداً. اختر الخيار بلا رمز.</string>
+    <string name="leave_err_has_backup">فشل: في %1$s هذا بيانات قبل الربط. أدخل رمز الاسترداد.</string>
+    <string name="leave_err_not_local">فشل: لا يمكن ذلك إلا على %1$s هذا نفسه.</string>
+    <string name="leave_err_generic">فشل: لم تنجح العملية (%1$s).</string>
+    <string name="leave_err_network">فشل: %1$s لا يجيب. حاول مجدداً.</string>
+</resources>

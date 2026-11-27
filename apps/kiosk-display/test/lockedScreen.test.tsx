@@ -24,9 +24,9 @@ vi.mock('../src/ui/Beep.ts', () => ({
 
 import { App } from '../src/app.tsx';
 
-const named = { settings: { surauInfo: { name: 'Surau D\'Waqaf' } } };
+const named = { settings: { surauInfo: { name: 'Surau Contoh' } } };
 function show(view: KioskView) {
-  holder.box = boxView({ state: 'locked', surauName: 'Surau D\'Waqaf' });
+  holder.box = boxView({ state: 'locked', surauName: 'Surau Contoh' });
   holder.view = view;
   return render(<App />);
 }
@@ -51,7 +51,7 @@ describe('Locked screen', () => {
     expect(r.container.querySelector('[data-role="clock"]')).toBeNull();
     expect(r.container.querySelector('.pbar')).toBeNull();
     expect(r.container.querySelector('.screen--main')).toBeNull();
-    expect(r.container.textContent).not.toContain('Surau D\'Waqaf');
+    expect(r.container.textContent).not.toContain('Surau Contoh');
   });
 
   it('wins over the pairing screen', () => {

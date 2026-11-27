@@ -4,11 +4,15 @@
 // entry is a [ComingScreen] with its real title (a later plan); the finance
 // pages live in lib/features/finance/, every other page in lib/screens/.
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async' show unawaited;
+
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 import 'package:go_router/go_router.dart';
 
+import '../box/join_address.dart';
 import '../features/common/language_switch.dart';
 import '../features/common/help_card.dart';
 import '../features/common/identity.dart';
@@ -34,7 +38,13 @@ import '../features/registry.g.dart' show hiddenFeatures;
 import '../features/setup/recovery_screen.dart';
 import '../features/setup/setup_providers.dart';
 import '../features/setup/setup_screen.dart';
+import '../features/link/link_screen.dart';
+import '../features/link/move_flow.dart';
+import '../features/link/move_screen.dart';
 import '../features/live/live_screen.dart';
+import '../features/screens/screens_list.dart';
+import '../features/screens/tv_editor.dart';
+import '../features/unlink/unlink_screen.dart';
 import '../features/prayer/import_records_screen.dart';
 import '../features/prayer/import_screen.dart';
 import '../features/prayer/location_screen.dart';
@@ -92,6 +102,7 @@ abstract final class AppRoutes {
   static const String recovery = '/recovery';
   static const String scan = '/scan';
   static const String unlock = '/unlock';
+  static const String move = '/move';
   static const String dashboard = '/';
   static const String settings = '/settings';
   static const String settingsFeature = '/settings/:feature';
@@ -106,6 +117,10 @@ abstract final class AppRoutes {
   static const String userNew = '/users/new';
   static const String devices = '/devices';
   static const String pairing = '/pairing';
+  static const String screens = '/screens';
+  static const String screensLink = '/screens/link';
+  static const String screensUnlink = '/screens/unlink';
+  static const String screensTv = '/screens/tv/:id';
   static const String audit = '/audit';
   static const String finance = '/finance';
   static const String financeKutipan = '/finance/kutipan';
@@ -132,6 +147,9 @@ abstract final class AppRoutes {
   static const String hadisCari = '/content/hadis/cari';
 
   static String settingsFor(String feature) => '/settings/$feature';
+
+  /// The choices of one TV (`self` for the main box's own TV, else the device id).
+  static String screensTvFor(String id) => '/screens/tv/${Uri.encodeComponent(id)}';
 
   /// A live feature's form: under Siaran langsung, so Back and the bottom bar stay with it.
   static String liveSettingsFor(String feature) => '/live/settings/$feature';
@@ -182,6 +200,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.listen(sessionProvider, (_, _) => refresh.ping());
   ref.listen(enrolledBoxProvider, (_, _) => refresh.ping());
   ref.listen(featureFlagsProvider, (_, _) => refresh.ping());
+  ref.listen(joiningInsteadProvider, (_, _) => refresh.ping());
   if (kOpsBuild) {
     // A Pentadbir MAXCOM with no surau chosen lands on the list; choosing one lets the surau screens open.
     ref.listen(needsSurauProvider, (_, _) => refresh.ping());
@@ -220,6 +239,7 @@ GoRouter createRouter(
           unlocked: ref.read(sessionProvider) != null,
           roles: ref.read(rolesProvider),
           features: ref.read(featureFlagsProvider),
+          joining: ref.read(joiningInsteadProvider),
           needsSurau: kOpsBuild && ref.read(needsSurauProvider),
           opsRevoked: kOpsBuild && ref.read(opsRevokedProvider),
           localDataClosed: kOpsBuild && ref.read(opsLocalDataClosedProvider),
@@ -234,7 +254,11 @@ GoRouter createRouter(
       GoRoute(
         path: AppRoutes.enrol,
         builder: (context, state) => _EnrolRoute(
-          initialCode: state.extra is String ? state.extra as String : null,
+          // A code handed over by the app itself, else a join ticket that came in the address of the web app (the
+          // follower's enrol page opened from an unlink); the address is cleaned once the page has taken it.
+          initialCode: state.extra is String
+              ? state.extra as String
+              : (state.uri.queryParameters[joinQueryKey] ?? heldJoinText),
         ),
       ),
       GoRoute(
@@ -252,6 +276,10 @@ GoRouter createRouter(
       GoRoute(
         path: AppRoutes.unlock,
         builder: (context, state) => const _UnlockRoute(),
+      ),
+      GoRoute(
+        path: AppRoutes.move,
+        builder: (context, state) => const _MoveRoute(),
       ),
       // The notice of a phone whose ops mark was withdrawn: outside the shell, ops build only.
       if (kOpsBuild) ...opsUnmarkedRoutes((context) => context.go(AppRoutes.thisDevice)),
@@ -425,6 +453,28 @@ GoRouter createRouter(
             builder: (context, state) => const PairingScreen(),
           ),
           GoRoute(
+            path: AppRoutes.screens,
+            builder: (context, state) => const ScreensListScreen(),
+            routes: [
+              GoRoute(
+                path: 'link',
+                builder: (context, state) => const LinkFlowScreen(),
+              ),
+              GoRoute(
+                path: 'unlink',
+                builder: (context, state) => UnlinkFlowScreen(
+                  deviceId: state.uri.queryParameters['device'],
+                  name: state.uri.queryParameters['name'],
+                ),
+              ),
+              GoRoute(
+                path: 'tv/:id',
+                builder: (context, state) =>
+                    TvEditorScreen(tvId: state.pathParameters['id']!),
+              ),
+            ],
+          ),
+          GoRoute(
             path: AppRoutes.audit,
             builder: (context, state) => const AuditScreen(),
           ),
@@ -552,15 +602,77 @@ class _PreviewRoute extends ConsumerWidget {
 
 // ---- the doors ----
 
-class _EnrolRoute extends ConsumerWidget {
+/// The new enrolment of a phone that left a follower is saved: the old one goes. Fails safe: the joining flag is always
+/// cleared, a failing biometric clear does not stop the rest, and when the old copy cannot be wiped the new box is
+/// still taken (the store already holds it), so the app never runs on the new record with the old box in memory.
+Future<void> finishJoining(T Function<T>(ProviderListenable<T> provider) read, EnrolOutcome outcome) async {
+  final deps = read(appDepsProvider);
+  try {
+    read(moveDeferredProvider.notifier).set(false);
+    read(revokedProvider.notifier).clear();
+    read(sessionProvider.notifier).clear();
+    try {
+      await deps.biometric.clear();
+    } on Object catch (e) {
+      debugPrint('finishJoining: biometric clear failed (${e.runtimeType})');
+    }
+    try {
+      await read(enrolledBoxProvider.notifier).replaceWith(outcome.box);
+    } on Object catch (e) {
+      debugPrint('finishJoining: wipe of the old copy failed (${e.runtimeType})');
+      read(enrolledBoxProvider.notifier).adopt(outcome.box);
+    }
+  } finally {
+    read(joiningInsteadProvider.notifier).set(false);
+  }
+}
+
+class _EnrolRoute extends ConsumerStatefulWidget {
   const _EnrolRoute({this.initialCode});
 
   /// A scanned `surau1:` text handed over by the scan router.
   final String? initialCode;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_EnrolRoute> createState() => _EnrolRouteState();
+}
+
+class _EnrolRouteState extends ConsumerState<_EnrolRoute> {
+  @override
+  void initState() {
+    super.initState();
+    // The join ticket was read once into the page; it does not stay in the address bar or the history.
+    if (widget.initialCode != null) WidgetsBinding.instance.addPostFrameCallback((_) => scrubJoinAddress());
+    _joining = ref.read(joiningInsteadProvider.notifier);
+  }
+
+  late final JoiningInsteadNotifier _joining;
+
+  @override
+  void dispose() {
+    // Leaving the enrol page by any route (back, another link) ends "join instead": the flag must not outlive it.
+    final joining = _joining;
+    Future.microtask(() {
+      try {
+        joining.set(false);
+      } on Object {
+        // the provider is gone with the app
+      }
+    });
+    super.dispose();
+  }
+
+  /// The new enrolment of a phone that left a follower succeeded: only now does the old one go.
+  Future<void> _finishJoining(EnrolOutcome outcome) async {
+    await finishJoining(ref.read, outcome);
+    if (mounted) context.go(AppRoutes.unlock);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final deps = ref.watch(appDepsProvider);
+    final joining = ref.watch(joiningInsteadProvider);
+    final initialCode = widget.initialCode;
     return EnrolScreen(
       flow: EnrolFlow(
         clientFor: deps.clientFor,
@@ -570,13 +682,27 @@ class _EnrolRoute extends ConsumerWidget {
         surauInfoStore: deps.surauInfoStore,
         platform: deps.platform,
         pageOrigin: kIsWeb ? Uri.base : null,
+        replacing: joining,
         now: deps.now,
       ),
       cameraAvailable: deps.cameraAvailable,
       scannerBuilder: deps.scannerBuilder ?? defaultScanner,
       initialCode: initialCode,
       pairingUi: true,
-      actions: _languageActions,
+      actions: joining
+          ? [
+              IconButton(
+                key: const ValueKey('enrol-joining-back'),
+                tooltip: S.of(context).actionBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () {
+                  ref.read(joiningInsteadProvider.notifier).set(false);
+                  context.go(AppRoutes.move);
+                },
+              ),
+              ..._languageActions,
+            ]
+          : _languageActions,
       onBoxQr: (text) => ScanRouter(
         enrolled: false,
         go: (path, {extra}) => context.go(path, extra: extra),
@@ -612,6 +738,11 @@ class _EnrolRoute extends ConsumerWidget {
       now: deps.now,
       toLocal: deps.toLocal,
       onEnrolled: (outcome) {
+        clearHeldJoin();
+        if (joining) {
+          unawaited(_finishJoining(outcome));
+          return;
+        }
         ref.read(enrolledBoxProvider.notifier).adopt(outcome.box);
         context.go(AppRoutes.unlock);
       },
@@ -810,6 +941,18 @@ class _UnlockRoute extends ConsumerWidget {
                 context.go(backTo);
               },
               onEnrolAgain: enrolAgain,
+              // A restore revokes every phone; the box then has no Pentadbir and says so on its public identity
+              // route. The way back in is the recovery QR of the TV and the recovery code, at the enrol page.
+              recoveryProbe: () async {
+                final info = await SetupClient(client).boxInfo();
+                return info.state == 'recovery' && info.reason == 'no_admin';
+              },
+              onRecover: enrolAgain,
+              moveDeferred: ref.watch(moveDeferredProvider),
+              onMove: () {
+                ref.read(moveDeferredProvider.notifier).set(false);
+                context.go(AppRoutes.move);
+              },
             );
           },
         );
@@ -833,6 +976,9 @@ class _ProfileNameStore implements SurauInfoStore {
 
   @override
   Future<void> save(SurauInfo info) => inner.save(info);
+
+  @override
+  Future<void> clear() => inner.clear();
 }
 
 class _GlassWait extends StatelessWidget {
@@ -915,5 +1061,60 @@ class _ReEnrolNeeded extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// The box this phone is enrolled at became a follower: the phone moves to the main box (door, like the unlock).
+class _MoveRoute extends ConsumerWidget {
+  const _MoveRoute();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final deps = ref.watch(appDepsProvider);
+    final box = ref.watch(enrolledBoxProvider);
+    if (box == null) return const SizedBox.shrink();
+    // Nothing is forgotten here: a wrong or expired code must not leave the phone enrolled nowhere. The enrol page
+    // opens beside the old enrolment (the guard lets it through) and the old one is dropped once the new succeeded.
+    Future<void> leaveAndEnrol(String? code) async {
+      ref.read(joiningInsteadProvider.notifier).set(true);
+      if (context.mounted) context.go(AppRoutes.enrol, extra: code);
+    }
+
+    return ref
+        .watch(enrolledClientProvider)
+        .when(
+          skipLoadingOnReload: true,
+          loading: () => const _GlassWait(),
+          error: (e, _) => const _BackToEnrol(),
+          data: (client) {
+            if (client == null) return const SizedBox.shrink();
+            return MoveScreen(
+              flow: MoveFlow(
+                box: box,
+                oldClient: client,
+                key: deps.key,
+                trust: deps.trust,
+                clientFor: deps.clientFor,
+                store: deps.boxStore,
+                platform: deps.platform,
+              ),
+              deviceName: platformLabel(S.of(context), deps.platform),
+              onAdopt: (b) {
+                ref.read(moveDeferredProvider.notifier).set(false);
+                ref.read(enrolledBoxProvider.notifier).adopt(b);
+                context.go(AppRoutes.unlock);
+              },
+              // Not a dead end: the unlock opens with "Sambung ke Box utama", which comes back here.
+              onLater: () {
+                ref.read(moveDeferredProvider.notifier).set(true);
+                context.go(AppRoutes.unlock);
+              },
+              // Joining the main box is an ordinary enrolment to that box: the old follower enrolment is forgotten (as
+              // "Daftar semula" does) and the enrol page takes the scan or the pasted code.
+              onJoinScan: () => leaveAndEnrol(null),
+              onJoinCode: leaveAndEnrol,
+            );
+          },
+        );
   }
 }

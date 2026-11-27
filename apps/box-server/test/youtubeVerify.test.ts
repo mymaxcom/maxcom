@@ -6,9 +6,8 @@ import { startFakeGoogle } from './support/fakeGoogle.ts';
 import type { FakeGoogle } from './support/fakeGoogle.ts';
 import { withUploadApi } from './support/fakeGoogleUpload.ts';
 import type { GoogleUploadFake } from './support/fakeGoogleUpload.ts';
-import { buildCloud } from './support/fakeCloud.ts';
+import { buildBox } from './support/boxGrant.ts';
 import { parseIsoDuration } from '../src/live/youtube/api.ts';
-import { seedCloudGrant } from './support/cloudGrant.ts';
 
 const closers: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -26,14 +25,13 @@ async function rig(signedIn = true): Promise<Rig> {
   const g = await startFakeGoogle();
   const up = withUploadApi(g);
   const clock = { t: klInstant('2026-11-05', '19:00').getTime(), now: (): Date => new Date(clock.t) };
-  const cloud = buildCloud('boxid0001', { now: clock.now, fetchImpl: up.fetchImpl });
+  // the box holds the grant (2026.11.13): the catch-up routes answer there, from its own sign-in
+  const cloud = buildBox('boxid0001', { now: clock.now, fetchImpl: up.fetchImpl }, signedIn ? {} : null);
   closers.push(cloud.close, g.close);
   const { mkdirSync, writeFileSync } = await import('node:fs');
   const { join } = await import('node:path');
   mkdirSync(join(cloud.dir, 'secret'), { recursive: true });
   writeFileSync(join(cloud.dir, 'secret', 'youtube-client.json'), JSON.stringify({ client_id: 'cid-123.apps.googleusercontent.com', client_secret: 'csecret-SECRET' }));
-  // the grant the cloud held from before release 2026.11.13 (the cloud makes no new one)
-  if (signedIn) seedCloudGrant(cloud.dir, clock.now);
   return { app: cloud.app, g, up };
 }
 

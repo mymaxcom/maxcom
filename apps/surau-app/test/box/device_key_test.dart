@@ -127,6 +127,23 @@ void main() {
       await expectLater(key.publicJwk(), throwsStateError);
     });
 
+    test('a pending key leaves the key in use alone until it is committed', () async {
+      final key = SoftwareDeviceKey.random();
+      final oldJwk = await key.publicJwk();
+      final pendingJwk = await key.generatePending();
+      expect(pendingJwk, isNot(oldJwk));
+      expect(await key.publicJwk(), oldJwk);
+      expect(verifyP256(oldJwk, message, await key.sign(message)), isTrue);
+      await key.discardPending();
+      expect(await key.publicJwk(), oldJwk);
+      await expectLater(key.commitPending(), throwsStateError);
+      final again = await key.generatePending();
+      await key.commitPending();
+      expect(await key.publicJwk(), again);
+      expect(verifyP256(again, message, await key.sign(message)), isTrue);
+      await expectLater(key.commitPending(), throwsStateError, reason: 'the slot is empty after a commit');
+    });
+
     test('signatures are always 64 bytes over many messages', () async {
       final key = SoftwareDeviceKey.random();
       final jwk = await key.publicJwk();
@@ -191,6 +208,18 @@ void main() {
           case 'clear':
             await fake.clear();
             return null;
+          case 'generatePending':
+            final pj = await fake.generatePending();
+            return Uint8List.fromList(
+                [0x04, ...unB64url(pj['x']!), ...unB64url(pj['y']!)]);
+          case 'signPending':
+            return p1363ToDer(await fake.signPending(call.arguments as Uint8List));
+          case 'commitPending':
+            await fake.commitPending();
+            return null;
+          case 'discardPending':
+            await fake.discardPending();
+            return null;
         }
         throw MissingPluginException();
       });
@@ -199,6 +228,16 @@ void main() {
     tearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, null);
+    });
+
+    test('generatePending self-checks with signPending and never calls the plain generate or sign', () async {
+      final key = AndroidDeviceKey();
+      final jwk = await key.generatePending();
+      expect(jwk.keys.toSet(), {'kty', 'crv', 'x', 'y'});
+      expect(calls, ['generatePending', 'signPending']);
+      await key.commitPending();
+      await key.discardPending();
+      expect(calls, ['generatePending', 'signPending', 'commitPending', 'discardPending']);
     });
 
     test('generate returns a clean JWK and self-checks with a signature', () async {

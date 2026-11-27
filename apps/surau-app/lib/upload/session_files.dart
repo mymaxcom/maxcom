@@ -42,6 +42,19 @@ class SessionFiles {
     });
   }
 
+  /// Every session that has names stored, in no particular order (the list
+  /// behind "Muat naik rakaman terdahulu").
+  Future<List<String>> sessions() async {
+    final out = <String>[];
+    for (final d in await store.list(Collections.sessionFiles)) {
+      final id = d['sessionId'];
+      if (id is String && id.isNotEmpty && d['names'] is List && (d['names'] as List).isNotEmpty && !out.contains(id)) {
+        out.add(id);
+      }
+    }
+    return out;
+  }
+
   /// The stored names of [sessionId], valid ones only; empty when unknown.
   Future<List<String>> names(String sessionId) async {
     final d = await store.getDoc(Collections.sessionFiles, _id(sessionId));

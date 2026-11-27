@@ -240,7 +240,7 @@ describe('CameraStore', () => {
     const s = mk();
     expect(s.get()).toBeNull();
     expect(s.lastTest).toBeNull();
-    expect(s.getMasked()).toEqual({ configured: false, url: '', username: null, hasPassword: false, lastTest: null });
+    expect(s.getMasked()).toEqual({ configured: false, url: '', username: null, hasPassword: false, lastTest: null, control: { enabled: false, protocol: 'http', profile: { preset: 1, focus: 'continuous', tracking: 'off', exposureEv: 0 }, applyOnLive: false } });
   });
 
   it('seals the address: the file holds no readable address or password; read-back shows dots', () => {

@@ -21,11 +21,10 @@ void main() {
 
   test('mime types follow the extensions, no duplicates', () {
     expect(mimeTypesFor(['csv']), ['text/csv', 'text/comma-separated-values']);
-    expect(mimeTypesFor(['csv', 'xlsx', 'zip', 'CSV']), [
+    expect(mimeTypesFor(['csv', 'xlsx', 'CSV']), [
       'text/csv',
       'text/comma-separated-values',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/zip',
     ]);
     expect(mimeTypesFor(['exe']), isEmpty);
   });

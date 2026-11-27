@@ -202,3 +202,110 @@ describe('YouTube grace window after a stop', () => {
     expect((inserts(r)[1]!.json as { status: { privacyStatus: string } }).status.privacyStatus).toBe('unlisted');
   });
 });
+
+// 2026.11.15, Lane A task A2: the orphan rule for every session, and the linger on system stops.
+describe('A2: orphan rule (S1) and linger on system stops (Y4)', () => {
+  const LAN_IP = '10.168.1.40';
+  async function plain(): Promise<{ h: LiveHarness; owner: Awaited<ReturnType<typeof loginAs>>; other: Awaited<ReturnType<typeof loginAs>>; id: string }> {
+    const h = await startLiveHarness({ live: { monitorMs: 3_600_000 } });
+    closers.push(h.close);
+    const owner = await loginAs(h.app, 'live');
+    const other = await loginAs(h.app, 'live');
+    const r = await h.app.inject({ method: 'POST', url: '/api/live/start', headers: owner.headers, payload: startBody(h), remoteAddress: LAN_IP });
+    expect(r.statusCode).toBe(200);
+    return { h, owner, other, id: r.json().session.id as string };
+  }
+  const poll = (h: LiveHarness, headers: Record<string, string>) => h.app.inject({ method: 'GET', url: '/api/live/status', headers, remoteAddress: LAN_IP });
+  const reasonOf = (h: LiveHarness, id: string): unknown => {
+    const rows = h.app.surau.db.prepare("SELECT after_json FROM change_log WHERE entity = 'live' AND entity_id = ? ORDER BY id").all(id) as Array<{ after_json: string }>;
+    return (JSON.parse(rows.at(-1)!.after_json) as { reason?: unknown }).reason;
+  };
+
+  it('S1: no ingest and no owner poll for 90 s ends the session with controller_lost, not before', async () => {
+    const { h, id } = await plain();
+    const sessions = h.app.liveSessions!;
+    h.clock.t += 89_000;
+    await sessions.tick();
+    expect(sessions.current()?.id).toBe(id);
+    h.clock.t += 2_000;
+    await sessions.tick();
+    expect(sessions.current()).toBeNull();
+    expect(reasonOf(h, id)).toBe('controller_lost');
+  });
+
+  it('S1: the owner polling keeps a session without ingest (success path); another device polling does not', async () => {
+    const { h, owner, other, id } = await plain();
+    const sessions = h.app.liveSessions!;
+    for (let i = 0; i < 5; i++) {
+      h.clock.t += 60_000;
+      expect((await poll(h, owner.headers)).statusCode).toBe(200);
+      await sessions.tick();
+    }
+    expect(sessions.current()?.id).toBe(id);
+    for (let i = 0; i < 2; i++) {
+      h.clock.t += 60_000;
+      await poll(h, other.headers);
+      await sessions.tick();
+    }
+    expect(sessions.current()).toBeNull();
+    expect(reasonOf(h, id)).toBe('controller_lost');
+  });
+
+  it('S1: a phone that still sends its picture is never an orphan, however long its app does not poll', async () => {
+    const { h, id } = await plain();
+    const sessions = h.app.liveSessions!;
+    h.fake.setReady(true, { sourceType: 'srtConn', sourceId: 'c1', bytesReceived: 10 });
+    for (let i = 0; i < 4; i++) {
+      h.clock.t += 10 * 60_000;
+      await sessions.tick();
+    }
+    expect(sessions.current()?.id).toBe(id);
+  });
+
+  it('Y4: the box ends an orphan kuliah live; a restart of the same kuliah inside the window reuses the broadcast (success path)', async () => {
+    const r = await rig(300_000);
+    const first = await r.start();
+    expect(first.statusCode).toBe(200);
+    await until(() => r.runs().length >= 1);
+    const sessions = r.h.app.liveSessions!;
+    // another phone reads the status (its polls are not the owner's heartbeat)
+    const watcher = await loginAs(r.h.app, 'live');
+    const liveA = (await r.h.app.inject({ method: 'GET', url: '/api/live/status', headers: watcher.headers, remoteAddress: LAN })).json();
+    expect(liveA.broadcastIds).toHaveLength(1);
+    // the app dies: no picture, no poll
+    r.h.fake.setReady(false);
+    // a monitor round already in flight must see the picture gone before the clock moves
+    await until(() => !sessions.status().ingest.ready);
+    r.h.clock.t += 91_000;
+    await until(() => sessions.current() === null);
+    await sessions.settled();
+    expect(completes(r)).toHaveLength(0);
+    expect(sessions.lingeringBroadcast()).toBe(liveA.broadcastIds[0]);
+    // the same kuliah again, two minutes later
+    r.h.clock.t += 120_000;
+    r.h.fake.setReady(true, { sourceType: 'webRTCSession', sourceId: 'w2' });
+    const second = await r.start();
+    expect(second.statusCode).toBe(200);
+    await until(() => r.runs().length >= 2);
+    expect(inserts(r)).toHaveLength(1);
+    expect(new Set(r.runs().map((a) => a.at(-1))).size).toBe(1);
+    const liveB = (await r.h.app.inject({ method: 'GET', url: '/api/live/status', headers: watcher.headers, remoteAddress: LAN })).json();
+    expect(liveB.broadcastIds).toEqual(liveA.broadcastIds);
+    expect(liveB.session.id).not.toBe(liveA.session.id);
+  });
+
+  it('Y6: a YouTube sign-out while the broadcast lingers is refused (409), and allowed once the window is over', async () => {
+    const r = await rig(60_000);
+    await r.start();
+    await until(() => r.runs().length >= 1);
+    await r.stop();
+    const admin = await loginAs(r.h.app, 'admin');
+    const refused = await r.h.app.inject({ method: 'POST', url: '/api/live/youtube/signout', headers: admin.headers, payload: {}, remoteAddress: LAN });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().code).toBe('live_busy');
+    await r.h.app.liveSessions!.shutdown();
+    expect(completes(r)).toHaveLength(1);
+    const ok = await r.h.app.inject({ method: 'POST', url: '/api/live/youtube/signout', headers: admin.headers, payload: {}, remoteAddress: LAN });
+    expect(ok.statusCode).toBe(200);
+  });
+});

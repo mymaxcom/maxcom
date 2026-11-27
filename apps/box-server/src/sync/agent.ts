@@ -44,7 +44,7 @@ import { verifySiteEntry } from './verify.ts';
  */
 
 export type AgentState = 'idle' | 'waking' | 'syncing' | 'offline';
-export type AgentErrorReason = 'unreachable' | 'unauthorised' | 'http_5xx' | 'http_4xx' | 'tls' | 'snapshot_required' | 'bad_answer' | 'refused';
+export type AgentErrorReason = 'unreachable' | 'unauthorised' | 'http_5xx' | 'http_4xx' | 'tls' | 'snapshot_required' | 'bad_answer' | 'refused' | 'surau_asleep';
 
 export const BACKOFF_MS = [60_000, 120_000, 300_000, 900_000] as const;
 /** A camera mark that will not clear may force this many waking cycles an hour (S9). */
@@ -233,6 +233,9 @@ export class SyncAgent {
   private peerToken: string | null = null;
   private cycleReasons: string[] = [];
   private cycleHook: (() => void) | null = null;
+  /** The cloud answered 409 `surau_asleep` (another box of the surau leads): no cycle runs until the next `start()`. */
+  private asleepSeen = false;
+  private halted = false;
 
   private readonly autoLink: AutoLink;
 
@@ -267,6 +270,8 @@ export class SyncAgent {
     if (!this.stopped) return;
     this.stopped = false;
     this.dead = false;
+    this.halted = false;
+    this.asleepSeen = false;
     this.unsubscribe = this.o.bus.on(() => this.noteLocalChange());
     this.schedule(this.o.initialDelayMs ?? 10_000);
     this.noteLocalChange();
@@ -309,7 +314,7 @@ export class SyncAgent {
   // ---- scheduling ---------------------------------------------------------------------------
 
   private schedule(ms: number): void {
-    if (this.stopped) return;
+    if (this.stopped || this.halted) return;
     if (this.tickTimer) clearTimeout(this.tickTimer);
     this.nextDelay = ms;
     this.tickTimer = setTimeout(() => void this.tick(), ms);
@@ -344,7 +349,7 @@ export class SyncAgent {
 
   /** Something local is waiting: push it after the debounce. */
   private noteLocalChange(): void {
-    if (this.stopped || this.running !== null || !this.enabled()) return;
+    if (this.stopped || this.halted || this.running !== null || !this.enabled()) return;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     if (this.pendingCount() === 0) return;
     this.debounceTimer = setTimeout(() => {
@@ -399,6 +404,7 @@ export class SyncAgent {
   /** Run one cycle, record the outcome, schedule the next check. */
   private guarded(): Promise<void> {
     if (this.running !== null) return this.running;
+    if (this.halted) return Promise.resolve();
     // this cycle pushes whatever the debounce was waiting for
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = null;
@@ -430,6 +436,8 @@ export class SyncAgent {
           }
         }
         await this.cycle(key);
+        // a call inside the cycle may have been refused for a sleeping surau and the error swallowed there
+        if (this.asleepSeen) throw new CycleError('surau_asleep');
         this.failures = 0;
         this.state = 'idle';
         this.setState('last_error', this.cycleRefused > 0 ? 'refused' : null);
@@ -455,6 +463,18 @@ export class SyncAgent {
   private fail(error: unknown): void {
     if (this.dead) return;
     const reason: AgentErrorReason = error instanceof CycleError ? error.reason : 'unreachable';
+    if (reason === 'surau_asleep') {
+      // the surau sleeps on the cloud: nothing to retry (the next start asks again)
+      this.halted = true;
+      this.state = 'offline';
+      this.setState('last_error', 'surau_asleep');
+      if (this.tickTimer) clearTimeout(this.tickTimer);
+      if (this.debounceTimer) clearTimeout(this.debounceTimer);
+      this.tickTimer = null;
+      this.debounceTimer = null;
+      this.nextDelay = null;
+      return;
+    }
     this.failures += 1;
     this.state = 'offline';
     this.setState('last_error', reason);
@@ -550,6 +570,16 @@ export class SyncAgent {
     });
   }
 
+  /** A 409 whose body says `code: 'surau_asleep'` (the body is read from a copy; the answer stays readable). */
+  private async isAsleep(res: Response): Promise<boolean> {
+    try {
+      const j = (await res.clone().json()) as { code?: unknown };
+      return j.code === 'surau_asleep';
+    } catch {
+      return false;
+    }
+  }
+
   private async isWaking(res: Response): Promise<boolean> {
     if (res.status !== 503) return false;
     if (res.headers.get('retry-after') !== null) return true;
@@ -613,6 +643,10 @@ export class SyncAgent {
       const res = await this.send(`${this.baseUrl(key)}${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${key.siteToken}`, ...BOX_REPORT_HEADERS } }, timeoutMs);
       const peer = res.headers.get('x-maxcom-server');
       if (peer !== null && PEER_TOKEN_RE.test(peer)) this.peerToken = peer;
+      if (res.status === 409 && (await this.isAsleep(res))) {
+        this.asleepSeen = true;
+        throw new CycleError('surau_asleep');
+      }
       if (!(await this.isWaking(res))) return res;
       await res.arrayBuffer().catch(() => undefined);
       this.state = 'waking';

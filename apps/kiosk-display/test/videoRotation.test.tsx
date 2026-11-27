@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, render, renderHook } from '@testing-library/preact';
+import { buildDayIntervals } from '@surau/core';
 import type { KioskContent, KioskVideo, TilawahSlot } from '@surau/core';
 import { days, makeView } from './helpers.tsx';
 import { useContent } from '../src/data/content.ts';
@@ -91,6 +92,18 @@ describe('a YouTube video with every other card off', () => {
       expect(r.container.querySelector('[data-idle]')?.getAttribute('data-idle')).toBe('false');
       expect(r.container.querySelector('iframe.video-frame')).not.toBeNull();
     }
+  });
+
+  it('F16: a 240 s item 2 minutes after the solat is held back when the zikir starts 5 minutes after it', () => {
+    const day = days.find((d) => d.date === DATE)!;
+    const asarEnd = buildDayIntervals(day, makeView(DATE, '12:00').settings).find((i) => i.prayer === 'asar' && i.phase === 'solat')!.end;
+    const at = new Date(asarEnd.getTime() + 2 * 60_000).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour12: false }).slice(0, 5);
+    const zikir = [1, 2, 3].map((i) => ({ id: `z${i}`, updatedAt: '2026-11-01T00:00:00Z', updatedBy: 'test', order: i, textAr: 'سُبْحَانَ اللهِ', textMs: 'Maha Suci Allah' }));
+    const settings = { ...othersOff, ...videoOn, zikirSelepasSolat: { startAfterMinutes: 5 } };
+    // the zikir takes the screen at 5 minutes: a 240 s showing that starts within the next minute cannot finish
+    expect(walk({ ...content(video(240)), zikir: zikir as never }, at, 30, settings).every((x) => x === null)).toBe(true);
+    // with no zikir items nothing takes the screen then: the video plays
+    expect(walk(content(video(240)), at, 30, settings).every((x) => x === 'v-yt')).toBe(true);
   });
 
   it('a 300 s item that cannot finish before the azan countdown is held back (soft rule), a 120 s one is not', () => {

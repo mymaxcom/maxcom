@@ -791,24 +791,12 @@ class ImportRecord {
   bool get undone => undoneAt != null;
 }
 
-/// Sends raw bytes with their own content type (for example a zip). The
-/// repository uses the gateway's [BoxGateway.postRaw] unless a test supplies
-/// its own.
-typedef RawPost =
-    Future<Map<String, dynamic>> Function(
-      String path,
-      Uint8List bytes,
-      String contentType,
-    );
-
 // ---- the repository ----
 
 class PrayerRepository {
-  PrayerRepository(this.gateway, {RawPost? rawPost})
-    : rawPost = rawPost ?? gateway.postRaw;
+  PrayerRepository(this.gateway);
 
   final BoxGateway gateway;
-  final RawPost rawPost;
 
   static const String base = '/api/prayer';
 

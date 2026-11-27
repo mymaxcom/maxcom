@@ -146,6 +146,7 @@ html[dir=rtl] ol, html[dir=rtl] ul { padding-left: 0; padding-right: 1.6rem; }
 <li>Mic-in on the box (a microphone plugged straight into the MAXCOM box).</li>
 </ul>
 <p>The extra source is mixed into the camera's sound. It does not replace the camera's sound. If a source is not available, it shows in grey with the reason, for example "This box has no audio input".</p>
+<p>The <strong>Audio</strong> card shows one row for every sound input: <strong>External camera audio</strong>, <strong>This phone microphone</strong> (or <strong>This iPad microphone</strong>), <strong>External microphone</strong>, <strong>Bluetooth microphone</strong> and <strong>Mic-in on the box</strong>. Each row has <strong>Use this source</strong>, <strong>Volume</strong>, <strong>Mute this source</strong> and <strong>Lift quiet sound</strong>.</p>
 </section>
 
 <section id="volume">
@@ -196,6 +197,7 @@ html[dir=rtl] ol, html[dir=rtl] ul { padding-left: 0; padding-right: 1.6rem; }
 
 <section id="clap-test">
 <h2>8. Cameras without sound, and the Clap test</h2>
+<p>This section is for a live whose video is taken by a phone or an iPad. When the MAXCOM Kiosk Box takes the video, the Clap test is not offered because there is no picture on the device; use <strong>Manual adjustment</strong> while watching the TV (section 12).</p>
 <p>Some cameras have no microphone. Then there is no camera sound to match against, so MAXCOM uses the extra source only, and you set <strong>Audio time offset</strong> once, so that the sound meets the slightly late picture.</p>
 <p>Clap test steps:</p>
 <ol class="steps">
@@ -232,6 +234,47 @@ html[dir=rtl] ol, html[dir=rtl] ul { padding-left: 0; padding-right: 1.6rem; }
 <p>If the network drops or the broadcast stops, the full recording of the event is still on the card. Download the files from it through the camera's page on a computer.</p>
 </section>
 
-<footer class="doc-foot"><span><b>MAXCOM R2 (2026.11.13)</b>, external camera guide, mymaxcom.my</span><span>Licensed under CC BY-NC-SA 4.0</span></footer>
+<section id="camera-control">
+<h2>11. Camera control and picture brightness</h2>
+<p>The live settings are on the <strong>Live broadcast</strong> page, in the <strong>Live settings</strong> card. The video is chosen in one place, the <strong>Video source</strong> card: <strong>Phone camera</strong> (<strong>iPad camera</strong> on an iPad) or <strong>External camera</strong>. With the external camera, <strong>Video is taken by</strong> shows <strong>This phone</strong> or <strong>MAXCOM Kiosk Box</strong>.</p>
+<p><strong>Camera control.</strong> If the camera supports control over the network, an Admin turns on <strong>Allow camera control</strong> in the camera settings. The Live broadcast page then has a <strong>Camera control</strong> card with <strong>Brightness</strong>, <strong>Position</strong> with <strong>Home</strong>, <strong>Auto tracking</strong> (<strong>Off</strong> or <strong>Person</strong>) and <strong>Focus</strong> (<strong>Continuous</strong>, <strong>Single</strong> or <strong>Manual</strong>).</p>
+<ol class="steps">
+<li>Change the settings you want.</li>
+<li>Tap <strong>Apply camera settings</strong> to send them to the camera.</li>
+<li>The app shows "Command sent to the camera", then "The camera answered". If it does not arrive: "The command did not reach the camera".</li>
+</ol>
+<p>With <strong>Apply when the live starts</strong> turned on, the same settings are sent every time a live starts.</p>
+<p><strong>Picture brightness.</strong> The choices are <strong>Automatic</strong>, <strong>Normal</strong>, <strong>Bright</strong> and <strong>Brighter</strong>. Automatic brightens the picture only when it is dark, such as at dusk. Choose Bright or Brighter if the picture is always too dark. It works when the MAXCOM Kiosk Box takes the video from the camera.</p>
+<p>When the MAXCOM Kiosk Box takes the video, the live carries on even if the phone is locked or the app is left (see section 12).</p>
+</section>
+
+<section id="box-takes-video">
+<h2>12. When the MAXCOM Kiosk Box takes the video</h2>
+<p>If <strong>Video is taken by</strong> is <strong>MAXCOM Kiosk Box</strong>, the Box reads the camera itself. The phone or iPad only controls the live and does not show the video: "The picture is not shown on this device. Watch it on the TV or on YouTube." This section explains what is different.</p>
+<h3>The live runs until Stop</h3>
+<p>This kind of live does not end by itself. It carries on when the phone or iPad is locked, when the app is left, when the phone loses its network, and when the camera drops: the TVs show the waiting card, and the picture and sound return by themselves when the camera connects again. The live stops only when someone taps <strong>Stop</strong>: the person who started it, other users who have live control, or an Admin. If the device that started the live has not been seen for a few minutes, other devices show the notice "The broadcast is still running, no device is in control" with a <strong>Stop the broadcast</strong> button.</p>
+<h3>Broadcast destinations</h3>
+<p>Before <strong>Go live</strong> and during the live, the <strong>Broadcast destinations</strong> sheet has the switches <strong>Screen</strong>, <strong>YouTube</strong> and <strong>Record</strong>. At least one destination must be on. YouTube can be turned on during a live but cannot be turned off. The details are in the Live Broadcast role guide.</p>
+<h3>Sound</h3>
+<ul>
+<li>The main sound is the <strong>MAXCOM microphone (main)</strong>, the microphone connected to the Box (mic-in), at volume 100. This differs from section 3: the camera sound is no longer the main sound.</li>
+<li>The camera sound (the row <strong>External camera audio</strong>) starts at 0. Raise it only if you want the sound of the hall.</li>
+<li><strong>Sound and picture sync</strong> delays the microphone sound so that it matches the camera picture. It has three states: <strong>Automatic sync</strong> (MAXCOM measures the difference from the camera sound and sets it by itself), <strong>Syncing (the sound stays on air)</strong> (while it measures, the microphone stays on air at the delay of the last broadcast) and <strong>Manual adjustment</strong>.</li>
+<li>In <strong>Manual adjustment</strong>, tap <strong>More by 50 ms</strong> or <strong>Less by 50 ms</strong> until the speaker's lips on the TV match the voice. The range is 0 to 2000 ms, and the value is kept for the next broadcasts on this MAXCOM. <strong>Back to automatic</strong> cancels it.</li>
+</ul>
+<h3>New notices</h3>
+<ul>
+<li>"The camera picture is slow": a camera app on a phone or iPad becomes a second reader, and two readers drop the picture to 4 to 6 frames a second. Close the camera app during the broadcast.</li>
+<li>"The MAXCOM microphone is paused for now, the camera sound is used": the microphone on the Box stalled for a moment. The broadcast is not silent, and the microphone is tried again by itself within 1 minute.</li>
+</ul>
+<h3>Operations tips</h3>
+<ul>
+<li>Connect the MAXCOM Kiosk Box with a LAN cable where possible, not Wi-Fi.</li>
+<li>Give the camera steady power. An unsteady supply makes the camera drop.</li>
+<li>Close the camera maker's app on every phone and tablet during a live.</li>
+</ul>
+</section>
+
+<footer class="doc-foot"><span><b>MAXCOM R2 (2026.11.15)</b>, external camera guide, mymaxcom.my</span><span>Licensed under CC BY-NC-SA 4.0</span></footer>
 </body>
 </html>

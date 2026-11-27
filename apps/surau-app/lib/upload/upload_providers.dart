@@ -9,11 +9,15 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/providers.dart';
+import '../box/box_address.dart' show currentIpOrigin;
+import '../box/box_name.dart' show isBoxName;
 import '../box/trust.dart' show CaDerSource, usesPublicTls;
 import '../box/wire.dart' show SessionDto;
 import '../features/enrol/enrol_flow.dart' show EnrolledBox;
+import '../features/settings_defaults.dart';
 import '../store/local_store.dart';
 import '../sync/sync_providers.dart';
+import '../sync/transport.dart' show SessionTokens;
 import 'session_files.dart';
 import 'upload_queue.dart';
 import 'upload_runner_android.dart' show AndroidUploadRunner;
@@ -22,19 +26,21 @@ import 'upload_runner_android.dart' show AndroidUploadRunner;
 /// defaults when nothing is stored yet.
 class CatchUpSettings {
   const CatchUpSettings({
-    this.enabled = false,
+    this.enabled = true,
     this.wifiOnly = true,
     this.joinSegments = true,
     this.replaceGappyLive = 'ask',
   });
 
   factory CatchUpSettings.fromDoc(Map<String, dynamic>? d) {
-    if (d == null) return const CatchUpSettings();
-    final replace = d['replaceGappyLive'];
+    // One defaults helper for every reader (B2): a missing row, or a row
+    // without the key, reads the registry's value (the feature is ON by default).
+    const f = 'youtubeCatchUp';
+    final replace = featureValue(f, d, 'replaceGappyLive');
     return CatchUpSettings(
-      enabled: d['enabled'] == true,
-      wifiOnly: d['wifiOnly'] != false,
-      joinSegments: d['joinSegments'] != false,
+      enabled: featureOnIn(d, f),
+      wifiOnly: featureValue(f, d, 'wifiOnly') != false,
+      joinSegments: featureValue(f, d, 'joinSegments') != false,
       replaceGappyLive: replace is String ? replace : 'ask',
     );
   }
@@ -63,6 +69,24 @@ Future<Uint8List?> uploadCaDer(EnrolledBox cloudBox, Object? store) async {
   return store.loadCaDer(sha);
 }
 
+/// The session token the device holds on the box itself, whichever address
+/// the session was issued at: tokens are kept under the base that issued
+/// them ([SessionTokens]), which is the address now in use, the name or the
+/// enrolment-time origin.
+String? boxSessionToken(SessionTokens tokens, EnrolledBox box) {
+  final bases = <Uri>[
+    currentIpOrigin(box),
+    box.box,
+    if (box.name != null && isBoxName(box.name!))
+      box.box.replace(host: box.name!),
+  ];
+  for (final b in bases) {
+    final t = tokens.get(b);
+    if (t != null && t.isNotEmpty) return t;
+  }
+  return null;
+}
+
 final uploadRunnerProvider = Provider<UploadRunner?>((ref) {
   final build = ref.watch(appDepsProvider).uploadRunnerBuilder;
   if (build == null) return null;
@@ -84,15 +108,28 @@ final uploadAuthProvider = Provider<Future<UploadAuth?> Function()>((ref) {
     if (box == null) return null;
     final session = ref.read(sessionProvider);
     // the cloud never holds the grant now: a cloud session's token is not used here
+    // The native uploader opens `base` with the system resolver, so it must
+    // be an IP (or domain) origin that is current now, never a `.local` name.
+    // Web (the trust does not pin the CA): the page origin is the only address,
+    // and the browser resolves a name and holds the trust, so neither the
+    // `.local` guard nor the stored-CA guard applies.
+    final pins = deps.trust.pinsCa;
+    final base = currentIpOrigin(box, isWeb: !pins);
+    if (pins && isBoxName(base.host)) return null;
     final token = session != null && session.via != SessionDto.viaCloud
         ? session.token
-        : ref.read(sessionTokensProvider).get(box.box);
+        : boxSessionToken(ref.read(sessionTokensProvider), box);
     if (token == null || token.isEmpty) return null;
-    final client = await deps.enrolledClient(box);
+    // name first when the box's name is proven, else the current IP
+    final client = await ref.read(enrolledClientProvider.future) ??
+        await deps.enrolledClient(box);
     final ca = await uploadCaDer(box, deps.boxStore);
+    // A private box without its stored root would be opened with system
+    // trust by the native uploader: never. Only the public cloud may.
+    if (pins && ca == null && !usesPublicTls(box)) return null;
     return UploadAuth(
       api: HttpUploadApi(client: client, token: token),
-      base: box.box,
+      base: base,
       token: token,
       caDer: ca,
     );
@@ -124,15 +161,17 @@ final uploadQueueProvider = Provider<UploadQueue?>((ref) {
     auth: ref.read(uploadAuthProvider),
     wifiOnly: () => cached.wifiOnly,
     joinSegments: () => cached.joinSegments,
+    // The Android worker only sends bytes to Google: the app asks the box for the address and confirms (B1, U7).
+    appBegins: runner is AndroidUploadRunner,
   );
 
   var kicking = false;
-  Future<void> kick() async {
+  Future<void> kick({bool retryFailed = true}) async {
     if (kicking) return;
     kicking = true;
     try {
       await refreshSettings();
-      await queue.kick();
+      await queue.kick(retryFailed: retryFailed);
     } on Object {
       // a failed look at the network is tried again on the next tick
     } finally {
@@ -141,7 +180,8 @@ final uploadQueueProvider = Provider<UploadQueue?>((ref) {
   }
 
   unawaited(queue.load().then((_) => kick(), onError: (_) {}));
-  final sub = queue.changes.listen((_) => unawaited(kick()));
+  // a change of the list itself never re-asks a box that just failed to answer: the timer does
+  final sub = queue.changes.listen((_) => unawaited(kick(retryFailed: false)));
   final timer = Timer.periodic(
     const Duration(seconds: 20),
     (_) => unawaited(kick()),

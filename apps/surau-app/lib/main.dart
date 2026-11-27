@@ -6,6 +6,7 @@ import 'app/deps.dart';
 import 'app/providers.dart';
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'box/join_address.dart';
 import 'features/common/trilingual_strings.dart';
 import 'features/common/trilingual_text.dart';
 import 'l10n/generated/s.dart';
@@ -50,6 +51,8 @@ Future<void> main() async {
       ),
     ),
   );
+  // A join ticket in the web address is taken into memory and scrubbed from the address on whatever route follows.
+  captureAndScrubJoinAddress();
   final deps = await AppDeps.forPlatform();
   runApp(
     ProviderScope(

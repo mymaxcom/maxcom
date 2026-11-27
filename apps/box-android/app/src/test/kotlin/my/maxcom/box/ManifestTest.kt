@@ -36,6 +36,20 @@ class ManifestTest {
         return tags.flatMap { app.getElementsByTagName(it).elements() }
     }
 
+    /** B6: Play infers these two from the landscape activities and the Wi-Fi permissions; a TV box may have neither. */
+    @Test
+    fun landscapeAndWifiAreDeclaredNotRequired() {
+        val features = manifest.getElementsByTagName("uses-feature").elements()
+        for (name in listOf("android.hardware.screen.landscape", "android.hardware.wifi")) {
+            val f = features.filter { it.getAttributeNS(ns, "name") == name }
+            assertEquals("$name declared once", 1, f.size)
+            assertEquals("$name must not be required", "false", f.single().getAttributeNS(ns, "required"))
+        }
+        // the TV feature stays the one the store filters on
+        val leanback = features.single { it.getAttributeNS(ns, "name") == "android.software.leanback" }
+        assertEquals("true", leanback.getAttributeNS(ns, "required"))
+    }
+
     @Test
     fun onlyKioskActivityIsExported() {
         val exported = components().filter { it.getAttributeNS(ns, "exported") == "true" }

@@ -357,7 +357,7 @@ const IMAGE_MIME = 'image/png';
 export async function seedContent(box, { today = klToday() } = {}) {
   // Surau identity + help contact (invented; shown on enrolment/unlock screens and the kiosk).
   const info = await box.json('PUT', '/api/settings/surauInfo', {
-    name: 'Surau D\'Waqaf',
+    name: 'Surau Contoh',
     kind: 'surau',
     shortAddress: 'Taman Seri Murni, Shah Alam',
     helpName: 'Encik Ahmad (Setiausaha)',

@@ -178,7 +178,7 @@ void main() {
       expect(a.message, externalMixFailedMessage(AppLang.ms));
       expect(
         externalMixFailedMessage(AppLang.ms),
-        'Pencampur audio kotak gagal. Siaran mungkin tiada gambar atau bunyi; cuba hentikan dan mulakan semula.',
+        'Pencampur audio MAXCOM gagal. Siaran mungkin tiada gambar atau bunyi; cuba hentikan dan mulakan semula.',
       );
       expect(a.micOnlyAction, isFalse);
     });

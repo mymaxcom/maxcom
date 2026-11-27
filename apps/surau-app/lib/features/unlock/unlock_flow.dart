@@ -7,6 +7,7 @@ import '../../box/box_client.dart';
 import '../../box/device_key.dart';
 import '../enrol/enrol_flow.dart';
 import '../enrol/pin_policy.dart';
+import '../link/move_flow.dart' show isFollowerRefusal;
 import 'biometric_pin.dart';
 
 sealed class UnlockFailure implements Exception {
@@ -43,6 +44,12 @@ class UnlockTooMany extends UnlockFailure {
 /// The box says this only after the device signature verified.
 class UnlockPinRequired extends UnlockFailure {
   const UnlockPinRequired(super.message);
+}
+
+/// 409 `follower`: the box this phone is enrolled at became a follower of another box. The phone moves to the main
+/// box (the move screen); it is not a PIN matter.
+class UnlockFollower extends UnlockFailure {
+  const UnlockFollower(super.message);
 }
 
 /// 401 `pin_missing`: the admin turned the app lock on and this person has a
@@ -268,6 +275,8 @@ class UnlockFlow {
         return UnlockLocked(e.message, retryAfterSec: e.retryAfterSec);
       case 429:
         return UnlockTooMany(e.message, retryAfterSec: e.retryAfterSec);
+      case 409 when isFollowerRefusal(e):
+        return UnlockFollower(e.message);
       case 409:
         // The box answers 409 on unlock only for `pin_required`, and only
         // after the device signature verified.

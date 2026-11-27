@@ -60,8 +60,8 @@ const NET = (probe) => ({
 const SCREENS = [
   { name: 'setup', box: () => boxView({ qr: { payload: qrPayload('setup'), expiresAt: expiresAt() } }) },
   { name: 'setup-nocert', box: () => boxView({ https: false, appDownloadUrl: 'https://mymaxcom.my/app', qr: { payload: qrPayload('setup', { box: '', caSha256: null }), expiresAt: expiresAt() } }) },
-  { name: 'recovery', settings: { surauInfo: { name: 'Surau D\'Waqaf' } }, box: () => boxView({ state: 'recovery', reason: 'no_admin', linked: true, surauName: 'Surau D\'Waqaf', name: 'MAXCOM Dewan Utama', recoveryCodeSet: true, qr: { payload: qrPayload('recovery', { linked: true }), expiresAt: expiresAt() } }) },
-  { name: 'recovery-damaged', box: () => boxView({ state: 'recovery', reason: 'db_damaged', linked: false, surauName: 'Surau D\'Waqaf' }) },
+  { name: 'recovery', settings: { surauInfo: { name: 'Surau Contoh' } }, box: () => boxView({ state: 'recovery', reason: 'no_admin', linked: true, surauName: 'Surau Contoh', name: 'MAXCOM Dewan Utama', recoveryCodeSet: true, qr: { payload: qrPayload('recovery', { linked: true }), expiresAt: expiresAt() } }) },
+  { name: 'recovery-damaged', box: () => boxView({ state: 'recovery', reason: 'db_damaged', linked: false, surauName: 'Surau Contoh' }) },
   { name: 'locked', box: () => boxView({ state: 'locked' }) },
   { name: 'pair', pair: 'ok', settings: { surauInfo: { name: 'Surau Al-Hidayah' } } },
   { name: 'pair-error', pair: 'error' },

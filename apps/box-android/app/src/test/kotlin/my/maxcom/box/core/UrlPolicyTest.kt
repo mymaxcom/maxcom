@@ -155,6 +155,29 @@ class UrlPolicyTest {
     }
 
     @Test
+    fun wwwGoogleComIsAPlayerResourceOnlyAndOnlyExactly() {
+        assertTrue(policy.allowsPlayerResource("https://www.google.com/js/th/abc.js"))
+        val refused = listOf(
+            "http://www.google.com/x",
+            "https://google.com/x",
+            "https://accounts.google.com/x",
+            "https://mail.google.com/x",
+            "https://www.google.com.evil.example/x",
+            "https://evilwww.google.com/x",
+            "https://www.google.com:8443/x",
+            "https://www.google.com:443/x",
+            "https://user@www.google.com/x",
+            "https://www.google.com./x",
+            // The host-shape rule is lower case only, so upper case is refused (as for the other player hosts).
+            "https://WWW.GOOGLE.COM/x",
+        )
+        for (u in refused) assertFalse("should refuse: $u", policy.allowsPlayerResource(u))
+        // Never the page, never a frame document.
+        assertFalse(policy.allows("https://www.google.com/"))
+        assertFalse(policy.allowsPlayerFrame("https://www.google.com/"))
+    }
+
+    @Test
     fun kioskUrlIsTheLocalhostOriginAndAllowed() {
         assertEquals("http://localhost:8787/", UrlPolicy.kioskUrl(8787))
         assertTrue(policy.allows(UrlPolicy.kioskUrl(8787)))

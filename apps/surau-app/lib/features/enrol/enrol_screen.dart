@@ -17,6 +17,7 @@ import '../../app/theme.dart';
 import '../../box/box_address.dart';
 import '../../box/box_client.dart';
 import '../../box/box_qr.dart';
+import '../../box/open_by_name.dart' as by_name;
 import '../../box/payload.dart';
 import '../../box/setup_client.dart';
 import '../../l10n/generated/s.dart';
@@ -28,6 +29,7 @@ import '../common/error_text.dart';
 import '../common/contact_links.dart';
 import '../common/help_card.dart';
 import '../common/identity.dart';
+import '../common/open_by_name_notice.dart';
 import '../common/payload_extras.dart';
 import '../common/roles.dart';
 import '../common/surau_info.dart';
@@ -123,6 +125,8 @@ class EnrolScreen extends StatefulWidget {
     this.openUrl = launchOutside,
     this.now = DateTime.now,
     this.toLocal = _toLocal,
+    this.pageOriginOf = by_name.pageOrigin,
+    this.openOrigin = by_name.openOrigin,
   });
 
   /// The top bar's trailing widgets (the router puts the language switch
@@ -163,6 +167,12 @@ class EnrolScreen extends StatefulWidget {
   /// Clock and zone, injectable so goldens are stable.
   final DateTime Function() now;
   final DateTime Function(DateTime) toLocal;
+
+  /// The origin the web page was opened at (null on native); injectable so tests can simulate a page at an IP.
+  final Uri? Function() pageOriginOf;
+
+  /// Opens the app at another origin (web only); injectable.
+  final void Function(Uri origin) openOrigin;
 
   static DateTime _toLocal(DateTime t) => t.toLocal();
 
@@ -677,6 +687,7 @@ class _EnrolScreenState extends State<EnrolScreen> {
       DateTime.fromMillisecondsSinceEpoch(p.exp, isUtc: true),
     );
     final when = whenWords(expiry, today: widget.toLocal(widget.now()), lang: appLangOfS(s));
+    final byName = by_name.enrolNameOriginToOffer(page: widget.pageOriginOf(), payload: p);
     final invitedBy = x.invitedBy;
     final note = invitedBy != null
         ? s.invitedByUntil(invitedBy, when)
@@ -790,7 +801,17 @@ class _EnrolScreenState extends State<EnrolScreen> {
           ],
         ],
         const SizedBox(height: 24),
-        FilledButton(
+        if (byName != null) ...[
+          OpenByNameNotice(
+            origin: byName,
+            body: s.openByNameBody(byName.toString()),
+            onOpen: widget.openOrigin,
+            enabled: !_busy,
+          ),
+          const SizedBox(height: 12),
+        ],
+        _joinButton(
+          byName != null,
           onPressed: _busy || _boxMismatch ? null : _enrol,
           child: _busy
               ? Row(
@@ -808,7 +829,7 @@ class _EnrolScreenState extends State<EnrolScreen> {
                     Text(s.enrolWorking),
                   ],
                 )
-              : Text(widget.pairingUi ? s.joinYes : s.enrolSubmit),
+              : Text(byName != null ? s.openByNameKeepIp : (widget.pairingUi ? s.joinYes : s.enrolSubmit)),
         ),
         const SizedBox(height: 8),
         TextButton(
@@ -818,6 +839,10 @@ class _EnrolScreenState extends State<EnrolScreen> {
       ],
     );
   }
+
+  /// The Join button; when the page is at an IP and the box has a name it is the secondary action.
+  Widget _joinButton(bool secondary, {required VoidCallback? onPressed, required Widget child}) =>
+      secondary ? OutlinedButton(onPressed: onPressed, child: child) : FilledButton(onPressed: onPressed, child: child);
 
   void _clearPinError(String _) {
     if (_pinError != null) setState(() => _pinError = null);

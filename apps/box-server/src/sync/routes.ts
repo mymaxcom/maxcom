@@ -22,6 +22,7 @@ import { reqSurau } from '../reqSurau.ts';
 import { claimCodeOf, linkState } from './register.ts';
 import { deviceSeenFor, maxNoFor } from './deviceSeen.ts';
 import { settlePeopleIds } from './peopleIds.ts';
+import { surauLogFloor } from './surauSleep.ts';
 
 export const MAX_OPS_PER_BATCH = 200;
 export const MAX_ASSET_OPS_PER_BATCH = 2;
@@ -126,7 +127,11 @@ export function createSyncService(deps: SyncDeps) {
    * Verify then apply a device's queued ops, in order. A refused op does not block the rest. The batch is
    * refused whole (nothing applied) when it is too big or carries an op for another device or user.
    */
-  function processDeviceOps(auth: AuthContext, ops: unknown, ip: string | null, surauId: string): DeviceBatchOut {
+  function processDeviceOps(auth: AuthContext, ops: unknown, ip: string | null, surauId: string, clockOffsetMs?: unknown): DeviceBatchOut {
+    // G3: the device's own measure of its clock against THIS BOX, on the body (never inside a signed op). Anything but a
+    // whole number is ignored, as an older app that sends nothing; the settings store bounds the value. The cloud
+    // never reads it: an app measures its clock against the box at the surau only.
+    const offset = (deps.role ?? 'box') === 'box' && typeof clockOffsetMs === 'number' && Number.isInteger(clockOffsetMs) ? clockOffsetMs : undefined;
     const server = { boxId, surauId };
     if (!Array.isArray(ops)) throw new SyncBatchError(400, 'bad_body', MSG_BAD_BODY);
     if (ops.length > MAX_OPS_PER_BATCH) {
@@ -158,7 +163,7 @@ export function createSyncService(deps: SyncDeps) {
         results.push({ opId, status: 'refused', rev: null, reason: v.reason, winner: null });
         continue;
       }
-      const r = applyOp(db, v.op, { now, origin: 'app', actor: `user:${v.op.userId}`, dataDir, role: deps.role ?? 'box', surauId, freezeReport: (d, ym, at, sid) => freezeReport(d, ym, at, deps.role ?? 'box', sid) });
+      const r = applyOp(db, v.op, { now, origin: 'app', actor: `user:${v.op.userId}`, dataDir, ...(offset === undefined ? {} : { clockOffsetMs: offset }), role: deps.role ?? 'box', surauId, freezeReport: (d, ym, at, sid) => freezeReport(d, ym, at, deps.role ?? 'box', sid) });
       if (r.status === 'refused') {
         logSyncRefusal(db, now, { userId: v.op.userId, deviceId: v.op.deviceId, ip }, `apply_${r.reason ?? 'invalid'}`);
       }
@@ -281,7 +286,7 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
         return { applied: out.applied, duplicate: out.duplicate, superseded: out.superseded, refused: out.refused, reasons: out.reasons, seq: out.seq, receivedAt: out.receivedAt };
       }
       if (b.entries !== undefined) return fail(reply, 400, 'bad_body', MSG_BAD_BODY);
-      const out = service.processDeviceOps(who, b.ops, request.ip, reqSurau(request));
+      const out = service.processDeviceOps(who, b.ops, request.ip, reqSurau(request), b.clockOffsetMs);
       if (out.changed) bus.emit(getVersion(db, reqSurau(request)), reqSurau(request));
       return { results: out.results, seq: out.seq };
     } catch (error) {
@@ -316,7 +321,9 @@ export function registerSyncRoutes(app: FastifyInstance, deps: SyncDeps): void {
     if (typeof limitText !== 'string' || !/^\d{1,5}$/.test(limitText)) return fail(reply, 400, 'bad_query', MSG_BAD_BODY);
     const since = Number(sinceText);
     const limit = Math.min(Math.max(Number(limitText), 1), MAX_CHANGES_PAGE);
-    if (since < logFloor(db)) {
+    // the cloud's global floor (trim) and, since multi-box 2B, the surau's own (a reset-from-box raised it)
+    const floor = role === 'cloud' ? Math.max(logFloor(db), surauLogFloor(db, reqSurau(request))) : logFloor(db);
+    if (since < floor) {
       return fail(reply, 410, 'snapshot_required', 'Sejarah perubahan telah dipangkas; ambil gambaran penuh');
     }
     reply.header('Cache-Control', 'no-store');

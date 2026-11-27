@@ -2,7 +2,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/store/local_store.dart';
 import 'package:surau_app/upload/session_files.dart';
+import 'package:surau_app/upload/upload_queue.dart';
 import 'package:surau_app/upload/upload_runner_android.dart';
+
+class _NoApi implements UploadApi {
+  @override
+  dynamic noSuchMethod(Invocation i) => throw StateError('the runner must not call the box');
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -100,5 +106,88 @@ void main() {
     final r = AndroidUploadRunner(sessionFiles: SessionFiles(store));
     expect(await r.segmentsFor('s3', null), isEmpty);
     await r.dispose();
+  });
+
+  // ---- 2026.11.15, B1 and U7: the worker only talks to Google ----
+
+  UploadJob job() => UploadJob(
+    id: '01J',
+    sessionId: 's2',
+    kuliahId: 'k1',
+    parts: const [
+      UploadPart(
+        index: 1,
+        source: 'android:content://x/4',
+        bytes: 9,
+        uploadId: 'up1',
+        uploadUri: 'https://www.googleapis.com/upload/youtube/s/1',
+      ),
+    ],
+    joined: false,
+    allowMobile: false,
+    createdAt: DateTime.utc(2026, 11, 23),
+  );
+
+  test('U7: start hands the worker the job with its Google address and nothing of the session', () async {
+    await runner.start(
+      job(),
+      UploadAuth(
+        api: _NoApi(),
+        base: Uri.parse('https://192.0.2.10'),
+        token: 'SESSION-TOKEN-SECRET',
+        caDer: Uint8List.fromList([1, 2, 3]),
+      ),
+    );
+    final c = calls.singleWhere((c) => c.method == 'enqueue');
+    final args = (c.arguments as Map).cast<String, Object?>();
+    expect(args.keys, ['job']);
+    final sent = args['job'] as Map;
+    expect(((sent['parts'] as List).single as Map)['uploadUri'], 'https://www.googleapis.com/upload/youtube/s/1');
+    final all = c.arguments.toString();
+    expect(all, isNot(contains('SESSION-TOKEN-SECRET')));
+    expect(all, isNot(contains('192.0.2.10')));
+  });
+
+  Future<List<UploadEvent>> replay(List<Map<String, Object?>> saved) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (c) async => c.method == 'status' ? saved : null);
+    final r = AndroidUploadRunner(sessionFiles: files);
+    final got = <UploadEvent>[];
+    final sub = r.events.listen(got.add);
+    await pumpEventQueue();
+    await sub.cancel();
+    await r.dispose();
+    return got;
+  }
+
+  test('B1: the worker saying uploaded reaches the queue with the video id and the upload id', () async {
+    final got = await replay([
+      {'jobId': '01J', 'partIndex': 1, 'state': 'uploaded', 'offset': 9, 'total': 9, 'uploadId': 'up1', 'videoId': 'v1'},
+    ]);
+    final e = got.single;
+    expect(e.videoId, 'v1');
+    expect(e.uploadId, 'up1');
+    expect(e.offset, 9);
+    // the Dart state of that name when the queue has one, else "sent in full"
+    expect(e.state.name, anyOf(AndroidUploadRunner.uploadedWire, 'uploading'));
+    expect(e.error, isNull);
+  });
+
+  test('B1: a part that needs an upload address says so, and a dead address is dropped', () async {
+    final got = await replay([
+      {'jobId': '01J', 'partIndex': 1, 'state': 'queued', 'error': 'needs_begin', 'clearSession': true},
+    ]);
+    expect(got.single.state, UploadPartState.queued);
+    expect(got.single.error, AndroidUploadRunner.needsBegin);
+    expect(got.single.clearSession, isTrue);
+  });
+
+  test('a reason that is not a plain code never reaches the queue as text', () async {
+    final got = await replay([
+      {'jobId': '01J', 'partIndex': 1, 'state': 'failed', 'error': 'https://www.googleapis.com/upload/youtube/s/1 refused'},
+      {'jobId': '01J', 'partIndex': 1, 'state': 'failed', 'error': 'runner_error'},
+      {'jobId': '01J', 'partIndex': 1, 'state': 'uploaded'}, // no video id: not a real "uploaded"
+    ]);
+    expect(got.map((e) => e.error), ['error', 'runner_error']);
   });
 }

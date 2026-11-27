@@ -261,6 +261,24 @@ describe('health', () => {
     expect(full).toMatchObject({ ok: true, tls: null, users: 2, devices: 2, lockedUsers: 0 });
     expect(full).toHaveProperty('daysAhead');
   });
+
+  it('G3: a signed-in caller of a box gets the box clock as `now`; an anonymous caller, the kiosk and the cloud never do', async () => {
+    const at = new Date('2026-11-23T04:05:06.789Z');
+    const app = makeApp({ now: () => at });
+    for (const role of ['ajk', 'live', 'admin'] as const) {
+      const who = await loginAs(app, role);
+      expect((await app.inject({ method: 'GET', url: '/api/health', headers: who.headers })).json().now, role).toBe(at.toISOString());
+    }
+    expect((await app.inject({ method: 'GET', url: '/api/health', remoteAddress: '10.168.1.9' })).json()).not.toHaveProperty('now');
+    expect((await app.inject({ method: 'GET', url: '/api/health' })).json()).not.toHaveProperty('now');
+    expect((await app.inject({ method: 'GET', url: '/api/health', headers: { authorization: 'Bearer nope' }, remoteAddress: '10.168.1.9' })).json()).not.toHaveProperty('now');
+
+    const cloud = makeApp({ role: 'cloud', dataDir: tempDir(), boxId: '0c10ad000000000d', now: () => at });
+    const admin = await loginAs(cloud, 'admin');
+    const signed = (await cloud.inject({ method: 'GET', url: '/api/health', headers: admin.headers })).json();
+    expect(signed.users).toBeTypeOf('number');
+    expect(signed).not.toHaveProperty('now');
+  });
 });
 
 describe('GET /api/pki/status (admin only)', () => {

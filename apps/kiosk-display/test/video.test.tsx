@@ -593,6 +593,16 @@ describe('videoRoomSeconds (a video that cannot finish is not started)', () => {
     const withSlot = videoRoomSeconds(v.now, day, settings, [slot], undefined);
     expect(withSlot).toBeLessThanOrEqual(plain);
   });
+  it('F16: a zikir that starts after an offset is a boundary (a 4 minute video at 16:47 would be cut at 16:50)', () => {
+    const day3 = days.find((d) => d.date === '2026-11-03')!; // asar solat ends 16:45
+    const v = makeView('2026-11-03', '16:47', { settings: { zikirSelepasSolat: { startAfterMinutes: 5 }, tilawah: { enabled: false } } });
+    expect(videoRoomSeconds(v.now, day3, v.settings, [], undefined, 3)).toBe(180);
+    // no zikir items: nothing takes the screen at 16:50, the room runs to the next prayer phase
+    expect(videoRoomSeconds(v.now, day3, v.settings, [], undefined, 0)).toBeGreaterThan(3600);
+    // zikir off: the same
+    const off = makeView('2026-11-03', '16:47', { settings: { zikirSelepasSolat: { enabled: false, startAfterMinutes: 5 }, tilawah: { enabled: false } } });
+    expect(videoRoomSeconds(off.now, day3, off.settings, [], undefined, 3)).toBeGreaterThan(3600);
+  });
   it('is unlimited with no prayer day', () => {
     expect(videoRoomSeconds(new Date(), null, settings, [])).toBe(Number.POSITIVE_INFINITY);
   });

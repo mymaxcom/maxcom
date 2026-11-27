@@ -1,5 +1,6 @@
-// Zikir: its place in the sequence, the Arabic, the translation, how many
-// times it is read.
+// Zikir: its place in the sequence, the Arabic, the Malay translation, the
+// optional English translation (an English TV shows it, else the Malay one),
+// how many times it is read.
 
 import 'package:flutter/material.dart';
 

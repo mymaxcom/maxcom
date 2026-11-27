@@ -222,6 +222,8 @@ void main() {
         'finance': false,
         'liveOnKiosk': false,
         'liveYoutube': false,
+        // on by the registry default (B2): switched off here like the others
+        'youtubeCatchUp': false,
       });
       expect(labels({'admin'}, off), [
         'Papan pemuka',
@@ -244,12 +246,14 @@ void main() {
         'Pengguna & peranti',
         'Log perubahan',
         'Siaran langsung',
+        // the catch-up upload is on by the registry default (B2)
+        'Muat naik YouTube',
       ]);
     });
 
     test('several roles show the union', () {
       expect(
-        labels({'treasurer', 'media', 'live'}, FeatureFlags.defaults.copyWith({'finance': true})),
+        labels({'treasurer', 'media', 'live'}, FeatureFlags.defaults.copyWith({'finance': true, 'youtubeCatchUp': false})),
         ['Papan pemuka', 'Kewangan', 'Kandungan', 'Konfigurasi', 'Siaran langsung'],
       );
     });

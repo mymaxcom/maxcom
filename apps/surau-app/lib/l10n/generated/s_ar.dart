@@ -1762,6 +1762,13 @@ class SAr extends S {
   String get contentSearchHint => 'بحث';
 
   @override
+  String get contentZikirSettings => 'إعدادات عرض الأذكار';
+
+  @override
+  String get contentZikirSettingsHint =>
+      'متى تبدأ الأذكار، ومدة كل ذكر، والساعة وشكل الشاشة';
+
+  @override
   String get contentNoMatch => 'لا توجد نتائج مطابقة.';
 
   @override
@@ -5253,77 +5260,6 @@ class SAr extends S {
   String get impGoRecords => 'عرض سجلات الاستيراد';
 
   @override
-  String get impMysoTitle => 'استيراد بيانات العرض القديم';
-
-  @override
-  String get impMysoIntro =>
-      'ارفع ملف zip المُصدَّر من نظام العرض القديم لهذا المصلى. يُدمج المحتوى وإعدادات المؤقت؛ ولا تشمل مواقيت الصلاة.';
-
-  @override
-  String get impMysoPick => 'اختيار ملف zip';
-
-  @override
-  String get impMysoPickHelp =>
-      'أُنشئ بنص التصدير الخاص بـ MAXCOM. الحد 64 MB.';
-
-  @override
-  String get impMysoTooBig => 'الملف كبير جدًا. الحد 64 MB.';
-
-  @override
-  String get impMysoWorking => 'جارٍ الرفع والفحص';
-
-  @override
-  String get impMysoMismatchTitle => 'اسم المصلى مختلف';
-
-  @override
-  String impMysoMismatch(String file, String target) {
-    return 'هذا الملف من \"$file\"؛ هل يُستورد إلى \"$target\"؟';
-  }
-
-  @override
-  String get impMysoMismatchYes => 'نعم، الاستيراد إلى هذا المصلى';
-
-  @override
-  String impMysoNameInFile(String name) {
-    return 'الاسم في الملف: $name';
-  }
-
-  @override
-  String impMysoTarget(String name) {
-    return 'الهدف: $name';
-  }
-
-  @override
-  String get impMysoPlanTitle => 'تشغيل تجريبي';
-
-  @override
-  String get impMysoKind => 'النوع';
-
-  @override
-  String get impMysoCreated => 'جديد';
-
-  @override
-  String get impMysoUpdated => 'تحديث';
-
-  @override
-  String get impMysoSame => 'مطابق';
-
-  @override
-  String get impMysoSkipped => 'تجاوز';
-
-  @override
-  String get impMysoTimers => 'استخدام إعدادات المؤقت من النظام القديم';
-
-  @override
-  String get impMysoImport => 'استيراد';
-
-  @override
-  String get impMysoDiscard => 'حذف';
-
-  @override
-  String get impMysoDone => 'اكتمل استيراد بيانات العرض القديم';
-
-  @override
   String get rekTitle => 'سجلات الاستيراد';
 
   @override
@@ -8679,4 +8615,2306 @@ class SAr extends S {
   @override
   String get liveRecBadPieceNote =>
       'ملف التسجيل غير صالح ولم يقبله الصندوق. يُحتفظ بكل جزء كما هو.';
+
+  @override
+  String get linkTitle => 'ربط MAXCOM Kiosk Box';
+
+  @override
+  String get linkEntryIntro =>
+      'اربط وحدتي MAXCOM Kiosk Box جرى إعدادهما بالفعل. تصبح إحداهما Box الرئيسي وتتبعها الأخرى.';
+
+  @override
+  String get linkCheckLan =>
+      'لا يمكن ربط MAXCOM Kiosk Box إلا على شبكة الواي فاي في المصلى.';
+
+  @override
+  String get linkCheckLive => 'أوقف البث المباشر أولًا، ثم حاول مرة أخرى.';
+
+  @override
+  String get linkCheckFollower =>
+      'هذا MAXCOM Kiosk Box التابع. أجرِ الربط من Box الرئيسي.';
+
+  @override
+  String get linkChoiceShow => 'عرض رمز على هذا التلفاز';
+
+  @override
+  String get linkChoiceShowSub => 'يمسح مسؤول Box الآخر الرمز بتطبيقه.';
+
+  @override
+  String get linkChoiceScan => 'مسح رمز Box آخر';
+
+  @override
+  String get linkChoiceScanSub =>
+      'امسح الرمز المعروض على تلفاز Box آخر أو Box جديد.';
+
+  @override
+  String get linkPinTitle => 'أكّد برقمك السري';
+
+  @override
+  String get linkPinLabel => 'رقمك السري';
+
+  @override
+  String linkPinBodyShow(String name) {
+    return 'سيعرض $name رمز الربط على التلفاز لمدة 5 دقائق.';
+  }
+
+  @override
+  String linkPinBodyScan(String name) {
+    return 'الرقم السري مطلوب لربط MAXCOM Kiosk Box الخاص بك مع $name.';
+  }
+
+  @override
+  String get linkPinBodyAgree =>
+      'الرقم السري مطلوب مرة أخرى لأنه أُدخل منذ وقت.';
+
+  @override
+  String get linkShowCode => 'إظهار الرمز';
+
+  @override
+  String linkWaitTitle(String name) {
+    return 'رمز الربط على تلفاز $name';
+  }
+
+  @override
+  String get linkWaitBody =>
+      'اطلب من مسؤول Box الآخر مسح الرمز بتطبيق MAXCOM المتصل بـ Box الخاص به.';
+
+  @override
+  String linkWaitExpires(String time) {
+    return 'ينتهي الرمز خلال $time';
+  }
+
+  @override
+  String get linkWaitFact1 => 'للاستخدام مرة واحدة، صالح 5 دقائق';
+
+  @override
+  String get linkWaitFact2 =>
+      'موقّع من هذا MAXCOM Kiosk Box. صورة الرمز لا تنفع بعد انتهائه.';
+
+  @override
+  String get linkWaitFact3 => 'لا تُنسخ أي بيانات حتى توافق';
+
+  @override
+  String get linkWaitClose => 'إغلاق الرمز الآن';
+
+  @override
+  String get linkCalling => 'جارٍ فحص كلا Box';
+
+  @override
+  String get linkCallingBody => 'لم تُرسل أي بيانات بعد.';
+
+  @override
+  String get linkScanHint =>
+      'وجّه الكاميرا إلى رمز الربط على تلفاز Box الآخر. يجب أن يكون هذا الهاتف وكلا Box على شبكة الواي فاي نفسها في المصلى.';
+
+  @override
+  String get linkScanPasteLabel => 'الصق رمز الربط';
+
+  @override
+  String linkConfirmTitle(String name) {
+    return 'الربط مع $name؟';
+  }
+
+  @override
+  String get linkFingerprint => 'بصمة مفتاح ذلك MAXCOM Kiosk Box';
+
+  @override
+  String get linkConfirmBody =>
+      'تأكد أن هذه البصمة هي ما تتوقعه. لا تُرسل أي بيانات قبل موافقة المسؤولين.';
+
+  @override
+  String get linkRescan => 'مسح مرة أخرى';
+
+  @override
+  String get linkStopTitle => 'توقف الربط';
+
+  @override
+  String linkStopVersion(String name, String release) {
+    return 'يعمل MAXCOM Kiosk Box $name بالإصدار $release. حدّث ذلك Box ثم حاول مرة أخرى.';
+  }
+
+  @override
+  String linkStopOlder(String name) {
+    return 'يعمل MAXCOM Kiosk Box $name بإصدار أقدم. حدّث ذلك Box ثم حاول مرة أخرى.';
+  }
+
+  @override
+  String get linkStopOlderUnnamed =>
+      'أحد Box يعمل بإصدار أقدم. حدّث ذلك Box ثم حاول مرة أخرى.';
+
+  @override
+  String get linkStopNothingChanged => 'لم يتغير شيء في كلا Box.';
+
+  @override
+  String linkCodeApproveTitle(String name) {
+    return 'يريد Box $name الربط';
+  }
+
+  @override
+  String linkCodeApproveFacts(int users, int content) {
+    return '$users مستخدمين، $content عناصر محتوى';
+  }
+
+  @override
+  String linkCodeApproveBody(String name) {
+    return 'قارن هذا الرمز بالرمز على هاتف مسؤول $name. يجب أن يتطابقا.';
+  }
+
+  @override
+  String get linkCodeNewBoxBody =>
+      'قارن هذا الرمز بالرمز على تلفاز MAXCOM Kiosk Box الجديد. يجب أن يتطابقا.';
+
+  @override
+  String get linkApprove => 'موافق';
+
+  @override
+  String get linkReject => 'رفض';
+
+  @override
+  String get linkSameCode => 'الرمز متطابق';
+
+  @override
+  String get linkCodeNoData =>
+      'لم تُنسخ أي بيانات بعد. بعد الموافقة تجيب عن سؤالين.';
+
+  @override
+  String get linkCodeShowTitle => 'أرِ هذا الرمز لمسؤول Box الآخر';
+
+  @override
+  String linkWaitingApproval(String name) {
+    return 'في انتظار موافقة مسؤول $name';
+  }
+
+  @override
+  String get linkCodeMismatchTitle => 'الرمز غير متطابق؟';
+
+  @override
+  String get linkCodeMismatch => 'اضغط إلغاء. ربما يحاول Box آخر الربط.';
+
+  @override
+  String get linkBoxThis => 'هذا Box';
+
+  @override
+  String linkBoxThisNamed(String name) {
+    return '$name (هذا Box)';
+  }
+
+  @override
+  String get linkQIntroTitle => 'تم الاتصال، لم يتغير أي شيء';
+
+  @override
+  String linkQIntro(String a, String b) {
+    return '$a و$b يعرف كل منهما الآخر الآن. أجب عن الأسئلة أدناه. يرى المسؤول الآخر الإجابات نفسها ويضغط موافق، وهذا يبدأ الربط.';
+  }
+
+  @override
+  String get linkQ1Title => 'بيانات أي MAXCOM Kiosk Box تبقى؟';
+
+  @override
+  String get linkQ1Hint => 'تُستبدل بيانات Box الآخر.';
+
+  @override
+  String get linkQ2Title => 'أي MAXCOM Kiosk Box يصبح الرئيسي؟';
+
+  @override
+  String get linkQ2Hint =>
+      'يحتفظ Box الرئيسي بالبيانات ويتصل بالسحابة ويوتيوب ويرسل نسخة إلى Box التابع خلال ثوانٍ. تُدار الهواتف والآيباد عبر Box الرئيسي فقط.';
+
+  @override
+  String get linkQ3Title => 'هواتف مستخدمي Box الآخر';
+
+  @override
+  String linkQ3Hint(String name) {
+    return 'أشخاص $name الذين لديهم هاتف، سواء استُبدلت بياناتهم أو نُقلت إلى Box الرئيسي.';
+  }
+
+  @override
+  String get linkQ3Direct => 'الاتصال مباشرة بـ Box الرئيسي';
+
+  @override
+  String get linkQ3DirectHint =>
+      'كل من لديه هاتف، بمن فيهم المسؤولون، يتصل بـ Box الرئيسي بنفسه دون رمز انضمام. وافق المسؤولان كلاهما برمز PIN.';
+
+  @override
+  String get linkQ3Code => 'طلب رمز انضمام للمسؤولين';
+
+  @override
+  String get linkQ3CodeHint =>
+      'يتصل الآخرون بأنفسهم. يحتاج المسؤولون إلى رمز انضمام من مسؤول في Box الرئيسي.';
+
+  @override
+  String get linkFactContent => 'المحتوى';
+
+  @override
+  String linkFactContentValue(int content, int posters, int videos) {
+    return '$content عناصر، $posters ملصقات، $videos فيديو';
+  }
+
+  @override
+  String get linkFactFinance => 'السجلات المالية';
+
+  @override
+  String get linkFactPeople => 'المستخدمون';
+
+  @override
+  String get linkFactLastEdit => 'آخر تعديل';
+
+  @override
+  String get linkNoEdit => 'لا تعديلات';
+
+  @override
+  String get linkFactDevice => 'الجهاز';
+
+  @override
+  String get linkFactStorage => 'المساحة الفارغة';
+
+  @override
+  String get linkFactYoutube => 'يوتيوب';
+
+  @override
+  String get linkFactCloud => 'سحابة MAXCOM';
+
+  @override
+  String get linkYes => 'نعم';
+
+  @override
+  String get linkNo => 'لا';
+
+  @override
+  String get linkDeviceWindows => 'حاسوب Windows';
+
+  @override
+  String get linkDeviceAndroid => 'Box أندرويد';
+
+  @override
+  String get linkDeviceOther => 'MAXCOM Kiosk Box';
+
+  @override
+  String get linkConnCable => 'سلكي';
+
+  @override
+  String get linkConnWifi => 'Wi-Fi';
+
+  @override
+  String get linkRecommended => 'موصى به';
+
+  @override
+  String linkAdvice(String name, String hardware) {
+    return 'الموصى به: $name ($hardware)';
+  }
+
+  @override
+  String get linkFixedNew => 'MAXCOM Kiosk Box الجديد لا يحتوي على بيانات';
+
+  @override
+  String linkFixedFollowers(String name) {
+    return 'لدى $name Box تابع بالفعل، لذلك يبقى MAXCOM Kiosk Box الرئيسي وتبقى بياناته.';
+  }
+
+  @override
+  String get linkCaseXOff =>
+      'في هذا الإصدار يجب أن يكون MAXCOM Kiosk Box الرئيسي هو الذي تبقى بياناته.';
+
+  @override
+  String get linkCrossTitle => 'البيانات وBox الرئيسي مختلفان';
+
+  @override
+  String linkCrossBody(String kept, String master, String other) {
+    return 'تُنسخ بيانات $kept مرة واحدة إلى $master ثم يصبح $master MAXCOM Kiosk Box الرئيسي. ويصبح $other Box التابع.';
+  }
+
+  @override
+  String get linkReplacedTitle => 'ما سيُستبدل';
+
+  @override
+  String linkReplacedLine(
+    String name,
+    int content,
+    int posters,
+    int videos,
+    int finance,
+    String kept,
+  ) {
+    return 'ستُستبدل بيانات $name: $content عناصر، $posters ملصقات، $videos فيديو، $finance سجلات مالية. وتبقى بيانات $kept.';
+  }
+
+  @override
+  String linkReplacedNone(String kept) {
+    return 'لا شيء يُستبدل. تبقى كل بيانات $kept.';
+  }
+
+  @override
+  String linkBackupLine(String time) {
+    return 'يُؤخذ نسخ احتياطي لكلا MAXCOM Kiosk Box أولًا: $time. يمكن فك الربط في أي وقت، ويمكن لكل Box العودة إلى هذه النسخة.';
+  }
+
+  @override
+  String linkFinanceTick(String name) {
+    return 'أفهم أن السجلات المالية لـ $name لن تُدمج. وقد صدّرت التقرير عند الحاجة.';
+  }
+
+  @override
+  String linkFinanceCount(int n, String name) {
+    return 'تبقى $n سجلات مالية لـ $name في النسخة الاحتياطية.';
+  }
+
+  @override
+  String get linkFinanceFirst => 'ضع علامة على تأكيد السجلات المالية أولًا.';
+
+  @override
+  String get linkMore => 'تفاصيل أخرى';
+
+  @override
+  String linkMorePeople(int a, String nameA, int b, String nameB) {
+    return 'يُدمج مستخدمو كلا Box: $a في $nameA و$b في $nameB.';
+  }
+
+  @override
+  String linkMoreYoutubeKept(String name) {
+    return 'يوتيوب: يبقى تسجيل الدخول في $name.';
+  }
+
+  @override
+  String get linkMoreYoutubeAgain =>
+      'يوتيوب: تحتاج إلى تسجيل الدخول مرة أخرى بعد الربط.';
+
+  @override
+  String get linkMoreCloud => 'السحابة: يحدّث Box الرئيسي النسخة السحابية.';
+
+  @override
+  String get linkMoreCamera =>
+      'كاميرا المصلى: تتبع إعدادات الكاميرا البيانات التي تبقى.';
+
+  @override
+  String get linkMoreBrowser =>
+      'تحتاج شاشات المتصفح إلى اقتران جديد بعد الربط.';
+
+  @override
+  String linkAgreeButton(String kept, String master) {
+    return 'موافق: إبقاء بيانات $kept ويصبح $master Box الرئيسي';
+  }
+
+  @override
+  String linkWaitingFor(String name) {
+    return 'في انتظار $name';
+  }
+
+  @override
+  String linkNameAgreed(String name) {
+    return '$name: موافق';
+  }
+
+  @override
+  String linkNameNotYet(String name) {
+    return '$name: لم يوافق بعد';
+  }
+
+  @override
+  String get linkAnswersChangeable =>
+      'يمكنك تغيير الإجابات حتى يوافق المسؤولان.';
+
+  @override
+  String get linkStaleNotice =>
+      'غيّر المسؤول الآخر الاختيارات. راجعها ووافق مرة أخرى.';
+
+  @override
+  String get linkProgressTitle => 'الربط قيد التنفيذ';
+
+  @override
+  String get linkProgressStarting => 'يبدأ الربط';
+
+  @override
+  String linkProgressStep(int n, int total, String name) {
+    return 'الخطوة $n من $total: $name';
+  }
+
+  @override
+  String linkProgressStepPercent(int n, int total, String name, int percent) {
+    return 'الخطوة $n من $total: $name، $percent%';
+  }
+
+  @override
+  String get linkProgressNote =>
+      'لا تُطفئ أيًّا من Box. تُرفض التعديلات حتى يكتمل الربط.';
+
+  @override
+  String get linkStepBackup => 'نسخ البيانات احتياطيًا';
+
+  @override
+  String get linkStepPeople => 'دمج المستخدمين';
+
+  @override
+  String get linkStepCommit => 'إتمام الربط';
+
+  @override
+  String get linkStepFinish => 'إنهاء الربط';
+
+  @override
+  String get linkStepWorking => 'ربط MAXCOM Kiosk Box';
+
+  @override
+  String get linkDoneTitle => 'اكتمل الربط';
+
+  @override
+  String get linkDoneBody =>
+      'كلا MAXCOM Kiosk Box مرتبطان الآن. تُدار الإعدادات والمحتوى من Box الرئيسي.';
+
+  @override
+  String linkDoneMaster(String master, String other) {
+    return 'أصبح $master MAXCOM Kiosk Box الرئيسي ويتبعه $other.';
+  }
+
+  @override
+  String get linkDoneBackup =>
+      'حُفظت النسختان الاحتياطيتان لكلا Box. يمكن فك الربط في أي وقت.';
+
+  @override
+  String get linkDoneNext =>
+      'مستخدمو Box التابع: انضموا إلى Box الرئيسي برمز الانضمام ثم عيّنوا رقمًا سريًا جديدًا.';
+
+  @override
+  String get linkDoneList => 'عرض شاشات التلفاز وMAXCOM Kiosk Box';
+
+  @override
+  String get linkDoneClose => 'تم';
+
+  @override
+  String get linkFailedTitle => 'أُلغي الربط';
+
+  @override
+  String linkFollowerTitle(String name) {
+    return 'يُدار مصلاك الآن من MAXCOM Kiosk Box الرئيسي $name.';
+  }
+
+  @override
+  String get linkFollowerTitleNoName =>
+      'يُدار مصلاك الآن من MAXCOM Kiosk Box الرئيسي.';
+
+  @override
+  String get linkCodePinRequired => 'أدخل رقمك السري للمتابعة.';
+
+  @override
+  String get linkCodeWrongPin => 'الرقم السري غير صحيح. حاول مرة أخرى.';
+
+  @override
+  String get linkCodeLocked => 'الرقم السري مقفل مؤقتًا. حاول لاحقًا.';
+
+  @override
+  String get linkCodeWrongStep => 'تغيرت هذه الخطوة. تم تحديث الشاشة.';
+
+  @override
+  String get linkCodeWrongSide => 'هذا الزر لمسؤول Box الآخر.';
+
+  @override
+  String get linkCodeSessionOpen =>
+      'هناك ربط جارٍ على هذا MAXCOM Kiosk Box. ألغِه أو انتظر حتى ينتهي.';
+
+  @override
+  String get linkCodeNoHttps =>
+      'ليس لدى هذا MAXCOM Kiosk Box اتصال آمن (HTTPS) بعد، لذلك لا يمكن ربطه.';
+
+  @override
+  String get linkCodeLinkLocked =>
+      'محاولات ربط فاشلة كثيرة. حاول مرة أخرى بعد ساعة.';
+
+  @override
+  String get linkCodeBadQr => 'هذا ليس رمز ربط صالحًا لـ MAXCOM Kiosk Box.';
+
+  @override
+  String get linkCodeSameBox =>
+      'هذا Box الخاص بك. امسح الرمز على تلفاز Box الآخر.';
+
+  @override
+  String get linkCodeCodeUsed => 'استُخدم هذا الرمز من قبل. اطلب رمزًا جديدًا.';
+
+  @override
+  String get linkCodeCodeExpired => 'انتهى هذا الرمز. اطلب رمزًا جديدًا.';
+
+  @override
+  String get linkCodePeerUnreachable =>
+      'تعذّر الوصول إلى MAXCOM Kiosk Box الآخر. تأكد أن كلا Box على شبكة الواي فاي نفسها في المصلى.';
+
+  @override
+  String get linkCodePeerRefused =>
+      'لم يقبل Box الآخر الطلب. راجع وحاول مرة أخرى.';
+
+  @override
+  String get linkCodeBadHello =>
+      'MAXCOM Kiosk Box الذي أجاب ليس Box الموجود في الرمز. لم يستمر الربط.';
+
+  @override
+  String get linkCodeVersion =>
+      'يجب أن يعمل كلا MAXCOM Kiosk Box بالإصدار نفسه. حدّث Box الأقدم ثم حاول مرة أخرى.';
+
+  @override
+  String get linkCodeBothHaveFollowers =>
+      'لدى كلا MAXCOM Kiosk Box أجهزة تابعة بالفعل. لا يمكن ربط Box الرئيسي إلا بـ Box ليس لديه أجهزة تابعة.';
+
+  @override
+  String get linkCodeBothNew =>
+      'لم يُعدّ أي من MAXCOM Kiosk Box. جهّز Box واحدًا أولًا.';
+
+  @override
+  String get linkCodeFixedAnswer => 'لا يمكن تغيير هذه الإجابة لهذين Box.';
+
+  @override
+  String get linkCodeKeepNewBox =>
+      'MAXCOM Kiosk Box الجديد ليس لديه بيانات لإبقائها.';
+
+  @override
+  String get linkCodeFinanceTick =>
+      'ضع علامة على أنك تفهم أن السجلات المالية لا تُدمج.';
+
+  @override
+  String get linkCodeRejected => 'رُفض الربط.';
+
+  @override
+  String get linkCodeLinking => 'الربط قيد التنفيذ. حاول بعد قليل.';
+
+  @override
+  String get linkCodeNotFound => 'لم يُعثر على ذلك MAXCOM Kiosk Box.';
+
+  @override
+  String get linkCodeBadMessage => 'الإجابة غير صالحة. حاول مرة أخرى.';
+
+  @override
+  String get linkCodeUnknown => 'تعذّر متابعة الربط. حاول مرة أخرى.';
+
+  @override
+  String get linkOutcomeFailed =>
+      'تعذّر إتمام الربط. افحص كلا Box ثم حاول مرة أخرى.';
+
+  @override
+  String get linkOutcomeCancelled => 'ألغيت الربط. لم يتغير شيء.';
+
+  @override
+  String get linkOutcomeCancelledByPeer =>
+      'ألغى مسؤول Box الآخر الربط. لم يتغير شيء.';
+
+  @override
+  String get linkOutcomeRejectedByPeer =>
+      'رفض مسؤول Box الآخر الربط. لم يتغير شيء.';
+
+  @override
+  String get linkOutcomeExpired =>
+      'انتهى الوقت قبل اكتمال الربط. لم يتغير شيء.';
+
+  @override
+  String get linkOutcomeApproveTimeout =>
+      'لم تتم الموافقة على الرمز خلال دقيقتين. لم يتغير شيء.';
+
+  @override
+  String get linkOutcomeRestart =>
+      'أُعيد تشغيل Box أثناء الربط. لم يتغير شيء؛ ابدأ الربط من جديد.';
+
+  @override
+  String get tvsTitle => 'شاشات التلفاز وMAXCOM Kiosk Box';
+
+  @override
+  String get tvsIntro =>
+      'MAXCOM Kiosk Box رئيسي واحد للمصلى كله. تُضبط الإعدادات والمحتوى مرة واحدة وتتبعها كل الشاشات خلال ثوانٍ.';
+
+  @override
+  String tvsCount(int a, int b) {
+    return '$a من $b شاشات متصلة';
+  }
+
+  @override
+  String get tvsSectionBoxes => 'MAXCOM Kiosk Box';
+
+  @override
+  String get tvsSectionBrowsers => 'شاشات المتصفح';
+
+  @override
+  String get tvsMainBox => 'Box الرئيسي';
+
+  @override
+  String get tvsFollowerBox => 'Box التابع';
+
+  @override
+  String get tvsBrowserScreen => 'شاشة متصفح';
+
+  @override
+  String tvsRoleLine(String role, String version) {
+    return '$role، الإصدار $version';
+  }
+
+  @override
+  String get tvsConnected => 'متصل';
+
+  @override
+  String tvsAwaySince(String when) {
+    return 'لا اتصال منذ $when';
+  }
+
+  @override
+  String get tvsNeverSeen => 'لم يتصل بعد';
+
+  @override
+  String tvsNotSeenSince(String date) {
+    return 'لم يُشاهد منذ $date';
+  }
+
+  @override
+  String get tvsRemoveStaleBody =>
+      'الإزالة: يُفرَّغ هذا MAXCOM Kiosk Box بما في ذلك نسخته الاحتياطية. إذا أُعيد تشغيل هذا Box وكان لا يزال يتبع، فإنه يُفرِّغ نفسه.';
+
+  @override
+  String tvsLinkedOn(String date) {
+    return 'رُبط في $date';
+  }
+
+  @override
+  String get tvsRemoved => 'أُزيل';
+
+  @override
+  String tvsRemovedOn(String date) {
+    return 'أُزيل في $date';
+  }
+
+  @override
+  String get tvsOpenSettings => 'إعدادات هذه الشاشة';
+
+  @override
+  String get tvsRemove => 'إزالة';
+
+  @override
+  String tvsRemoveTitle(String name) {
+    return 'إزالة $name؟';
+  }
+
+  @override
+  String get tvsRemoveBody =>
+      'الإزالة: يُفرَّغ هذا MAXCOM Kiosk Box بما في ذلك نسخته الاحتياطية.';
+
+  @override
+  String tvsRemovedToast(String name) {
+    return 'أُزيل $name.';
+  }
+
+  @override
+  String get tvsLinkOther => 'ربط MAXCOM Kiosk Box آخر';
+
+  @override
+  String get tvsOlderBox =>
+      'هذا MAXCOM Kiosk Box لا يدعم الربط بعد. حدّثه أولًا.';
+
+  @override
+  String get tvsEmpty => 'لا توجد شاشات للعرض.';
+
+  @override
+  String get tvEdTitle => 'إعدادات هذه الشاشة';
+
+  @override
+  String tvEdFor(String name) {
+    return 'لـ $name فقط. تتبع الشاشات الأخرى إعدادات المصلى.';
+  }
+
+  @override
+  String get tvEdName => 'اسم الشاشة';
+
+  @override
+  String get tvEdFollows => 'يتبع المصلى';
+
+  @override
+  String get tvEdChanged => 'تغيّر';
+
+  @override
+  String get tvEdReset => 'إعادة ضبط';
+
+  @override
+  String get tvEdLiveSection => 'البث المباشر';
+
+  @override
+  String get tvEdShow => 'عرض البث على هذه الشاشة';
+
+  @override
+  String get tvEdShowYes => 'عرض';
+
+  @override
+  String get tvEdShowNo => 'لا يُعرض';
+
+  @override
+  String get tvEdShowOn => 'تُعرض كاميرا الدرس';
+
+  @override
+  String get tvEdShowOff => 'تبقى الشاشة على العرض المعتاد';
+
+  @override
+  String get tvEdSound => 'صوت البث';
+
+  @override
+  String get tvEdSoundYes => 'بصوت';
+
+  @override
+  String get tvEdSoundNo => 'بدون صوت';
+
+  @override
+  String get tvEdSoundOn => 'الصوت من هذه الشاشة';
+
+  @override
+  String get tvEdSoundOff => 'صورة فقط (لتفادي الصدى)';
+
+  @override
+  String get tvEdVolume => 'مستوى صوت البث';
+
+  @override
+  String get tvEdDisplay => 'العرض';
+
+  @override
+  String get tvEdTemplate => 'القالب';
+
+  @override
+  String get tvEdTemplatePickTitle => 'القالب لهذه الشاشة';
+
+  @override
+  String get tvEdTemplatePickHint =>
+      'اختر قالبًا لهذه الشاشة فقط أو اتبع المصلى.';
+
+  @override
+  String get tvEdLang => 'لغة الشاشة';
+
+  @override
+  String get tvEdLangAuto => 'تلقائي';
+
+  @override
+  String get tvEdLangMs => 'Bahasa Melayu';
+
+  @override
+  String get tvEdLangEn => 'English';
+
+  @override
+  String get tvEdLangAr => 'العربية';
+
+  @override
+  String get tvEdContent => 'المحتوى';
+
+  @override
+  String get tvEdHide => 'الأنواع المخفية على هذه الشاشة';
+
+  @override
+  String get tvEdHideNone => 'لا شيء؛ تُعرض كل الأنواع';
+
+  @override
+  String get tvEdHideHint =>
+      'اضغط للإخفاء على هذه الشاشة. يبقى المحتوى ظاهرًا على الشاشات الأخرى. لا يمكن إخفاء أوقات الصلاة والأذان والإقامة.';
+
+  @override
+  String get tvEdSounds => 'أصوات الشاشة';
+
+  @override
+  String get tvEdBeeps => 'تنبيهات أوقات الصلاة';
+
+  @override
+  String get tvEdBeepsSub => 'قبل الأذان والإقامة';
+
+  @override
+  String get tvEdAzan => 'الأذان';
+
+  @override
+  String get tvEdAzanSub => 'يُشغَّل على هذه الشاشة';
+
+  @override
+  String get tvEdAzanOffSub => 'لا يُشغَّل (شاشة قريبة تشغّله)';
+
+  @override
+  String get tvEdTilawah => 'التلاوة';
+
+  @override
+  String get tvEdTilawahSub => 'قبل الفجر ويوم الجمعة';
+
+  @override
+  String get tvEdOn => 'تشغيل';
+
+  @override
+  String get tvEdOff => 'إيقاف';
+
+  @override
+  String get tvEdSaved => 'حُفظت إعدادات الشاشة.';
+
+  @override
+  String get tvKindKuliah => 'المحاضرات';
+
+  @override
+  String get tvKindPengumuman => 'الإعلانات';
+
+  @override
+  String get tvKindTicker => 'النص المتحرك';
+
+  @override
+  String get tvKindPoster => 'الملصقات';
+
+  @override
+  String get tvKindVideo => 'الفيديو';
+
+  @override
+  String get tvKindProgramKhas => 'البرامج الخاصة';
+
+  @override
+  String get tvKindTakwim => 'التقويم';
+
+  @override
+  String get tvKindHadis => 'الأحاديث';
+
+  @override
+  String get tvKindWorldTime => 'أوقات العالم';
+
+  @override
+  String get tvKindTugasan => 'المهام';
+
+  @override
+  String get tvKindZikir => 'الأذكار';
+
+  @override
+  String get tvKindTabung => 'صندوق المصلى';
+
+  @override
+  String backupLine(String time, String size) {
+    return 'نسخة احتياطية قبل الربط: $time، $size';
+  }
+
+  @override
+  String get backupDrop => 'حذف النسخة الاحتياطية';
+
+  @override
+  String get backupDropTitle => 'حذف النسخة الاحتياطية؟';
+
+  @override
+  String backupDropBody(String date) {
+    return 'بعد ذلك لا يمكن لهذا Box العودة إلى بيانات $date.';
+  }
+
+  @override
+  String get backupWordDrop => 'حذف';
+
+  @override
+  String backupConfirmLabel(String word) {
+    return 'اكتب $word للتأكيد';
+  }
+
+  @override
+  String backupKeptLine(String date) {
+    return 'يمكن تغيير هذا الاختيار حتى $date';
+  }
+
+  @override
+  String get backupKeptDrop => 'حذف البيانات القديمة';
+
+  @override
+  String get backupKeptDropTitle => 'حذف البيانات القديمة؟';
+
+  @override
+  String backupKeptDropBody(String size) {
+    return 'تُحذف البيانات القديمة ($size) ولا يمكن استرجاعها.';
+  }
+
+  @override
+  String get backupRestore => 'العودة إلى البيانات قبل الربط';
+
+  @override
+  String get backupRestoreTitle => 'العودة إلى البيانات قبل الربط؟';
+
+  @override
+  String backupRestoreBody(String date) {
+    return 'تعود البيانات إلى حالة $date. يُعاد تشغيل هذا Box. تبقى هواتف المسؤولين تعمل، وتنضم الهواتف الأخرى إليه من جديد برمز QR من المسؤول.';
+  }
+
+  @override
+  String get backupWordRestore => 'استعادة';
+
+  @override
+  String get backupDroppedToast => 'حُذفت النسخة الاحتياطية.';
+
+  @override
+  String get backupKeptDroppedToast => 'حُذفت البيانات القديمة.';
+
+  @override
+  String get backupRestoredToast =>
+      'يُعاد تشغيل هذا Box. يجب أن ينضم كل هاتف إليه من جديد.';
+
+  @override
+  String get linkCodeHasFollowers =>
+      'لا يزال لدى هذا Box أجهزة تابعة. أزلها أولًا.';
+
+  @override
+  String get linkCodeKeptExists =>
+      'ما زالت البيانات القديمة محفوظة. احذفها أولًا.';
+
+  @override
+  String get linkCodeOtherVolume =>
+      'النسخة الاحتياطية على وحدة تخزين أخرى ولا يمكن استعادتها هنا.';
+
+  @override
+  String get linkCodeConfirmRequired => 'اكتب كلمة التأكيد أولًا.';
+
+  @override
+  String get linkCodeNoBackup => 'لا توجد نسخة احتياطية بعد الآن.';
+
+  @override
+  String linkCodeKeptData(String date) {
+    return 'البيانات القديمة محفوظة حتى $date. احذف البيانات القديمة لتربط الآن.';
+  }
+
+  @override
+  String get linkCodeKeptDataNoDate =>
+      'البيانات القديمة ما زالت محفوظة. احذف البيانات القديمة لتربط الآن.';
+
+  @override
+  String get liveViewersTitle => 'الشاشات التي تعرض البث';
+
+  @override
+  String get liveViewerPlaying => 'تعرض';
+
+  @override
+  String get liveViewerConnecting => 'تتصل';
+
+  @override
+  String get liveViewerOff => 'لا تعرض البث';
+
+  @override
+  String get peopleTabScreens => 'التلفاز وBox';
+
+  @override
+  String get linkPeopleTitle => 'المستخدمون بعد الربط';
+
+  @override
+  String linkPeopleAdded(int count, String box) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'عدد الأشخاص المضافين من $box: $count',
+      one: 'أُضيف شخص واحد من $box',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String linkPeopleAddedNone(String box) {
+    return 'لا يوجد أشخاص جدد من $box للإضافة.';
+  }
+
+  @override
+  String get linkPeopleSameTitle => 'الشخص نفسه (رقم الهاتف نفسه)';
+
+  @override
+  String get linkPeopleSameHint =>
+      'هم في كلا Box ويُذكرون مرة واحدة فقط. تبقى أدوارهم في Box المحتفظ به.';
+
+  @override
+  String get linkPeopleRolesTitle => 'أدوار مختلفة';
+
+  @override
+  String linkPeopleRoleHead(String name, String phone4) {
+    return '$name، الهاتف المنتهي بـ $phone4';
+  }
+
+  @override
+  String linkPeopleRoleStays(String roles) {
+    return 'يبقى: $roles';
+  }
+
+  @override
+  String linkPeopleRoleOther(String box, String roles) {
+    return 'في $box: $roles';
+  }
+
+  @override
+  String linkPeopleRoleAddLabel(String box) {
+    return 'إضافة دور واحد من $box:';
+  }
+
+  @override
+  String get linkPeopleRoleChangeNote =>
+      'هذا الاختيار يُنشئ مراجعة جديدة. تُلغى موافقة المسؤولَين ويجب إعطاؤها من جديد.';
+
+  @override
+  String get linkPeopleNoRole => 'بلا دور';
+
+  @override
+  String get linkPeopleNamesTitle => 'الاسم نفسه';
+
+  @override
+  String linkPeopleNameAsk(String name, String box, String keptName) {
+    return 'لـ $name في $box الاسم نفسه الذي لـ $keptName، لكن رقم الهاتف لا يطابق.';
+  }
+
+  @override
+  String get linkPeopleSameYes => 'الشخص نفسه';
+
+  @override
+  String get linkPeopleSameNo => 'شخص مختلف';
+
+  @override
+  String get linkPeopleAdminsTitle => 'المسؤولون بعد الربط';
+
+  @override
+  String get linkPeopleAdminsNone => 'لا يوجد مسؤولون';
+
+  @override
+  String linkPeopleTickets(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'سيُطلب من $n هاتفًا الاتصال بـ Box الرئيسي',
+      two: 'سيُطلب من هاتفين الاتصال بـ Box الرئيسي',
+      one: 'سيُطلب من هاتف واحد الاتصال بـ Box الرئيسي',
+      zero: 'لن يُطلب من أي هاتف الاتصال بـ Box الرئيسي',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get linkCodePeopleAnswer =>
+      'لم تعد اختيارات المستخدمين تناسب القوائم. راجع قسم المستخدمين أعلاه.';
+
+  @override
+  String moveAskTitle(String master) {
+    return 'يُدار مصلاك الآن من MAXCOM Kiosk Box الرئيسي $master. هل تتصل الآن؟';
+  }
+
+  @override
+  String get moveAskBody =>
+      'نقرة واحدة، ثم حدّد رمز PIN جديدًا. لا تحتاج إلى رمز انضمام.';
+
+  @override
+  String get moveConnect => 'اتصل الآن';
+
+  @override
+  String get moveLater => 'لاحقًا';
+
+  @override
+  String get moveChecking => 'جارٍ فحص Box الخاص بك';
+
+  @override
+  String movePinBody(String master) {
+    return 'حدّد رمز PIN جديدًا لـ $master. لا يُنقل رمز PIN القديم.';
+  }
+
+  @override
+  String moveWorking(String master) {
+    return 'جارٍ الاتصال بـ $master';
+  }
+
+  @override
+  String moveDone(String master) {
+    return 'أنت الآن متصل بـ $master.';
+  }
+
+  @override
+  String get moveDoneButton => 'متابعة';
+
+  @override
+  String get moveNeedCodeTitle => 'مطلوب رمز انضمام';
+
+  @override
+  String moveNeedCode(String master) {
+    return 'اطلب رمز انضمام من مسؤول $master.';
+  }
+
+  @override
+  String get moveNeedCodeNoName => 'اطلب رمز انضمام من المسؤول.';
+
+  @override
+  String get moveAway =>
+      'افتح التطبيق على شبكة Wi-Fi المصلى مرة واحدة للاتصال بـ Box الرئيسي';
+
+  @override
+  String get moveTooMany => 'محاولات كثيرة. حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get moveWrongBox =>
+      'الـ Box الذي ردّ ليس Box الرئيسي المذكور. لم يتغيّر شيء.';
+
+  @override
+  String get moveBadPointer =>
+      'تعذّرت قراءة ردّ Box القديم. حاول مرة أخرى أو اطلب رمز انضمام من المسؤول.';
+
+  @override
+  String get moveRetry => 'حاول مرة أخرى';
+
+  @override
+  String get moveJoinScan => 'مسح رمز الانضمام';
+
+  @override
+  String get moveJoinPaste => 'لصق الرمز';
+
+  @override
+  String get moveJoinHint =>
+      'ينشئ مسؤول الصندوق الرئيسي رمز الانضمام في المستخدمون والأجهزة. امسح رمز QR هذا أو الصق نصه.';
+
+  @override
+  String get moveJoinCodeLabel => 'رمز الانضمام';
+
+  @override
+  String get moveBannerTitle => 'الاتصال بالصندوق الرئيسي';
+
+  @override
+  String get moveBannerBody =>
+      'يُدار مصلّاك الآن من الصندوق الرئيسي. اتصل لمواصلة استخدام التطبيق.';
+
+  @override
+  String get openByNameTitle => 'افتح عبر اسم MAXCOM';
+
+  @override
+  String openByNameBody(String origin) {
+    return 'قد يتغيّر عنوان IP الخاص بـ MAXCOM. إذا سُجّل هذا الـ iPad أو الحاسوب عبر عنوان IP، فسيلزم تسجيله مجددًا عند تغيّر العنوان. افتح $origin وامسح هذا الرمز مرة أخرى هناك.';
+  }
+
+  @override
+  String openByNameButton(String host) {
+    return 'افتح $host';
+  }
+
+  @override
+  String get openByNameKeepIp => 'المتابعة بعنوان IP';
+
+  @override
+  String openByNameDeviceBody(String origin) {
+    return 'سُجّل هذا الجهاز عبر عنوان IP. إذا تغيّر عنوان MAXCOM فلن يمكن استخدام هذا التسجيل بعد الآن. للإبقاء عليه، افتح $origin وسجّل هذا الجهاز هناك.';
+  }
+
+  @override
+  String get liveDestUnconfirmed => 'لم يتم التأكد من MAXCOM بعد';
+
+  @override
+  String get liveDestSaving => 'جارٍ حفظ الاختيار';
+
+  @override
+  String get liveDestPerBoxNote =>
+      'يُحفظ هذا الاختيار لهذا MAXCOM Kiosk Box فقط. يستخدم كل MAXCOM Kiosk Box قناته الخاصة على YouTube.';
+
+  @override
+  String get liveDestRecUnavailable => 'التسجيل: غير متاح';
+
+  @override
+  String get liveMineTitle => 'بثك ما زال جاريًا';
+
+  @override
+  String get liveMineResume => 'استئناف';
+
+  @override
+  String get liveMineStillSending => 'ما زال البث يُرسل من هذا الهاتف';
+
+  @override
+  String get liveStoppedCameraLost =>
+      'أُوقف البث بسبب انقطاع الكاميرا الخارجية';
+
+  @override
+  String get liveStoppedByBox => 'أُوقف البث من قِبل MAXCOM';
+
+  @override
+  String get liveStoppedByAdmin => 'أُوقف البث من قِبل المسؤول';
+
+  @override
+  String get liveVideoPathLabel => 'يُؤخذ الفيديو بواسطة';
+
+  @override
+  String get liveVideoPathDevice => 'هذا الهاتف';
+
+  @override
+  String get liveVideoPathBox => 'MAXCOM Kiosk Box';
+
+  @override
+  String get liveVideoPathBoxNote =>
+      'الهاتف يتحكم في البث فقط. التسجيل على الهاتف غير متاح.';
+
+  @override
+  String get liveCamCtlTitle => 'التحكم بالكاميرا';
+
+  @override
+  String get liveCamCtlBrightness => 'السطوع';
+
+  @override
+  String get liveCamCtlBrightnessDown => 'تقليل السطوع';
+
+  @override
+  String get liveCamCtlBrightnessUp => 'زيادة السطوع';
+
+  @override
+  String get liveCamCtlPosition => 'الموضع';
+
+  @override
+  String get liveCamCtlHome => 'الأصلي';
+
+  @override
+  String get liveCamCtlTracking => 'التتبع التلقائي';
+
+  @override
+  String get liveCamCtlSent => 'تم إرسال الأمر إلى الكاميرا';
+
+  @override
+  String get liveCamCtlConfirmed => 'استجابت الكاميرا';
+
+  @override
+  String get liveCamCtlFailed => 'لم يصل الأمر إلى الكاميرا';
+
+  @override
+  String get liveCamCtlAllow => 'السماح بالتحكم بالكاميرا';
+
+  @override
+  String get liveCamCtlAllowNote =>
+      'فقط للكاميرات التي تدعم التحكم عبر الشبكة.';
+
+  @override
+  String get liveCamCtlApply => 'تطبيق إعدادات الكاميرا';
+
+  @override
+  String get liveCamCtlFocus => 'التركيز';
+
+  @override
+  String get liveCamCtlFocusContinuous => 'مستمر';
+
+  @override
+  String get liveCamCtlFocusSingle => 'مرة واحدة';
+
+  @override
+  String get liveCamCtlFocusManual => 'يدوي';
+
+  @override
+  String get liveCamCtlTrackingOff => 'إيقاف';
+
+  @override
+  String get liveCamCtlTrackingHuman => 'شخص';
+
+  @override
+  String get liveCamCtlApplyOnLive => 'التطبيق عند بدء البث';
+
+  @override
+  String get liveCamCtlProfileTitle => 'إعدادات الكاميرا';
+
+  @override
+  String get liveCameraHeavyWarn =>
+      'بث الكاميرا أكبر مما يناسب YouTube. اخفضه في الكاميرا إلى 720p، من 3 إلى 4 Mbps.';
+
+  @override
+  String get liveRecNoBoxPullStart =>
+      'التسجيل غير معروض لأن الفيديو يُؤخذ بواسطة MAXCOM Kiosk Box. هذا الهاتف لا يستقبل صورة الكاميرا، فلا يوجد ما يُسجَّل على الهاتف. للتسجيل، اختر «يُؤخذ الفيديو بواسطة: هذا الهاتف».';
+
+  @override
+  String get liveRecNoBoxPullSummary =>
+      'لم يُسجَّل هذا البث على الهاتف لأن الفيديو أُخذ بواسطة MAXCOM Kiosk Box وليس بواسطة هذا الهاتف. إذا تم اختيار YouTube فهناك نسخة من البث على YouTube.';
+
+  @override
+  String liveCameraInUseBy(String device, String since) {
+    return 'الكاميرا مستخدمة حاليًا من قِبل $device منذ $since.';
+  }
+
+  @override
+  String liveCameraInUseByBox(String since) {
+    return 'الكاميرا مستخدمة حاليًا من قِبل MAXCOM Kiosk Box منذ $since.';
+  }
+
+  @override
+  String get liveCameraJoinNote =>
+      'يعرض هذا الهاتف الصورة نفسها عبر MAXCOM ولا يتصل بالكاميرا مباشرة.';
+
+  @override
+  String get errcCameraInUse =>
+      'الكاميرا مستخدمة من قِبل جهاز آخر. تُشارَك الصورة عبر MAXCOM.';
+
+  @override
+  String get liveWarnWeakPhoneWifi =>
+      'إشارة Wi-Fi في الهاتف ضعيفة. قد تتقطع الصورة.';
+
+  @override
+  String get errcResumeMismatch =>
+      'البث الجاري لا يطابق هذه الاختيارات. أوقف ذلك البث أولًا، ثم ابدأ من جديد.';
+
+  @override
+  String get errcYoutubeLiveNotEnabled =>
+      'البث المباشر غير مفعّل بعد في قناة YouTube هذه.';
+
+  @override
+  String get errcBoxClockWrong =>
+      'ساعة MAXCOM غير صحيحة. صحّح الساعة وحاول مرة أخرى.';
+
+  @override
+  String get errcYoutubeBusyOtherBox =>
+      'YouTube مستخدم حاليًا من قِبل MAXCOM Kiosk Box آخر.';
+
+  @override
+  String get errcTooManyViewers =>
+      'تم بلوغ الحد الأقصى لشاشات عرض البث المباشر';
+
+  @override
+  String get errcYoutubeBroadcastOpen =>
+      'لم يُغلق بث YouTube بعد. حاول مرة أخرى بعد بضع دقائق.';
+
+  @override
+  String get errcAlreadyUploading => 'تسجيل هذا البث يُرفع حاليًا من جهاز آخر.';
+
+  @override
+  String get liveNotifStop => 'إيقاف البث';
+
+  @override
+  String get syncBoxFailed => 'تعذّرت المزامنة مع MAXCOM';
+
+  @override
+  String get settingsChangedElsewhereNow =>
+      'تم تغيير هذه الإعدادات للتو في جهاز آخر';
+
+  @override
+  String get settingsReload => 'إعادة التحميل';
+
+  @override
+  String get settingsMaybeStale => 'قد لا تكون محدّثة';
+
+  @override
+  String get cameraResetBody =>
+      'ستُعاد الخيارات المتقدمة إلى الوضع الافتراضي. تبقى الكاميرا مفعّلة.';
+
+  @override
+  String get cameraFoundByPort => 'أجهزة تستجيب على منفذ الكاميرا';
+
+  @override
+  String get uploadReasonNoBox => 'تعذّر الاتصال بـ MAXCOM';
+
+  @override
+  String get uploadAwaitingConfirm => 'بانتظار التأكيد';
+
+  @override
+  String get uploadErrorEmptyFile => 'ملف التسجيل فارغ';
+
+  @override
+  String get uploadEarlierEntry => 'رفع تسجيل سابق';
+
+  @override
+  String liveGapReplaceAsk(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other:
+          'انقطع البث الأخير لمدة $minutes دقيقة. هل تريد استبداله بالتسجيل الكامل؟',
+      two: 'انقطع البث الأخير لمدة دقيقتين. هل تريد استبداله بالتسجيل الكامل؟',
+      one: 'انقطع البث الأخير لمدة دقيقة واحدة. هل تريد استبداله بالتسجيل الكامل؟',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get liveGapReplaceYes => 'استبدال';
+
+  @override
+  String get liveGapReplaceNo => 'لا';
+
+  @override
+  String get liveYoutubeSignOutOtherBoxes =>
+      'يجب إعادة ربط وحدات MAXCOM Kiosk Box الأخرى التي تستخدم حساب YouTube هذا.';
+
+  @override
+  String get errcYoutubeClientRefused =>
+      'رفضت Google ملف عميل YouTube. تواصل مع مسؤول MAXCOM.';
+
+  @override
+  String get errcUploadAbandoned => 'أُلغي هذا الرفع';
+
+  @override
+  String get liveStoppedUnattended =>
+      'أُوقف البث لأن اتصال الهاتف بـ MAXCOM انقطع لأكثر من 10 دقائق';
+
+  @override
+  String get liveWarnCameraH265 =>
+      'الكاميرا ترسل فيديو H.265 ولا يمكن بثه عبر MAXCOM. غيّر الكاميرا إلى H.264.';
+
+  @override
+  String get unlinkTitle => 'فصل الربط';
+
+  @override
+  String unlinkSheetTitle(String name) {
+    return 'فصل الربط: $name';
+  }
+
+  @override
+  String get unlinkSheetLineFollower =>
+      'سيعمل هذا Box بمفرده من جديد. اختر البيانات التي سيستخدمها بعد ذلك.';
+
+  @override
+  String unlinkSheetLineMaster(String name) {
+    return 'سيعمل $name بمفرده. اختر البيانات التي سيستخدمها هذا Box بعد ذلك.';
+  }
+
+  @override
+  String unlinkEligibleAny(String name) {
+    return 'لا يوجد مسؤول سابق نشط لـ $name. ستُعيَّن مسؤولًا عن $name.';
+  }
+
+  @override
+  String unlinkPhoneNote(String name) {
+    return 'بعد ذلك يغادر هذا الهاتف Box الرئيسي وينضم إلى $name. ستعيّن هناك رقمًا سريًا جديدًا.';
+  }
+
+  @override
+  String unlinkAnsweredBy(String name) {
+    return 'أجاب: $name';
+  }
+
+  @override
+  String unlinkChoiceBack(String date) {
+    return 'العودة إلى البيانات قبل الربط (نسخة احتياطية في $date)';
+  }
+
+  @override
+  String get unlinkChoiceBackNoDate => 'العودة إلى البيانات قبل الربط';
+
+  @override
+  String get unlinkChoiceBackNote =>
+      'يعود هذا Box كما كان في ذلك التاريخ. التغييرات بعد ذلك لن تكون على هذا Box.';
+
+  @override
+  String get unlinkChoiceCarry => 'المتابعة بالبيانات الحالية بشكل منفصل';
+
+  @override
+  String get unlinkChoiceCarryNoteFollower =>
+      'يحتفظ هذا Box بالمحتوى والإعدادات الحالية ويصبح مصلى مستقلًا.';
+
+  @override
+  String get unlinkChoiceCarryNoteMaster =>
+      'يحتفظ هذا Box بالبيانات الحالية. لا يتغير شيء على هذا Box.';
+
+  @override
+  String get unlinkChoiceEmpty => 'إفراغ هذا Box (العودة إلى شاشة الإعداد)';
+
+  @override
+  String get unlinkChoiceEmptyNote =>
+      'يُفرَّغ هذا Box ويبدأ من جديد في شاشة الإعداد.';
+
+  @override
+  String unlinkNumChanges(int n, String date) {
+    return '$n تغييرًا منذ $date لن تكون على هذا Box بعد ذلك.';
+  }
+
+  @override
+  String get unlinkNumNoChanges => 'لا تغييرات منذ إنشاء النسخة الاحتياطية.';
+
+  @override
+  String get unlinkNumKept7 => 'تُحفظ البيانات الحالية 7 أيام أخرى ثم تُحذف.';
+
+  @override
+  String unlinkNumPeopleLead(String date) {
+    return 'تعود قائمة المستخدمين كما كانت في $date.';
+  }
+
+  @override
+  String unlinkNumPeopleBack(int n, String names) {
+    return '$n أشخاص حُذفوا بعد ذلك سيعودون: $names.';
+  }
+
+  @override
+  String unlinkNumPeopleAbsent(int n, String names) {
+    return '$n أشخاص أُضيفوا بعد ذلك لن يكونوا موجودين: $names.';
+  }
+
+  @override
+  String unlinkNumFinance(int n) {
+    return 'تبقى $n قيود مالية في Box الرئيسي. يبدأ هذا Box بدفتر فارغ.';
+  }
+
+  @override
+  String get unlinkTickLabel => 'أفهم أن السجلات المالية تبقى في Box الرئيسي.';
+
+  @override
+  String unlinkNumVideos(int n) {
+    return '$n مقاطع فيديو لا تتسع ولن تُنسخ:';
+  }
+
+  @override
+  String unlinkVideoLine(String title, String size) {
+    return '$title ($size)';
+  }
+
+  @override
+  String unlinkRemovePeople(String name, int n) {
+    return 'حذف المستخدمين الذين جاؤوا من $name ($n أشخاص)';
+  }
+
+  @override
+  String get unlinkYoutubeKept =>
+      'YouTube: يحتفظ هذا Box بتسجيل الدخول الذي يستخدمه.';
+
+  @override
+  String get unlinkYoutubeReturns =>
+      'YouTube: يعود تسجيل الدخول الموجود في النسخة الاحتياطية إلى هذا Box.';
+
+  @override
+  String get unlinkYoutubeSignIn =>
+      'YouTube: سجّل الدخول مرة أخرى على هذا Box.';
+
+  @override
+  String get unlinkYoutubeNone =>
+      'YouTube: لا يوجد تسجيل دخول. سجّل الدخول بنفسك على هذا Box (يستغرق نحو دقيقة).';
+
+  @override
+  String get unlinkAgree => 'موافق';
+
+  @override
+  String get unlinkChangeAnswer => 'تغيير إجابتي';
+
+  @override
+  String get unlinkConfirmTitle => 'أكّد هذا الاختيار';
+
+  @override
+  String get unlinkConfirmBody =>
+      'يترك هذا الاختيار تغييرات خلفه. تُحفظ البيانات المتروكة 7 أيام ثم تُحذف.';
+
+  @override
+  String get unlinkAgreePinBody => 'أدخل رقمك السري للموافقة.';
+
+  @override
+  String get unlinkWord => 'فصل';
+
+  @override
+  String get unlinkSideFollower => 'Box التابع';
+
+  @override
+  String get unlinkSideMaster => 'Box الرئيسي';
+
+  @override
+  String get unlinkStartBody =>
+      'يسأل كل MAXCOM Kiosk Box مسؤوله عمّا سيحدث لبياناته. لا يتغير شيء حتى يوافق الاثنان.';
+
+  @override
+  String unlinkStartPhoneNote(String name) {
+    return 'المسؤول الذي يجيب عن $name يغادر Box الرئيسي بهاتفه وينضم إلى $name.';
+  }
+
+  @override
+  String get unlinkStartTimeNote =>
+      'إذا لم يجب أحد خلال 20 دقيقة فلا يتغير شيء ويبقى الربط.';
+
+  @override
+  String get unlinkStartButton => 'ابدأ';
+
+  @override
+  String get unlinkStartPinBody => 'أدخل رقمك السري للبدء.';
+
+  @override
+  String get unlinkWaitingTitle => 'بانتظار المسؤول الآخر';
+
+  @override
+  String get unlinkWaitingBody =>
+      'حُفظت إجابتك. يُفصل الربط بعد موافقة المسؤول الآخر. لا يتغير شيء قبل ذلك.';
+
+  @override
+  String get unlinkWaitingOther =>
+      'يجيب مسؤول آخر على هاتفه. لا يتغير شيء حتى يوافق الجميع.';
+
+  @override
+  String get unlinkProgressTitle => 'جارٍ فصل الربط';
+
+  @override
+  String get unlinkProgressStarting => 'العمل يبدأ';
+
+  @override
+  String get unlinkProgressNote =>
+      'لا تُطفئ أيًّا من MAXCOM Kiosk Box حتى ينتهي العمل.';
+
+  @override
+  String get unlinkStepCopy => 'نسخ البيانات إلى Box التابع';
+
+  @override
+  String get unlinkStepBack => 'استعادة البيانات قبل الربط';
+
+  @override
+  String get unlinkStepCarryOn => 'حفظ البيانات الحالية';
+
+  @override
+  String get unlinkStepEmpty => 'إفراغ Box';
+
+  @override
+  String get unlinkStepJoin => 'بانتظار انضمام الهاتف إلى Box التابع';
+
+  @override
+  String unlinkJoinTitle(String name) {
+    return 'الاتصال بـ $name';
+  }
+
+  @override
+  String unlinkJoinBody(String name) {
+    return 'هذا الهاتف يتبع الآن $name. عيّن رقمًا سريًا جديدًا للانضمام إليه. يكتمل فصل الربط بعد ذلك.';
+  }
+
+  @override
+  String unlinkJoinWaitTitle(String name) {
+    return 'بانتظار هاتف مسؤول $name';
+  }
+
+  @override
+  String get unlinkJoinWaitBody =>
+      'يكتمل فصل الربط بعد أن ينضم المسؤول إلى ذلك Box بهاتفه ويعيّن رقمًا سريًا. يواصل ذلك Box العمل بمفرده في هذه الأثناء.';
+
+  @override
+  String get unlinkDoneTitle => 'فُصل الربط';
+
+  @override
+  String unlinkDoneBody(String name) {
+    return '$name يعمل الآن بمفرده.';
+  }
+
+  @override
+  String get unlinkFailedTitle => 'لم يُفصل الربط';
+
+  @override
+  String get unlinkKeptSection => 'البيانات القديمة بعد فصل الربط';
+
+  @override
+  String get unlinkKeptNone => 'لا توجد بيانات قديمة محفوظة.';
+
+  @override
+  String unlinkKeptMasterRow(String name) {
+    return 'Box الرئيسي، بعد مغادرة $name';
+  }
+
+  @override
+  String unlinkKeptFollowerRow(String name) {
+    return '$name';
+  }
+
+  @override
+  String get unlinkKeptChosenBack => 'الاختيار: العودة إلى البيانات قبل الربط';
+
+  @override
+  String get unlinkKeptChosenCarry => 'الاختيار: المتابعة بالبيانات الحالية';
+
+  @override
+  String get unlinkSwitch => 'تغيير الاختيار';
+
+  @override
+  String get unlinkSwitchTitle => 'تغيير الاختيار؟';
+
+  @override
+  String unlinkSwitchBodyToBack(String date) {
+    return 'يعود هذا Box إلى البيانات قبل الربط. تُحفظ البيانات الحالية حتى $date.';
+  }
+
+  @override
+  String unlinkSwitchBodyToCarry(String date) {
+    return 'يتابع هذا Box بالبيانات الحالية. تُحفظ النسخة الاحتياطية حتى $date.';
+  }
+
+  @override
+  String get unlinkSwitchedToast => 'تم تغيير الاختيار. هذا Box يعمل الآن.';
+
+  @override
+  String get unlinkDropBody => 'تُحذف البيانات القديمة ولا يمكن استعادتها.';
+
+  @override
+  String get unlinkCodeOpen => 'هناك عملية فصل ربط قيد التنفيذ.';
+
+  @override
+  String get unlinkCodeNotLinked => 'هذا Box لم يعد مرتبطًا.';
+
+  @override
+  String get unlinkCodeNotAllowed =>
+      'لا يمكنك الإجابة عن هذا Box. يجيب مسؤول آخر.';
+
+  @override
+  String get unlinkCodeSamePhone => 'لا يمكن لهاتف واحد أن يجيب عن كلا Box.';
+
+  @override
+  String get unlinkCodeOptionUnavailable => 'هذا الاختيار غير متاح لهذا Box.';
+
+  @override
+  String get unlinkCodeStaleSession =>
+      'تغيّر فصل الربط هذا أو انتهى. حُدّثت الشاشة.';
+
+  @override
+  String get unlinkCodeKeptOver => 'انتهى وقت تغيير الاختيار.';
+
+  @override
+  String get unlinkCodeNoKept => 'لا توجد بيانات قديمة محفوظة.';
+
+  @override
+  String get unlinkCodeNotLocal =>
+      'لا يمكن تنفيذ هذا إلا على شاشة الصيانة في ذلك Box نفسه.';
+
+  @override
+  String get unlinkCodeWrongCode => 'رمز الاستعادة غير صحيح.';
+
+  @override
+  String get unlinkCodeHasBackup =>
+      'لدى هذا Box نسخة احتياطية. استخدم العودة إلى البيانات قبل الربط.';
+
+  @override
+  String unlinkKeptMasterNamed(String master, String follower) {
+    return '$master، بعد مغادرة $follower';
+  }
+
+  @override
+  String unlinkKeptListLine(String date) {
+    return 'البيانات القديمة محفوظة حتى $date';
+  }
+
+  @override
+  String get unlinkVideosNotFitTitle =>
+      'هذه المقاطع لا تتسع في ذلك Box ولن تُنسخ:';
+
+  @override
+  String get unlinkJoinStay => 'ابقَ هنا';
+
+  @override
+  String unlinkJoinStayNote(String master, String follower) {
+    return 'إذا بقيت هنا، يُسجَّل خروج هذا الهاتف من $master بعد انضمام $follower. اختر اتصل الآن لمواصلة إدارة $follower بهذا الهاتف.';
+  }
+
+  @override
+  String get linkRecoveryTitle => 'احفظ هذا الرمز';
+
+  @override
+  String get errcSurauAsleep =>
+      'يجري تحديث نسخة هذا المصلى في السحابة من MAXCOM Kiosk Box. حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get liveYoutubeLaterButton => 'البث على YouTube';
+
+  @override
+  String get liveYoutubeLaterHint =>
+      'هذا البث يذهب إلى شاشة المصلى فقط. يمكنك إضافة YouTube الآن.';
+
+  @override
+  String get liveYoutubeLaterStarting => 'جارٍ تشغيل YouTube';
+
+  @override
+  String get liveYoutubeLaterNotSignedIn =>
+      'لم يُربط YouTube بهذا الـ MAXCOM. اربط حساب YouTube من الإعدادات أولًا.';
+
+  @override
+  String get liveYoutubeLaterNotOwner =>
+      'فقط الجهاز الذي بدأ هذا البث أو المسؤول يمكنه إضافة YouTube إليه.';
+
+  @override
+  String get liveYoutubeLaterBusy =>
+      'جارٍ تشغيل YouTube بالفعل. حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get liveRecNoSpaceNote =>
+      'لا توجد مساحة كافية على MAXCOM لدمج التسجيل. احفظ التسجيلات القديمة أو احذفها أولًا. يُحتفظ بكل جزء كما هو.';
+
+  @override
+  String get uploadErrorClaimLost =>
+      'أُوقف الرفع لأن جهازًا آخر تولّى هذا البث. لا حاجة لأي إجراء.';
+
+  @override
+  String get liveYoutubeLaterSheetTitle => 'البث على YouTube';
+
+  @override
+  String get liveYoutubeLaterTitleLabel => 'العنوان على YouTube';
+
+  @override
+  String get liveYoutubeLaterPrivacyLabel => 'الظهور';
+
+  @override
+  String get liveYoutubePrivacyPrivate => 'خاص';
+
+  @override
+  String get liveYoutubePrivacyUnlisted => 'غير مدرج';
+
+  @override
+  String get liveYoutubePrivacyPublic => 'عام';
+
+  @override
+  String get liveYoutubeLaterConfirm => 'ابدأ البث الآن';
+
+  @override
+  String get liveYoutubeLaterConfirmNote =>
+      'سيبدأ البث بالظهور على YouTube بهذا العنوان وهذا الظهور.';
+
+  @override
+  String get liveYoutubeLaterUpdateBox => 'حدّث MAXCOM لاستخدام هذه الميزة.';
+
+  @override
+  String get liveYoutubeLaterNoSession =>
+      'انتهى هذا البث بالفعل. ابدأ بثًا جديدًا.';
+
+  @override
+  String get liveYoutubeLaterBadRequest =>
+      'العنوان أو الظهور غير صالح. تحقق وحاول مرة أخرى.';
+
+  @override
+  String get liveYoutubeLaterYoutubeOff =>
+      'تم إيقاف YouTube في إعدادات هذا الـ MAXCOM.';
+
+  @override
+  String get liveYoutubeLaterToolsMissing =>
+      'أدوات بث YouTube غير مثبتة على هذا الـ MAXCOM بعد.';
+
+  @override
+  String get liveYoutubeLaterNoInternet =>
+      'لا يوجد اتصال بالإنترنت على MAXCOM. حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get liveYoutubeLaterPrivacyNotAllowed =>
+      'هذا الظهور أكثر انفتاحًا مما تسمح به إعدادات المصلى. اختر خيارًا أكثر تقييدًا.';
+
+  @override
+  String unlinkJoinWebBody(String name) {
+    return 'أنت تستخدم متصفح الويب. افتح تطبيق الويب الخاص بـ $name للانضمام إليه. هناك تختار اسم الجهاز ورقمًا سريًا جديدًا.';
+  }
+
+  @override
+  String unlinkJoinWebOpen(String name) {
+    return 'افتح تطبيق $name';
+  }
+
+  @override
+  String get unlinkJoinWebTrust =>
+      'قد يطلب المتصفح منك الوثوق بذلك الـ MAXCOM مرة واحدة. اقبل ثم تابع.';
+
+  @override
+  String get unlinkJoinWebFailed =>
+      'تعذر على المتصفح فتح ذلك التطبيق. حاول مرة أخرى.';
+
+  @override
+  String unlinkJoinUnreachable(String name) {
+    return 'لا يستطيع هذا الهاتف الوصول إلى $name. تحقق من اتصال الشبكة وحاول مرة أخرى.';
+  }
+
+  @override
+  String get unlinkNumBackRecovery =>
+      'تبقى هواتف المسؤولين تعمل. تنضم الهواتف الأخرى من جديد برمز QR من أحد المسؤولين. لا حاجة إلى رمز الاسترداد إلا إذا لم يبق أي هاتف مسؤول.';
+
+  @override
+  String get unlockUseRecoveryCode => 'استخدم رمز الاسترداد';
+
+  @override
+  String get unlockRecoveryHint =>
+      'لا يوجد مسؤول يستطيع الدخول إلى هذا الـ MAXCOM. امسح رمز QR للاسترداد على شاشة تلفاز MAXCOM، ثم أدخل رمز الاسترداد المكتوب على الورق.';
+
+  @override
+  String get linkKeptOtherBox =>
+      'تلك البيانات القديمة محفوظة على الـ MAXCOM الآخر. احذف البيانات القديمة هناك بهاتف مسؤوله لتربط الآن.';
+
+  @override
+  String get liveCtlNoVideo =>
+      'لا يُعرض الفيديو على هذا الجهاز. شاهده على التلفاز أو على YouTube.';
+
+  @override
+  String get liveCtlCloseApp => 'أغلق تطبيق الكاميرا (OBSBOT) أثناء البث.';
+
+  @override
+  String get liveCtlCloseAppWhy =>
+      'قارئان للكاميرا يخفضان الصورة إلى 4 إلى 6 إطارات في الثانية.';
+
+  @override
+  String get liveCtlLevels => 'مستويات الصوت';
+
+  @override
+  String liveCtlStartedBy(String name, String device, String time) {
+    return 'بدأه $name من $device، $time';
+  }
+
+  @override
+  String liveCtlStartedByNoDevice(String name, String time) {
+    return 'بدأه $name، $time';
+  }
+
+  @override
+  String get liveCtlTvsSub => 'شاشات المصلى عبر واي فاي المصلى';
+
+  @override
+  String get liveCtlTvsWaiting => 'تُعرض بطاقة الانتظار';
+
+  @override
+  String get liveCtlTvsOff => 'شاشات المصلى متوقفة لهذا البث';
+
+  @override
+  String get liveCtlYtWaiting => 'بانتظار الصورة';
+
+  @override
+  String get liveCtlYtNo => 'لا';
+
+  @override
+  String liveCtlCamOk(String mbps) {
+    return 'متصلة، $mbps Mbps';
+  }
+
+  @override
+  String get liveCtlCamConnected => 'متصلة';
+
+  @override
+  String liveCtlCamSlow(String mbps) {
+    return 'متصلة، الصورة بطيئة ($mbps Mbps)';
+  }
+
+  @override
+  String get liveCtlCamGone => 'مقطوعة';
+
+  @override
+  String liveCtlSubOnAir(int vol) {
+    return 'على الهواء، $vol%';
+  }
+
+  @override
+  String liveCtlSubOff(int vol) {
+    return '$vol%، ليس على الهواء';
+  }
+
+  @override
+  String get liveCtlSubBenched => 'متوقف مؤقتًا، تُعاد المحاولة';
+
+  @override
+  String get liveCtlSubWaitingCam => 'بانتظار الكاميرا';
+
+  @override
+  String get liveCtlSubMeanwhile => 'مستخدم مؤقتًا';
+
+  @override
+  String get liveCtlRecHere => 'التسجيل على هذا iPad';
+
+  @override
+  String get liveCtlWatchYoutube => 'شاهد على YouTube';
+
+  @override
+  String get liveQuietTitle => 'البث مستمر ولا يوجد جهاز يتحكم به';
+
+  @override
+  String liveQuietBody(int minutes) {
+    return 'لم يظهر الجهاز الذي بدأ البث منذ $minutes دقيقة. يستمر البث إلى التلفاز وYouTube.';
+  }
+
+  @override
+  String get liveQuietStop => 'إيقاف البث';
+
+  @override
+  String get liveKioskRestored =>
+      'تعذّر البث على YouTube. أُعيد تشغيل شاشة المصلى حتى يبقى البث على الهواء.';
+
+  @override
+  String get liveCamSlowTitle => 'صورة الكاميرا بطيئة';
+
+  @override
+  String get liveMicBenchedTitle =>
+      'تم إيقاف ميكروفون الصندوق مؤقتًا ويُستخدم صوت الكاميرا';
+
+  @override
+  String get liveMicBenchedBody =>
+      'البث ليس صامتًا. تُعاد محاولة ميكروفون الصندوق تلقائيًا خلال دقيقة.';
+
+  @override
+  String get liveCamGoneTitle => 'الكاميرا مقطوعة والبث مستمر';
+
+  @override
+  String get liveCamGoneBody =>
+      'تعرض الشاشات بطاقة الانتظار. تعود الصورة والصوت تلقائيًا عند اتصال الكاميرا. لا يتوقف البث تلقائيًا؛ اضغط إيقاف عند انتهاء الدرس.';
+
+  @override
+  String get liveStopOtherTitle => 'إيقاف البث';
+
+  @override
+  String liveStopOtherBody(String name, String device) {
+    return 'بدأ هذا البث $name من $device. هل تريد إيقافه؟';
+  }
+
+  @override
+  String liveStopOtherBodyNoDevice(String name) {
+    return 'بدأ هذا البث $name. هل تريد إيقافه؟';
+  }
+
+  @override
+  String liveStopOtherLog(String name) {
+    return 'يُسجَّل اسمك واسم $name في سجل التغييرات.';
+  }
+
+  @override
+  String get liveLeaveBoxPulled =>
+      'يستمر MAXCOM في البث. افتح التطبيق مرة أخرى للتحكم به أو إيقافه.';
+
+  @override
+  String get liveAudioBoxMicMain => 'ميكروفون الصندوق (الأساسي)';
+
+  @override
+  String get liveAudioBoxMicMainHint =>
+      'مدخل الميكروفون في MAXCOM. صوت المحاضر، دائمًا ضمن المزيج.';
+
+  @override
+  String get liveAudioCamBoxHint => 'ارفعه فقط إذا أردت صوت القاعة';
+
+  @override
+  String get liveAudioCamNotOnAir => 'ليس على الهواء';
+
+  @override
+  String get liveAudioBoxMicOnAir => 'على الهواء';
+
+  @override
+  String get liveSyncTitle => 'مزامنة الصوت والصورة';
+
+  @override
+  String get liveSyncAuto => 'مزامنة تلقائية';
+
+  @override
+  String get liveSyncAutoBody =>
+      'يُؤخَّر صوت ميكروفون الصندوق ليتوافق مع صورة الكاميرا. يُقاس تلقائيًا من صوت الكاميرا.';
+
+  @override
+  String get liveSyncBusy => 'جارٍ المزامنة (الصوت يبقى على الهواء)';
+
+  @override
+  String liveSyncBusyBody(int ms) {
+    return 'يبقى ميكروفون الصندوق على الهواء بتأخير البث السابق (+$ms ms) أثناء قياس MAXCOM.';
+  }
+
+  @override
+  String get liveSyncManual => 'ضبط يدوي';
+
+  @override
+  String get liveSyncManualBody =>
+      'أخِّر الصوت ليتوافق مع صورة الكاميرا. راقب شفتي المحاضر على التلفاز أثناء الضبط.';
+
+  @override
+  String get liveSyncRange => 'من 0 إلى 2000 ms بخطوات 50 ms.';
+
+  @override
+  String get liveSyncBack => 'العودة إلى التلقائي';
+
+  @override
+  String get liveSyncLess => 'أقل بمقدار 50 ms';
+
+  @override
+  String get liveSyncMore => 'أكثر بمقدار 50 ms';
+
+  @override
+  String get liveDestPickOne => 'اختر وجهة واحدة على الأقل';
+
+  @override
+  String get liveDestLastOne => 'لا يمكن إيقاف آخر وجهة أثناء البث';
+
+  @override
+  String get liveDestKioskOldBox => 'حدّث MAXCOM Kiosk Box لهذا الخيار';
+
+  @override
+  String get liveDestKioskOffSub => 'متوقفة لهذا البث';
+
+  @override
+  String get liveDestKioskLabelOff => 'شاشات المصلى: لا';
+
+  @override
+  String get liveDestRecSwitchNotNow =>
+      'لا يمكن تغييره أثناء البث على هذا الجهاز';
+
+  @override
+  String get liveCtlTvsTitle => 'التلفازات التي تعرض';
+
+  @override
+  String get liveCtlDuration => 'مدة البث';
+
+  @override
+  String get liveMicLostBoxTitle => 'لم يُكتشف ميكروفون MAXCOM';
+
+  @override
+  String get liveMicLostBoxBody =>
+      'قد يكون البث صامتًا. تحقق من توصيل الميكروفون بجهاز MAXCOM.';
+
+  @override
+  String get liveMicLostDeviceTitle => 'لم يُكتشف ميكروفون الجهاز';
+
+  @override
+  String get liveMicLostDeviceBody =>
+      'قد يكون البث صامتًا. تحقق من الميكروفون في الجهاز الذي يرسل البث.';
+
+  @override
+  String get liveRecordingStopped => 'توقف، ويُحفظ الملف حتى الآن';
+
+  @override
+  String get liveRetrying => 'تتم إعادة المحاولة';
+
+  @override
+  String get liveDestYoutubeLive => 'يمكن تشغيله أثناء البث ولا يمكن إيقافه';
+
+  @override
+  String get liveSyncRangeSaved =>
+      'من 0 إلى 2000 ms بخطوات 50 ms. يُحفظ للبثوث القادمة على MAXCOM هذا.';
+
+  @override
+  String get liveDestLiveYt => 'إلى YouTube فقط';
+
+  @override
+  String get liveDestLiveRec => 'تسجيل فقط، لا بث إلى شاشة المصلى أو YouTube';
+
+  @override
+  String get liveCtlSubMicLost => 'غير مكتشف';
+
+  @override
+  String get liveTvShowTitle => 'عرض البث المباشر';
+
+  @override
+  String get liveTvShowHint =>
+      'أوقفه للصندوق البطيء أثناء البث. يبقى تلفاز ذلك الصندوق على عرضه المعتاد.';
+
+  @override
+  String get liveTvShowServer => 'خادم البث';
+
+  @override
+  String get liveTvShowOff => 'العرض المعتاد أثناء البث';
+
+  @override
+  String get liveTvShowAllOff => 'لن يعرض أي تلفاز البث.';
+
+  @override
+  String liveTvShowSwitch(String name) {
+    return 'عرض البث المباشر، $name';
+  }
+
+  @override
+  String liveTvShowCpuNow(int n) {
+    return 'المعالج $n%';
+  }
+
+  @override
+  String liveTvShowCpuLast(int n) {
+    return 'المعالج $n% أثناء البث السابق';
+  }
+
+  @override
+  String liveCtlTvsShowing(int n, String names) {
+    return 'التلفازات التي تعرض البث: $n ($names)';
+  }
+
+  @override
+  String liveCtlTvNormal(String name) {
+    return '$name: العرض المعتاد';
+  }
+
+  @override
+  String get liveViewerShowing => 'يعرض البث';
+
+  @override
+  String get liveViewerNormal => 'العرض المعتاد';
+
+  @override
+  String get liveViewersHint => 'غيّر ذلك في إعدادات البث، عرض البث المباشر.';
+
+  @override
+  String liveBusyTitle(String name, int n) {
+    return '$name مشغول جدًا (المعالج $n%)';
+  }
+
+  @override
+  String get liveBusyBody =>
+      'قد تتقطع الصورة على التلفازات وYouTube. يعرض تلفاز آخر البث، لذا يمكن لتلفاز هذا الصندوق العودة إلى عرضه المعتاد. يمكن تشغيله من جديد في إعدادات البث.';
+
+  @override
+  String get liveBusyAction => 'إيقاف عرض البث على هذا الصندوق';
+
+  @override
+  String get liveBusyLater => 'ليس الآن';
+
+  @override
+  String get liveMicSilentTitle => 'لا صوت من ميكروفون MAXCOM';
+
+  @override
+  String liveMicSilentBody(int n) {
+    return 'البث على الهواء بلا صوت المحاضر منذ $n دقيقة.';
+  }
+
+  @override
+  String get liveMicSilentTip1 =>
+      'افحص كابل الميكروفون في مدخل الميكروفون في MAXCOM.';
+
+  @override
+  String get liveMicSilentTip2 => 'استخدم بطاقة صوت USB لها مدخل ميكروفون.';
+
+  @override
+  String get liveMicSilentTip3 => 'أو ارفع صوت الكاميرا الخارجية.';
+
+  @override
+  String get liveMicSilentUseCamera => 'استخدام صوت الكاميرا';
+
+  @override
+  String liveMicSilentRow(String time) {
+    return 'على الهواء، لا صوت منذ $time';
+  }
+
+  @override
+  String get liveMicSilentCamTitle => 'يُستخدم صوت الكاميرا';
+
+  @override
+  String get liveMicSilentCamBody =>
+      'يحتوي البث الآن على صوت من الكاميرا الخارجية. إذا عاد ميكروفون MAXCOM للصوت فسيُسمع من جديد.';
+
+  @override
+  String get liveMicTestHint =>
+      'تحدث إلى الميكروفون أثناء الاختبار لمدة 5 ثوانٍ. اختر مدخلًا فيه صوت.';
+
+  @override
+  String get liveMicTestBusy => 'جارٍ الاختبار...';
+
+  @override
+  String get liveMicTestSound => 'تم الاختبار: يوجد صوت';
+
+  @override
+  String get liveMicTestSilent => 'تم الاختبار: صامت';
+
+  @override
+  String get liveMicTestFailed => 'تعذر الاختبار';
+
+  @override
+  String get liveMicTestNone => 'لم يُختبر بعد';
+
+  @override
+  String get liveMicTestAgain => 'أعد الاختبار (5 ثوانٍ)';
+
+  @override
+  String liveMicTestAt(String time) {
+    return 'تم الاختبار في $time.';
+  }
+
+  @override
+  String get liveMicTestSilentTitle => 'المدخل المختار صامت';
+
+  @override
+  String get liveMicTestSilentBody =>
+      'سيذهب البث إلى الهواء بلا صوت المحاضر. اختر مدخلًا آخر أو افحص الكابل ثم أعد الاختبار.';
+
+  @override
+  String get liveYoutubeLaterWhySignIn =>
+      'لم يتم ربط YouTube بجهاز MAXCOM بعد.';
+
+  @override
+  String get liveYoutubeLaterWhyUnreachable => 'تعذر الوصول إلى MAXCOM.';
+
+  @override
+  String get liveYoutubeLaterWhyStarter =>
+      'الجهاز الذي بدأ البث وحده يستطيع إضافة YouTube.';
+
+  @override
+  String get liveTvShowFailed => 'تعذر حفظ الاختيار. أعد المحاولة.';
+
+  @override
+  String get liveCtlSubNoSound => 'لا صوت';
+
+  @override
+  String get liveAudioSwitchConfirm =>
+      'تغيير الصوت؟ سيتوقف البث لحظة (من ثانيتين إلى 3 ثوانٍ).';
+
+  @override
+  String get liveAudioSwitchDo => 'تغيير';
+
+  @override
+  String get liveAudioSwitchCancel => 'إلغاء';
+
+  @override
+  String get liveWarnMicDropsTitle => 'صوت ميكروفون MAXCOM متقطع';
+
+  @override
+  String get liveWarnMicDropsBody =>
+      'افحص كابل الميكروفون أو اختر صوت الكاميرا.';
+
+  @override
+  String get liveWarnBehindTitle => 'الرفع إلى YouTube بطيء';
+
+  @override
+  String liveWarnBehindBody(int seconds) {
+    return 'البث متأخر $seconds ثانية. يستمر البث.';
+  }
+
+  @override
+  String get liveWarnQualityTitle => 'تم خفض جودة الصورة (480p)';
+
+  @override
+  String get liveWarnQualityBody =>
+      'الإنترنت بطيء. تعود الجودة تلقائيًا عند تحسن الاتصال.';
+
+  @override
+  String liveRelayReconnects(int count) {
+    return 'أُعيد الاتصال بـ YouTube $count مرات';
+  }
 }

@@ -24,9 +24,30 @@ final _locales = <String, S>{
 /// (validation messages); the app shows that sentence. Anything the box sends
 /// that is not here and not in [kErrorCodeTexts] fails the guard below.
 const _serverSentenceCodes = <String>{
+  // 2026.11.15: `bad_session` answers only an app bug (camera release sent with no session id, never from the UI);
+  // `internal` is the download link's last-resort 500 (the iPad then falls back to the direct save, no text shown).
+  'bad_session',
+  'internal',
+  // Camera control (Lane X): `control_off` answers only when the opt-in is off (the app hides the row then);
+  // `bad_action` / `bad_setting` answer only a malformed request from the app itself.
+  'bad_action',
+  'bad_setting',
+  'control_off',
   // Statuses of the Mic-in check result (`code: 'ok' | 'untested'`), not errors: the app never shows them as a refusal.
   'ok',
   'untested',
+  // Build 5 `PUT /api/live/tv-show`: `bad_request` answers only a malformed body from the app itself and
+  // `unknown_tv` a TV that left the list; the Paparkan siaran langsung card shows its own save-failed line.
+  'bad_request',
+  'unknown_tv',
+  // The link routes: the link screens word them in lib/features/link/link_text.dart (`linkCodeText`), a code that
+  // function does not know gets its generic sentence.
+  'bad_message',
+  'bad_origin',
+  'linking',
+  'stale_revision',
+  'stale_session', // the unlink screens word it (lib/features/unlink/unlink_text.dart)
+  'wrong_step',
   'invalid', // content validators: one sentence per field
   'bad_asset', // asset checks: one sentence per cause
   'bad_body', // shape of a body: wording differs per route
@@ -45,6 +66,12 @@ const _serverSentenceCodes = <String>{
   'grant_unreadable',
   // GET /api/live/notice/frame.jpg with no frame: the notice picture falls back to the thumbnail quietly, nothing is shown.
   'no_frame',
+  // Box-to-cloud signed calls of a box (multi-box 2B): only the box reads these refusals, never a person.
+  'bad_mark',
+  'bad_sig',
+  'clock',
+  'no_key',
+  'replay',
 };
 
 void main() {
@@ -220,6 +247,26 @@ void main() {
         errorText(s, const SessionExpired('Sesi tamat', code: 'no_session')),
         s.errorSessionExpired,
       );
+    });
+
+    test('the refusals of the 2026.11.15 live contracts read from the one table, in every language', () {
+      const codes = [
+        'resume_mismatch', 'camera_in_use', 'youtube_live_not_enabled', 'box_clock_wrong', 'youtube_client_refused',
+        'youtube_busy_other_box', 'too_many_viewers', 'youtube_broadcast_open', 'already_uploading', 'upload_abandoned',
+      ];
+      for (final l in _locales.entries) {
+        final texts = <String>{};
+        for (final code in codes) {
+          expect(kErrorCodeTexts.containsKey(code), isTrue, reason: code);
+          final t = errorText(l.value, BoxError(409, 'ayat pelayan', code: code));
+          expect(t, isNot('ayat pelayan'), reason: '$code/${l.key}');
+          texts.add(t);
+        }
+        expect(texts.length, codes.length, reason: 'each refusal has its own sentence (${l.key})');
+      }
+      final ms = _locales['ms']!;
+      expect(errorText(ms, const BoxError(409, 'x', code: 'youtube_client_refused')), 'Fail klien YouTube ditolak oleh Google. Hubungi Pentadbir MAXCOM.');
+      expect(errorText(ms, const BoxError(409, 'x', code: 'upload_abandoned')), 'Muat naik ini telah dibatalkan');
     });
 
     test('[A5] every mapped code renders a non-empty text in all three languages', () {

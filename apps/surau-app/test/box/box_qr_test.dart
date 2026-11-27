@@ -153,6 +153,79 @@ void main() {
     expect(kindOf(''), ScannedKind.unknown);
   });
 
+  group('link QR (type link, shown on the TV of the other box)', () {
+    Future<String> signedLink({String type = 'link', String box = 'https://10.168.50.10:8443', Object? ca = 'cc', int? exp, bool tamper = false}) async {
+      final key = SoftwareDeviceKey.random();
+      final pub = await key.publicJwk();
+      final m = <String, dynamic>{
+        'v': 1,
+        'type': type,
+        'boxId': 'a1a1a1a1a1a1a1a1',
+        'keyFp': keyFingerprint({'crv': pub['crv'], 'kty': pub['kty'], 'x': pub['x'], 'y': pub['y']}),
+        'name': 'MAXCOM Dewan Utama',
+        'box': box,
+        'linked': false,
+        'nonce': 'XDEmJK-uEm2ZdjkX4kN3l09a-gC3tFkiDDUfgLAlRvg',
+        'iat': 1795000000,
+        'exp': exp ?? 1795000300,
+        'pub': {'crv': pub['crv'], 'kty': pub['kty'], 'x': pub['x'], 'y': pub['y']},
+      };
+      if (ca != null) m['caSha256'] = ca == 'cc' ? 'c' * 64 : ca;
+      final head = 'maxcom-qr\n${m['boxId']}\n$type\n';
+      m['sig'] = b64url(await key.sign(Uint8List.fromList(utf8.encode('$head${sha256HexOf(utf8.encode(canonicalJson(m)))}'))));
+      if (tamper) m['name'] = '${m['name']} X';
+      return _enc(m);
+    }
+
+    test('a correctly signed link QR parses and keeps the scanned text', () async {
+      final t = await signedLink();
+      final p = BoxQrPayload.parseLink('  $t  ');
+      expect(p.type, 'link');
+      expect(p.text, t);
+      expect(p.name, 'MAXCOM Dewan Utama');
+      expect(p.box, 'https://10.168.50.10:8443');
+      expect(p.verifySignature(), isTrue);
+      expect(p.fingerprintGroups, matches(RegExp(r'^[0-9A-F]{4}( [0-9A-F]{4}){3}$')));
+    });
+
+    test('the expiry is not judged by this phone: a code long past on this clock still parses', () async {
+      expect(BoxQrPayload.parseLink(await signedLink(exp: 1795000001)).exp, 1795000001);
+    });
+
+    test('a link QR is not a setup, recovery or probe code, and those are not link codes', () async {
+      final link = await signedLink();
+      expect(() => BoxQrPayload.parse(link, requireCa: false), throwsA(isA<BoxQrInvalid>()));
+      expect(() => BoxQrPayload.parse(link, requireCa: true), throwsA(isA<BoxQrInvalid>()));
+      final setup = await signedLink(type: 'setup');
+      expect(() => BoxQrPayload.parseLink(setup), throwsA(isA<BoxQrInvalid>()));
+      expect(() => BoxQrPayload.parseLink(cases.first['text'] as String), throwsA(isA<BoxQrInvalid>()));
+      expect(kindOf(await signedLink()), ScannedKind.unknown);
+    });
+
+    test('a link QR with no HTTPS address, no CA, a tampered field or the wrong prefix is refused', () async {
+      expect(() => BoxQrPayload.parseLink('x'), throwsA(isA<BoxQrInvalid>()));
+      final cases2 = <Future<String>>[
+        signedLink(box: ''),
+        signedLink(ca: null),
+        signedLink(box: 'http://10.168.50.10:8443'),
+        signedLink(tamper: true),
+      ];
+      for (final c in cases2) {
+        final t = await c;
+        expect(() => BoxQrPayload.parseLink(t), throwsA(isA<BoxQrInvalid>()), reason: t);
+      }
+      expect(() => BoxQrPayload.parseLink('surau1:abc'), throwsA(isA<BoxQrInvalid>()));
+      expect(() => BoxQrPayload.parseLink('maxcom1:${'A' * 5000}'), throwsA(isA<BoxQrInvalid>()));
+    });
+
+    test('looksLikeBoxQr tells a box QR of any type from other text', () async {
+      expect(looksLikeBoxQr(await signedLink()), isTrue);
+      expect(looksLikeBoxQr('  ${cases.first['text']}'), isTrue);
+      expect(looksLikeBoxQr('surau1:abc'), isFalse);
+      expect(looksLikeBoxQr('https://example.com'), isFalse);
+    });
+  });
+
   test('isExpired follows the phone clock; fingerprint groups are four by four', () {
     final p = BoxQrPayload.parse(cases.first['text'] as String, requireCa: false);
     expect(p.isExpired(DateTime.fromMillisecondsSinceEpoch((p.exp - 1) * 1000)), isFalse);

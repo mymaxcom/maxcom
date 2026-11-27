@@ -509,6 +509,44 @@ class CameraSourceController extends ChangeNotifier {
     _notify();
   }
 
+  // ---- camera control (Lane X)
+
+  /// A change of the control opt-in is on its way to the box.
+  bool controlBusy = false;
+
+  /// The box's words when the opt-in could not be changed.
+  String? controlError;
+
+  /// "Benarkan kawalan kamera": switches the opt-in of the saved camera on the box. What is typed in the form is kept.
+  Future<void> setControl(bool on) => _putControl((g) => g.setLiveCameraControl(enabled: on));
+
+  /// The profile fields under the switch: the whole profile is sent at each change (the box checks every field).
+  Future<void> setProfile(LiveCameraProfile p) => _putControl((g) => g.setLiveCameraControl(profile: p));
+
+  /// "Terapkan semasa siaran bermula".
+  Future<void> setApplyOnLive(bool on) => _putControl((g) => g.setLiveCameraControl(applyOnLive: on));
+
+  Future<void> _putControl(Future<LiveCameraRecord> Function(BoxGateway g) call) async {
+    if (controlBusy) return;
+    final g = _gateway();
+    if (g == null || _viaCloud() || !record.configured) return;
+    controlBusy = true;
+    controlError = null;
+    _notify();
+    try {
+      final out = await call(g);
+      record = record.withControl(out.control);
+    } on BoxUnreachable {
+      controlError = cameraTestBoxAway(lang);
+    } on SessionExpired {
+      // the session ends the page
+    } on BoxError catch (e) {
+      controlError = _isNotFound(e) ? cameraAtSurauOnly(lang) : errorText(sFor(lang), e);
+    }
+    controlBusy = false;
+    _notify();
+  }
+
   // ---- discovery (O1)
 
   bool discovering = false;
@@ -653,6 +691,7 @@ class CameraSourceCard extends StatefulWidget {
     required this.name,
     required this.transport,
     required this.onChanged,
+    this.brightness = 'auto',
     this.readOnly = false,
     this.nameError,
     this.discoveryReady = cameraDiscoveryReady,
@@ -667,7 +706,10 @@ class CameraSourceCard extends StatefulWidget {
   final String name;
   final String transport;
 
-  /// Called with `name` or `transport` and the new value, like the settings form's.
+  /// `liveCamera.brightness` (B7): `auto`, `normal`, `bright` or `brighter`.
+  final String brightness;
+
+  /// Called with `name`, `transport` or `brightness` and the new value, like the settings form's.
   final void Function(String key, Object? value) onChanged;
   final bool readOnly;
   final String? nameError;
@@ -727,21 +769,133 @@ class _CameraSourceCardState extends State<CameraSourceCard> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.controller,
-      builder: (context, _) {
-        final c = widget.controller;
-        c.lang = appLangOf(context);
-        if (!widget.enabled) return _off(context, c);
-        if (c.loading) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: LinearProgressIndicator(minHeight: 2),
-          );
-        }
-        if (c.loadError != null) return _loadFailed(context, c);
-        return _form(context, c);
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) {
+            final c = widget.controller;
+            c.lang = appLangOf(context);
+            if (!widget.enabled) return _off(context, c);
+            if (c.loading) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: LinearProgressIndicator(minHeight: 2),
+              );
+            }
+            if (c.loadError != null) return _loadFailed(context, c);
+            return _form(context, c);
+          },
+        ),
+        _brightness(context),
+      ],
+    );
+  }
+
+  /// Lane X: the opt-in for network control of the camera. Off by default; the live screen shows its control row only
+  /// while it is on. Drawn on a box connection only (the cloud does not relay it).
+  Widget _controlSwitch(BuildContext context, CameraSourceController c, bool ro) {
+    final s = sFor(appLangOf(context));
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SwitchListTile(
+            key: const ValueKey('camera-control-switch'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(s.liveCamCtlAllow, style: text.titleSmall),
+            subtitle: Text(s.liveCamCtlAllowNote, style: _smallHint.copyWith(color: SurauColors.muted)),
+            value: c.record.control.enabled,
+            onChanged: ro || c.controlBusy ? null : (v) => c.setControl(v),
+          ),
+          if (c.record.control.enabled) _profileFields(context, c, ro),
+          if (c.controlError != null)
+            Text(c.controlError!, key: const ValueKey('camera-control-error'), style: text.bodySmall!.copyWith(color: SurauColors.danger)),
+        ],
+      ),
+    );
+  }
+
+  /// The one-tap profile ("Terapkan tetapan kamera"): Kedudukan, Fokus, Jejak automatik, Kecerahan, and whether the box
+  /// sends it when a live starts. Each change is saved on the box at once.
+  Widget _profileFields(BuildContext context, CameraSourceController c, bool ro) {
+    final s = sFor(appLangOf(context));
+    final text = Theme.of(context).textTheme;
+    final p = c.record.control.profile;
+    final off = ro || c.controlBusy;
+    Widget seg<T>(String key, T value, Map<T, String> labels, void Function(T) pick) => SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<T>(
+        key: ValueKey(key),
+        showSelectedIcon: false,
+        segments: [for (final e in labels.entries) ButtonSegment<T>(value: e.key, label: FittedBox(fit: BoxFit.scaleDown, child: Text(e.value, maxLines: 1)))],
+        selected: {value},
+        onSelectionChanged: off ? null : (v) => pick(v.first),
+      ),
+    );
+    Widget title(String t) => Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 6),
+      child: Text(t, style: text.titleSmall),
+    );
+    final ev = p.exposureEv;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      key: const ValueKey('camera-profile'),
+      children: [
+        title(s.liveCamCtlPosition),
+        seg<int>('camera-profile-preset', p.preset, {1: '1', 2: '2', 3: '3'}, (v) => c.setProfile(p.copyWith(preset: v))),
+        title(s.liveCamCtlFocus),
+        seg<String>(
+          'camera-profile-focus',
+          p.focus,
+          {'continuous': s.liveCamCtlFocusContinuous, 'single': s.liveCamCtlFocusSingle, 'manual': s.liveCamCtlFocusManual},
+          (v) => c.setProfile(p.copyWith(focus: v)),
+        ),
+        title(s.liveCamCtlTracking),
+        seg<String>(
+          'camera-profile-tracking',
+          p.tracking,
+          {'off': s.liveCamCtlTrackingOff, 'human': s.liveCamCtlTrackingHuman},
+          (v) => c.setProfile(p.copyWith(tracking: v)),
+        ),
+        title(s.liveCamCtlBrightness),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton.outlined(
+              key: const ValueKey('camera-profile-darker'),
+              tooltip: s.liveCamCtlBrightnessDown,
+              onPressed: off || ev <= -3 ? null : () => c.setProfile(p.copyWith(exposureEv: ev - 0.5)),
+              icon: const Icon(Icons.remove_rounded),
+            ),
+            SizedBox(
+              width: 72,
+              child: Text(
+                '${ev > 0 ? '+' : ''}${ev.toStringAsFixed(1)}',
+                key: const ValueKey('camera-profile-ev'),
+                textAlign: TextAlign.center,
+                style: text.titleMedium,
+              ),
+            ),
+            IconButton.outlined(
+              key: const ValueKey('camera-profile-brighter'),
+              tooltip: s.liveCamCtlBrightnessUp,
+              onPressed: off || ev >= 3 ? null : () => c.setProfile(p.copyWith(exposureEv: ev + 0.5)),
+              icon: const Icon(Icons.add_rounded),
+            ),
+          ],
+        ),
+        SwitchListTile(
+          key: const ValueKey('camera-profile-on-live'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(s.liveCamCtlApplyOnLive, style: text.titleSmall),
+          value: c.record.control.applyOnLive,
+          onChanged: off ? null : (v) => c.setApplyOnLive(v),
+        ),
+      ],
     );
   }
 
@@ -800,6 +954,31 @@ class _CameraSourceCardState extends State<CameraSourceCard> {
               label: Text(cameraRetry(lang)),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// B7: the picture brightness of every live (the phone's own camera and the external one), shown whether or not an
+  /// external camera is set up.
+  Widget _brightness(BuildContext context) {
+    final lang = appLangOf(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Card(
+        key: const ValueKey('camera-brightness-card'),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: ChoiceField(
+            path: 'brightness',
+            name: 'brightness',
+            label: settingLabel('brightness', lang),
+            value: widget.brightness,
+            choices: const ['auto', 'normal', 'bright', 'brighter'],
+            help: cameraBrightnessHelp(lang),
+            readOnly: widget.readOnly,
+            onChanged: (v) => widget.onChanged('brightness', v),
+          ),
         ),
       ),
     );
@@ -924,6 +1103,10 @@ class _CameraSourceCardState extends State<CameraSourceCard> {
                         _TestResult(controller: c, help: help()),
                       ],
               ),
+              if (!c.viaCloud && c.record.configured) ...[
+                const Divider(),
+                _controlSwitch(context, c, ro),
+              ],
               const Divider(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),

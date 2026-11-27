@@ -150,12 +150,15 @@ export function getAssetPath(db: DatabaseSync, dataDir: string, id: string): { p
  * Removes a stored theme file (and its row) that nothing refers to any more. Only a .maxtheme asset can be removed
  * here, so a wrong id can never take a picture or a sound the surau uses. Missing is fine.
  */
-export function deletePackAsset(db: DatabaseSync, dataDir: string, id: string): boolean {
+export function deletePackAsset(db: DatabaseSync, dataDir: string, id: string, keep?: (rel: string) => boolean): boolean {
   if (!ID_RE.test(id)) return false;
   const row = db.prepare('SELECT mime FROM assets WHERE id = ?').get(id);
   if (row === undefined || row.mime !== PACK_MIME) return false;
   db.prepare('DELETE FROM assets WHERE id = ?').run(id);
-  rmSync(join(assetsDirOf(dataDir), `${id}.${EXT[PACK_MIME]}`), { force: true });
+  // `keep` is the link backup's keep-on-delete step (it lives beside the video code: this file cannot import it)
+  if (keep?.(`assets/${id}.${EXT[PACK_MIME]}`) !== true) {
+    rmSync(join(assetsDirOf(dataDir), `${id}.${EXT[PACK_MIME]}`), { force: true });
+  }
   return true;
 }
 

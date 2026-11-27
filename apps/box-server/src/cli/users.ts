@@ -12,8 +12,9 @@ import { authLog } from '../auth/sessions.ts';
 import { openDb } from '../db.ts';
 import { bumpVersion, putFeature } from '../settingsStore.ts';
 import { ApprovalError, approveSite, formatCode, issueLinkCode, revokeSite, unrevokeSite } from '../sync/sites.ts';
+import { wakeSurau } from '../sync/surauSleep.ts';
 import { cleanText, deleteEmptySurau, getSurau, listSuraus, setStorageLimit, SurauError, suspendSurau, unsuspendSurau } from '../surau/registry.ts';
-import { pruneEmptySuraus } from '../surau/prune.ts';
+import { PruneBackupError, pruneEmptySuraus } from '../surau/prune.ts';
 import { workerAdminFrom } from '../sync/workerOutbox.ts';
 import type { WorkerAdminConfig } from '../sync/workerOutbox.ts';
 import { getRegistration, isStaleRegistration, listRegistrations, RegError } from '../sync/workerRegs.ts';
@@ -40,9 +41,10 @@ const USAGE = [
   '  cloud-suraus           (awan) senarai surau dengan status, had storan dan kotaknya',
   '  surau-suspend --surau <id> --reason "<sebab>"   (awan) gantung surau: tapak dan telefonnya ditolak oleh awan (kotak terus berfungsi setempat)',
   '  surau-unsuspend --surau <id>   (awan) tamatkan penggantungan surau',
+  '  surau-wake --surau <id>   (awan) bangunkan surau yang dibekukan kerana kotaknya dipautkan kepada kotak lain',
   '  surau-limit --surau <id> --gb <n>   (awan) tetapkan had storan awan surau itu (lalai 2 GB)',
   '  surau-delete --surau <id>   (awan) padam surau yang kosong (tiada kandungan, pengguna, peranti atau kotak aktif); yang tidak kosong ditolak',
-  '  surau-prune [--older-hours <n>] [--apply]   (awan) senarai surau kosong yang lebih tua daripada n jam (lalai 24); tanpa --apply hanya senarai, dengan --apply sandaran pangkalan data ditulis dahulu (backups/pre-prune-<UTC>.db) kemudian ia dipadam',
+  '  surau-prune [--older-hours <n>] [--apply]   (awan) senarai surau kosong yang lebih tua daripada n jam (lalai 24); tanpa --apply hanya senarai, dengan --apply sandaran pangkalan data ditulis dahulu (disulitkan dengan kunci awam age: backups/pre-prune-<UTC>.db.age; tanpa kunci yang sah ia ditolak dan tiada apa dipadam, kecuali MAXCOM_PRUNE_PLAIN_BACKUP=1 membenarkan salinan biasa) kemudian ia dipadam',
   '  promote-superadmin --name "<nama tepat>" [--rename "MAXCOM SuperAdmin"]   (awan) jadikan pengguna Pentadbir MAXCOM pertama (kekal Pentadbir); pengguna mesti sudah diselaraskan ke awan',
   '  enrol <userId>         keluarkan kod pendaftaran sekali guna baharu [--box https://<ip>:8443] [--data <folder>]',
   '  box-name "<nama>"      tetapkan nama MAXCOM ini (untuk pembangunan) [--data <folder>]',
@@ -57,7 +59,7 @@ const USAGE = [
 
 const OPS_COMMANDS: readonly string[] = ['ops-enrol', 'ops-devices', 'ops-unmark', 'support-add', 'support-remove'];
 /** The surau registry commands (Plan 14 Task 8): cloud only, like the ops commands. */
-const REGISTRY_COMMANDS: readonly string[] = ['cloud-suraus', 'surau-suspend', 'surau-unsuspend', 'surau-limit', 'surau-delete', 'surau-prune', 'cloud-revoke', 'cloud-unrevoke'];
+const REGISTRY_COMMANDS: readonly string[] = ['cloud-suraus', 'surau-suspend', 'surau-unsuspend', 'surau-wake', 'surau-limit', 'surau-delete', 'surau-prune', 'cloud-revoke', 'cloud-unrevoke'];
 const GIB = 1024 * 1024 * 1024;
 /** `--gb`: up to 4 digits, optionally 1 to 3 decimals. */
 const GB_RE = /^\d{1,4}(\.\d{1,3})?$/;
@@ -341,6 +343,15 @@ ${USAGE}`);
         }
         return 0;
       }
+      case 'surau-wake': {
+        const surauArg = args.surau;
+        if (surauArg === undefined) throw new AuthError(400, 'bad_args', 'Guna: surau-wake --surau <id>');
+        const s = getSurau(db, surauArg);
+        if (s === null || s === undefined) throw new AuthError(404, 'surau_not_found', 'Surau tidak dijumpai');
+        const woke = wakeSurau(db, s.id, ACTOR, 'operator', new Date());
+        out(woke ? `Surau ${s.id} (${shown(s.name)}) dibangunkan` : `Surau ${s.id} (${shown(s.name)}) tidak dibekukan`);
+        return 0;
+      }
       case 'surau-suspend':
       case 'surau-unsuspend':
       case 'surau-limit': {
@@ -554,7 +565,7 @@ ${USAGE}`);
     }
   } catch (e) {
     // the message, then the refusal code as a word a script can match
-    errOut(e instanceof AuthError ? `${e.message} (${e.code})` : 'Arahan gagal');
+    errOut(e instanceof AuthError ? `${e.message} (${e.code})` : e instanceof PruneBackupError ? e.message : 'Arahan gagal');
     return 1;
   } finally {
     db.close();

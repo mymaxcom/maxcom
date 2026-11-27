@@ -21,7 +21,7 @@ import 'package:surau_app/features/unlock/unlock_flow.dart';
 import 'package:surau_app/features/unlock/offline_vault.dart' show OfflineVault;
 import 'package:surau_app/features/unlock/unlock_screen.dart';
 import 'package:surau_app/store/local_store.dart';
-import 'package:surau_app/sync/sync_providers.dart' show localStoreProvider, revokedProvider;
+import 'package:surau_app/sync/sync_providers.dart' show RevokedNotifier, localStoreProvider, revokedProvider;
 import 'package:surau_app/l10n/generated/s.dart';
 
 import '../../golden_sizes.dart';
@@ -72,6 +72,10 @@ Widget screen(
   VoidCallback? onEnrolAgain,
   bool cachedInfo = true,
   List<Override> overrides = const [],
+  bool moveDeferred = false,
+  VoidCallback? onMove,
+  Future<bool> Function()? recoveryProbe,
+  VoidCallback? onRecover,
 }) {
   container = ProviderContainer(overrides: overrides);
   addTearDown(container.dispose);
@@ -97,6 +101,10 @@ Widget screen(
         ),
         onUnlocked: onUnlocked ?? (_) {},
         onEnrolAgain: onEnrolAgain ?? () {},
+        moveDeferred: moveDeferred,
+        onMove: onMove,
+        recoveryProbe: recoveryProbe,
+        onRecover: onRecover,
         openUrl: opener.call,
         now: fixedNow,
         toLocal: fixedToLocal,
@@ -151,7 +159,7 @@ void main() {
         screen(flowFor(box), onUnlocked: (s) => got = s),
         GoldenSize.phone,
       );
-      expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Surau Contoh'), findsOneWidget);
       expect(find.text('Assalamualaikum, Ustaz Ali'), findsOneWidget);
       expect(find.text('Pentadbir'), findsOneWidget);
       expect(find.text('Masukkan PIN untuk teruskan'), findsOneWidget);
@@ -242,7 +250,7 @@ void main() {
         reason: 'the version tag travels with it',
       );
       expect(req.headers.containsKey('authorization'), isFalse);
-      expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Surau Contoh'), findsOneWidget);
       expect(find.text('Assalamualaikum, Ustaz Ali'), findsOneWidget);
     },
   );
@@ -263,7 +271,7 @@ void main() {
       });
       await pumpAtSize(tester, screen(flowFor(box)), GoldenSize.phone);
       expect(find.byKey(const ValueKey('surau-logo')), findsNothing);
-      expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+      expect(find.text('Surau Contoh'), findsOneWidget);
     },
   );
 
@@ -413,6 +421,63 @@ void main() {
     },
   );
 
+  testWidgets(
+    'revoked device on a box in recovery (after a restore): "Guna kod pemulihan" is offered and leads to the recovery way in',
+    (tester) async {
+      final box = boxAnswering(401, 'Peranti telah dibatalkan');
+      var recover = 0;
+      var again = 0;
+      await pumpAtSize(
+        tester,
+        screen(flowFor(box), onEnrolAgain: () => again++, recoveryProbe: () async => true, onRecover: () => recover++),
+        GoldenSize.phone,
+      );
+      await typeDigits(tester, '280419');
+      await tester.pumpAndSettle();
+      expect(find.text('Peranti telah dibatalkan'), findsOneWidget);
+      expect(find.byKey(const ValueKey('unlock-recovery')), findsOneWidget);
+      expect(find.text('Guna kod pemulihan'), findsOneWidget);
+      expect(
+        find.text('MAXCOM ini tiada Pentadbir yang boleh masuk. Imbas kod QR pemulihan pada skrin TV MAXCOM, kemudian masukkan kod pemulihan yang ditulis di atas kertas.'),
+        findsOneWidget,
+      );
+      // the ordinary way stays beside it
+      expect(find.text('Daftar semula'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('unlock-recovery')));
+      expect(recover, 1);
+      expect(again, 0);
+    },
+  );
+
+  testWidgets('revoked device on a box that still has an admin, or one that does not answer: no recovery button', (tester) async {
+    for (final probe in <Future<bool> Function()>[() async => false, () async => throw StateError('no answer')]) {
+      final box = boxAnswering(401, 'Peranti telah dibatalkan');
+      await pumpAtSize(tester, screen(flowFor(box), recoveryProbe: probe, onRecover: () {}), GoldenSize.phone);
+      await typeDigits(tester, '280419');
+      await tester.pumpAndSettle();
+      expect(find.text('Peranti telah dibatalkan'), findsOneWidget);
+      expect(find.byKey(const ValueKey('unlock-recovery')), findsNothing);
+      expect(find.text('Daftar semula'), findsOneWidget);
+    }
+  });
+
+  testWidgets('a phone that learnt it was revoked during a sync also gets "Guna kod pemulihan" on a box in recovery', (tester) async {
+    final box = FakeBox(happyBox);
+    await pumpAtSize(
+      tester,
+      screen(
+        flowFor(box),
+        overrides: [revokedProvider.overrideWith(() => _AlreadyRevoked())],
+        recoveryProbe: () async => true,
+        onRecover: () {},
+      ),
+      GoldenSize.phone,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Peranti ini telah dibatalkan'), findsOneWidget);
+    expect(find.byKey(const ValueKey('unlock-recovery')), findsOneWidget);
+  });
+
   testWidgets('[K2] a device_revoked answer on the unlock screen wipes the copy and the vault', (
     tester,
   ) async {
@@ -440,6 +505,44 @@ void main() {
     expect(container.read(revokedProvider), isTrue);
   });
 
+  testWidgets('follower answer after "Kemudian": the unlock shows "Sambung ke Box utama", which opens the move', (
+    tester,
+  ) async {
+    var moves = 0;
+    final box = FakeBox((r) async {
+      if (r.url.path == '/api/auth/challenge') {
+        return jsonResponse(409, {'code': 'follower', 'errors': ['follower']});
+      }
+      return happyBox(r);
+    });
+    await pumpAtSize(
+      tester,
+      screen(flowFor(box), moveDeferred: true, onMove: () => moves++),
+      GoldenSize.phone,
+    );
+    await typeDigits(tester, '280419');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('unlock-move-banner')), findsOneWidget);
+    expect(moves, 0);
+    await tester.tap(find.byKey(const ValueKey('unlock-move-banner')));
+    expect(moves, 1);
+  });
+
+  testWidgets('follower answer without "Kemudian": the move opens at once', (tester) async {
+    var moves = 0;
+    final box = FakeBox((r) async {
+      if (r.url.path == '/api/auth/challenge') {
+        return jsonResponse(409, {'code': 'follower', 'errors': ['follower']});
+      }
+      return happyBox(r);
+    });
+    await pumpAtSize(tester, screen(flowFor(box), onMove: () => moves++), GoldenSize.phone);
+    await typeDigits(tester, '280419');
+    await tester.pumpAndSettle();
+    expect(moves, 1);
+    expect(find.byKey(const ValueKey('unlock-move-banner')), findsNothing);
+  });
+
   testWidgets('missing device key: no request, Daftar semula offered', (
     tester,
   ) async {
@@ -463,7 +566,7 @@ void main() {
     await pumpAtSize(tester, screen(flowFor(box)), GoldenSize.phone);
     await typeDigits(tester, '280419');
     expect(
-      find.text('Tidak dapat menghubungi Surau D\'Waqaf'),
+      find.text('Tidak dapat menghubungi Surau Contoh'),
       findsOneWidget,
     );
     expect(find.text('Cuba lagi'), findsOneWidget);
@@ -683,7 +786,7 @@ void main() {
           find.byKey(const ValueKey('unlock-auto-spinner')),
           findsOneWidget,
         );
-        expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+        expect(find.text('Surau Contoh'), findsOneWidget);
         expect(
           find.text('Bukan anda? Daftar peranti ini semula'),
           findsOneWidget,
@@ -912,7 +1015,7 @@ void main() {
         expect(find.byKey(const ValueKey('surau-logo')), findsOneWidget);
         await settleImages(tester);
         expect(
-          find.text('Surau D\'Waqaf'),
+          find.text('Surau Contoh'),
           findsNothing,
           reason: 'the logo is the name',
         );
@@ -1025,4 +1128,10 @@ void main() {
       }
     });
   });
+}
+
+/// A phone that the sync already marked as revoked when the screen opens.
+class _AlreadyRevoked extends RevokedNotifier {
+  @override
+  bool build() => true;
 }

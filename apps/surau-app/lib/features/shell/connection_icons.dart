@@ -51,9 +51,16 @@ LinkBadge _badgeOf(LinkState s) => switch (s) {
 bool isNetworkSyncError(String? code) =>
     code == null || code == 'unreachable' || code == 'cloud_unreachable';
 
+/// The last sync run found the box and then failed with it: a failure of the
+/// box exchange, which says nothing about the cloud (B13).
+bool boxSyncFailed(SyncView v) => v.state == SyncState.offline && v.lastError != null && v.failedVia == 'box';
+
 /// The cloud as the sync engine sees it, most urgent first.
 LinkState cloudStateOf(SyncView v) {
   if (v.state == SyncState.waking) return LinkState.connecting;
+  // A sync that failed against the BOX is the box icon's to show: the cloud
+  // was not asked, so its icon is never turned red by it.
+  if (boxSyncFailed(v)) return v.lastSync == null ? LinkState.connecting : LinkState.connected;
   if (v.state == SyncState.offline && !isNetworkSyncError(v.lastError)) {
     return LinkState.error;
   }
@@ -95,7 +102,14 @@ LinkState boxLinkState(WidgetRef ref) {
   if (session?.offline == true || session?.via == SessionDto.viaCloud) {
     return LinkState.disconnected;
   }
-  return reachStateOf(ref.watch(connectivityProvider));
+  final reach = reachStateOf(ref.watch(connectivityProvider));
+  // the box answers, but the last sync with it failed: shown here, on the box icon
+  if (reach == LinkState.connected &&
+      ref.watch(syncActionsProvider) != null &&
+      boxSyncFailed(ref.watch(syncViewProvider).value ?? SyncView.empty)) {
+    return LinkState.error;
+  }
+  return reach;
 }
 
 String linkWords(S s, LinkKind kind, LinkState state) => switch ((kind, state)) {

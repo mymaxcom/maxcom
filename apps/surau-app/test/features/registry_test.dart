@@ -50,8 +50,8 @@ void main() {
     expect(cases['coreSourceHash'], coreSourceHash);
   });
 
-  test('features: core has 56, 11 of them locked', () {
-    expect(features.length, 56);
+  test('features: core has 57, 12 of them locked', () {
+    expect(features.length, 57);
     final locked = features.where((f) => f.locked).map((f) => f.key).toSet();
     expect(locked, {
       'prayerCalc',
@@ -65,6 +65,7 @@ void main() {
       'prayerSources',
       'system',
       'language',
+      'tvProfiles',
     });
     expect(features.map((f) => f.key).toSet().length, features.length);
   });
@@ -118,7 +119,7 @@ void main() {
   test('theme tables: screens, titles, hidden features, contract', () {
     expect(screenIds.length, 21);
     expect(themeTitles['oldschool'], 'Old School');
-    expect(hiddenFeatures, ['themeStyle', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage']);
+    expect(hiddenFeatures, ['themeStyle', 'tvProfiles', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage']);
     expect(themeContract, 1);
     expect(builtInThemeIds, ['default', 'colourful', 'creative', 'oldschool', 'minimal', 'arabic']);
     expect(themeTitles['arabic'], 'Arabic Art');

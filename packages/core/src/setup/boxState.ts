@@ -18,6 +18,8 @@ export interface BoxInfo {
   serverTime: string;
   /** The MAX Kiosk Server version (YYYY.MM.N) of the box answering: stamped into its release at build time. */
   version: string;
+  /** Several boxes in one surau: `follower` for a kotak pengikut. Absent on a box older than 2026.11.15 (read as `main`). */
+  mode?: 'main' | 'follower';
 }
 
 export interface BoxStateView extends BoxInfo {
@@ -29,6 +31,11 @@ export interface BoxStateView extends BoxInfo {
   recoveryCodeSet?: boolean;
   surauName: string | null;
   appDownloadUrl: string;
+  /** Follower only: the master it shows, whether the master answers now, whole minutes since it last did, and whether the master speaks a newer screen contract than this box. */
+  master?: { name: string };
+  connected?: boolean;
+  awayMinutes?: number;
+  needsUpdate?: boolean;
 }
 
 export interface NetCheckView {

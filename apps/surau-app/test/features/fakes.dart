@@ -14,9 +14,9 @@ import 'package:surau_app/features/unlock/biometric_pin.dart';
 
 /// The surau and its helper, as `GET /api/surau/info` answers.
 const fixtureInfoJson = <String, Object?>{
-  'name': 'Surau D\'Waqaf',
+  'name': 'Surau Contoh',
   'kind': 'surau',
-  'shortAddress': 'Jalan Mahabbah 3, Taman Mahabbah',
+  'shortAddress': 'Jalan Contoh 3, Taman Contoh',
   'help': {
     'name': 'Encik Hafiz',
     'phone': '012-345 6789',
@@ -54,7 +54,7 @@ String fixturePayload({
     'exp': exp,
     'appLock': ?appLock,
     if (!legacy) ...{
-      'surau': {'name': 'Surau D\'Waqaf', 'kind': 'surau'},
+      'surau': {'name': 'Surau Contoh', 'kind': 'surau'},
       'help': fixtureInfoJson['help'],
       'roles': roles,
       'invitedBy': ?invitedBy,
@@ -115,6 +115,34 @@ class FakeDeviceKey implements DeviceKey {
   Future<void> clear() async {
     clearCalls++;
     present = false;
+    pending = false;
+  }
+
+  /// A pending key waits next to the key in use; [present] is only the key in use.
+  bool pending = false;
+  int generatePendingCalls = 0;
+  int commitPendingCalls = 0;
+  int discardPendingCalls = 0;
+
+  @override
+  Future<Map<String, String>> generatePending() async {
+    generatePendingCalls++;
+    pending = true;
+    return Map.of(fixtureJwk);
+  }
+
+  @override
+  Future<void> commitPending() async {
+    commitPendingCalls++;
+    if (!pending) throw StateError('no pending key');
+    pending = false;
+    present = true;
+  }
+
+  @override
+  Future<void> discardPending() async {
+    discardPendingCalls++;
+    pending = false;
   }
 }
 
@@ -136,7 +164,34 @@ class FakeTrust implements EnrolTrust {
   @override
   Future<void> establish(Uri box, String? caSha256) async {
     calls.add((box, caSha256));
+    if (mismatch) throw TrustError.of(TrustKind.rootMismatch);
+    if (failAt.contains(box.host)) throw const TrustError('Sijil akar tidak sepadan');
     if (fail) throw const TrustError('Sijil akar tidak sepadan');
+  }
+
+  /// The name to address table the flow seeds, and every change in order
+  /// (`+name=ip`, `-name`).
+  final Map<String, String> routes = {};
+  final List<String> routeLog = [];
+
+  /// Origins whose root fetch fails (a candidate IP that is not the box).
+  final Set<String> failAt = {};
+
+  /// Every root fetch finds a root that does not match the QR's hash.
+  bool mismatch = false;
+
+  @override
+  String? routeOf(String name) => routes[name];
+
+  @override
+  void routeName(String name, String ip) {
+    routes[name] = ip;
+    routeLog.add('+$name=$ip');
+  }
+
+  @override
+  void unrouteName(String name) {
+    if (routes.remove(name) != null) routeLog.add('-$name');
   }
 }
 
@@ -252,8 +307,10 @@ EnrolledBox fixtureBox({
   List<String> roles = const ['admin'],
   bool appLock = true,
   String? name,
+  String? lastIp,
+  String box = 'https://127.0.0.1:8443',
 }) => EnrolledBox(
-  box: Uri.parse('https://127.0.0.1:8443'),
+  box: Uri.parse(box),
   boxId: '0123456789abcdef',
   deviceId: 'dev-1',
   userId: 'u1',
@@ -262,6 +319,7 @@ EnrolledBox fixtureBox({
   caSha256: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
   appLock: appLock,
   name: name,
+  lastIp: lastIp,
 );
 
 /// Captures the URIs a help card tried to open.

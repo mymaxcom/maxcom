@@ -207,8 +207,8 @@ class FinHarness {
   List<Override> overrides({
     Set<String> roles = const {'admin'},
     SurauInfo? info = const SurauInfo(
-      name: 'Surau D\'Waqaf',
-      shortAddress: 'Jalan Mahabbah 3, Taman Mahabbah',
+      name: 'Surau Contoh',
+      shortAddress: 'Jalan Contoh 3, Taman Contoh',
     ),
   }) => [
     financeRepositoryProvider.overrideWithValue(repo),
@@ -226,8 +226,8 @@ class FinHarness {
     Locale locale = const Locale('ms'),
     Set<String> roles = const {'admin'},
     SurauInfo? info = const SurauInfo(
-      name: 'Surau D\'Waqaf',
-      shortAddress: 'Jalan Mahabbah 3, Taman Mahabbah',
+      name: 'Surau Contoh',
+      shortAddress: 'Jalan Contoh 3, Taman Contoh',
     ),
   }) {
     final router = GoRouter(

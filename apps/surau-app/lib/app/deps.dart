@@ -193,7 +193,7 @@ LivePublisher publisherFor(
   Uri? box,
   Future<String?> Function()? tokenProvider,
   int segmentMinutes = 15,
-  int maxBitrateKbps = 2500,
+  int maxBitrateKbps = 3500,
 }) {
   if (kIsWeb || platform == 'web' || platform == 'ios-web') {
     return WebPublisher(

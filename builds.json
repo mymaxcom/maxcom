@@ -1,5 +1,5 @@
 {
-  "admin-client-android": 2,
-  "kiosk-server-android": 1,
-  "kiosk-server-windows": 1
+  "kiosk-server-windows": 6,
+  "kiosk-server-android": 6,
+  "admin-client-android": 6
 }

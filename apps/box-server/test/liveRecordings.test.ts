@@ -394,7 +394,8 @@ const ffmpeg = (() => {
   return r.status === 0 ? r.stdout.split(/\r?\n/)[0]!.trim() : '';
 })();
 
-describe.runIf(ffmpeg !== '')('with the real ffmpeg', () => {
+// Visible skip: where ffmpeg is not on PATH the reporter lists this block as skipped, with the reason in its title.
+describe.skipIf(ffmpeg === '')(`with the real ffmpeg${ffmpeg === '' ? ' (SKIPPED: ffmpeg not found on PATH)' : ''}`, () => {
   const clip = (file: string): void => {
     const r = spawnSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=10:duration=1', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:v', 'mpeg4', '-c:a', 'aac', '-shortest', '-y', file]);
     expect(r.status, String(r.stderr)).toBe(0);
@@ -424,12 +425,18 @@ describe.runIf(ffmpeg !== '')('with the real ffmpeg', () => {
     expect(seconds(join(work, 'a.mp4'))).toBeLessThan(1.3);
   });
 
-  it('joins two webm clips with the whitelists in place (the format whitelist lets matroska/webm through)', async () => {
+  // the webm encoder (libvpx + libopus) is probed once; without it the test is listed as skipped, not silently passed
+  const encoders = ffmpeg === '' ? '' : String(spawnSync(ffmpeg, ['-hide_banner', '-encoders'], { encoding: 'utf8' }).stdout);
+  const webmEncoder = encoders.includes(" libvpx ") && encoders.includes(" libopus ");
+  it.skipIf(!webmEncoder)(`joins two webm clips with the whitelists in place${webmEncoder ? '' : ' (SKIPPED: this ffmpeg has no libvpx/libopus encoder)'}`, async () => {
     const work = mkdtempSync(join(tmpdir(), 'surau-recreal-'));
     dirs.push(work);
-    const mk = (file: string): number =>
-      spawnSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=10:duration=1', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:v', 'libvpx', '-c:a', 'libopus', '-shortest', '-y', file]).status ?? 1;
-    if (mk(join(work, 'a.webm')) !== 0 || mk(join(work, 'b.webm')) !== 0) return; // this ffmpeg has no vp8/opus encoder
+    const mk = (file: string): void => {
+      const m = spawnSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=10:duration=1', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:v', 'libvpx', '-c:a', 'libopus', '-shortest', '-y', file]);
+      expect(m.status, String(m.stderr)).toBe(0);
+    };
+    mk(join(work, 'a.webm'));
+    mk(join(work, 'b.webm'));
     const r = await rig({ liveRecordings: { ffmpegPath: () => ffmpeg, free: () => 50 * 1024 ** 3 } });
     expect((await piece(r, r.owner, 0, readFileSync(join(work, 'a.webm')), 'video/webm')).statusCode).toBe(200);
     expect((await piece(r, r.owner, 1, readFileSync(join(work, 'b.webm')), 'video/webm')).statusCode).toBe(200);

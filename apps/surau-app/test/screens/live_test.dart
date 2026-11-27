@@ -4,6 +4,7 @@
 // and summary, and the six goldens at the three sizes.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -14,6 +15,9 @@ import 'package:surau_app/app/app_lang.dart';
 import 'package:surau_app/app/providers.dart' show settingsProvider;
 import 'package:surau_app/features/common/bidi.dart';
 import 'package:surau_app/features/live/fake_publisher.dart';
+import 'package:surau_app/features/live/live_controller.dart' show LiveResume;
+import 'package:surau_app/features/live/live_destinations.dart';
+import 'package:surau_app/l10n/s_lookup.dart' show sBm;
 import 'package:surau_app/features/live/live_notice_box.dart' show liveBoxNoticeProvider;
 import 'package:surau_app/features/live/live_screen.dart';
 import 'package:surau_app/features/live/live_widgets.dart';
@@ -24,7 +28,7 @@ import '../features/shell/harness.dart';
 import '../golden_sizes.dart';
 
 const _signedIn = LiveBoxStatus(
-  youtube: YoutubeAccount.signedIn('Surau D\'Waqaf'),
+  youtube: YoutubeAccount.signedIn('Surau Contoh'),
 );
 
 class _Live {
@@ -216,7 +220,7 @@ void main() {
     final t = await _open(
       tester,
       box: const LiveBoxStatus(
-        youtube: YoutubeAccount.signedIn('Surau D\'Waqaf'),
+        youtube: YoutubeAccount.signedIn('Surau Contoh'),
         warnings: {'media_ports_blocked'},
       ),
     );
@@ -233,12 +237,24 @@ void main() {
     await _open(
       tester,
       box: const LiveBoxStatus(
-        youtube: YoutubeAccount.signedIn('Surau D\'Waqaf'),
+        youtube: YoutubeAccount.signedIn('Surau Contoh'),
         warnings: {'no_video_from_device'},
       ),
     );
     expect(find.text(_noVideo), findsOneWidget);
     expect(find.text(_blocked), findsNothing);
+  });
+
+  testWidgets('C3, C11: the camera warnings of the box are told on the live screen', (tester) async {
+    await _open(
+      tester,
+      box: const LiveBoxStatus(
+        youtube: YoutubeAccount.signedIn('Surau Contoh'),
+        warnings: {'camera_bitrate_high', 'camera_h265'},
+      ),
+    );
+    expect(find.text('Strim kamera terlalu besar untuk YouTube. Turunkan kepada 720p, 3 hingga 4 Mbps pada kamera.'), findsOneWidget);
+    expect(find.text('Kamera menghantar video H.265, yang tidak dapat disiarkan melalui MAXCOM. Tukar kamera kepada H.264.'), findsOneWidget);
   });
 
   testWidgets('a clean status shows neither banner', (tester) async {
@@ -327,7 +343,7 @@ void main() {
       final t = await _open(
         tester,
         box: unknown
-            ? const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf'))
+            ? const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau Contoh'))
             : _signedIn.copyWith(internet: false),
       );
       await tester.tap(_start);
@@ -337,10 +353,12 @@ void main() {
       expect(text.startsWith('YouTube tidak dapat digunakan sekarang: '), isTrue);
       expect(text.substring('YouTube'.length).contains('YouTube'), isFalse, reason: text);
       expect(text, contains(unknown ? 'akaun tidak dapat disemak sekarang' : 'tiada internet'));
-      if (unknown) expect(text, contains(bidiIsolate('Surau D\'Waqaf')));
+      if (unknown) expect(text, contains(bidiIsolate('Surau Contoh')));
       await tester.tap(find.byKey(const ValueKey('live-youtube-ask-cancel')));
       await settle(tester);
       expect(t.pub.started, isEmpty);
+      // the screen is opened again in the loop: the first one's providers end with it
+      t.h.container.dispose();
     }
   });
 
@@ -445,21 +463,21 @@ void main() {
         youtube: YoutubeAccount.signingIn(userCode: 'BQXR-TKMW', verificationUrl: 'https://www.google.com/device'),
       ),
     );
-    t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau D\'Waqaf')));
+    t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau Contoh')));
     await tester.pump();
-    expect(find.text('YouTube disambungkan: ${bidiIsolate('Surau D'Waqaf')}'), findsOneWidget);
+    expect(find.text('YouTube disambungkan: ${bidiIsolate('Surau Contoh')}'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
     // the same state again is not a new connection
-    t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau D\'Waqaf')));
+    t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.signedIn('Surau Contoh')));
     await tester.pump();
-    expect(find.text('YouTube disambungkan: ${bidiIsolate('Surau D'Waqaf')}'), findsOneWidget);
+    expect(find.text('YouTube disambungkan: ${bidiIsolate('Surau Contoh')}'), findsOneWidget);
     await settle(tester);
     await reveal(tester, find.byKey(const ValueKey('live-settings-summary-connected')));
     expect(find.byKey(const ValueKey('live-settings-summary-connected')), findsOneWidget);
     await reveal(tester, find.byKey(const ValueKey('live-youtube-channel')));
     expect(find.text('YouTube disambungkan'), findsOneWidget);
     expect(find.byKey(const ValueKey('live-youtube-channel')), findsOneWidget);
-    expect(find.text('Surau D\'Waqaf'), findsWidgets);
+    expect(find.text('Surau Contoh'), findsWidgets);
     expect(find.text('Tukar saluran / Log keluar'), findsOneWidget);
   });
 
@@ -520,6 +538,74 @@ void main() {
     await tester.tap(_start);
     await settle(tester);
     expect(t.pub.started, isEmpty);
+  });
+
+  group('[B12] the stop confirm always shows', () {
+    testWidgets('Berhenti on the page opens the confirm; nothing stops before Ya', (tester) async {
+      final t = await _open(tester);
+      t.pub.emit(_running());
+      await settle(tester);
+      await tester.tap(_stop);
+      await settle(tester);
+      expect(find.byKey(const ValueKey('live-stop-dialog')), findsOneWidget);
+      expect(t.pub.stops, 0);
+      expect(t.box.stopLog, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('live-stop-confirm')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await settle(tester);
+      expect(t.pub.stops, 1);
+      expect(t.box.stopLog.single.path, 'user');
+    });
+
+    testWidgets('a fast double tap on Berhenti cannot pass through the dialog while it opens', (tester) async {
+      final t = await _open(tester);
+      t.pub.emit(_running());
+      await settle(tester);
+      await tester.tap(_stop);
+      // one frame: the dialog is in the tree but still flying in
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 20));
+      final confirm = find.byKey(const ValueKey('live-stop-confirm'));
+      expect(confirm, findsOneWidget);
+      tester.widget<FilledButton>(confirm).onPressed!();
+      await settle(tester);
+      expect(find.byKey(const ValueKey('live-stop-dialog')), findsOneWidget, reason: 'still asking');
+      expect(t.pub.stops, 0);
+      expect(t.box.stopLog, isEmpty);
+    });
+
+    testWidgets('[S7] a publisher in error with a session held shows Berhenti, not Mula siaran, and it asks first', (tester) async {
+      final t = await _open(tester, box: _signedIn.copyWith(sessionId: 's1'));
+      t.pub.emit(const PublisherState(phase: PublisherPhase.error));
+      await settle(tester);
+      expect(_stop, findsOneWidget);
+      expect(_start, findsNothing);
+      await tester.tap(_stop);
+      await settle(tester);
+      expect(find.byKey(const ValueKey('live-stop-dialog')), findsOneWidget);
+    });
+
+    testWidgets('[B9] own live after a restart: the card with Sambung semula and Berhenti; Berhenti asks first', (tester) async {
+      await _open(tester, box: _signedIn.copyWith(sessionId: 's1', resume: LiveResume.needed));
+      expect(find.text('Siaran anda masih berjalan'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Sambung semula'), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-emergency-stop')), findsNothing, reason: 'it is our own live');
+      expect(find.byKey(const ValueKey('live-other-device')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('live-mine-stop')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('live-stop-dialog')), findsOneWidget);
+    });
+
+    testWidgets('[B9] the phone still sends the picture: the screen says so', (tester) async {
+      final t = await _open(tester, box: _signedIn.copyWith(sessionId: 's1', resume: LiveResume.sending));
+      t.pub.emit(_running());
+      await settle(tester);
+      t.unfold();
+      await settle(tester);
+      expect(find.text('Siaran masih dihantar dari telefon ini'), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-mine')), findsNothing);
+      expect(_stop, findsOneWidget);
+    });
   });
 
   testWidgets('Berhenti asks first; cancel keeps the live', (tester) async {
@@ -1073,7 +1159,7 @@ void main() {
     });
 
     // Arabic app, Arabic and Latin channel names: the chip and the dialog read in order (bidi isolation).
-    for (final channel in ['قناة مصلى النور', 'Surau D\'Waqaf']) {
+    for (final channel in ['قناة مصلى النور', 'Surau Contoh']) {
       final tag = channel.startsWith('ق') ? 'arch' : 'latch';
       testWidgets('live_youtube_chip_ar_$tag', (tester) async {
         final t = await _open(tester, box: LiveBoxStatus(youtube: YoutubeAccount.signedIn(channel)));
@@ -1105,7 +1191,7 @@ void main() {
     testWidgets('live_youtube_unknown', (tester) async {
       final t = await _open(
         tester,
-        box: const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf')),
+        box: const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau Contoh')),
       );
       // the grey "?" on the YouTube pill, the reason in its label (and in the sheet)
       expect(
@@ -1114,8 +1200,8 @@ void main() {
       );
       expect(
         _pillLabel(tester),
-        'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}. '
-        'YouTube: tidak dapat disemak sekarang (kali terakhir: ${bidiIsolate('Surau D'Waqaf')})',
+        'YouTube: Ya, ${bidiIsolate('Surau Contoh')}. '
+        'YouTube: tidak dapat disemak sekarang (kali terakhir: ${bidiIsolate('Surau Contoh')})',
       );
       await expectGoldens(tester, t.h.app, 'live_youtube_unknown');
     });
@@ -1179,7 +1265,7 @@ void main() {
     Finder chip(String k) => find.byKey(ValueKey('live-dest-$k'));
     Finder badge(String k, String state) =>
         find.descendant(of: chip(k), matching: find.byKey(ValueKey('live-dest-badge-$state')));
-    final channelOn = 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}';
+    final channelOn = 'YouTube: Ya, ${bidiIsolate('Surau Contoh')}';
 
     testWidgets('[PP-L2] the pills are visible without opening any card; the switch in the sheet changes YouTube at once', (
       tester,
@@ -1247,7 +1333,7 @@ void main() {
       t.box.set(const LiveBoxStatus());
       await settle(tester);
       expect(badge('youtube', 'warn'), findsOneWidget);
-      t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf')));
+      t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau Contoh')));
       await settle(tester);
       expect(badge('youtube', 'unknown'), findsOneWidget);
     });
@@ -1265,24 +1351,86 @@ void main() {
       });
     }
 
-    testWidgets('[PP-L2] the switch is greyed while the box has not answered, as the chip was', (tester) async {
+    testWidgets('[B5] while a write is pending the pill shows a progress mark, and a second tap is applied after it', (tester) async {
       final t = await _open(tester);
-      t.h.settings['liveYoutube'] = {'nextLiveOn': true};
-      t.h.container.invalidate(settingsProvider);
-      await settle(tester);
-      final answer = Completer<http.Response>();
-      t.h.handlers['PUT /api/live/youtube/next-live'] = (r) => answer.future;
+      final answers = <Completer<http.Response>>[];
+      final sent = <Object?>[];
+      t.h.handlers['PUT /api/live/youtube/next-live'] = (r) {
+        sent.add((jsonDecode(r.body) as Map)['on']);
+        final c = Completer<http.Response>();
+        answers.add(c);
+        return c.future;
+      };
       await _openDest(tester);
-      expect(tester.widget<Switch>(_youtubeSwitch).onChanged, isNotNull);
       await tester.tap(_youtubeSwitch);
       await tester.pump();
       await tester.pump();
-      expect(tester.widget<Switch>(_youtubeSwitch).onChanged, isNull, reason: 'one write at a time');
       expect(tester.widget<Switch>(_youtubeSwitch).value, isFalse, reason: 'the tap shows at once');
-      answer.complete(jsonResponse(200, {'nextLiveOn': false}));
+      expect(tester.widget<Switch>(_youtubeSwitch).onChanged, isNotNull, reason: 'a second tap is taken, not dropped');
+      expect(find.byKey(const ValueKey('live-dest-saving')), findsOneWidget);
+      expect(find.text('Menyimpan pilihan'), findsOneWidget);
+      // the second tap, while the first write has not been answered
+      await tester.tap(_youtubeSwitch);
+      await tester.pump();
+      await tester.pump();
+      expect(sent, [false], reason: 'one write at a time');
+      expect(tester.widget<Switch>(_youtubeSwitch).value, isTrue);
+      answers[0].complete(jsonResponse(200, {'nextLiveOn': false}));
+      await tester.pump();
+      await tester.pump();
+      expect(sent, [false, true], reason: 'the queued tap is written after the first');
+      answers[1].complete(jsonResponse(200, {'nextLiveOn': true}));
       await settle(tester);
-      expect(tester.widget<Switch>(_youtubeSwitch).onChanged, isNotNull);
-      expect(badge('youtube', 'off'), findsOneWidget, reason: 'the pill behind the sheet follows');
+      expect(find.byKey(const ValueKey('live-dest-saving')), findsNothing);
+      expect(tester.widget<Switch>(_youtubeSwitch).value, isTrue);
+      expect(badge('youtube', 'on'), findsOneWidget, reason: 'the pill behind the sheet follows');
+    });
+
+    testWidgets('[B5] YouTube switched off stays off after 61 s and after the screen is rebuilt; Mula siaran sends youtube false (success)', (tester) async {
+      final t = await _open(tester);
+      t.h.handlers['PUT /api/live/youtube/next-live'] = (r) async => jsonResponse(200, {'nextLiveOn': false});
+      await _toggleYoutube(tester);
+      expect(badge('youtube', 'off'), findsOneWidget);
+      // the old screen trusted the answer for one minute only, then fell back to a stale copy
+      await tester.pump(const Duration(seconds: 61));
+      await settle(tester);
+      expect(badge('youtube', 'off'), findsOneWidget);
+      // the screen is rebuilt (another tab and back): its own State is new, the choice is not
+      t.h.router.go('/');
+      await settle(tester);
+      t.h.router.go('/live');
+      await settle(tester);
+      expect(badge('youtube', 'off'), findsOneWidget);
+      expect(_pillLabel(tester), _offSpoken);
+      await tester.tap(_start);
+      await settle(tester);
+      expect(t.pub.started.last.outputs.youtube, isFalse);
+    });
+
+    testWidgets('[B5] the box\'s own choice in the status wins; a write the box has not yet agreed with says "Belum dapat disahkan"', (tester) async {
+      final t = await _open(tester);
+      final dest = t.h.container.read(liveDestinationsProvider.notifier);
+      dest.fromStatus(false); // another admin switched it off on this box
+      await settle(tester);
+      expect(badge('youtube', 'off'), findsOneWidget);
+      t.h.handlers['PUT /api/live/youtube/next-live'] = (r) async => jsonResponse(200, {'nextLiveOn': true});
+      await _openDest(tester);
+      await tester.tap(_youtubeSwitch);
+      await settle(tester);
+      expect(tester.widget<Switch>(_youtubeSwitch).value, isTrue);
+      expect(find.text('Belum dapat disahkan dengan MAXCOM'), findsOneWidget, reason: 'the status still says off');
+      dest.fromStatus(true);
+      await settle(tester);
+      expect(find.text('Belum dapat disahkan dengan MAXCOM'), findsNothing);
+      expect(find.byKey(const ValueKey('live-dest-per-box')), findsOneWidget, reason: 'the memory is this box\'s own');
+    });
+
+    testWidgets('[B5] a write the box refuses puts the pill back and says so', (tester) async {
+      final t = await _open(tester);
+      t.h.handlers['PUT /api/live/youtube/next-live'] = (r) async => jsonResponse(500, {'errors': ['x']});
+      await _toggleYoutube(tester);
+      expect(badge('youtube', 'on'), findsOneWidget);
+      expect(find.text(sBm.liveYoutubeChoiceFailed), findsOneWidget);
     });
 
     testWidgets('[PP-L2] Sambung only where it was: none when signed in, none when unknown with a last channel', (
@@ -1296,7 +1444,7 @@ void main() {
       await settle(tester);
       expect(find.text('YouTube belum disambungkan'), findsOneWidget);
       expect(find.byKey(const ValueKey('live-dest-connect')), findsOneWidget);
-      t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf')));
+      t.box.set(const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau Contoh')));
       await settle(tester);
       expect(find.byKey(const ValueKey('live-dest-connect')), findsNothing);
       expect(find.byKey(const ValueKey('live-dest-skip')), findsOneWidget, reason: 'the unknown note, amber');
@@ -1327,12 +1475,14 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('[PP-L2] the open sheet closes itself when this phone starts a live', (tester) async {
+    testWidgets('[PP-L2] the open sheet stays when this phone starts a live (Skrin and Rakam can be changed during it, YouTube cannot be turned off)', (tester) async {
       final t = await _open(tester);
       await _openDest(tester);
       t.pub.emit(_running());
       await settle(tester);
-      expect(_destSheet, findsNothing);
+      expect(_destSheet, findsOneWidget);
+      expect(find.byKey(const ValueKey('live-dest-youtube-switch')), findsNothing);
+      expect(find.byKey(const ValueKey('live-dest-kiosk-switch')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -1387,7 +1537,8 @@ void main() {
       t.unfold();
       await settle(tester);
       expect(find.text('Ke skrin surau dan YouTube'), findsOneWidget);
-      expect(find.byKey(const ValueKey('live-destinations')), findsNothing);
+      // the pills stay during the live: Skrin and Rakam can be switched there (YouTube only turned on)
+      expect(find.byKey(const ValueKey('live-destinations')), findsOneWidget);
     });
 
     testWidgets('[PP-L2] the chips sit above the start button', (tester) async {
@@ -1460,7 +1611,7 @@ void main() {
 
     testWidgets('the chip shows the setting, and a tap writes it to the box', (tester) async {
       final t = await openOn(tester);
-      expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}');
+      expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau Contoh')}');
       await _toggleYoutube(tester);
       expect(chipLabel(tester), _offSpoken);
       expect(stored(t), false, reason: 'written to the surau setting, not kept in memory');
@@ -1471,14 +1622,14 @@ void main() {
       expect(chipLabel(tester), _offSpoken);
       // another admin sets it on; this phone reads the settings again (a change event or a resume)
       await boxSets(tester, t, true);
-      expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}');
+      expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau Contoh')}');
     });
 
     testWidgets('a refused write puts the chip back and says so', (tester) async {
       final t = await openOn(tester);
       t.h.failPuts = 5;
       await _toggleYoutube(tester);
-      expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}');
+      expect(chipLabel(tester), 'YouTube: Ya, ${bidiIsolate('Surau Contoh')}');
       expect(find.text('Pilihan YouTube tidak dapat disimpan. Cuba lagi.'), findsOneWidget);
       expect(stored(t), true);
     });
@@ -1488,15 +1639,15 @@ void main() {
     ) async {
       final t = await openOn(
         tester,
-        box: const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf')),
+        box: const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau Contoh')),
       );
       expect(
         chipLabel(tester),
-        'YouTube: Ya, ${bidiIsolate('Surau D'Waqaf')}. '
-        'YouTube: tidak dapat disemak sekarang (kali terakhir: ${bidiIsolate('Surau D'Waqaf')})',
+        'YouTube: Ya, ${bidiIsolate('Surau Contoh')}. '
+        'YouTube: tidak dapat disemak sekarang (kali terakhir: ${bidiIsolate('Surau Contoh')})',
       );
       await _openDest(tester);
-      expect(find.text('YouTube: tidak dapat disemak sekarang (kali terakhir: ${bidiIsolate('Surau D'Waqaf')})'), findsWidgets);
+      expect(find.text('YouTube: tidak dapat disemak sekarang (kali terakhir: ${bidiIsolate('Surau Contoh')})'), findsWidgets);
       expect(find.text('Log masuk YouTube dahulu'), findsNothing);
       expect(find.byKey(const ValueKey('live-dest-connect')), findsNothing);
       await _closeDest(tester);
@@ -1543,7 +1694,7 @@ void main() {
     ) async {
       final t = await openOn(
         tester,
-        box: const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau D\'Waqaf')),
+        box: const LiveBoxStatus(youtube: YoutubeAccount.unknown(channel: 'Surau Contoh')),
       );
       await tester.tap(_start);
       await settle(tester);
@@ -1698,6 +1849,26 @@ void main() {
       expect(find.text('Siaran sedang berlangsung.'), findsNothing);
     });
 
+    testWidgets('[AQ6] a momentary session null while this device live is starting keeps the banner', (tester) async {
+      final t = await _open(
+        tester,
+        roles: const ['admin'],
+        box: _signedIn.copyWith(sessionId: 's1'),
+      );
+      t.h.handlers['GET /api/live/notice'] = (r) async => jsonResponse(200, {
+        'active': true,
+        'videoId': 'AAAAAAAAAAA',
+        'watchUrl': 'https://www.youtube.com/live/AAAAAAAAAAA',
+      });
+      // the box has not caught up yet: no session in the status
+      t.h.handlers['GET /api/live/status'] = (r) async => jsonResponse(200, {
+        'session': null,
+        'youtube': {'state': 'live'},
+      });
+      t.h.container.invalidate(liveBoxNoticeProvider);
+      expect(await tester.runAsync(() => t.h.container.read(liveBoxNoticeProvider.future)), isNotNull);
+    });
+
     testWidgets('[PP-L1] a live another device started with a watch link shows the notice to live:control', (tester) async {
       const other = OtherLive(sessionId: 's9', starter: 'iPad Ustaz Ali', video: 'phone');
       await _open(tester, box: _signedIn.copyWith(watchUrl: watch, otherLive: other));
@@ -1748,6 +1919,7 @@ void main() {
         await settle(tester);
         expect(share(), findsNothing, reason: bad);
         expect(banner(), findsNothing, reason: bad);
+        t.h.container.dispose();
       }
     });
 

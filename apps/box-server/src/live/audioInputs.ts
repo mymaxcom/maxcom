@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { childEnv } from './childEnv.ts';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FastifyInstance, FastifyReply } from 'fastify';
@@ -56,6 +57,8 @@ const ACCESS_ERROR = /access is denied|permission denied|0x80070005/i;
 
 /** Digital silence from volumedetect (-inf is read as -91): the sound never reaches the box. */
 export const SILENT_DB = -90;
+/** The lowest level the test reports (volumedetect's -inf reads as -91). */
+const LEVEL_FLOOR = -90;
 
 /** Strips ffmpeg's `[in#0 @ 0000..] ` / `[dshow @ 0000..] ` prefix. */
 const PREFIX = /^\[[^\]]*\]\s*/;
@@ -142,7 +145,7 @@ export const spawnRunner: Runner = (ffmpeg, args, timeoutMs) =>
     };
     let child;
     try {
-      child = spawn(ffmpeg, [...args], { shell: false, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
+      child = spawn(ffmpeg, [...args], { shell: false, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'], env: childEnv() });
     } catch {
       resolve({ output: '', ok: false });
       return;
@@ -163,9 +166,45 @@ export const spawnRunner: Runner = (ffmpeg, args, timeoutMs) =>
 
 export const LIST_ARGS: readonly string[] = ['-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'];
 
-/** Args of the level probe: 1 s of the device at 48 kHz (the Intel SST microphone is silent at 16 kHz). */
-export function levelArgs(deviceName: string): string[] {
-  return ['-hide_banner', '-nostats', '-f', 'dshow', '-sample_rate', '48000', '-i', `audio=${deviceName}`, '-t', '1', '-af', 'volumedetect', '-f', 'null', '-'];
+/** Args of the level probe: 1 s (the test before Start: 5 s) of the device at 48 kHz (the Intel SST microphone is silent at 16 kHz). */
+export function levelArgs(deviceName: string, seconds = 1): string[] {
+  return ['-hide_banner', '-nostats', '-f', 'dshow', '-sample_rate', '48000', '-i', `audio=${deviceName}`, '-t', String(seconds), '-af', 'volumedetect', '-f', 'null', '-'];
+}
+
+/** The test of every capture device before Start (build 5): seconds of each probe, the mean at or under which a device reads as silent. */
+export const TEST_SECONDS = 5;
+export const TEST_SILENT_DB = -70;
+/** A refused test: at most one new test per this many ms; inside it the last result is returned. */
+export const TEST_MIN_GAP_MS = 10_000;
+const TEST_TIMEOUT_MS = 10_000;
+
+export type MicTestCode = 'ok' | 'silent' | 'access_denied' | 'device_unavailable';
+
+/** One capture device in the answer of the test; `meanDb` and `maxDb` are null when the device could not be read. */
+export interface MicTestRow {
+  name: string;
+  selected: boolean;
+  meanDb: number | null;
+  maxDb: number | null;
+  code: MicTestCode;
+}
+
+export interface MicTestResult {
+  testedAt: string | null;
+  seconds: number;
+  results: MicTestRow[];
+}
+
+/** A refusal of the test route (the box is live). */
+export class AudioInputRefusal extends Error {
+  readonly status: number;
+  readonly code: string;
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = 'AudioInputRefusal';
+    this.status = status;
+    this.code = code;
+  }
 }
 
 /** mean/max volume (dBFS) from volumedetect output; null when absent. */
@@ -214,8 +253,12 @@ export class AudioInputs {
   private lastLevel: { meanDb: number; maxDb: number } | null = null;
   private lastProblem: 'access_denied' | 'device_unavailable' | 'silent' | null = null;
   private probing = false;
+  /** Settles when the running level probe ends (a test of every device waits for it). */
+  private probeEnd: Promise<void> | null = null;
   private lastCheck: { at: number; answer: { devices: number; code: 'ok' | AudioInputCode | 'untested' } } | null = null;
   private checking: Promise<{ devices: number; code: 'ok' | AudioInputCode | 'untested' }> | null = null;
+  private testing: Promise<MicTestResult> | null = null;
+  private tested: { at: number; result: MicTestResult } | null = null;
 
   constructor(o: AudioInputOptions) {
     this.o = o;
@@ -325,8 +368,12 @@ export class AudioInputs {
     }
     if (this.o.isLive?.() === true) return { level: null, reason: AUDIO_INPUT_MSG.liveBusy };
     const t = this.now();
-    if (this.probing || t - this.lastLevelAt < (this.o.minLevelMs ?? 1500)) return this.levelAnswer();
+    if (this.probing || this.testing !== null || t - this.lastLevelAt < (this.o.minLevelMs ?? 1500)) return this.levelAnswer();
     this.probing = true;
+    let endProbe: () => void = () => {};
+    this.probeEnd = new Promise<void>((res) => {
+      endProbe = res;
+    });
     this.lastLevelAt = t;
     // a probe that throws leaves no stale answer behind
     this.lastProblem = null;
@@ -343,8 +390,85 @@ export class AudioInputs {
       }
     } finally {
       this.probing = false;
+      this.probeEnd = null;
+      endProbe();
     }
     return this.levelAnswer();
+  }
+
+  /**
+   * S2/Q5: resolves when no level probe and no device test is running any more. A live start awaits it before its combiner
+   * opens the box microphone, so a probe never holds the device the combiner needs. Never rejects.
+   */
+  async idle(): Promise<void> {
+    // a probe can be followed at once by a test that waited for it: look again until both are quiet (bounded)
+    for (let i = 0; i < 4; i++) {
+      const waits: Array<Promise<unknown>> = [];
+      if (this.probeEnd !== null) waits.push(this.probeEnd);
+      if (this.testing !== null) waits.push(this.testing.catch(() => undefined));
+      if (waits.length === 0) return;
+      await Promise.all(waits);
+    }
+  }
+
+  /** The last test of every device, or an empty one; never starts a probe. */
+  lastTest(): MicTestResult {
+    return this.tested?.result ?? { testedAt: null, seconds: TEST_SECONDS, results: [] };
+  }
+
+  /**
+   * Probes every usable capture device for `TEST_SECONDS`, one after another (N4: the Atom CPU is spared; two devices take
+   * about 10 seconds in all, each probe is cut at `TEST_TIMEOUT_MS`), so a person sees before Start which input
+   * carries sound. Refused while a live runs (the device is the combiner's). A call while a test runs gets that test's
+   * result; a new test starts at most once per `TEST_MIN_GAP_MS` (inside it the last result is returned).
+   */
+  async testAll(): Promise<MicTestResult> {
+    if (this.o.isLive?.() === true) throw new AudioInputRefusal(409, 'live_busy', AUDIO_INPUT_MSG.liveBusy);
+    if (this.testing !== null) return this.testing;
+    if (this.tested !== null && this.now() - this.tested.at < TEST_MIN_GAP_MS) return this.tested.result;
+    // a running 1 s level probe holds the device: the test starts when it has ended. A live may have started meanwhile
+    // (its combiner opens the box microphone), so the check is made again once the wait is over.
+    const wait = this.probeEnd;
+    const begin = (): Promise<MicTestResult> => {
+      if (this.o.isLive?.() === true) return Promise.reject(new AudioInputRefusal(409, 'live_busy', AUDIO_INPUT_MSG.liveBusy));
+      return this.testNow();
+    };
+    this.testing = (wait === null ? begin() : wait.then(begin)).finally(() => {
+      this.testing = null;
+    });
+    return this.testing;
+  }
+
+  private async testNow(): Promise<MicTestResult> {
+    const ff = this.o.ffmpegPath();
+    let rows: MicTestRow[] = [];
+    if (this.platform === 'windows' && ff !== null) {
+      const snap = await this.list(true);
+      const chosen = this.boxInput()?.deviceName ?? null;
+      for (const d of snap.devices) {
+        if (!d.usable) continue;
+        // a live that starts meanwhile owns the devices: the test stops at once
+        if (this.o.isLive?.() === true) throw new AudioInputRefusal(409, 'live_busy', AUDIO_INPUT_MSG.liveBusy);
+        const selected = chosen === d.name;
+        try {
+          const r = await this.run(ff, levelArgs(d.name, TEST_SECONDS), TEST_TIMEOUT_MS);
+          const v = parseVolumeDetect(r.output);
+          if (v === null) {
+            rows.push({ name: d.name, selected, meanDb: null, maxDb: null, code: ACCESS_ERROR.test(r.output) ? 'access_denied' : 'device_unavailable' });
+            continue;
+          }
+          const meanDb = Math.max(LEVEL_FLOOR, v.meanDb);
+          const maxDb = Math.max(LEVEL_FLOOR, v.maxDb);
+          rows.push({ name: d.name, selected, meanDb, maxDb, code: meanDb <= TEST_SILENT_DB ? 'silent' : 'ok' });
+        } catch {
+          rows.push({ name: d.name, selected, meanDb: null, maxDb: null, code: 'device_unavailable' });
+        }
+      }
+    }
+    const at = this.now();
+    const result: MicTestResult = { testedAt: new Date(at).toISOString(), seconds: TEST_SECONDS, results: rows };
+    this.tested = { at, result };
+    return result;
   }
 
   private levelAnswer(): { level: { meanDb: number; maxDb: number } | null; reason?: string; code?: AudioInputCode } {
@@ -421,6 +545,17 @@ export function registerAudioInputRoutes(app: FastifyInstance, deps: AudioInputR
       .run(reqSurau(request), new Date().toISOString(), actorOf(request), 'live-audio-input', 'choose', null, JSON.stringify({ deviceName: asked }), deviceOf(request) ?? null);
     return send(reply, 200, await inputs.view());
   });
+
+  // build 5: the test of every capture device before Start (the app calls it on the start screen)
+  app.post('/api/live/audio-inputs/test', async (_request, reply) => {
+    try {
+      return send(reply, 200, await inputs.testAll());
+    } catch (error) {
+      if (error instanceof AudioInputRefusal) return send(reply, error.status, { errors: [error.message], code: error.code });
+      throw error;
+    }
+  });
+  app.get('/api/live/audio-inputs/test', async (_request, reply) => send(reply, 200, inputs.lastTest()));
 
   app.get('/api/live/audio-inputs/level', async (_request, reply) => {
     const r = await inputs.level();

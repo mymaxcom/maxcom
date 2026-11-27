@@ -59,7 +59,7 @@ void main() {
     expect(find.text('Android'), findsOneWidget);
     expect(find.text('Ustaz Ali'), findsOneWidget);
     expect(find.text('Pentadbir'), findsOneWidget);
-    expect(find.text('Surau D\'Waqaf'), findsOneWidget);
+    expect(find.text('Surau Contoh'), findsOneWidget);
     expect(find.text('Butiran teknikal'), findsOneWidget);
     expect(find.textContaining('127.0.0.1'), findsNothing, reason: 'folded');
     expect(find.text('Tukar PIN'), findsOneWidget);

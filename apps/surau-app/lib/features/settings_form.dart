@@ -974,7 +974,13 @@ class ChoiceField extends StatelessWidget {
             (st) => st.contains(WidgetState.selected) ? SurauColors.glass : SurauColors.teal,
           ),
         ),
-        onSelectionChanged: readOnly ? null : (sel) => onChanged(sel.first),
+        // A tap on the segment that is already chosen arrives with an empty
+        // set: the choice stays (G6: `sel.first` threw on it).
+        onSelectionChanged: readOnly
+            ? null
+            : (sel) {
+                if (sel.isNotEmpty) onChanged(sel.first);
+              },
       );
     } else {
       control = DropdownMenu<String>(

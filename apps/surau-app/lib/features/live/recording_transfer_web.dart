@@ -9,12 +9,12 @@ import 'package:web/web.dart' as web;
 
 import '../../box/box_client.dart';
 import '../../upload/recording_join.dart';
-import 'recordings_store_web.dart' show anchorDownload;
+import 'recordings_store_web.dart' show anchorDownload, anchorOpenLink;
 
 RecordingTransfer? openRecordingTransfer({required Uri box, required String token}) =>
     FetchRecordingTransfer(box: box, token: token);
 
-class FetchRecordingTransfer implements RecordingTransfer {
+class FetchRecordingTransfer implements RecordingTransfer, RecordingLinkProbe {
   FetchRecordingTransfer({required this.box, required this.token});
 
   final Uri box;
@@ -86,4 +86,38 @@ class FetchRecordingTransfer implements RecordingTransfer {
 
   @override
   Future<void> saveFile(String fileName, Object file, String mime) => anchorDownload(fileName, file);
+
+  @override
+  Future<Uri?> requestLink(String path) async {
+    final web.Response res;
+    try {
+      res = await _fetch(path, method: 'POST');
+    } on BoxError catch (e) {
+      if (isMissingLinkRoute(e)) return null;
+      rethrow;
+    }
+    try {
+      final body = jsonDecode((await res.text().toDart).toDart);
+      if (body is Map) return linkFromAnswer(box, body['url']);
+    } on Object {
+      // an answer that is not the link: use the Blob path
+    }
+    return null;
+  }
+
+  @override
+  Future<void> openLink(Uri url, String fileName) => anchorOpenLink(url, fileName);
+
+  /// F18: one byte of the file (`Range: bytes=0-0`); the link carries its own token, so no authorization is sent.
+  @override
+  Future<bool> probeLink(Uri url) async {
+    try {
+      final headers = web.Headers()..append('range', 'bytes=0-0');
+      final init = web.RequestInit(method: 'GET', headers: headers, credentials: 'omit', cache: 'no-store');
+      final res = await web.window.fetch(url.toString().toJS, init).toDart;
+      return res.status == 200 || res.status == 206;
+    } on Object {
+      return false;
+    }
+  }
 }

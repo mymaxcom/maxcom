@@ -57,9 +57,9 @@ const LOGOS = {
   tiny: { body: TINY_PNG, type: 'image/png' },
 };
 
-const NAME = { surauInfo: { name: 'Surau D\'Waqaf' } };
+const NAME = { surauInfo: { name: 'Surau Contoh' } };
 /** The wordmark carries the name: the text name is left out of the header (Plan 4 add-on C). */
-const NONAME = { surauInfo: { name: 'Surau D\'Waqaf', showName: false } };
+const NONAME = { surauInfo: { name: 'Surau Contoh', showName: false } };
 const LONG = { surauInfo: { name: 'Masjid Jamek Kampung Baru Seksyen Tujuh Shah Alam' } };
 const SEC12 = { clock: { showSeconds: true } };
 const SEC24 = { prayerBar: { timeFormat: '24h' }, clock: { showSeconds: true } };

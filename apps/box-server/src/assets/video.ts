@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import type { DatabaseSync } from 'node:sqlite';
 import { VIDEO_LIMITS, VIDEO_MIME } from '@surau/core';
 import type { VideoErrorCode } from '@surau/core';
+import { keepFolderInBackupBeforeDelete, keepInBackupBeforeDelete } from '../link/backupCopy.ts';
 import { AssetError, assetsDirOf, assetsMaxBytes, assetsTotalBytes } from './store.ts';
 
 /** A refused video upload: `code` is the stable answer the app maps to its own text, `status` the HTTP status. */
@@ -432,7 +433,7 @@ export async function receiveVideo(
       holdVideo(db, id);
       return { id, mime: VIDEO_MIME, bytes: size, width: facts.width, height: facts.height, durationSec: Math.round(facts.durationSec), created: false };
     }
-    if (existsSync(final)) rmSync(final, { force: true });
+    if (existsSync(final) && !keepMediaBeforeDelete(dataDir, `assets/${id}.mp4`)) rmSync(final, { force: true });
     renameSync(tmp, final);
     try {
       db.prepare('INSERT INTO assets (id, mime, bytes, width, height, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -453,6 +454,23 @@ export async function receiveVideo(
     state.busy = false;
     state.reservedBytes = Math.max(0, state.reservedBytes - declaredBytes);
   }
+}
+
+/**
+ * Before a media file of the store is deleted or replaced (`rel` is relative to the data folder): a kept-data master's
+ * `keep-on-delete` backup takes the file instead. True: the file is no longer at its path (moved into the backup, or
+ * the backup already holds the link-day one), so the caller must not delete it and a replace just writes the new file.
+ * False: delete or replace as usual. Free when the box has no `linkundo/` folder. A throw means "do not delete".
+ */
+export function keepMediaBeforeDelete(dataDir: string, rel: string): boolean {
+  if (!existsSync(join(dataDir, 'linkundo'))) return false;
+  return keepInBackupBeforeDelete(dataDir, rel) !== 'not-needed';
+}
+
+/** The folder variant for a theme folder that is about to be removed or replaced; the caller then removes the rest. */
+export function keepFolderBeforeDelete(dataDir: string, relDir: string): void {
+  if (!existsSync(join(dataDir, 'linkundo'))) return;
+  keepFolderInBackupBeforeDelete(dataDir, relDir);
 }
 
 /** The video asset ids a live or any-state content item points at (all suraus on this database). */
@@ -480,7 +498,7 @@ export function removeVideoIfUnused(db: DatabaseSync, dataDir: string, id: strin
   if (isVideoHeld(db, id)) return false;
   if (referencedVideoIds(db).has(id)) return false;
   db.prepare('DELETE FROM assets WHERE id = ?').run(id);
-  rmSync(join(assetsDirOf(dataDir), `${id}.mp4`), { force: true });
+  if (!keepMediaBeforeDelete(dataDir, `assets/${id}.mp4`)) rmSync(join(assetsDirOf(dataDir), `${id}.mp4`), { force: true });
   return true;
 }
 
@@ -521,7 +539,7 @@ export function sweepVideoOrphans(db: DatabaseSync, dataDir: string, minAgeMs: n
     const id = String(row.id);
     if (used.has(id) || String(row.created_at) > cutoff || isVideoHeld(db, id, now.getTime())) continue;
     db.prepare('DELETE FROM assets WHERE id = ?').run(id);
-    rmSync(join(dir, `${id}.mp4`), { force: true });
+    if (!keepMediaBeforeDelete(dataDir, `assets/${id}.mp4`)) rmSync(join(dir, `${id}.mp4`), { force: true });
     removed += 1;
   }
   if (!existsSync(dir)) return removed;
@@ -530,10 +548,10 @@ export function sweepVideoOrphans(db: DatabaseSync, dataDir: string, minAgeMs: n
     try {
       const old = now.getTime() - statSync(path).mtimeMs > minAgeMs;
       if (name.startsWith(TMP_PREFIX) && name.endsWith('.tmp') && old) {
-        rmSync(path, { force: true });
+        if (!keepMediaBeforeDelete(dataDir, `assets/${name}`)) rmSync(path, { force: true });
         removed += 1;
       } else if (/^[0-9a-f]{64}\.mp4$/.test(name) && old && db.prepare('SELECT 1 AS ok FROM assets WHERE id = ?').get(name.slice(0, 64)) === undefined) {
-        rmSync(path, { force: true });
+        if (!keepMediaBeforeDelete(dataDir, `assets/${name}`)) rmSync(path, { force: true });
         removed += 1;
       }
     } catch {

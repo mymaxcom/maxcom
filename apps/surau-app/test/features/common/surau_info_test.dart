@@ -11,9 +11,9 @@ import '../fakes.dart';
 void main() {
   test('parses the full answer and omits empty help fields', () {
     final info = SurauInfo.fromJson(fixtureInfoJson)!;
-    expect(info.name, 'Surau D\'Waqaf');
+    expect(info.name, 'Surau Contoh');
     expect(info.kind, 'surau');
-    expect(info.shortAddress, 'Jalan Mahabbah 3, Taman Mahabbah');
+    expect(info.shortAddress, 'Jalan Contoh 3, Taman Contoh');
     expect(info.help!.name, 'Encik Hafiz');
     expect(info.help!.phone, '012-345 6789');
     expect(info.help!.email, 'hafiz@contoh.my');
@@ -97,11 +97,11 @@ void main() {
         );
         expect(await loader.cached(), isNull);
         final info = await loader.refresh();
-        expect(info!.name, 'Surau D\'Waqaf');
+        expect(info!.name, 'Surau Contoh');
         final req = box.byPath('/api/surau/info')!;
         expect(req.method, 'GET');
         expect(req.headers.containsKey('authorization'), isFalse);
-        expect((await store.load())!.name, 'Surau D\'Waqaf');
+        expect((await store.load())!.name, 'Surau Contoh');
       },
     );
 
@@ -146,10 +146,10 @@ void main() {
         store: store,
         fallback: () async => cloudClient,
       );
-      expect((await loader.refresh())!.name, 'Surau D\'Waqaf');
+      expect((await loader.refresh())!.name, 'Surau Contoh');
       expect(cloud.byPath('/api/surau/info')!.url.host, 'api.mymaxcom.my');
       expect(identical(loader.servedBy, cloudClient), isTrue);
-      expect((await store.load())!.name, 'Surau D\'Waqaf');
+      expect((await store.load())!.name, 'Surau Contoh');
     });
 
     test('the box answers: the cloud is not asked', () async {

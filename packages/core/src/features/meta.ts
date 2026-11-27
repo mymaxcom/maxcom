@@ -79,9 +79,10 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
   liveYoutube: {
     relayFrom: { ui: 'segment', choices: ['box', 'phone'], disabledChoices: ['phone'], hidden: true },
     relayVideo: { ui: 'segment', choices: ['copy', 'reencode'], scope: 'system' },
-    maxBitrateKbps: { ui: 'slider', min: 500, max: 6000, step: 500, unit: 'kbps', scope: 'system' },
+    maxBitrateKbps: { ui: 'slider', min: 1000, max: 8000, step: 500, unit: 'kbps', hidden: true },
     // the Live screen's own YouTube control owns this choice (one setting, one place)
     nextLiveOn: { ui: 'switch', hidden: true },
+    autoQuality: { ui: 'switch', hidden: true },
     titleTemplate: { ui: 'template', maxLen: 100 },
     descriptionTemplate: { ui: 'template', maxLen: 500 },
   },
@@ -98,6 +99,8 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
   autoTone: { override: { ui: 'colour', hidden: true } },
   // Nothing reads these: kept in the registry so stored values stay valid, not offered in Tetapan (decision 9).
   themeStyle: { enabled: { hidden: true } },
+  // Locked and without a generic page: the app edits each TV in its own screen (HIDDEN_FEATURES).
+  tvProfiles: { enabled: { hidden: true } },
   kioskTemplate: { templateId: { ui: 'theme' } },
   solatScreen: {
     message: {
@@ -153,7 +156,13 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
   hadis: CARD_DURATION,
   worldTimes: CARD_DURATION,
   tugasan: CARD_DURATION,
-  zikirSelepasSolat: CARD_DURATION,
+  zikirSelepasSolat: {
+    ...CARD_DURATION,
+    startAfterMinutes: { ui: 'slider', min: 0, max: 30, step: 1, unit: 'minit' },
+    showClock: { ui: 'switch' },
+    showTimeLeft: { ui: 'switch' },
+    look: { ui: 'segment', choices: ['theme', 'plain', 'arab'] },
+  },
   zone: { zone: { ui: 'zone' } },
   recording: {
     segmentMinutes: { ui: 'chips', choices: [5, 10, 15, 30, 60], unit: 'minit' },
@@ -201,8 +210,9 @@ export const FIELD_META: Partial<Record<FeatureKey, FM>> = {
   liveOnKiosk: { volume: { ui: 'slider', min: 0, max: 100, step: 5, unit: '%' } },
   liveCamera: {
     transport: { ui: 'segment', choices: ['auto', 'tcp', 'udp'] },
-    'avOffsetMs.deviceMic': { ui: 'stepper', min: 0, max: 2000, step: 50 },
-    'avOffsetMs.boxInput': { ui: 'stepper', min: 0, max: 2000, step: 50 },
+    brightness: { ui: 'segment', choices: ['auto', 'normal', 'bright', 'brighter'] },
+    'avOffsetMs.deviceMic': { ui: 'stepper', min: 0, max: 2000, step: 50, hidden: true },
+    'avOffsetMs.boxInput': { ui: 'stepper', min: 0, max: 2000, step: 50, hidden: true },
   },
 };
 
@@ -247,7 +257,7 @@ export function patchNeedsSystemWrite(feature: FeatureKey, patch: unknown): bool
 
 /** The Lanjutan rows that open a surau feature's page at its system card. */
 export const LANJUTAN_ROWS: readonly { feature: FeatureKey; fields: readonly string[]; labelMs: string; labelEn: string }[] = [
-  { feature: 'liveYoutube', fields: ['relayVideo', 'maxBitrateKbps'], labelMs: 'Penyiaran YouTube', labelEn: 'YouTube relay' },
+  { feature: 'liveYoutube', fields: ['relayVideo'], labelMs: 'Penyiaran YouTube', labelEn: 'YouTube relay' },
   { feature: 'tilawah', fields: ['cacheMaxMb'], labelMs: 'Ruang simpanan tilawah', labelEn: 'Recitation storage' },
 ];
 
@@ -257,7 +267,7 @@ export const LANJUTAN_ROWS: readonly { feature: FeatureKey; fields: readonly str
  * changes later).
  * Their registry entries and stored values stay untouched, so they can come back by removing the key here.
  */
-export const HIDDEN_FEATURES: readonly FeatureKey[] = ['themeStyle', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage'];
+export const HIDDEN_FEATURES: readonly FeatureKey[] = ['themeStyle', 'tvProfiles', 'orientation', 'quranReader', 'calendarFeed', 'jemaahPage'];
 
 /**
  * The features of the Siaran Langsung menu. A holder of `live:settings` (role Siaran Langsung) may change these and
@@ -344,6 +354,7 @@ const DESC_MS_EN: Record<FeatureKey, Omit<FeatureDesc, 'ar'>> = {
     'templat', 'tema', 'rupa', 'warna',
   ),
   themeStyle: d('Ubah suai rupa setiap skrin bagi tema.', 'Customise the look of each screen of a theme.', 'tema', 'ubah suai'),
+  tvProfiles: d('Pilihan berasingan bagi setiap TV: templat, bahasa, siaran langsung, bunyi dan jenis kandungan.', 'Separate choices for each TV: template, language, live, sounds and content kinds.', 'tv', 'skrin'),
   kuliahCard: d('Kuliah akan datang di skrin TV.', 'Upcoming lectures on the TV screen.', 'kuliah'),
   penceramahPhoto: d('Bentuk gambar penceramah pada kad kuliah.', 'The shape of the speaker photo on the lecture card.', 'penceramah'),
   kitabCover: d('Papar kulit kitab pada kad kuliah.', 'Show the book cover on the lecture card.', 'kitab'),
@@ -360,7 +371,11 @@ const DESC_MS_EN: Record<FeatureKey, Omit<FeatureDesc, 'ar'>> = {
   worldTimes: d('Waktu di Makkah, Madinah dan bandar lain.', 'The time in Makkah, Madinah and other cities.', 'makkah'),
   tugasan: d('Jadual bertugas imam, bilal dan AJK.', 'The duty roster for imam, bilal and committee.', 'imam', 'bilal'),
   ayatCard: d('Ayat Al-Quran pilihan dengan terjemahan.', 'A chosen Quran verse with translation.', 'quran'),
-  zikirSelepasSolat: d('Zikir di skrin selepas setiap solat.', 'Zikir on screen after each prayer.'),
+  zikirSelepasSolat: d(
+    'Zikir di skrin selepas setiap solat: bila ia bermula, berapa lama, jam dan masa berbaki, serta rupanya.',
+    'Zikir on screen after each prayer: when it starts, how long it shows, the clock and the time left, and its look.',
+    'zikir', 'wirid', 'doa',
+  ),
   quranReader: d('Baca mushaf penuh di aplikasi dan skrin TV.', 'Read the full mushaf in the app and on the TV screen.', 'mushaf'),
   tilawah: d('Bacaan Al-Quran oleh qari pilihan.', 'Quran recitation by a chosen reciter.', 'qari'),
   beeps: d(
@@ -419,6 +434,7 @@ const DESC_AR: Record<FeatureKey, string> = {
   orientation: 'شاشة التلفاز أفقية أو عمودية.',
   kioskTemplate: 'القالب يغيّر مظهر شاشة التلفاز كله. ويمكن تخصيص كل شاشة.',
   themeStyle: 'خصّص مظهر كل شاشة في القالب.',
+  tvProfiles: 'خيارات منفصلة لكل تلفاز: القالب واللغة والبث المباشر والأصوات وأنواع المحتوى.',
   kuliahCard: 'الدروس القادمة على شاشة التلفاز.',
   penceramahPhoto: 'شكل صورة المحاضر في بطاقة الدرس.',
   kitabCover: 'عرض غلاف الكتاب في بطاقة الدرس.',
@@ -432,7 +448,7 @@ const DESC_AR: Record<FeatureKey, string> = {
   worldTimes: 'الوقت في مكة المكرمة والمدينة المنورة ومدن أخرى.',
   tugasan: 'جدول مناوبة الإمام والمؤذن وأعضاء اللجنة.',
   ayatCard: 'آية قرآنية مختارة مع ترجمتها.',
-  zikirSelepasSolat: 'أذكار على الشاشة بعد كل صلاة.',
+  zikirSelepasSolat: 'أذكار على الشاشة بعد كل صلاة: متى تبدأ، ومدة عرضها، والساعة والوقت المتبقي، وشكلها.',
   quranReader: 'قراءة المصحف كاملًا في التطبيق وعلى شاشة التلفاز.',
   tilawah: 'تلاوة القرآن بصوت قارئ مختار.',
   beeps: 'مفتاح ومستوى أصوات التنبيه قبل الأذان والإقامة، وصوت الإمساك وصوت الشروق. إذا أُوقف المفتاح أو كان المستوى 0، يسكت أيضًا صوت الإمساك وصوت الشروق وأذان الفجر الأول. ويتوقف الأذان الأول عندما يبدأ العد التنازلي لأذان الفجر، أو عند الفجر.',

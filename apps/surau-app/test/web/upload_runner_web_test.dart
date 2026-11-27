@@ -21,7 +21,7 @@ class _FakeCloud implements UploadApi {
     begins.add(r);
     return UploadBegun(
       uploadId: 'up${r.part?.index ?? 0}',
-      uploadUri: 'https://www.googleapis.com/upload/s/${r.part?.index ?? 0}',
+      uploadUri: 'https://www.googleapis.com/upload/youtube/s/${r.part?.index ?? 0}',
       expiresAt: DateTime.utc(2026, 11, 13),
       title: 'Kuliah',
     );

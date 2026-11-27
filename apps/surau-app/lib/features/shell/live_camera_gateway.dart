@@ -79,6 +79,112 @@ class CameraRelayTarget {
   final int seq;
 }
 
+/// The one-tap camera profile kept on the box (Lane X part 2): [preset] 1 to 3, [focus] `continuous`, `single` or
+/// `manual`, [tracking] `off` or `human`, [exposureEv] -3.0 to +3.0 in steps of 0.5.
+class LiveCameraProfile {
+  const LiveCameraProfile({this.preset = 1, this.focus = 'continuous', this.tracking = 'off', this.exposureEv = 0});
+
+  factory LiveCameraProfile.fromJson(Object? j) {
+    if (j is! Map) return const LiveCameraProfile();
+    final p = j['preset'];
+    final f = j['focus'];
+    final t = j['tracking'];
+    final e = j['exposureEv'];
+    return LiveCameraProfile(
+      preset: p is int && p >= 1 && p <= 3 ? p : 1,
+      focus: f == 'single' || f == 'manual' ? f as String : 'continuous',
+      tracking: t == 'human' ? 'human' : 'off',
+      exposureEv: e is num && e >= -3 && e <= 3 ? (e * 2).round() / 2 : 0,
+    );
+  }
+
+  final int preset;
+  final String focus;
+  final String tracking;
+  final double exposureEv;
+
+  LiveCameraProfile copyWith({int? preset, String? focus, String? tracking, double? exposureEv}) => LiveCameraProfile(
+    preset: preset ?? this.preset,
+    focus: focus ?? this.focus,
+    tracking: tracking ?? this.tracking,
+    exposureEv: exposureEv ?? this.exposureEv,
+  );
+
+  Map<String, Object?> toJson() => {'preset': preset, 'focus': focus, 'tracking': tracking, 'exposureEv': exposureEv};
+
+  @override
+  bool operator ==(Object other) =>
+      other is LiveCameraProfile &&
+      other.preset == preset &&
+      other.focus == focus &&
+      other.tracking == tracking &&
+      other.exposureEv == exposureEv;
+
+  @override
+  int get hashCode => Object.hash(preset, focus, tracking, exposureEv);
+}
+
+/// The opt-in for network control of the camera (Lane X), kept with the camera record on the box. Off by default;
+/// [protocol] is `http` (default), `osc` or `visca`. An older box says nothing: off.
+class LiveCameraControl {
+  const LiveCameraControl({
+    this.enabled = false,
+    this.protocol = 'http',
+    this.profile = const LiveCameraProfile(),
+    this.applyOnLive = false,
+  });
+
+  factory LiveCameraControl.fromJson(Object? j) => j is Map
+      ? LiveCameraControl(
+          enabled: j['enabled'] == true,
+          protocol: j['protocol'] == 'visca'
+              ? 'visca'
+              : j['protocol'] == 'osc'
+              ? 'osc'
+              : 'http',
+          profile: LiveCameraProfile.fromJson(j['profile']),
+          applyOnLive: j['applyOnLive'] == true,
+        )
+      : const LiveCameraControl();
+
+  final bool enabled;
+  final String protocol;
+  final LiveCameraProfile profile;
+
+  /// Send the profile once when a live that uses this camera starts.
+  final bool applyOnLive;
+
+  /// The exposure compensation has a command in every method but VISCA (the HTTP method sends it by OSC).
+  bool get hasBrightness => protocol != 'visca';
+
+  LiveCameraControl copyWith({bool? enabled, LiveCameraProfile? profile, bool? applyOnLive}) => LiveCameraControl(
+    enabled: enabled ?? this.enabled,
+    protocol: protocol,
+    profile: profile ?? this.profile,
+    applyOnLive: applyOnLive ?? this.applyOnLive,
+  );
+}
+
+/// What `POST /api/live/camera/control` answers: `sent` = the message left the box, `confirmed` = the camera answered.
+/// [steps] is only there for the profile: each step (`preset`, `focus`, `tracking`, `exposure`) with its own answer.
+class CameraControlOutcome {
+  const CameraControlOutcome({required this.sent, required this.confirmed, this.steps = const []});
+
+  factory CameraControlOutcome.fromJson(Map<String, dynamic> j) => CameraControlOutcome(
+    sent: j['sent'] == true,
+    confirmed: j['confirmed'] == true,
+    steps: [
+      if (j['steps'] is List)
+        for (final x in j['steps'] as List)
+          if (x is Map) (step: '${x['step']}', sent: x['sent'] == true, confirmed: x['confirmed'] == true),
+    ],
+  );
+
+  final bool sent;
+  final bool confirmed;
+  final List<({String step, bool sent, bool confirmed})> steps;
+}
+
 /// What `GET /api/live/camera` and `PUT /api/live/camera` answer: masked.
 ///
 /// Over the cloud the answer also says whether a change sent from here still waits for the box ([pending]), why the
@@ -94,6 +200,7 @@ class LiveCameraRecord {
     this.failure,
     this.relay,
     this.passwordNeeded = false,
+    this.control = const LiveCameraControl(),
   });
 
   factory LiveCameraRecord.fromJson(Map<String, dynamic> j) => LiveCameraRecord(
@@ -106,6 +213,7 @@ class LiveCameraRecord {
     failure: j['failure'] is String ? j['failure'] as String : null,
     relay: CameraRelayTarget.fromJson(j['relay']),
     passwordNeeded: j['passwordNeeded'] == true,
+    control: LiveCameraControl.fromJson(j['control']),
   );
 
   static const LiveCameraRecord none = LiveCameraRecord(
@@ -136,6 +244,23 @@ class LiveCameraRecord {
   /// The camera came back from the cloud backup, which never holds the password: it must be typed again here.
   final bool passwordNeeded;
 
+  /// Lane X: the control opt-in (off when the box says nothing).
+  final LiveCameraControl control;
+
+  /// The same record with another control opt-in (the form keeps what was typed).
+  LiveCameraRecord withControl(LiveCameraControl c) => LiveCameraRecord(
+    configured: configured,
+    url: url,
+    username: username,
+    hasPassword: hasPassword,
+    lastTest: lastTest,
+    pending: pending,
+    failure: failure,
+    relay: relay,
+    passwordNeeded: passwordNeeded,
+    control: c,
+  );
+
   LiveCameraRecord withTest(CameraTestOutcome? t) => LiveCameraRecord(
     configured: configured,
     url: url,
@@ -146,6 +271,7 @@ class LiveCameraRecord {
     failure: failure,
     relay: relay,
     passwordNeeded: passwordNeeded,
+    control: control,
   );
 }
 
@@ -191,6 +317,50 @@ extension BoxGatewayLiveCamera on BoxGateway {
   static const String liveCameraDiscoverPath = '/api/live/camera/discover';
   static const String liveCameraFillPath = '/api/live/camera/discover/fill';
   static const String liveAudioPath = '/api/live/audio';
+  static const String liveCameraReleasePath = '/api/live/camera/release';
+  static const String liveCameraControlPath = '/api/live/camera/control';
+
+  /// `PUT /api/live/camera/control` (`live:settings`): switches the control opt-in of the saved camera. The answer is
+  /// the masked record. A box without a saved camera answers 404.
+  /// Every field is optional; only the ones given are sent (the box keeps the rest).
+  Future<LiveCameraRecord> setLiveCameraControl({
+    bool? enabled,
+    String? protocol,
+    LiveCameraProfile? profile,
+    bool? applyOnLive,
+  }) async {
+    final out = await put(liveCameraControlPath, {
+      'enabled': ?enabled,
+      'protocol': ?protocol,
+      if (profile != null) 'profile': profile.toJson(),
+      'applyOnLive': ?applyOnLive,
+    });
+    return LiveCameraRecord.fromJson(out);
+  }
+
+  /// `POST /api/live/camera/control` (`live:control`): one fixed action to the camera: [exposure] (EV, -3.0 to 3.0),
+  /// [preset] (1 to 3), [resetPosition], [aiTracking], or [applyProfile] (the box sends the profile it saved: preset,
+  /// focus, tracking, brightness). The box answers `sent` and `confirmed`; it never refuses
+  /// because the camera was silent. 404 `control_off` while the opt-in is off, `too_many` after ten a minute.
+  Future<CameraControlOutcome> controlLiveCamera({
+    double? exposure,
+    int? preset,
+    bool resetPosition = false,
+    bool? aiTracking,
+    bool applyProfile = false,
+  }) async {
+    final action = applyProfile
+        ? 'applyProfile'
+        : exposure != null
+        ? 'exposure'
+        : preset != null
+        ? 'preset'
+        : resetPosition
+        ? 'resetPosition'
+        : 'aiTracking';
+    final body = <String, Object?>{'action': action, 'ev': ?exposure, 'preset': ?preset, 'on': ?aiTracking};
+    return CameraControlOutcome.fromJson(await post(liveCameraControlPath, body));
+  }
 
   /// `GET /api/live/camera` (`live:settings`): the masked record.
   Future<LiveCameraRecord> liveCamera() async => LiveCameraRecord.fromJson(await getFresh(liveCameraPath));
@@ -272,6 +442,12 @@ extension BoxGatewayLiveCamera on BoxGateway {
     return url is String ? url : '';
   }
 
+  /// `POST /api/live/camera/release` (the starting device only; 204): this phone pulled the camera itself and now sends
+  /// its own camera, so the box's "camera in use" flag for it is cleared. Best effort: the caller ignores a failure.
+  Future<void> releaseLiveCamera(String sessionId) async {
+    await post(liveCameraReleasePath, {'sessionId': sessionId});
+  }
+
   /// `POST /api/live/audio` (`live:control`, the starting device only): the mix of a box-combined live.
   ///
   /// [video] (`phone` or `external`) switches the picture of a live the box
@@ -281,11 +457,16 @@ extension BoxGatewayLiveCamera on BoxGateway {
     LiveAudioMix mix, {
     String? video,
     int? avOffsetMs,
+    String? avOffsetId,
+    bool clearOffset = false,
   }) async {
     await post(liveAudioPath, {
       'audio': mix.toJson(),
       'video': ?video,
-      'avOffsetMs': ?avOffsetMs,
+      // [clearOffset] sends an explicit null with [avOffsetId]: the source leaves manual mode and the box measures again
+      if (clearOffset) 'avOffsetMs': null else 'avOffsetMs': ?avOffsetMs,
+      // which source the hand-set delay belongs to (`deviceMic` or `boxInput`); left out it means deviceMic
+      'avOffsetId': ?avOffsetId,
     });
   }
 }

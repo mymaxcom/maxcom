@@ -6,6 +6,38 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RecordingGuardTest {
+    // ---- B3: a closed segment is judged before its name is kept or the file published ----
+
+    private val many = Long.MAX_VALUE
+
+    @Test
+    fun aNormalSegmentIsListedAndPublished() {
+        // success path: bytes, a video track with a length, pictures from the camera
+        val p = RecordingGuard.Probe(bytes = 48_000_000, hasVideo = true, durationMs = 900_000)
+        assertEquals(RecordingGuard.SegmentVerdict.KEEP, RecordingGuard.judgeSegment(p, many))
+        assertEquals(RecordingGuard.SegmentVerdict.KEEP, RecordingGuard.judgeSegment(p, 1))
+    }
+
+    @Test
+    fun aZeroFrameSegmentIsNotListedAndNotPublished() {
+        // the 22 Nov file: 0 bytes
+        val empty = RecordingGuard.Probe(0, false, 0)
+        assertEquals(RecordingGuard.SegmentVerdict.DISCARD, RecordingGuard.judgeSegment(empty, many))
+        // the external camera never delivered a picture: the file holds blank frames only
+        val blank = RecordingGuard.Probe(900_000, true, 60_000)
+        assertEquals(RecordingGuard.SegmentVerdict.DISCARD, RecordingGuard.judgeSegment(blank, 0))
+    }
+
+    @Test
+    fun aHeaderOnlyFileIsNotARecordingEvenThoughItHasBytes() {
+        // a size check alone would pass these
+        val noTrack = RecordingGuard.Probe(3_200, false, 0)
+        val noLength = RecordingGuard.Probe(3_200, true, 0)
+        assertEquals(RecordingGuard.SegmentVerdict.LEAVE, RecordingGuard.judgeSegment(noTrack, many))
+        assertEquals(RecordingGuard.SegmentVerdict.LEAVE, RecordingGuard.judgeSegment(noLength, many))
+        assertEquals("empty_recording", RecordingGuard.EMPTY_RECORDING)
+    }
+
     private val me = "my.maxcom.app"
 
     @Test

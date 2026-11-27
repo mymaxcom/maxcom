@@ -15,7 +15,7 @@ String _t(AppLang l, String ms, String en, String ar) => switch (l) {
 
 // ---- Kamera luaran: the form (plan 4.2, 4.3, mockups 07 to 16) ----
 
-String cameraUseTitle(AppLang l) => _t(l, 'Guna kamera luaran', 'Use external camera', 'استخدام كاميرا خارجية');
+String cameraUseTitle(AppLang l) => _t(l, 'Tawarkan kamera luaran', 'Offer the external camera', 'عرض الكاميرا الخارجية كخيار');
 String cameraUseOn(AppLang l) => _t(
       l,
       'Dipaparkan sebagai pilihan sebelum siaran',
@@ -107,7 +107,7 @@ String cameraDiscoverNoName(AppLang l) => _t(l, 'Kamera', 'Camera', 'كامير�
 String cameraLoginTitle(AppLang l) => _t(l, 'Log masuk kamera', 'Camera sign-in', 'تسجيل الدخول إلى الكاميرا');
 String cameraLoginHelp(AppLang l) => _t(
       l,
-      'Masukkan nama pengguna dan kata laluan kamera ini, jika ada. Kotak MAXCOM menggunakannya untuk mendapatkan alamat RTSP.',
+      'Masukkan nama pengguna dan kata laluan kamera ini, jika ada. MAXCOM menggunakannya untuk mendapatkan alamat RTSP.',
       'Enter the user name and password of this camera, if it has any. The MAXCOM box uses them to get the RTSP address.',
       'أدخل اسم المستخدم وكلمة مرور هذه الكاميرا إن وُجدا. يستخدمهما صندوق MAXCOM للحصول على عنوان RTSP.',
     );
@@ -115,7 +115,7 @@ String cameraLoginFill(AppLang l) => _t(l, 'Isi alamat', 'Fill in the address', 
 String cameraLoginBack(AppLang l) => _t(l, 'Kembali', 'Back', 'رجوع');
 String cameraLoginFilling(AppLang l) => _t(
       l,
-      'Kotak MAXCOM sedang bertanya kepada kamera',
+      'MAXCOM sedang bertanya kepada kamera',
       'The MAXCOM box is asking the camera',
       'صندوق MAXCOM يسأل الكاميرا',
     );
@@ -154,7 +154,7 @@ String cameraUserMissing(AppLang l) => _t(
     );
 String externalMixFailedMessage(AppLang l) => _t(
       l,
-      'Pencampur audio kotak gagal. Siaran mungkin tiada gambar atau bunyi; cuba hentikan dan mulakan semula.',
+      'Pencampur audio MAXCOM gagal. Siaran mungkin tiada gambar atau bunyi; cuba hentikan dan mulakan semula.',
       'The box audio mixer failed. The broadcast may have no picture or sound; try stopping and starting again.',
       'تعذّر تشغيل مازج الصوت في الصندوق. قد يكون البث بلا صورة أو صوت؛ جرّب الإيقاف ثم البدء من جديد.',
     );
@@ -165,13 +165,13 @@ String cameraPassHide(AppLang l) => _t(l, 'Sembunyi kata laluan', 'Hide password
 String cameraPassKept(AppLang l) => _t(l, 'Kata laluan disimpan', 'Password saved', 'كلمة المرور محفوظة');
 String cameraPassHelpKept(AppLang l) => _t(
       l,
-      'Disimpan bersulit di kotak MAXCOM sahaja, tidak di awan. Tidak dipaparkan semula.',
+      'Disimpan bersulit di MAXCOM sahaja, tidak di awan. Tidak dipaparkan semula.',
       'Saved encrypted on the MAXCOM box only, never in the cloud. It is not shown again.',
       'تُحفظ مشفّرة في صندوق MAXCOM فقط، ولا تُحفظ في السحابة. ولا تُعرض مرة أخرى.',
     );
 String cameraPassHelpNew(AppLang l) => _t(
       l,
-      'Disimpan bersulit di kotak MAXCOM sahaja, tidak di awan.',
+      'Disimpan bersulit di MAXCOM sahaja, tidak di awan.',
       'Saved encrypted on the MAXCOM box only, never in the cloud.',
       'تُحفظ مشفّرة في صندوق MAXCOM فقط، ولا تُحفظ في السحابة.',
     );
@@ -213,13 +213,13 @@ String cameraAudioHelp(AppLang l) => _t(
 String cameraTest(AppLang l) => _t(l, 'Uji sambungan', 'Test connection', 'اختبار الاتصال');
 String cameraTestHelp(AppLang l) => _t(
       l,
-      'Alamat yang belum disimpan disimpan dahulu. Kotak MAXCOM kemudian cuba menyambung ke kamera dan memeriksa gambar dan audionya.',
+      'Alamat yang belum disimpan disimpan dahulu. MAXCOM kemudian cuba menyambung ke kamera dan memeriksa gambar dan audionya.',
       'An address that is not saved yet is saved first. The MAXCOM box then tries to connect to the camera and checks its picture and audio.',
       'يُحفظ العنوان غير المحفوظ أولًا. ثم يحاول صندوق MAXCOM الاتصال بالكاميرا ويفحص صورتها وصوتها.',
     );
 String cameraTestRunning(AppLang l) => _t(
       l,
-      'Kotak MAXCOM sedang menyambung ke kamera',
+      'MAXCOM sedang menyambung ke kamera',
       'The MAXCOM box is connecting to the camera',
       'صندوق MAXCOM يتصل بالكاميرا',
     );
@@ -231,7 +231,7 @@ String cameraTestRunningDetail(AppLang l, String host) => _t(
     );
 String cameraTestOk(AppLang l) => _t(
       l,
-      'Berjaya. Kotak menerima gambar dari kamera.',
+      'Berjaya. MAXCOM menerima gambar dari kamera.',
       'It worked. The box receives the picture from the camera.',
       'نجح الاختبار. يستقبل الصندوق الصورة من الكاميرا.',
     );
@@ -243,7 +243,7 @@ String cameraTestUnreachable(AppLang l) => _t(
     );
 String cameraTestUnreachableDetail(AppLang l, String host) => _t(
       l,
-      'Kotak tidak mendapat jawapan dari $host. Semak alamat, pastikan kamera dihidupkan dan berada pada Wi-Fi atau rangkaian surau yang sama.',
+      'MAXCOM tidak mendapat jawapan dari $host. Semak alamat, pastikan kamera dihidupkan dan berada pada Wi-Fi atau rangkaian surau yang sama.',
       'The box got no answer from $host. Check the address and make sure the camera is on and on the same Wi-Fi or surau network.',
       'لم يتلقَّ الصندوق ردًّا من $host. تحقق من العنوان وتأكد من تشغيل الكاميرا واتصالها بشبكة Wi-Fi أو شبكة المصلى نفسها.',
     );
@@ -308,9 +308,15 @@ String cameraTransportHelp(AppLang l) => _t(
       'Automatic tries TCP first, then UDP if the picture does not arrive. Choose TCP or UDP only if Automatic does not work.',
       'يجرّب الوضع التلقائي TCP أولًا ثم UDP إذا لم تصل الصورة. اختر TCP أو UDP فقط إذا لم ينجح الوضع التلقائي.',
     );
+String cameraBrightnessHelp(AppLang l) => _t(
+      l,
+      'Automatik menerangkan gambar hanya apabila hari gelap, seperti waktu senja. Pilih Cerah atau Lebih cerah jika gambar sentiasa terlalu gelap.',
+      'Automatic brightens the picture only when it is dark, such as at dusk. Choose Bright or Brighter if the picture is always too dark.',
+      'يُضيء الوضع التلقائي الصورة فقط عند الظلام، مثل وقت الغروب. اختر ساطع أو أكثر سطوعًا إذا كانت الصورة داكنة دائمًا.',
+    );
 String cameraNetworkNotice(AppLang l) => _t(
       l,
-      'Telefon atau kotak yang menarik video mesti berada pada Wi-Fi surau yang sama dengan kamera. Internet tidak diperlukan untuk siaran ke skrin surau.',
+      'Telefon atau MAXCOM yang menarik video mesti berada pada Wi-Fi surau yang sama dengan kamera. Internet tidak diperlukan untuk siaran ke skrin surau.',
       'The phone or box that pulls the video must be on the same surau Wi-Fi as the camera. The internet is not needed to broadcast to the surau screen.',
       'يجب أن يكون الهاتف أو الصندوق الذي يسحب الفيديو على شبكة Wi-Fi المصلى نفسها التي تتصل بها الكاميرا. لا حاجة إلى الإنترنت للبث إلى شاشة المصلى.',
     );
@@ -324,7 +330,7 @@ String cameraAtSurauOnly(AppLang l) => _t(
 /// Over the cloud: the change was sealed and sent, the box has not applied it yet.
 String cameraCloudPending(AppLang l) => _t(
       l,
-      'Dihantar ke kotak. Akan digunakan selepas kotak menerima (biasanya dalam 2 minit).',
+      'Dihantar ke MAXCOM. Akan digunakan selepas MAXCOM menerima (biasanya dalam 2 minit).',
       'Sent to the box. It will be used once the box receives it (usually within 2 minutes).',
       'أُرسلت إلى الصندوق. سيُستخدم بعد أن يستلمها الصندوق (عادةً خلال دقيقتين).',
     );
@@ -345,7 +351,7 @@ String cameraTestSurauOnly(AppLang l) => _t(
 /// Over the cloud with no box linked to it: there is nobody to send the setting to.
 String cameraCloudNoBox(AppLang l) => _t(
       l,
-      'Kotak belum disambung ke awan, jadi kamera hanya boleh ditetapkan di Wi-Fi surau.',
+      'MAXCOM belum disambung ke awan, jadi kamera hanya boleh ditetapkan di Wi-Fi surau.',
       'The box is not linked to the cloud, so the camera can only be set on the surau Wi-Fi.',
       'الصندوق غير متصل بالسحابة، لذا يمكن ضبط الكاميرا على شبكة Wi-Fi الخاصة بالمصلى فقط.',
     );
@@ -353,20 +359,20 @@ String cameraCloudNoBox(AppLang l) => _t(
 String cameraCloudRefused(AppLang l, String? code) => switch (code) {
       'bad_address' => _t(
           l,
-          'Kotak tidak menerima alamat itu. Gunakan alamat rtsp:// dengan alamat IPv4 persendirian di rangkaian surau.',
+          'MAXCOM tidak menerima alamat itu. Gunakan alamat rtsp:// dengan alamat IPv4 persendirian di rangkaian surau.',
           'The box did not accept that address. Use an rtsp:// address with a private IPv4 address on the surau network.',
           'لم يقبل الصندوق هذا العنوان. استخدم عنوان rtsp:// بعنوان IPv4 خاص في شبكة المصلى.',
         ),
       'bad_login' => _t(
           l,
-          'Kotak tidak menerima nama pengguna atau kata laluan itu. Semak aksara yang digunakan.',
+          'MAXCOM tidak menerima nama pengguna atau kata laluan itu. Semak aksara yang digunakan.',
           'The box did not accept that username or password. Check the characters used.',
           'لم يقبل الصندوق اسم المستخدم أو كلمة المرور. تحقق من الأحرف المستخدمة.',
         ),
       'password_again' => cameraPassAgain(l),
       _ => _t(
           l,
-          'Kotak tidak dapat menggunakan tetapan itu. Cuba hantar semula.',
+          'MAXCOM tidak dapat menggunakan tetapan itu. Cuba hantar semula.',
           'The box could not use that setting. Try sending it again.',
           'تعذر على الصندوق استخدام هذا الإعداد. حاول إرساله مرة أخرى.',
         ),
@@ -409,13 +415,13 @@ String liveAudioPhoneMicRow(AppLang l) => _t(l, 'Mikrofon telefon ini', 'This ph
 String liveAudioIpadMicRow(AppLang l) => _t(l, 'Mikrofon iPad ini', 'This iPad microphone', 'ميكروفون هذا الـ iPad');
 String liveAudioPhoneMicShort(AppLang l) => _t(l, 'Mikrofon telefon', 'Phone microphone', 'ميكروفون الهاتف');
 String liveAudioIpadMicShort(AppLang l) => _t(l, 'Mikrofon iPad', 'iPad microphone', 'ميكروفون iPad');
-String liveAudioBoxInputRow(AppLang l) => _t(l, 'Mic-in pada kotak', 'Mic-in on the box', 'مدخل الميكروفون في الصندوق');
+String liveAudioBoxInputRow(AppLang l) => _t(l, 'Mic-in pada MAXCOM', 'Mic-in on the box', 'مدخل الميكروفون في الصندوق');
 String liveAudioAdd(AppLang l) => _t(l, 'Tambah audio', 'Add audio', 'إضافة صوت');
 String liveAudioRemove(AppLang l) => _t(l, 'Buang', 'Remove', 'إزالة');
 String liveAudioVolume(AppLang l) => _t(l, 'Kelantangan', 'Volume', 'مستوى الصوت');
 String liveAudioBoxInputMissing(AppLang l) => _t(
       l,
-      'Tiada input audio pada kotak ini',
+      'Tiada input audio pada MAXCOM ini',
       'This box has no audio input',
       'لا يوجد مدخل صوت في هذا الصندوق',
     );
@@ -456,7 +462,7 @@ String liveAudioAllMuted(AppLang l) => _t(
     );
 String liveAudioBoxInputInPhoneLive(AppLang l) => _t(
       l,
-      'Rakaman di telefon tidak mengandungi bunyi Mic-in pada kotak.',
+      'Rakaman di telefon tidak mengandungi bunyi Mic-in pada MAXCOM.',
       'The recording on the phone does not contain the Mic-in sound of the box.',
       'لا يحتوي التسجيل على الهاتف على صوت مدخل الميكروفون في الصندوق.',
     );
@@ -467,7 +473,7 @@ String liveAudioNoCameraNoneAdded(AppLang l) => _t(
       'هذه الكاميرا بلا صوت. اضغط «إضافة صوت» لاختيار ميكروفون، وإلا فلن يكون للبث صوت.',
     );
 
-/// `source` in the messages below: Mikrofon telefon, Mikrofon iPad or Mic-in pada kotak, in the same language.
+/// `source` in the messages below: Mikrofon telefon, Mikrofon iPad or Mic-in pada MAXCOM, in the same language.
 String liveAudioAligningMsg(AppLang l, String source) => _t(
       l,
       'Sedang menyelaraskan $source dengan audio kamera...',
@@ -512,9 +518,15 @@ String liveAudioJoin(AppLang l, List<String> names) => names.join(_t(l, ' dan ',
 
 // ---- Siaran langsung: the screen's rows, chips, sections and sheets (task C2) ----
 
+String liveSourceSwitchFailed(AppLang l) => _t(
+      l,
+      'Sumber video tidak dapat ditukar. Sumber sebelumnya masih digunakan.',
+      'The video source could not be changed. The previous source is still in use.',
+      'تعذّر تغيير مصدر الفيديو. ما زال المصدر السابق قيد الاستخدام.',
+    );
 String liveCameraSourceFailed(AppLang l) => _t(
       l,
-      'Alamat kamera luaran tidak dapat diambil dari kotak. Kamera telefon digunakan.',
+      'Alamat kamera luaran tidak dapat diambil dari MAXCOM. Kamera telefon digunakan.',
       'The external camera address could not be fetched from the box. The phone camera is used.',
       'تعذّر جلب عنوان الكاميرا الخارجية من الصندوق. تُستخدم كاميرا الهاتف.',
     );
@@ -547,6 +559,35 @@ String liveMicTrrsHint(AppLang l) => _t(
       'تم اكتشاف سماعات بدون ميكروفون. استخدم ميكروفونًا رباعي الأقطاب (TRRS) أو محوّل TRRS.',
     );
 String liveMicUndo(AppLang l) => _t(l, 'Batal', 'Undo', 'تراجع');
+
+// ---- Phone inputs as rows, the loudness lift, Bluetooth (2026.11.15, lane P1) ----
+
+/// The per-source switch that raises quiet speech to a comfortable level.
+String liveAudioLift(AppLang l) => _t(l, 'Naikkan suara perlahan', 'Lift quiet sound', 'رفع الصوت الخافت');
+String liveAudioInputUse(AppLang l) => _t(l, 'Guna sumber ini', 'Use this source', 'استخدام هذا المصدر');
+String liveAudioStatusOff(AppLang l) => _t(l, 'Tidak digunakan', 'Not used', 'غير مستخدم');
+String liveAudioInputGone(AppLang l) => _t(l, 'Tidak disambungkan', 'Not connected', 'غير متصل');
+String liveAudioOnePhoneInput(AppLang l) => _t(
+      l,
+      'Satu mikrofon sahaja pada satu masa pada peranti ini. Menghidupkan yang ini mematikan mikrofon lain pada peranti.',
+      'One microphone at a time on this device. Turning this one on turns the other microphone on the device off.',
+      'ميكروفون واحد فقط في كل مرة على هذا الجهاز. تشغيل هذا الميكروفون يوقف الميكروفون الآخر على الجهاز.',
+    );
+String liveAudioBluetoothQuality(AppLang l) => _t(
+      l,
+      'Bunyi Bluetooth bermutu telefon.',
+      'Bluetooth sound is telephone quality.',
+      'جودة صوت البلوتوث مثل جودة المكالمات الهاتفية.',
+    );
+String liveAudioBluetoothDenied(AppLang l) => _t(
+      l,
+      'Kebenaran Bluetooth diperlukan untuk mikrofon ini. Benarkan di tetapan telefon. Siaran diteruskan dengan mikrofon sedia ada.',
+      'Bluetooth permission is needed for this microphone. Allow it in the phone settings. The live goes on with the current microphone.',
+      'يلزم إذن البلوتوث لهذا الميكروفون. اسمح به من إعدادات الهاتف. يستمر البث بالميكروفون الحالي.',
+    );
+String liveMicBluetoothName(AppLang l) => _t(l, 'Mikrofon Bluetooth', 'Bluetooth microphone', 'ميكروفون بلوتوث');
+String liveAudioMuteSource(AppLang l) => _t(l, 'Senyapkan sumber ini', 'Mute this source', 'كتم هذا المصدر');
+String liveAudioUnmuteSource(AppLang l) => _t(l, 'Hidupkan bunyi sumber ini', 'Unmute this source', 'تشغيل صوت هذا المصدر');
 String liveAudioStatusReady(AppLang l) => _t(l, 'Sedia', 'Ready', 'جاهز');
 String liveCameraUnreachableShort(AppLang l) =>
     _t(l, 'Kamera tidak dapat dihubungi', 'The camera cannot be reached', 'تعذّر الوصول إلى الكاميرا');
@@ -562,7 +603,7 @@ String liveAudioStatusMuted(AppLang l) => _t(l, 'Disenyapkan', 'Muted', 'مكت�
 String liveAudioStatusMixed(AppLang l) => _t(l, 'Dicampur', 'Mixed in', 'مدمج');
 String liveAudioStatusReadyMixed(AppLang l) => _t(l, 'Sedia, dicampur', 'Ready, mixed in', 'جاهز، مدمج');
 String liveAudioStatusBoxSignal(AppLang l) =>
-    _t(l, 'Isyarat dikesan pada kotak', 'Signal detected on the box', 'رُصدت إشارة في الصندوق');
+    _t(l, 'Isyarat dikesan pada MAXCOM', 'Signal detected on the box', 'رُصدت إشارة في الصندوق');
 String liveAudioAlignWhenLive(AppLang l) =>
     _t(l, 'Diselaraskan bila siaran bermula', 'Aligned when the broadcast starts', 'يُضبط التوقيت عند بدء البث');
 String liveAudioOffsetChip(AppLang l, int ms) => _t(l, 'Imbangan +$ms ms', 'Offset +$ms ms', 'إزاحة +$ms ms');
@@ -625,19 +666,19 @@ String liveAudioAligningMixed(AppLang l, String source) => _t(
     );
 String liveBoxLateNote(AppLang l) => _t(
       l,
-      'Mic-in pada kotak dicampur di kotak MAXCOM, jadi siaran sampai ke skrin surau dan YouTube 1 hingga 2 saat lewat.',
+      'Mic-in pada MAXCOM dicampur di MAXCOM, jadi siaran sampai ke skrin surau dan YouTube 1 hingga 2 saat lewat.',
       'The Mic-in on the box is mixed on the MAXCOM box, so the broadcast reaches the surau screen and YouTube 1 to 2 seconds late.',
       'يُدمج مدخل الميكروفون في صندوق MAXCOM، لذلك يصل البث إلى شاشة المصلى وYouTube متأخرًا من ثانية إلى ثانيتين.',
     );
 String liveBoxPullNote(AppLang l, String cameraName) => _t(
       l,
-      'Di iPad, kotak MAXCOM yang menarik gambar dan audio dari $cameraName dan menghantar pratonton ke iPad ini. Siaran yang digabungkan di kotak sampai ke skrin surau dan YouTube 1 hingga 2 saat lewat.',
+      'Di iPad, MAXCOM yang menarik gambar dan audio dari $cameraName dan menghantar pratonton ke iPad ini. Siaran yang digabungkan di MAXCOM sampai ke skrin surau dan YouTube 1 hingga 2 saat lewat.',
       'On the iPad, the MAXCOM box pulls the picture and audio from $cameraName and sends a preview to this iPad. The broadcast combined at the box reaches the surau screen and YouTube 1 to 2 seconds late.',
       'على iPad، يسحب صندوق MAXCOM الصورة والصوت من $cameraName ويرسل معاينة إلى هذا الجهاز. يصل البث المدمج في الصندوق إلى شاشة المصلى وYouTube متأخرًا من ثانية إلى ثانيتين.',
     );
 String livePhonePullNote(AppLang l, String cameraName, {required bool mic}) => _t(
       l,
-      'Telefon ini menarik gambar dan audio dari $cameraName dan menghantar siaran ke kotak MAXCOM. ${mic ? liveAudioPhoneNearSpeaker(l) : 'Kekalkan skrin terbuka.'}',
+      'Telefon ini menarik gambar dan audio dari $cameraName dan menghantar siaran ke MAXCOM. ${mic ? liveAudioPhoneNearSpeaker(l) : 'Kekalkan skrin terbuka.'}',
       'This phone pulls the picture and audio from $cameraName and sends the broadcast to the MAXCOM box. ${mic ? liveAudioPhoneNearSpeaker(l) : 'Keep the screen on.'}',
       'يسحب هذا الهاتف الصورة والصوت من $cameraName ويرسل البث إلى صندوق MAXCOM. ${mic ? liveAudioPhoneNearSpeaker(l) : 'أبقِ الشاشة مفتوحة.'}',
     );
@@ -667,7 +708,7 @@ String liveAudioAddHelpPhone(AppLang l) => _t(
     );
 String liveAudioAddBoxHint(AppLang l) => _t(
       l,
-      'Input audio pada kotak MAXCOM. Siaran sampai 1 hingga 2 saat lewat.',
+      'Input audio pada MAXCOM. Siaran sampai 1 hingga 2 saat lewat.',
       'The audio input on the MAXCOM box. The broadcast arrives 1 to 2 seconds late.',
       'مدخل الصوت في صندوق MAXCOM. يصل البث متأخرًا من ثانية إلى ثانيتين.',
     );
@@ -710,17 +751,35 @@ String liveAudioClapIpadIntro(AppLang l) => _t(
       'صفّق بيديك أمام الكاميرا واستمع عبر سماعات الرأس. اضبط الإزاحة حتى يُرى التصفيق ويُسمع في الوقت نفسه.',
     );
 String liveSectionOutputs(AppLang l) => _t(l, 'Ke mana siaran pergi', 'Where the broadcast goes', 'وجهات البث');
-String liveSectionOutputsSummaryPhone(AppLang l) => _t(
+/// The summary of the fold "Ke mana siaran pergi": the destinations that are chosen, joined with ", " and the first
+/// letter capital ("Skrin surau, YouTube, rakaman di telefon ini"). [recording] is true only when a recording is
+/// available AND chosen; an unavailable recording is told apart by [liveSectionOutputsNoRecording].
+String liveSectionOutputsSummary(
+  AppLang l, {
+  required bool screen,
+  required bool youtube,
+  required bool recording,
+  required bool ipad,
+}) {
+  final parts = <String>[
+    if (screen) _t(l, 'Skrin surau', 'Surau screen', 'شاشة المصلى'),
+    if (youtube) 'YouTube',
+    if (recording)
+      ipad
+          ? _t(l, 'rakaman di iPad ini', 'recording on this iPad', 'التسجيل على هذا الـ iPad')
+          : _t(l, 'rakaman di telefon ini', 'recording on this phone', 'التسجيل على هذا الهاتف'),
+  ];
+  if (parts.isEmpty) return _t(l, 'Tiada destinasi dipilih', 'No destination chosen', 'لم تُختر أي وجهة');
+  final joined = parts.join(l == AppLang.ar ? '، ' : ', ');
+  return l == AppLang.ar ? joined : joined[0].toUpperCase() + joined.substring(1);
+}
+
+/// The second line of that summary when this device cannot record (the MAXCOM Kiosk Box takes the video).
+String liveSectionOutputsNoRecording(AppLang l) => _t(
       l,
-      'Skrin surau, YouTube, rakaman di telefon ini',
-      'Surau screen, YouTube, recording on this phone',
-      'شاشة المصلى، YouTube، التسجيل على هذا الهاتف',
-    );
-String liveSectionOutputsSummaryIpad(AppLang l) => _t(
-      l,
-      'Skrin surau, YouTube, rakaman di iPad ini',
-      'Surau screen, YouTube, recording on this iPad',
-      'شاشة المصلى، YouTube، التسجيل على هذا الـ iPad',
+      'Rakaman: Tidak tersedia, video diambil oleh MAXCOM Kiosk Box',
+      'Recording: Not available, the video is taken by the MAXCOM Kiosk Box',
+      'التسجيل: غير متاح، يأخذ MAXCOM Kiosk Box الفيديو',
     );
 String liveSectionSettings(AppLang l) => _t(l, 'Tetapan siaran', 'Live settings', 'إعدادات البث');
 /// Konfigurasi's one pointer row (and its search hit): the four live features moved to the Siaran langsung page.
@@ -743,9 +802,9 @@ const List<String> liveSettingsMovedWords = [
 ];
 String liveSectionSettingsSummary(AppLang l, bool cameraOn) => _t(
       l,
-      'Kamera luaran ${cameraOn ? 'hidup' : 'dimatikan'}, skrin, YouTube, rakaman',
-      'External camera ${cameraOn ? 'on' : 'off'}, screen, YouTube, recording',
-      'الكاميرا الخارجية ${cameraOn ? 'مفعّلة' : 'متوقفة'}، الشاشة، YouTube، التسجيل',
+      'Kamera luaran ${cameraOn ? 'ditawarkan' : 'tidak ditawarkan'}, skrin, YouTube, rakaman',
+      'External camera ${cameraOn ? 'offered' : 'not offered'}, screen, YouTube, recording',
+      'الكاميرا الخارجية ${cameraOn ? 'معروضة كخيار' : 'غير معروضة'}، الشاشة، YouTube، التسجيل',
     );
 String liveSettingsCameraRow(AppLang l) => _t(l, 'Kamera luaran', 'External camera', 'الكاميرا الخارجية');
 String liveSettingsKioskRow(AppLang l) => _t(l, 'Siaran langsung di skrin', 'Live on the screen', 'البث المباشر على الشاشة');
@@ -757,8 +816,12 @@ String liveSettingsYoutubeHint(AppLang l) =>
 String liveSettingsRecordingRow(AppLang l) => _t(l, 'Rakaman', 'Recording', 'التسجيل');
 String liveSettingsRecordingHint(AppLang l) =>
     _t(l, 'Panjang fail dan simpanan', 'File length and storage', 'طول الملف والتخزين');
-String liveSettingsCameraOn(AppLang l) => _t(l, 'Hidup', 'On', 'مفعّلة');
-String liveSettingsCameraOff(AppLang l) => _t(l, 'Dimatikan', 'Off', 'متوقفة');
+String liveSettingsCameraOn(AppLang l) => _t(l, 'Ditawarkan sebagai pilihan', 'Offered as a choice', 'معروضة كخيار');
+/// The short forms, for a summary line that also says other things.
+String liveSettingsCameraShort(AppLang l, bool on) => on
+    ? _t(l, 'ditawarkan', 'offered', 'معروضة')
+    : _t(l, 'tidak ditawarkan', 'not offered', 'غير معروضة');
+String liveSettingsCameraOff(AppLang l) => _t(l, 'Tidak ditawarkan', 'Not offered', 'غير معروضة');
 String liveSourcesRemembered(AppLang l) => _t(
       l,
       'Sumber video dan campuran audio terakhir diingat untuk siaran seterusnya.',
@@ -801,7 +864,7 @@ String liveMixedLevel(AppLang l) => _t(l, 'Campuran', 'Mix', 'المزيج');
 String liveNoSound(AppLang l) => _t(l, 'Tiada bunyi', 'No sound', 'بلا صوت');
 String liveFromCamera(AppLang l, String name) => _t(l, 'Langsung dari $name', 'Live from $name', 'مباشر من $name');
 String liveFromBoxCamera(AppLang l, String name) =>
-    _t(l, 'Langsung dari kotak: $name', 'Live from the box: $name', 'مباشر من الصندوق: $name');
+    _t(l, 'Langsung dari MAXCOM: $name', 'Live from the box: $name', 'مباشر من الصندوق: $name');
 String liveCameraWaiting(AppLang l, String name) =>
     _t(l, 'Menunggu gambar dari $name', 'Waiting for the picture from $name', 'بانتظار الصورة من $name');
 String liveCameraLostTitle(AppLang l) => _t(
@@ -892,3 +955,12 @@ String liveCameraBackBody(AppLang l, String source) => _t(
       'The camera audio is mixed in again as soon as it is aligned with $source, to keep voices from sounding doubled.',
       'يُدمج صوت الكاميرا من جديد فور توافقه مع $source، حتى لا يُسمع الصوت مزدوجًا.',
     );
+
+// ---- the sources card during a live (were hardcoded BM in the screen, G7) ----
+
+String liveCamLinkLost(AppLang l) => _t(l, 'Terputus', 'Lost', 'منقطعة');
+String liveCamLinkReconnecting(AppLang l) => _t(l, 'Menyambung semula', 'Reconnecting', 'جارٍ إعادة الاتصال');
+String liveCamLinkBack(AppLang l) => _t(l, 'Kembali', 'Back', 'عادت');
+String liveCamLinkReceived(AppLang l) => _t(l, 'Diterima', 'Received', 'مستلمة');
+String liveCamPulledByBox(AppLang l) => _t(l, 'Ditarik oleh MAXCOM', 'Pulled by MAXCOM', 'يسحبها MAXCOM');
+String liveCamLastPicture(AppLang l) => _t(l, 'Gambar terakhir', 'Last picture', 'آخر صورة');

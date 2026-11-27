@@ -35,7 +35,7 @@ const Map<String, String> _sample = {
   'penceramah': 'Ustaz Haji Ahmad Fauzi bin Ismail',
   'topic': 'Sifat 20: Wujud, Qidam dan Baqa',
   'kitab': 'Aqidatun Najin',
-  'surau': 'Surau D\'Waqaf', // lang-ok: sample surau name
+  'surau': 'Surau Contoh', // lang-ok: sample surau name
   'date': 'Sabtu, 7 November 2026', // lang-ok: sample date, as above
   'time': '8:30 malam',
 };

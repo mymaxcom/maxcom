@@ -21,16 +21,23 @@ describe('liveCamera feature', () => {
     expect(camera!.labelMs).toBe('Kamera luaran');
   });
   it('defaults: name, automatic transport, no fallback offset', () => {
-    expect(camera!.defaults).toEqual({ name: 'Kamera luaran', transport: 'auto', avOffsetMs: { deviceMic: 0, boxInput: 0 } });
+    expect(camera!.defaults).toEqual({ name: 'Kamera luaran', transport: 'auto', brightness: 'auto', avOffsetMs: { deviceMic: 0, boxInput: 0 } });
     const s = resolveSettings({}).liveCamera;
-    expect(s).toEqual({ enabled: false, name: 'Kamera luaran', transport: 'auto', avOffsetMs: { deviceMic: 0, boxInput: 0 } });
+    expect(s).toEqual({ enabled: false, name: 'Kamera luaran', transport: 'auto', brightness: 'auto', avOffsetMs: { deviceMic: 0, boxInput: 0 } });
   });
   it('holds no address and no password: the address is a sealed record, not a setting', () => {
-    expect(Object.keys(camera!.defaults).sort()).toEqual(['avOffsetMs', 'name', 'transport']);
+    expect(Object.keys(camera!.defaults).sort()).toEqual(['avOffsetMs', 'brightness', 'name', 'transport']);
   });
   it('accepts transport auto, tcp and udp only', () => {
     for (const t of ['auto', 'tcp', 'udp']) expect(validateFeatureSettings('liveCamera', { transport: t }).ok, t).toBe(true);
     for (const t of ['http', 'TCP', '', 'sctp']) expect(validateFeatureSettings('liveCamera', { transport: t }).ok, t).toBe(false);
+  });
+  it('accepts brightness auto, normal, bright and brighter only (B7)', () => {
+    for (const b of ['auto', 'normal', 'bright', 'brighter']) expect(validateFeatureSettings('liveCamera', { brightness: b }).ok, b).toBe(true);
+    for (const b of ['dark', 'Auto', '', 5]) expect(validateFeatureSettings('liveCamera', { brightness: b }).ok, String(b)).toBe(false);
+    expect(fieldMeta('liveCamera', 'brightness')).toMatchObject({ ui: 'segment', choices: ['auto', 'normal', 'bright', 'brighter'] });
+    expect(resolveSettings({ liveCamera: { brightness: 'dim' } as never }).liveCamera.brightness).toBe('auto');
+    expect(resolveSettings({ liveCamera: { brightness: 'bright' } as never }).liveCamera.brightness).toBe('bright');
   });
   it('accepts the fallback offset 0..2000 in steps of 50 only', () => {
     for (const v of [0, 50, 600, 1950, 2000]) {
@@ -68,7 +75,7 @@ describe('liveCamera feature', () => {
       expect(m).toMatchObject({ ui: 'stepper', min: 0, max: 2000, step: 50 });
       expect(isSystemField('liveCamera', leaf)).toBe(false);
     }
-    expect(Object.keys(FIELD_META.liveCamera!).every((p) => ['transport', 'avOffsetMs.deviceMic', 'avOffsetMs.boxInput'].includes(p))).toBe(true);
+    expect(Object.keys(FIELD_META.liveCamera!).every((p) => ['transport', 'brightness', 'avOffsetMs.deviceMic', 'avOffsetMs.boxInput'].includes(p))).toBe(true);
     expect(patchNeedsSystemWrite('liveCamera', { transport: 'tcp', avOffsetMs: { deviceMic: 50 } })).toBe(false);
   });
   it('is not hidden from Tetapan', () => {

@@ -52,28 +52,26 @@ Future<Map<String, dynamic>> saved(WidgetTester tester, ShellHarness h, String f
 void main() {
   test('fieldMeta reads the generated table', () {
     final m = fieldMeta('liveYoutube', 'maxBitrateKbps')!;
+    expect(m.hidden, isTrue, reason: 'quality is automatic: no manual control');
     expect(m.ui, 'slider');
     expect(m.step, 500);
     expect(m.unit, 'kbps');
-    expect(m.isSystem, isTrue);
+    expect(m.isSystem, isFalse, reason: 'the bitrate is a live setting, not a system one');
+    expect(m.min, 1000);
+    expect(m.max, 8000);
+    expect(fieldMeta('liveYoutube', 'relayVideo')!.isSystem, isTrue);
     expect(fieldMeta('liveYoutube', 'privacy'), isNull);
     expect(fieldMeta('tilawah', 'cacheMaxMb')!.choices, [100, 300, 500, 1000]);
-    expect(withUnit(2500, 'kbps'), '2500 kbps');
+    expect(withUnit(3500, 'kbps'), '3500 kbps');
     expect(withUnit(60, '%'), '60%');
   });
 
-  testWidgets('slider: maxBitrateKbps steps by 500 and shows the unit', (tester) async {
-    final h = await open(tester, 'liveYoutube', roles: const ['superadmin']);
-    await reveal(tester, k('setting-maxBitrateKbps'));
-    expect(find.text('2500 kbps'), findsOneWidget);
-    final slider = tester.widget<Slider>(k('setting-maxBitrateKbps'));
-    expect(slider.divisions, 11);
-    expect(slider.min, 500); // the rule's own range, so an old 700 kbps value is shown and kept
-    slider.onChanged!(3000);
-    await settle(tester);
-    expect(find.text('3000 kbps'), findsOneWidget);
-    expect(await saved(tester, h, 'liveYoutube'), {'maxBitrateKbps': 3000});
-  }, skip: !kOpsBuild);
+  testWidgets('maxBitrateKbps and autoQuality are hidden from the YouTube page', (tester) async {
+    await open(tester, 'liveYoutube');
+    expect(k('setting-maxBitrateKbps'), findsNothing);
+    expect(k('setting-autoQuality'), findsNothing);
+    expect(find.text('Kualiti automatik'), findsNothing);
+  });
 
   testWidgets('chips: cacheMaxMb is four choices; a stored value outside them is still shown', (tester) async {
     final h = await open(tester, 'tilawah', roles: const ['superadmin']);
@@ -345,6 +343,7 @@ void main() {
     await open(tester, 'liveYoutube');
     expect(k('lanjutan-card'), findsNothing);
     expect(find.text('Video ke YouTube'), findsNothing, reason: 'hidden, not read-only');
+    // the bitrate is no longer a Lanjutan field, and no longer shown at all (quality is automatic)
     expect(find.text('Kadar bit maksimum (kbps)'), findsNothing);
   });
 

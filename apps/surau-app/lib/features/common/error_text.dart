@@ -30,6 +30,8 @@ int _int(Map<String, dynamic> d, String key, [int fallback = 0]) {
 final Map<String, ErrorCodeText> kErrorCodeTexts = <String, ErrorCodeText>{
   // Session, PIN and unlock.
   'no_session': (s, d) => s.errorSessionExpired,
+  // The cloud copy of a surau is being made equal to its box (multi-box): writes wait.
+  'surau_asleep': (s, d) => s.errcSurauAsleep,
   // Windows Mic-in (audio inputs list and level probe) and play now.
   'no_device': (s, d) => s.errcNoMicDevice,
   'access_denied': (s, d) => s.errcMicAccessDenied,
@@ -123,6 +125,10 @@ final Map<String, ErrorCodeText> kErrorCodeTexts = <String, ErrorCodeText>{
       cameraReasonText(s, d['reason'] is String ? d['reason'] as String : null) ?? s.errcBadAddress,
   'unknown_video': (s, d) => s.errcUnknownVideo,
   'cloud_unreachable': (s, d) => s.liveWarnCloudUnreachable,
+  // The refusals of the 2026.11.15 live contracts (core `LIVE_REFUSALS`).
+  'resume_mismatch': (s, d) => s.errcResumeMismatch,
+  'camera_in_use': (s, d) => s.errcCameraInUse,
+  'too_many_viewers': (s, d) => s.errcTooManyViewers,
   // MAXCOM cloud and linked sites.
   'bad_claim': (s, d) => s.errcBadClaim,
   'worker_unreachable': (s, d) => s.errcWorkerUnreachable,
@@ -139,6 +145,12 @@ final Map<String, ErrorCodeText> kErrorCodeTexts = <String, ErrorCodeText>{
   'youtube_forbidden': (s, d) => s.errcYoutubeForbidden,
   'youtube_not_found': (s, d) => s.errcYoutubeNotFound,
   'youtube_network': (s, d) => s.errcYoutubeNetwork,
+  // 2026.11.15 (Y6, Y9, Y11): refusals with a cause of their own.
+  'youtube_live_not_enabled': (s, d) => s.errcYoutubeLiveNotEnabled,
+  'box_clock_wrong': (s, d) => s.errcBoxClockWrong,
+  'youtube_client_refused': (s, d) => s.errcYoutubeClientRefused,
+  'youtube_busy_other_box': (s, d) => s.errcYoutubeBusyOtherBox,
+  'youtube_broadcast_open': (s, d) => s.errcYoutubeBroadcastOpen,
   // 2026.11.13: the grant is held by the MAXCOM at the surau; the cloud signs nothing in or out.
   'youtube_at_box': (s, d) => s.errcYoutubeAtBox,
   'catchup_off': (s, d) => s.errcCatchupOff,
@@ -148,6 +160,8 @@ final Map<String, ErrorCodeText> kErrorCodeTexts = <String, ErrorCodeText>{
   'upload_not_found': (s, d) => s.errcUploadNotFound,
   'video_mismatch': (s, d) => s.errcVideoMismatch,
   'upload_expired': (s, d) => s.errcUploadExpired,
+  'already_uploading': (s, d) => s.errcAlreadyUploading,
+  'upload_abandoned': (s, d) => s.errcUploadAbandoned,
   // MAXCOM Ops, the CLI and setup (the person may meet these on a phone).
   'surau_not_found': (s, d) => s.errcSurauNotFound,
   'surau_required': (s, d) => s.errcSurauRequired,

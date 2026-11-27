@@ -24,6 +24,7 @@ class UploadBeginRequest {
     required this.bytes,
     this.part,
     this.replaceLiveVideoId,
+    this.sessionId,
   });
 
   final String? kuliahId;
@@ -31,11 +32,17 @@ class UploadBeginRequest {
   final UploadPartRef? part;
   final String? replaceLiveVideoId;
 
+  /// The live session the recording belongs to (2026.11.15): the box refuses
+  /// a second device that uploads the same live (`already_uploading`). Left
+  /// out when it is not a box session id the box could know.
+  final String? sessionId;
+
   Map<String, dynamic> toJson() => {
     'kuliahId': kuliahId,
     'part': part?.toJson(),
     'bytes': bytes,
     'replaceLiveVideoId': replaceLiveVideoId,
+    'sessionId': ?sessionId,
   };
 }
 
@@ -105,6 +112,23 @@ class UploadNeedsUnlock implements Exception {
   const UploadNeedsUnlock();
 }
 
+/// The 2026.11.15 addition to [UploadApi], as its own interface so an older
+/// implementation still stands: `POST /api/youtube/upload/abandon`.
+abstract interface class UploadAbandon {
+  /// Marks this device's open upload abandoned, so it stops counting against
+  /// the box's open-upload cap. Never throws for an upload that is already
+  /// done or gone.
+  Future<void> abandon(String uploadId);
+}
+
+/// Lane B (2026.11.15): `POST /api/youtube/upload/progress` (200 `{ok}`). An upload that shows no progress for 30 minutes
+/// may be taken over by another device of the same live, so a running upload says it is alive every two minutes.
+abstract interface class UploadProgress {
+  /// True while the box still holds this device's claim. False only when the box answers `ok: false` (the claim was
+  /// taken over or is gone): the upload must stop. A failed call or an older box counts as true (best effort).
+  Future<bool> progress(String uploadId);
+}
+
 abstract class UploadApi {
   Future<UploadBegun> begin(UploadBeginRequest r);
 
@@ -114,7 +138,7 @@ abstract class UploadApi {
 }
 
 /// Over the pinned cloud client.
-class HttpUploadApi implements UploadApi {
+class HttpUploadApi implements UploadApi, UploadAbandon, UploadProgress {
   HttpUploadApi({required this.client, required this.token});
 
   final BoxClient client;
@@ -153,6 +177,30 @@ class HttpUploadApi implements UploadApi {
       throw const UploadNeedsUnlock();
     } on BoxError catch (e) {
       throw UploadApiException(e.code ?? 'done_${e.status}');
+    }
+  }
+
+  @override
+  Future<void> abandon(String uploadId) async {
+    try {
+      await client.postJson('/api/youtube/upload/abandon', {'uploadId': uploadId}, token: token);
+    } on SessionExpired {
+      throw const UploadNeedsUnlock();
+    } on BoxError catch (e) {
+      // not this device's, already done, or an older box with no such route: nothing left to free
+      if (e.status == 404 || e.status == 409) return;
+      throw UploadApiException(e.code ?? 'abandon_${e.status}');
+    }
+  }
+
+  @override
+  Future<bool> progress(String uploadId) async {
+    try {
+      final r = await client.postJson('/api/youtube/upload/progress', {'uploadId': uploadId}, token: token);
+      return r['ok'] != false;
+    } on Object {
+      // best effort: an older box has no such route, a missed call is made up by the next one
+      return true;
     }
   }
 

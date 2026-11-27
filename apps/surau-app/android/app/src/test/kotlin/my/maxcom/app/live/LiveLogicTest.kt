@@ -9,6 +9,24 @@ import org.junit.Test
 
 class LiveLogicTest {
     @Test
+    fun aPreparedEngineIsReleasedOnRequestOnlyWhenNoLiveRunsOrStops() {
+        // B11: with the box pulling the camera the phone lets its own camera go, but never under a live
+        assertTrue(LiveLogic.mayReleasePrepared(live = false, stopping = false))
+        assertFalse(LiveLogic.mayReleasePrepared(live = true, stopping = false))
+        assertFalse(LiveLogic.mayReleasePrepared(live = false, stopping = true))
+        assertFalse(LiveLogic.mayReleasePrepared(live = true, stopping = true))
+    }
+
+    @Test
+    fun theReleaseChannelMethodGoesThroughTheGuardedEngineCall() {
+        val channel = java.io.File("src/main/kotlin/my/maxcom/app/live/LiveChannel.kt").readText()
+        assertTrue(channel.contains("\"release\" -> result.success(engine.releasePrepared())"))
+        val engine = java.io.File("src/main/kotlin/my/maxcom/app/live/LiveEngine.kt").readText()
+        val body = engine.substringAfter("fun releasePrepared(): Boolean {").substringBefore("fun release() {")
+        assertTrue(body.trimStart().startsWith("if (!LiveLogic.mayReleasePrepared(live, stopping)) return false"))
+    }
+
+    @Test
     fun backoffDoublesFromTwoAndStopsAtThirty() {
         val seq = (1..9).map { LiveLogic.backoffSeconds(it) }
         assertEquals(listOf(2, 4, 8, 16, 30, 30, 30, 30, 30), seq)
@@ -162,5 +180,63 @@ class LiveLogicTest {
         }
         // the address is read in one place and handed on; it is never put into a reply
         assertFalse(src.contains("result.success(mapOf(\"url\""))
+    }
+
+    // ---- 2026.11.15, D2: the recorder never saves or lists an empty file (B3, D5, U2, U9) ----
+
+    private val engineSrc: String by lazy {
+        listOf("src/main/kotlin/my/maxcom/app/live/LiveEngine.kt", "app/src/main/kotlin/my/maxcom/app/live/LiveEngine.kt")
+            .map { java.io.File(it) }.first { it.exists() }.readText()
+    }
+
+    @Test
+    fun aSegmentNameIsListedOnlyAfterTheFileWasProbed() {
+        // B3: the name used to join the list at record start, before one byte existed
+        val start = engineSrc.substringAfter("private fun startSegment()").substringBefore("private fun stopRecordBounded")
+        assertFalse("startSegment must not list the name", start.contains("sessionNames.add"))
+        val fin = engineSrc.substringAfter("private fun finalizeSegment(").substringBefore("fun awaitPublished")
+        val probe = fin.indexOf("probeRecording(file)")
+        val judge = fin.indexOf("RecordingGuard.judgeSegment(")
+        val add = fin.indexOf("sessionNames.add(file.name)")
+        val publish = fin.indexOf("publishToGallery(file)")
+        assertTrue("probe, then judge, then list, then publish", probe in 0 until judge && judge < add && add < publish)
+        // only the KEEP branch lists or publishes
+        val discard = fin.substringAfter("SegmentVerdict.DISCARD ->")
+        assertFalse(discard.contains("sessionNames.add"))
+        assertFalse(discard.contains("publishToGallery"))
+    }
+
+    @Test
+    fun theExternalCameraIsRenderedAtASteadyRateAndThePhoneCameraIsNot() {
+        // B3, D5: without force render no decoded frame meant no encoded frame: an empty file and no lost overlay
+        assertTrue(engineSrc.contains("setForceRender(videoKind == VideoKind.EXTERNAL, 30)"))
+        val prepare = engineSrc.substringAfter("fun prepare(front: Boolean").substringBefore("fun reframe()")
+        assertTrue(prepare.contains("applyForceRender()"))
+        val switch = engineSrc.substringAfter("fun setSource(spec: SourceSpec)").substringBefore("private fun releaseQuietly")
+        assertTrue(switch.contains("applyForceRender()"))
+    }
+
+    @Test
+    fun aSegmentIsNeverClosedOnTheMainThreadWhileTheLiveRuns() {
+        // U9: the rotation and the battery/storage halts used to block the main thread for up to ten seconds
+        val rotate = engineSrc.substringAfter("private val rotate = Runnable {").substringBefore("private fun segmentSourceFrames")
+        assertTrue(rotate.contains("finishSegmentAsync("))
+        assertFalse(rotate.contains("finishSegmentBlocking("))
+        val device = engineSrc.substringAfter("private fun checkDevice()")
+        assertFalse(device.contains("finishSegmentBlocking("))
+        assertEquals(2, Regex("finishSegmentAsync\\(s\\)").findAll(device).count())
+        // the one blocking close left is the synchronous stop (a failed start, a release)
+        assertEquals(1, Regex("finishSegmentBlocking\\(s\\)").findAll(engineSrc.substringBefore("private fun finishSegmentBlocking")).count())
+    }
+
+    @Test
+    fun theStopIsAnsweredOnlyAfterTheLastFileWasJudged() {
+        // U2: the app asks for the names of the live right after stop
+        val complete = engineSrc.substringAfter("private fun completeStop(").substringBefore("private fun settleStop")
+        val finalize = complete.indexOf("finalizeSegment(file, frames)")
+        val settle = complete.indexOf("settleStop(")
+        assertTrue(finalize in 0 until settle)
+        val settleBody = engineSrc.substringAfter("private fun settleStop(").substringBefore("/** Synchronous stop")
+        assertTrue(settleBody.contains("stopWaiters"))
     }
 }

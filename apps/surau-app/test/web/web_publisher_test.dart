@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 import 'dart:js_interop';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:surau_app/features/live/android_publisher.dart'
     show PublisherException;
@@ -146,8 +147,10 @@ class FakeReceiver implements ReceiverLink {
   Future<void> applyAnswer(String sdp) async => answer = sdp;
   @override
   Stream<String> get connectionStates => statesC.stream;
+  // a real (empty) stream, so the hidden element of a box-pulled live has something to hold
+  final JSObject _stream = web.MediaStream() as JSObject;
   @override
-  JSObject? get stream => null;
+  JSObject? get stream => _stream;
   @override
   void close() => closed = true;
 
@@ -202,6 +205,7 @@ class Rig {
         requests.add(r);
         final h = postHandler;
         if (r.method == 'POST' && r.path == WebPublisher.whepPath) {
+          if (whepRefused) return const WhipReply(409, '{"error":"preview_off"}');
           return WhipReply(201, 'v=0 whep answer', location: whepLocation);
         }
         if (r.method == 'POST') {
@@ -239,6 +243,9 @@ class Rig {
   bool failMedia = false;
   bool silentRecorder = false;
   String? whepLocation = '/api/live/preview/whep/prev-1';
+
+  /// The box answers 409 preview_off to the preview request (a box-pulled live shows this device no picture).
+  bool whepRefused = false;
 
   final MemoryRecordingsStore store;
   late final FakePage page;
@@ -730,6 +737,86 @@ void main() {
       expect(rig.captures.single.stopped, isTrue);
     });
 
+    testWidgets('409 preview_off is asked once and never again (no retry loop)', (t) async {
+      final rig = Rig()..whepRefused = true;
+      await rig.goLiveExternal();
+      await t.pump();
+      expect(rig.whepPosts, hasLength(1));
+      expect(rig.publisher.previewRefused, isTrue);
+      await t.pump(const Duration(seconds: 120));
+      expect(rig.whepPosts, hasLength(1));
+      expect(rig.publisher.externalState.preview, ExternalPreview.idle);
+      await rig.publisher.stop();
+    });
+
+    testWidgets('Rakam off files the running piece, Rakam on starts a new one', (t) async {
+      final rig = Rig();
+      await rig.goLiveExternal();
+      rig.receivers[0].emit('connected');
+      await t.pump();
+      expect(rig.recorders, hasLength(1));
+      await rig.publisher.setRecording(false);
+      expect(rig.recorders[0].stopped, isTrue);
+      expect(rig.publisher.current.recording.on, isFalse);
+      await rig.publisher.setRecording(true);
+      await t.pump();
+      // the reader was closed with the recording: Rakam on opens a new one, and the new piece starts when it connects
+      expect(rig.receivers, hasLength(2));
+      rig.receivers[1].emit('connected');
+      await t.pump();
+      expect(rig.recorders, hasLength(2));
+      expect(rig.publisher.current.recording.on, isTrue);
+      await rig.publisher.stop();
+    });
+
+    testWidgets('the reader of the box stream exists only for the recording; the hidden element goes with it', (t) async {
+      final rig = Rig();
+      await rig.publisher.prepareExternal(const PublisherConfig(recording: false));
+      await rig.publisher.start(Rig.targets);
+      await t.pump();
+      // no Rakam: no reader of the box stream at all, and nothing hidden is held
+      expect(rig.whepPosts, isEmpty);
+      expect(rig.receivers, isEmpty);
+      expect(rig.publisher.sinkHeld, isFalse);
+      // Rakam switched on during the live: the reader opens, the hidden element holds the stream
+      await rig.publisher.setRecording(true);
+      await t.pump();
+      expect(rig.whepPosts, hasLength(1));
+      expect(rig.publisher.sinkHeld, isTrue);
+      rig.receivers.single.emit('connected');
+      await t.pump();
+      // Rakam off: the reader is closed and deleted, the element lets go
+      await rig.publisher.setRecording(false);
+      expect(rig.receivers.single.closed, isTrue);
+      expect(rig.deletes.single.path, '/api/live/preview/whep/prev-1');
+      expect(rig.publisher.sinkHeld, isFalse);
+      // Rakam on again, then the live ends: the element is released on stop
+      await rig.publisher.setRecording(true);
+      await t.pump();
+      expect(rig.receivers, hasLength(2));
+      expect(rig.publisher.sinkHeld, isTrue);
+      await rig.publisher.stop();
+      expect(rig.publisher.sinkHeld, isFalse);
+    });
+
+    testWidgets('the received picture is always muted in box-pull mode, whatever the preview sound switch holds', (t) async {
+      final rig = Rig();
+      await t.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: SizedBox(width: 120, height: 80, child: Builder(builder: rig.publisher.preview)),
+        ),
+      );
+      await t.pump(const Duration(milliseconds: 200));
+      await rig.goLiveExternal();
+      await t.pump(const Duration(milliseconds: 200));
+      rig.publisher.setPreviewSound(true);
+      await t.pump();
+      expect(rig.publisher.externalState.previewSound, isTrue);
+      expect(rig.publisher.previewMuted ?? true, isTrue);
+      await rig.publisher.stop();
+    });
+
     testWidgets('a WHEP Location off the WHEP path is never used', (t) async {
       final rig = Rig()..whepLocation = '/api/live/whip/x';
       await rig.goLiveExternal();
@@ -1158,6 +1245,41 @@ void main() {
         expect(offer.h264First, isFalse);
       }
       expect(sdp, contains('a=sendonly'));
+    });
+  });
+
+  group('loudness lift on the iPad', () {
+    Map<String, Object?> audioOf(Map<String, Object?> c) => c['audio']! as Map<String, Object?>;
+
+    testWidgets('the lift is on by default and switching it off opens the microphone again without the automatic gain', (t) async {
+      final rig = Rig();
+      await rig.publisher.prepare(const PublisherConfig());
+      expect(audioOf(rig.constraints.last)['autoGainControl'], isTrue);
+      final before = rig.constraints.length;
+      await rig.publisher.setLift('deviceMic', false);
+      expect(rig.constraints.length, before + 1);
+      expect(audioOf(rig.constraints.last)['autoGainControl'], isFalse);
+      // the same value again opens nothing
+      await rig.publisher.setLift('deviceMic', false);
+      expect(rig.constraints.length, before + 1);
+      // switched on again: the gain returns
+      await rig.publisher.setLift('deviceMic', true);
+      expect(audioOf(rig.constraints.last)['autoGainControl'], isTrue);
+      // the camera's own sound is not captured here
+      await rig.publisher.setLift('camera', false);
+      expect(rig.constraints.length, before + 2);
+    });
+
+    testWidgets('a microphone that cannot be opened keeps the old lift', (t) async {
+      final rig = Rig();
+      await rig.publisher.prepare(const PublisherConfig());
+      rig.failMedia = true;
+      await rig.publisher.setLift('deviceMic', false);
+      rig.failMedia = false;
+      final before = rig.constraints.length;
+      // the value was reverted, so asking for "off" again tries again
+      await rig.publisher.setLift('deviceMic', false);
+      expect(rig.constraints.length, before + 1);
     });
   });
 }

@@ -42,7 +42,7 @@ describe('no pack stylesheet on the box screens', () => {
   });
 
   it('the stopped screen has no pack link, no protected rules, and no theme on its stage', () => {
-    holder.box = boxView({ state: 'locked', surauName: 'Surau D\'Waqaf' });
+    holder.box = boxView({ state: 'locked', surauName: 'Surau Contoh' });
     holder.view = withPack();
     const r = render(<App />);
     expect(r.getByText('Perkhidmatan dihentikan')).toBeTruthy();

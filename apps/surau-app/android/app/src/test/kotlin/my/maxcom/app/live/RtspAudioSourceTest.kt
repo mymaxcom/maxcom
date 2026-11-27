@@ -143,4 +143,126 @@ class RtspAudioSourceTest {
         assertArrayEquals(byteArrayOf(0x14, 0x08), AacMediaCodecDecoder.defaultConfig(16000, 1))
         assertArrayEquals(byteArrayOf(0x11, 0x90.toByte()), AacMediaCodecDecoder.defaultConfig(48000, 2))
     }
+
+    // ---- 2026.11.15, D4: the sync offset is wired (A1), AAC is decoded off the receive thread (A6) ----
+
+    @Test
+    fun theSavedOffsetHoldsTheCameraSoundBack() {
+        // A1: until now nothing called setSyncOffsetMs, so the offset was always 0
+        val a = RtspAudioSource(48_000)
+        assertEquals(0, a.syncOffsetMs)
+        val base = a.holdSamples // the 100 ms prebuffer
+        assertEquals(4800, base)
+        a.setSyncOffsetMs(SourceLogic.cameraSyncMs(250))
+        assertEquals(250, a.syncOffsetMs)
+        assertEquals(4800 + 12_000, a.holdSamples)
+        // the sound can only be delayed, and not without limit
+        assertEquals(0, SourceLogic.cameraSyncMs(-300))
+        assertEquals(2000, SourceLogic.cameraSyncMs(9000))
+        a.setSyncOffsetMs(SourceLogic.cameraSyncMs(-300))
+        assertEquals(base, a.holdSamples)
+    }
+
+    @Test
+    fun withAnOffsetTheSoundComesOutThatMuchLater() {
+        fun firstSoundAfterMs(offsetMs: Int): Int {
+            val a = RtspAudioSource(8000, nowMs = { 7L })
+            a.setSyncOffsetMs(offsetMs)
+            a.onFormat(CameraAudioCodec.G711_ULAW, 8000, 1, null)
+            val out = ShortArray(80) // 10 ms
+            var ms = 0
+            while (ms < 3000) {
+                a.onSample(ByteArray(80) { 0x10 }, 0, 80) // 10 ms of a loud constant
+                a.read(out)
+                ms += 10
+                if (out.any { it.toInt() != 0 }) return ms
+            }
+            return -1
+        }
+        val plain = firstSoundAfterMs(0)
+        val held = firstSoundAfterMs(300)
+        assertTrue("plain=$plain", plain in 1..300)
+        assertEquals(300, held - plain)
+    }
+
+    @Test
+    fun theEngineSetsTheOffsetFromTheSavedValue() {
+        val e = listOf("src/main/kotlin/my/maxcom/app/live/LiveEngine.kt", "app/src/main/kotlin/my/maxcom/app/live/LiveEngine.kt")
+            .map { java.io.File(it) }.first { it.exists() }.readText()
+        assertTrue(e.contains("audio.setSyncOffsetMs(SourceLogic.cameraSyncMs(spec.avOffsetMs))"))
+        assertTrue(e.contains("rtspAudio?.setSyncOffsetMs(SourceLogic.cameraSyncMs(v))"))
+        assertTrue(e.contains("RtspAudioSource(AUDIO_RATE, decodeOn = camAudioExec)"))
+    }
+
+    private class CountingDecoder : AacPcmDecoder {
+        override val sampleRate = 48_000
+        @Volatile var thread: String? = null
+        @Volatile var calls = 0
+        override fun decode(data: ByteArray, off: Int, len: Int): ShortArray {
+            thread = Thread.currentThread().name
+            calls++
+            return ShortArray(1024) { 1000 }
+        }
+
+        override fun release() {}
+    }
+
+    @Test
+    fun aacIsDecodedOnTheWorkerNotOnTheReceiveThread() {
+        // A6: a slow decode used to hold back the camera's video packets on the same thread
+        val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "decode-worker") }
+        try {
+            val dec = CountingDecoder()
+            val a = RtspAudioSource(48_000, decoderFactory = { _, _, _ -> dec }, decodeOn = worker)
+            a.onFormat(CameraAudioCodec.AAC, 48_000, 1, null)
+            val packet = ByteArray(16) { 7 }
+            for (i in 0 until 10) a.onSample(packet, 0, packet.size)
+            worker.submit {}.get(5, java.util.concurrent.TimeUnit.SECONDS)
+            assertEquals(10, dec.calls)
+            assertEquals("decode-worker", dec.thread)
+            assertTrue(a.isLive()) // success path: the sound still arrives
+            assertEquals(0L, a.decodeDropped)
+        } finally {
+            worker.shutdownNow()
+        }
+    }
+
+    @Test
+    fun aDecodeWorkerThatFallsBehindDropsPacketsInsteadOfGrowingAQueue() {
+        val gate = java.util.concurrent.CountDownLatch(1)
+        val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            worker.execute { gate.await() } // the worker is stuck
+            val dec = CountingDecoder()
+            val a = RtspAudioSource(48_000, decoderFactory = { _, _, _ -> dec }, decodeOn = worker)
+            a.onFormat(CameraAudioCodec.AAC, 48_000, 1, null)
+            for (i in 0 until RtspAudioSource.MAX_BACKLOG + 25) a.onSample(ByteArray(8), 0, 8)
+            assertEquals(25L, a.decodeDropped)
+            gate.countDown()
+            worker.submit {}.get(5, java.util.concurrent.TimeUnit.SECONDS)
+            assertEquals(RtspAudioSource.MAX_BACKLOG, dec.calls)
+        } finally {
+            gate.countDown()
+            worker.shutdownNow()
+        }
+    }
+
+    @Test
+    fun withoutAWorkerAndForG711TheDecodeStaysInline() {
+        val dec = CountingDecoder()
+        val a = RtspAudioSource(48_000, decoderFactory = { _, _, _ -> dec })
+        a.onFormat(CameraAudioCodec.AAC, 48_000, 1, null)
+        a.onSample(ByteArray(8), 0, 8)
+        assertEquals(Thread.currentThread().name, dec.thread)
+        // G.711 is a table look-up: never queued, whatever the worker does
+        val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val g = RtspAudioSource(8000, decodeOn = worker, nowMs = { 5L })
+            g.onFormat(CameraAudioCodec.G711_ALAW, 8000, 1, null)
+            g.onSample(ByteArray(80), 0, 80)
+            assertTrue(g.isLive())
+        } finally {
+            worker.shutdownNow()
+        }
+    }
 }

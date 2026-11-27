@@ -560,7 +560,7 @@ void main() {
         t.cards.single.fields,
         const LiveCardFields(
           badge: 'SIARAN LANGSUNG',
-          surau: 'Surau D\'Waqaf',
+          surau: 'Surau Contoh',
           slot: 'Kuliah Maghrib',
           speaker: 'Ustaz Ahmad',
           time: '19:15',
@@ -576,7 +576,7 @@ void main() {
       expect(c.photo, _photo);
       expect(c.fields.slot, 'Kuliah Maghrib');
       expect(c.fields.speaker, 'Ustaz Ahmad');
-      expect(c.fields.surau, 'Surau D\'Waqaf');
+      expect(c.fields.surau, 'Surau Contoh');
       expect(c.fields.time, '19:15');
       expect(t.platform.shares.single.picture, _jpeg);
       expect(t.h.box.byPath('/api/live/notice/frame.jpg'), isNotNull);
@@ -620,7 +620,7 @@ void main() {
       final c = t.cards.single;
       expect(c.background, isNull);
       expect(c.photo, isNull);
-      expect(c.fields, const LiveCardFields(badge: 'SIARAN LANGSUNG', surau: 'Surau D\'Waqaf'));
+      expect(c.fields, const LiveCardFields(badge: 'SIARAN LANGSUNG', surau: 'Surau Contoh'));
       expect(c.fields.hasKuliah, isFalse);
       expect(t.platform.shares.single.picture, _jpeg);
     });

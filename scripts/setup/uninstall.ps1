@@ -50,7 +50,7 @@ Import-Module -Name (Join-Path $PSScriptRoot 'MaxcomSetup.psm1') -Force
 $WordData = 'BUANG DATA'
 $WordCa = 'BUANG SIJIL'
 $TaskNames = @('MAXCOM Kiosk', 'MAXCOM Box', 'MaxcomCertRenew', 'MAXCOM Live Firewall')
-$RuleNames = @('MAXCOM Live WebRTC', 'MAXCOM Live SRT', 'MAXCOM Live RTP', 'MAXCOM Box HTTPS')
+$RuleNames = @('MAXCOM Live WebRTC', 'MAXCOM Live SRT', 'MAXCOM Live RTP', 'MAXCOM Box HTTPS', 'MAXCOM Box mDNS')
 
 function Exit-Script([int]$Code) {
   # In the window opened by self-elevation the text must stay readable until a key is pressed.

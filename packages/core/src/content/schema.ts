@@ -411,8 +411,10 @@ function buildZikir(src: Record<string, unknown>, errors: string[]): ContentItem
   const textAr = checkText('textAr', src.textAr, errors);
   const textMs = checkText('textMs', src.textMs, errors);
   const repeat = checkOptionalInt('repeat', src.repeat, 1, 10000, errors);
+  // The English meaning, shown on a TV set to English (the Malay one when it is missing or empty).
+  const textEn = checkOptionalText('textEn', src.textEn, errors) || undefined;
   if (order === undefined || !textAr || !textMs) return undefined;
-  return { order, textAr, textMs, repeat } as ContentItemOf<'zikir'>;
+  return { order, textAr, textMs, textEn, repeat } as ContentItemOf<'zikir'>;
 }
 
 function buildTilawahSlot(src: Record<string, unknown>, errors: string[]): ContentItemOf<'tilawahSlot'> | undefined {

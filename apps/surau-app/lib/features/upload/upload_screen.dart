@@ -13,8 +13,9 @@ import '../../app/shell.dart';
 import '../../app/theme.dart';
 import '../../l10n/generated/s.dart';
 import '../../upload/upload_queue.dart';
-import '../live/live_widgets.dart' show LiveColors;
+import '../live/live_widgets.dart' show LiveColors, formatBytes;
 import 'cleanup_providers.dart';
+import 'earlier_recordings.dart';
 import 'upload_widgets.dart';
 
 export 'upload_widgets.dart';
@@ -91,11 +92,56 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     await _act(job.id, (q) => q.remove(job.id));
   }
 
+  /// "Muat naik" on an earlier recording (U1): it joins the queue. When the box's record says that live was cut
+  /// off, the full recording can replace it, by the surau's setting or after asking (D2).
+  Future<void> _uploadEarlier(EarlierRecording rec) async {
+    final q = ref.read(catchUpQueueProvider);
+    if (q == null || _busy.contains(rec.sessionId)) return;
+    final s = S.of(context);
+    final decision = replaceDecision(rec, catchUpReplaceMode(ref.read(settingsProvider).value?.value));
+    var replace = decision.replace;
+    if (decision.ask) {
+      final yes = await showDialog<bool>(
+        context: context,
+        useRootNavigator: true,
+        builder: (d) => AlertDialog(
+          key: const ValueKey('upload-gap-replace'),
+          content: Text(s.liveGapReplaceAsk(rec.gapMinutes)),
+          actions: [
+            TextButton(
+              key: const ValueKey('upload-gap-replace-no'),
+              onPressed: () => Navigator.of(d, rootNavigator: true).pop(false),
+              child: Text(s.liveGapReplaceNo),
+            ),
+            FilledButton(
+              key: const ValueKey('upload-gap-replace-yes'),
+              onPressed: () => Navigator.of(d, rootNavigator: true).pop(true),
+              child: Text(s.liveGapReplaceYes),
+            ),
+          ],
+        ),
+      );
+      if (yes == null || !mounted) return; // dismissed: nothing is queued
+      if (!yes) replace = null;
+    }
+    setState(() => _busy.add(rec.sessionId));
+    try {
+      await q.enqueueFromSession(rec.sessionId, rec.kuliahId, replaceLive: replace);
+      await q.kick();
+    } on NoRecordings {
+      // the files went meanwhile: the list is read again below
+    } finally {
+      if (mounted) setState(() => _busy.remove(rec.sessionId));
+      ref.invalidate(earlierRecordingsProvider);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
     final deps = ref.watch(appDepsProvider);
+    final earlier = ref.watch(earlierRecordingsProvider).value ?? const <EarlierRecording>[];
     final queue = ref.watch(catchUpQueueProvider);
     final jobs = ref.watch(catchUpJobsProvider).value;
     final network =
@@ -125,9 +171,47 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           UploadQuotaStrip(quota: quota),
           const SizedBox(height: 16),
         ],
-        if (jobs.isEmpty)
+        if (earlier.isNotEmpty) ...[
+          Card(
+            key: const ValueKey('upload-earlier'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(20, 14, 16, 4),
+                  child: Text(s.uploadEarlierEntry, style: text.titleSmall),
+                ),
+                for (final rec in earlier)
+                  ListTile(
+                    key: ValueKey('upload-earlier-${rec.sessionId}'),
+                    contentPadding: const EdgeInsetsDirectional.fromSTEB(20, 0, 12, 0),
+                    leading: const Icon(Icons.video_file_rounded, color: SurauColors.teal),
+                    title: Text(
+                      (rec.kuliahId == null ? null : kuliah[rec.kuliahId]?.label) ?? s.uploadNoKuliah,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      [
+                        if (rec.live?.startedAt != null) _dateTime(localOf(rec.live!.startedAt!)),
+                        formatBytes(rec.bytes),
+                      ].join(' · '),
+                    ),
+                    trailing: OutlinedButton(
+                      key: ValueKey('upload-earlier-go-${rec.sessionId}'),
+                      onPressed: _busy.contains(rec.sessionId) ? null : () => _uploadEarlier(rec),
+                      child: Text(s.actionUpload),
+                    ),
+                  ),
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (jobs.isEmpty && earlier.isEmpty)
           ..._empty(s, text)
-        else ...[
+        else if (jobs.isNotEmpty) ...[
           Text(
             s.uploadIntro,
             style: text.bodyLarge!.copyWith(color: SurauColors.muted),
@@ -200,6 +284,11 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     ),
   ];
 }
+
+String _two(int n) => n.toString().padLeft(2, '0');
+
+/// `23/11/2026 20:45`: digits only, the same in every app language.
+String _dateTime(DateTime t) => '${_two(t.day)}/${_two(t.month)}/${t.year} ${_two(t.hour)}:${_two(t.minute)}';
 
 class _Footer extends StatelessWidget {
   const _Footer({required this.icon, required this.text});

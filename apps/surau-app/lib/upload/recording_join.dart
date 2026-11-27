@@ -5,7 +5,9 @@
 //    pieces and only then are the pieces removed (`AndroidRecordingJoiner`, the Kotlin `RecordingMerger`).
 //  * Web / iPad: the pieces in the browser store go to the box (`POST /api/live/recordings/<liveId>/pieces/<n>`),
 //    the box joins them (`POST .../join`, ffmpeg concat, no re-encode), the iPad saves the joined file
-//    (`GET .../file`, one tap). Clicking the download link is NOT proof the browser kept the file (Safari lets the
+//    (`GET .../file`, one tap). Since 2026.11.15 the one tap asks the box for a short-lived link (`POST .../link`) and
+//    opens it, so the browser downloads the file straight to Files without reading it into memory; a box without the
+//    link route (older release) is served by the Blob path. Clicking the download link is NOT proof the browser kept the file (Safari lets the
 //    person cancel), so nothing is deleted then: the person is asked "saved in Files/Downloads?" and only a Yes
 //    removes the local pieces and asks the box to drop its copy (`confirmSaved`). Without a Yes the box copy expires
 //    by itself after 7 days (`WebRecordingJoin`).
@@ -174,14 +176,77 @@ abstract class RecordingTransfer {
 
   /// Hands [file] (what [fetchFile] gave) to the browser as a download named [fileName].
   Future<void> saveFile(String fileName, Object file, String mime);
+
+  /// Asks the box for a download link of the joined file (`POST` [path]); the answer is the full address, on the box
+  /// itself. Null when this transfer cannot open links, or the box has no link route (an older release): the caller
+  /// then uses [fetchFile] and [saveFile]. A box answer with a code (`not_ready`, ...) is thrown as [BoxError].
+  Future<Uri?> requestLink(String path);
+
+  /// Opens [url] so the browser downloads it as [fileName] (a plain link: nothing is read into memory).
+  Future<void> openLink(Uri url, String fileName);
+}
+
+/// F18: a transfer that can check a download link before the browser is sent to it. The link route has no LAN check on
+/// the POST but the download has: a network the box does not count as the surau's, or a rate limit, gives the browser
+/// an error page instead of the file. A transfer that implements this is asked first; a link that does not answer
+/// falls back to the Blob path.
+abstract interface class RecordingLinkProbe {
+  /// True when [url] answers with the file (a HEAD or a one-byte range read); never throws.
+  Future<bool> probeLink(Uri url);
+}
+
+/// The link route of a box that has one answers with a code; an older box answers 404 or 403 with none. Only those
+/// bare answers mean "no such route". The one coded answer treated the same is 403 `lan_only`: the box does not count
+/// this network as the surau's, and the Blob path has no such rule, so the caller falls back to it.
+bool isMissingLinkRoute(BoxError e) =>
+    (e.code == null && (e.status == 404 || e.status == 403 || e.status == 405)) ||
+    (e.status == 403 && e.code == 'lan_only');
+
+/// The address a box's link answer names, checked: it must be the box's own download route, never another host.
+Uri? linkFromAnswer(Uri box, Object? url) {
+  if (url is! String || url.isEmpty || url.length > 200) return null;
+  final u = box.replace(path: '', query: null, fragment: null).resolve(url);
+  if (u.host != box.host || u.port != box.port || u.scheme != box.scheme) return null;
+  if (!RegExp(r'^/api/live/recordings/dl/[0-9a-f]{64}$').hasMatch(u.path)) return null;
+  return Uri(scheme: u.scheme, host: u.host, port: u.hasPort ? u.port : null, path: u.path);
 }
 
 /// [RecordingTransfer] over bytes in memory, through the gateway.
-class BytesRecordingTransfer implements RecordingTransfer {
-  BytesRecordingTransfer({required this.gateway, required this.saveBytes});
+class BytesRecordingTransfer implements RecordingTransfer, RecordingLinkProbe {
+  BytesRecordingTransfer({required this.gateway, required this.saveBytes, this.box, this.open, this.probe});
 
   final BoxGateway gateway;
   final SaveBytes saveBytes;
+
+  /// The box's address and a function that opens a link (a browser); both null means links are not used.
+  final Uri? box;
+  final Future<void> Function(Uri url, String fileName)? open;
+
+  /// Checks a link before it is opened (see [RecordingLinkProbe]); null means every link is trusted.
+  final Future<bool> Function(Uri url)? probe;
+
+  @override
+  Future<bool> probeLink(Uri url) async => probe == null ? true : await probe!(url);
+
+  @override
+  Future<Uri?> requestLink(String path) async {
+    final b = box;
+    if (b == null || open == null) return null;
+    try {
+      final r = await gateway.post(path, const <String, dynamic>{});
+      return linkFromAnswer(b, r['url']);
+    } on BoxError catch (e) {
+      if (isMissingLinkRoute(e)) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> openLink(Uri url, String fileName) {
+    final o = open;
+    if (o == null) return Future.error(StateError('links are not opened here'));
+    return o(url, fileName);
+  }
 
   @override
   Future<void> uploadPiece(String path, Object blob, String mime) async {
@@ -214,6 +279,12 @@ class AwayRecordingTransfer implements RecordingTransfer {
 
   @override
   Future<void> saveFile(String fileName, Object file, String mime) => Future.error(const BoxUnreachable());
+
+  @override
+  Future<Uri?> requestLink(String path) => Future.error(const BoxUnreachable());
+
+  @override
+  Future<void> openLink(Uri url, String fileName) => Future.error(const BoxUnreachable());
 }
 
 /// What `saveJoined` did.
@@ -323,6 +394,33 @@ class WebRecordingJoin {
     if (!_liveId.hasMatch(liveId)) return JoinSave.failed;
     final pieces = await store.forSession(sessionId);
     if (pieces.isEmpty) return JoinSave.failed;
+    // The link first: the browser downloads the file by itself, nothing is held in memory. A box without the link
+    // route (older release) falls through to the Blob path below.
+    Uri? link;
+    try {
+      link = await transfer.requestLink('${_base(liveId)}/link');
+    } on Object {
+      return JoinSave.failed;
+    }
+    // F18: the browser is sent to the link only when it answers with the file; else the Blob path below.
+    final t = transfer;
+    if (link != null && t is RecordingLinkProbe) {
+      var ok = false;
+      try {
+        ok = await (t as RecordingLinkProbe).probeLink(link);
+      } on Object {
+        ok = false;
+      }
+      if (!ok) link = null;
+    }
+    if (link != null) {
+      try {
+        await transfer.openLink(link, joinedWebFileName(pieces));
+      } on Object {
+        return JoinSave.failed;
+      }
+      return JoinSave.handedOver;
+    }
     final Object file;
     try {
       file = await transfer.fetchFile('${_base(liveId)}/file');

@@ -3,10 +3,10 @@
   "termux": {
     "arm": {
       "nodejs-lts": {
-        "version": "24.22.2-1",
-        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_24.22.2-1_arm.deb",
-        "file": "nodejs-lts_24.22.2-1_arm.deb",
-        "sha256": "95471b68bf5cc5860714e4a2da0c1c99c165b9ad57577a63529847bf932a3646",
+        "version": "24.22.3",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_24.22.3_arm.deb",
+        "file": "nodejs-lts_24.22.3_arm.deb",
+        "sha256": "e7a65deb94edf1fe1a369cee48081de987d4e1d400ed38f7cc115e5739416383",
         "licence": "MIT, with bundled third-party licences (see licences/nodejs-lts)"
       },
       "libc++": {
@@ -61,10 +61,10 @@
     },
     "aarch64": {
       "nodejs-lts": {
-        "version": "24.22.2-1",
-        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_24.22.2-1_aarch64.deb",
-        "file": "nodejs-lts_24.22.2-1_aarch64.deb",
-        "sha256": "837bbc7e422ef44583d590b7735c8736916183a185fc6f8c547c42b44cabfd01",
+        "version": "24.22.3",
+        "url": "https://packages-cf.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_24.22.3_aarch64.deb",
+        "file": "nodejs-lts_24.22.3_aarch64.deb",
+        "sha256": "80edcc73db025db0baa09be27e3d65a16e6f2a72ab925f1873a1b808ab857c28",
         "licence": "MIT, with bundled third-party licences (see licences/nodejs-lts)"
       },
       "libc++": {

@@ -13,7 +13,7 @@ const STORE_KEY = 'maxcom-mxhost';
 const HASH_RE = /(?:^|[#&])mxhost=(\d{1,5})\.([0-9a-fA-F]{64})(?:&|$)/;
 
 export interface HostBridgeWindow {
-  MaxcomHost?: { exit?: (key?: string) => void };
+  MaxcomHost?: { exit?: (key?: string) => void; videoStuck?: (key?: string) => void };
   /** Set by the Android app in this page's main frame only; the bridge refuses a call without it. */
   __mxHostKey?: string;
 }
@@ -87,6 +87,22 @@ export function captureHostBridge(deps: CaptureDeps = {}): HostTarget | null {
 
 export function hasHostBridge(w: HostBridgeWindow = window as unknown as HostBridgeWindow): boolean {
   return typeof w.MaxcomHost?.exit === 'function' || windowsTarget !== null;
+}
+
+/**
+ * Tell the Android host that live video arrives but no frame decodes, so it can recover the WebView. Android only
+ * (needs the bridge function and the main-frame key); returns whether the host was told. Never throws.
+ */
+export function reportVideoStuck(w: HostBridgeWindow = window as unknown as HostBridgeWindow): boolean {
+  try {
+    if (typeof w.MaxcomHost?.videoStuck === 'function' && typeof w.__mxHostKey === 'string') {
+      w.MaxcomHost.videoStuck(w.__mxHostKey);
+      return true;
+    }
+  } catch {
+    /* a broken bridge is the same as none */
+  }
+  return false;
 }
 
 /** Ask the host to close the kiosk. Resolves to which bridge answered; never throws. */

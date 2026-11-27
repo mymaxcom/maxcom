@@ -70,5 +70,24 @@ void main() {
       expect(routes.epoch.value, e0 + 3);
       expect(previewTargetFor(box, routes, isWeb: false).origin, box.box);
     });
+
+    test('no route, but a newer lastIp: the stored origin follows lastIp', () {
+      final box = fixtureBox(name: _name, lastIp: '192.0.2.50');
+      final t = previewTargetFor(box, BoxRoutes(), isWeb: false);
+      expect(t.routed, isFalse);
+      expect(t.origin, Uri.parse('https://192.0.2.50:8443'));
+      expect(t.leafBox.box, t.origin);
+      expect(previewTargetFor(box, null, isWeb: false).origin, t.origin);
+    });
+
+    test('a name-origin box without a route loads its lastIp, never the name', () {
+      final box = fixtureBox(box: 'https://box1-surau.local:8443', name: _name, lastIp: '192.0.2.50');
+      expect(previewTargetFor(box, BoxRoutes(), isWeb: false).origin, Uri.parse('https://192.0.2.50:8443'));
+    });
+
+    test('web ignores lastIp', () {
+      final box = fixtureBox(name: _name, lastIp: '192.0.2.50');
+      expect(previewTargetFor(box, BoxRoutes(), isWeb: true).origin, box.box);
+    });
   });
 }

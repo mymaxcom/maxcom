@@ -1,35 +1,28 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { randomToken } from '../auth/crypto.ts';
 import { createRateLimiter } from '../auth/ratelimit.ts';
 import type { RateLimiter } from '../auth/ratelimit.ts';
-import type { YoutubeRegistry } from '../live/youtube/registry.ts';
-import { cloudHoldsGrant, tokenFileFor } from '../live/youtube/registry.ts';
 import { readClientText } from '../live/youtube/clientFile.ts';
-import { TokenStore } from '../live/youtube/tokenStore.ts';
+import { wipeOldGrantCopies } from '../live/youtube/quarantine.ts';
 import { reqSurau } from '../reqSurau.ts';
-import { CLIENT_FILE_MAX, sealClient, sealHandover } from './youtubeSeal.ts';
+import { CLIENT_FILE_MAX, sealClient } from './youtubeSeal.ts';
 
 /**
  * The cloud's half of "YouTube held by the box only" (release 2026.11.13). SECURITY scope: OAuth refresh tokens.
  *
- *  - The cloud makes no new grant (its sign-in routes answer `youtube_at_box`, `live/routes.ts`). What it keeps is a
- *    NON-SECRET flag per surau, pushed by the box that holds the grant: signed in or not, the channel name, whether
- *    Google withdrew it, which box said so, when (`PUT /api/sync/youtube/flag`).
- *  - A grant the cloud held before this release moves ONCE to the first linked box of that surau that asks (D4):
- *    `POST /api/sync/youtube/handover` seals it to that box's public key (the cloud keeps no key that opens it), the
- *    box proves it with one refresh and acknowledges (`POST /api/sync/youtube/handover/ack`), then the cloud DELETES
- *    its token file and its open-broadcast record. It never calls Google's revoke: that would end the box's copy too.
- *    Preconditions: no broadcast of that surau open on the cloud. A grant Google already withdrew is deleted the same
- *    way and the flag says "withdrawn", so the box asks for one sign-in at the surau.
+ *  - The cloud holds no YouTube sign-in at all and makes none (its sign-in routes answer `youtube_at_box`,
+ *    `live/routes.ts`). What it keeps is a NON-SECRET flag per surau, pushed by the box that holds the grant: signed in
+ *    or not, the channel name, whether Google withdrew it, which box said so, when (`PUT /api/sync/youtube/flag`).
  *  - The operator's OAuth client file (D2) is delivered to a linked box, sealed to it (`GET /api/sync/youtube/client`);
  *    installers stay clean and an unlinked box keeps a file the operator placed.
+ *  - A sign-out at the box (`signedOut` on the flag) removes what an earlier release left of that surau's old grant
+ *    here: a token file, a quarantine copy (`wipeOldGrantCopies`). Never a revoke at Google.
+ *  - The one-time handover of a grant the cloud used to hold is over (2026.11.15, phase 4): the cloud has no token file
+ *    to hand over. `POST /api/sync/youtube/handover` stays only as the answer an updated box of 2026.11.13 or 2026.11.14
+ *    still asks for ("nothing to move", which settles it), and the acknowledgement only closes a row an earlier cloud
+ *    wrote. This file reads no `youtube-token-*.json` and seals no grant.
  *  - Every route here is for a linked site of the asking surau only (a device session gets 404). The change history
  *    keeps who and which handover, never a token, a code or the client secret.
- *
- * Phase 4 (a later release) removes the cloud's old grants entirely; until then this file is the only cloud code that
- * reads a `youtube-token-<surauId>.json` (the handover itself), apart from the old box leg that serves a box not yet
- * updated.
  */
 
 /** The sentence an older app shows as it is (BM); a newer app words `youtube_at_box` itself.
@@ -55,7 +48,7 @@ const TITLE_MAX = 100;
 const OFFER_TTL_MS = 6 * 3_600_000;
 /** An acknowledged holder box not seen by the cloud for this long no longer blocks another box's flag (F10). */
 const HOLDER_SILENT_MS = 30 * 86_400_000;
-const MSG = { notFound: 'not found', badRequest: 'Permintaan tidak sah', tooMany: 'Terlalu banyak percubaan. Cuba sebentar lagi.', busy: 'Siaran YouTube masih terbuka. Cuba lagi selepas siaran tamat.', unreadable: 'Log masuk YouTube lama belum dapat dibuka. Cuba lagi sebentar.', claimed: 'MAXCOM lain di surau ini memegang log masuk YouTube.' } as const;
+const MSG = { notFound: 'not found', badRequest: 'Permintaan tidak sah', tooMany: 'Terlalu banyak percubaan. Cuba sebentar lagi.', claimed: 'MAXCOM lain di surau ini memegang log masuk YouTube.' } as const;
 
 const isRec = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -128,10 +121,8 @@ export interface YoutubeBoxCloudDeps {
   role: 'box' | 'cloud';
   db: DatabaseSync;
   now: () => Date;
-  /** The cloud's data folder (its secret folder holds the old grants and the operator's client file); null in unit tests. */
+  /** The cloud's data folder (its secret folder holds the operator's client file); null in unit tests. */
   dataDir: string | null;
-  /** The cloud's per-surau services of the old grants. */
-  registry: YoutubeRegistry | null;
   clock?: () => number;
 }
 
@@ -197,66 +188,18 @@ export function registerYoutubeBoxCloudRoutes(app: FastifyInstance, deps: Youtub
     !(row.state === 'offered' && now().getTime() - row.offeredAt > OFFER_TTL_MS) &&
     !(row.state === 'acked' && holderSilent(surauId, row.boxId));
 
-  /** Deletes the surau's old cloud grant (no revoke) and closes its handover. */
-  const retire = (surauId: string): void => {
-    if (deps.registry !== null) deps.registry.retire(surauId);
-  };
+  // ---- the old handover: nothing left to move ---------------------------------------------------------------------
 
-  // ---- the one-time handover of an old cloud grant ---------------------------------------------------------------
-
+  // The cloud holds no grant any more. An updated box of 2026.11.13 or 2026.11.14 still asks once; "nothing to move"
+  // (404 with `code: none`) is the answer that settles it on the box.
   app.post('/api/sync/youtube/handover', gate, async (request, reply) => {
     const site = siteOf(request, reply);
     if (site === null) return reply;
-    const { surauId, boxId } = site;
-    const row = readHandover(db, surauId);
-    if (deps.dataDir === null || deps.registry === null || !cloudHoldsGrant(deps.dataDir, surauId)) return send(reply, 404, { code: 'none' });
-    // D4: the first box to ask claims it; another box of the same surau gets the flag only
-    if (heldByOther(row, surauId, boxId)) return send(reply, 409, { errors: [MSG.claimed], code: 'claimed' });
-    const svc = deps.registry.for(surauId);
-    if (svc === null) return send(reply, 404, { code: 'none' });
-    // a broadcast the cloud made is still open: it must end on the cloud first (an old box's live, the orphan sweep)
-    if (svc.hasOpenBroadcast()) return send(reply, 409, { errors: [MSG.busy], code: 'live_busy' });
-    // the file is there (checked above): one that will not open is NOT "nothing to move", the box asks again later
-    let t: ReturnType<TokenStore['load']> = null;
-    try {
-      t = new TokenStore(deps.dataDir, tokenFileFor(surauId)).load();
-    } catch {
-      t = null;
-    }
-    if (t === null) return send(reply, 503, { errors: [MSG.unreadable], code: 'grant_unreadable' });
-    if (!svc.signedIn()) {
-      // Google already withdrew it: nothing worth moving. Deleted here (no revoke), the flag says so.
-      retire(surauId);
-      const at = now().toISOString();
-      writeFlag(db, surauId, { signedIn: false, channelTitle: t.channelTitle || null, revoked: true, boxId }, at);
-      db.prepare(
-        `INSERT INTO youtube_handover (surau_id, box_id, handover_id, state, offered_at, acked_at) VALUES (?, ?, ?, 'acked', ?, ?)
-         ON CONFLICT(surau_id) DO UPDATE SET box_id = excluded.box_id, handover_id = excluded.handover_id, state = 'acked', offered_at = excluded.offered_at, acked_at = excluded.acked_at`,
-      ).run(surauId, boxId, `revoked_${randomToken(8)}`, at, at);
-      audit(surauId, boxId, 'revoked', { boxId, state: 'revoked' });
-      return send(reply, 410, { code: 'youtube_reauthorise' });
-    }
-    const handoverId = `ho_${randomToken(12)}`;
-    const plain = JSON.stringify({
-      v: 1,
-      surauId,
-      boxId,
-      handoverId,
-      refreshToken: t.refreshToken,
-      channelId: t.channelId,
-      channelTitle: t.channelTitle,
-      scope: t.scope,
-    });
-    const sealed = sealHandover(site.jwk, plain, boxId, handoverId);
-    const at = now().toISOString();
-    db.prepare(
-      `INSERT INTO youtube_handover (surau_id, box_id, handover_id, state, offered_at, acked_at) VALUES (?, ?, ?, 'offered', ?, NULL)
-       ON CONFLICT(surau_id) DO UPDATE SET box_id = excluded.box_id, handover_id = excluded.handover_id, state = 'offered', offered_at = excluded.offered_at, acked_at = NULL`,
-    ).run(surauId, boxId, handoverId, at);
-    audit(surauId, boxId, handoverId, { boxId, state: 'offered' });
-    return send(reply, 200, { handoverId, boxId, sealed });
+    return send(reply, 404, { code: 'none' });
   });
 
+  // Closes a handover an earlier cloud offered (the box proved its copy before the cloud held no grant, or Google
+  // withdrew it). No token file is read or deleted here.
   app.post('/api/sync/youtube/handover/ack', gate, async (request, reply) => {
     const site = siteOf(request, reply);
     if (site === null) return reply;
@@ -270,21 +213,8 @@ export function registerYoutubeBoxCloudRoutes(app: FastifyInstance, deps: Youtub
     // said before, the answer was lost: the same answer again, nothing changes
     if (row.state === 'acked') return send(reply, 200, { acknowledged: true });
     const failed = b.ok !== true;
-    if (failed && b.code !== 'invalid_grant') {
-      // the box could not prove it yet (network, no client): the cloud keeps its copy and the box tries again
-      return send(reply, 200, { acknowledged: false });
-    }
-    const svc = deps.registry?.for(surauId) ?? null;
-    if (svc !== null && svc.hasOpenBroadcast()) return send(reply, 409, { errors: [MSG.busy], code: 'live_busy' });
-    if (failed && svc !== null) {
-      // S2: the box says Google withdrew it; the cloud asks Google with its own copy first, and keeps it if that works
-      // only the cloud's own `invalid_grant` retires it: a proof that merely failed (Google not reachable, no client
-      // file) keeps the grant and the box asks again later (F7)
-      const proof = await svc.proveGrant();
-      if (proof !== 'invalid_grant') return send(reply, 200, { acknowledged: false });
-    }
-    // the box holds it now (or Google withdrew it): the cloud's copy goes, WITHOUT a revoke
-    retire(surauId);
+    // the box could not prove it for another reason (network, no client): the box asks again later
+    if (failed && b.code !== 'invalid_grant') return send(reply, 200, { acknowledged: false });
     const at = now().toISOString();
     db.prepare("UPDATE youtube_handover SET state = 'acked', acked_at = ? WHERE surau_id = ? AND handover_id = ?").run(at, surauId, b.handoverId);
     writeFlag(db, surauId, { signedIn: !failed, channelTitle: title, revoked: failed, boxId }, at);
@@ -300,14 +230,24 @@ export function registerYoutubeBoxCloudRoutes(app: FastifyInstance, deps: Youtub
     const { surauId, boxId } = site;
     const b = request.body;
     // exactly these keys: nothing else (a token, a code) can be stored through this route
-    if (!isRec(b) || Object.keys(b).some((k) => k !== 'signedIn' && k !== 'channelTitle' && k !== 'revoked')) return send(reply, 400, { errors: [MSG.badRequest], code: 'invalid' });
+    if (!isRec(b) || Object.keys(b).some((k) => k !== 'signedIn' && k !== 'channelTitle' && k !== 'revoked' && k !== 'signedOut')) return send(reply, 400, { errors: [MSG.badRequest], code: 'invalid' });
     if (typeof b.signedIn !== 'boolean' || (b.revoked !== undefined && typeof b.revoked !== 'boolean')) return send(reply, 400, { errors: [MSG.badRequest], code: 'invalid' });
+    // `signedOut` (2026.11.15, Y7): a person signed out at the box. Only with `signedIn false`; a boolean, nothing else.
+    if (b.signedOut !== undefined && (typeof b.signedOut !== 'boolean' || (b.signedOut && b.signedIn))) return send(reply, 400, { errors: [MSG.badRequest], code: 'invalid' });
     const title = cleanTitle(b.channelTitle);
     if (title === 'bad') return send(reply, 400, { errors: [MSG.badRequest], code: 'invalid' });
     // D4: the flag is the holding box's (the box of the handover); with no handover any linked box may push it
     if (heldByOther(readHandover(db, surauId), surauId, boxId)) return send(reply, 409, { errors: [MSG.claimed], code: 'claimed' });
     writeFlag(db, surauId, { signedIn: b.signedIn, channelTitle: b.signedIn ? title : null, revoked: b.signedIn ? false : b.revoked === true, boxId }, now().toISOString());
-    return send(reply, 200, { stored: true });
+    // Y7: a sign-out at the box leaves no copy of the surau's old grant on the cloud either (none is held now; this
+    // removes what an earlier release may have left: a token file, a quarantine copy). No revoke from here.
+    let wiped = false;
+    if (b.signedOut === true && deps.dataDir !== null) {
+      wipeOldGrantCopies(deps.dataDir, surauId);
+      wiped = true;
+      audit(surauId, boxId, 'signout', { boxId, state: 'wiped' });
+    }
+    return send(reply, 200, { stored: true, ...(b.signedOut === true ? { wiped } : {}) });
   });
 
   // ---- D2: the operator's OAuth client, sealed to a linked box ------------------------------------------------------

@@ -45,7 +45,7 @@ class UploadWorkerTest {
 
     @Test
     fun aJobTooBigForWorkManagersInputIsRefused() {
-        assertTrue(UploadPlan.fitsInput("{}", "https://cloud", "tok", "ca"))
+        assertTrue(UploadPlan.fitsInput("{}"))
         assertFalse(UploadPlan.fitsInput("x".repeat(UploadPlan.MAX_INPUT_BYTES)))
     }
 
@@ -79,7 +79,128 @@ class UploadWorkerTest {
         assertFalse(p.toString().contains("secret.example"))
         val e = UploadEvent("J", 1, "uploading", uploadUri = "https://secret.example/x")
         assertFalse(e.toString().contains("secret.example"))
-        assertFalse(BegunUpload("u", "https://secret.example/x").toString().contains("secret.example"))
+    }
+
+    // ---- U7: the work request holds the job and nothing else ----
+
+    private fun dartJob(): Map<String, Any?> = mapOf(
+        "id" to "01J", "sessionId" to "s1", "kuliahId" to "k1", "joined" to false, "allowMobile" to false,
+        "joinSegments" to true, "replaceLiveVideoId" to "live1", "createdAt" to "2026-11-23T10:00:00.000Z",
+        // what must never get through, should a caller ever put it on a job
+        "token" to "SESSION-TOKEN-SECRET", "base" to "https://192.0.2.10", "ca" to "CERT",
+        "auth" to mapOf("token" to "SESSION-TOKEN-SECRET"),
+        "parts" to listOf(
+            mapOf(
+                "index" to 1, "source" to "android:content://media/external/video/media/7", "bytes" to 1000,
+                "uploadId" to "up1", "uploadUri" to "https://www.googleapis.com/upload/youtube/s/1", "offset" to 0,
+                "videoId" to null, "state" to "queued", "token" to "SESSION-TOKEN-SECRET",
+            ),
+        ),
+    )
+
+    @Test
+    fun theWorkDataHoldsNoToken() {
+        val json = UploadPlan.workJob(dartJob())
+        val data = UploadPlan.inputValues(json)
+        assertEquals(setOf("job"), data.keys)
+        val all = data.values.joinToString()
+        for (secret in listOf("SESSION-TOKEN-SECRET", "192.0.2.10", "CERT", "token", "auth", "base", "live1", "k1")) {
+            assertFalse("work data must not hold $secret", all.contains(secret))
+        }
+    }
+
+    @Test
+    fun theWorkJobStillCarriesWhatTheWorkerNeeds() {
+        // success path: the sanitised job parses to the same parts, with the Google address the app got
+        val j = JobSpec.parse(UploadPlan.workJob(dartJob()))
+        assertEquals("01J", j.id)
+        assertTrue(j.joinSegments)
+        assertFalse(j.allowMobile)
+        val p = j.parts.single()
+        assertEquals(1000L, p.bytes)
+        assertEquals("android:content://media/external/video/media/7", p.source)
+        assertEquals("up1", p.uploadId)
+        assertEquals("https://www.googleapis.com/upload/youtube/s/1", p.uploadUri)
+        assertNull(p.videoId)
+    }
+
+    @Test
+    fun aJoinedJobKeepsItsOriginalSegments() {
+        val job = dartJob() + mapOf(
+            "joined" to true,
+            "segments" to listOf(mapOf("source" to "android:content://v/1", "bytes" to 10, "secret" to "x")),
+        )
+        val j = JobSpec.parse(UploadPlan.workJob(job))
+        assertTrue(j.joined)
+        assertEquals(listOf("android:content://v/1"), j.segments!!.map { it.source })
+        assertFalse(UploadPlan.workJob(job).contains("secret"))
+    }
+
+    @Test
+    fun aJobWithNoIdOrPartsIsRefused() {
+        for (bad in listOf(mapOf("parts" to emptyList<Any>()), mapOf<String, Any?>("id" to "J"))) {
+            try {
+                UploadPlan.workJob(bad)
+                throw AssertionError("must refuse")
+            } catch (e: IllegalArgumentException) {
+                assertEquals("bad_args", e.message)
+            }
+        }
+    }
+
+    @Test
+    fun theWorkerReadsNothingButTheJobFromItsInput() {
+        val src = listOf("src/main/kotlin/my/maxcom/app/upload/UploadWorker.kt", "app/src/main/kotlin/my/maxcom/app/upload/UploadWorker.kt")
+            .map { java.io.File(it) }.first { it.exists() }.readText()
+        val reads = Regex("inputData\\.getString\\(([A-Z_a-z.]+)\\)").findAll(src).map { it.groupValues[1] }.toSet()
+        assertEquals(setOf("KEY_JOB"), reads)
+    }
+
+    // ---- U8: queueing the same job again does not cancel the worker ----
+
+    @Test
+    fun theSameJobAgainKeepsTheRunningWork() {
+        val a = UploadPlan.jobDigest(UploadPlan.workJob(dartJob()))
+        // the offset and the state moved (the worker is sending): still the same work
+        val moved = dartJob().toMutableMap()
+        @Suppress("UNCHECKED_CAST")
+        moved["parts"] = (moved["parts"] as List<Map<String, Any?>>).map { it + mapOf("offset" to 500, "state" to "uploading") }
+        val b = UploadPlan.jobDigest(UploadPlan.workJob(moved))
+        assertEquals(a, b)
+        assertTrue(UploadPlan.keepExisting(a, b))
+        assertFalse("the first request of a job is never held back", UploadPlan.keepExisting(null, a))
+    }
+
+    @Test
+    fun aNewUploadAddressOrNetworkRuleReplacesTheWork() {
+        val a = UploadPlan.jobDigest(UploadPlan.workJob(dartJob()))
+        val begun = dartJob().toMutableMap()
+        @Suppress("UNCHECKED_CAST")
+        begun["parts"] = (begun["parts"] as List<Map<String, Any?>>).map { it + mapOf("uploadUri" to "https://www.googleapis.com/upload/youtube/s/2") }
+        assertFalse(UploadPlan.keepExisting(a, UploadPlan.jobDigest(UploadPlan.workJob(begun))))
+        val mobile = dartJob() + mapOf("allowMobile" to true)
+        assertFalse(UploadPlan.keepExisting(a, UploadPlan.jobDigest(UploadPlan.workJob(mobile))))
+        assertFalse("the digest is a hash, not the address", a.contains("googleapis"))
+    }
+
+    // ---- B1c: a metered Wi-Fi is not "wifi" for a Wi-Fi-only job ----
+
+    @Test
+    fun theNetworkWordMatchesWhatWorkManagerWillRunOn() {
+        assertEquals("wifi", UploadPlan.networkKind(internet = true, wifiOrEthernet = true, cellular = false, unmetered = true))
+        assertEquals("cellular", UploadPlan.networkKind(internet = true, wifiOrEthernet = true, cellular = false, unmetered = false))
+        assertEquals("cellular", UploadPlan.networkKind(internet = true, wifiOrEthernet = false, cellular = true, unmetered = false))
+        assertEquals("none", UploadPlan.networkKind(internet = false, wifiOrEthernet = true, cellular = false, unmetered = true))
+    }
+
+    @Test
+    fun theSavedStateKeepsTheReasonOfTheLastEvent() {
+        val s = JobState()
+        s.parts[1] = PartState(state = "queued", error = "needs_begin")
+        assertEquals("needs_begin", JobState.fromJson(s.toJson()).parts[1]!!.error)
+        // a state saved by an older build has no reason: read as none
+        val old = JobState.fromJson("""{"parts":{"1":{"state":"queued","offset":0}},"joined":false,"joinedBytes":0}""")
+        assertNull(old.parts[1]!!.error)
     }
 
     @Test

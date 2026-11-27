@@ -66,15 +66,17 @@ class StartTextsTrilingualTest {
     }
 
     @Test
-    fun theNotificationIsBmSlashEnglishOnOneLine() {
-        val xml = File("src/main/res/values/strings.xml").readText()
+    fun theNotificationIsOneLanguagePerLocale() {
         val names = listOf("notif_title", "notif_text_running", "notif_text_starting", "notif_text_waiting_clock", "notif_text_failed")
-        for (n in names) {
-            val v = Regex("""<string name="$n">(.*?)</string>""").find(xml)!!.groupValues[1]
-            assertTrue("$n has ' / '", v.contains(" / "))
-            assertFalse("$n has no Arabic", v.any { it in '\u0600'..'\u06FF' })
-            assertFalse("$n is one line", v.contains("\n"))
-            assertFalse("$n has no dash", Regex("[\u2014\u2013]").containsMatchIn(v))
+        for (dir in listOf("values", "values-en", "values-ar")) {
+            val xml = File("src/main/res/$dir/strings.xml").readText()
+            for (n in names) {
+                val v = Regex("""<string name="$n">(.*?)</string>""").find(xml)!!.groupValues[1]
+                assertFalse("$dir $n has no ' / '", v.contains(" / "))
+                assertFalse("$dir $n is one line", v.contains("\n"))
+                assertFalse("$dir $n has no dash", Regex("[—–]").containsMatchIn(v))
+                if (dir != "values-ar") assertFalse("$dir $n has no Arabic", v.any { it in '؀'..'ۿ' })
+            }
         }
     }
 }

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { klInstant, parseJakimCsv, resolveSettings } from '../src/index.ts';
 import type { KioskContent, KioskPoster, KioskProgramKhas, TilawahSlot } from '../src/index.ts';
-import { buildRotation, currentSlot, kuliahOnScreen, tilawahWindow, zikirWindow } from '../src/content/rotation.ts';
+import { buildRotation, currentSlot, kuliahOnScreen, tilawahWindow, zikirSpanSeconds, zikirStarts, zikirWindow } from '../src/content/rotation.ts';
 import type { Slot } from '../src/content/rotation.ts';
 
 const csv = readFileSync(fileURLToPath(new URL('./fixtures/SGR01-2026.csv', import.meta.url)), 'utf8');
@@ -204,10 +204,94 @@ describe('zikirWindow', () => {
     expect(zikirWindow(klInstant('2026-11-03', '16:50'), days, resolveSettings({ zikirSelepasSolat: { enabled: false } }))).toBeNull();
     expect(zikirWindow(klInstant('2027-06-01', '16:50'), days, s)).toBeNull();
   });
+  it('each item once: 3 items x 20 s end the zikir 60 s after solat end, then the rotation is back', () => {
+    expect(zikirWindow(klInstant('2026-11-03', '16:45:59'), days, s, undefined, 3)).toMatchObject({ prayer: 'asar', startsAt: klInstant('2026-11-03', '16:45'), endsAt: klInstant('2026-11-03', '16:46') });
+    expect(zikirWindow(klInstant('2026-11-03', '16:46:01'), days, s, undefined, 3)).toBeNull();
+  });
+  it('a list longer than the ceiling is cut at the ceiling, never wraps', () => {
+    const m = resolveSettings({ zikirSelepasSolat: { minutesAfterSolat: 1, durationSeconds: 20 } });
+    expect(zikirWindow(klInstant('2026-11-03', '16:45:30'), days, m, undefined, 10)).toMatchObject({ endsAt: klInstant('2026-11-03', '16:46') });
+    expect(zikirWindow(klInstant('2026-11-03', '16:46:01'), days, m, undefined, 10)).toBeNull();
+  });
+  it('exactly fits the ceiling', () => {
+    const m = resolveSettings({ zikirSelepasSolat: { minutesAfterSolat: 1, durationSeconds: 20 } });
+    expect(zikirWindow(klInstant('2026-11-03', '16:45:59'), days, m, undefined, 3)).toMatchObject({ endsAt: klInstant('2026-11-03', '16:46') });
+    expect(zikirWindow(klInstant('2026-11-03', '16:46:00'), days, m, undefined, 3)).toBeNull();
+  });
+  it('no items, feature off, or 0 minutes: no zikir', () => {
+    expect(zikirWindow(klInstant('2026-11-03', '16:45:10'), days, s, undefined, 0)).toBeNull();
+    expect(zikirWindow(klInstant('2026-11-03', '16:45:10'), days, resolveSettings({ zikirSelepasSolat: { enabled: false } }), undefined, 3)).toBeNull();
+    expect(zikirWindow(klInstant('2026-11-03', '16:45:10'), days, resolveSettings({ zikirSelepasSolat: { minutesAfterSolat: 0 } }), undefined, 3)).toBeNull();
+  });
+  it('zikirSpanSeconds: min(items x duration, minutes x 60); duration 0/invalid falls back to 20 s', () => {
+    expect(zikirSpanSeconds(3, 20, 10)).toBe(60);
+    expect(zikirSpanSeconds(100, 20, 10)).toBe(600);
+    expect(zikirSpanSeconds(3, 0, 10)).toBe(60);
+    expect(zikirSpanSeconds(3, 'x', 10)).toBe(60);
+    expect(zikirSpanSeconds(0, 20, 10)).toBe(0);
+    expect(zikirSpanSeconds(3, 20, 0)).toBe(0);
+  });
+  it('tarawih cut: a zikir stretch running into the tarawih phase ends there (Ramadan, ceiling 20 min)', () => {
+    const r = resolveSettings({ zikirSelepasSolat: { minutesAfterSolat: 20 } });
+    expect(zikirWindow(klInstant('2026-11-03', '20:40'), days, r, 9, 100)).toMatchObject({ prayer: 'isyak' });
+    expect(zikirWindow(klInstant('2026-11-03', '20:45'), days, r, 9, 100)).toBeNull();
+  });
+  it('no zikir while a prayer phase runs', () => {
+    expect(zikirWindow(klInstant('2026-11-03', '16:35'), days, s, undefined, 3)).toBeNull();
+  });
   it('minutesAfterSolat honoured', () => {
     const m = resolveSettings({ zikirSelepasSolat: { minutesAfterSolat: 3 } });
     expect(zikirWindow(klInstant('2026-11-03', '16:47'), days, m)).not.toBeNull();
     expect(zikirWindow(klInstant('2026-11-03', '16:49'), days, m)).toBeNull();
+  });
+  it('the new zikir settings have their defaults: start at once, clock on, no time left, the theme look', () => {
+    expect(s.zikirSelepasSolat).toMatchObject({ startAfterMinutes: 0, showClock: true, showTimeLeft: false, look: 'theme' });
+  });
+  it('startAfterMinutes moves the whole window: 3 items x 20 s start 5 minutes after the solat ends (16:45)', () => {
+    const m = resolveSettings({ zikirSelepasSolat: { startAfterMinutes: 5 } });
+    expect(zikirWindow(klInstant('2026-11-03', '16:45:10'), days, m, undefined, 3)).toBeNull();
+    expect(zikirWindow(klInstant('2026-11-03', '16:49:59'), days, m, undefined, 3)).toBeNull();
+    expect(zikirWindow(klInstant('2026-11-03', '16:50:00'), days, m, undefined, 3)).toMatchObject({
+      prayer: 'asar', startsAt: klInstant('2026-11-03', '16:50'), endsAt: klInstant('2026-11-03', '16:51'),
+    });
+    expect(zikirWindow(klInstant('2026-11-03', '16:50:59'), days, m, undefined, 3)).toMatchObject({ prayer: 'asar' });
+    expect(zikirWindow(klInstant('2026-11-03', '16:51:00'), days, m, undefined, 3)).toBeNull();
+  });
+  it('the ceiling counts from the zikir start, not from the solat end', () => {
+    const m = resolveSettings({ zikirSelepasSolat: { startAfterMinutes: 2, minutesAfterSolat: 1 } });
+    expect(zikirWindow(klInstant('2026-11-03', '16:47:30'), days, m, undefined, 10)).toMatchObject({ endsAt: klInstant('2026-11-03', '16:48') });
+    expect(zikirWindow(klInstant('2026-11-03', '16:48:00'), days, m, undefined, 10)).toBeNull();
+  });
+  it('F33: the window ends where the next prayer phase starts (the countdown never runs past it)', () => {
+    // isyak solat ends 20:34; a 20 minute ceiling would end at 20:54, but tarawih takes the screen at 20:44.
+    const r = resolveSettings({ zikirSelepasSolat: { minutesAfterSolat: 20 } });
+    expect(zikirWindow(klInstant('2026-11-03', '20:40'), days, r, 9, 100)).toMatchObject({
+      prayer: 'isyak', startsAt: klInstant('2026-11-03', '20:34'), endsAt: klInstant('2026-11-03', '20:44'),
+    });
+    // outside Ramadan nothing follows the isyak solat that evening: the full ceiling stays
+    expect(zikirWindow(klInstant('2026-11-03', '20:40'), days, r, undefined, 100)).toMatchObject({ endsAt: klInstant('2026-11-03', '20:54') });
+  });
+  it('an offset that runs into the next prayer phase shows nothing there', () => {
+    // isyak solat ends 20:30 on this day in Ramadan; tarawih runs from 20:45: a 20 minute offset lands inside it.
+    const r = resolveSettings({ zikirSelepasSolat: { startAfterMinutes: 20 } });
+    expect(zikirWindow(klInstant('2026-11-03', '20:50'), days, r, 9, 3)).toBeNull();
+  });
+});
+
+describe('zikirStarts (F16: the instants the zikir takes the screen, a boundary for a video)', () => {
+  const day = days.find((d) => d.date === '2026-11-03')!;
+  it('each solat end plus the start offset, only for prayers with a zikir', () => {
+    const m = resolveSettings({ zikirSelepasSolat: { startAfterMinutes: 5 } });
+    const starts = zikirStarts(day, m, undefined, 3).map((d) => d.getTime());
+    expect(starts).toContain(klInstant('2026-11-03', '16:50').getTime()); // asar solat ends 16:45
+    expect(starts.length).toBeGreaterThanOrEqual(5);
+    const plain = zikirStarts(day, s, undefined, 3).map((d) => d.getTime());
+    expect(plain).toContain(klInstant('2026-11-03', '16:45').getTime());
+  });
+  it('none when the zikir would not show (feature off, no items, 0 minutes)', () => {
+    expect(zikirStarts(day, resolveSettings({ zikirSelepasSolat: { enabled: false } }), undefined, 3)).toEqual([]);
+    expect(zikirStarts(day, s, undefined, 0)).toEqual([]);
+    expect(zikirStarts(day, resolveSettings({ zikirSelepasSolat: { minutesAfterSolat: 0 } }), undefined, 3)).toEqual([]);
   });
 });
 
