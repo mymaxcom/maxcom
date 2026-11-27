@@ -16,6 +16,8 @@ Setiap panduan tersedia dalam Bahasa Melayu, Bahasa Inggeris dan Bahasa Arab.
 | Peranan: Siaran Langsung / Role: Live Broadcast / دور البث المباشر | [PDF](Bahasa-Melayu/panduan-peranan-siaran-langsung.pdf) · [HTML](Bahasa-Melayu/panduan-peranan-siaran-langsung.html) | [PDF](English/role-guide-live.pdf) · [HTML](English/role-guide-live.html) | [PDF](Arabic/role-guide-live-ar.pdf) · [HTML](Arabic/role-guide-live-ar.html) |
 | Peranan: AJK / Role: Committee member / دور أعضاء اللجنة | [PDF](Bahasa-Melayu/panduan-peranan-ajk.pdf) · [HTML](Bahasa-Melayu/panduan-peranan-ajk.html) | [PDF](English/role-guide-committee.pdf) · [HTML](English/role-guide-committee.html) | [PDF](Arabic/role-guide-committee-ar.pdf) · [HTML](Arabic/role-guide-committee-ar.html) |
 
+Panduan video / Video guide / دليل الفيديو: [Video-Guide](Video-Guide/README.md) (siaran langsung, pengumuman, tema skrin TV / live broadcast, announcements, TV themes)
+
 Contoh tema / Sample theme / قالب نموذجي: [sample-theme/hijau-siti.maxtheme](sample-theme/hijau-siti.maxtheme)
 
 Muat turun MAXCOM / Download MAXCOM / تنزيل MAXCOM: [mymaxcom.my](https://mymaxcom.my)
